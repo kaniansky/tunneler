@@ -252,6 +252,14 @@ app.get("/play", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "tunneler.html"));
 });
 
+// singleplayer vs a simple built-in AI (green) - same story as /play: purely local, no
+// networking, no server session, registered before "/:id" for the same reason.
+// difficulty (easy/medium/hard) is read client-side from the path by tunneler.js/ai.js,
+// not by this route - a bare "/ai" defaults to "medium" there.
+app.get(["/ai", "/ai/easy", "/ai/medium", "/ai/hard"], (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "tunneler.html"));
+});
+
 // looks up (never creates) a session; bounces to the "name a session" page if the id
 // doesn't exist - a manually-typed/guessed/stale-bookmarked id has nothing to join.
 app.param("id", (req, res, next, id) => {

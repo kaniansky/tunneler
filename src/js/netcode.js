@@ -121,9 +121,14 @@ class Game
         shield: getByte(0x0c41, 0x0c86)
       }};
   }
-  render(ctx)
+  // force: bypass the appBlit() dirty check and blit the current frame regardless.
+  // Needed right when something outside the WASM engine itself (e.g. tunneler.js's
+  // countdown overlay) has drawn over ctx and needs the real frame put back - if
+  // appBlit() happens to be false right then (nothing changed on the game's own
+  // side), the overlay's last paint would otherwise never get erased.
+  render(ctx, force = false)
   {
-    if (this.app.symbols.appBlit())
+    if (force || this.app.symbols.appBlit())
     {
       const img = new ImageData(this.videoBuffer, 640, 400);
       ctx.putImageData(img, 0, 0);

@@ -2,6 +2,11 @@
 
 class SpectatorSession
 {
+  // First to this many round wins takes the match - kept in sync manually with
+  // tunneler.js's Session.WIN_SCORE (no shared constant between the two files, same
+  // as the wire protocol opcodes - see CLAUDE.md).
+  static WIN_SCORE = 3;
+
   constructor(ctx, mapCtx, scoreEl, sessionName, blueName, greenName)
   {
     this.ctx = ctx;
@@ -267,20 +272,34 @@ class SpectatorSession
   renderScore()
   {
     const s = this.game.state();
-    this.formatScore(s.round, s.blue.score, s.green.score);
+    const gameOver = s.blue.score >= SpectatorSession.WIN_SCORE || s.green.score >= SpectatorSession.WIN_SCORE;
+    const winnerName = gameOver ? (s.blue.score >= SpectatorSession.WIN_SCORE ? this.blueName : this.greenName) : null;
+    this.formatScore(s.round, s.blue.score, s.green.score, gameOver, winnerName);
   }
 
   // shared by renderScore() (real values, once the game is running) and
-  // waitForBothPlayers() (a "Round 1 - Blue: 0 | Green: 0" placeholder before it is).
-  // blue is the left side, green the right (see tunneler.js's crop) - colors brightened
-  // relative to the in-game palette so they stay legible on the banner's blue background.
+  // waitForBothPlayers() (a "Round 1 - Blue: 0 | Green: 0" placeholder before it is,
+  // hence gameOver/winnerName defaulting to false/null there). blue is the left side,
+  // green the right (see tunneler.js's crop) - colors brightened relative to the
+  // in-game palette so they stay legible on the banner's blue background.
   // sessionName/blueName/greenName are escaped here (not just once server-side) since
   // they're read back out of a data-* attribute and re-inserted via innerHTML - see
-  // netcode.js's escapeHtml() for why that needs a second pass.
-  formatScore(round, blueScore, greenScore)
+  // netcode.js's escapeHtml() for why that needs a second pass. winnerName is passed
+  // pre-resolved (already this.blueName or this.greenName, both already display-safe
+  // once escaped below) rather than a bare "blue"/"green" role tag, since a spectator
+  // watching has no single "you" the way tunneler.js's Victory/Defeat does - it needs
+  // to actually name whoever won instead.
+  //
+  // Once the match is decided, "Round N" no longer means anything (the engine's own
+  // full-map reveal replaces split-screen play - mirrors tunneler.js's render()
+  // gameOver branch, though this spectator view has no equivalent crop/canvas-resize
+  // logic of its own since it always showed the full frame anyway), so this segment
+  // becomes "<winner> wins" instead.
+  formatScore(round, blueScore, greenScore, gameOver = false, winnerName = null)
   {
+    const label = gameOver ? `${escapeHtml(winnerName)} wins` : `Round ${round}`;
     this.scoreEl.innerHTML =
-      `${escapeHtml(this.sessionName)} &mdash; Round ${round} &mdash; ` +
+      `${escapeHtml(this.sessionName)} &mdash; ${label} &mdash; ` +
       `<span style="color:#9fcaff">${escapeHtml(this.blueName)}: ${blueScore}</span>` +
       `&nbsp;&nbsp;|&nbsp;&nbsp;` +
       `<span style="color:#7CFC00">${escapeHtml(this.greenName)}: ${greenScore}</span>`;
