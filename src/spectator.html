@@ -1,0 +1,14 @@
+<title>{{SESSION_NAME}} - Tunneler</title>
+<link rel="icon" href="/favicon.ico">
+<link rel="stylesheet" href="/css/common.css">
+<link rel="stylesheet" href="/css/spectator.css">
+<div class="banner">
+<a class="new-game-btn" href="/">New Game</a>
+<div id="score" data-session-name="{{SESSION_NAME}}" data-blue-name="{{BLUE_NAME}}" data-green-name="{{GREEN_NAME}}"></div>
+</div>
+<canvas id="canvas1" width="640" height="400"></canvas>
+<canvas id="map" width="1024" height="480"></canvas>
+
+<script src="/js/wasmapp.js"></script>
+<script src="/js/netcode.js"></script>
+<script src="/js/spectator.js"></script>

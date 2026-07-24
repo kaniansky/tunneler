@@ -1,0 +1,34 @@
+<title>Tunneler</title>
+<link rel="icon" href="/favicon.ico">
+<link rel="stylesheet" href="/css/common.css">
+<link rel="stylesheet" href="/css/index.css">
+<div class="banner">
+<div class="left-text">Tunneler</div>
+</div>
+<div class="links">
+  <form id="startForm" action="/create" method="POST" autocomplete="off">
+    <p>Network game:</p>
+    <div class="form-row">
+      <input id="sessionName" name="name" type="text" class="field" maxlength="100" placeholder="Session name (leave blank for a random one)" autofocus autocomplete="off">
+      <button type="submit">Start</button>
+    </div>
+    <details class="advanced">
+      <summary>Advanced settings (optional)</summary>
+      <div class="advanced-fields">
+        <div class="form-row">
+          <input name="blueName" type="text" class="field" maxlength="100" placeholder="Blue player name" autocomplete="off">
+          <input name="bluePassword" type="password" class="field" maxlength="100" placeholder="Blue password" autocomplete="new-password" data-lpignore="true" data-1p-ignore="true">
+        </div>
+        <div class="form-row">
+          <input name="greenName" type="text" class="field" maxlength="100" placeholder="Green player name" autocomplete="off">
+          <input name="greenPassword" type="password" class="field" maxlength="100" placeholder="Green password" autocomplete="new-password" data-lpignore="true" data-1p-ignore="true">
+        </div>
+        <input name="spectatePassword" type="password" class="field" maxlength="100" placeholder="Spectate password" autocomplete="new-password" data-lpignore="true" data-1p-ignore="true">
+      </div>
+    </details>
+  </form>
+</div>
+<div class="links">
+  <p>Local split screen: <a id="play" href="#"></a></p>
+</div>
+<script src="/js/index.js"></script>

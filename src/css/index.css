@@ -1,0 +1,47 @@
+.links a {
+  text-decoration: none;
+  color: #66aaff;
+}
+#startForm {
+  margin-top: 10px;
+}
+.form-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.field {
+  flex: 1 1 36px;
+  padding: 8px 10px;
+  font-size: 1rem;
+  border: 1px solid #444;
+  border-radius: 4px;
+  background: #1a1a1a;
+  color: #eee;
+}
+#startForm button {
+  padding: 8px 16px;
+  font-size: 1rem;
+  font-weight: bold;
+  border: none;
+  border-radius: 4px;
+  background: #007BFF;
+  color: white;
+  cursor: pointer;
+}
+#startForm button:hover {
+  background: #0066d6;
+}
+.advanced {
+  margin-top: 15px;
+}
+.advanced summary {
+  cursor: pointer;
+  color: #66aaff;
+}
+.advanced-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+}
