@@ -367,13 +367,14 @@ class Session
   // Once the match is decided, "Round N" no longer means anything (the engine's own
   // full-map reveal replaces split-screen play - see render()'s gameOver branch), so
   // this player's own outcome replaces it instead - only meaningful for role
-  // "blue"/"green" (an actual remote player, one of two possible winners); hotseat
-  // roles (0/"play") have no single "you" to call it a win or loss for, so they keep
-  // showing "Round N" same as before.
+  // "blue"/"green"/"ai" (a single human with one tank to call a win or loss for -
+  // "ai" always plays blue's side, see KEYMAPS); hotseat roles (0/"play") have two
+  // humans sharing the screen with no single "you", so they keep showing "Round N".
   formatScore(round, blueScore, greenScore, gameOver = false, winner = null)
   {
-    const label = gameOver && (this.role == "blue" || this.role == "green")
-      ? (this.role == winner ? t("victory") : t("defeat"))
+    const myRole = this.role == "ai" ? "blue" : this.role;
+    const label = gameOver && (myRole == "blue" || myRole == "green")
+      ? (myRole == winner ? t("victory") : t("defeat"))
       : t("round", {n: round});
     this.scoreEl.innerHTML =
       `${label} &mdash; ` +
@@ -540,6 +541,23 @@ const KEYMAPS = {
 function onKey(e, pressed)
 {
   let consumed = true;
+
+  // the WASM engine's own "press any key" prompt on the match-over map reveal
+  // (see Session.render()'s gameOver branch) only ever reads scancodes for the bits
+  // in KEYMAPS - it has no way to see an arbitrary keypress, so that prompt would sit
+  // there forever with no browser input able to satisfy it. Handle "any key" ourselves
+  // instead: blue/green have nothing left to rejoin (matchEnded already told the
+  // server to drop the session - see Session.render()), so send them back to the
+  // index; offline modes (0/play/ai) just reload, same as their restart button.
+  if (pressed && session.matchEnded)
+  {
+    if (role == "blue" || role == "green")
+      document.location.href = "/";
+    else
+      document.location.reload();
+    e.preventDefault();
+    return;
+  }
 
   if (role == "blue" || role == "green" || role == "ai")
   {

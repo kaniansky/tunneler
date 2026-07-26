@@ -103,5 +103,8 @@ function injectLangSwitcher()
 
 document.addEventListener("DOMContentLoaded", () => {
   applyI18n();
-  injectLangSwitcher();
+  // only index.html gets the switcher - lobby/tunneler/spectator share the .banner
+  // class too, but switching language mid-session isn't a thing they need to expose
+  if (location.pathname == "/")
+    injectLangSwitcher();
 });

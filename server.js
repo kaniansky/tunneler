@@ -512,6 +512,14 @@ wsServer.on("connection", function (socket, request) {
     return;
   }
 
+  // blue/green are single-occupancy - a second socket can't join as a role someone
+  // else already holds (would let two clients drive the same tank). Spectators have
+  // no such limit.
+  if (role != "spectate" && session.sockets.some((s) => s.role == role)) {
+    socket.close(4409, `${role} already connected`);
+    return;
+  }
+
   // someone rejoined before the empty-session grace period elapsed - keep it alive
   if (session.emptyTimer) {
     clearTimeout(session.emptyTimer);
