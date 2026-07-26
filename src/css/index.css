@@ -81,3 +81,37 @@
 #gamesTable .score {
   white-space: nowrap;
 }
+
+/* local split screen shares one keyboard between two people sitting at the same
+   device - there's no touch-input equivalent for that, so drop the option entirely
+   on touch devices / narrow viewports rather than link to a mode nobody can play. */
+@media (max-width: 600px), (pointer: coarse) {
+  .local-splitscreen-row {
+    display: none;
+  }
+}
+
+@media (max-width: 600px) {
+  .links p {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .links p span {
+    width: 100%;
+  }
+  .btn {
+    flex: 1 1 auto;
+  }
+  .btn + .btn {
+    margin-left: 0;
+  }
+  .form-row {
+    justify-content: flex-start;
+  }
+  #gamesTable {
+    font-size: 0.9rem;
+  }
+  #gamesTable th, #gamesTable td {
+    padding: 6px 8px 6px 0;
+  }
+}

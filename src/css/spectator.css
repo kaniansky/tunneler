@@ -6,13 +6,17 @@
 #canvas1 {
   display: block;
   margin: 20px auto 10px;
+  max-width: 100%;
+  height: auto;
   border-radius: 4px;
 }
 #map {
   display: block;
   image-rendering: pixelated;
   width: 640px;
-  height: 300px;
+  max-width: 100%;
+  height: auto;
+  aspect-ratio: 640 / 300;
   margin: 0 auto 20px;
   border-radius: 4px;
 }

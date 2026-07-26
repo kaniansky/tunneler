@@ -60,3 +60,40 @@ body {
   border-radius: 8px;
   font-size: 1.1rem;
 }
+@media (max-width: 600px) {
+  /* the title/score/session-name text is centered and can run long (e.g. "Round 1 -
+     Blue: 0 | Green: 0") - on narrow screens that collides with the new-game/restart/
+     copy-link/lang-select buttons, which sit absolutely positioned in the corners on
+     desktop. Drop them into normal flow instead: text takes its own full-width row,
+     buttons wrap to a second row below it. */
+  .banner {
+    flex-wrap: wrap;
+    justify-content: center;
+    height: auto;
+    padding: 8px 12px;
+    font-size: 1rem;
+    gap: 6px;
+  }
+  .banner > .new-game-btn,
+  .banner > .lang-select,
+  .banner > .restart-btn,
+  .banner > .copy-link-btn {
+    position: static;
+    transform: none;
+    order: 2;
+    padding: 4px 10px;
+    font-size: 0.8rem;
+  }
+  .banner > #score,
+  .banner > .left-text,
+  .banner > #sessionName {
+    order: 1;
+    flex: 1 0 100%;
+    text-align: center;
+  }
+  .links {
+    margin: 16px 10px;
+    padding: 14px;
+    font-size: 1rem;
+  }
+}

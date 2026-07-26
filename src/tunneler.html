@@ -1,13 +1,22 @@
 <title>Tunneler</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <link rel="icon" href="/favicon.ico">
 <link rel="stylesheet" href="/css/common.css">
 <link rel="stylesheet" href="/css/tunneler.css">
 <div class="banner">
-<a class="new-game-btn" href="/" data-i18n="newGame">New Game</a>
+<a class="new-game-btn" href="/" data-i18n="home">Home</a>
 <div id="score" data-session-name="{{SESSION_NAME}}" data-blue-name="{{BLUE_NAME}}" data-green-name="{{GREEN_NAME}}"></div>
-<button id="restartBtn" class="restart-btn" type="button" hidden data-i18n="restart">Restart</button>
+<button id="restartBtn" class="restart-btn" type="button" hidden data-i18n="newGame">New Game</button>
 </div>
-<canvas id="canvas1" width="640" height="400"></canvas>
+<div id="gameArea">
+  <canvas id="canvas1" width="640" height="400"></canvas>
+  <div id="touchControls" class="touch-controls" hidden>
+    <div id="joystick" class="joystick" aria-label="Move">
+      <div class="joystick-knob"></div>
+    </div>
+    <button type="button" id="fireBtn" class="fire-btn" data-action="fire" aria-label="Fire">FIRE</button>
+  </div>
+</div>
 
 <script src="/js/i18n.js"></script>
 <script src="/js/wasmapp.js"></script>

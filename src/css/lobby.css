@@ -27,7 +27,16 @@
   line-height: 2;
   display: flex;
   justify-content: space-evenly;
+  flex-wrap: wrap;
   gap: 10px;
+}
+@media (max-width: 500px) {
+  .links {
+    flex-direction: column;
+  }
+  .links .btn {
+    width: 100%;
+  }
 }
 .links .btn {
   padding: 10px 20px;

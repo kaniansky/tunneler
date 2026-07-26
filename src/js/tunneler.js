@@ -215,6 +215,14 @@ class Session
   {
     if (this.role != "blue" && this.role != "green")
     {
+      // offline/hotseat roles (0/play/ai) have no session to tell the server about
+      // (that fetch("/"+sid+"/end") below is blue/green-only) and never crop the
+      // canvas, but still need matchEnded set so the "any key"/"any tap" handler
+      // (see handleMatchEndInput() below) knows to fire once the WASM engine's own
+      // full-map reveal comes up - this used to only ever get set in the blue/green
+      // branch, which left offline matches with no way to leave the reveal screen.
+      if (!this.matchEnded && Session.isMatchOver(this.gameLocal.state()))
+        this.matchEnded = true;
       this.gameLocal.render(this.ctx, forceRedraw);
       this.drawCountdown(this.ctx, remaining);
       return;
@@ -545,6 +553,13 @@ if (role == "blue" || role == "green")
 const session = new Session(canvas.getContext('2d'), role, isOffline, document.getElementById('score'), blueName, greenName, aiDifficulty)
 session.start();
 
+// touch has no keyboard to satisfy the WASM engine's "press any key" match-over prompt
+// with - a tap anywhere on the game view (not just the joystick/fire widgets, which
+// have their own handleMatchEndInput() check further down) should count the same way a
+// keypress does on desktop. handleMatchEndInput() is a hoisted function declaration
+// (defined further down), so calling it here before that point in the file is fine.
+canvas.addEventListener("pointerdown", () => handleMatchEndInput());
+
 // bit index within the 11-bit keyState for each logical action, per tank/role.
 // role 0 and "play" (both hotseat) keep two disjoint key sets live simultaneously, since
 // one physical keyboard is shared by two people - only the fire key differs between them
@@ -554,23 +569,33 @@ const KEYMAPS = {
   green: { up:0, right:1, down:2, left:3, fire:4, esc:5 }
 };
 
+// the WASM engine's own "press any key" prompt on the match-over map reveal (see
+// Session.render()'s gameOver branch) only ever reads scancodes for the bits in
+// KEYMAPS - it has no way to see an arbitrary keypress/tap, so that prompt would sit
+// there forever with no input able to satisfy it. Handle "any key"/"any tap" ourselves
+// instead: blue/green have nothing left to rejoin (matchEnded already told the server
+// to drop the session - see Session.render()), so send them back to the index; offline
+// modes (0/play/ai) just reload, same as their restart button. Shared by onKey() below
+// and the touch controls' pointerdown handlers - session.onKey() (used to actually
+// move/fire) has no idea about match-end, so every input entry point has to check this
+// itself before it does anything else.
+function handleMatchEndInput()
+{
+  if (!session.matchEnded)
+    return false;
+  if (role == "blue" || role == "green")
+    document.location.href = "/";
+  else
+    document.location.reload();
+  return true;
+}
+
 function onKey(e, pressed)
 {
   let consumed = true;
 
-  // the WASM engine's own "press any key" prompt on the match-over map reveal
-  // (see Session.render()'s gameOver branch) only ever reads scancodes for the bits
-  // in KEYMAPS - it has no way to see an arbitrary keypress, so that prompt would sit
-  // there forever with no browser input able to satisfy it. Handle "any key" ourselves
-  // instead: blue/green have nothing left to rejoin (matchEnded already told the
-  // server to drop the session - see Session.render()), so send them back to the
-  // index; offline modes (0/play/ai) just reload, same as their restart button.
-  if (pressed && session.matchEnded)
+  if (pressed && handleMatchEndInput())
   {
-    if (role == "blue" || role == "green")
-      document.location.href = "/";
-    else
-      document.location.reload();
     e.preventDefault();
     return;
   }
@@ -642,3 +667,89 @@ function onKey(e, pressed)
 }
 document.onkeydown = evt => onKey(evt, 1);
 document.onkeyup = evt => onKey(evt, 0);
+
+// Touch controls: only blue/green/ai drive exactly one tank via KEYMAPS, so a single
+// on-screen joystick+fire button maps onto one of those roles cleanly. "play"/0 hotseat
+// share one keyboard between two people sitting at the same device - there's no
+// touch-input equivalent for a second player, so mobile drops that mode entirely
+// instead (see index.html's local-splitscreen-row, hidden on touch/narrow viewports).
+const touchControls = document.getElementById("touchControls");
+const isTouchViewport = window.matchMedia("(pointer: coarse)").matches || window.innerWidth <= 900;
+if (touchControls && isTouchViewport && (role == "blue" || role == "green" || role == "ai"))
+{
+  document.body.classList.add("touch-enabled");
+  touchControls.hidden = false;
+  const map = KEYMAPS[role == "ai" ? "blue" : role];
+
+  const fireBtn = document.getElementById("fireBtn");
+  const firePress = e => {
+    e.preventDefault();
+    if (handleMatchEndInput())
+      return;
+    fireBtn.classList.add("active");
+    session.onKey(map.fire, 1);
+  };
+  const fireRelease = e => { e.preventDefault(); fireBtn.classList.remove("active"); session.onKey(map.fire, 0); };
+  fireBtn.addEventListener("pointerdown", firePress);
+  fireBtn.addEventListener("pointerup", fireRelease);
+  fireBtn.addEventListener("pointercancel", fireRelease);
+  fireBtn.addEventListener("pointerleave", fireRelease);
+
+  // Drag joystick: setting both an x-axis and a y-axis bit at once (e.g. up+right)
+  // drives a diagonal, same as holding two arrow keys together on a keyboard - a
+  // fixed set of up/down/left/right buttons can't do that with a single thumb.
+  // DEADZONE/RADIUS are in the knob's own translated pixels, not screen pixels, so
+  // they stay correct regardless of CSS transform scaling.
+  const joystick = document.getElementById("joystick");
+  const knob = joystick.querySelector(".joystick-knob");
+  const RADIUS = 32; // (.joystick 116px - .joystick-knob 52px) / 2, see tunneler.css
+  const DEADZONE = 10;
+  let activePointerId = null;
+
+  const setAxes = (dx, dy) => {
+    session.onKey(map.left, dx < -DEADZONE);
+    session.onKey(map.right, dx > DEADZONE);
+    session.onKey(map.up, dy < -DEADZONE);
+    session.onKey(map.down, dy > DEADZONE);
+  };
+  const moveKnob = (clientX, clientY) => {
+    const rect = joystick.getBoundingClientRect();
+    let dx = clientX - (rect.left + rect.width / 2);
+    let dy = clientY - (rect.top + rect.height / 2);
+    const dist = Math.hypot(dx, dy);
+    if (dist > RADIUS)
+    {
+      dx = dx / dist * RADIUS;
+      dy = dy / dist * RADIUS;
+    }
+    knob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+    setAxes(dx, dy);
+  };
+  const resetKnob = () => {
+    knob.style.transform = "translate(-50%, -50%)";
+    setAxes(0, 0);
+  };
+
+  joystick.addEventListener("pointerdown", e => {
+    e.preventDefault();
+    if (handleMatchEndInput())
+      return;
+    activePointerId = e.pointerId;
+    joystick.setPointerCapture(activePointerId);
+    moveKnob(e.clientX, e.clientY);
+  });
+  joystick.addEventListener("pointermove", e => {
+    if (e.pointerId !== activePointerId)
+      return;
+    e.preventDefault();
+    moveKnob(e.clientX, e.clientY);
+  });
+  const endDrag = e => {
+    if (e.pointerId !== activePointerId)
+      return;
+    activePointerId = null;
+    resetKnob();
+  };
+  joystick.addEventListener("pointerup", endDrag);
+  joystick.addEventListener("pointercancel", endDrag);
+}

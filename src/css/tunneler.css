@@ -26,3 +26,104 @@
   margin: 20px auto;
   border-radius: 4px;
 }
+
+.touch-controls[hidden] {
+  display: none !important;
+}
+/* overlaid on top of #gameArea (corners), not a row that reserves its own layout
+   space - the game's fixed 640x400/320x400 aspect ratio already leaves blank margins
+   around the canvas on most phone viewports (landscape content on a portrait screen),
+   and floating the controls into that space rather than budgeting a separate strip
+   below the canvas keeps the game itself as big as the screen allows. */
+.touch-controls {
+  display: none;
+  padding: 20px 20px calc(20px + env(safe-area-inset-bottom));
+  pointer-events: none;
+  margin-top: auto;
+  width: stretch;
+  align-items: center;
+  justify-content: space-between;
+}
+.touch-controls > * {
+  pointer-events: auto;
+}
+/* base + knob drag joystick - lets one thumb hit diagonals (both an x and a y bit set
+   at once), which separate up/down/left/right buttons can't do without a second
+   finger. Knob travel radius is computed in tunneler.js from these two sizes
+   ((base - knob) / 2) - keep them in sync if either changes. */
+.joystick {
+  position: relative;
+  width: 116px;
+  height: 116px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.joystick-knob {
+  position: absolute;
+  width: 52px;
+  height: 52px;
+  left: 50%;
+  top: 50%;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+.fire-btn {
+  width: 78px;
+  height: 78px;
+  border-radius: 50%;
+  background: rgba(220, 50, 50, 0.35);
+  border: 2px solid rgba(255, 255, 255, 0.5);
+  color: #fff;
+  font-weight: bold;
+  font-size: 0.9rem;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+.fire-btn.active {
+  background: rgba(220, 50, 50, 0.65);
+}
+
+/* small/touch viewports: fit banner + game in one non-scrolling screen, scaling the
+   canvas to whatever room is left (width:auto/height:auto+max-width/max-height is the
+   standard aspect-preserving fit for a replaced element like canvas - no object-fit
+   needed since we're not forcing its box to a fixed size). Touch controls (see above)
+   overlay directly on #gameArea rather than taking their own layout row. */
+@media (max-width: 900px), (pointer: coarse) {
+  body {
+    height: 100dvh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .banner {
+    flex: 0 0 auto;
+  }
+  #gameArea {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    flex-direction: column;
+  }
+  #canvas1 {
+    margin: 0;
+    margin-top: auto;
+    width: auto;
+    height: auto;
+    max-width: 100%;
+    max-height: 100%;
+  }
+  body.touch-enabled .touch-controls {
+    display: flex;
+  }
+}

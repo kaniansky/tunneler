@@ -7,7 +7,7 @@
   "restart": "Restart",
   "lobbySuffix": "Lobby",
   "newNetworkGame": "New Network Game",
-  "backToHome": "Back",
+  "home": "Home",
   "sessionName": "Session name",
   "sessionNamePlaceholder": "Leave blank for a random one",
   "start": "Start",

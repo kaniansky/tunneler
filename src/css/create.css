@@ -10,6 +10,14 @@
   gap: 10px;
   height: 36px;
 }
+@media (max-width: 500px) {
+  .form-row {
+    height: auto;
+  }
+  .field-group {
+    flex-basis: 100%;
+  }
+}
 .field {
   flex: 1 1 36px;
   padding: 8px 10px;
