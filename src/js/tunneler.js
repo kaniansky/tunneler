@@ -517,8 +517,10 @@ let blueName = t("blueDefault"), greenName = t("greenDefault");
 if (role == "blue" || role == "green")
 {
   const scoreEl = document.getElementById("score");
-  blueName = scoreEl.dataset.blueName || "Blue";
-  greenName = scoreEl.dataset.greenName || "Green";
+  const rawBlueName = scoreEl.dataset.blueName || "Blue";
+  const rawGreenName = scoreEl.dataset.greenName || "Green";
+  blueName = rawBlueName == "Blue" ? t("blueDefault") : rawBlueName;
+  greenName = rawGreenName == "Green" ? t("greenDefault") : rawGreenName;
   document.title = `${scoreEl.dataset.sessionName} - ${role == "blue" ? blueName : greenName} - Tunneler`;
 }
 else if (role == "play" || role == "ai")

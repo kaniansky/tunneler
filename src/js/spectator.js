@@ -308,8 +308,10 @@ class SpectatorSession
 
 const scoreEl = document.getElementById('score');
 const sessionName = scoreEl.dataset.sessionName;
-const blueName = scoreEl.dataset.blueName || "Blue";
-const greenName = scoreEl.dataset.greenName || "Green";
+const rawBlueName = scoreEl.dataset.blueName || "Blue";
+const rawGreenName = scoreEl.dataset.greenName || "Green";
+const blueName = rawBlueName == "Blue" ? t("blueDefault") : rawBlueName;
+const greenName = rawGreenName == "Green" ? t("greenDefault") : rawGreenName;
 const canvas = document.getElementById('canvas1');
 const mapCanvas = document.getElementById('map');
 const session = new SpectatorSession(canvas.getContext('2d'), mapCanvas.getContext('2d'), scoreEl, sessionName, blueName, greenName);
