@@ -136,7 +136,8 @@ class Session
       {
         if (!/wrong \w+ password/i.test(e.message))
           throw e;
-        const entered = window.prompt(`This ${this.role} slot is password-protected.\nEnter password:`);
+        const roleName = this.role == "blue" ? t("blueDefault") : t("greenDefault");
+        const entered = window.prompt(t("slotPasswordProtected", {role: roleName}));
         if (entered === null)
         {
           this.renderPasswordError();
@@ -155,7 +156,7 @@ class Session
     this.ctx.fillStyle = "#fff";
     this.ctx.font = "20px sans-serif";
     this.ctx.textAlign = "center";
-    this.ctx.fillText("No password entered - reload to try again.", canvas.width/2, canvas.height/2);
+    this.ctx.fillText(t("noPasswordEntered"), canvas.width/2, canvas.height/2);
   }
 
   // blue/green shouldn't be able to move before the other player has joined - the game
@@ -199,7 +200,7 @@ class Session
     this.ctx.fillStyle = "#fff";
     this.ctx.font = "20px sans-serif";
     this.ctx.textAlign = "center";
-    this.ctx.fillText("Waiting for opponent…", canvas.width/2, canvas.height/2 + 16);
+    this.ctx.fillText(t("waitingForOpponent"), canvas.width/2, canvas.height/2 + 16);
   }
 
   // remaining: ms left in the round-start freeze (0 once it's over) - drives the
@@ -268,7 +269,7 @@ class Session
     ctx.font = "bold 18px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(`${name} disconnected...`, canvas.width / 2, cy);
+    ctx.fillText(t("disconnected", {name}), canvas.width / 2, cy);
     ctx.textBaseline = "alphabetic";
   }
 
@@ -372,8 +373,8 @@ class Session
   formatScore(round, blueScore, greenScore, gameOver = false, winner = null)
   {
     const label = gameOver && (this.role == "blue" || this.role == "green")
-      ? (this.role == winner ? "Victory" : "Defeat")
-      : `Round ${round}`;
+      ? (this.role == winner ? t("victory") : t("defeat"))
+      : t("round", {n: round});
     this.scoreEl.innerHTML =
       `${label} &mdash; ` +
       `<span style="color:#9fcaff">${escapeHtml(this.blueName)}: ${blueScore}</span>` +
@@ -497,7 +498,7 @@ const aiDifficulty = role == "ai" ? (pathSegments[1] || "medium") : null;
 // names (and display name) come from #score's data-* attributes, server-templated by
 // sendWithSessionName() the same way lobby.html/spectator.html get theirs - not the URL
 // slug, which may not match the name's original casing/spacing.
-let blueName = "Blue", greenName = "Green";
+let blueName = t("blueDefault"), greenName = t("greenDefault");
 if (role == "blue" || role == "green")
 {
   const scoreEl = document.getElementById("score");
@@ -507,11 +508,11 @@ if (role == "blue" || role == "green")
 }
 else if (role == "play" || role == "ai")
 {
-  document.title = role == "play" ? "Split screen - Tunneler" : `vs AI (${capitalize(aiDifficulty)}) - Tunneler`;
+  document.title = role == "play" ? t("splitScreenTitle") : t("vsAiTitle", {difficulty: t(aiDifficulty)});
   if (role == "ai")
   {
-    blueName = "Human";
-    greenName = "AI";
+    blueName = t("humanDefault");
+    greenName = t("aiDefault");
   }
   // /play and /ai both have a restart concept - they're the fully local/offline modes
   // with no opponent to disrupt by reloading; a reload is enough to reset either since
@@ -519,11 +520,6 @@ else if (role == "play" || role == "ai")
   const restartBtn = document.getElementById("restartBtn");
   restartBtn.hidden = false;
   restartBtn.addEventListener("click", () => document.location.reload());
-}
-
-function capitalize(s)
-{
-  return s[0].toUpperCase() + s.slice(1);
 }
 
 const canvas = document.getElementById('canvas1');

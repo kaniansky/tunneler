@@ -79,7 +79,7 @@ class SpectatorSession
       {
         if (!/wrong \w+ password/i.test(e.message))
           throw e;
-        const entered = window.prompt("This session is spectate-password protected.\nEnter password:");
+        const entered = window.prompt(t("sessionPasswordProtected"));
         if (entered === null)
         {
           this.renderPasswordError();
@@ -98,7 +98,7 @@ class SpectatorSession
     this.ctx.fillStyle = "#fff";
     this.ctx.font = "20px sans-serif";
     this.ctx.textAlign = "center";
-    this.ctx.fillText("No password entered - reload to try again.", canvas.width/2, canvas.height/2);
+    this.ctx.fillText(t("noPasswordEntered"), canvas.width/2, canvas.height/2);
   }
 
   // The server doesn't generate a seed - i.e. there's no map, no game, nothing to
@@ -145,7 +145,7 @@ class SpectatorSession
     this.ctx.fillStyle = "#fff";
     this.ctx.font = "20px sans-serif";
     this.ctx.textAlign = "center";
-    this.ctx.fillText("Waiting for players to connect…", canvas.width/2, canvas.height/2 + 16);
+    this.ctx.fillText(t("waitingForPlayers"), canvas.width/2, canvas.height/2 + 16);
     this.formatScore(1, 0, 0);
   }
   async netsync()
@@ -297,7 +297,7 @@ class SpectatorSession
   // becomes "<winner> wins" instead.
   formatScore(round, blueScore, greenScore, gameOver = false, winnerName = null)
   {
-    const label = gameOver ? `${escapeHtml(winnerName)} wins` : `Round ${round}`;
+    const label = gameOver ? t("wins", {name: escapeHtml(winnerName)}) : t("round", {n: round});
     this.scoreEl.innerHTML =
       `${escapeHtml(this.sessionName)} &mdash; ${label} &mdash; ` +
       `<span style="color:#9fcaff">${escapeHtml(this.blueName)}: ${blueScore}</span>` +

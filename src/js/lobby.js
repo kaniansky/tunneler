@@ -14,6 +14,19 @@ document.querySelector("#blue").addEventListener("click", () => document.locatio
 document.querySelector("#green").addEventListener("click", () => document.location.href = green);
 document.querySelector("#sp").addEventListener("click", () => document.location.href = sp);
 
+// blue/green button labels interpolate the server-templated player name into a
+// translated "Join {name}" string - applyI18n()'s blanket data-i18n textContent
+// overwrite can't do this itself, so it's redone here on every langchange too.
+const blueBtn = document.querySelector("#blue");
+const greenBtn = document.querySelector("#green");
+function updateJoinButtons()
+{
+  blueBtn.textContent = t("join", {name: blueBtn.dataset.name});
+  greenBtn.textContent = t("join", {name: greenBtn.dataset.name});
+}
+updateJoinButtons();
+document.addEventListener("langchange", updateJoinButtons);
+
 // navigator.clipboard needs a secure context (https, or localhost) - fall back to the
 // old select-and-execCommand trick over plain http so this still works there too.
 async function copyText(text)
@@ -36,7 +49,7 @@ copyLinkBtn.addEventListener("click", async () => {
   {
     await copyText(document.location.href);
     const original = copyLinkBtn.textContent;
-    copyLinkBtn.textContent = "Copied!";
+    copyLinkBtn.textContent = t("copied");
     setTimeout(() => { copyLinkBtn.textContent = original; }, 1500);
   }
   catch (e)

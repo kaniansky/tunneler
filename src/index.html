@@ -3,33 +3,34 @@
 <link rel="stylesheet" href="/css/common.css">
 <link rel="stylesheet" href="/css/index.css">
 <div class="banner">
-<div class="left-text">Tunneler</div>
+<div class="left-text" data-i18n="appTitle">Tunneler</div>
 </div>
 <div class="links">
   <form id="startForm" action="/create" method="POST" autocomplete="off">
-    <p>Network game:</p>
+    <p data-i18n="networkGame">Network game:</p>
     <div class="form-row">
-      <input id="sessionName" name="name" type="text" class="field" maxlength="100" placeholder="Session name (leave blank for a random one)" autofocus autocomplete="off">
-      <button type="submit">Start</button>
+      <input id="sessionName" name="name" type="text" class="field" maxlength="100" placeholder="Session name (leave blank for a random one)" data-i18n-placeholder="sessionNamePlaceholder" autofocus autocomplete="off">
+      <button type="submit" data-i18n="start">Start</button>
     </div>
     <details class="advanced">
-      <summary>Advanced settings (optional)</summary>
+      <summary data-i18n="advancedSettings">Advanced settings (optional)</summary>
       <div class="advanced-fields">
         <div class="form-row">
-          <input name="blueName" type="text" class="field" maxlength="100" placeholder="Blue player name" autocomplete="off">
-          <input name="bluePassword" type="password" class="field" maxlength="100" placeholder="Blue password" autocomplete="new-password" data-lpignore="true" data-1p-ignore="true">
+          <input name="blueName" type="text" class="field" maxlength="100" placeholder="Blue player name" data-i18n-placeholder="bluePlayerName" autocomplete="off">
+          <input name="bluePassword" type="password" class="field" maxlength="100" placeholder="Blue password" data-i18n-placeholder="bluePassword" autocomplete="new-password" data-lpignore="true" data-1p-ignore="true">
         </div>
         <div class="form-row">
-          <input name="greenName" type="text" class="field" maxlength="100" placeholder="Green player name" autocomplete="off">
-          <input name="greenPassword" type="password" class="field" maxlength="100" placeholder="Green password" autocomplete="new-password" data-lpignore="true" data-1p-ignore="true">
+          <input name="greenName" type="text" class="field" maxlength="100" placeholder="Green player name" data-i18n-placeholder="greenPlayerName" autocomplete="off">
+          <input name="greenPassword" type="password" class="field" maxlength="100" placeholder="Green password" data-i18n-placeholder="greenPassword" autocomplete="new-password" data-lpignore="true" data-1p-ignore="true">
         </div>
-        <input name="spectatePassword" type="password" class="field" maxlength="100" placeholder="Spectate password" autocomplete="new-password" data-lpignore="true" data-1p-ignore="true">
+        <input name="spectatePassword" type="password" class="field" maxlength="100" placeholder="Spectate password" data-i18n-placeholder="spectatePassword" autocomplete="new-password" data-lpignore="true" data-1p-ignore="true">
       </div>
     </details>
   </form>
 </div>
 <div class="links">
-  <p>Local split screen: <a id="play" href="#"></a></p>
-  <p>Singleplayer vs AI: <a id="aiEasy" href="#">Easy</a> | <a id="aiMedium" href="#">Medium</a> | <a id="aiHard" href="#">Hard</a></p>
+  <p><span data-i18n="localSplitScreen">Local split screen:</span> <a id="play" href="#"></a></p>
+  <p><span data-i18n="singleplayerVsAi">Singleplayer vs Bot:</span> <a id="aiEasy" href="#" data-i18n="easy">Easy</a> | <a id="aiMedium" href="#" data-i18n="medium">Medium</a> | <a id="aiHard" href="#" data-i18n="hard">Hard</a></p>
 </div>
+<script src="/js/i18n.js"></script>
 <script src="/js/index.js"></script>

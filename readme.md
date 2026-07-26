@@ -79,6 +79,20 @@ npm run watch   # the whole dev loop in one command:
                 #  - also runs server.js under Node's own --watch, restarting it on server.js changes
 ```
 
+## Translations
+
+The UI (landing page, lobby, in-game banner/scoreboard, waiting/password/disconnect messages) is
+translated client-side, no server involvement. Currently English (`en`), Slovak (`sk`), Czech (`cs`).
+
+Each language is one `src/lang/<code>.json` file — a flat key/string map plus a `_label` key (the short
+code shown in the language `<select>`, e.g. `"EN"`). `build.js` derives `public/lang/index.json`
+(`{code: label, ...}`) from whatever `*.json` files exist in `src/lang/` at build time, so adding a
+language is just adding its json file — no JS changes needed. `src/js/i18n.js` loads that manifest plus
+the active language synchronously (via `XMLHttpRequest`, not `fetch()`) so `t(key, vars)` is usable
+immediately by other scripts as they parse, not just after the page finishes loading. Static chrome is
+tagged `data-i18n`/`data-i18n-placeholder` in the html and applied automatically; anything built from
+dynamic data (session/player names, scores) calls `t()` directly in the page's own JS instead.
+
 ## Docker
 
 ```bash
@@ -101,6 +115,9 @@ File list:
   - **spectator.html** / **spectator.js** / **spectator.css** - read-only view: both players, map overview, scoreboard
   - **lobby.html** / **lobby.js** / **lobby.css** - a session's landing page listing its Blue / Green / Spectate links
   - **netcode.js** - shared `Path`/`Game`/`Net` classes (WASM stepping, wire protocol, frame timing)
+  - **i18n.js** - client-side translations (`t()`/`applyI18n()`/language switcher) - see "Translations" above
+  - **lang/en.json** / **sk.json** / **cs.json** - one file per language; `build.js` derives
+    `public/lang/index.json` from these at build time
   - **ai.js** / **ai-combat.js** / **ai-pathing.js** / **ai-sighting.js** / **ai-debug.js** - built-in bot
     that drives green for `/ai/<easy|medium|hard>`, split across files by concern (class shell + pipeline,
     sniping, movement/pathfinding, vision/fog-of-war, diagnostics-only) but all mixed onto one

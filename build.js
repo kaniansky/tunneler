@@ -57,6 +57,28 @@ function buildPublic() {
       allowOverwrite: true,
       logLevel: "warning",
     });
+
+  buildLangManifest();
+}
+
+// src/lang/<code>.json holds one language's translation strings plus a "_label" key (the
+// short code shown in i18n.js's lang <select>, e.g. "EN"/"SK"/"CZ"). Rather than hardcode
+// the set of supported languages in i18n.js, generate a manifest - {code: label, ...} -
+// straight from whatever *.json files actually exist in src/lang/, so adding/removing a
+// language is just adding/removing its json file, no JS edit needed. i18n.js fetches this
+// (synchronously, same as it loads each language file - see its own comment for why)
+// before it needs to know what languages exist at all.
+function buildLangManifest() {
+  const langDir = path.join(OUT_DIR, "lang");
+  if (!fs.existsSync(langDir))
+    return;
+  const manifest = {};
+  for (const f of fs.readdirSync(langDir).filter((f) => f.endsWith(".json"))) {
+    const code = path.basename(f, ".json");
+    const data = JSON.parse(fs.readFileSync(path.join(langDir, f), "utf8"));
+    manifest[code] = data._label || code;
+  }
+  fs.writeFileSync(path.join(langDir, "index.json"), JSON.stringify(manifest));
 }
 
 // Rebuilds on every change under src/ - one full buildPublic() per change rather than
