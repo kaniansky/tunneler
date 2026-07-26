@@ -1,5 +1,9 @@
 # Tunneler
 
+[![CI](https://github.com/kaniansky/tunneler/actions/workflows/ci.yml/badge.svg)](https://github.com/kaniansky/tunneler/actions/workflows/ci.yml)
+[![Docker image](https://github.com/kaniansky/tunneler/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/kaniansky/tunneler/actions/workflows/docker-publish.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 **Landing page** — name a session to create/join it, or jump straight into local split screen:
 
 ![Landing page](screenshots/index.png)
@@ -26,13 +30,17 @@ full split screen like `/play` since there's no second human to hide the other h
 
 ![Singleplayer vs AI](screenshots/ai.png)
 
-Tunneler by Geoffrey Silverton is a DOS game from 1991 written in Turbo Pascal. With Cicoparser it was converted into C++ and then rebuild with emscripten so it could be played inside browser. This is a proof of concept of turning cicoparser games into network multiplayer game.
+Tunneler by Geoffrey Silverton is a DOS game from 1991 written in Turbo Pascal.
+
+The spectator view (`src/spectator.html`) shows both players, a live map overview, and a realtime scoreboard.
+
+## Background
+
+With [Cicoparser](https://github.com/gabonator/Projects/tree/master/CicoJit) it was converted into C++ and then rebuild with emscripten so it could be played inside browser. This is a proof of concept of turning cicoparser games into network multiplayer game.
 You can play it here [http://cloud.valky.eu:8042/](http://cloud.valky.eu:8042/), or run it locally (see
 "Running"/"Docker" below). This copy fetches the WASM/EXE binaries over HTTP, so it needs that server
 running — it can't be opened as a bare local file anymore. A self-contained standalone build (no server
 required) is available at [tunneler.html](https://rawgit.valky.eu/gabonator/Projects/refs/heads/master/CicoJit/gamelib/tunneler/netplay/tunneler.html)
-
-The spectator view (`src/spectator.html`) shows both players, a live map overview, and a realtime scoreboard.
 
 ## Running
 
@@ -113,3 +121,14 @@ File list:
   - **readme.md**
   - **screenshots/index.png** / **lobby.png** / **blue.png** / **green.png** / **spectate.png** /
     **split-screen.png** / **ai.png**
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for dev setup, PR expectations, and the release process.
+
+## License
+
+The netplay layer in this repo (server, build tooling, `src/` client code) is MIT licensed — see
+[LICENSE](LICENSE). That does not extend to the original Tunneler game by Geoffrey Silverton or the
+compiled game assets (`src/assets/tunneler.wasm`, `src/assets/TUNNELER.EXE`), which remain under their own
+original copyright.

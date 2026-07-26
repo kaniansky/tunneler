@@ -1,0 +1,10 @@
+.git
+.github
+node_modules
+public
+certs
+screenshots
+*.md
+.editorconfig
+.nvmrc
+.gitignore

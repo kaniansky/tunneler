@@ -1,5 +1,24 @@
 {
+  "name": "tunneler",
+  "version": "1.0.0",
+  "description": "Netplay layer for Tunneler (1991 DOS game) - browser client + relay server turning the WASM-ported single-player game into a lockstep-synced 2-player game",
+  "license": "MIT",
+  "author": "Norko",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kaniansky/tunneler.git"
+  },
+  "homepage": "https://github.com/kaniansky/tunneler#readme",
+  "bugs": {
+    "url": "https://github.com/kaniansky/tunneler/issues"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "private": true,
+  "main": "server.js",
   "scripts": {
+    "start": "node server.js",
     "build": "node build.js",
     "watch": "node build.js --watch"
   },
