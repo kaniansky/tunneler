@@ -6,31 +6,27 @@
 <div class="left-text" data-i18n="appTitle">Tunneler</div>
 </div>
 <div class="links">
-  <form id="startForm" action="/create" method="POST" autocomplete="off">
-    <p data-i18n="networkGame">Network game:</p>
-    <div class="form-row">
-      <input id="sessionName" name="name" type="text" class="field" maxlength="100" placeholder="Session name (leave blank for a random one)" data-i18n-placeholder="sessionNamePlaceholder" autofocus autocomplete="off">
-      <button type="submit" data-i18n="start">Start</button>
-    </div>
-    <details class="advanced">
-      <summary data-i18n="advancedSettings">Advanced settings (optional)</summary>
-      <div class="advanced-fields">
-        <div class="form-row">
-          <input name="blueName" type="text" class="field" maxlength="100" placeholder="Blue player name" data-i18n-placeholder="bluePlayerName" autocomplete="off">
-          <input name="bluePassword" type="password" class="field" maxlength="100" placeholder="Blue password" data-i18n-placeholder="bluePassword" autocomplete="new-password" data-lpignore="true" data-1p-ignore="true">
-        </div>
-        <div class="form-row">
-          <input name="greenName" type="text" class="field" maxlength="100" placeholder="Green player name" data-i18n-placeholder="greenPlayerName" autocomplete="off">
-          <input name="greenPassword" type="password" class="field" maxlength="100" placeholder="Green password" data-i18n-placeholder="greenPassword" autocomplete="new-password" data-lpignore="true" data-1p-ignore="true">
-        </div>
-        <input name="spectatePassword" type="password" class="field" maxlength="100" placeholder="Spectate password" data-i18n-placeholder="spectatePassword" autocomplete="new-password" data-lpignore="true" data-1p-ignore="true">
-      </div>
-    </details>
-  </form>
+  <p><span data-i18n="localSplitScreen">Local split screen:</span> <button id="play" data-i18n="play" class="btn btn-blue" type="button"></button></p>
 </div>
 <div class="links">
-  <p><span data-i18n="localSplitScreen">Local split screen:</span> <a id="play" href="#"></a></p>
-  <p><span data-i18n="singleplayerVsAi">Singleplayer vs Bot:</span> <a id="aiEasy" href="#" data-i18n="easy">Easy</a> | <a id="aiMedium" href="#" data-i18n="medium">Medium</a> | <a id="aiHard" href="#" data-i18n="hard">Hard</a></p>
+  <p><span data-i18n="singleplayerVsAi">Singleplayer vs Bot:</span> <button id="aiEasy" class="btn btn-easy" type="button" data-i18n="easy">Easy</button> <button id="aiMedium" class="btn btn-medium" type="button" data-i18n="medium">Medium</button> <button id="aiHard" class="btn btn-hard" type="button" data-i18n="hard">Hard</button></p>
+</div>
+<div class="links">
+  <div class="form-row">
+    <p data-i18n="networkGamesList">Network games:</p>
+    <button id="newNetworkGameBtn" class="btn btn-blue" type="button" data-i18n="newNetworkGame">New Network Game</button>
+  </div>
+  <table id="gamesTable" hidden>
+    <thead>
+      <tr>
+        <th data-i18n="gameName">Name</th>
+        <th data-i18n="gamePlayers">Players</th>
+        <th data-i18n="gameScore">Score</th>
+      </tr>
+    </thead>
+    <tbody id="gamesTableBody"></tbody>
+  </table>
+  <p id="noGamesMsg" data-i18n="noGamesListed">No public games right now.</p>
 </div>
 <script src="/js/i18n.js"></script>
 <script src="/js/index.js"></script>

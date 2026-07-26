@@ -1,0 +1,51 @@
+<title data-i18n="newNetworkGame">New Network Game</title>
+<link rel="icon" href="/favicon.ico">
+<link rel="stylesheet" href="/css/common.css">
+<link rel="stylesheet" href="/css/create.css">
+<div class="banner">
+<a class="new-game-btn" href="/" data-i18n="backToHome">Back</a>
+<div class="left-text" data-i18n="newNetworkGame">New Network Game</div>
+</div>
+<div class="links">
+  <p><span data-i18n="sessionName">Session name</span>:</p>
+  <form id="startForm" action="/create" method="POST" autocomplete="off">
+    <div class="form-row">
+      <input id="sessionName" name="name" type="text" class="field" maxlength="100" placeholder="leave blank for a random one" data-i18n-placeholder="sessionNamePlaceholder" autofocus autocomplete="off">
+    </div>
+    <div class="form-row">
+      <label class="checkbox-row"><input type="checkbox" name="listed" checked> <span data-i18n="listPublicly">List publicly</span></label>
+    </div>
+    <div class="form-row">
+      <span class="field-group">
+        <img class="field-icon" src="/assets/tank-blue.png" alt="">
+        <input name="blueName" type="text" class="field" maxlength="100" placeholder="Blue player name" data-i18n-placeholder="bluePlayerName" autocomplete="off">
+      </span>
+      <span class="field-group">
+        <span class="field-icon lock-icon">&#128274;</span>
+        <input name="bluePassword" type="password" class="field" maxlength="100" placeholder="Blue password" data-i18n-placeholder="bluePassword" autocomplete="new-password" data-lpignore="true" data-1p-ignore="true">
+      </span>
+    </div>
+    <div class="form-row">
+      <span class="field-group">
+        <img class="field-icon" src="/assets/tank-green.png" alt="">
+        <input name="greenName" type="text" class="field" maxlength="100" placeholder="Green player name" data-i18n-placeholder="greenPlayerName" autocomplete="off">
+      </span>
+      <span class="field-group">
+        <span class="field-icon lock-icon">&#128274;</span>
+        <input name="greenPassword" type="password" class="field" maxlength="100" placeholder="Green password" data-i18n-placeholder="greenPassword" autocomplete="new-password" data-lpignore="true" data-1p-ignore="true">
+      </span>
+    </div>
+    <div class="form-row">
+      <label class="checkbox-row"><input id="allowSpectate" type="checkbox" name="allowSpectate" checked> <span data-i18n="allowSpectate">Allow spectate</span></label>
+      <span class="field-group">
+        <span class="field-icon lock-icon">&#128274;</span>
+        <input id="spectatePassword" name="spectatePassword" type="password" class="field" maxlength="100" placeholder="Spectate password" data-i18n-placeholder="spectatePassword" autocomplete="new-password" data-lpignore="true" data-1p-ignore="true">
+      </span>
+    </div>
+    <div class="form-row">
+      <button type="submit" data-i18n="start">Start</button>
+    </div>
+  </form>
+</div>
+<script src="/js/i18n.js"></script>
+<script src="/js/create.js"></script>

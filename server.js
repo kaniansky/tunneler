@@ -184,6 +184,8 @@ function createSession(settings) {
     session.greenName = settings.greenName.trim().slice(0, MAX_SID_LENGTH);
     session.bluePassword = settings.bluePassword.trim().slice(0, MAX_SID_LENGTH);
     session.greenPassword = settings.greenPassword.trim().slice(0, MAX_SID_LENGTH);
+    session.listed = settings.listed;
+    session.allowSpectate = settings.allowSpectate;
     console.log("Created session", id, "-", session.displayName);
   }
   return id;
@@ -239,8 +241,38 @@ app.post("/create", (req, res) => {
     greenName: String(req.body.greenName || ""),
     bluePassword: String(req.body.bluePassword || ""),
     greenPassword: String(req.body.greenPassword || ""),
+    // an unchecked checkbox sends no field at all (not "off") - only "on" means checked
+    listed: req.body.listed == "on",
+    allowSpectate: req.body.allowSpectate == "on",
   });
   res.redirect(303, id ? "/" + id + "/" : "/");
+});
+
+// polled by index.html's game list (index.js) - only sessions whose creator left the
+// "list publicly" checkbox on the create form checked (default: checked) show up here;
+// everyone else is joinable only by whoever already has the link, same as before this
+// existed. Registered before app.param("id", ...)/the "/:id" routes below for the same
+// reason /play and /ai are - otherwise "/games" itself would be swallowed as a session id.
+app.get("/games", (req, res) => {
+  res.json(
+    Object.values(sessions)
+      .filter((s) => s.listed)
+      .map((s) => ({
+        id: s.id,
+        name: s.displayName,
+        players: s.sockets.filter((sock) => sock.role == "blue" || sock.role == "green").length,
+        blueScore: s.blueScore,
+        greenScore: s.greenScore,
+      })),
+  );
+});
+
+// the create-network-game form now lives on its own page (index.html only shows
+// singleplayer/split-screen links + the public games list) - registered before the
+// "/:id" routes below for the same reason "/play"/"/games" are: "/:id" is a wildcard
+// and would otherwise swallow "new" as a session id.
+app.get("/new", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "create.html"));
 });
 
 // classic single-browser hotseat split-screen: purely local, no networking, no server
@@ -272,19 +304,63 @@ app.param("id", (req, res, next, id) => {
 app.get(["/:id", "/:id/"], (req, res) => {
   sendWithSessionName(res, "lobby.html", sessions[req.params.id]);
 });
+// blue/green are single-occupancy (see the websocket handler's role-taken check below) -
+// a direct/bookmarked/shared URL to a role someone's already holding has nothing to join,
+// same reasoning as app.param("id", ...) above for an unknown id entirely. Bounces back
+// to this session's own lobby (not the global "/") since the session itself is still
+// live - lobby.js is what greys out the button so this path is normally unreachable
+// except via a stale link or someone typing the URL directly.
 app.get("/:id/blue", (req, res) => {
-  sendWithSessionName(res, "tunneler.html", sessions[req.params.id]);
+  const session = sessions[req.params.id];
+  if (session.sockets.some((s) => s.role == "blue"))
+    return res.redirect(307, "/" + session.id + "/");
+  sendWithSessionName(res, "tunneler.html", session);
 });
 app.get("/:id/green", (req, res) => {
-  sendWithSessionName(res, "tunneler.html", sessions[req.params.id]);
+  const session = sessions[req.params.id];
+  if (session.sockets.some((s) => s.role == "green"))
+    return res.redirect(307, "/" + session.id + "/");
+  sendWithSessionName(res, "tunneler.html", session);
+});
+
+// polled by lobby.js to grey out a role's button once someone's holding it - the
+// websocket is what actually enforces single-occupancy (see the connection handler
+// below), this is purely so the lobby UI can reflect it before a click even happens.
+app.get("/:id/status", (req, res) => {
+  const session = sessions[req.params.id];
+  res.json({
+    blue: session.sockets.some((s) => s.role == "blue"),
+    green: session.sockets.some((s) => s.role == "green"),
+    allowSpectate: session.allowSpectate,
+    round: session.round,
+    blueScore: session.blueScore,
+    greenScore: session.greenScore,
+  });
+});
+// blue's client calls this whenever its round/score changes (see tunneler.js's
+// renderScore()) - the server never runs game logic itself, so this is the only way it
+// learns a score to show in /games' list. Purely cosmetic: never fed back into the
+// game, never authoritative over anything the wire protocol already handles.
+app.get("/:id/score", (req, res) => {
+  const session = sessions[req.params.id];
+  session.round = Number(req.query.round) || 1;
+  session.blueScore = Number(req.query.blue) || 0;
+  session.greenScore = Number(req.query.green) || 0;
+  res.sendStatus(204);
 });
 app.get("/:id/spectate", (req, res) => {
+  const session = sessions[req.params.id];
+  // creator turned spectating off entirely (the "allow spectate" checkbox on the create
+  // form) - bounce back to this session's own lobby, same as blue/green's role-taken
+  // bounce above, rather than serving a page that can never actually connect (the
+  // websocket handler below refuses the same session/role regardless).
+  if (!session.allowSpectate) return res.redirect(307, "/" + session.id + "/");
   // this page is just markup/canvas/script - no session-specific secret lives here, so
   // it's served unconditionally like blue/green. The actual game data only flows over
   // the websocket below, which is where the spectate password (if any) is checked -
   // see handleInitMessage() - never as a URL query param, so it never lands in browser
   // history/server logs/the Referer header.
-  sendWithSessionName(res, "spectator.html", sessions[req.params.id]);
+  sendWithSessionName(res, "spectator.html", session);
 });
 
 // tunneler.js calls this once a player detects the match is over (someone hit
@@ -351,6 +427,11 @@ class Session {
     this.greenName = "";
     this.bluePassword = "";
     this.greenPassword = "";
+    this.listed = true;
+    this.allowSpectate = true;
+    this.round = 1;
+    this.blueScore = 0;
+    this.greenScore = 0;
   }
 }
 
@@ -491,7 +572,7 @@ function handleSyncMessage(socket, session, msg) {
   socket.sentFrame = maxRecvFrame;
 }
 
-const EMPTY_SESSION_TIMEOUT = 30 * 60 * 1000;
+const EMPTY_SESSION_TIMEOUT = 5 * 60 * 1000;
 
 wsServer.on("connection", function (socket, request) {
   // path is "/<id>/<role>" (role: blue, green, spectate), mirroring the page's own HTTP
@@ -517,6 +598,14 @@ wsServer.on("connection", function (socket, request) {
   // no such limit.
   if (role != "spectate" && session.sockets.some((s) => s.role == role)) {
     socket.close(4409, `${role} already connected`);
+    return;
+  }
+
+  // creator turned spectating off entirely (separate from spectatePassword, which only
+  // gates it) - checked here too, not just the "/:id/spectate" HTTP route above, since
+  // that route is what serves spectator.html but this is what actually carries game data.
+  if (role == "spectate" && !session.allowSpectate) {
+    socket.close(4403, "Spectating disabled for this session");
     return;
   }
 

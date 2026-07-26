@@ -16,10 +16,18 @@
 .copy-link-btn:hover {
   background: rgba(255, 255, 255, 0.3);
 }
+.lobby-score {
+  text-align: center;
+  font-family: sans-serif;
+  font-size: 1.1rem;
+  color: white;
+  margin: 12px 0;
+}
 .links {
   line-height: 2;
   display: flex;
   justify-content: space-evenly;
+  gap: 10px;
 }
 .links .btn {
   padding: 10px 20px;
@@ -47,4 +55,12 @@
 }
 .links .btn-spectate:hover {
   background: #3d3d3d;
+}
+.links .btn:disabled {
+  background: #888;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+.links .btn:disabled:hover {
+  background: #888;
 }

@@ -139,11 +139,23 @@ pure indirection over identities the game already had):
   `lobby.js`), and its banner shows the session's stored **display name** (`{{SESSION_NAME}}` in
   `lobby.html`, filled in server-side by `sendWithSessionName()` — not the URL slug, and not set by
   `lobby.js` at all anymore).
-- `/` — served as `index.html`, a name-a-session form that's a real `GET` to `/create?name=...` (no client-
-  side slugify/navigate anymore — `index.js` only blocks submitting a blank name) — plus the `/play` link
-  (see below). `server.js`'s `slugify()` is now the single source of truth for turning a display name into
-  a URL id; `MAX_SID_LENGTH` (used by both `slugify()` and `normalizeSid()`) truncates both the slug and
-  the stored display name to the same length.
+- `/` — served as `index.html`: singleplayer/split-screen links (`/play`, `/ai/*`) plus the public games
+  list (see "Public games list" below) and a `/new` link. Deliberately carries no session-creation form of
+  its own anymore — that used to live here directly (a single always-visible "Session name" field plus
+  a collapsed `<details>` of advanced settings), which buried the actual create flow one click deep and
+  cluttered the page that's now also the games list's home. `index.js` only wires up the `/play`/`/ai/*`
+  links and polls `/games` (see below) — it does not touch session creation at all.
+- `/new` — served as `create.html`, the session-creation form moved out to its own page: a plain `GET` to
+  `/` (via the banner's "Back" link, `.new-game-btn` reused from `lobby.html`) gets you here, and the form
+  itself still `POST`s to `/create` exactly as before. Every field that used to sit inside index.html's
+  collapsed `<details class="advanced">` (blue/green names+passwords, spectate password, the
+  "list publicly"/"allow spectate" checkbits) is now always visible — no `<details>` at all — since a
+  dedicated page doesn't need to hide its own reason for existing. Registered
+  (`app.get("/new", ...)`) **before** the `/:id` routes, same reason as `/play`/`/games` below - `/:id` is
+  a wildcard that would otherwise treat "new" as a session id. `server.js`'s `slugify()` is still the
+  single source of truth for turning a display name into a URL id; `MAX_SID_LENGTH` (used by both
+  `slugify()` and `normalizeSid()`) truncates both the slug and the stored display name to the same
+  length.
 - `/play` — same `tunneler.html`, but role `"play"`: classic single-browser hotseat, full split screen
   (no crop, same as role `0`), **no id, no networking at all** — `Session.offline` is passed straight
   into `Net.connect(seed, offline)`, which skips the websocket entirely. Deliberately doesn't share a key
@@ -224,11 +236,14 @@ content inside a 125x114 canvas), which `spectator.js`'s `drawTank()` scaling (`
 img.width`) accounts for automatically since it reads the image's own dimensions, so this needed no code
 change, just tighter source images.
 
-### Sessions only exist if created via the index form; everything else 404s to `/`
+### Sessions only exist if created via the `/new` form; everything else 404s to `/`
 
-`createSession(displayName)` in `server.js` is the **only** place a `Session` gets created — called from
-`GET /create` (which `index.html`'s form submits to directly, a real GET, no client-side JS round-trip).
-It `slugify()`s the display name into an id, creates a `Session` under that id if one doesn't already
+`createSession(settings)` in `server.js` is the **only** place a `Session` gets created — called from
+`POST /create` (which `create.html`'s form, at `/new`, submits to directly - see "Roles" above for why
+this moved off the index page - no client-side JS round-trip). It's a POST, not a GET, specifically so
+the up-to-three passwords the form carries never end up in a URL (address bar, browser history, server
+access logs, Referer header) the way a GET's query string would put them. `createSession()`
+`slugify()`s the display name into an id, creates a `Session` under that id if one doesn't already
 exist (storing the *original*, unslugified `displayName` on it — that's what banners show, not the URL
 slug), and redirects to `/<id>/`. If the slug is already taken, it joins the existing session rather than
 overwriting its stored name — so "My Game" and "my game" land in the same session, keeping whichever
@@ -251,7 +266,7 @@ URL client-side.
 A player disconnecting and reconnecting is *not* special-cased
 either — it works because the session's identity (seed/started/mergedPath) lives on the `Session` object
 itself, which outlives any individual socket: when the last one disconnects, `server.js`'s `close` handler
-starts a 30-minute `session.emptyTimer` before deleting `sessions[id]`, rather than deleting synchronously
+starts a 5-minute `session.emptyTimer` before deleting `sessions[id]`, rather than deleting synchronously
 — and the connection handler cancels that timer immediately if anyone reconnects in the meantime. So a
 reload or brief connection blip — for everyone, not just one player — doesn't lose the game either, and
 a reconnecting client's fresh `Game` instances naturally replay the full merged-path history from frame 0
@@ -288,6 +303,34 @@ Server-side, `role` is the second path segment (`new URL(request.url,...).pathna
 no role segment is treated as legacy/`blue`. Spectators are excluded from `getMergedPath`'s slowest-client
 frame throttle (`players = session.sockets.filter(s => s.role != "spectate")`) — otherwise a lagging/idle
 spectator would stall both real players.
+
+### Public games list
+
+`index.html` polls `GET /games` (every 3s, `index.js`) to show a table of joinable sessions - name,
+connected player count (0-2, counting only `blue`/`green` sockets, never spectators), and live score.
+Two per-session opt-outs, both checkboxes on `create.html`'s form (checked/on by default), both stored on
+`Session` and set once in `createSession()` from `POST /create`'s body (`req.body.<field> == "on"` - an
+unchecked checkbox sends no field at all, never `"off"`):
+- `listed` - whether this session appears in `/games` at all. `/games` itself is registered before the
+  `/:id` routes, same reason as `/play`/`/new` - `/:id` is a wildcard that would otherwise swallow "games"
+  as a session id.
+- `allowSpectate` - whether the `spectate` role can join *at all*, independent of `spectatePassword` (which
+  only gates it, not disables it). Checked in two places, since the HTTP route and the websocket are two
+  separate entry points to the same role: `GET /:id/spectate` redirects to the session's own lobby (same
+  as blue/green's role-taken bounce) rather than serving `spectator.html` at all, and the websocket
+  connection handler independently closes (4403) any socket that opens with `role == "spectate"` if this
+  is false - the HTTP bounce alone wouldn't stop a client that dials the websocket directly. `lobby.js`
+  also greys out the Spectate button when `/:id/status`'s (also polled from there) `allowSpectate` field is
+  false, same mechanism it already used to grey out a taken blue/green slot.
+
+The server never runs game logic (see "Server is a dumb relay" below), so it has no score of its own to
+report - blue's client pushes it explicitly whenever it changes (`tunneler.js`'s `reportScore()`, called
+from `renderScore()` every tick but only actually fetching `GET /:id/score?round=&blue=&green=` on a real
+change, not every frame) and the server just stores whatever it's told (`session.round`/`blueScore`/
+`greenScore`) for `/games` to read back. Only blue reports, not green - both compute the identical
+deterministic value from the same lockstep simulation, so a second report would just be redundant traffic.
+This is purely cosmetic display data for the lobby list; it's never fed back into the game or treated as
+authoritative over anything the wire protocol already handles.
 
 ### Two WASM game instances, not one
 

@@ -355,6 +355,20 @@ class Session
     const gameOver = Session.isMatchOver(s);
     const winner = gameOver ? (s.blue.score >= Session.WIN_SCORE ? "blue" : "green") : null;
     this.formatScore(s.round, s.blue.score, s.green.score, gameOver, winner);
+    this.reportScore(s.round, s.blue.score, s.green.score);
+  }
+
+  // tells the server this session's live round/score so index.html's public games list
+  // can show it - only blue reports (both clients compute the identical deterministic
+  // value, no need for green to send the same thing twice), and only on an actual
+  // change, not every frame, since this runs from iterate() every tick.
+  reportScore(round, blueScore, greenScore)
+  {
+    if (this.role != "blue") return;
+    if (this.lastReportedScore == `${round}:${blueScore}:${greenScore}`) return;
+    this.lastReportedScore = `${round}:${blueScore}:${greenScore}`;
+    const sid = document.location.pathname.split("/").filter(Boolean)[0];
+    fetch(`/${sid}/score?round=${round}&blue=${blueScore}&green=${greenScore}`).catch(()=>{});
   }
 
   // shared by renderScore() (real values, once the game is running) and
