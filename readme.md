@@ -33,14 +33,12 @@ full split screen like `/play` since there's no second human to hide the other h
 Tunneler by Geoffrey Silverton is a DOS game from 1991 written in Turbo Pascal.
 
 The spectator view (`src/spectator.html`) shows both players, a live map overview, and a realtime scoreboard.
+You can play it here [https://tunneler-xwtw.onrender.com/](https://tunneler-xwtw.onrender.com/), or run it locally (see
+"Running"/"Docker" below).
 
-## Background
+## CicoJit
 
 With [Cicoparser](https://github.com/gabonator/Projects/tree/master/CicoJit) it was converted into C++ and then rebuild with emscripten so it could be played inside browser. This is a proof of concept of turning cicoparser games into network multiplayer game.
-You can play it here [http://cloud.valky.eu:8042/](http://cloud.valky.eu:8042/), or run it locally (see
-"Running"/"Docker" below). This copy fetches the WASM/EXE binaries over HTTP, so it needs that server
-running — it can't be opened as a bare local file anymore. A self-contained standalone build (no server
-required) is available at [tunneler.html](https://rawgit.valky.eu/gabonator/Projects/refs/heads/master/CicoJit/gamelib/tunneler/netplay/tunneler.html)
 
 ## Running
 
