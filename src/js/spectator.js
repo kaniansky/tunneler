@@ -7,116 +7,110 @@ class SpectatorSession
   // as the wire protocol opcodes - see CLAUDE.md).
   static WIN_SCORE = 3;
 
-  constructor(ctx, mapCtx, scoreEl, sessionName, blueName, greenName)
+  constructor(ctx, mapCtx, scoreEl, sessionName)
   {
     this.ctx = ctx;
     this.mapCtx = mapCtx;
     this.scoreEl = scoreEl;
     this.sessionName = sessionName;
-    this.blueName = blueName;
-    this.greenName = greenName;
     this.net = new Net();
     this.game = new Game();
     this.running = false;
     this.waitSync = false;
     this.fullCanvas = document.createElement('canvas');
-    this.fullCanvas.width = 640;
     this.fullCanvas.height = 400;
     this.fullCtx = this.fullCanvas.getContext('2d');
-    // blue spawns on the left facing right, green on the right facing left (toward each
-    // other - same assumption the waiting screen's 180deg green rotation makes) rather
-    // than defaulting both to 0 and waiting for the first movement sample to correct it.
-    this.heading = { blue: 0, green: Math.PI };
-    this.prevPos = { blue: null, green: null };
-    this.tankImages = { blue: new Image(), green: new Image() };
-    this.tankImages.blue.src = "/assets/tank-blue.png";
-    this.tankImages.green.src = "/assets/tank-green.png";
+    // Online-only state, populated once waitForPlayers() resolves - see tunneler.js's
+    // Session for the same roster/seatOfTank/names shape and why it's needed (a tank's
+    // roster position and its raw seat number can differ when lower seats are empty).
+    this.roster = null;
+    this.names = null;
+    this.seatOfTank = null;
+    this.connectedMask = 0;
+    // no facing byte is exposed by Game.state(), so heading is derived from movement
+    // between samples instead (per tank index) - holds the last heading while
+    // stationary rather than snapping to 0. Starts at 0 for everyone (unlike the old
+    // fixed 2-base left/right default) since bases can be anywhere on the map now.
+    this.heading = [];
+    this.prevPos = [];
+    this.cols = 1;
+    this.rows = 1;
   }
-  loadTankImages()
-  {
-    const wait = img => img.complete ? Promise.resolve() : new Promise(r => { img.onload = r; });
-    return Promise.all([wait(this.tankImages.blue), wait(this.tankImages.green)]);
-  }
+
   async start()
   {
-    // this proposal is normally moot - the server doesn't seed a session until both
-    // blue and green are connected (see startSessionIfReady() in server.js), so it just
-    // ignores whatever we propose here. It only matters as a fallback in the (currently
-    // unreachable) case that a spectator socket somehow becomes one of the two roles the
-    // server checks for, which it can't - spectate is excluded from that check on purpose.
+    // this proposal is normally moot - the server doesn't seed a session until enough
+    // seats are ready (see startSessionIfReady() in server.js), so it just ignores
+    // whatever we propose here.
     const fallbackSeed = Math.floor(Math.random()*0x10000) | (Math.floor(Math.random()*0x10000)<<16);
-    // tank images need to be loaded before waitForBothPlayers() below, not after - it
-    // draws them on the waiting screen, not just later on the map overview
-    const state = await this.connectWithPassword(fallbackSeed);
-    if (!state)
-      return; // user gave up on the password prompt - renderPasswordError() already ran
+    // net.connect() rejects outright on a closed/refused websocket (unknown session, or
+    // spectating disabled for this one) - previously unhandled here, silently leaving
+    // the page blank forever. Show a message and send them back to the lobby instead.
+    let state;
+    try
+    {
+      state = await this.net.connect(fallbackSeed, false);
+    }
+    catch (e)
+    {
+      this.renderConnectionError();
+      return;
+    }
     this.game.seed = state.seed;
-    await this.waitForBothPlayers();
-    await this.game.load();
+    await this.waitForPlayers();
+    this.game.seed = state.seed; // reInit() below may have refreshed it again
+    await this.game.load(this.roster, this.friendlyFire);
     this.running = true;
     setInterval(()=>{ this.netsync() }, 100);
   }
 
-  // Connects with no password first (the common case: no password set on this
-  // session). server.js only rejects the init packet - closing with reason "Wrong
-  // spectate password" - once it's actually checked one (see handleInitMessage()), so
-  // that's the one specific failure worth prompting and retrying on; anything else
-  // (unknown session, network drop) is a real error and propagates. Never sends the
-  // password as a URL query param - it only ever travels inside the init packet itself
-  // (see netcode.js's Net.buildInitPacket()), so it's never logged/cached/left in
-  // browser history the way a query string would be.
-  async connectWithPassword(fallbackSeed)
-  {
-    let password = "";
-    while (true)
-    {
-      try
-      {
-        const [state] = await Promise.all([this.net.connect(fallbackSeed, false, password), this.loadTankImages()]);
-        return state;
-      }
-      catch (e)
-      {
-        if (!/wrong \w+ password/i.test(e.message))
-          throw e;
-        const entered = window.prompt(t("sessionPasswordProtected"));
-        if (entered === null)
-        {
-          this.renderPasswordError();
-          return null;
-        }
-        password = entered;
-      }
-    }
-  }
-
-  renderPasswordError()
+  renderConnectionError()
   {
     const canvas = this.ctx.canvas;
     this.ctx.fillStyle = "#000";
     this.ctx.fillRect(0, 0, canvas.width, canvas.height);
     this.ctx.fillStyle = "#fff";
-    this.ctx.font = "20px sans-serif";
+    this.ctx.font = "18px sans-serif";
     this.ctx.textAlign = "center";
-    this.ctx.fillText(t("noPasswordEntered"), canvas.width/2, canvas.height/2);
+    this.ctx.fillText(t("seatUnavailable"), canvas.width/2, canvas.height/2);
+    const sid = document.location.pathname.split("/").filter(Boolean)[0];
+    setTimeout(() => { document.location.href = "/" + sid + "/"; }, 2000);
   }
 
   // The server doesn't generate a seed - i.e. there's no map, no game, nothing to
-  // spectate at all - until both blue and green are connected (see startSessionIfReady()
-  // in server.js). connect()'s handshake above may have come back with seed=0/started=0
-  // if this spectator got here before either player did, so poll (same
-  // empty-sync-request approach as tunneler.js's waitForOpponent(), which can't pollute
-  // session.mergedPath) until both are in, then reInit() to fetch the now-real seed.
-  async waitForBothPlayers()
+  // spectate at all - until the match actually starts (see startSessionIfReady() in
+  // server.js). Poll /:id/status (same endpoint the lobby polls) until `started`, then
+  // fetch the final locked-in roster - mirrors tunneler.js's Session.waitForPlayers()
+  // exactly (see its own comment for why the tank-index<->seat-number mapping matters).
+  async waitForPlayers()
   {
+    const sid = document.location.pathname.split("/").filter(Boolean)[0];
     this.renderWaitingMessage();
     while (true)
     {
-      const resp = await this.net.sync(0, [[0, 0]]).catch(()=>null);
-      if (resp && resp.blueConnected && resp.greenConnected)
+      const status = await fetch(`/${sid}/status`).then((r) => r.json()).catch(() => null);
+      if (status && status.started)
+      {
+        this.friendlyFire = status.friendlyFire;
+        const occupied = [];
+        status.seats.forEach((s, seatNum) => { if (s) occupied.push({ seatNum, ...s }); });
+        this.roster = occupied.map((o) => ({ team: o.team, color: o.color }));
+        this.names = occupied.map((o) => o.name);
+        this.seatOfTank = occupied.map((o) => o.seatNum);
         break;
-      await new Promise(r => setTimeout(r, 500));
+      }
+      await new Promise((r) => setTimeout(r, 500));
     }
+    this.heading = this.roster.map(() => 0);
+    this.prevPos = this.roster.map(() => null);
+    this.cols = Math.ceil(Math.sqrt(this.roster.length));
+    this.rows = Math.ceil(this.roster.length / this.cols);
+    this.ctx.canvas.width = this.cols * 320;
+    this.ctx.canvas.height = this.rows * 400;
+    this.fullCanvas.width = 320 * this.roster.length;
+    // the server doesn't generate a real seed until the match actually starts - connect()'s
+    // original handshake may have come back with seed=0/started=0 if this spectator got
+    // here first, fetch it again now that it's guaranteed to exist.
     const state = await this.net.reInit(this.game.seed);
     this.game.seed = state.seed;
   }
@@ -126,59 +120,47 @@ class SpectatorSession
     const canvas = this.ctx.canvas;
     this.ctx.fillStyle = "#000";
     this.ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    // green rotated 180deg (images point right by default) so the two tanks face each
-    // other rather than both pointing the same way
-    const drawAbove = (img, xOffset, rotate180) => {
-      const w = 40, h = 40 * img.height / img.width;
-      const x = canvas.width/2 + xOffset, y = canvas.height/2 - h/2 - 20;
-      this.ctx.save();
-      this.ctx.translate(x, y);
-      if (rotate180)
-        this.ctx.rotate(Math.PI);
-      this.ctx.drawImage(img, -w/2, -h/2, w, h);
-      this.ctx.restore();
-    };
-    drawAbove(this.tankImages.blue, -50, false);
-    drawAbove(this.tankImages.green, 50, true);
-
     this.ctx.fillStyle = "#fff";
     this.ctx.font = "20px sans-serif";
     this.ctx.textAlign = "center";
     this.ctx.fillText(t("waitingForPlayers"), canvas.width/2, canvas.height/2 + 16);
-    this.formatScore(1, 0, 0);
   }
   async netsync()
   {
     if (this.waitSync || !this.running)
       return;
     this.waitSync = true;
-    await this.net.sync(this.game.frame, [[0, 0]]).then(resp=>{
+    // frame 0/no path - a spectator has no seat/inputs of its own to report, only ever
+    // receives (matches how tunneler.js's Game.paths[] works for a tank that never
+    // reports its own path - see netcode.js's Net.sync()).
+    await this.net.sync(this.game.frame, []).then(resp=>{
       this.waitSync = false;
-      const path = resp.path;
+      this.connectedMask = resp.connectedMask;
 
-      // unshift previous known state, so we can extract keys during simulation
-      if (this.game.pathOur.length)
-        path.unshift(this.game.pathOur[this.game.pathOur.length-1]);
-      else
-        path.unshift([0, 0]);
-
+      const paths = this.roster.map((_, tankIndex) => resp.paths[this.seatOfTank[tankIndex]] || []);
+      // Unconditional, even when p is empty (no NEW change reported for this tank this
+      // round) - see tunneler.js's Session.netsync() for why: "nothing new" means
+      // "still whatever it last was", not "released", and skipping the baseline here
+      // would silently fall back to Path.Extract's empty-path default of 0.
+      paths.forEach((p, i) => {
+        p.unshift(this.game.paths[i].length ? this.game.paths[i][this.game.paths[i].length-1] : [0, 0]);
+      });
       // no key changes doesn't mean no time passed - keep advancing to the server's
-      // ack'd frame even when path is otherwise empty (see tunneler.js's netsync)
-      if (path.length == 1 && resp.frame > this.game.frame)
-        path.push([resp.frame-1, path[0][1]]);
+      // ack'd frame even when every path is otherwise empty (see tunneler.js's netsync)
+      if (paths.every((p) => p.length <= 1) && resp.frame > this.game.frame)
+        paths.forEach((p) => p.push([resp.frame-1, p.length ? p[0][1] : 0]));
 
-      const last = path.length ? path[path.length-1][0] : -1;
+      const last = Math.max(-1, ...paths.map((p) => p.length ? p[p.length-1][0] : -1));
       for (let i=this.game.frame; i<=last; i++)
       {
-        const keys = Path.Extract(path, i);
-        if (!this.game.step(keys, 0))
+        const rawStates = paths.map((p) => Path.Extract(p, i));
+        if (!this.game.step(rawStates))
         {
           this.running = false;
           break;
         }
       }
-      this.renderFrame(resp.blueConnected, resp.greenConnected);
+      this.renderFrame();
       this.renderMap();
       this.renderScore();
       this.setDisconnected(false);
@@ -196,52 +178,66 @@ class SpectatorSession
     this.ctx.canvas.style.filter = filter;
     this.mapCtx.canvas.style.filter = filter;
   }
-  renderFrame(blueConnected, greenConnected)
+  // Lays every connected tank's own camera pane (engine-render.js renders them all
+  // side by side into one W*N-wide strip - see its render()) out into a grid instead
+  // of the old fixed 2-way left/right split, since there can be up to 8 now. Once the
+  // match is decided, the engine switches to a single full-map reveal instead (see
+  // engine.js's TunnelerEngine.render()) - shown across the whole canvas, not
+  // mosaic-sliced, same treatment as tunneler.js's own gameOver branch.
+  renderFrame()
   {
-    // Game.render() draws via putImageData, which ignores ctx.filter - so render the
-    // full frame off-screen first, then copy each half across with filter applied.
-    // blue renders on the left half, green on the right (see tunneler.js's crop).
+    const s = this.game.state();
+    const gameOver = Object.values(s.teamScores).some((v) => v >= SpectatorSession.WIN_SCORE);
+    if (gameOver)
+    {
+      this.game.render(this.ctx);
+      return;
+    }
     this.game.render(this.fullCtx);
-    this.ctx.filter = blueConnected ? "none" : "grayscale(1)";
-    this.ctx.drawImage(this.fullCanvas, 0, 0, 320, 400, 0, 0, 320, 400);
-    this.ctx.filter = greenConnected ? "none" : "grayscale(1)";
-    this.ctx.drawImage(this.fullCanvas, 320, 0, 320, 400, 320, 0, 320, 400);
+    const paneW = this.ctx.canvas.width / this.cols, paneH = this.ctx.canvas.height / this.rows;
+    this.ctx.fillStyle = "#000";
+    this.ctx.fillRect(0, 0, this.ctx.canvas.width, this.ctx.canvas.height);
+    for (let i = 0; i < this.roster.length; i++)
+    {
+      const col = i % this.cols, row = Math.floor(i / this.cols);
+      const connected = !!(this.connectedMask & (1 << this.seatOfTank[i]));
+      this.ctx.filter = connected ? "none" : "grayscale(1)";
+      this.ctx.drawImage(this.fullCanvas, i * 320, 0, 320, 400, col * paneW, row * paneH, paneW, paneH);
+    }
     this.ctx.filter = "none";
   }
+  // Was reading the old WASM engine's packed-EGA map buffer (2px/byte, x-8 offset -
+  // see git history if that's ever needed again). The new engine (engine.js) exposes
+  // its field grid directly via Game.getField() - one byte per cell, no packing - and
+  // state().tanks[i].x/y is that tank's exact world position with no offset quirk to
+  // correct for, unlike the old buffer's -8px reading.
   renderMap()
   {
-    if (!this.game.memoryBuffer)
+    const terrain = this.game.getField();
+    if (!terrain)
       return;
-    const pal = [0x000000, 0x0000b0, 0x00b000, 0x00b0b0, 0xb00000, 0xb000b0, 0xb0b000, 0xb0b0b0,
-        0x808080, 0x0000ff, 0x00ff00, 0x00ffff, 0xff0000, 0xff00ff, 0xffff00, 0xffffff];
-    const img = this.mapCtx.createImageData(1024, 480);
+    const { field, sizeX, sizeY } = terrain;
+    if (!this._mapImg || this._mapImg.width !== sizeX || this._mapImg.height !== sizeY)
+      this._mapImg = this.mapCtx.createImageData(sizeX, sizeY);
+    const img = this._mapImg;
     let i = 0;
-    for (let y=0; y<480; y++)
-      for (let x=0; x<512; x++)
+    for (let y = 0; y < sizeY; y++)
+      for (let x = 0; x < sizeX; x++)
       {
-        const c = this.game.memoryBuffer[64100+y*512+x];
-        let cc = pal[c&15];
-        img.data[i++] = (cc>>16)&255; img.data[i++] = (cc>>8)&255; img.data[i++] = cc&255; img.data[i++] = 255;
-        cc = pal[c>>4];
-        img.data[i++] = (cc>>16)&255; img.data[i++] = (cc>>8)&255; img.data[i++] = cc&255; img.data[i++] = 255;
+        const [r, g, b] = EngineRender.fieldColor(field[y * sizeX + x]);
+        img.data[i++] = r; img.data[i++] = g; img.data[i++] = b; img.data[i++] = 255;
       }
     this.mapCtx.putImageData(img, 0, 0);
 
     const s = this.game.state();
-    // state().{blue,green}.x run ~8px right of their actual position on this map buffer -
-    // found by testing, not derived, see CLAUDE.md
-    const TANK_X_OFFSET = -8;
-    const bx = s.blue.x + TANK_X_OFFSET, by = s.blue.y;
-    const gx = s.green.x + TANK_X_OFFSET, gy = s.green.y;
-    this.drawTank(bx, by, this.updateHeading("blue", bx, by), "blue");
-    this.drawTank(gx, gy, this.updateHeading("green", gx, gy), "green");
+    s.tanks.forEach((tank, i) => {
+      if (tank.roundOut) return;
+      this.drawTank(tank.x, tank.y, this.updateHeading(i, tank.x, tank.y), tank.color);
+    });
   }
-  // no facing byte is exposed by Game.state(), so heading is derived from movement
-  // between samples instead - holds the last heading while stationary rather than
-  // snapping to 0.
-  updateHeading(key, x, y)
+  updateHeading(i, x, y)
   {
-    const prev = this.prevPos[key];
+    const prev = this.prevPos[i];
     if (prev)
     {
       const dx = x - prev.x, dy = y - prev.y;
@@ -250,69 +246,72 @@ class SpectatorSession
         // movement is 8-directional - snap to the nearest 45deg step rather than
         // trust the raw angle, which can drift off-diagonal from sampling jitter
         const step = Math.PI / 4;
-        this.heading[key] = Math.round(Math.atan2(dy, dx) / step) * step;
+        this.heading[i] = Math.round(Math.atan2(dy, dx) / step) * step;
       }
     }
-    this.prevPos[key] = {x:x, y:y};
-    return this.heading[key];
+    this.prevPos[i] = {x:x, y:y};
+    return this.heading[i];
   }
-  drawTank(x, y, angle, colorKey)
+  // A small filled triangle tinted to the tank's own chosen color (EngineRender.
+  // tankPalette(), same palette the in-game tank sprite itself uses) rather than a
+  // static tank-{color}.png sprite - avoids needing 6 more hand-made image assets for
+  // the 6 added colors.
+  drawTank(x, y, angle, color)
   {
-    // tank-{blue,green}.png (derived from tank.png) already point right (barrel at
-    // angle 0), matching the atan2(dy,dx) convention updateHeading() uses.
-    const img = this.tankImages[colorKey];
-    const w = 8, h = 8 * img.height / img.width;
+    const [r, g, b] = EngineRender.tankPalette(color)[0];
+    const size = 6;
     const ctx = this.mapCtx;
     ctx.save();
     ctx.translate(x, y);
     ctx.rotate(angle);
-    ctx.drawImage(img, -w/2, -h/2, w, h);
+    ctx.fillStyle = `rgb(${r},${g},${b})`;
+    ctx.beginPath();
+    ctx.moveTo(size, 0);
+    ctx.lineTo(-size * 0.7, size * 0.7);
+    ctx.lineTo(-size * 0.7, -size * 0.7);
+    ctx.closePath();
+    ctx.fill();
     ctx.restore();
   }
   renderScore()
   {
     const s = this.game.state();
-    const gameOver = s.blue.score >= SpectatorSession.WIN_SCORE || s.green.score >= SpectatorSession.WIN_SCORE;
-    const winnerName = gameOver ? (s.blue.score >= SpectatorSession.WIN_SCORE ? this.blueName : this.greenName) : null;
-    this.formatScore(s.round, s.blue.score, s.green.score, gameOver, winnerName);
+    const gameOver = Object.values(s.teamScores).some((v) => v >= SpectatorSession.WIN_SCORE);
+    const winningTeam = gameOver
+      ? Object.keys(s.teamScores).find((team) => s.teamScores[team] >= SpectatorSession.WIN_SCORE)
+      : null;
+    this.formatScore(s.round, s.teamScores, gameOver, winningTeam);
   }
 
   // shared by renderScore() (real values, once the game is running) and
-  // waitForBothPlayers() (a "Round 1 - Blue: 0 | Green: 0" placeholder before it is,
-  // hence gameOver/winnerName defaulting to false/null there). blue is the left side,
-  // green the right (see tunneler.js's crop) - colors brightened relative to the
-  // in-game palette so they stay legible on the banner's blue background.
-  // sessionName/blueName/greenName are escaped here (not just once server-side) since
-  // they're read back out of a data-* attribute and re-inserted via innerHTML - see
-  // netcode.js's escapeHtml() for why that needs a second pass. winnerName is passed
-  // pre-resolved (already this.blueName or this.greenName, both already display-safe
-  // once escaped below) rather than a bare "blue"/"green" role tag, since a spectator
-  // watching has no single "you" the way tunneler.js's Victory/Defeat does - it needs
-  // to actually name whoever won instead.
+  // waitForPlayers() has nothing to format yet (roster isn't known before the match
+  // starts), so it just shows a static waiting message instead (see
+  // renderWaitingMessage()). sessionName is escaped here (not just once server-side)
+  // since it's read back out of a data-* attribute and re-inserted via innerHTML - see
+  // netcode.js's escapeHtml() for why that needs a second pass.
   //
   // Once the match is decided, "Round N" no longer means anything (the engine's own
-  // full-map reveal replaces split-screen play - mirrors tunneler.js's render()
-  // gameOver branch, though this spectator view has no equivalent crop/canvas-resize
-  // logic of its own since it always showed the full frame anyway), so this segment
-  // becomes "<winner> wins" instead.
-  formatScore(round, blueScore, greenScore, gameOver = false, winnerName = null)
+  // full-map reveal replaces split-camera play - mirrors tunneler.js's render()
+  // gameOver branch), so this segment becomes "Team N wins" instead.
+  formatScore(round, teamScores, gameOver = false, winningTeam = null)
   {
-    const label = gameOver ? t("wins", {name: escapeHtml(winnerName)}) : t("round", {n: round});
+    const label = gameOver ? t("teamWins", {team: winningTeam}) : t("round", {n: round});
+    const teams = Object.keys(teamScores).sort((a, b) => a - b);
+    const parts = teams.map((team) => `<span>${t("team")} ${team}: ${teamScores[team]}</span>`);
     this.scoreEl.innerHTML =
-      `${escapeHtml(this.sessionName)} &mdash; ${label} &mdash; ` +
-      `<span style="color:#9fcaff">${escapeHtml(this.blueName)}: ${blueScore}</span>` +
-      `&nbsp;&nbsp;|&nbsp;&nbsp;` +
-      `<span style="color:#7CFC00">${escapeHtml(this.greenName)}: ${greenScore}</span>`;
+      `${escapeHtml(this.sessionName)} &mdash; ${label}` +
+      (parts.length ? " &mdash; " + parts.join("&nbsp;&nbsp;|&nbsp;&nbsp;") : "");
   }
 }
 
 const scoreEl = document.getElementById('score');
 const sessionName = scoreEl.dataset.sessionName;
-const rawBlueName = scoreEl.dataset.blueName || "Blue";
-const rawGreenName = scoreEl.dataset.greenName || "Green";
-const blueName = rawBlueName == "Blue" ? t("blueDefault") : rawBlueName;
-const greenName = rawGreenName == "Green" ? t("greenDefault") : rawGreenName;
 const canvas = document.getElementById('canvas1');
 const mapCanvas = document.getElementById('map');
-const session = new SpectatorSession(canvas.getContext('2d'), mapCanvas.getContext('2d'), scoreEl, sessionName, blueName, greenName);
+// HTML's width/height attrs are just a static fallback - keep them synced to the
+// field's actual size here rather than trusting a hardcoded number to stay right,
+// since a canvas smaller than the field clips putImageData's write in renderMap().
+mapCanvas.width = EngineConfig.FIELD_SIZEX;
+mapCanvas.height = EngineConfig.FIELD_SIZEY;
+const session = new SpectatorSession(canvas.getContext('2d'), mapCanvas.getContext('2d'), scoreEl, sessionName);
 session.start();

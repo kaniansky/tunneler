@@ -2,8 +2,9 @@
 
 // Simple built-in opponent for /ai/<difficulty> (easy/medium/hard) - drives green's
 // bits every frame instead of a second human at the keyboard, from tunneler.js's
-// Session.iterate(). Reads only Game.state()/Game.memoryBuffer - the same public
-// surface spectator.js's renderMap() uses, no special access into the WASM engine.
+// Session.iterate(). Reads only Game.state()/the engine's field grid (via
+// ai-sighting.js's readNibble(), see its header for how that's wired to the new
+// engine) - the same public surface spectator.js's renderMap() uses.
 //
 // Game mechanics confirmed by user:
 // - Moving into dirt is slow but works (see isPermanentWall() - only rock/border
@@ -234,25 +235,26 @@ class AiController
   //  map knowledge:              "hard" and "medium" know the whole map live;
   //                              "easy" only knows what it has personally scouted
   //                              (rememberSeen()/knownNibble() - fog of war).
-  static LOW_ENERGY = 15; // energy floor that TRIGGERS a retreat (entry condition)
-  static LOW_SHIELD = 15; // shield floor that TRIGGERS a retreat (entry condition) - shield
-                           // only repairs at home and doesn't drain from travel, so unlike
-                           // energy it has no distance-scaled exit condition below.
-  // No exact energy-drain-per-pixel rate OR max energy is exposed via state() (it's
-  // read as a raw byte in netcode.js with no documented scale/units) - MAX_ENERGY is
-  // an observed live value (confirmed by user), not an engine constant, so it could
-  // be wrong for a different game setup; these are a deliberately conservative,
-  // tunable ESTIMATE, not a measured budget. Getting ENERGY_NEEDED_CAP wrong is the
-  // dangerous direction here, not ENERGY_PER_PIXEL - a cap the tank can never
-  // actually reach latches this.retreating true forever (confirmed by user: an
-  // earlier cap of 90 against a real max of 44 got the tank stuck at base
-  // permanently), so the cap is pinned a few points UNDER the observed max on
-  // purpose rather than trying to guess the true ceiling exactly.
-  static MAX_ENERGY = 44; // observed live max - see warning above
-  static ENERGY_NEEDED_CAP = AiController.MAX_ENERGY - 4;
-  static ENERGY_PER_PIXEL = 0.03; // guessed drain per px of travel while outside base
-  static ENERGY_TRIP_RESERVE = 8; // spare energy to actually fight/dig once arrived,
-                                   // not just barely survive the trip there
+  // engine v2 (engine-core.js) reports energy/shields as floats normalized to
+  // [0.0, 1.0], not the old raw 0-44 byte scale - these thresholds and rates are
+  // in that same [0,1] domain, derived straight from EngineConfig so they can't
+  // drift out of sync with the engine again. Getting ENERGY_NEEDED_CAP wrong is
+  // the dangerous direction here, not ENERGY_PER_PIXEL - a cap the tank can never
+  // actually reach latches this.retreating true forever (confirmed by user: a
+  // stale cap tuned against the old 0-44 scale got the tank stuck at base
+  // permanently), so the cap is pinned a bit under the true 1.0 ceiling on purpose.
+  static LOW_ENERGY = 0.35; // energy floor that TRIGGERS a retreat (entry condition)
+  static LOW_SHIELD = 0.35; // shield floor that TRIGGERS a retreat (entry condition) - shield
+                             // only repairs at home and doesn't drain from travel, so unlike
+                             // energy it has no distance-scaled exit condition below.
+  static MAX_ENERGY = 1.0;
+  static ENERGY_NEEDED_CAP = AiController.MAX_ENERGY - 0.1;
+  // drain per px of travel while outside base: energy drains at ENERGY_DROP per
+  // second (engine-core.js) regardless of movement, and the tank covers
+  // TANK_SPEED px/sec, so per-pixel drain is ENERGY_DROP / TANK_SPEED.
+  static ENERGY_PER_PIXEL = EngineConfig.ENERGY_DROP / EngineConfig.TANK_SPEED;
+  static ENERGY_TRIP_RESERVE = 0.1; // spare energy to actually fight/dig once arrived,
+                                     // not just barely survive the trip there
 
   // Energy the tank should top off to before leaving base again, given the one-way
   // distance to wherever it's actually headed next - see the retreat hysteresis in
@@ -268,7 +270,7 @@ class AiController
   computeKeys()
   {
     const s = this.game.state();
-    this.liveBlue = { x: s.blue.x, y: s.blue.y };
+    this.liveBlue = { x: s.tanks[0].x, y: s.tanks[0].y };
     // See blueHeading's own comment - derived from movement, same as this.heading is
     // for green, except off raw position delta rather than input bits (no bits to
     // read for the opponent). Only updated on actual movement and left alone
@@ -322,13 +324,13 @@ class AiController
     this.matchFrames++;
     this.rememberSeen(s);
     if (this.homePos == null)
-      this.homePos = { x: s.green.x, y: s.green.y };
+      this.homePos = { x: s.tanks[1].x, y: s.tanks[1].y };
     // Green's own base room - see ownBasePos' own comment in the constructor.
     // Green's position is always known (it's this controller's own tank, not
     // something that needs sighting), so this only needs the freshSpawn guarantee,
     // no difficulty/seesBlue gating the way blueBasePos' capture below needs.
     if (this.ownBasePos == null && freshSpawn)
-      this.ownBasePos = this.findEnclosingBase(s.green.x, s.green.y);
+      this.ownBasePos = this.findEnclosingBase(s.tanks[1].x, s.tanks[1].y);
     const seesBlue = this.canSeeBlue(s);
     // Point-blank contact counts as "knowing where blue is" regardless of canSeeBlue()
     // - originally added because that check used to raycast dirt/walls between the
@@ -342,10 +344,10 @@ class AiController
     // closeContact can't actually add anything canSeeBlue() doesn't already cover -
     // kept only as a smaller, explicitly-named "touching" concept for the debug log
     // and comments below, not because it changes any decision anymore.
-    const closeContact = Math.hypot(s.blue.x - s.green.x, s.blue.y - s.green.y) < AiController.CONTACT_SENSE_RANGE;
+    const closeContact = Math.hypot(s.tanks[0].x - s.tanks[1].x, s.tanks[0].y - s.tanks[1].y) < AiController.CONTACT_SENSE_RANGE;
     if (this.difficulty == "hard" || seesBlue || closeContact)
     {
-      this.lastSeenBlue = { x: s.blue.x, y: s.blue.y };
+      this.lastSeenBlue = { x: s.tanks[0].x, y: s.tanks[0].y };
       // Update the remembered base-occupancy flags from this same knowledge event
       // (see their own comment in the constructor) - hard's gate is always true, so
       // this is effectively live for hard; medium/easy only update it here, on an
@@ -369,7 +371,7 @@ class AiController
     // reading (no sighting yet), it just stays unfound and gets another chance to be
     // captured on the NEXT round's reset instead.
     if (this.blueBasePos == null && freshSpawn && (this.difficulty == "hard" || seesBlue))
-      this.blueBasePos = this.findEnclosingBase(s.blue.x, s.blue.y);
+      this.blueBasePos = this.findEnclosingBase(s.tanks[0].x, s.tanks[0].y);
     // "medium" free-reveals blue's base location BASE_REVEAL_FRAMES after the game
     // started if it hasn't been found any other way by then, per user request -
     // scouting/sighting-based discovery alone could otherwise leave medium
@@ -378,7 +380,7 @@ class AiController
     // base immediately via the freshSpawn branch above) or "easy" (no such reveal
     // requested - stays fully scouting-dependent). Goes through
     // findBlueBaseAnywhere() (a whole-map scan for blue's actual BORDER), not
-    // findEnclosingBase(s.blue.x, s.blue.y) - by BASE_REVEAL_FRAMES in, blue's tank
+    // findEnclosingBase(s.tanks[0].x, s.tanks[0].y) - by BASE_REVEAL_FRAMES in, blue's tank
     // could be anywhere on the map, nowhere near its own base (confirmed by user:
     // that assumes blue is standing inside its base right then, which only holds at
     // the freshSpawn instant above, not generally) - reveals only the fixed base
@@ -411,14 +413,14 @@ class AiController
     // knownKey()'s own comment) - fixed at the source, so every-frame calling is
     // cheap again and doesn't need throttling.
     if (this.blueBasePos == null)
-      this.blueBasePos = this.findEnclosingBlueBase(s.green.x, s.green.y);
+      this.blueBasePos = this.findEnclosingBlueBase(s.tanks[1].x, s.tanks[1].y);
     // Same idea, but for merely seeing blue's wall NEARBY rather than standing inside
     // it - see findBlueBaseNear()/findBlueCorner() for why the above, position-only
     // check misses this case (confirmed by user, from a live debug dump: green stood
     // right next to a visible stretch of blue's border - and blue's own tank - with
     // blueBasePos still null since green wasn't inside the box on either axis).
     if (this.blueBasePos == null)
-      this.blueBasePos = this.findBlueBaseNear(s.green.x, s.green.y);
+      this.blueBasePos = this.findBlueBaseNear(s.tanks[1].x, s.tanks[1].y);
     // If we've closed in on where we last saw/knew blue to be and it's not currently
     // sighted there, that's a stale memory (blue moved on since) - drop it so the AI
     // goes back to searching/wandering (or attacking the known base, if found - see
@@ -427,7 +429,7 @@ class AiController
     // findPath() physically failing to reach it - see BLUE_SEEN_ARRIVAL_DIST). hard
     // mode never needs this - its lastSeenBlue is always live, never stale.
     if (this.difficulty != "hard" && this.lastSeenBlue && !seesBlue &&
-        Math.hypot(s.green.x - this.lastSeenBlue.x, s.green.y - this.lastSeenBlue.y) < AiController.BLUE_SEEN_ARRIVAL_DIST)
+        Math.hypot(s.tanks[1].x - this.lastSeenBlue.x, s.tanks[1].y - this.lastSeenBlue.y) < AiController.BLUE_SEEN_ARRIVAL_DIST)
       this.lastSeenBlue = null;
     // Same idea as the lastSeenBlue invalidation just above, but for blueBasePos as
     // a search target (see baseWorthVisiting's own comment) - having actually walked
@@ -466,12 +468,12 @@ class AiController
     // off anyway). BASE_ARRIVAL_DIST is kept as a margin added onto the room bounds,
     // not dropped - blue lingering just outside the doorway still counts as "here".
     if (this.baseWorthVisiting && this.blueBasePos &&
-        Math.hypot(s.green.x - this.blueBasePos.x, s.green.y - this.blueBasePos.y) < AiController.BASE_ARRIVAL_DIST)
+        Math.hypot(s.tanks[1].x - this.blueBasePos.x, s.tanks[1].y - this.blueBasePos.y) < AiController.BASE_ARRIVAL_DIST)
     {
       const room = this.scanEnclosingBox(this.blueBasePos.x, this.blueBasePos.y, (px, py) => this.knownNibble(px, py) == 9);
       const stillThere = room &&
-        Math.abs(s.blue.x - room.x) < room.halfW + AiController.BASE_ARRIVAL_DIST &&
-        Math.abs(s.blue.y - room.y) < room.halfH + AiController.BASE_ARRIVAL_DIST;
+        Math.abs(s.tanks[0].x - room.x) < room.halfW + AiController.BASE_ARRIVAL_DIST &&
+        Math.abs(s.tanks[0].y - room.y) < room.halfH + AiController.BASE_ARRIVAL_DIST;
       if (!stillThere)
         this.baseWorthVisiting = false;
     }
@@ -496,8 +498,8 @@ class AiController
     const tripDist = Math.hypot(nextTarget.x - this.homePos.x, nextTarget.y - this.homePos.y);
     const energyNeeded = this.energyNeededFor(tripDist);
     if (!this.retreating)
-      this.retreating = s.green.energy < AiController.LOW_ENERGY || s.green.shield < AiController.LOW_SHIELD;
-    else if (s.green.energy >= energyNeeded && s.green.shield >= AiController.LOW_SHIELD)
+      this.retreating = s.tanks[1].energy < AiController.LOW_ENERGY || s.tanks[1].shield < AiController.LOW_SHIELD;
+    else if (s.tanks[1].energy >= energyNeeded && s.tanks[1].shield >= AiController.LOW_SHIELD)
       this.retreating = false;
     const retreating = this.retreating;
 
@@ -553,10 +555,10 @@ class AiController
     // - shield/energy still has to come from somewhere, so this just falls through
     // to home regardless.
     let retreatTarget = this.homePos;
-    if (retreating && s.green.shield >= AiController.LOW_SHIELD && this.blueBasePos && !this.blueInEnemyBase)
+    if (retreating && s.tanks[1].shield >= AiController.LOW_SHIELD && this.blueBasePos && !this.blueInEnemyBase)
     {
-      const distHome = Math.hypot(s.green.x - this.homePos.x, s.green.y - this.homePos.y);
-      const distEnemyBase = Math.hypot(s.green.x - this.blueBasePos.x, s.green.y - this.blueBasePos.y);
+      const distHome = Math.hypot(s.tanks[1].x - this.homePos.x, s.tanks[1].y - this.homePos.y);
+      const distEnemyBase = Math.hypot(s.tanks[1].x - this.blueBasePos.x, s.tanks[1].y - this.blueBasePos.y);
       if (distEnemyBase < distHome || this.blueInOwnBase)
         retreatTarget = this.blueBasePos;
     }
@@ -572,7 +574,7 @@ class AiController
     // (hard, a fresh sighting - seesBlue, or point-blank contact - closeContact, see
     // its own comment above) - medium/easy can't snipe a stale remembered spot, only
     // a position they're confident is current.
-    const blueDx = s.blue.x - s.green.x, blueDy = s.blue.y - s.green.y;
+    const blueDx = s.tanks[0].x - s.tanks[1].x, blueDy = s.tanks[0].y - s.tanks[1].y;
     const blueDist = Math.hypot(blueDx, blueDy);
     const snipeHeading = this.snipeHeadingFor(blueDx, blueDy);
 
@@ -589,7 +591,7 @@ class AiController
     // roughly along the home direction (dot product of the two vectors) and closer
     // than home itself - "between", not "off to the side" or "past it".
     const blueBetweenUsAndHome = this.homePos && blueDist > 0 && (() => {
-      const toHomeX = this.homePos.x - s.green.x, toHomeY = this.homePos.y - s.green.y;
+      const toHomeX = this.homePos.x - s.tanks[1].x, toHomeY = this.homePos.y - s.tanks[1].y;
       const homeDist = Math.hypot(toHomeX, toHomeY);
       if (homeDist < 1) return false;
       const dot = (toHomeX * blueDx + toHomeY * blueDy) / (homeDist * blueDist);
@@ -671,7 +673,7 @@ class AiController
         const stickyCells = this.pathCells && this.pathCells.length
           ? new Set(this.pathCells.map(([gx, gy]) => gy * AiController.GRID_W + gx))
           : null;
-        const path = this.findPath(s.green.x, s.green.y, target.x, target.y, stickyCells);
+        const path = this.findPath(s.tanks[1].x, s.tanks[1].y, target.x, target.y, stickyCells);
         this.heldPath = path; // temp diagnostic
         this.heldBothBlocked = false;
         let short = false; // best route still lands far short of target - see UNREACHABLE_DIST
@@ -684,10 +686,18 @@ class AiController
           const CELL = AiController.CELL;
           this.pathWaypoints = path.cells.map(([gx, gy]) => ({ x: gx * CELL + CELL / 2, y: gy * CELL + CELL / 2 }));
           this.pathCells = path.cells;
-          const [lastGx, lastGy] = path.cells[path.cells.length - 1];
-          const lastX = lastGx * CELL + CELL / 2, lastY = lastGy * CELL + CELL / 2;
-          short = Math.hypot(lastX - target.x, lastY - target.y) > AiController.UNREACHABLE_DIST ||
-            this.wallBetween(lastX, lastY, target.x, target.y);
+          // A budget-exhausted search landing short of the target just means
+          // "haven't gotten there yet, try again after this hop" - not a genuine
+          // dead end (see findPath()'s own comment on budgetExhausted) - only a
+          // search that ran its heap dry with cells still short of the target is
+          // a real "no route exists" verdict worth caching as unreachable below.
+          if (!path.budgetExhausted)
+          {
+            const [lastGx, lastGy] = path.cells[path.cells.length - 1];
+            const lastX = lastGx * CELL + CELL / 2, lastY = lastGy * CELL + CELL / 2;
+            short = Math.hypot(lastX - target.x, lastY - target.y) > AiController.UNREACHABLE_DIST ||
+              this.wallBetween(lastX, lastY, target.x, target.y);
+          }
         }
         else
         {
@@ -700,12 +710,12 @@ class AiController
           // applyStuckOverride()'s escape below.
           this.pathWaypoints = null;
           this.pathCells = null;
-          const dx = target.x - s.green.x, dy = target.y - s.green.y;
+          const dx = target.x - s.tanks[1].x, dy = target.y - s.tanks[1].y;
           const wantX = Math.abs(dx) > 2 ? Math.sign(dx) : 0;
           const wantY = Math.abs(dy) > 2 ? Math.sign(dy) : 0;
           const PROBE = AiController.PROBE;
-          const blockedX = wantX != 0 && this.footprintBlocked(s.green.x + wantX * PROBE, s.green.y);
-          const blockedY = wantY != 0 && this.footprintBlocked(s.green.x, s.green.y + wantY * PROBE);
+          const blockedX = wantX != 0 && this.footprintBlocked(s.tanks[1].x + wantX * PROBE, s.tanks[1].y);
+          const blockedY = wantY != 0 && this.footprintBlocked(s.tanks[1].x, s.tanks[1].y + wantY * PROBE);
           this.heldBothBlocked = blockedX && blockedY;
           this.fallbackDirX = (!blockedX && wantX != 0) ? wantX : 0;
           this.fallbackDirY = (!blockedY && wantY != 0) ? wantY : 0;
@@ -765,16 +775,30 @@ class AiController
         {
           const cur = this.pathWaypoints[0];
           const next = this.pathWaypoints[1];
-          const distCur = Math.hypot(cur.x - s.green.x, cur.y - s.green.y);
-          const distNext = Math.hypot(next.x - s.green.x, next.y - s.green.y);
+          const distCur = Math.hypot(cur.x - s.tanks[1].x, cur.y - s.tanks[1].y);
+          const distNext = Math.hypot(next.x - s.tanks[1].x, next.y - s.tanks[1].y);
           if (distCur >= AiController.CELL && distNext >= distCur)
             break;
           this.pathWaypoints.shift();
           this.pathCells.shift();
         }
-        const wp = this.pathWaypoints[0];
-        dirX = Math.sign(wp.x - s.green.x);
-        dirY = Math.sign(wp.y - s.green.y);
+        // Compare GRID CELLS, not raw pixel positions (a pixel-distance deadzone
+        // was tried here first and made the tank barely move at all - waypoints
+        // are only CELL apart, so a magnitude threshold big enough to filter
+        // quantization noise on the cross axis also ate the real, equally-small
+        // distance on the axis of travel). wp's cell is already known exactly
+        // (this.pathCells[0], the grid cell it was generated from) - comparing it
+        // against the tank's own floor()'d cell gives an exact ±1/0 direction
+        // with no per-pixel jitter: a straight cardinal path's cross axis reads
+        // a clean 0 as long as the tank is anywhere within that same cell row/col,
+        // instead of flipping sign every tick off a sub-pixel residual (confirmed
+        // by user: that version shuffled diagonally in place instead of tracking
+        // straight).
+        const CELL = AiController.CELL;
+        const [wgx, wgy] = this.pathCells[0];
+        const tgx = Math.floor(s.tanks[1].x / CELL), tgy = Math.floor(s.tanks[1].y / CELL);
+        dirX = Math.sign(wgx - tgx);
+        dirY = Math.sign(wgy - tgy);
       }
       else if (!this.heldBothBlocked)
       {
@@ -799,7 +823,7 @@ class AiController
     const exX = (bits & (1 << AI_BITS.right)) ? 1 : (bits & (1 << AI_BITS.left)) ? -1 : 0;
     const exY = (bits & (1 << AI_BITS.down)) ? 1 : (bits & (1 << AI_BITS.up)) ? -1 : 0;
     const diggingDirt = (exX != 0 || exY != 0) &&
-      !this.isOpen(s.green.x + exX * AiController.PROBE, s.green.y + exY * AiController.PROBE);
+      !this.isOpen(s.tanks[1].x + exX * AiController.PROBE, s.tanks[1].y + exY * AiController.PROBE);
 
     let keys = bits;
     if (this.fireCooldown > 0)
@@ -846,9 +870,9 @@ class AiController
     if (--this.decideLogFrames <= 0)
     {
       this.decideLogFrames = 5;
-      console.log(`[ai] decide pos=(${s.green.x.toFixed(2)},${s.green.y.toFixed(2)}) blue=(${s.blue.x.toFixed(2)},${s.blue.y.toFixed(2)}) heading=${this.heading} target=(${target.x.toFixed(0)},${target.y.toFixed(0)}) ` +
+      console.log(`[ai] decide pos=(${s.tanks[1].x.toFixed(2)},${s.tanks[1].y.toFixed(2)}) blue=(${s.tanks[0].x.toFixed(2)},${s.tanks[0].y.toFixed(2)}) heading=${this.heading} target=(${target.x.toFixed(0)},${target.y.toFixed(0)}) ` +
         /*`path=${JSON.stringify(this.heldPath)} ` + */`heldBothBlocked=${this.heldBothBlocked} bits=${bits} keys=${keys} retreating=${retreating} ` +
-        `energy=${s.green.energy} shield=${s.green.shield} energyNeeded=${energyNeeded.toFixed(0)} diggingDirt=${diggingDirt} ` +
+        `energy=${s.tanks[1].energy} shield=${s.tanks[1].shield} energyNeeded=${energyNeeded.toFixed(0)} diggingDirt=${diggingDirt} ` +
         `escapeFramesLeft=${this.escapeFramesLeft} escapeDir=${this.escapeDir} moveHoldFrames=${this.moveHoldFrames} ` +
         `isAttackTarget=${isAttackTarget} blueUnreachable=${this.blueUnreachable} blueRecheckFrames=${this.blueRecheckFrames} ` +
         `blueBasePos=${JSON.stringify(this.blueBasePos)} baseWorthVisiting=${this.baseWorthVisiting} canSnipeBlue=${canSnipeBlue} ` +
@@ -859,7 +883,7 @@ class AiController
     if (--this.dumpFrames <= 0)
     {
       this.dumpFrames = 5; // ~0.5s at 30fps - full 64x64 dump every frame is unreadable spam
-      this.debugDumpMap(s.green.x, s.green.y, target.x, target.y, this.pathCells, s.blue.x, s.blue.y);
+      this.debugDumpMap(s.tanks[1].x, s.tanks[1].y, target.x, target.y, this.pathCells, s.tanks[0].x, s.tanks[0].y);
     }
     return keys;
   }

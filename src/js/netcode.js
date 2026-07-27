@@ -18,6 +18,18 @@ function escapeHtml(s)
 let Path = {
   Extract(path, f)
   {
+    // An empty path means this tank has never pressed anything (Append() deliberately
+    // never seeds a [0,0] entry for an all-zero start - see its own comment), which is
+    // exactly the common case for any tank that hasn't yet acted while OTHER tanks
+    // already have entries in the same server response (e.g. right as the round-start
+    // freeze ends and one player moves a beat before another) - default to "nothing
+    // pressed" rather than crashing on path[0] of an empty array. That crash used to be
+    // silently swallowed by netsync()'s outer .catch(), permanently freezing
+    // gameRemote/spectator's replay from that point on - looked like "can't leave base,
+    // keeps getting reset back inside" once recalc() next rewound gameLocal to that
+    // stuck state (confirmed by user).
+    if (path.length == 0)
+      return 0;
     // TODO: slow
     const binarySearch = (a, t) => {
       for (let i=1; i<a.length; i++)
@@ -47,99 +59,98 @@ let Path = {
   }
 }
 
+// Wraps TunnelerEngine (engine/engine.js) to match the exact public surface this
+// file's callers (tunneler.js's Session, spectator.js) already use - load()/
+// step()/state()/render()/copy() plus the plain frame/paths/seed properties.
+// Previously wrapped WasmApp (the emscripten-compiled DOS binary) - see the plan
+// doc for why/how this was swapped.
+//
+// `paths` replaces the old single pathOur/pathTheir pair with one sparse
+// [[frame,rawBits],...] array PER TANK (roster order) - a straight
+// generalization of the old asymmetric 2-tank naming to up to 8 online seats
+// (or exactly 2 for offline hotseat, which still goes through this same class -
+// see tunneler.js's legacyTank0Bits()/legacyTank1Bits()). Whichever entry is
+// "this client's own seat" is Session's concern (it knows its own seat index),
+// not Game's - every tank's path is tracked uniformly here.
 class Game
 {
   constructor()
   {
-    this.app = new WasmApp()
-    this.videoBuffer = null;
-    this.memoryBuffer = null;
+    this.engine = null;
     this.frame = 0;
-    this.pathOur = [[0, 0]];
-    this.pathTheir = [[0, 0]];
+    this.paths = null;
     this.ready = new Promise((resolve, reject)=>{this.resolveReady = resolve})
     this.seed = Math.floor(Math.random()*0x10000) | (Math.floor(Math.random()*0x10000)<<16)
   }
 
-  load()
+  // roster/friendlyFire: see TunnelerEngine's constructor (engine.js). Defaults
+  // match its own 2-tank default, for offline hotseat callers that don't care.
+  load(roster = [{ team: 1, color: 0 }, { team: 2, color: 1 }], friendlyFire = false)
   {
-    return this.app.load().then(() => {
-      this.videoBuffer = new Uint8ClampedArray(this.app.memory.buffer, this.app.HEAP32[this.app.symbols.appVideo.value>>2], 640 * 400 * 4);
-      this.memoryBuffer = new Uint8Array(this.app.memory.buffer, this.app.HEAP32[this.app.symbols.appMemory.value>>2], 0x10000*14);
-      this.asyncifyBuffer = new Uint8Array(this.app.memory.buffer, this.app.HEAP32[this.app.symbols.asyncifyBuffer.value>>2], 1024+12);
-
-      this.app.HEAP32[this.app.symbols.seed.value>>2] = this.seed;
-      this.app.symbols.appLoop();
-      this.app.symbols.asyncify_stop_unwind();
-      // wait until map is generated
-      this.app.asyncifyResume();
-      this.app.asyncifyResume();
-      this.app.asyncifyResume();
-      this.app.asyncifyResume();
-      // F1 to start a game
-      this.app.HEAP32[this.app.symbols.lastKey.value>>2] = 0x3b00;
-      this.app.asyncifyResume();
-      this.app.HEAP32[this.app.symbols.lastKey.value>>2] = 0x0100;
-      this.frame = 0;
-      this.resolveReady();
-    });
+    this.engine = new TunnelerEngine(this.seed, roster, friendlyFire);
+    this.frame = 0;
+    this.paths = roster.map(() => [[0, 0]]);
+    this.resolveReady();
+    return Promise.resolve();
   }
 
-  step(keyStateOur, keyStateTheir)
+  // Single fixed 5-bit-per-tank layout (up=bit0,down=bit1,left=bit2,right=bit3,
+  // fire=bit4), used identically for every tank now that each has its own
+  // independent raw scalar instead of sharing one combined 11-bit field split
+  // by bit-range - replaces the old decodeInputs(combinedBits) (see git history),
+  // which depended on two DIFFERENT per-half bit orders that only worked because
+  // both tanks' bits lived in one shared integer. tunneler.js's
+  // legacyTank0Bits()/legacyTank1Bits() re-derive this same order from the old
+  // hotseat layout for offline modes, so this decoder needs no hotseat special
+  // case.
+  static decodeInput(bits)
   {
-    if (this.app.HEAP32[this.app.symbols.lastKey.value>>2] != 0x0100)
-      return false;
-    const keys = ["H".charCodeAt(0), "M".charCodeAt(0), "P".charCodeAt(0), "K".charCodeAt(0),
-      0x1c, 0x01, 0x11, 0x2d, 0x1e, 0x20, 0x1d];
-    for (let i=0; i<keys.length; i++)
-      this.memoryBuffer[0x0ac30+0x14f0+keys[i]] = !!((keyStateOur | keyStateTheir) & (1<<i))
-    Path.Append(this.pathOur, this.frame, keyStateOur);
-    Path.Append(this.pathTheir, this.frame, keyStateTheir);
-    this.app.asyncifyResume();
+    return {
+      up: !!(bits & 1), down: !!(bits & 2), left: !!(bits & 4),
+      right: !!(bits & 8), fire: !!(bits & 16),
+    };
+  }
+
+  // rawStates: this tick's raw 5-bit (0-31) scalar per tank, roster order.
+  // Recorded into this.paths (harmless bookkeeping even when never read, e.g.
+  // offline hotseat) and decoded for the engine.
+  step(rawStates)
+  {
+    for (let i = 0; i < rawStates.length; i++)
+      Path.Append(this.paths[i], this.frame, rawStates[i]);
+    this.engine.step(rawStates.map(Game.decodeInput));
     this.frame++;
     return true;
   }
+
   state()
   {
-    const getWord = (seg, ofs) => this.memoryBuffer[seg*16+ofs] + (this.memoryBuffer[seg*16+ofs+1]<<8);
-    const getByte = (seg, ofs) => this.memoryBuffer[seg*16+ofs];
-
-    return {
-      round: getWord(0x0ac3, 0x1264),
-      blue: {
-        score: getWord(0x0ac3, 0x1266),
-        x: getWord(0x0c41, 0x0ee6),
-        y: getWord(0x0c41, 0x0eea),
-        energy: getByte(0x0c41, 0x0c8c),
-        shield: getByte(0x0c41, 0x0c84)
-      },
-      green: {
-        score: getWord(0x0ac3, 0x1268),
-        x: getWord(0x0c41, 0x0ee8),
-        y: getWord(0x0c41, 0x0eec),
-        energy: getByte(0x0c41, 0x0c8e),
-        shield: getByte(0x0c41, 0x0c86)
-      }};
+    return this.engine.snapshot();
   }
-  // force: bypass the appBlit() dirty check and blit the current frame regardless.
-  // Needed right when something outside the WASM engine itself (e.g. tunneler.js's
-  // countdown overlay) has drawn over ctx and needs the real frame put back - if
-  // appBlit() happens to be false right then (nothing changed on the game's own
-  // side), the overlay's last paint would otherwise never get erased.
+
+  // Field grid accessor for spectator.js's map overview - the new engine has no
+  // packed framebuffer to read, just the plain field array.
+  getField()
+  {
+    return this.engine.terrain;
+  }
+
+  // force is accepted for interface compatibility with tunneler.js's callers (the
+  // old WASM engine had an appBlit() dirty-frame check `force` could bypass) - the
+  // new engine has no such concept, it always redraws from current state.
   render(ctx, force = false)
   {
-    if (force || this.app.symbols.appBlit())
-    {
-      const img = new ImageData(this.videoBuffer, 640, 400);
-      ctx.putImageData(img, 0, 0);
-    }
+    this.engine.render(ctx);
   }
 
+  // Copies netGame's ENGINE checkpoint into this instance (used by recalc() to
+  // rewind gameLocal to gameRemote's last-confirmed state) - deliberately
+  // doesn't touch this.paths, same as the old copy() never touched
+  // pathOur/pathTheir: this instance's own recorded input history stays intact
+  // across the rewind, it's only the simulated game state being reset.
   copy(netGame)
   {
-    this.videoBuffer.set(netGame.videoBuffer);
-    this.memoryBuffer.set(netGame.memoryBuffer);
-    this.asyncifyBuffer.set(netGame.asyncifyBuffer);
+    this.engine.copyFrom(netGame.engine);
     this.seed = netGame.seed;
     this.frame = netGame.frame;
   }
@@ -153,27 +164,22 @@ class Net
     this.lastFrame = 0;
     this.connected = false;
     this.offline = false;
-    this.password = "";
   }
   // offline: true for local-only hotseat modes (bare tunneler.html, or the dedicated
   // /play route) - the caller decides this from its own role, since there's no
   // reliable way to infer it here from the URL alone.
   //
-  // password: only meaningful when this role (blue/green/spectate) has a join password
-  // set on the session - sent inside the init packet itself (see buildInitPacket()/
-  // reInit() below), never as a URL query param, so it never lands in browser
-  // history/server logs/the Referer header. Stored on the instance so every later
-  // reInit() call (polling for the seed, reconnects) resends it without the caller
-  // having to pass it again.
+  // No passwords anywhere anymore (players or spectators) - seats are still
+  // "whoever holds the link", same trust model as the rest of the app.
   //
-  // The server no longer seeds a session until both blue and green are connected (see
-  // startSessionIfReady() in server.js), so this single handshake attempt may come back
-  // with seed=0/started=0 if the caller is first to arrive - it's on the caller to poll
-  // (via sync(), checking blueConnected/greenConnected) and call reInit() once the
-  // server actually has a seed. connect() itself no longer retries internally.
-  connect(masterSeed, offline = false, password = "")
+  // The server doesn't seed a session until enough seats are filled AND every
+  // occupied seat is ready (see startSessionIfReady() in server.js), so this
+  // single handshake attempt may come back with seed=0/started=0 if the caller
+  // gets here before that. It's on the caller to poll (via sync(), checking
+  // resp.frame/connectedMask) and call reInit() once the server actually has a
+  // seed. connect() itself no longer retries internally.
+  connect(masterSeed, offline = false)
   {
-    this.password = password;
     if (offline)
     {
       const p = {started:new Date().getTime(), seed:masterSeed};
@@ -237,7 +243,7 @@ class Net
   // Returns null (rather than throwing) if the socket closed mid-request.
   async reInit(masterSeed)
   {
-    const initPacket = this.buildInitPacket({seed:masterSeed, started:new Date().getTime(), password:this.password});
+    const initPacket = this.buildInitPacket({seed:masterSeed, started:new Date().getTime()});
     const resp = await this.transfer(initPacket);
     if (!resp)
       return null;
@@ -278,12 +284,7 @@ class Net
   }
   buildInitPacket(p)
   {
-    // trailing bytes (if any) carry this role's join password, UTF-8 encoded - see
-    // server.js's parseInitPacket(). Offline modes never set p.password (they never
-    // reach here at all), and any role with no password set on the session just sends
-    // "" - so this is the fixed 13-byte packet for them.
-    const passwordBytes = new TextEncoder().encode(p.password || "");
-    return [0x30, ...this.dwordToBytes(p.seed), ...this.timestampToBytes(p.started), ...passwordBytes];
+    return [0x30, ...this.dwordToBytes(p.seed), ...this.timestampToBytes(p.started)];
   }
   parseInitPacket(buf)
   {
@@ -293,14 +294,17 @@ class Net
   }
 
   // public:
+  // This client's own outgoing path only ever needs a 5-bit (0-31) keystate per
+  // entry now (one tank's own inputs, not a combined multi-tank field) - 3 bytes/
+  // entry (frame:u16, keystate:u8) instead of the old 4.
   pathToBytes(path)
   {
     const buf = [];
     for (const point of path)
     {
-      if (point[0] >= 0x10000 || point[1] >= 0x10000)
+      if (point[0] >= 0x10000 || point[1] > 0x1f)
         throw new Error("Too large value to encode");
-      buf.push(point[0]>>8, point[0]&255, point[1]>>8, point[1]&255);
+      buf.push(point[0]>>8, point[0]&255, point[1]);
     }
     return buf;
   }
@@ -316,25 +320,38 @@ class Net
     this.lastFrame = lastFrame;
     return [0x32, ...this.dwordToBytes(frame), ...this.pathToBytes(subPath)];
   }
+  // Response carries a SEAT-TAGGED merge of every connected tank's own sparse
+  // path (4 bytes/entry: frame:u16, seat:u8, keystate:u8) rather than one
+  // shared combined keystate - up to 8 tanks x 5 bits each can't fit in a
+  // single bitwise-safe JS number (bitwise ops are 32-bit), so each tank keeps
+  // its own independent scalar all the way through, same as Game.paths[].
+  // connectedMask: bit i set = seat i has a live socket (fits exactly, 8 seats/
+  // 8 bits). clients: total socket count including spectators (was folded into
+  // the same byte as the 2 old connected-bits; a full byte of its own now that
+  // 8 seats already use their own byte).
   parseSyncPacket(buf)
   {
-    if (buf[0] != 0x33 || buf.length % 4 != 1)
+    if (buf[0] != 0x33 || (buf.length - 7) % 4 != 0)
       throw new Error("wrong token");
-    const path = [];
-    let frame = this.bytesToDword(buf.slice(1, 5)) & 0xffffff;
-    if (frame == 0xffffff)
-      frame = -1;
-
-    // top byte: bit0 = blue connected, bit1 = green connected, remaining 6 bits = total socket count
-    const statusByte = this.bytesToDword(buf.slice(1, 5)) >> 24;
-    const clients = statusByte >> 2;
-    const blueConnected = !!(statusByte & 1);
-    const greenConnected = !!(statusByte & 2);
-    for (let i=5; i<buf.length; i+= 4)
-      path.push([(buf[i]<<8)|(buf[i+1]), (buf[i+2]<<8)|(buf[i+3])]);
-
-    return {frame:frame, clients:clients, blueConnected:blueConnected, greenConnected:greenConnected, path:path};
+    // bytesToDword's bitwise OR is 32-bit SIGNED - four 0xff bytes (the "no data yet"
+    // sentinel the server sends for maxRecvFrame=-1, see server.js's getMaxRecvFrame())
+    // naturally comes back as -1 already, not 0xffffffff/4294967295, so no separate
+    // sentinel check is needed here at all (unlike the old 24-bit-masked design, which
+    // had to compare against 0xffffff explicitly to get a reliably non-negative result).
+    const frame = this.bytesToDword(buf.slice(1, 5));
+    const connectedMask = buf[5];
+    const clients = buf[6];
+    const paths = [];
+    for (let i = 7; i < buf.length; i += 4)
+    {
+      const f = (buf[i] << 8) | buf[i + 1], seat = buf[i + 2], keystate = buf[i + 3];
+      if (!paths[seat])
+        paths[seat] = [];
+      paths[seat].push([f, keystate]);
+    }
+    return { frame, clients, connectedMask, paths };
   }
+  // path: this seat's own sparse [[frame,keystate],...] array (Game.paths[mySeat]).
   sync(frame, path)
   {
     if (!this.connected)

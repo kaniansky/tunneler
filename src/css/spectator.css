@@ -16,7 +16,6 @@
   width: 640px;
   max-width: 100%;
   height: auto;
-  aspect-ratio: 640 / 300;
   margin: 0 auto 20px;
   border-radius: 4px;
 }

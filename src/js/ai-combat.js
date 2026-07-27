@@ -49,13 +49,13 @@ Object.assign(AiController.prototype, {
 canShootBlue(s, heading)
 {
   const [ux, uy] = AiController.SNIPE_UNIT[heading];
-  const dist = Math.hypot(s.blue.x - s.green.x, s.blue.y - s.green.y);
+  const dist = Math.hypot(s.tanks[0].x - s.tanks[1].x, s.tanks[0].y - s.tanks[1].y);
   const dx = ux * dist, dy = uy * dist;
   const STEPS = Math.max(1, Math.ceil(dist));
   for (let i = 1; i < STEPS; i++)
   {
     const t = i / STEPS;
-    if (this.isPermanentWall(s.green.x + dx * t, s.green.y + dy * t))
+    if (this.isPermanentWall(s.tanks[1].x + dx * t, s.tanks[1].y + dy * t))
       return false;
   }
   return true;

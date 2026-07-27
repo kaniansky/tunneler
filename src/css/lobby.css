@@ -73,3 +73,148 @@
 .links .btn:disabled:hover {
   background: #888;
 }
+
+.join-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+/* [hidden] and .join-form are equal specificity - without this, whichever the cascade
+   puts last wins regardless of the `hidden` attribute actually being set (confirmed:
+   the join form stayed visible after joining, hidden="" and all, since this stylesheet
+   loads after the UA default and ties on specificity). */
+.join-form[hidden] {
+  display: none;
+}
+.join-form .field {
+  flex: 1 1 160px;
+  padding: 8px 10px;
+  font-size: 1rem;
+  border: 1px solid #444;
+  border-radius: 4px;
+  background: #1a1a1a;
+  color: #eee;
+}
+#joinTeam {
+  padding: 6px 8px;
+  border-radius: 4px;
+  border: 1px solid #444;
+  background: #1a1a1a;
+  color: #eee;
+}
+#joinBtn {
+  padding: 8px 20px;
+  font-size: 1rem;
+  font-weight: bold;
+  border: none;
+  border-radius: 6px;
+  background: #007BFF;
+  color: white;
+  cursor: pointer;
+}
+#joinBtn:hover {
+  background: #0066d6;
+}
+
+.color-swatches {
+  display: flex;
+  gap: 6px;
+}
+.color-swatch {
+  width: 26px;
+  height: 26px;
+  border-radius: 5px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+}
+.color-swatch.selected {
+  border-color: #fff;
+}
+.color-swatch:disabled {
+  opacity: 0.25;
+  cursor: not-allowed;
+}
+
+.seat-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.seat-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: #1a1a1a;
+  min-height: 26px;
+}
+.seat-row.own {
+  background: #2a3f5f;
+}
+.seat-row.empty {
+  color: #777;
+  font-style: italic;
+}
+.seat-swatch {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  flex: 0 0 auto;
+}
+.seat-name {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.seat-team {
+  flex: 0 0 auto;
+  color: #aaa;
+  font-size: 0.9rem;
+}
+.seat-ready {
+  flex: 0 0 auto;
+  font-weight: bold;
+}
+.seat-ready.is-ready {
+  color: #7CFC00;
+}
+.seat-ready.not-ready {
+  color: #888;
+}
+.seat-row.own .seat-name {
+  padding: 4px 6px;
+  border: 1px solid #444;
+  border-radius: 4px;
+  background: #1a1a1a;
+  color: #eee;
+}
+.seat-leave-btn {
+  flex: 0 0 auto;
+  padding: 4px 10px;
+  font-size: 0.85rem;
+  border: none;
+  border-radius: 4px;
+  background: #555;
+  color: white;
+  cursor: pointer;
+}
+.seat-leave-btn:hover {
+  background: #3d3d3d;
+}
+.hint {
+  margin: 8px 0 0;
+  color: #999;
+  font-size: 0.85rem;
+}
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  white-space: nowrap;
+  cursor: pointer;
+}

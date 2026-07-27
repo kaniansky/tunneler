@@ -1,25 +1,20 @@
 "use strict"
 
-class KeyFilter
+// Legacy hotseat bit layout (unchanged since before the N-player rework): one shared
+// 11-bit keyState field, bits 6-10 = tank0's up/down/left/right/fire, bits 0-4 = tank1's
+// up/right/down/left/fire (note tank1's right/down ORDER differs from tank0's - a
+// historical quirk of the old combined-field design, harmless since both tanks were
+// always decoded by fixed bit position, never relative order). Online seats now each
+// get their own independent 0-31 scalar in a single unified order (see netcode.js's
+// Game.decodeInput()), so these two helpers translate the still-unchanged hotseat
+// (0/"play") bit positions into that same unified order - tank0's slice already matches
+// it 1:1 once shifted, tank1's needs its right/down bits swapped.
+function legacyTank0Bits(keyState11) { return (keyState11 >> 6) & 0x1f; }
+function legacyTank1Bits(keyState11)
 {
-  constructor()
-  {
-    this.localKeys = 0;
-    this.localKeysBuf = [];
-    this.localKeysFilter = 0;
-  }
-  put(keys)
-  {
-    this.localKeysBuf.push(keys);
-    this.localKeys = 0;
-    if (this.localKeysBuf.length > 10)
-      this.localKeysBuf.shift();
-    this.localKeysFilter = this.localKeysBuf.reduce((a, b) => a | b, 0);
-  }
-  get()
-  {
-    return this.localKeysFilter;
-  }
+  const up = keyState11 & 1, right = (keyState11 >> 1) & 1, down = (keyState11 >> 2) & 1,
+        left = (keyState11 >> 3) & 1, fire = (keyState11 >> 4) & 1;
+  return up | (down << 1) | (left << 2) | (right << 3) | (fire << 4);
 }
 
 class Session
@@ -27,26 +22,29 @@ class Session
   // how long movement stays frozen at the start of each round
   static COUNTDOWN_MS = 3000;
 
-  // first to this many round wins takes the match - once either score reaches it, the
-  // WASM engine shows a full-screen map reveal instead of split-screen gameplay (see
-  // render() below).
+  // first to this many round wins takes the match - see engine-core.js's EngineConfig.WIN_SCORE
+  // (kept in sync manually, same reasoning as the wire protocol opcodes).
   static WIN_SCORE = 3;
 
   static isMatchOver(s)
   {
-    return s.blue.score >= Session.WIN_SCORE || s.green.score >= Session.WIN_SCORE;
+    return Object.values(s.teamScores).some((v) => v >= Session.WIN_SCORE);
   }
 
-  // role: 0 (bare tunneler.html) and "play" (/play) show the full split screen and
-  // run fully local/offline, no networking at all. "blue"/"green" crop to that player's
-  // own half and talk to the server, so remote players can't see their opponent's side.
-  // "ai" (/ai/<difficulty>) is also fully local/offline like 0/"play", but only blue is
-  // keyboard-driven - green's bits come from this.ai (an AiController, see ai.js) every
-  // frame instead of a second human at the same keyboard.
+  // role: 0 (bare tunneler.html) and "play" (/play) show the full split screen and run
+  // fully local/offline, no networking at all. A numeric role (online, /<id>/seat/<n>)
+  // crops to that seat's own camera pane and talks to the server, so remote players
+  // can't see anyone else's. "ai" (/ai/<difficulty>) is also fully local/offline like
+  // 0/"play", but only tank0 is keyboard-driven - tank1's bits come from this.ai (an
+  // AiController, see ai.js) every frame instead of a second human at the same keyboard.
   //
-  // blueName/greenName: cosmetic display names (default "Blue"/"Green") shown in the
-  // scoreboard/title instead of the role names - see the bootstrap code at the bottom of
-  // this file for where they come from.
+  // offline fully disambiguates "numeric role" between bare-tunneler.html's role 0 and
+  // online seat 0 (both are the JS value 0) - see the bootstrap code at the bottom of
+  // this file, which computes it from the URL directly rather than from role.
+  //
+  // blueName/greenName: cosmetic hotseat display names (default "Blue"/"Green"), only
+  // meaningful for the offline 0/"play"/"ai" roles - online seats' names/colors/teams
+  // come from the live roster fetched in waitForPlayers() instead.
   constructor(ctx, role, offline, scoreEl, blueName, greenName, aiDifficulty)
   {
     this.ctx = ctx;
@@ -58,131 +56,147 @@ class Session
     this.net = new Net();
     this.gameLocal = new Game();
     this.gameRemote = new Game();
-    this.keyEstimate = 0;
     this.keyState = 0;
-    this.keyFilter = new KeyFilter();
     this.waitSync = false;
     this.running = false;
     this.matchEnded = false;
     // freeze movement for COUNTDOWN_MS at the start of every round (including the
     // first) - lastRound null means "never seen a round yet", so the very first
-    // iterate() call also counts as a round start. Both clients detect this off the
-    // same WASM-driven s.round value, which advances at an identical frame number
-    // for both (lockstep), so the two countdowns start within real-time sync
+    // iterate() call also counts as a round start. All clients detect this off the same
+    // engine-driven s.round value, which advances at an identical frame number for
+    // every client (lockstep), so the two countdowns start within real-time sync
     // tolerance of each other without needing an explicit handshake.
     this.lastRound = null;
     this.countdownEnd = null;
-    // blue/green only - tracks the opponent's connection flag from every sync response
-    // (see updateOpponentConnection()). Assumed true at construction time: start()
-    // doesn't flip `running` on until waitForOpponent() has already confirmed both
-    // roles are in, so by the time iterate()/netsync() start running this is accurate.
+    // online only - tracks whether every OTHER connected seat is still connected, from
+    // every sync response's connectedMask (see updateOpponentConnection()). Assumed
+    // true at construction: start() doesn't flip `running` on until waitForPlayers() has
+    // already confirmed the match started, so by the time iterate()/netsync() run this
+    // is accurate.
     this.opponentConnected = true;
+
+    // Online-only state, populated once waitForPlayers() resolves (see start()):
+    // roster ([{team,color},...], tank-index order), friendlyFire, mySeat (this
+    // client's raw seat number, 0-7), myTankIndex (mySeat's position within roster - can
+    // differ from mySeat if lower-numbered seats are empty), seatOfTank (roster
+    // index -> raw seat number, the inverse mapping) and names (roster-index-order
+    // display names). seatEstimates holds this client's current best guess of every
+    // OTHER tank's live input, by tank index - the online generalization of the old
+    // single-opponent `keyEstimate` scalar.
+    this.roster = null;
+    this.friendlyFire = false;
+    this.mySeat = null;
+    this.myTankIndex = null;
+    this.seatOfTank = null;
+    this.names = null;
+    this.seatEstimates = null;
+    this.connectedMask = 0;
+
     this.ai = role == "ai" ? new AiController(this.gameLocal, aiDifficulty) : null;
-    if (role == "blue" || role == "green")
+    if (!offline)
     {
       this.fullCanvas = document.createElement('canvas');
-      this.fullCanvas.width = 640;
+      this.fullCanvas.width = 320; // widened once roster size is known - see start()
       this.fullCanvas.height = 400;
       this.fullCtx = this.fullCanvas.getContext('2d');
-      // shown above the "Waiting for opponent..." message - own tank, matching own role
-      this.tankImage = new Image();
-      this.tankImage.src = "/assets/tank-" + role + ".png";
     }
   }
-  loadTankImage()
-  {
-    if (!this.tankImage)
-      return Promise.resolve();
-    return this.tankImage.complete ? Promise.resolve() : new Promise(r => { this.tankImage.onload = r; });
-  }
+
   async start()
   {
-    // load before waitForOpponent() so it's ready the instant it needs to draw it, not
-    // partway through the wait
-    await this.loadTankImage();
-    const state = await this.connectWithPassword();
-    if (!state)
-      return; // user gave up on the password prompt - renderPasswordError() already ran
-    this.gameRemote.seed = this.gameLocal.seed = state.seed;
-    await this.waitForOpponent();
-    await Promise.all([this.gameLocal.load(), this.gameRemote.load()]);
-    this.running = true;
-    setInterval(()=>{
-      this.iterate();
-    }, 1000/this.net.fps);
-    setInterval(async ()=>{
-      await this.netsync();
-    }, 100);
-  }
-
-  // Connects with no password first (the common case: this role has none set).
-  // server.js only rejects the init packet - closing with reason "Wrong <role>
-  // password" (see handleInitMessage()) - once it's actually checked one, so that's the
-  // one specific failure worth prompting and retrying on; anything else (unknown
-  // session, network drop) is a real error and propagates. Never sends the password as
-  // a URL query param - it only travels inside the init packet itself (see netcode.js's
-  // Net.buildInitPacket()). offline modes never reject at all, so this resolves
-  // immediately for them without ever prompting.
-  async connectWithPassword()
-  {
-    let password = "";
-    while (true)
+    if (this.offline)
     {
-      try
-      {
-        return await this.net.connect(this.gameLocal.seed, this.offline, password);
-      }
-      catch (e)
-      {
-        if (!/wrong \w+ password/i.test(e.message))
-          throw e;
-        const roleName = this.role == "blue" ? t("blueDefault") : t("greenDefault");
-        const entered = window.prompt(t("slotPasswordProtected", {role: roleName}));
-        if (entered === null)
-        {
-          this.renderPasswordError();
-          return null;
-        }
-        password = entered;
-      }
+      // no networking at all - gameRemote is never touched (simulate()/recalc() only
+      // ever run from netsync(), which only fires once running via the online path
+      // below), just gameLocal needs loading. iterate() steps it once per tick off its
+      // own setInterval directly (see buildRawStates()/iterate()) rather than via
+      // Net.currentFrame()'s wall-clock reconciliation - there's no server round trip
+      // to reconcile against offline.
+      await this.gameLocal.load();
+      this.running = true;
+      setInterval(() => { this.iterate(); }, 1000 / this.net.fps);
+      return;
     }
+
+    // net.connect() rejects outright on a closed/refused websocket (unknown session, or
+    // this seat already has a live connection elsewhere - see server.js's seat-taken
+    // check) - previously unhandled here, which left the page silently blank forever
+    // (an async function's rejection with nobody awaiting it further just vanishes,
+    // confirmed by user: "clicking a server opens a blank screen with just Home").
+    // Show an actual message and send them back to the lobby instead.
+    let state;
+    try
+    {
+      state = await this.net.connect(this.gameLocal.seed, false);
+    }
+    catch (e)
+    {
+      this.renderConnectionError();
+      return;
+    }
+    this.gameRemote.seed = this.gameLocal.seed = state.seed;
+    await this.waitForPlayers();
+    this.fullCanvas.width = 320 * this.roster.length;
+    this.seatEstimates = this.roster.map(() => 0);
+    await Promise.all([
+      this.gameLocal.load(this.roster, this.friendlyFire),
+      this.gameRemote.load(this.roster, this.friendlyFire),
+    ]);
+    this.running = true;
+    setInterval(() => { this.iterate(); }, 1000 / this.net.fps);
+    setInterval(async () => { await this.netsync(); }, 100);
   }
 
-  renderPasswordError()
+  renderConnectionError()
   {
     const canvas = this.ctx.canvas;
     this.ctx.fillStyle = "#000";
     this.ctx.fillRect(0, 0, canvas.width, canvas.height);
     this.ctx.fillStyle = "#fff";
-    this.ctx.font = "20px sans-serif";
+    this.ctx.font = "18px sans-serif";
     this.ctx.textAlign = "center";
-    this.ctx.fillText(t("noPasswordEntered"), canvas.width/2, canvas.height/2);
+    this.ctx.fillText(t("seatUnavailable"), canvas.width/2, canvas.height/2);
+    const sid = document.location.pathname.split("/").filter(Boolean)[0];
+    // this browser's remembered seat (lobby.js's sessionStorage, see its own SEAT_KEY)
+    // is exactly what sent it here - if that seat turned out to be taken by someone
+    // else's live connection, clearing it now is what stops the lobby from bouncing it
+    // straight back to this same failing seat every 2s poll forever.
+    sessionStorage.removeItem(`tunneler_seat_${sid}`);
+    setTimeout(() => { document.location.href = "/" + sid + "/"; }, 2000);
   }
 
-  // blue/green shouldn't be able to move before the other player has joined - the game
-  // clock (Net.currentFrame()) runs off wall-clock time from when the server actually
+  // Online seats/spectators shouldn't be able to move before the match actually starts -
+  // the game clock (Net.currentFrame()) runs off wall-clock time from when the server
   // seeds the session regardless, so starting solo would give whoever arrives first a
-  // head start once the other catches up. Poll with empty sync requests (frame 0, no
-  // path - Path.Sub against lastFrame=0 always encodes nothing, so this can't pollute
-  // session.mergedPath) until the server reports both roles connected. Hotseat/offline
-  // modes have no "opponent" concept, so skip this.
-  async waitForOpponent()
+  // head start once the others catch up. Poll /:id/status (same endpoint the lobby
+  // polls) until the server reports `started`, then fetch the final seat roster (locked
+  // in at that point - see server.js's startSessionIfReady()) and build the
+  // tank-index<->seat-number mappings every client needs to agree on identically:
+  // roster order is just "occupied seats, in ascending seat-number order" - deterministic
+  // because every client reads the exact same seats array in the exact same order.
+  async waitForPlayers()
   {
-    if (this.role != "blue" && this.role != "green")
-      return;
+    const sid = document.location.pathname.split("/").filter(Boolean)[0];
     this.renderWaitingMessage();
-    this.formatScore(1, 0, 0);
     while (true)
     {
-      const resp = await this.net.sync(0, [[0, 0]]).catch(()=>null);
-      if (resp && resp.blueConnected && resp.greenConnected)
+      const status = await fetch(`/${sid}/status`).then((r) => r.json()).catch(() => null);
+      if (status && status.started)
+      {
+        this.friendlyFire = status.friendlyFire;
+        const occupied = [];
+        status.seats.forEach((s, seatNum) => { if (s) occupied.push({ seatNum, ...s }); });
+        this.roster = occupied.map((o) => ({ team: o.team, color: o.color }));
+        this.names = occupied.map((o) => o.name);
+        this.seatOfTank = occupied.map((o) => o.seatNum);
+        this.myTankIndex = occupied.findIndex((o) => o.seatNum === this.mySeat);
         break;
-      await new Promise(r => setTimeout(r, 500));
+      }
+      await new Promise((r) => setTimeout(r, 500));
     }
-    // the server doesn't generate a real seed until both roles are connected (see
-    // startSessionIfReady() in server.js) - connect()'s original handshake may have come
-    // back with seed=0/started=0 if we got here first, so fetch it again now that it's
-    // guaranteed to exist.
+    // the server doesn't generate a real seed until the match actually starts - connect()'s
+    // original handshake may have come back with seed=0/started=0 if we got here first,
+    // fetch it again now that it's guaranteed to exist.
     const state = await this.net.reInit(this.gameLocal.seed);
     this.gameRemote.seed = this.gameLocal.seed = state.seed;
   }
@@ -192,35 +206,28 @@ class Session
     const canvas = this.ctx.canvas;
     this.ctx.fillStyle = "#000";
     this.ctx.fillRect(0, 0, canvas.width, canvas.height);
-    if (this.tankImage)
-    {
-      const w = 48, h = 48 * this.tankImage.height / this.tankImage.width;
-      this.ctx.drawImage(this.tankImage, canvas.width/2 - w/2, canvas.height/2 - h - 20, w, h);
-    }
     this.ctx.fillStyle = "#fff";
     this.ctx.font = "20px sans-serif";
     this.ctx.textAlign = "center";
-    this.ctx.fillText(t("waitingForOpponent"), canvas.width/2, canvas.height/2 + 16);
+    this.ctx.fillText(t("waitingForPlayers"), canvas.width/2, canvas.height/2 + 16);
   }
 
   // remaining: ms left in the round-start freeze (0 once it's over) - drives the
   // countdown overlay. forceRedraw: true only on the one render() call right after
   // the freeze ends, so the role 0/play/ai branch below can force a real repaint and
   // erase the overlay's last paint - see its own comment for why that branch can't
-  // just rely on the usual appBlit()-gated redraw for that. disconnectedName: the
-  // opponent's display name while they're disconnected (blue/green only - role 0/
-  // play/ai have no networked opponent to lose), null otherwise - greys out this
-  // player's own half and shows a banner instead of the countdown.
+  // just rely on the usual dirty-frame-gated redraw for that. disconnectedName: the
+  // name of a disconnected opponent while online, null otherwise (offline roles have no
+  // networked opponent to lose) - greys out this player's own half and shows a banner
+  // instead of the countdown.
   render(remaining = 0, forceRedraw = false, disconnectedName = null)
   {
-    if (this.role != "blue" && this.role != "green")
+    if (this.offline)
     {
       // offline/hotseat roles (0/play/ai) have no session to tell the server about
-      // (that fetch("/"+sid+"/end") below is blue/green-only) and never crop the
-      // canvas, but still need matchEnded set so the "any key"/"any tap" handler
-      // (see handleMatchEndInput() below) knows to fire once the WASM engine's own
-      // full-map reveal comes up - this used to only ever get set in the blue/green
-      // branch, which left offline matches with no way to leave the reveal screen.
+      // (that fetch("/"+sid+"/end") below is online-only) and never crop the canvas,
+      // but still need matchEnded set so the "any key"/"any tap" handler (see
+      // handleMatchEndInput() below) knows to fire once teamScores hits WIN_SCORE.
       if (!this.matchEnded && Session.isMatchOver(this.gameLocal.state()))
         this.matchEnded = true;
       this.gameLocal.render(this.ctx, forceRedraw);
@@ -228,8 +235,8 @@ class Session
       return;
     }
     // once someone's won the match (first to WIN_SCORE round wins), the engine reveals
-    // the whole map on its own frame - showing just this player's half-crop of that
-    // would cut off half of a screen that's no longer split-screen gameplay at all.
+    // the whole map on its own frame - showing just this player's pane would cut off a
+    // screen that's no longer split-camera gameplay at all.
     const s = this.gameLocal.state();
     const gameOver = Session.isMatchOver(s);
     if (gameOver)
@@ -251,12 +258,12 @@ class Session
       this.ctx.canvas.width = 320;
     this.gameLocal.render(this.fullCtx);
     // this drawImage runs unconditionally every call (unlike gameLocal.render()'s
-    // appBlit()-gated blit), so it already erases any leftover countdown paint from
+    // dirty-frame-gated blit), so it already erases any leftover countdown paint from
     // the previous frame on its own - no forceRedraw needed on this branch. ctx.filter
     // only applies to drawImage/fill calls, not gameLocal.render()'s putImageData
     // above, so grayscaling has to happen here rather than earlier in the pipeline.
     this.ctx.filter = disconnectedName ? "grayscale(1)" : "none";
-    this.ctx.drawImage(this.fullCanvas, this.role == "blue" ? 0 : 320, 0, 320, 400, 0, 0, 320, 400);
+    this.ctx.drawImage(this.fullCanvas, this.myTankIndex * 320, 0, 320, 400, 0, 0, 320, 400);
     this.ctx.filter = "none";
     if (disconnectedName)
       this.drawDisconnected(this.ctx, disconnectedName);
@@ -264,7 +271,7 @@ class Session
       this.drawCountdown(this.ctx, remaining);
   }
 
-  // banner shown in place of the countdown while the opponent is disconnected - see
+  // banner shown in place of the countdown while any other seat is disconnected - see
   // updateOpponentConnection(). No timer of its own (unlike drawCountdown): it just
   // reflects opponentConnected, which only flips back on an actual reconnect.
   drawDisconnected(ctx, name)
@@ -309,13 +316,12 @@ class Session
     if (!this.running)
       return
 
-    // a round start is just s.round changing value - the WASM engine drives that
-    // itself (map/spawn reset), so this fires identically for role 0/play/ai
-    // (offline) and blue/green (networked) alike, no extra server signal needed.
-    // The winning round itself still bumps this the same way any other round does
-    // (confirmed against ai/play), which used to make the countdown pop up right over
-    // the map-reveal screen - matchOver() gates both starting a fresh countdown here
-    // and (below) actually showing/enforcing one that was already in flight.
+    // a round start is just s.round changing value - the engine drives that itself
+    // (map/spawn reset), so this fires identically for offline (0/play/ai) and online
+    // seats alike, no extra server signal needed. The winning round itself still bumps
+    // this the same way any other round does, which used to make the countdown pop up
+    // right over the map-reveal screen - matchOver() gates both starting a fresh
+    // countdown here and (below) actually showing/enforcing one that was already in flight.
     const s = this.gameLocal.state();
     const matchOver = Session.isMatchOver(s);
     if (!matchOver && (this.lastRound === null || s.round != this.lastRound))
@@ -324,97 +330,133 @@ class Session
       this.countdownEnd = performance.now() + Session.COUNTDOWN_MS;
     }
     const remaining = matchOver || this.countdownEnd === null ? 0 : this.countdownEnd - performance.now();
-    // opponentConnected only ever goes false for blue/green (see
-    // updateOpponentConnection()) - freezes the same way a round-start countdown does,
-    // just with no timer of its own: it holds until the reconnect flips it back and
-    // re-arms countdownEnd, at which point the ordinary countdown branch below takes
-    // back over.
+    // opponentConnected only ever goes false online (see updateOpponentConnection()) -
+    // freezes the same way a round-start countdown does, just with no timer of its
+    // own: it holds until the reconnect flips it back and re-arms countdownEnd, at
+    // which point the ordinary countdown branch below takes back over.
     const disconnected = !this.opponentConnected;
     const frozen = remaining > 0 || disconnected;
     // the exact frame the freeze ends - forces one real repaint below (see render()'s
-    // role 0/play/ai branch): that branch draws straight to the visible canvas only
-    // when the WASM side flags a dirty frame (appBlit()), which can stay false
-    // indefinitely if nothing else changes on screen before the player's first move -
-    // otherwise the last-drawn digit + its background box would sit there frozen
-    // until some other event (e.g. that first move) finally triggered a real repaint.
+    // offline branch): that branch draws straight to the visible canvas only when the
+    // engine flags a dirty frame, which can stay false indefinitely if nothing else
+    // changes on screen before the player's first move - otherwise the last-drawn digit
+    // + its background box would sit there frozen until some other event (e.g. that
+    // first move) finally triggered a real repaint.
     const justExpired = this.countdownEnd !== null && !frozen;
     if (justExpired)
       this.countdownEnd = null;
 
-    const netFrame = this.net.currentFrame()
+    const netFrame = this.offline ? this.gameLocal.frame + 1 : this.net.currentFrame();
     while (this.gameLocal.frame < netFrame)
     {
-      const theirKeys = this.ai ? this.ai.computeKeys() : this.keyEstimate;
-      if (!this.gameLocal.step(frozen ? 0 : this.keyState, frozen ? 0 : theirKeys))
+      const rawStates = this.buildRawStates(frozen);
+      if (!this.gameLocal.step(rawStates))
       {
         // this could be a local glitch
         this.running = false;
         break;
       }
     }
-    const opponentName = this.role == "blue" ? this.greenName : this.blueName;
-    this.render(frozen ? remaining : 0, justExpired, disconnected ? opponentName : null);
+    this.render(frozen ? remaining : 0, justExpired, disconnected ? this.disconnectedOpponentName() : null);
     this.renderScore();
+  }
+
+  // Builds this tick's per-tank raw 5-bit scalar array for gameLocal.step() - see
+  // netcode.js's Game.step()/decodeInput() for the unified bit order every tank now
+  // shares. Offline hotseat (0/play/ai) still drives exactly 2 tanks from one shared
+  // legacy keyState field (legacyTank0Bits/legacyTank1Bits, defined above); online seats
+  // build one array entry per tank, this client's own tank real-time, every other tank
+  // from its current best-guess estimate (this.seatEstimates, updated in netsync()).
+  buildRawStates(frozen)
+  {
+    if (this.offline)
+    {
+      if (frozen)
+        return [0, 0];
+      const tank1Raw = this.ai ? legacyTank1Bits(this.ai.computeKeys()) : legacyTank1Bits(this.keyState);
+      return [legacyTank0Bits(this.keyState), tank1Raw];
+    }
+    const rawStates = this.seatEstimates.slice();
+    rawStates[this.myTankIndex] = frozen ? 0 : this.keyState;
+    return rawStates;
+  }
+
+  disconnectedOpponentName()
+  {
+    // whichever other tank's seat isn't in the latest connectedMask - only meaningful
+    // while disconnected==true (exactly one seat down at a time is the common case;
+    // if more than one drop simultaneously this just names the first found, which is
+    // fine for a banner that's naming a problem, not enumerating every one).
+    for (let i = 0; i < this.roster.length; i++)
+      if (i != this.myTankIndex && !(this.connectedMask & (1 << this.seatOfTank[i])))
+        return this.names[i];
+    return "";
   }
 
   renderScore()
   {
     const s = this.gameLocal.state();
     const gameOver = Session.isMatchOver(s);
-    const winner = gameOver ? (s.blue.score >= Session.WIN_SCORE ? "blue" : "green") : null;
-    this.formatScore(s.round, s.blue.score, s.green.score, gameOver, winner);
-    this.reportScore(s.round, s.blue.score, s.green.score);
+    const myTeam = this.offline ? null : s.tanks[this.myTankIndex].team;
+    const winningTeam = gameOver
+      ? Object.keys(s.teamScores).find((team) => s.teamScores[team] >= Session.WIN_SCORE)
+      : null;
+    this.formatScore(s.round, s.teamScores, gameOver, winningTeam, myTeam);
+    this.reportScore(s.round, s.teamScores);
   }
 
-  // tells the server this session's live round/score so index.html's public games list
-  // can show it - only blue reports (both clients compute the identical deterministic
-  // value, no need for green to send the same thing twice), and only on an actual
-  // change, not every frame, since this runs from iterate() every tick.
-  reportScore(round, blueScore, greenScore)
+  // tells the server this session's live round/teamScores so index.html's public games
+  // list can show it - only the lowest-CONNECTED seat reports (every client computes the
+  // identical deterministic value, no need for more than one to send the same thing
+  // twice), and only on an actual change, not every frame, since this runs from
+  // iterate() every tick.
+  reportScore(round, teamScores)
   {
-    if (this.role != "blue") return;
-    if (this.lastReportedScore == `${round}:${blueScore}:${greenScore}`) return;
-    this.lastReportedScore = `${round}:${blueScore}:${greenScore}`;
+    if (this.offline) return;
+    const lowestConnectedSeat = [...Array(8).keys()].find((i) => this.connectedMask & (1 << i));
+    if (lowestConnectedSeat !== this.mySeat) return;
+    const key = `${round}:${JSON.stringify(teamScores)}`;
+    if (this.lastReportedScore == key) return;
+    this.lastReportedScore = key;
     const sid = document.location.pathname.split("/").filter(Boolean)[0];
-    fetch(`/${sid}/score?round=${round}&blue=${blueScore}&green=${greenScore}`).catch(()=>{});
+    fetch(`/${sid}/score`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ round, teamScores }),
+    }).catch(()=>{});
   }
 
   // shared by renderScore() (real values, once the game is running) and
-  // waitForOpponent() (a "Round 1 - Blue: 0 | Green: 0" placeholder before it is, hence
-  // gameOver/winner defaulting to false/null there - a match can't be over before it's
-  // even started). blueName/greenName are escaped here (not just once server-side)
-  // since they're read back out of a data-* attribute and re-inserted via innerHTML -
-  // see netcode.js's escapeHtml() for why that needs a second pass.
+  // waitForPlayers()'s placeholder is skipped now - waitForPlayers() has nothing to
+  // format yet (roster isn't known before the match starts), so it just shows a static
+  // "waiting" message instead (see renderWaitingMessage()).
   //
   // Once the match is decided, "Round N" no longer means anything (the engine's own
-  // full-map reveal replaces split-screen play - see render()'s gameOver branch), so
-  // this player's own outcome replaces it instead - only meaningful for role
-  // "blue"/"green"/"ai" (a single human with one tank to call a win or loss for -
-  // "ai" always plays blue's side, see KEYMAPS); hotseat roles (0/"play") have two
-  // humans sharing the screen with no single "you", so they keep showing "Round N".
-  formatScore(round, blueScore, greenScore, gameOver = false, winner = null)
+  // full-map reveal replaces split-camera play - see render()'s gameOver branch), so
+  // this player's own outcome replaces it instead - only meaningful online (a single
+  // human with one tank/team to call a win or loss for); hotseat roles (0/"play") have
+  // two humans sharing the screen with no single "you", so they keep showing "Round N".
+  formatScore(round, teamScores, gameOver = false, winningTeam = null, myTeam = null)
   {
-    const myRole = this.role == "ai" ? "blue" : this.role;
-    const label = gameOver && (myRole == "blue" || myRole == "green")
-      ? (myRole == winner ? t("victory") : t("defeat"))
+    const label = gameOver && myTeam !== null
+      ? (String(myTeam) == String(winningTeam) ? t("victory") : t("defeat"))
       : t("round", {n: round});
-    this.scoreEl.innerHTML =
-      `${label} &mdash; ` +
-      `<span style="color:#9fcaff">${escapeHtml(this.blueName)}: ${blueScore}</span>` +
-      `&nbsp;&nbsp;|&nbsp;&nbsp;` +
-      `<span style="color:#7CFC00">${escapeHtml(this.greenName)}: ${greenScore}</span>`;
+    const teams = Object.keys(teamScores).sort((a, b) => a - b);
+    const parts = teams.map((team) => `<span>${t("team")} ${team}: ${teamScores[team]}</span>`);
+    this.scoreEl.innerHTML = `${label}` + (parts.length ? " &mdash; " + parts.join("&nbsp;&nbsp;|&nbsp;&nbsp;") : "");
   }
 
-  // called from every netsync() response with this role's opponent's connected flag.
-  // A false->true transition (reconnect) re-arms the same round-start countdown so
-  // play doesn't resume mid-stride - see iterate()'s `disconnected` freeze and
-  // render()'s drawDisconnected() for the other half of this.
-  updateOpponentConnection(connected)
+  // called from every netsync() response with the current connected-seat bitmask. A
+  // seat that was missing coming back (reconnect) re-arms the same round-start
+  // countdown so play doesn't resume mid-stride - see iterate()'s `disconnected` freeze
+  // and render()'s drawDisconnected() for the other half of this.
+  updateOpponentConnection(connectedMask)
   {
-    if (connected == this.opponentConnected)
-      return;
-    this.opponentConnected = connected;
-    if (connected)
+    const wasConnected = this.opponentConnected;
+    this.connectedMask = connectedMask;
+    this.opponentConnected = this.roster.every((_, i) =>
+      i == this.myTankIndex || !!(connectedMask & (1 << this.seatOfTank[i])));
+    if (this.opponentConnected && !wasConnected)
       this.countdownEnd = performance.now() + Session.COUNTDOWN_MS;
   }
 
@@ -426,49 +468,65 @@ class Session
       return;
 
     this.waitSync = true;
-    await this.net.sync(this.gameLocal.frame, this.gameLocal.pathOur).then(resp=>{
+    await this.net.sync(this.gameLocal.frame, this.gameLocal.paths[this.myTankIndex]).then(resp=>{
       this.waitSync = false;
-      // resp.blueConnected/greenConnected come from every sync response (see
-      // netcode.js's parseSyncPacket()/server.js's handleSyncMessage() - it recomputes
-      // both from session.sockets on every call), so this is only ever a call or two
-      // stale, not something that needs its own poll loop.
-      this.updateOpponentConnection(this.role == "blue" ? resp.greenConnected : resp.blueConnected);
-      const path = resp.path;
-      if (path.length)
-        this.keyEstimate = path[path.length-1][1] & ~this.keyFilter.get();
+      this.updateOpponentConnection(resp.connectedMask);
 
-      // unshift previous state, so we can extract keys in simulation
-      if (this.gameRemote.pathOur.length)
-        path.unshift(this.gameRemote.pathOur[this.gameRemote.pathOur.length-1]);
-      else
-        path.unshift([0, 0]);
+      // resp.paths is seat-tagged (raw seat numbers, see netcode.js's parseSyncPacket) -
+      // remap to tank-index order (this.seatOfTank) so the rest of the pipeline works
+      // in the same indexing gameLocal/gameRemote's tanks[] already use.
+      const paths = this.roster.map((_, tankIndex) => resp.paths[this.seatOfTank[tankIndex]] || []);
+
+      // Each tank's path is now its own fully independent scalar (never combined with
+      // any other tank's bits into one shared field, unlike the old 2-tank design) -
+      // just take the latest confirmed value verbatim as the new estimate, no masking
+      // needed (the old design's keyFilter existed only to strip THIS client's own bits
+      // back out of a value that used to be a combined field spanning both tanks).
+      if (paths.some((p) => p.length))
+        this.seatEstimates = paths.map((p, i) => p.length ? p[p.length-1][1] : this.seatEstimates[i]);
+
+      // unshift previous state per tank, so we can extract keys in simulation - same
+      // reasoning as the old single-path design: each seat's delta only covers frames
+      // since THIS socket's own last ack, so Path.Extract's binary search needs a known
+      // baseline value in effect right before the delta window starts.
+      // Unconditional, even when p is empty (no NEW change reported for this tank this
+      // round - the common case for a seat holding steady) - the server only ever
+      // sends entries newer than what THIS socket already acked, so "nothing new"
+      // means "still whatever it last was", not "released". Without this baseline, an
+      // empty p would fall back to Path.Extract's new empty-path default of 0 (see
+      // netcode.js) - silently treating "still holding the key" as "key released" the
+      // moment the one-time change event aged out of the response window (confirmed by
+      // user: movement would advance briefly then get stuck/reset on any held key).
+      paths.forEach((p, i) => {
+        p.unshift(this.gameRemote.paths[i].length ? this.gameRemote.paths[i][this.gameRemote.paths[i].length-1] : [0, 0]);
+      });
 
       // keep remote instance in sync with slowest client
-      if (path.length == 1 && resp.frame > this.gameRemote.frame)
-        path.push([resp.frame-1, path[0][1]]);
+      if (paths.every((p) => p.length <= 1) && resp.frame > this.gameRemote.frame)
+        paths.forEach((p) => p.push([resp.frame-1, p.length ? p[0][1] : 0]));
 
-      const needsRecalc = this.simulate(path)
+      const needsRecalc = this.simulate(paths)
       if (needsRecalc)
         this.recalc();
-
-      this.keyFilter.put(this.localKeys);
-      this.localKeys = 0;
     }).catch(e=>{});
   }
 
-  simulate(path)
+  // paths: per-tank-index sparse arrays (see netsync() above), each already unshifted
+  // with a baseline value at/before gameRemote.frame.
+  simulate(paths)
   {
-    // we got new path from server which represents source of truth, during
-    // simulation into gameRemote instance check if we need to rerun our local instance
+    // we got new paths from server which represent source of truth, during simulation
+    // into gameRemote instance check if we need to rerun our local instance
     let recalc = false;
-    const last = path.length ? path[path.length-1][0] : -1
+    const last = Math.max(-1, ...paths.map((p) => p.length ? p[p.length-1][0] : -1));
     for (let i=this.gameRemote.frame; i<=last; i++)
     {
       // TODO: slow!
-      const keys = Path.Extract(path, i);
-      if (keys != (Path.Extract(this.gameLocal.pathOur, i) | Path.Extract(this.gameLocal.pathTheir, i)))
+      const rawStates = paths.map((p) => Path.Extract(p, i));
+      const localStates = this.gameLocal.paths.map((p) => Path.Extract(p, i));
+      if (!rawStates.every((v, ti) => v == localStates[ti]))
         recalc = true;
-      if (!this.gameRemote.step(keys, 0)) // should be local=0, theirs=key
+      if (!this.gameRemote.step(rawStates))
       {
         this.running = false;
         console.log("Game finished");
@@ -478,112 +536,124 @@ class Session
   }
   recalc()
   {
+    const myTankIndex = this.myTankIndex;
     const extend = [];
     // these are our local frames which we need to append to gameRemote instance
     for (let i=this.gameRemote.frame; i<this.gameLocal.frame; i++)
-      extend.push(Path.Extract(this.gameLocal.pathOur, i));
+      extend.push(Path.Extract(this.gameLocal.paths[myTankIndex], i));
     // copy gameRemote to gameLocal, both represent source of truth
     this.gameLocal.copy(this.gameRemote);
     for (let i=0; i<extend.length; i++)
-      this.gameLocal.step(extend[i], i > 3 ? this.keyEstimate : 0);
+    {
+      const rawStates = this.seatEstimates.slice();
+      rawStates[myTankIndex] = extend[i];
+      if (i <= 3)
+        for (let s = 0; s < rawStates.length; s++)
+          if (s !== myTankIndex) rawStates[s] = 0;
+      this.gameLocal.step(rawStates);
+    }
   }
   onKey(key, pressed)
   {
-    this.keyEstimate &= ~(1<<key);
-    this.localKeys |= 1<<key;
-    if (pressed)
-      this.keyState |= 1<<key;
-    else
-      this.keyState &= ~(1<<key);
+    this.keyState = pressed ? (this.keyState | (1<<key)) : (this.keyState & ~(1<<key));
   }
 }
 
 const pathSegments = document.location.pathname.split("/").filter(Boolean);
-let role = 0;
-if (pathSegments[0] == "play")
-  role = "play";
-else if (pathSegments[0] == "ai")
-  role = "ai";
-else if (pathSegments[1] == "blue")
-  role = "blue";
-else if (pathSegments[1] == "green")
-  role = "green";
-// role 0 (bare tunneler.html), "play" (/play, no id), and "ai" (/ai/<difficulty>, no id)
-// are all local hotseat as far as networking goes - no server session, no websocket at
-// all. /ai's difficulty is its own path segment (like blue/green's role segment under
-// an id) - defaults to "medium" for a bare /ai with none given.
-const isOffline = role == 0 || role == "play" || role == "ai";
+let role = 0, mySeat = null, isOffline;
+if (pathSegments[0] == "play") { role = "play"; isOffline = true; }
+else if (pathSegments[0] == "ai") { role = "ai"; isOffline = true; }
+else if (pathSegments[1] == "seat" && /^\d+$/.test(pathSegments[2] || ""))
+{
+  mySeat = Number(pathSegments[2]);
+  role = mySeat;
+  isOffline = false;
+}
+else
+{
+  role = 0; // bare tunneler.html - offline hotseat, same as before
+  isOffline = true;
+}
+// /ai's difficulty is its own path segment (like a seat number under an id) - defaults
+// to "medium" for a bare /ai with none given.
 const aiDifficulty = role == "ai" ? (pathSegments[1] || "medium") : null;
 
 // role 0 and "play" keep the hardcoded "Blue"/"Green" labels - they're pure hotseat
 // with no session/settings to pull custom names from at all. "ai" overrides them below
-// to "Human"/"AI" instead, since there's no second human behind green's tank. blue/green's
-// names (and display name) come from #score's data-* attributes, server-templated by
-// sendWithSessionName() the same way lobby.html/spectator.html get theirs - not the URL
-// slug, which may not match the name's original casing/spacing.
+// to "Human"/"AI" instead, since there's no second human behind tank1. Online seats'
+// names come from the live roster (waitForPlayers()), not any static markup.
 let blueName = t("blueDefault"), greenName = t("greenDefault");
-if (role == "blue" || role == "green")
+if (isOffline)
 {
-  const scoreEl = document.getElementById("score");
-  const rawBlueName = scoreEl.dataset.blueName || "Blue";
-  const rawGreenName = scoreEl.dataset.greenName || "Green";
-  blueName = rawBlueName == "Blue" ? t("blueDefault") : rawBlueName;
-  greenName = rawGreenName == "Green" ? t("greenDefault") : rawGreenName;
-  document.title = `${scoreEl.dataset.sessionName} - ${role == "blue" ? blueName : greenName} - Tunneler`;
-}
-else if (role == "play" || role == "ai")
-{
-  document.title = role == "play" ? t("splitScreenTitle") : t("vsAiTitle", {difficulty: t(aiDifficulty)});
-  if (role == "ai")
+  // bare tunneler.html (role 0) keeps the static <title> from the HTML itself - only
+  // /play and /ai override it, same as before this rework.
+  if (role == "play")
+    document.title = t("splitScreenTitle");
+  else if (role == "ai")
   {
+    document.title = t("vsAiTitle", {difficulty: t(aiDifficulty)});
     blueName = t("humanDefault");
     greenName = t("aiDefault");
   }
   // /play and /ai both have a restart concept - they're the fully local/offline modes
   // with no opponent to disrupt by reloading; a reload is enough to reset either since
   // all their state (both Game instances) lives in this page, nothing on the server.
-  const restartBtn = document.getElementById("restartBtn");
-  restartBtn.hidden = false;
-  restartBtn.addEventListener("click", () => document.location.reload());
+  if (role == "play" || role == "ai")
+  {
+    const restartBtn = document.getElementById("restartBtn");
+    restartBtn.hidden = false;
+    restartBtn.addEventListener("click", () => document.location.reload());
+  }
+}
+else
+{
+  const scoreEl = document.getElementById("score");
+  document.title = `${scoreEl.dataset.sessionName} - Tunneler`;
 }
 
 const canvas = document.getElementById('canvas1');
-if (role == "blue" || role == "green")
+if (!isOffline)
   canvas.width = 320;
 const session = new Session(canvas.getContext('2d'), role, isOffline, document.getElementById('score'), blueName, greenName, aiDifficulty)
+session.mySeat = mySeat;
 session.start();
 
-// touch has no keyboard to satisfy the WASM engine's "press any key" match-over prompt
-// with - a tap anywhere on the game view (not just the joystick/fire widgets, which
-// have their own handleMatchEndInput() check further down) should count the same way a
-// keypress does on desktop. handleMatchEndInput() is a hoisted function declaration
-// (defined further down), so calling it here before that point in the file is fine.
+// touch has no keyboard to satisfy the engine's "press any key" match-over prompt with -
+// a tap anywhere on the game view (not just the joystick/fire widgets, which have their
+// own handleMatchEndInput() check further down) should count the same way a keypress
+// does on desktop. handleMatchEndInput() is a hoisted function declaration (defined
+// further down), so calling it here before that point in the file is fine.
 canvas.addEventListener("pointerdown", () => handleMatchEndInput());
 
-// bit index within the 11-bit keyState for each logical action, per tank/role.
-// role 0 and "play" (both hotseat) keep two disjoint key sets live simultaneously, since
-// one physical keyboard is shared by two people - only the fire key differs between them
-// (see onKey below).
+// bit index within the 11-bit keyState for each logical action, hotseat only (0/"play" -
+// both share one keyboard between two people, so tank0/tank1 need two DISJOINT key sets
+// live simultaneously - only the fire key differs between them, see onKey below). Online
+// seats each get their own browser/keyboard, so they all use ONE fixed map instead - see
+// ONLINE_KEYMAP below.
 const KEYMAPS = {
   blue: { up:6, down:7, left:8, right:9, fire:10 },
   green: { up:0, right:1, down:2, left:3, fire:4, esc:5 }
 };
+// Unified bit order every online seat shares (up=0,down=1,left=2,right=3,fire=4) -
+// matches netcode.js's Game.decodeInput() exactly, so no per-role remapping is needed
+// online at all (unlike the hotseat KEYMAPS above).
+const ONLINE_KEYMAP = { up: 0, down: 1, left: 2, right: 3, fire: 4 };
 
-// the WASM engine's own "press any key" prompt on the match-over map reveal (see
+// the engine's own "press any key" prompt on the match-over map reveal (see
 // Session.render()'s gameOver branch) only ever reads scancodes for the bits in
-// KEYMAPS - it has no way to see an arbitrary keypress/tap, so that prompt would sit
-// there forever with no input able to satisfy it. Handle "any key"/"any tap" ourselves
-// instead: blue/green have nothing left to rejoin (matchEnded already told the server
-// to drop the session - see Session.render()), so send them back to the index; offline
-// modes (0/play/ai) just reload, same as their restart button. Shared by onKey() below
-// and the touch controls' pointerdown handlers - session.onKey() (used to actually
-// move/fire) has no idea about match-end, so every input entry point has to check this
-// itself before it does anything else.
+// KEYMAPS/ONLINE_KEYMAP - it has no way to see an arbitrary keypress/tap, so that
+// prompt would sit there forever with no input able to satisfy it. Handle "any
+// key"/"any tap" ourselves instead: online seats have nothing left to rejoin
+// (matchEnded already told the server to drop the session - see Session.render()), so
+// send them back to the index; offline modes (0/play/ai) just reload, same as their
+// restart button. Shared by onKey() below and the touch controls' pointerdown handlers -
+// session.onKey() (used to actually move/fire) has no idea about match-end, so every
+// input entry point has to check this itself before it does anything else.
 function handleMatchEndInput()
 {
   if (!session.matchEnded)
     return false;
-  if (role == "blue" || role == "green")
+  if (!isOffline)
     document.location.href = "/";
   else
     document.location.reload();
@@ -600,12 +670,11 @@ function onKey(e, pressed)
     return;
   }
 
-  if (role == "blue" || role == "green" || role == "ai")
+  if (!isOffline)
   {
-    // each remote player may use either arrows or WASD to move, and any of
-    // space/enter/ctrl to fire - only their own tank's bits ever get set. "ai" always
-    // plays blue's side (green's bits are the AiController's, never the keyboard's).
-    const map = KEYMAPS[role == "ai" ? "blue" : role];
+    // each online seat may use either arrows or WASD to move, and any of
+    // space/enter/ctrl to fire - only its own tank's bits ever get set.
+    const map = ONLINE_KEYMAP;
     let action = null;
     switch (e.keyCode)
     {
@@ -614,7 +683,26 @@ function onKey(e, pressed)
       case 37: case 65: action = "left"; break;
       case 39: case 68: action = "right"; break;
       case 32: case 13: case 17: action = "fire"; break;
-      case 27: action = "esc"; break;
+      default: consumed = false;
+    }
+    if (action && map[action] !== undefined)
+      session.onKey(map[action], pressed);
+    else if (action)
+      consumed = false;
+  }
+  else if (role == "ai")
+  {
+    // "ai" always drives tank0's bits from the keyboard (tank1 is the AiController) -
+    // same key layout as KEYMAPS.blue.
+    const map = KEYMAPS.blue;
+    let action = null;
+    switch (e.keyCode)
+    {
+      case 38: case 87: action = "up"; break;
+      case 40: case 83: action = "down"; break;
+      case 37: case 65: action = "left"; break;
+      case 39: case 68: action = "right"; break;
+      case 32: case 13: case 17: action = "fire"; break;
       default: consumed = false;
     }
     if (action && map[action] !== undefined)
@@ -668,18 +756,18 @@ function onKey(e, pressed)
 document.onkeydown = evt => onKey(evt, 1);
 document.onkeyup = evt => onKey(evt, 0);
 
-// Touch controls: only blue/green/ai drive exactly one tank via KEYMAPS, so a single
-// on-screen joystick+fire button maps onto one of those roles cleanly. "play"/0 hotseat
-// share one keyboard between two people sitting at the same device - there's no
-// touch-input equivalent for a second player, so mobile drops that mode entirely
-// instead (see index.html's local-splitscreen-row, hidden on touch/narrow viewports).
+// Touch controls: online seats drive exactly one tank via ONLINE_KEYMAP, so a single
+// on-screen joystick+fire button maps onto it cleanly. "play"/0 hotseat share one
+// keyboard between two people sitting at the same device - there's no touch-input
+// equivalent for a second player, so mobile drops that mode entirely instead (see
+// index.html's local-splitscreen-row, hidden on touch/narrow viewports).
 const touchControls = document.getElementById("touchControls");
 const isTouchViewport = window.matchMedia("(pointer: coarse)").matches || window.innerWidth <= 900;
-if (touchControls && isTouchViewport && (role == "blue" || role == "green" || role == "ai"))
+if (touchControls && isTouchViewport && (!isOffline || role == "ai"))
 {
   document.body.classList.add("touch-enabled");
   touchControls.hidden = false;
-  const map = KEYMAPS[role == "ai" ? "blue" : role];
+  const map = isOffline ? KEYMAPS.blue : ONLINE_KEYMAP;
 
   const fireBtn = document.getElementById("fireBtn");
   const firePress = e => {

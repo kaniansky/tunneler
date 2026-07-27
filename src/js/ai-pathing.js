@@ -208,7 +208,7 @@ findSearchTarget()
 wanderTarget(s)
 {
   const reached = this.wanderPoint &&
-    Math.hypot(this.wanderPoint.x - s.green.x, this.wanderPoint.y - s.green.y) < 20;
+    Math.hypot(this.wanderPoint.x - s.tanks[1].x, this.wanderPoint.y - s.tanks[1].y) < 20;
   if (!this.wanderPoint || reached || this.wanderFrames-- <= 0)
   {
     this.wanderPoint = this.findSearchTarget();
@@ -274,7 +274,7 @@ pickEscapeDir(s)
   for (let dir = 0; dir < 4; dir++)
   {
     const [dx, dy, heading] = AiController.ESCAPE_DIRS[dir];
-    if (!this.spriteBlockedFor(heading, s.green.x + dx * PROBE, s.green.y + dy * PROBE))
+    if (!this.spriteBlockedFor(heading, s.tanks[1].x + dx * PROBE, s.tanks[1].y + dy * PROBE))
       open.push(dir);
   }
   const choices = open.length ? open : [0, 1, 2, 3];
@@ -296,8 +296,8 @@ applyStuckOverride(s, bits, bothBlocked)
     else
     {
       const stalled = this.escapeLastPos &&
-        this.escapeLastPos.x == s.green.x && this.escapeLastPos.y == s.green.y;
-      this.escapeLastPos = { x: s.green.x, y: s.green.y };
+        this.escapeLastPos.x == s.tanks[1].x && this.escapeLastPos.y == s.tanks[1].y;
+      this.escapeLastPos = { x: s.tanks[1].x, y: s.tanks[1].y };
       if (stalled)
       {
         this.escapeDir = this.pickEscapeDir(s);
@@ -312,21 +312,21 @@ applyStuckOverride(s, bits, bothBlocked)
   {
     this.escapeDir = this.pickEscapeDir(s);
     this.escapeFramesLeft = AiController.ESCAPE_WINDOW;
-    this.escapeLastPos = { x: s.green.x, y: s.green.y };
+    this.escapeLastPos = { x: s.tanks[1].x, y: s.tanks[1].y };
     return 1 << this.escapeDir;
   }
   if (this.stuckCheckPos == null)
-    this.stuckCheckPos = { x: s.green.x, y: s.green.y };
+    this.stuckCheckPos = { x: s.tanks[1].x, y: s.tanks[1].y };
   if (++this.stuckCheckFrames < AiController.STUCK_WINDOW)
     return bits;
-  const moved = Math.hypot(s.green.x - this.stuckCheckPos.x, s.green.y - this.stuckCheckPos.y);
-  this.stuckCheckPos = { x: s.green.x, y: s.green.y };
+  const moved = Math.hypot(s.tanks[1].x - this.stuckCheckPos.x, s.tanks[1].y - this.stuckCheckPos.y);
+  this.stuckCheckPos = { x: s.tanks[1].x, y: s.tanks[1].y };
   this.stuckCheckFrames = 0;
   if (moved < AiController.STUCK_MIN_MOVE)
   {
     this.escapeDir = this.pickEscapeDir(s);
     this.escapeFramesLeft = AiController.ESCAPE_WINDOW;
-    this.escapeLastPos = { x: s.green.x, y: s.green.y };
+    this.escapeLastPos = { x: s.tanks[1].x, y: s.tanks[1].y };
     return 1 << this.escapeDir;
   }
   return bits;
@@ -635,7 +635,18 @@ findPath(startX, startY, targetX, targetY, stickyCells = null)
     }
     cells.push([sx, sy]);
     cells.reverse();
-    result = { cells };
+    // budgetExhausted: the search hit MAX_VISITED with the heap still non-empty -
+    // there was still unexplored, potentially-reachable map left when it gave up,
+    // as opposed to the heap running dry on its own (every reachable cell from
+    // start was actually visited - a real dead end). At match start (or after any
+    // long chase), the target routinely sits 300-500px away while MAX_VISITED
+    // only covers roughly a ~100px-radius disk (8000 cells * CELL^2 px^2 area) -
+    // "best" landing far short of the target there is just the search running out
+    // of budget on an otherwise-open path, not proof blue is actually unreachable
+    // (confirmed by user: the AI immediately gave up chasing a live, perfectly
+    // reachable player at the start of every round and beelined for a wander
+    // point instead, because this looked identical to a genuine dead end before).
+    result = { cells, budgetExhausted: heap.length > 0 };
   }
   return result;
 },

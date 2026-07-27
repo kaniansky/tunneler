@@ -42,10 +42,13 @@ function renderGames(games)
     link.textContent = g.name;
     nameCell.appendChild(link);
     const playersCell = document.createElement("td");
-    playersCell.textContent = `${g.players}/2`;
+    playersCell.textContent = `${g.players}/${g.maxPlayers}`;
     const scoreCell = document.createElement("td");
     scoreCell.classList.add('score');
-    scoreCell.textContent = `${t("blueDefault")} ${g.blueScore} : ${t("greenDefault")} ${g.greenScore}`;
+    const teams = Object.keys(g.teamScores || {}).sort((a, b) => a - b);
+    scoreCell.textContent = teams.length
+      ? teams.map((team) => `${t("team")} ${team}: ${g.teamScores[team]}`).join(" : ")
+      : t("round", {n: g.round});
     row.append(nameCell, playersCell, scoreCell);
     gamesTableBody.appendChild(row);
   }

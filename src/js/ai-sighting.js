@@ -8,39 +8,53 @@
 // load after ai.js (which defines the class), order among sibling ai-*.js files
 // doesn't matter.
 
-// Reads the same map-overview buffer spectator.js's renderMap() reads (packed EGA
-// planar data, 2 pixels per byte). The x-8/nibble-split math matches
-// spectator.js's renderMap()/drawTank() exactly - state().{blue,green}.x reads
-// ~8px right of the tank's actual position on this particular buffer, and each
-// buffer byte packs 2 horizontal output pixels.
+// Was a packed-EGA-planar-buffer decode against the old WASM engine's raw video
+// memory (2px/byte, x-8 offset, 512x480 bounds). The new engine (engine.js)
+// exposes field cells directly via Game.engine.fieldAt() - no packing/offset
+// involved - so this now just translates its values into the same
+// nibble-equivalent codes every downstream helper in this file/ai-pathing.js/
+// ai-combat.js already expects, meaning isPermanentWall()/isOpen()/isDirt()/
+// findPath()/etc. below needed NO changes at all:
+//   0            (empty/dug)                       -> 0
+//   8, 9         (sand, two shades)                 -> 3  (dirt: diggable, not
+//                                                          open, not a wall)
+//   10           (rock)                             -> 7
+//   30           (player 0/blue base border)        -> 9  (matches cornerAt()'s/
+//                                                          findEnclosingBlueBase()'s
+//                                                          hardcoded ==9 check for
+//                                                          "this is blue's border")
+//   40+          (any other player's base border)   -> 10 (generic wall, same as
+//                                                          rock/border always was)
 //
-// Returns the raw palette nibble at (x,y), or a sentinel: -1 if the WASM memory
-// buffer isn't loaded yet, -2 if (x,y) falls outside the map buffer entirely.
+// Returns -1 if the engine isn't loaded yet, -2 if (x,y) falls outside the field -
+// both sentinels unchanged from the old version, callers already handle them.
+//
+// NOTE: distance constants throughout this file/ai-pathing.js/ai-combat.js
+// (BLUE_SIGHT_RANGE, CONTACT_SENSE_RANGE, TANK_COLLIDE_RADIUS,
+// EASY_VISION_RADIUS, etc.) were tuned by playtesting against the OLD engine's
+// world scale (1024x480 map, the WASM engine's own tank/ammo speeds). The new
+// engine's world (800x600, tunneler-1.1.1's own TANK_SPEED/AMMO_SPEED/etc - see
+// engine-constants.js) is a different scale - these are left as-is for now but
+// should be re-tuned by actually playing against this AI once the swap is
+// running, not guessed at analytically.
 Object.assign(AiController.prototype, {
 
 readNibble(x, y)
 {
-  const buf = this.game.memoryBuffer;
-  if (!buf)
+  if (!this.game.engine)
     return -1;
-  // Callers here are frequently fractional (px/py interpolated along a raycast
-  // - canShootBlue()/canMoveBetween()/wallBetween(), all in the other ai-*.js
-  // files), not just the whole-pixel steps this packing was written for. Column
-  // parity has to come from the actual integer pixel column (floor(outX)), not
-  // the raw fractional outX itself - outX % 2 == 0 is true only at an EXACT
-  // even integer, so any fractional sample landing anywhere in an even column
-  // (the overwhelming majority of them) used to fall through to the != 0 branch
-  // and silently read the ODD/high nibble of the wrong neighboring pixel
-  // instead (confirmed by testing: a diagonal shot/path line can cross a solid
-  // wall column and still read it as open, exactly when that column happens to
-  // be even).
-  const outX = x - 8, mapY = Math.round(y);
-  const col = Math.floor(outX);
-  const mapX = Math.floor(col / 2);
-  if (mapX < 0 || mapX >= 512 || mapY < 0 || mapY >= 480)
+  const v = this.game.engine.fieldAt(x, y);
+  if (v === -2)
     return -2;
-  const byte = buf[64100 + mapY * 512 + mapX];
-  return col % 2 == 0 ? byte & 15 : byte >> 4;
+  if (v === FieldCell.ROCK)
+    return 7;
+  if (v === FieldCell.baseBorder(0))
+    return 9;
+  if (v >= 30)
+    return 10;
+  if (FieldCell.isSand(v))
+    return 3;
+  return 0;
 },
 
 // True indestructible obstacles only: rock (7) and a base border (9/10). Everything
@@ -323,7 +337,7 @@ wallRun(x, y, dx, dy)
 // is for "medium"'s BASE_REVEAL_FRAMES free-reveal (see computeKeys()) - by the
 // time that fires there's no guarantee blue's base is anywhere near green, or that
 // blue's own tank (findEnclosingBase()'s approach) is anywhere near its base
-// either (confirmed by user: findEnclosingBase(s.blue.x, s.blue.y) is wrong here
+// either (confirmed by user: findEnclosingBase(s.tanks[0].x, s.tanks[0].y) is wrong here
 // precisely because blue could be off wandering the map, nowhere near its base, by
 // the time this fires - unlike the freshSpawn case above, where blue is guaranteed
 // to still be standing inside it). Walks the whole map at BASE_SEARCH_STEP
@@ -399,14 +413,14 @@ rememberSeen(s)
 {
   if (this.difficulty != "easy")
     return;
-  this.visionPos = { x: s.green.x, y: s.green.y };
+  this.visionPos = { x: s.tanks[1].x, y: s.tanks[1].y };
   const R = AiController.EASY_VISION_RADIUS, STEP = AiController.EASY_VISION_STEP;
   for (let dy = -R; dy <= R; dy += STEP)
     for (let dx = -R; dx <= R; dx += STEP)
     {
       if (dx * dx + dy * dy > R * R)
         continue;
-      const x = s.green.x + dx, y = s.green.y + dy;
+      const x = s.tanks[1].x + dx, y = s.tanks[1].y + dy;
       const n = this.readNibble(x, y);
       if (n != -1) // don't cache "buffer not loaded yet" as if it were real terrain
         this.knownMap.set(this.knownKey(x, y), n);
@@ -521,7 +535,7 @@ Object.assign(AiController.prototype, {
 // those; it was never canSeeBlue()'s job to re-check that too).
 canSeeBlue(s)
 {
-  const dx = s.blue.x - s.green.x, dy = s.blue.y - s.green.y;
+  const dx = s.tanks[0].x - s.tanks[1].x, dy = s.tanks[0].y - s.tanks[1].y;
   return dx * dx + dy * dy <= AiController.BLUE_SIGHT_RANGE * AiController.BLUE_SIGHT_RANGE;
 },
 
