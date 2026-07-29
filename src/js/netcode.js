@@ -83,11 +83,13 @@ class Game
     this.seed = Math.floor(Math.random()*0x10000) | (Math.floor(Math.random()*0x10000)<<16)
   }
 
-  // roster/friendlyFire: see TunnelerEngine's constructor (engine.js). Defaults
-  // match its own 2-tank default, for offline hotseat callers that don't care.
-  load(roster = [{ team: 1, color: 0 }, { team: 2, color: 1 }], friendlyFire = false)
+  // roster/friendlyFire/sizeX/sizeY: see TunnelerEngine's constructor (engine.js).
+  // Defaults match its own 2-tank/default-map-size defaults, for offline hotseat/AI
+  // callers that don't care and never pass a session's chosen size.
+  load(roster = [{ team: 1, color: 0 }, { team: 2, color: 1 }], friendlyFire = false,
+    sizeX = undefined, sizeY = undefined)
   {
-    this.engine = new TunnelerEngine(this.seed, roster, friendlyFire);
+    this.engine = new TunnelerEngine(this.seed, roster, friendlyFire, sizeX, sizeY);
     this.frame = 0;
     this.paths = roster.map(() => [[0, 0]]);
     this.resolveReady();

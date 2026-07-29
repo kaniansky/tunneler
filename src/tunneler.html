@@ -3,33 +3,20 @@
 <link rel="icon" href="/favicon.ico">
 <link rel="stylesheet" href="/css/common.css">
 <link rel="stylesheet" href="/css/tunneler.css">
-<div class="banner">
-<a class="new-game-btn" href="/" data-i18n="home">Home</a>
-<div id="score" data-session-name="{{SESSION_NAME}}"></div>
-<button id="restartBtn" class="restart-btn" type="button" hidden data-i18n="newGame">New Game</button>
-</div>
-<div id="gameArea">
-  <canvas id="canvas1" width="640" height="400"></canvas>
-  <div id="touchControls" class="touch-controls" hidden>
-    <div id="joystick" class="joystick" aria-label="Move">
-      <div class="joystick-knob"></div>
-    </div>
-    <button type="button" id="fireBtn" class="fire-btn" data-action="fire" aria-label="Fire">FIRE</button>
-  </div>
-</div>
+<div id="root" data-session-name="{{SESSION_NAME}}"></div>
 
 <script src="/js/i18n.js"></script>
-<script src="/js/engine-rng.js"></script>
-<script src="/js/engine-constants.js"></script>
+<script src="/js/engine/engine-rng.js"></script>
+<script src="/js/engine/engine-constants.js"></script>
 <script src="/js/colors.js"></script>
-<script src="/js/engine-terrain.js"></script>
-<script src="/js/engine-core.js"></script>
-<script src="/js/engine-render.js"></script>
-<script src="/js/engine.js"></script>
+<script src="/js/engine/engine-terrain.js"></script>
+<script src="/js/engine/engine-core.js"></script>
+<script src="/js/engine/engine-render.js"></script>
+<script src="/js/engine/engine.js"></script>
 <script src="/js/netcode.js"></script>
-<script src="/js/ai.js"></script>
-<script src="/js/ai-sighting.js"></script>
-<script src="/js/ai-combat.js"></script>
-<script src="/js/ai-pathing.js"></script>
-<script src="/js/ai-debug.js"></script>
+<script src="/js/ai/ai.js"></script>
+<script src="/js/ai/ai-sighting.js"></script>
+<script src="/js/ai/ai-combat.js"></script>
+<script src="/js/ai/ai-pathing.js"></script>
+<script src="/js/ai/ai-debug.js"></script>
 <script src="/js/tunneler.js"></script>

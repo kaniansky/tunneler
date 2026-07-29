@@ -3,31 +3,7 @@
 <link rel="icon" href="/favicon.ico">
 <link rel="stylesheet" href="/css/common.css">
 <link rel="stylesheet" href="/css/index.css">
-<div class="banner">
-<div class="left-text" data-i18n="appTitle">Tunneler</div>
-</div>
-<div class="links local-splitscreen-row">
-  <p><span data-i18n="localSplitScreen">Local split screen:</span> <button id="play" data-i18n="play" class="btn btn-blue" type="button"></button></p>
-</div>
-<div class="links">
-  <p><span data-i18n="singleplayerVsAi">Singleplayer vs Bot:</span> <button id="aiEasy" class="btn btn-easy" type="button" data-i18n="easy">Easy</button> <button id="aiMedium" class="btn btn-medium" type="button" data-i18n="medium">Medium</button> <button id="aiHard" class="btn btn-hard" type="button" data-i18n="hard">Hard</button></p>
-</div>
-<div class="links">
-  <div class="form-row">
-    <p data-i18n="networkGamesList">Network games:</p>
-    <button id="newNetworkGameBtn" class="btn btn-blue" type="button" data-i18n="newNetworkGame">New Network Game</button>
-  </div>
-  <table id="gamesTable" hidden>
-    <thead>
-      <tr>
-        <th data-i18n="gameName">Name</th>
-        <th data-i18n="gamePlayers">Players</th>
-        <th data-i18n="gameScore">Score</th>
-      </tr>
-    </thead>
-    <tbody id="gamesTableBody"></tbody>
-  </table>
-  <p id="noGamesMsg" data-i18n="noGamesListed">No public games right now.</p>
-</div>
+<div id="root"></div>
+
 <script src="/js/i18n.js"></script>
 <script src="/js/index.js"></script>

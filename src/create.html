@@ -3,31 +3,7 @@
 <link rel="icon" href="/favicon.ico">
 <link rel="stylesheet" href="/css/common.css">
 <link rel="stylesheet" href="/css/create.css">
-<div class="banner">
-<a class="new-game-btn" href="/" data-i18n="home">Home</a>
-<div class="left-text" data-i18n="newNetworkGame">New Network Game</div>
-</div>
-<div class="links">
-  <p><span data-i18n="sessionName">Session name</span>:</p>
-  <form id="startForm" action="/create" method="POST" autocomplete="off">
-    <div class="form-row">
-      <input id="sessionName" name="name" type="text" class="field" maxlength="100" placeholder="leave blank for a random one" data-i18n-placeholder="sessionNamePlaceholder" autofocus autocomplete="off">
-    </div>
-    <div class="form-row">
-      <label class="checkbox-row"><input type="checkbox" name="listed" checked> <span data-i18n="listPublicly">List publicly</span></label>
-    </div>
-    <div class="form-row">
-      <label class="checkbox-row"><input type="checkbox" name="allowSpectate" checked> <span data-i18n="allowSpectate">Allow spectate</span></label>
-    </div>
-    <div class="form-row">
-      <label class="checkbox-row"><input type="checkbox" name="friendlyFire"> <span data-i18n="friendlyFire">Friendly fire (teammates can damage each other)</span></label>
-    </div>
-    <div class="form-row">
-      <p class="hint" data-i18n="lobbyHint">Up to 8 players join and pick a name, color, and team in the lobby after creating the session.</p>
-    </div>
-    <div class="form-row">
-      <button type="submit" data-i18n="start">Start</button>
-    </div>
-  </form>
-</div>
+<div id="root"></div>
+
 <script src="/js/i18n.js"></script>
+<script src="/js/create.js"></script>

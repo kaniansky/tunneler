@@ -3,29 +3,7 @@
 <link rel="icon" href="/favicon.ico">
 <link rel="stylesheet" href="/css/common.css">
 <link rel="stylesheet" href="/css/lobby.css">
-<div class="banner">
-<a class="new-game-btn" href="/" data-i18n="home">Home</a>
-<div class="left-text" id="sessionName">{{SESSION_NAME}} - <span data-i18n="lobbySuffix">Lobby</span></div>
-<button id="copyLink" class="copy-link-btn" type="button" data-i18n="copyLink">Copy Link</button>
-</div>
-<div id="score" class="lobby-score"></div>
-
-<div id="joinForm" class="links join-form">
-  <input id="joinName" type="text" maxlength="30" class="field" placeholder="Your name" data-i18n-placeholder="yourName" autocomplete="off">
-  <div id="joinColors" class="color-swatches"></div>
-  <label data-i18n="team">Team</label>
-  <select id="joinTeam"></select>
-  <button id="joinBtn" type="button" data-i18n="joinGame">Join</button>
-</div>
-
-<div class="links">
-  <div id="seatGrid" class="seat-grid"></div>
-  <p id="startHint" class="hint" data-i18n="readyHint">Match starts once every seat is ready (at least 2 seats, at least 2 teams).</p>
-</div>
-
-<div class="links">
-  <button id="sp" class="btn btn-spectate" type="button" data-i18n="spectateBtn">Spectate</button>
-</div>
+<div id="root" data-session-name="{{SESSION_NAME}}"></div>
 
 <script src="/js/i18n.js"></script>
 <script src="/js/colors.js"></script>

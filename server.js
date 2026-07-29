@@ -104,9 +104,33 @@ app.use(express.static("public"));
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
 
+// Map size presets a session can be created with - kept as a server-side whitelist
+// (rather than accepting arbitrary client-supplied width/height) so a session can't be
+// created with an unreasonably huge field. Same aspect ratio as the original fixed
+// 1024x480 field (now "medium", the default - unchanged from before this existed).
+const MAP_SIZE_PRESETS = {
+  small: { x: 768, y: 360 },
+  medium: { x: 1024, y: 480 },
+  large: { x: 1536, y: 720 },
+};
+
 const MAX_SID_LENGTH = 100;
 const MAX_SEATS = 8;
+const MIN_SEATS = 2;
 const MAX_TEAMS = 8;
+const DEFAULT_WIN_SCORE = 3;
+const MIN_WIN_SCORE = 1;
+const MAX_WIN_SCORE = 20;
+
+// A claimed-but-abandoned lobby seat (tab closed, no heartbeat since) is freed once its
+// lastSeen is this stale - see the sweep in GET /:id/status and the heartbeat route
+// below. Comfortably above lobby.jsx's own POLL_INTERVAL_MS (2s, which is also how often
+// it heartbeats) so one dropped beat doesn't evict an idle-but-present player.
+const STALE_SEAT_TIMEOUT_MS = 8000;
+
+// how long the ready-up countdown holds once every seat is ready, before the match
+// actually starts - see startSessionIfReady()/session.started below.
+const MATCH_START_COUNTDOWN_MS = 5000;
 
 // Shared by the HTTP "/:id" param handler and the websocket connection handler below, so
 // a session name longer than this truncates identically on both paths - otherwise a long
@@ -170,10 +194,12 @@ function escapeHtml(s) {
 // whoever got there first's settings). Does NOT seed the session - seed/started stay 0
 // until startSessionIfReady() sees enough ready seats.
 //
-// No passwords anywhere anymore (players or spectators - see the plan) - seats are
+// No per-seat passwords (players or spectators are never individually gated) - seats are
 // claimed via the lobby's own /join endpoint, first-come-first-served, same trust model
-// as every other URL in this app. friendlyFire is a fixed-for-the-match setting chosen at
-// creation time (see engine-core.js's atest()).
+// as every other URL in this app. A session CAN have a single optional password gating
+// the whole thing (session.password below, checked by /join, /:id/spectate, and
+// /:id/verify-password) - one shared secret for the session, not per-role. friendlyFire is
+// a fixed-for-the-match setting chosen at creation time (see engine-core.js's atest()).
 function createSession(settings) {
   const id = slugify(settings.displayName);
   if (!id) return null;
@@ -184,6 +210,20 @@ function createSession(settings) {
     session.listed = settings.listed;
     session.allowSpectate = settings.allowSpectate;
     session.friendlyFire = settings.friendlyFire;
+    // empty string = no password (falsy, gates nothing below) - a lightweight join/
+    // spectate deterrent, same trust model as the rest of this app (plain string
+    // compare, sent/checked over plain JSON - not meant to withstand a hostile client).
+    session.password = String(settings.password || "").trim().slice(0, MAX_SID_LENGTH);
+    session.mapSize = Object.hasOwn(MAP_SIZE_PRESETS, settings.mapSize) ? settings.mapSize : "medium";
+    const maxPlayers = Number(settings.maxPlayers);
+    const seatCount = Number.isInteger(maxPlayers)
+      ? Math.min(MAX_SEATS, Math.max(MIN_SEATS, maxPlayers))
+      : MAX_SEATS;
+    session.seats = new Array(seatCount).fill(null);
+    const winScore = Number(settings.winScore);
+    session.winScore = Number.isInteger(winScore)
+      ? Math.min(MAX_WIN_SCORE, Math.max(MIN_WIN_SCORE, winScore))
+      : DEFAULT_WIN_SCORE;
     console.log("Created session", id, "-", session.displayName);
   }
   return id;
@@ -203,7 +243,13 @@ function startSessionIfReady(session) {
   if (occupied.length < 2 || !occupied.every((s) => s.ready)) return;
   if (new Set(occupied.map((s) => s.team)).size < 2) return;
   session.seed = generateSeed();
-  session.started = Date.now();
+  // started is set to a few seconds in the future, not now - this both locks the roster
+  // in immediately (every other route already guards on `started != 0`) and gives
+  // clients a real timestamp to count down against (see /:id/status's startsAt).
+  // Net.currentFrame() computing a negative frame number until this timestamp arrives is
+  // harmless - callers only ever compare it against gameLocal.frame (starting at 0), so
+  // the game clock simply idles rather than stepping early.
+  session.started = Date.now() + MATCH_START_COUNTDOWN_MS;
   console.log(
     "All players ready - starting session",
     session.id,
@@ -263,6 +309,10 @@ app.post("/create", (req, res) => {
     listed: req.body.listed == "on",
     allowSpectate: req.body.allowSpectate == "on",
     friendlyFire: req.body.friendlyFire == "on",
+    mapSize: req.body.mapSize,
+    maxPlayers: req.body.maxPlayers,
+    winScore: req.body.winScore,
+    password: req.body.password,
   });
   res.redirect(303, id ? "/" + id + "/" : "/");
 });
@@ -281,6 +331,8 @@ app.get("/games", (req, res) => {
         name: s.displayName,
         players: s.seats.filter(Boolean).length,
         maxPlayers: s.seats.length,
+        hasPassword: !!s.password,
+        mapSize: s.mapSize,
         round: s.round,
         teamScores: s.teamScores,
       })),
@@ -325,18 +377,31 @@ app.get(["/:id", "/:id/"], (req, res) => {
   sendWithSessionName(res, "lobby.html", sessions[req.params.id]);
 });
 
+// Checked by lobby.jsx before it shows any seat/join UI at all (and cached client-side
+// per session so it's asked once, not on every visit) - a plain password compare, same
+// trust model as the rest of this app, not meant to withstand a hostile client. A session
+// with no password set always passes, so callers don't need to special-case that first.
+app.post("/:id/verify-password", (req, res) => {
+  const session = sessions[req.params.id];
+  if (session.password && req.body.password !== session.password)
+    return res.status(403).json({ error: "wrong password" });
+  res.sendStatus(204);
+});
+
 // Seat lifecycle - all pre-start (once session.started is set the roster is locked in,
 // see startSessionIfReady()). Seats are claimed first-come-first-served, no auth beyond
 // "whoever has the session link", same trust model as every other URL in this app.
 app.post("/:id/join", (req, res) => {
   const session = sessions[req.params.id];
   if (session.started != 0) return res.status(409).json({ error: "already started" });
+  if (session.password && req.body.password !== session.password)
+    return res.status(403).json({ error: "wrong password" });
   const fields = validSeatFields(req.body);
   if (!fields) return res.status(400).json({ error: "invalid fields" });
   const seat = session.seats.findIndex((s) => s == null);
   if (seat == -1) return res.status(409).json({ error: "session full" });
   if (colorTaken(session, fields.color)) return res.status(409).json({ error: "color taken" });
-  session.seats[seat] = { ...fields, ready: false };
+  session.seats[seat] = { ...fields, ready: false, lastSeen: Date.now() };
   res.json({ seat });
 });
 // editing a seat un-readies it - the other players should see (and re-confirm against)
@@ -349,7 +414,7 @@ app.post("/:id/seat/:n/update", (req, res) => {
   const fields = validSeatFields(req.body);
   if (!fields) return res.status(400).json({ error: "invalid fields" });
   if (colorTaken(session, fields.color, n)) return res.status(409).json({ error: "color taken" });
-  session.seats[n] = { ...fields, ready: false };
+  session.seats[n] = { ...fields, ready: false, lastSeen: Date.now() };
   res.sendStatus(204);
 });
 app.post("/:id/seat/:n/ready", (req, res) => {
@@ -357,6 +422,7 @@ app.post("/:id/seat/:n/ready", (req, res) => {
   const n = Number(req.params.n);
   if (!session.seats[n]) return res.status(404).json({ error: "seat not claimed" });
   session.seats[n].ready = !!req.body.ready;
+  session.seats[n].lastSeen = Date.now();
   startSessionIfReady(session);
   res.sendStatus(204);
 });
@@ -365,6 +431,16 @@ app.post("/:id/seat/:n/leave", (req, res) => {
   const n = Number(req.params.n);
   if (session.started != 0) return res.status(409).json({ error: "already started" });
   session.seats[n] = null;
+  res.sendStatus(204);
+});
+// lobby.jsx sends this alongside its normal status poll, for as long as this browser
+// holds a seat - keeps that seat's lastSeen fresh so the sweep in GET /:id/status (below)
+// doesn't mistake "tab still open, just idle" for "tab was closed". A missing seat here
+// (already left/kicked/session gone) is a no-op, not an error - nothing to bump.
+app.post("/:id/seat/:n/heartbeat", (req, res) => {
+  const session = sessions[req.params.id];
+  const n = Number(req.params.n);
+  if (session.seats[n]) session.seats[n].lastSeen = Date.now();
   res.sendStatus(204);
 });
 
@@ -384,15 +460,35 @@ app.get("/:id/seat/:n", (req, res) => {
 // tunneler.js/spectator.js while waiting for the match to start.
 app.get("/:id/status", (req, res) => {
   const session = sessions[req.params.id];
+  // Free any seat whose tab went away without ever calling /leave (closed, crashed,
+  // lost network) - piggybacked on this poll rather than a standalone timer, since every
+  // lobby viewer already hits this endpoint every couple seconds regardless. Only while
+  // still in the lobby - once started, an abandoned seat is the websocket layer's
+  // problem (connectedMask), not this one's.
+  if (session.started == 0) {
+    const now = Date.now();
+    session.seats.forEach((s, i) => {
+      if (s && now - (s.lastSeen || 0) > STALE_SEAT_TIMEOUT_MS) session.seats[i] = null;
+    });
+  }
   res.json({
     seats: session.seats.map((s) =>
       s ? { name: s.name, color: s.color, team: s.team, ready: s.ready } : null,
     ),
     friendlyFire: session.friendlyFire,
+    mapSize: session.mapSize,
+    mapSizeX: MAP_SIZE_PRESETS[session.mapSize].x,
+    mapSizeY: MAP_SIZE_PRESETS[session.mapSize].y,
+    winScore: session.winScore,
     allowSpectate: session.allowSpectate,
     round: session.round,
     teamScores: session.teamScores,
     started: session.started != 0,
+    hasPassword: !!session.password,
+    // raw scheduled-start timestamp (0 if not started yet) - lets clients render a
+    // countdown for the MATCH_START_COUNTDOWN_MS gap between "started" flipping true and
+    // the match actually running; `started` alone only says "roster is locked in".
+    startsAt: session.started,
   });
 });
 // the lowest-connected seat's client calls this whenever the round/teamScores change
@@ -414,6 +510,8 @@ app.get("/:id/spectate", (req, res) => {
   // above, rather than serving a page that can never actually connect (the websocket
   // handler below refuses the same session/role regardless).
   if (!session.allowSpectate) return res.redirect(307, "/" + session.id + "/");
+  if (session.password && req.query.password !== session.password)
+    return res.redirect(307, "/" + session.id + "/");
   sendWithSessionName(res, "spectator.html", session);
 });
 
@@ -468,6 +566,8 @@ class Session {
     this.emptyTimer = null;
     this.displayName = id;
     this.friendlyFire = false;
+    this.mapSize = "medium";
+    this.winScore = DEFAULT_WIN_SCORE;
     this.listed = true;
     this.allowSpectate = true;
     // seats[n] = null (open) or {name, color, team, ready}, claimed via /join

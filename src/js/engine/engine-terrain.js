@@ -128,9 +128,8 @@ class EngineTerrain
   // `areaScale` for anything that's a count or a cell-area (chunk count, chunk
   // size) - so a bigger or smaller field keeps the same proportions rather than
   // the same absolute pixel counts.
-  static initField(rng, roster)
+  static initField(rng, roster, sizeX = EngineConfig.FIELD_SIZEX, sizeY = EngineConfig.FIELD_SIZEY)
   {
-    const sizeX = EngineConfig.FIELD_SIZEX, sizeY = EngineConfig.FIELD_SIZEY;
     const field = new Uint8Array(sizeX * sizeY);
     const idx = (y, x) => y * sizeX + x;
 

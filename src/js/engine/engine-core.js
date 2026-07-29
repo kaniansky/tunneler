@@ -616,7 +616,7 @@ class EngineCore
     if (EngineConfig.REGENERATE_MAP_EACH_ROUND)
     {
       const roster = state.tanks.map(t => ({ team: t.team, color: t.color }));
-      const generated = EngineTerrain.initField(rng, roster);
+      const generated = EngineTerrain.initField(rng, roster, terrain.sizeX, terrain.sizeY);
       terrain.field = generated.field;
       bases = generated.bases;
     }

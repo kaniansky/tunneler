@@ -12,12 +12,13 @@ class TunnelerEngine
   // `roster` is [{team, color}, ...], one entry per tank, order matching however
   // the lobby assigned seats. `friendlyFire` is a fixed-for-the-match session
   // setting (see engine-core.js's atest()).
-  constructor(seed, roster = [{ team: 1, color: 0 }, { team: 2, color: 1 }], friendlyFire = false)
+  constructor(seed, roster = [{ team: 1, color: 0 }, { team: 2, color: 1 }], friendlyFire = false,
+    sizeX = EngineConfig.FIELD_SIZEX, sizeY = EngineConfig.FIELD_SIZEY)
   {
     this.rng = new EngineRng(seed);
     this.friendlyFire = friendlyFire;
-    const { field, bases } = EngineTerrain.initField(this.rng, roster);
-    this.terrain = { field, sizeX: EngineConfig.FIELD_SIZEX, sizeY: EngineConfig.FIELD_SIZEY };
+    const { field, bases } = EngineTerrain.initField(this.rng, roster, sizeX, sizeY);
+    this.terrain = { field, sizeX, sizeY };
     this.state = EngineCore.initTanks(bases, roster);
   }
 

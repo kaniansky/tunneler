@@ -3,20 +3,15 @@
 <link rel="icon" href="/favicon.ico">
 <link rel="stylesheet" href="/css/common.css">
 <link rel="stylesheet" href="/css/spectator.css">
-<div class="banner">
-<a class="new-game-btn" href="/" data-i18n="newGame">New Game</a>
-<div id="score" data-session-name="{{SESSION_NAME}}"></div>
-</div>
-<canvas id="canvas1" width="640" height="400"></canvas>
-<canvas id="map" width="1024" height="512"></canvas>
+<div id="root" data-session-name="{{SESSION_NAME}}"></div>
 
 <script src="/js/i18n.js"></script>
-<script src="/js/engine-rng.js"></script>
-<script src="/js/engine-constants.js"></script>
+<script src="/js/engine/engine-rng.js"></script>
+<script src="/js/engine/engine-constants.js"></script>
 <script src="/js/colors.js"></script>
-<script src="/js/engine-terrain.js"></script>
-<script src="/js/engine-core.js"></script>
-<script src="/js/engine-render.js"></script>
-<script src="/js/engine.js"></script>
+<script src="/js/engine/engine-terrain.js"></script>
+<script src="/js/engine/engine-core.js"></script>
+<script src="/js/engine/engine-render.js"></script>
+<script src="/js/engine/engine.js"></script>
 <script src="/js/netcode.js"></script>
 <script src="/js/spectator.js"></script>
