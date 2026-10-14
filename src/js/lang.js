@@ -12,6 +12,7 @@ const L = {};
 // ------------------------------------------------------------------ English
 L.en = {
   name: "English",
+  "menu.info": "Information", "menu.info.i": "About this version of the game.", "menu.instr": "Instructions", "menu.instr.i": "How to play.", "page.back": "Press <ENTER> to go back.", "rd.you1": "You are ready.", "rd.you2": "Waiting for {name}...", "rd.cancel": "<ESC> - not ready after all",
   blue: "BLUE", green: "GREEN",
   "ui.hint": "↑↓ and <ENTER>, or the mouse.", "ui.back": "<ESC> back.", "ui.pd": "public domain, 2026",
   "home.split": "Split screen", "home.split.i1": "Two players on one keyboard, like the original.",
@@ -67,6 +68,7 @@ L.en = {
 // ------------------------------------------------------------------ Slovak
 L.sk = {
   name: "Slovensky",
+  "menu.info": "Informácie", "menu.info.i": "O tejto verzii hry.", "menu.instr": "Návod", "menu.instr.i": "Ako sa hrá.", "page.back": "<ENTER> - späť.", "rd.you1": "Si pripravený.", "rd.you2": "Čakám na {name}...", "rd.cancel": "<ESC> - predsa nie som pripravený",
   blue: "MODRÝ", green: "ZELENÝ",
   "ui.hint": "↑↓ a <ENTER>, alebo myš.", "ui.back": "<ESC> späť.", "ui.pd": "voľné dielo, 2026",
   "home.split": "Delená obrazovka", "home.split.i1": "Dvaja hráči na jednej klávesnici, ako v origináli.",
@@ -117,7 +119,7 @@ L.sk = {
   "conn.closed": "zatvorené", "conn.connected": "pripojený",
   engine: {
     by: "napísal Norko Kaniansky",
-    menu: ["Začať hru", "Návod", "Informácie", "Do hlavného menu"],
+    menu: ["Začať hru", "Návod", "Do hlavného menu"],
     waiting: ["Čaká sa, kým hráči", "začnú hru"],
     creating: "(vytváram svet)", ready: "(svet je hotový)", round: "KOLO",
     stats: { title: "Štatistika", fired: "výstrely", hit: "zásahy", percent: "úspešnosť", dug: "vykopané metre",
@@ -174,6 +176,7 @@ L.sk = {
 // ------------------------------------------------------------------ Czech
 L.cs = {
   name: "Česky",
+  "menu.info": "Informace", "menu.info.i": "O této verzi hry.", "menu.instr": "Návod", "menu.instr.i": "Jak se hraje.", "page.back": "<ENTER> - zpět.", "rd.you1": "Jsi připraven.", "rd.you2": "Čekám na {name}...", "rd.cancel": "<ESC> - přece nejsem připraven",
   blue: "MODRÝ", green: "ZELENÝ",
   "ui.hint": "↑↓ a <ENTER>, nebo myš.", "ui.back": "<ESC> zpět.", "ui.pd": "volné dílo, 2026",
   "home.split": "Dělená obrazovka", "home.split.i1": "Dva hráči na jedné klávesnici, jako v originálu.",
@@ -224,7 +227,7 @@ L.cs = {
   "conn.closed": "zavřeno", "conn.connected": "připojen",
   engine: {
     by: "napsal Norko Kaniansky",
-    menu: ["Začít hru", "Návod", "Informace", "Do hlavního menu"],
+    menu: ["Začít hru", "Návod", "Do hlavního menu"],
     waiting: ["Čeká se, až hráči", "začnou hru"],
     creating: "(vytvářím svět)", ready: "(svět je hotov)", round: "KOLO",
     stats: { title: "Statistika", fired: "výstřely", hit: "zásahy", percent: "úspěšnost", dug: "vykopané metry",
@@ -281,6 +284,7 @@ L.cs = {
 // ------------------------------------------------------------------ Ukrainian
 L.uk = {
   name: "Українська",
+  "menu.info": "Інформація", "menu.info.i": "Про цю версію гри.", "menu.instr": "Інструкція", "menu.instr.i": "Як грати.", "page.back": "<ENTER> - назад.", "rd.you1": "Ти готовий.", "rd.you2": "Чекаю на {name}...", "rd.cancel": "<ESC> - все-таки не готовий",
   blue: "СИНІЙ", green: "ЗЕЛЕНИЙ",
   "ui.hint": "↑↓ і <ENTER>, або миша.", "ui.back": "<ESC> назад.", "ui.pd": "суспільне надбання, 2026",
   "home.split": "Розділений екран", "home.split.i1": "Двоє гравців за однією клавіатурою, як в оригіналі.",
@@ -331,7 +335,7 @@ L.uk = {
   "conn.closed": "закрито", "conn.connected": "з'єднано",
   engine: {
     by: "автор: Norko Kaniansky",
-    menu: ["Почати гру", "Інструкція", "Інформація", "До головного меню"],
+    menu: ["Почати гру", "Інструкція", "До головного меню"],
     waiting: ["Чекаємо, поки гравці", "почнуть гру"],
     creating: "(створюю світ)", ready: "(світ готовий)", round: "РАУНД",
     stats: { title: "Статистика", fired: "постріли", hit: "влучання", percent: "влучність", dug: "викопано метрів",
@@ -388,6 +392,7 @@ L.uk = {
 // ------------------------------------------------------------------ Russian
 L.ru = {
   name: "Русский",
+  "menu.info": "Информация", "menu.info.i": "Об этой версии игры.", "menu.instr": "Инструкция", "menu.instr.i": "Как играть.", "page.back": "<ENTER> - назад.", "rd.you1": "Ты готов.", "rd.you2": "Жду {name}...", "rd.cancel": "<ESC> - всё-таки не готов",
   blue: "СИНИЙ", green: "ЗЕЛЁНЫЙ",
   "ui.hint": "↑↓ и <ENTER>, или мышь.", "ui.back": "<ESC> назад.", "ui.pd": "общественное достояние, 2026",
   "home.split": "Разделённый экран", "home.split.i1": "Двое игроков за одной клавиатурой, как в оригинале.",
@@ -438,7 +443,7 @@ L.ru = {
   "conn.closed": "закрыто", "conn.connected": "соединено",
   engine: {
     by: "автор: Norko Kaniansky",
-    menu: ["Начать игру", "Инструкция", "Информация", "В главное меню"],
+    menu: ["Начать игру", "Инструкция", "В главное меню"],
     waiting: ["Ждём, пока игроки", "начнут игру"],
     creating: "(создаю мир)", ready: "(мир готов)", round: "РАУНД",
     stats: { title: "Статистика", fired: "выстрелы", hit: "попадания", percent: "меткость", dug: "выкопано метров",
@@ -495,6 +500,7 @@ L.ru = {
 // ------------------------------------------------------------------ Pirate (the funny one)
 L.pirate = {
   name: "Pirate",
+  "menu.info": "Captain's log", "menu.info.i": "About this here ship.", "menu.instr": "Ship's manual", "menu.instr.i": "How to plunder.", "page.back": "<ENTER> - back to the ship.", "rd.you1": "Ye be ready.", "rd.you2": "Waitin' fer {name}...", "rd.cancel": "<ESC> - chicken out",
   blue: "BLUE", green: "GREEN",
   "ui.hint": "↑↓ an' <ENTER>, or yer mouse.", "ui.back": "<ESC> retreat!", "ui.pd": "free booty, 2026",
   "home.split": "Split the deck", "home.split.i1": "Two pirates, one keyboard, like in the olden days.",
@@ -546,7 +552,7 @@ L.pirate = {
   "conn.closed": "sunk", "conn.connected": "aboard",
   engine: {
     by: "by Cap'n Norko Kaniansky",
-    menu: ["Hoist the sails", "Ship's manual", "Captain's log", "Back to the ship"],
+    menu: ["Hoist the sails", "Ship's manual", "Back to the ship"],
     waiting: ["Waitin' fer the", "pirates to sail"],
     creating: "(diggin' the seas)", ready: "(seas be ready)", round: "ROUND",
     stats: { title: "Plunder log", fired: "balls fired", hit: "hits", percent: "aim", dug: "fathoms dug",

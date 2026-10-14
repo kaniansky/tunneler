@@ -51,7 +51,7 @@
 
   const K = TunnelerEngine.KEYS;
   const ai = mode === "cpu" ? new TunnelerAI(level, 2) : null;
-  // two DOS-style lines under the game: controls, then [Home]  mode  sound
+  // two DOS-style lines under the game: controls, then mode  sound
   const statusLine = new StatusLine(document.getElementById("status"), canvas, () => display.columns()[1] - display.columns()[0]);
   function renderBar() {
     const T = Lang.t;
@@ -59,7 +59,6 @@
       ? [{ text: T("st.move"), attr: 0x09, prio: 1 }, { text: T("st.fire"), attr: 0x09, prio: 1 }]
       : [{ text: T("st.blue"), attr: 0x09 }, { text: T("st.green"), attr: 0x0A }];
     statusLine.set([top, [
-      { text: " \x11 " + T("st.home") + " ", attr: 0x1F, onClick: () => { location.href = "/"; } },
       { text: mode === "cpu" ? T("st.cpu", { level: Lang.raw("level." + level) }) : T("st.split"), attr: 0x0F, prio: 2 },
       { text: T("st.esc"), attr: 0x08, prio: 3 },
       { text: T(speaker.muted ? "st.soff" : "st.son"), attr: 0x08, prio: 1 },

@@ -30,16 +30,17 @@
         { key: "online", label: T("home.online"), info: [T("home.online.i1"), T("home.online.i2")],
           go: () => { location.href = "/lobby.html"; } },
         { key: "gap", label: "", disabled: true },
+        { key: "info", label: T("menu.info"), info: [T("menu.info.i")], go: () => ui.showPage("information", "hotseat", () => main(4)) },
         { key: "lang", label: T("home.lang") + Lang.name(Lang.code), info: [T("home.lang.i1"), T("home.lang.i2")],
           go: () => setLang(1), change: setLang },
       ],
     }, keep);
   }
 
-  function cpu(keep) {
+  function cpu(keep, sel) {
     const start = () => { location.href = "/play.html?mode=cpu&level=" + level + "&hide=" + (hide ? 1 : 0); };
     ui.show({
-      lines: title(), box: BOX, sel: 0, infoRow: 20,
+      lines: title(), box: BOX, sel: sel || 0, infoRow: 20,
       back: () => main(1),
       items: [
         { key: "play", label: T("cpu.start"), info: [T("cpu.start.i1", { level: Lang.raw("level." + level) }), T(hide ? "cpu.own" : "cpu.both")], go: start },
@@ -50,6 +51,7 @@
         { key: "view", label: T("cpu.view") + T(hide ? "cpu.view.own" : "cpu.view.both"), info: [T("cpu.view.i1"), T("cpu.view.i2")],
           go: toggleView, change: toggleView },
         { key: "gap2", label: "", disabled: true },
+        { key: "instr", label: T("menu.instr"), info: [T("menu.instr.i")], go: () => ui.showPage("instructions", "cpu", () => cpu(false, 5)) },
         { key: "back", label: T("back.main"), info: [T("back.main.i")], go: () => main(1) },
       ],
     }, keep);

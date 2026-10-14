@@ -75,15 +75,15 @@ const Banner = [
 // Main menu. The DOS version chose these with F1 / F2 / F3 / F10; here the arrow keys move a highlight
 // bar and Enter (or a mouse click) picks the item. The item's old F-key scan code is still what the menu
 // loop dispatches on internally, so a keystroke with that scan code selects the item directly.
-const MENU_SCANS = [59, 60, 61, 68];
-const MENU_ROWS = [0, 2, 3, 5];                         // box row of each item (blank rows between groups)
+const MENU_SCANS = [59, 60, 68];
+const MENU_ROWS = [0, 2, 4];                         // box row of each item (blank rows between groups)
 const MENU_ATTR = 0x05, MENU_SEL_ATTR = 0x5F;          // magenta text / white on magenta bar
 // All text the program shows. engine.strings can be replaced with a translation (lang.js builds one,
 // already encoded to the font's code page: one JS char per byte). "{n}" in a line switches the text
 // colour to n.
 const STRINGS_EN = {
   title: "TUNNELER ONLINE", by: "by Norko Kaniansky",
-  menu: ["Start game", "Instructions", "Information", "Back to main menu"],
+  menu: ["Start game", "Instructions", "Back to main menu"],
   waiting: ["Waiting for the", "players to start"],
   creating: "(creating world)", ready: "(world ready)",
   round: "ROUND", blue: "BLUE", green: "GREEN",
@@ -207,6 +207,7 @@ class TunnelerEngine {
     this.menuX = 30; this.menuW = 20;              // main menu box (set by showMainMenu)
     this.uiMode = "hotseat";                      // "hotseat", "cpu" or "online": which controls the instructions describe
     this.menuWaiting = false;                     // draw the menu box as a "waiting for the players" notice
+    this.menuNotice = null;                       // or as this notice (lines) instead of the items
 
     // PlayGame locals
     this.obstacle = 0; this.static = false; this.soundOn = true; this.roundOver = false; this.matchOver = false;
@@ -1178,18 +1179,19 @@ class TunnelerEngine {
     this.gotoXY(this.centreCol(S.by, this.menuShift), 6);
     this.write(S.by);
     // the box fits its longest line (20 wide in the original), centred
-    const W = this.menuW = Math.max(16, ...(this.menuWaiting ? S.waiting : S.menu).map(t => visLen(t) + 4)) + 1 >> 1 << 1;
+    const notice = this.menuNotice || (this.menuWaiting ? S.waiting : null);
+    const W = this.menuW = Math.max(16, ...(notice || S.menu).map(t => visLen(t) + 4)) + 1 >> 1 << 1;
     const X = this.menuX = this.menuShift + 41 - ((W + 2) >> 1);
     this.textColor(5);
     this.window(X, 11, Math.min(80, X + W + 5), 22);
     this.write("\xDA", "\xC4".repeat(W)); this.writeLn("\xBF");
-    const lines = this.menuWaiting ? ["", "", ...S.waiting, "", ""] : ["", "", "", "", "", ""];
-    if (!this.menuWaiting) MENU_ROWS.forEach((r, i) => { lines[r] = S.menu[i]; });
+    const lines = notice ? ["", ...notice, ""] : new Array(MENU_ROWS[MENU_ROWS.length - 1] + 1).fill("");
+    if (!notice) MENU_ROWS.forEach((r, i) => { lines[r] = S.menu[i]; });
     for (const t of lines) this.writeLn("\xB3" + centre(t, W) + "\xB3");
     this.write("\xC0", "\xC4".repeat(W)); this.writeLn("\xD9");
     this.window(1, 1, 80, 25);
     this.menuPage = "menu";
-    if (!this.menuWaiting) this.drawMenuSel();
+    if (!notice) this.drawMenuSel();
     if (this.menuShift !== 0) {
       this.textColor(8);
       for (let i = 1; i <= 25; i++) { this.gotoXY(40, i); this.write("\xB3"); }
@@ -1213,9 +1215,11 @@ class TunnelerEngine {
       };
       row(S.stats.fired, i => this.write(this.num(this.shotsFired[i], 9)));
       row(S.stats.hit, i => this.write(this.num(this.shotsHit[i], 9)));
+      // the original set ShotsFired to 1 here when 0 (to avoid dividing by zero), so a redraw of this
+      // screen showed 1 shot; online the statistics are drawn by several engine copies, so don't
       row(S.stats.percent, i => {
-        if (this.shotsFired[i] === 0) this.shotsFired[i] = 1;
-        this.write(this.num(Math.trunc(i16(this.shotsHit[i] * 100) / this.shotsFired[i]), 8), "%");
+        const fired = this.shotsFired[i] === 0 ? 1 : this.shotsFired[i];
+        this.write(this.num(Math.trunc(i16(this.shotsHit[i] * 100) / fired), 8), "%");
       });
       this.writeLn();
       row(S.stats.dug, i => this.write(this.num(this.metersDug[i], 9)));
@@ -1380,7 +1384,7 @@ class TunnelerEngine {
           } else yield* this.createWorldStep();
           if (this.worldStage === -1 && !this.worldReady) {
             this.window(1, 1, 80, 25);
-            this.worldStatus(this.strings.ready, this.menuShift, 2);
+            this.worldStatus("", this.menuShift, 0);     // world ready: the "(creating world)" line goes away
             this.worldReady = true;
           }
           this.keyStr = this.menuKey(this.keyStr);

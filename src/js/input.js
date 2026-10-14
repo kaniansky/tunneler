@@ -50,7 +50,7 @@ class Keyboard {
     if (held !== null) this.down.set(e.code, held);
     let ascii = NAMED_ASCII[e.code];
     if (ascii === undefined) ascii = e.key.length === 1 && e.key.charCodeAt(0) < 128 && !e.ctrlKey && !e.altKey ? e.key.charCodeAt(0) : 0;
-    this.keys.push([ascii, scan]);
+    this.keys.push([ascii, scan, e.repeat]);           // [2]: auto-repeat of a held key
     if (this.keys.length > 32) this.keys.shift();
   }
 

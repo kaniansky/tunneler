@@ -71,11 +71,13 @@ project dependency; install playwright-core in a scratch dir when needed).
 - Engine text is data: `engine.strings` (default `STRINGS_EN`, translations from `Lang.apply(engine)`),
   lines may contain `{n}` colour codes (`markup()`); positions are computed from text length
   (`centreCol(t) = 41 - (visibleLength >> 1)`; boxes of even width centred exactly).
-- Menu (no F keys any more): item texts `strings.menu`, dispatched internally by their old F-key scan codes (`MENU_SCANS`:
-  59 start, 60 instructions, 61 information, 68 back to main menu); arrows move the highlight bar,
-  Enter selects (`menuKey`), mouse via `menuItemAt`. Box auto-sizes to the longest item
-  (`menuX/menuW`), items at box rows `MENU_ROWS = [0, 2, 3, 5]` (blank rows after "Start game" and before
-  "Back to main menu"). "Back to main menu" (was "Exit program") halts the engine -> page goes home.
+- Menu (no F keys any more): items Start game / Instructions / Back to main menu (`strings.menu`),
+  dispatched internally by their old F-key scan codes (`MENU_SCANS`: 59 start, 60 instructions, 68 back;
+  Information (61) is only on the homepage now); arrows move the highlight bar, Enter selects
+  (`menuKey`), mouse via `menuItemAt`. Box auto-sizes to the longest item (`menuX/menuW`), items at box
+  rows `MENU_ROWS = [0, 2, 4]` (blank rows between). `menuNotice` (lines) / `menuWaiting` draw a notice
+  in the box instead of the items. "Back to main menu" (was "Exit program") halts the engine -> page
+  goes home. "(world ready)" is not shown any more: the "(creating world)" line is erased when done.
 - `uiMode` ("hotseat" | "cpu" | "online") only changes the instructions' controls text.
 - Online, every client's engine must stay identical: never let local-only things (language, sound mute,
   local menu pages) change engine state. Text/language may differ per client (it only affects the vram
@@ -83,26 +85,33 @@ project dependency; install playwright-core in a scratch dir when needed).
 
 ## Client pages
 
-- `index.html` + `home.js` - main menu (Split screen, Vs computer, Online game, Language: ...); the vs
-  computer screen: Start a new game / Difficulty / View switches (Left/Right/Enter/click cycle values,
+- `index.html` + `home.js` - main menu (Split screen, Vs computer, Online game, Information, Language:
+  ...); the vs computer screen: Start a new game / Difficulty / View switches / Instructions (Left/Right/Enter/click cycle values,
   remembered in localStorage `tunneler.level`, `tunneler.hide`, `tunneler.lang`).
 - `play.html` + `play.js` - local modes `?mode=hotseat` and `?mode=cpu&level=...&hide=0|1`; `LocalClock`
   drives one step per tick; the AI (`ai.js`, `new TunnelerAI(level, 2).update(engine)` -> keys) drives
   GREEN; with hide=1 the display is cropped to BLUE's half (`display.setCrop`).
 - `lobby.html` + `lobby.js` - list of public games (games scroll, separator + "Create a new game" + "Back
   to main menu" fixed below), create screen (name input max 26, public / spectators switches), one
-  game's screen (Play as BLUE/GREEN, Watch, Copy invite link, Back). `/lobby.html?room=<id>` opens a game
+  game's screen (Play as BLUE/GREEN, Instructions, Watch, Copy invite link, Back; the link itself is
+  clickable and copies too; "Link copied" reverts after 3 s). `/lobby.html?room=<id>` opens a game
   directly (private games are shared this way).
 - `online.html` + `online.js` - online play. The DOS menu is drawn **locally per player** by a private
   engine instance over the shared game (`runner.setOverlay`); "Start game" sends `{t:"ready"}`; the server
-  starts the shared game only when both are ready. Instructions/information are read locally. Spectators
-  see a "waiting for the players to start" box instead of the menu. Connecting / waiting for opponent /
+  starts the shared game only when both are ready. Once ready, the box shows "You are ready / Waiting
+  for GREEN..." instead of the items (only Esc works: cancel); who is ready is shown in yellow under
+  the box. Instructions are read locally. Spectators see a "waiting for the players to start" box.
+  The end-of-match world map ("PRESS ANY KEY") is per viewer: it stays on each screen until that
+  player/spectator presses a key or clicks (`mapPending`, `mapSnap`); a player's key also moves the
+  shared game on. Auto-repeated keys (`keys[i][2]`) never count, so a key held from the game can't skip
+  it. `window.tunnelerEngine()` exposes the page's engine for tests/debugging. Connecting / waiting for opponent /
   paused / catching up / errors are DOS screens too (`DosUI` with `present` override).
-- `dosui.js` - shared DOS menu screen: title lines, magenta box, white-on-magenta highlight, items with
+- `dosui.js` - shared DOS menu screen (`showPage("instructions"|"information", uiMode, back)` shows the
+  game's own page full screen; info lines can be clickable links): title lines, magenta box, white-on-magenta highlight, items with
   `info` lines, `separator`, disabled gaps (`label: ""`), text `input`, switches (`change(dir)` for
   Left/Right), `fixed` footer items, scrolling, auto width (omit `box.w`), keep selection by `key`.
 - `statusline.js` - the two DOS text lines under the game canvas (controls / who's ready, then
-  [Home|Lobby] button, mode/room, role, players, connection, ping, "M: sound on/off"). Same width as the
+  mode/room, role, players, connection, ping, "M: sound on/off"). Same width as the
   game canvas (80 or 40 columns when cropped); drops low-priority segments to fit.
 - Input (`input.js`): browser codes -> PC scan codes. No function keys. BLUE moves with **W A S D** (S is
   mapped to the original's X scan code, X itself does nothing); BLUE fire also on Left Shift / Space / Tab
@@ -139,6 +148,8 @@ after 10 minutes. Each player sees only their own half during play (`display.set
 - Menus: arrow keys + Enter + mouse; switches also with Left/Right; menus auto-size and are centred;
   blank rows/separators to group items; no F keys anywhere.
 - Sound hint shows the current state ("M: sound on" / "M: sound off").
+- **Never `git push` until the owner explicitly says so** (the repo auto-deploys to
+  https://tunneler-online.onrender.com/). Leave changes local for review.
 - Online: both players must choose "Start game"; spectators never see the menu.
 - The owner works iteratively and checks in the browser - verify UI changes with screenshots
   (playwright) and keep `npm test` green.

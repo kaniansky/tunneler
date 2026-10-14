@@ -15,6 +15,10 @@
 //   spec.items:  [{label, go, info: [..], disabled, attr, align: "left", input: {value, max}}]
 //                {separator: true} draws a horizontal line across the box
 //                change(dir): a switch - Left / Right step its value back (-1) / forward (+1)
+//                info lines may be {text, color, onClick} - clickable (e.g. the invite link)
+//
+// ui.showPage(kind, uiMode, back) shows the game's own Instructions / Information page full screen
+// (drawn by an engine instance, like in the game); Enter, Esc or a click calls back().
 //   spec.infoRow: row of the selected item's info lines (cyan, centred)
 //   spec.hint:   bottom line text;  spec.back: Esc handler;  spec.sel: initially selected item
 //
@@ -44,6 +48,23 @@ class DosUI {
 
   // keepSel: keep the selected item (matched by its key, or label) when redrawing the same screen
   // with fresh data
+  showPage(kind, uiMode, back) {
+    const e = new TunnelerEngine(0);
+    if (root.Lang) {
+      root.Lang.apply(e);
+      e.strings = Object.assign({}, e.strings, { prompt: root.Lang.t("page.back") });
+    }
+    e.uiMode = uiMode || "hotseat";
+    e.initTables();
+    e.textMode();
+    e.window(1, 1, 80, 24);
+    e.clearScreen();
+    if (kind === "instructions") e.showInstructions();
+    else { const g = e.showInformation(); while (!g.next().done); }
+    this.spec = { page: true, back, items: [] };
+    this.present({ t: 0, mode: "text", screen: "text", vram: e.vram.slice(0, 16000) });
+  }
+
   show(spec, keepSel) {
     const keyOf = it => it && (it.key != null ? it.key : it.label);
     const prev = this.spec && keyOf(this.spec.items[this.sel]);
@@ -139,11 +160,14 @@ class DosUI {
     if (this.top + this.scrollRows < this.scrollN) { t.gotoXY(b.x + b.w - 1, moreRow || row); t.write("\x19"); }
     // info about the selected item
     const it = s.items[this.sel];
+    this.links = [];
     (it && it.info || []).forEach((l, i) => {
       t.textColor(l.color == null ? 3 : l.color);
       const text = typeof l === "string" ? l : l.text;
-      t.gotoXY(Math.max(1, 41 - (text.length >> 1)), (s.infoRow || row + 3) + i);
+      const x = Math.max(1, 41 - (text.length >> 1)), y = (s.infoRow || row + 3) + i;
+      t.gotoXY(x, y);
       t.write(text.slice(0, 79));
+      if (l.onClick) this.links.push({ x, y, w: Math.min(text.length, 79), onClick: l.onClick });
     });
     // bottom line, like the game's "Press <ENTER> for main menu."
     t.drawBottomRule();
@@ -159,6 +183,10 @@ class DosUI {
   key(e) {
     const s = this.spec;
     if (!s) return;
+    if (s.page) {
+      if (["Enter", "NumpadEnter", "Escape", "Space"].includes(e.code)) { e.preventDefault(); s.back(); }
+      return;
+    }
     const it = s.items[this.sel];
     if (e.code === "ArrowUp" || e.code === "Numpad8") this.move(-1);
     else if (e.code === "ArrowDown" || e.code === "Numpad2" || (e.code === "Tab" && it && it.input)) this.move(1);
@@ -176,9 +204,16 @@ class DosUI {
     e.preventDefault();
   }
 
+  // clickable info line (link) under the mouse
+  linkAt(ev) {
+    const c = this.display.cellAt(ev);
+    if (!c || !this.spec || this.spec.page) return null;
+    return (this.links || []).find(l => c[1] + 1 === l.y && c[0] + 1 >= l.x && c[0] + 1 < l.x + l.w) || null;
+  }
+
   itemAt(ev) {
     const c = this.display.cellAt(ev);
-    if (!c || !this.spec) return -1;
+    if (!c || !this.spec || this.spec.page) return -1;
     const b = this.geom(), k = c[1] + 1 - this.firstItemRow(), x = c[0] + 1 - b.x;
     const shown = this.rowItems();
     if (k < 0 || k >= shown.length || x < 0 || x > b.w + 1) return -1;
@@ -186,10 +221,13 @@ class DosUI {
   }
   hover(ev) {
     const i = this.itemAt(ev);
-    this.canvas.style.cursor = i >= 0 ? "pointer" : "";
+    this.canvas.style.cursor = i >= 0 || this.linkAt(ev) || (this.spec && this.spec.page) ? "pointer" : "";
     if (i >= 0 && i !== this.sel) { this.sel = i; this.draw(); }
   }
   click(ev) {
+    if (this.spec && this.spec.page) { this.spec.back(); return; }
+    const link = this.linkAt(ev);
+    if (link) { link.onClick(); return; }
     const i = this.itemAt(ev);
     if (i >= 0) { this.sel = i; this.spec.items[i].go(); }
   }

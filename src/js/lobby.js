@@ -89,7 +89,18 @@
   // ------------------------------------------------------------ one game
   function openRoom(id) { roomId = id; room = null; copied = false; view = "room"; setUrl(id); refreshRoom(false); }
 
-  function roomScreen(keep) {
+  // copy the invite link; "Link copied" for 3 seconds
+  let copiedTimer = null;
+  function copyLink(url) {
+    (navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject()).then(() => {
+      copied = true;
+      if (view === "room") roomScreen(true);
+      clearTimeout(copiedTimer);
+      copiedTimer = setTimeout(() => { copied = false; if (view === "room") roomScreen(true); }, 3000);
+    }, () => {});
+  }
+
+  function roomScreen(keep, selKey) {
     view = "room";
     if (!room) {
       return ui.show({ lines: [...TITLE, { row: 9, text: T("room.notfound"), color: 12 }, { row: 11, text: T("room.expired"), color: 3 }],
@@ -103,10 +114,14 @@
         info: [T("room.play.i1", { name }), T("room.play.i2")],
         go: () => { location.href = gameUrl(r.id, role); } };
     };
-    const items = [slot("blue", 0x09, r.blue, "blue"), slot("green", 0x0A, r.green, "green"), { key: "gap1", label: "", disabled: true }];
+    const items = [slot("blue", 0x09, r.blue, "blue"), slot("green", 0x0A, r.green, "green"), { key: "gap1", label: "", disabled: true },
+      { key: "instr", label: T("menu.instr"), info: [T("menu.instr.i")],
+        go: () => { view = "page"; ui.showPage("instructions", "online", () => { view = "room"; roomScreen(false, "instr"); }); } },
+      { key: "gap3", label: "", disabled: true }];
     if (r.spectators) items.push({ key: "watch", label: T("room.watch"), info: [T("room.watch.i")], go: () => { location.href = gameUrl(r.id, "spectate"); } });
-    items.push({ key: "copy", label: T(copied ? "room.copied" : "room.copy"), info: [T("room.copy.i"), { text: E(roomUrl(r.id)), color: 11 }],
-      go: () => { (navigator.clipboard ? navigator.clipboard.writeText(roomUrl(r.id)) : Promise.reject()).then(() => { copied = true; roomScreen(true); }, () => {}); } });
+    const copy = () => copyLink(roomUrl(r.id));
+    items.push({ key: "copy", label: T(copied ? "room.copied" : "room.copy"),
+      info: [T("room.copy.i"), { text: E(roomUrl(r.id)), color: 11, onClick: copy }], go: copy });
     items.push({ key: "gap2", label: "", disabled: true });
     items.push({ key: "back", label: T("back.lobby"), info: [T("back.lobby.i")], go: () => list() });
     const st = on => T(on ? "room.connected" : "room.free");
@@ -115,7 +130,8 @@
         { row: 6, text: T("blue") + ": " + st(r.blue) + "      " + T("green") + ": " + st(r.green) +
             (r.spec ? "      " + T("room.watching", { n: r.spec }) : ""), color: 7 },
         { row: 7, text: stateText(r), color: 6 }],
-      box: { y: 10 }, infoRow: 20, back: () => list(), items,
+      box: { y: 9 }, infoRow: 21, back: () => list(), items,
+      sel: selKey ? Math.max(0, items.findIndex(it => it.key === selKey)) : 0,
     }, keep);
   }
 
