@@ -12,6 +12,10 @@ class Runner {
     this.speaker = speaker;
     this.queue = [];              // [{at: performance.now() time, snap}]
     this.onStep = null;           // optional hook after every step (scoreboards, AI)
+    // optional: (engine) => ({x, y}) | null - where this viewer hears the game from (world pixels, e.g.
+    // their own tank); sounds fade with distance from it (Speaker.attenuation). null / unset = full
+    // volume. Called once per presented step that has sound events, after the step.
+    this.listener = null;
     this.raf = requestAnimationFrame(t => this.frame(t));
   }
 
@@ -21,7 +25,8 @@ class Runner {
     this.engine.step(input);
     if (!quiet) {
       for (const s of this.engine.snapshots) this.queue.push({ at: at + s.t, snap: s });
-      if (this.speaker) this.speaker.play(this.engine.soundEvents, at);
+      if (this.speaker && this.engine.soundEvents.length)
+        this.speaker.play(this.engine.soundEvents, at, this.listener ? this.listener(this.engine) : null);
     } else if (this.engine.snapshots.length) {
       this.queue = [{ at: 0, snap: this.engine.snapshots[this.engine.snapshots.length - 1] }];
     }

@@ -1,9 +1,8 @@
 name: Publish Docker image
 
+# Manual image build (Actions tab -> Run workflow). Releases (every push to main, and tags) publish
+# their image from release.yml.
 on:
-  push:
-    branches: ["main"]
-    tags: ["v*.*.*"]
   workflow_dispatch:
 
 env:

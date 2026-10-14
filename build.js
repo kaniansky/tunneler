@@ -23,10 +23,22 @@ function files(dir, ext) {
     .map(f => path.join(dir, f));
 }
 
+// src/lang/*.js (one file per language, docs/DESIGN-8P.md 24) -> public/js/langs.js, one script the pages
+// load after lang.js: en.js first (the fallback), then alphabetically; the language list's order comes
+// from each file's `order` (lang.js). The same join as server.js's langBundle, which serves it for src/.
+const LANG = path.join(SRC, "lang");
+function langBundle() {
+  const names = fs.readdirSync(LANG).filter(f => f.endsWith(".js"))
+    .sort((a, b) => (a !== "en.js") - (b !== "en.js") || (a < b ? -1 : a > b ? 1 : 0));
+  return "// generated: src/lang/*.js joined (see build.js)\n" +
+    names.map(f => fs.readFileSync(path.join(LANG, f), "utf8")).join("\n");
+}
+
 function build() {
   const t0 = Date.now();
   fs.rmSync(OUT, { recursive: true, force: true });
-  fs.cpSync(SRC, OUT, { recursive: true });
+  fs.cpSync(SRC, OUT, { recursive: true, filter: f => f !== LANG });   // the language files go into js/langs.js
+  fs.writeFileSync(path.join(OUT, "js", "langs.js"), langBundle());
   for (const ext of [".js", ".css"]) {
     const entryPoints = files(OUT, ext);
     if (entryPoints.length)

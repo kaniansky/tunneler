@@ -1,8 +1,8 @@
 # TUNNELER ONLINE
 
 **TUNNELER 2.0** - the 1991 DOS two-player tank game by Geoffrey Silverton - rewritten in JavaScript from
-the decompiled original and playable in the browser: split screen, against the computer, or online
-against a friend, with spectators.
+the decompiled original and playable in the browser: split screen, against computer tanks, or online with
+up to 8 tanks, in teams, with spectators.
 
 **Play it now: <https://tunneler-online.onrender.com/>** - no install, just a browser. (Hosted on
 Render's free tier: if nobody has played for a while, the first visit can take up to a minute while the
@@ -15,30 +15,65 @@ server wakes up.)
 The original program was decompiled and ported routine by routine (`src/js/engine.js`). Tanks, digging,
 shots, explosions, energy and shield, sound and the world generator behave exactly like the DOS game - an
 automated test runs the original (compiled to WebAssembly) next to the port and compares every frame.
+Two tanks (BLUE and GREEN) on the medium map, three rounds to win, is the original game byte for byte;
+everything with more tanks, teams or other settings is built on top of it with the same physics.
 
-The screen is the original's undocumented "low-res" text mode (160x100 pixels in 16 colours, made of
+The screen is the original's undocumented "low-res" text mode (160x100 pixels in 16 colors, made of
 80x100 text cells) on an emulated VGA with the IBM ROM font, and the sound is a simulated PC speaker.
 All menus, the lobby and the status lines use the same DOS text screen.
 
-| Split screen | Against the computer |
+| Split screen | Vs computer: the slot editor |
 |---|---|
 | ![Split screen](screenshots/split-screen.png) | ![Vs computer](screenshots/vs-computer.png) |
-
-| Online lobby | Online: a player sees only their own screen | Spectator |
-|---|---|---|
-| ![Lobby](screenshots/lobby.png) | ![Online, BLUE](screenshots/online-blue.png) | ![Spectator](screenshots/spectator.png) |
 
 ## Modes
 
 - **Split screen** - two players on one keyboard, like the original.
-- **Vs computer** - play BLUE against a computer-driven GREEN: easy, normal, hard or expert; see both
-  screens or only your own.
+- **Vs computer** - you (BLUE) against 1 to 7 computer tanks (easy, normal, hard or expert), every tank
+  for itself or in teams. See your own screen, your team's screens or everybody's.
 - **Online game** - create a game in the lobby (public or private, with or without spectators), send
-  the invite link, and play BLUE vs GREEN from two computers. Each player sees only their own view;
-  spectators see both. The game starts when both players choose "Start game" and pauses while one of
-  them is disconnected; reconnecting resumes where you left off.
+  the invite link, and play with 2 to 8 tanks from several computers; any slot can be a computer tank.
 
-Languages: English, Slovenčina, Čeština, Українська, Русский and Pirate (switch on the main menu).
+Settings (split screen: map size and rounds to win only):
+
+- **Slots and teams** - 8 slots (BLUE, GREEN, CYAN, MAGENTA, WHITE, PINK, VIOLET, TEAL), each nobody,
+  human or a computer tank, each with a team number 1-8: all different = free-for-all, shared numbers =
+  teams of any size (4 v 4, 2 v 2 v 2 v 2, 3 v 5, ...).
+- **Map size** - small (512x256), medium (1024x512, the original) or large (2048x1024).
+- **Rounds to win** - 1 to 9 (the original: 3).
+- **Friendly fire** - on or off in team games (off: a shot at a teammate explodes like on a wall).
+
+Sounds of other tanks fade with their distance from your own tank.
+
+| Create a game | Pre-game lobby: names, teams, ping, chat |
+|---|---|
+| ![Create a game](screenshots/create.png) | ![Pre-game lobby](screenshots/online-lobby.png) |
+
+### Online
+
+After joining a slot, every player is in the **pre-game lobby**: the list of all tanks with their
+names, teams, state (ready, not ready, computer, free, disconnected) and ping, and a chat for players and
+spectators (any alphabet). Each player sets their name and team and chooses "Start game"; the game starts
+when every player is ready and there are at least two teams. The creator of the game is its **host** and
+can remove a player or spectator (who then can't come back). Between matches everyone returns to the
+lobby, with the statistics of the last match.
+
+During play each player sees only their own view screen - or their team's or everybody's, as far as the
+game's "Visible" setting allows. A disconnected player's tank stands still and the game goes on;
+reconnecting resumes where you left off. (A classic BLUE vs GREEN game pauses instead, like before.)
+
+| An 8-tank game: BLUE sees its team | Spectator: all views | Spectator: map and scores |
+|---|---|---|
+| ![Team view](screenshots/online-team.png) | ![All views](screenshots/spectator-grid.png) | ![Map and scores](screenshots/spectator-map.png) |
+
+**Spectators** switch between three views with Tab or 1 2 3: all view screens in a grid, the live map of
+the whole world with a score table (wins, energy, shield per tank and team), or one tank followed large
+(Left / Right choose the tank).
+
+![Game list](screenshots/lobby.png)
+
+Languages: English, Slovenčina, Čeština, Українська, Русский and Gen Z (switch on the main menu). Each
+language is one file in `src/lang/`.
 
 ## Controls
 
@@ -48,11 +83,13 @@ Languages: English, Slovenčina, Čeština, Українська, Русский
 | Fire | Left Ctrl, Left Shift, Space | Enter, Right Ctrl |
 
 Online and against the computer you can use either set. Hold two direction keys to move diagonally;
-firing while moving digs faster. **M** turns the sound on/off, **Esc** ends the match. Menus: arrow keys
+firing while moving digs faster. **M** turns the sound on/off, **Esc** ends the match (except in online
+games with more than BLUE and GREEN, where one player must not end it for everybody). Menus: arrow keys
 and Enter, or the mouse.
 
-The rules are in the game's own *Instructions* page: win three rounds; a round ends when a tank is shot
-or runs out of energy; refuel at either base, repair your shield only at your own.
+The rules are in the game's own *Instructions* page: win the set number of rounds (three in the
+original); a round ends when only one tank (or one team) is left - tanks blow up when shot or out of
+energy; refuel at any base, repair your shield only at your own.
 
 ## Run it
 
@@ -78,23 +115,32 @@ docker build -t tunneler-online .
 docker run -d -p 8050:8050 tunneler-online
 ```
 
-Images are published to `ghcr.io/kaniansky/tunneler-online` (see `.github/workflows/docker-publish.yml`).
+Every push to `main` is a release: the version goes up (v1.0.0, v1.0.1, ...), a GitHub Release is
+created and the Docker image is published to `ghcr.io/kaniansky/tunneler-online` (`latest` and the
+version; see `.github/workflows/release.yml`).
 Put a reverse proxy (nginx, Caddy, ...) in front for HTTPS; the game connects its websocket over `wss:`
 automatically when the page is served over HTTPS.
 
 ## How it works
 
 - `src/js/engine.js` - the game: the whole DOS program as a deterministic state machine; one `step()` is
-  one BIOS timer tick (54.9 ms, one game frame).
+  one BIOS timer tick (54.9 ms, one game frame). The classic two-tank game runs the original code paths
+  unchanged; 3-8 tanks, teams and the other settings run the engine's *extended mode* (design:
+  [docs/DESIGN-8P.md](docs/DESIGN-8P.md)).
 - `src/js/display.js`, `vgafont.js`, `speaker.js`, `input.js`, `runner.js` - emulated VGA text screen,
-  PC speaker, keyboard, presentation loop.
-- `src/js/dosui.js`, `statusline.js`, `home.js`, `lobby.js` - DOS-style menus and status lines.
-- `src/js/lang.js`, `glyphs.js` - translations; letters the VGA font lacks are loaded from a VGA-style
-  console font into unused font slots.
-- `src/js/ai.js` - the computer player.
+  PC speaker (sounds fade with distance), keyboard, presentation loop.
+- `src/js/dosui.js`, `statusline.js`, `home.js`, `lobby.js` - DOS-style menus, slot editors and status
+  lines.
+- `src/js/views.js` - what a viewer sees during play: one view screen, a grid of several, or the live
+  map with scores.
+- `src/js/lang.js` (core), `src/lang/<code>.js` (one file per language, joined into `/js/langs.js`),
+  `glyphs.js` - translations; letters the VGA font lacks are loaded from a VGA-style console font into
+  unused font slots, and names and chat in the lobby are drawn in any alphabet.
+- `src/js/ai.js` - the computer tanks: deterministic, so every browser runs the same ones.
 - `server.js`, `src/js/netproto.js`, `src/js/online.js` - online play: the server runs the game clock and
-  broadcasts both players' keys every tick; every browser runs the same engine (lockstep), so only key
-  presses travel over the network.
+  broadcasts every player's keys each tick (plus the names and teams from the lobby when a match
+  starts); every browser runs the same engine and computer tanks (lockstep), so only key presses travel
+  over the network.
 
 More detail for contributors in [CONTRIBUTING.md](CONTRIBUTING.md) and [CLAUDE.md](CLAUDE.md).
 

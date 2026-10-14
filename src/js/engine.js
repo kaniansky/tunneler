@@ -65,6 +65,28 @@ const KeyRight = [0, 0x20, 0x4D];   // D / Right
 const KeyLeft = [0, 0x1E, 0x4B];    // A / Left
 // colour -> 0 free, 1 dirt (6, 8), 2 shot (12), 3 tank / base, 4 rock / solid
 const PixelClass = [0, 3, 3, 4, 4, 4, 1, 4, 1, 3, 3, 4, 2, 4, 3, 4];
+
+// ---------------------------------------------------------------- extended mode (3-8 players, teams)
+// Not in the original: new TunnelerEngine(seed, {slots: [{color, team}, ...]}) - see docs/DESIGN-8P.md.
+// Slot color c (0..7) is EXT_COLORS[c] in the extended palette (EXT_PAL_RGB, used for the LORES screens
+// instead of the original PalRGB); EXT_TEXT_COLORS[c] is the closest text-mode colour for the round
+// title / statistics screens. A player's color is its slot's (engine.playerColor(p)).
+const EXT_KEYS = ["blue", "green", "cyan", "magenta", "white", "pink", "violet", "teal"];
+const EXT_COLORS = [1, 2, 3, 5, 9, 10, 11, 15];
+const EXT_TEXT_COLORS = [9, 10, 11, 13, 15, 12, 5, 3];
+const EXT_PAL_RGB = [
+  [0, 0, 0], [11, 11, 63], [0, 48, 0], [10, 60, 60], [46, 0, 0], [63, 13, 63], [48, 30, 12], [38, 38, 38],
+  [46, 22, 1], [63, 63, 63], [63, 40, 48], [36, 18, 63], [63, 13, 2], [25, 25, 25], [60, 58, 7], [0, 38, 32]];
+// colour -> 0 free, 1 dirt (6, 8), 2 shot (12), 3 tank / base (player colours, treads 13, gun 14), 4 rock (7, 4)
+const PixelClassExt = [0, 3, 3, 3, 4, 3, 1, 4, 1, 3, 3, 3, 2, 3, 3, 3];
+const EXT_TREADS = 13, EXT_GUN = 14, EXT_SHIELD = 3;   // shield gauge: 11 is VIOLET here, 3 is the original's cyan
+const EXT_MAX_PLAYERS = 8;
+// net bits (netproto.js): 1 up, 2 down, 4 left, 8 right, 16 fire (32 esc is ignored in extended mode)
+const B_UP = 1, B_DOWN = 2, B_LEFT = 4, B_RIGHT = 8, B_FIRE = 16;
+// world sizes (option size, not in the original): scale [numerator, denominator] against the original
+// 1024 x 512 world. "medium" is the original, byte for byte.
+const WORLD_SIZES = { small: [1, 2], medium: [1, 1], large: [2, 1] };
+const clampInt = (v, lo, hi, def) => { v = Math.trunc(Number(v)); return Number.isFinite(v) ? Math.max(lo, Math.min(hi, v)) : def; };
 const Banner = [
   "***  ***  ***  **  **    **  *  * *   *   *  * *** *   *",
   "*  * *  * *   *   *     *  * ** *  * *    * *  *    * * ",
@@ -88,13 +110,30 @@ const STRINGS_EN = {
   creating: "(creating world)", ready: "(world ready)",
   round: "ROUND", blue: "BLUE", green: "GREEN",
   stats: { title: "Statistics", fired: "shots fired", hit: "shots hit", percent: "percent hit", dug: "meters dug",
-    moved: "meters travelled", winner: "The winner is " },
+    moved: "meters traveled", winner: "The winner is ",
+    // extended mode: column headings of the one-row-per-player table (max 4, 4, 4, 5, 5 characters)
+    head: ["shot", "hit", "hit%", "dug", "moved"] },
+  // extended mode: tank color names (slot color 0..7); "team" labels a team ("{n}" = its number 1..8;
+  // "teams" is no longer used - teams are numbered now)
+  colors: ["BLUE", "GREEN", "CYAN", "MAGENTA", "WHITE", "PINK", "VIOLET", "TEAL"],
+  teams: ["BLUE TEAM", "GREEN TEAM"],
+  team: "TEAM {n}",
+  // the world map's "PRESS ANY KEY" pixel-art banner (5 rows of '*' / ' ', all the same length); a
+  // translation may replace it (see Banner below for the original)
+  // banner: [...],
   prompt: "Press <ENTER> for main menu.",
   instr: {
     title: "INSTRUCTIONS",
+    // "{n}" = winRounds[winScore - 1]; the paragraph is re-wrapped when the result does not fit
     intro: ["TUNNELER is a two player game.  The objective of the game is to be the first to",
-      "win three rounds.  A round continues until one tank blows up (from being shot or",
+      "win {n}.  A round continues until one tank blows up (from being shot or",
       "simply running out of energy)."],
+    // extended mode (3-8 tanks, teams, computer tanks)
+    introExt: ["Every tank fights for itself, or teams fight each other.  The objective is",
+      "to be the first to win {n}.  A round continues until only one tank (or",
+      "one team) is left; tanks blow up when shot or simply out of energy."],
+    winRounds: ["one round", "two rounds", "three rounds", "four rounds", "five rounds", "six rounds",
+      "seven rounds", "eight rounds", "nine rounds"],
     displayHead: "The display:  ",
     display: ["Each player has a view screen and an instrument panel with two",
       "meters (energy and shield).  The view screen shows your surroundings from above",
@@ -105,6 +144,8 @@ const STRINGS_EN = {
       hotseat: ["{9}BLUE{3} player:", "               {10}GREEN{3} player:"],
       cpu: "you drive {9}BLUE{3} (either set of keys), the computer drives {10}GREEN{3}.",
       online: "you drive your own tank ({9}BLUE{3} or {10}GREEN{3}) with either set of keys.",
+      cpuExt: "you drive {9}BLUE{3} (either set of keys), computers drive the rest.",
+      onlineExt: "you drive the tank of your color with either set of keys.",
     },
     table: [["        <W> up", "             <\x18> up"],
       ["left <A>   <D> right", "    left <\x1B>   <\x1A> right"],
@@ -121,18 +162,19 @@ const STRINGS_EN = {
   },
   info: {
     title: "INFORMATION",
-    p1: ["TUNNELER ONLINE brings TUNNELER 2.0 to the web browser.  The original DOS",
-      "program was decompiled and rewritten in JavaScript routine by routine, so the",
-      "tanks, digging, shots, explosions, energy and the world generator behave",
-      "exactly like in 1991.  The screen is the undocumented low-res mode (160x100 in",
-      "16 colors) on an emulated VGA, and the sound comes from a simulated PC speaker."],
+    p1: ["TUNNELER ONLINE brings TUNNELER 2.0 to the web browser.  The DOS program was",
+      "decompiled and rewritten in JavaScript routine by routine, so tanks, digging,",
+      "shots, energy and the world generator behave exactly like in 1991, on the same",
+      "low-res screen (160x100 in 16 colors) with the sound of a simulated PC speaker."],
     waysHead: "Ways to play:",
     ways: [["split screen", "two players on one keyboard, just like the original"],
-      ["vs computer", "against a computer tank: easy, normal, hard or expert"],
-      ["online game", "against a player on another computer; others may watch"]],
-    p2: ["Online, both computers run the same game in lockstep and only the pressed keys",
-      "travel over the network.  Each player sees only their own view screen, while",
-      "spectators see both.  The game starts when both players choose \"Start game\"."],
+      ["vs computer", "you against 1 to 7 computer tanks, alone or in teams"],
+      ["online game", "2 to 8 tanks on other computers, any of them computer tanks"],
+      ["spectate", "watch an online game: all views, the live map, or one tank"]],
+    p2: ["Up to 8 tanks fight free-for-all or in teams (friendly fire on or off) on",
+      "a small, medium or large map, to win 1 to 9 rounds.  Online, players pick their",
+      "names and teams in the lobby, chat, and start when everyone is ready.  Every",
+      "computer runs the same game in lockstep; only key presses go over the network."],
     p3: ["This is a public-domain program; feel free to copy it for friends."],
     credits: ["Norko Kaniansky, 2026", "original TUNNELER 2.0:", "Geoffrey Silverton, 1991"],
   },
@@ -172,10 +214,56 @@ class Explosion {
 
 class TunnelerEngine {
   // seed: Turbo Pascal RandSeed (what Randomize would have put there)
-  constructor(seed) {
+  // opts (not in the original, docs/DESIGN-8P.md):
+  //   slots: [{color: 0..7, team: 1..8}, ...]  the used slots in slot order (2..8): player p (1..N) has the
+  //          color of slots[p - 1] (BLUE GREEN CYAN MAGENTA WHITE PINK VIOLET TEAL) and its team number
+  //   players: 2..8, teams: bool              shorthand: slot i = color i, team i + 1 (teams: i % 2 + 1;
+  //                                           teams: true always runs the extended engine)
+  //   extended: bool                          force the extended engine (e.g. 2 players, one a computer online)
+  //   escEnds: bool                           extended, local games: player 1's Esc ends the match
+  //   size: "small" | "medium" | "large"      world 512x256 / 1024x512 (the original) / 2048x1024
+  //   winScore: 1..9                          round wins that win the match (3 = the original)
+  //   friendlyFire: bool                      shots hurt teammates (default false: they hit like a wall)
+  //   autoStart: bool                         local games: skip the first main menu (settings were already
+  //                                           chosen on the page) - straight to creating the world and round 1
+  // The classic engine (the original, byte for byte with size medium and winScore 3) runs for exactly
+  // BLUE + GREEN in different teams; anything else is the extended engine (N tanks, own palette, input bits).
+  constructor(seed, opts) {
+    const o = opts || {};
+    let slots, forceExt = !!o.extended;
+    if (Array.isArray(o.slots) && o.slots.length)
+      slots = o.slots.slice(0, EXT_MAX_PLAYERS).map((s, i) =>
+        ({ color: clampInt(s && s.color, 0, 7, i), team: clampInt(s && s.team, 1, 8, i + 1) }));
+    else {
+      const nP = Math.max(2, Math.min(EXT_MAX_PLAYERS, (o.players | 0) || 2));
+      slots = [];
+      for (let i = 0; i < nP; i++) slots.push({ color: i, team: o.teams ? (i % 2) + 1 : i + 1 });
+      if (o.teams) forceExt = true;
+    }
+    for (let c = 0; slots.length < 2; c++)            // at least 2 tanks
+      if (!slots.some(s => s.color === c)) slots.push({ color: c, team: 9 - slots.length });
+    const classic = !forceExt && slots.length === 2 && slots[0].color === 0 && slots[1].color === 1
+      && slots[0].team !== slots[1].team;
+    this.extended = !classic;
+    this.nPlayers = this.extended ? slots.length : 2;
+    this.slots = slots;
+    this.names = new Array(this.nPlayers).fill(null);  // display names (setNames), null = color name
+    this.computeTeams();
+    this.winScore = clampInt(o.winScore, 1, 9, 3);
+    this.friendlyFire = !!o.friendlyFire;
+    // world size: W x H pixels, 2 per byte (odd x = high nibble), ws bytes per row
+    this.size = WORLD_SIZES[o.size] ? o.size : "medium";
+    [this.scN, this.scD] = WORLD_SIZES[this.size];
+    this.worldW = this.sc(1024); this.worldH = this.sc(512); this.ws = this.worldW >> 1;
+    // extended mode, local games only: player 1's Esc (bit 32) ends the match as in the original (online
+    // the extended engine ignores Esc - one player must not end everybody's match)
+    this.escEnds = this.extended && !!o.escEnds;
+    this.escHeld = false;
+    this.autoStartPending = !!o.autoStart;
+    const n1 = this.nPlayers + 1, arr = v => new Array(n1).fill(v);
     this.randSeed = seed >>> 0;
     this.vram = new Uint8Array(0x8000);          // B800:0000
-    this.world = new Uint8Array(512 * 512);       // 1024 x 512 pixels, 2 per byte, odd x = high nibble
+    this.world = new Uint8Array(this.ws * this.worldH);   // medium: 1024 x 512 pixels in 512 x 512 bytes
     this.keyDown = new Uint8Array(256);           // Kbd.KeyDown
     this.kbdInstalled = false;
     this.keyBuf = [];                             // BIOS keyboard buffer: [ascii, scan]
@@ -195,8 +283,8 @@ class TunnelerEngine {
     }
     this.distTable = [];
     this.round = 0;
-    this.wins = [0, 0, 0]; this.shotsFired = [0, 0, 0]; this.shotsHit = [0, 0, 0];
-    this.metersDug = [0, 0, 0]; this.metersMoved = [0, 0, 0]; this.alive = [false, false, false];
+    this.wins = arr(0); this.shotsFired = arr(0); this.shotsHit = arr(0);
+    this.metersDug = arr(0); this.metersMoved = arr(0); this.alive = arr(false);
     this.keyStr = NO_KEY;
     this.genX = 0; this.genY = 0; this.genI = 0; this.worldStage = -2;
     this.edgeVel = [0, 0, 0]; this.edgePos = [0, 0, 0];
@@ -213,19 +301,34 @@ class TunnelerEngine {
     this.obstacle = 0; this.static = false; this.soundOn = true; this.roundOver = false; this.matchOver = false;
     this.endTimer = -1; this.gaugeTurn = 2; this.P = 1; this.keyBits = 0; this.newX = 0; this.newY = 0;
     this.newDir = 0; this.I = 0;
-    this.staticTimer = [0, 0, 0]; this.shield = [0, 0, 0]; this.shownShield = [0, 0, 0];
-    this.energy = [0, 0, 0]; this.shownEnergy = [0, 0, 0]; this.fireDelay = [0, 0, 0];
+    this.staticTimer = arr(0); this.shield = arr(0); this.shownShield = arr(0);
+    this.energy = arr(0); this.shownEnergy = arr(0); this.fireDelay = arr(0);
     this.tickMarker = 160;
     this.soundQueue = new Uint16Array(256); this.soundPos = 0;
-    this.shotDir = [null, new Uint8Array(MaxShots + 1), new Uint8Array(MaxShots + 1)];
-    this.shotX = [null, new Int16Array(MaxShots + 1).fill(-1), new Int16Array(MaxShots + 1).fill(-1)];
-    this.shotY = [null, new Int16Array(MaxShots + 1), new Int16Array(MaxShots + 1)];
-    this.baseX = [0, 0, 0]; this.baseY = [0, 0, 0]; this.digDelay = [0, 0, 0]; this.moving = [false, false, false];
-    this.tankX = [0, 0, 0]; this.tankY = [0, 0, 0]; this.tankDir = [0, 0, 0];
+    // source position of every queued sound (output only: soundEvents carry it, the simulation never reads it)
+    this.soundSrcX = new Int16Array(256).fill(-1); this.soundSrcY = new Int16Array(256).fill(-1);
+    this.shotDir = [null]; this.shotX = [null]; this.shotY = [null];
+    for (let p = 1; p < n1; p++) {
+      this.shotDir.push(new Uint8Array(MaxShots + 1));
+      this.shotX.push(new Int16Array(MaxShots + 1).fill(-1));
+      this.shotY.push(new Int16Array(MaxShots + 1));
+    }
+    this.baseX = arr(0); this.baseY = arr(0); this.digDelay = arr(0); this.moving = arr(false);
+    this.tankX = arr(0); this.tankY = arr(0); this.tankDir = arr(0);
     this.explosions = [];
     for (let i = 0; i <= MaxExplosions + 1; i++) this.explosions.push(new Explosion());
     this.numExplosions = 0;
     this.speakerHz = 0;
+
+    // extended mode
+    this.pixelClass = this.extended ? PixelClassExt : PixelClass;
+    this.bits = new Uint8Array(n1);               // held net bits per player 1..N (input.bits)
+    // (teamWins: per team index 0..nTeams-1, set by computeTeams)
+    this.roundWinner = 0;                         // last round: winning player 1..N if the winning team is one tank, else 0
+    this.roundWinnerTeam = -1;                    // winning team index of the last round, -1 = nobody
+    this.baseMinDist = 100;                       // pair distance the bases were placed with
+    this.extSprites = null;                       // [player 1..N][dir] coloured tank sprites
+    this.views = this.extended ? Array.from({ length: this.nPlayers }, () => new Uint8Array(16000)) : null;
 
     // virtual machine
     this.tick = 0; this.now = 0; this.waitUntil = 0; this.cpu = 0;
@@ -237,9 +340,13 @@ class TunnelerEngine {
 
   // ============================================================ virtual machine
   // input: { keyDown: array-like of 128 (scan code -> 0/1), keys: [[ascii, scan], ...] }
+  // extended mode: { bits: [player 0 bits, ..., player N-1 bits], keys } (net bits, held until changed)
   step(input) {
     if (input) {
-      if (input.keyDown) for (let i = 0; i < 128; i++) this.keyDown[i] = input.keyDown[i] ? 1 : 0;
+      if (input.keyDown && !this.extended) for (let i = 0; i < 128; i++) this.keyDown[i] = input.keyDown[i] ? 1 : 0;
+      if (input.bits && this.extended)
+        for (let p = 1; p <= this.nPlayers; p++) this.bits[p] = (input.bits[p - 1] | 0) & (B_UP | B_DOWN | B_LEFT | B_RIGHT | B_FIRE);
+      if (input.bits && this.escEnds) this.escHeld = ((input.bits[0] | 0) & 32) !== 0;
       // INT 9 is replaced while playing and does not chain to the BIOS: no keys get buffered then
       if (input.keys && !this.kbdInstalled)
         for (const k of input.keys) if (this.keyBuf.length < 15) this.keyBuf.push(k);
@@ -263,8 +370,17 @@ class TunnelerEngine {
 
   snapshot(t) {
     this.dirty = false;
+    if (this.extended) return this.snapshotExt(t);
     this.snapshots.push({ t: (t - this.stepStart) * 1000 / PIT_HZ, mode: this.mode, screen: this.screen,
       vram: this.vram.slice(0, 16000) });
+  }
+  // extended mode: LORES screens use the extended palette; during play every player has a view buffer
+  // (vram = views[0])
+  snapshotExt(t) {
+    const s = { t: (t - this.stepStart) * 1000 / PIT_HZ, mode: this.mode, screen: this.screen, palette: "extended" };
+    if (this.screen === "play") { s.views = this.views.map(v => v.slice()); s.vram = s.views[0]; }
+    else s.vram = this.vram.slice(0, 16000);
+    this.snapshots.push(s);
   }
 
   // Turbo Pascal 4 Random(Range): RandSeed := RandSeed * $08088405 + 1; result := Hi(RandSeed) mod Range
@@ -287,10 +403,12 @@ class TunnelerEngine {
   removeKbd() { this.kbdInstalled = false; }
 
   // ------------------------------------------------------------ PC speaker (Crt.Sound / NoSound)
-  sound(hz) {
+  // x, y: world position of the sound's source (not in the original; -1 = none, e.g. silence)
+  sound(hz, x, y) {
     const f = hz > 18 ? PIT_HZ / Math.floor(1193180 / hz) : 0;
     this.speakerHz = f;
-    this.soundEvents.push({ t: (this.now + this.cpu - this.stepStart) * 1000 / PIT_HZ, hz: f });
+    this.soundEvents.push({ t: (this.now + this.cpu - this.stepStart) * 1000 / PIT_HZ, hz: f,
+      x: x === undefined ? -1 : x, y: y === undefined ? -1 : y });
   }
   noSound() { this.sound(0); }
 
@@ -415,9 +533,9 @@ class TunnelerEngine {
 
   // 76 x 71 pixel window of the world (71 rows x 38 bytes) into the attribute bytes at ScrOfs
   blitView(col, row, scrOfs, noise) {
-    let src, mem;
-    if (noise) { src = this.random(30000); mem = LOW_MEMORY; }
-    else { src = row * 512 + col; mem = this.world; }
+    let src, mem, skip;
+    if (noise) { src = this.random(30000); mem = LOW_MEMORY; skip = 474; }
+    else { src = row * this.ws + col; mem = this.world; skip = this.ws - 38; }
     let dst = scrOfs;
     for (let r = 0; r < 71; r++) {
       for (let c = 0; c < 38; c++) {
@@ -425,19 +543,25 @@ class TunnelerEngine {
         this.vram[dst] = s >= 0 && s < mem.length ? mem[s] : 0;
         src++; dst += 2;
       }
-      src += 474; dst += 84;
+      src += skip; dst += 84;
     }
     this.dirty = true;
   }
 
+  // world scale (option size): v * W / 1024, and the original-world row / column that output row / column
+  // v starts at (both the identity for the medium world)
+  sc(v) { return Math.trunc(v * this.scN / this.scD); }
+  unsc(v) { return Math.trunc(v * this.scD / this.scN); }
+  mFor(v) { return Math.trunc((v * this.scD + this.scN - 1) / this.scN); }
+
   setPixel(x, y, color) {
-    const i = y * 512 + shr(x, 1);
+    const i = y * this.ws + shr(x, 1);
     if (y < 0 || i >= this.world.length) return;
     if (x & 1) this.world[i] = (this.world[i] & 0x0F) | ((color << 4) & 0xF0);
     else this.world[i] = (this.world[i] & 0xF0) | (color & 0x0F);
   }
   getPixel(x, y) {
-    const i = y * 512 + shr(x, 1);
+    const i = y * this.ws + shr(x, 1);
     if (y < 0 || i >= this.world.length) return 7;
     return (x & 1) ? (this.world[i] & 0xF0) >> 4 : this.world[i] & 0x0F;
   }
@@ -484,39 +608,46 @@ class TunnelerEngine {
     return dx > dy ? dx : dy;
   }
 
-  queueSound(kind) {
-    const q = this.soundQueue, pos = this.soundPos;
+  // x, y: world position of the source (not in the original, output only - see sound())
+  queueSound(kind, x, y) {
+    const q = this.soundQueue, pos = this.soundPos, sx = this.soundSrcX, sy = this.soundSrcY;
+    const put = (i, v) => { q[i] = v; sx[i] = x; sy[i] = y; };
     switch (kind) {
-      case 0: for (let i = 1; i <= 4; i++) q[(pos + i * 2) & 0xFF] = i * 20 + 50; break;
+      case 0: for (let i = 1; i <= 4; i++) put((pos + i * 2) & 0xFF, i * 20 + 50); break;
       case 5:
-        for (let i = 1; i <= 3; i++) { q[(pos + i * 2) & 0xFF] = 40; q[(pos + i * 2 + 1) & 0xFF] = 45; }
+        for (let i = 1; i <= 3; i++) { put((pos + i * 2) & 0xFF, 40); put((pos + i * 2 + 1) & 0xFF, 45); }
         break;
-      case 4: q[(pos + 1) & 0xFF] = 5000; break;
-      case 1: q[(pos + 1) & 0xFF] = 40; break;
+      case 4: put((pos + 1) & 0xFF, 5000); break;
+      case 1: put((pos + 1) & 0xFF, 40); break;
       case 2:
         for (let i = 1; i <= 4; i++) {
           let f = 0x100;
           const step = this.random(0x350);
-          for (let j = 1; j <= 7; j++) { q[(hiB(f) + pos) & 0xFF] = j * 15 + 40; f = (f + step) & 0xFFFF; }
+          for (let j = 1; j <= 7; j++) { put((hiB(f) + pos) & 0xFF, j * 15 + 40); f = (f + step) & 0xFFFF; }
         }
-        q[(pos + 1) & 0xFF] = 1000;
+        put((pos + 1) & 0xFF, 1000);
         break;
       case 3:
         for (let i = 1; i <= 40; i++) {
           let f = 0x100;
           const step = this.random(0x400);
-          for (let j = 1; j <= 22; j++) { q[(hiB(f) + pos) & 0xFF] = ((step >> 7) * j + 40) & 0xFFFF; f = (f + step) & 0xFFFF; }
+          for (let j = 1; j <= 22; j++) { put((hiB(f) + pos) & 0xFF, ((step >> 7) * j + 40) & 0xFFFF); f = (f + step) & 0xFFFF; }
         }
-        q[(pos + 1) & 0xFF] = 1000;
+        put((pos + 1) & 0xFF, 1000);
         break;
     }
+  }
+  clearSoundQueue() {
+    this.soundQueue.fill(0); this.soundSrcX.fill(-1); this.soundSrcY.fill(-1);
+    this.soundPos = 0;
   }
 
   soundTick() {
     this.soundQueue[this.soundPos] = 0;
     this.soundPos = (this.soundPos + 1) & 0xFF;
     if (this.soundOn) {
-      if (this.soundQueue[this.soundPos] !== 0) this.sound(this.soundQueue[this.soundPos]);
+      const p = this.soundPos;
+      if (this.soundQueue[p] !== 0) this.sound(this.soundQueue[p], this.soundSrcX[p], this.soundSrcY[p]);
       else this.noSound();
     }
   }
@@ -528,7 +659,7 @@ class TunnelerEngine {
     for (let i = 0; i <= 6; i++)
       for (let j = 0; j <= 6; j++)
         if (spr[j][i] !== 0x10) {
-          const c = PixelClass[this.getPixel(x + i, y + j)];
+          const c = this.pixelClass[this.getPixel(x + i, y + j)];
           if (c > maxClass) maxClass = c;
         }
     return maxClass;
@@ -558,7 +689,7 @@ class TunnelerEngine {
     if (this.endTimer < 0) {
       // original bug kept: erase-mask kind is PlayGame's loop variable I + 2, not P + 2
       this.drawTank(this.tankX[p], this.tankY[p], this.I + 2, this.tankDir[p]);
-      this.queueSound(3);
+      this.queueSound(3, x, y);
       this.addExplosion(x, y, 24, 40);
       this.addExplosion(x, y, 20, 40);
       this.addExplosion(x, y, 16, 40);
@@ -569,7 +700,7 @@ class TunnelerEngine {
   }
 
   digPixel(x, y) {
-    const i = y * 512 + shr(x, 1);
+    const i = y * this.ws + shr(x, 1);
     if (y < 0 || i >= this.world.length) return;
     if (x & 1) {
       const c = this.world[i] & 0xF0;
@@ -605,7 +736,7 @@ class TunnelerEngine {
   }
 
   eraseShots() {
-    for (let p = 1; p <= 2; p++)
+    for (let p = 1; p <= this.nPlayers; p++)
       for (let s = 1; s <= MaxShots; s++)
         if (this.shotX[p][s] !== -1) {
           const d = this.shotDir[p][s];
@@ -621,7 +752,7 @@ class TunnelerEngine {
       let s = 1;
       while (s <= MaxShots && this.shotX[player][s] !== -1) s++;
       if (s <= MaxShots) {
-        this.queueSound(4);
+        this.queueSound(4, this.tankX[player], this.tankY[player]);
         this.shotX[player][s] = this.tankX[player];
         this.shotY[player][s] = this.tankY[player];
         this.shotDir[player][s] = this.tankDir[player];
@@ -632,7 +763,7 @@ class TunnelerEngine {
   }
 
   drawShots() {
-    for (let p = 1; p <= 2; p++)
+    for (let p = 1; p <= this.nPlayers; p++)
       for (let s = 1; s <= MaxShots; s++)
         if (this.shotX[p][s] !== -1) {
           const d = this.shotDir[p][s];
@@ -658,12 +789,12 @@ class TunnelerEngine {
                   this.gaugeTurn = 2;
                   if (this.shield[3 - p] > 0) {
                     this.addExplosion(x - DX, y - DY, 7, 20);
-                    this.queueSound(2);
+                    this.queueSound(2, x - DX, y - DY);
                   } else
                     this.killTank(3 - p, x + DX + DX, y + DX + DX);   // original: DX, not DY
                 } else {
                   this.addExplosion(x - DX, y - DY, 3, 7);
-                  this.queueSound(0);
+                  this.queueSound(0, x - DX, y - DY);
                 }
                 x = -1;
               }
@@ -770,17 +901,16 @@ class TunnelerEngine {
     }
     do {
       for (let i = 1; i <= 2; i++) {
-        this.baseX[i] = this.random(704) + 160;
-        this.baseY[i] = this.random(192) + 160;
+        this.baseX[i] = this.random(this.sc(704)) + this.sc(160);
+        this.baseY[i] = this.random(this.sc(192)) + this.sc(160);
       }
-    } while (!(this.distance(Math.abs(this.baseX[1] - this.baseX[2]), Math.abs(this.baseY[1] - this.baseY[2])) > 100));
+    } while (!(this.distance(Math.abs(this.baseX[1] - this.baseX[2]), Math.abs(this.baseY[1] - this.baseY[2])) > this.sc(100)));
   }
 
   newRound() {
     this.numExplosions = 0;
     for (let i = 1; i <= MaxExplosions; i++) this.explosions[i].active = false;
-    this.soundQueue.fill(0);
-    this.soundPos = 0;
+    this.clearSoundQueue();
     this.tankDir[1] = 2;
     this.tankDir[2] = 6;
     for (let i = 1; i <= 2; i++) {
@@ -795,12 +925,13 @@ class TunnelerEngine {
   }
 
   drawBases() {
-    for (let p = 1; p <= 2; p++) {
+    for (let p = 1; p <= this.nPlayers; p++) {
       const bx = this.baseX[p], by = this.baseY[p];
+      const c = this.playerColor(p);                          // extended: walls in the player's color
       for (let x = bx - 16; x <= bx + 16; x++) for (let y = by - 16; y <= by + 16; y++) this.setPixel(x, y, 0);
-      for (let x = bx - 17; x <= bx - 4; x++) { this.setPixel(x, by - 17, p + 8); this.setPixel(x, by + 17, p + 8); }
-      for (let x = bx + 17; x >= bx + 4; x--) { this.setPixel(x, by - 17, p + 8); this.setPixel(x, by + 17, p + 8); }
-      for (let y = by - 16; y <= by + 16; y++) { this.setPixel(bx - 17, y, p + 8); this.setPixel(bx + 17, y, p + 8); }
+      for (let x = bx - 17; x <= bx - 4; x++) { this.setPixel(x, by - 17, c); this.setPixel(x, by + 17, c); }
+      for (let x = bx + 17; x >= bx + 4; x--) { this.setPixel(x, by - 17, c); this.setPixel(x, by + 17, c); }
+      for (let y = by - 16; y <= by + 16; y++) { this.setPixel(bx - 17, y, c); this.setPixel(bx + 17, y, c); }
     }
   }
 
@@ -818,12 +949,15 @@ class TunnelerEngine {
     this.gotoXY(x, 10);
     this.write("\xC0", "\xC4".repeat(label.length + 2), "\xD9");
     const name = (t, c, y) => this.gotoXY(c - (visLen(t) >> 1), y);
-    this.textColor(9);
-    name(S.blue, 28, 16); this.write(S.blue);
-    name(String(this.wins[1]), 28, 18); this.write(this.wins[1]);
-    this.textColor(10);
-    name(S.green, 53, 16); this.write(S.green);
-    name(String(this.wins[2]), 53, 18); this.write(this.wins[2]);
+    if (this.extended) this.roundTitleExt();
+    else {
+      this.textColor(9);
+      name(S.blue, 28, 16); this.write(S.blue);
+      name(String(this.wins[1]), 28, 18); this.write(this.wins[1]);
+      this.textColor(10);
+      name(S.green, 53, 16); this.write(S.green);
+      name(String(this.wins[2]), 53, 18); this.write(this.wins[2]);
+    }
     const at = 8 * 160 + (x + 1) * 2 + 1;                      // attribute of the first label cell
     for (let i = 1; i <= 80; i++) {
       for (let j = 0; j < label.length; j++) this.vpoke(at + j * 2, CycleColors[(i + j) % 6]);
@@ -831,28 +965,39 @@ class TunnelerEngine {
     }
   }
 
+  // the "PRESS ANY KEY" banner: this.strings.banner when it is 5 rows of equal length (or 6: a row of
+  // diacritics above the 5-row capitals, e.g. the háček of Č), else the original
+  bannerRows() {
+    const b = this.strings.banner;
+    return Array.isArray(b) && (b.length === 5 || b.length === 6) && typeof b[0] === "string" && b[0].length > 0 && b[0].length <= 150
+      && b.every(r => typeof r === "string" && r.length === b[0].length) ? b : Banner;
+  }
+
   *showWorldMap() {
     this.initLores("map");
     this.fillBox(0, 0, 79, 99, 176, 0, 1);
     this.fillBox(4, 5, 75, 77, 221, 0, 0);
-    this.fillBox(22, 85, 57, 93, 221, 1, 1);
+    // the banner's box fits the banner (the original: cells 22..57 around its 56 pixels), centered
+    const B = this.bannerRows(), bw = B[0].length, bx = 80 - (bw >> 1) - 1;
+    this.fillBox(Math.max(1, (bx - 7) >> 1), 85, Math.min(78, (bx + bw + 8) >> 1), 93, 221, 1, 1);   // 8 pixels around
+    // every 7th pixel of the original world (other sizes: the same 144 x 73 samples spread over it)
     for (let y = 0; y <= 72; y++)
       for (let x = 1; x <= 144; x++) {
-        let c = this.getPixel(x * 7, y * 7);
-        if (c === 10 || c === 9) c = 0;
+        let c = this.getPixel(this.sc(x * 7), this.sc(y * 7));
+        if (this.extended ? PixelClassExt[c] === 3 : (c === 10 || c === 9)) c = 0;   // tanks and bases hidden
         this.plotLores(x + 7, y + 5, c);
       }
-    for (let p = 1; p <= 2; p++) {
-      const color = p + 8;
-      const x = Math.trunc((this.baseX[p] + 3) / 7) + 7;
-      const yc = Math.trunc((this.baseY[p] + 3) / 7) + 5;
+    for (let p = 1; p <= this.nPlayers; p++) {
+      const color = this.playerColor(p);
+      const x = Math.trunc((this.unsc(this.baseX[p]) + 3) / 7) + 7;
+      const yc = Math.trunc((this.unsc(this.baseY[p]) + 3) / 7) + 5;
       for (let y = yc - 2; y <= yc + 2; y++) { this.plotLores(x - 2, y, color); this.plotLores(x + 2, y, color); }
       this.plotLores(x - 1, yc - 2, color); this.plotLores(x - 1, yc + 2, color);
       this.plotLores(x + 1, yc - 2, color); this.plotLores(x + 1, yc + 2, color);
     }
-    for (let y = 1; y <= 5; y++)
-      for (let x = 1; x <= Banner[0].length; x++)
-        this.plotLores(80 - (Banner[0].length >> 1) - 1 + x, y + 86, Banner[y - 1][x - 1] === "*" ? 14 : 1);
+    for (let y = 1; y <= B.length; y++)                       // (the capitals always on rows 87..91)
+      for (let x = 1; x <= bw; x++)
+        if (bx + x >= 2 && bx + x <= 157) this.plotLores(bx + x, y + 91 - B.length, B[y - 1][x - 1] === "*" ? 14 : 1);
     while (!this.keyPressed()) yield WAIT_TICK;
     this.readKey();
     this.doneLores();
@@ -912,10 +1057,10 @@ class TunnelerEngine {
               // moving / digging needs the key held for a second frame
               if (this.moving[P]) {
                 this.obstacle = this.tankBlocked(this.newX, this.newY, this.newDir);
-                if (this.obstacle > 2) this.queueSound(5);
+                if (this.obstacle > 2) this.queueSound(5, this.tankX[P], this.tankY[P]);
                 else if (this.distance(Math.abs(this.newX - this.tankX[3 - P]), Math.abs(this.newY - this.tankY[3 - P])) >= 6) {
                   if (this.obstacle === 1) {
-                    this.queueSound(1);
+                    this.queueSound(1, this.newX, this.newY);
                     this.digTunnel(kb);
                     this.energy[P] -= 2;
                     this.metersDug[P] = i16(this.metersDug[P] + 1);
@@ -1019,7 +1164,518 @@ class TunnelerEngine {
       this.round = i16(this.round + 1);
       if (!this.alive[1]) this.wins[2]++;
       if (!this.alive[2]) this.wins[1]++;
-      if (this.wins[2] >= 3 || this.wins[1] >= 3) this.matchOver = true;
+      if (this.wins[2] >= this.winScore || this.wins[1] >= this.winScore) this.matchOver = true;
+    } while (!this.matchOver);
+    this.removeKbd();
+    yield* this.showWorldMap();
+  }
+
+  // ============================================================ extended mode (3-8 players, teams)
+  // Not in the original. Only runs when this.extended (docs/DESIGN-8P.md). It follows PlayGame as
+  // closely as possible: same physics, digging, shots, energy, explosions, static, gauges, sounds and
+  // frame pacing; the differences are N tanks, coloured sprites, per-player view buffers
+  // (this.views[i], the original's left-half layout for player i + 1), no Esc, and N-player rules
+  // (blocking, hits, bases, deaths, round / match winners).
+
+  // Teams: every slot has a team number 1..8 (slots[p - 1].team); team(p) is the team's index 0..nTeams-1
+  // (team numbers in ascending order), teamWins[index] its round wins, teamIds[index] its number.
+  // Free-for-all = everybody in their own team. this.teams: some team has 2 or more tanks.
+  computeTeams() {
+    // (classic: BLUE is team 0, GREEN team 1, whatever their numbers)
+    const ids = this.extended ? [...new Set(this.slots.map(s => s.team))].sort((a, b) => a - b) : this.slots.map(s => s.team);
+    this.teamIds = ids;
+    this.nTeams = ids.length;
+    this.teamOf = [-1, ...this.slots.map((s, i) => this.extended ? ids.indexOf(s.team) : i)];
+    this.teams = this.extended && ids.length < this.nPlayers;
+    if (!this.teamWins || this.teamWins.length !== ids.length) this.teamWins = new Array(ids.length).fill(0);
+  }
+  // section 18 (online pre-game lobby): new team numbers (1..8) per player, 0-based array. Changes the
+  // simulation, so every engine must apply it at the same step - between matches (extended engine only).
+  setTeams(teams) {
+    if (!this.extended || !Array.isArray(teams)) return;
+    this.slots.forEach((s, i) => { if (teams[i] !== undefined) s.team = clampInt(teams[i], 1, 8, s.team); });
+    this.computeTeams();
+  }
+  // display names per player (0-based array, already encoded for the font, e.g. Lang.enc; null = the
+  // color name). Display only (round title, statistics) - never part of the simulation.
+  setNames(names) {
+    if (!Array.isArray(names)) return;
+    for (let i = 0; i < this.nPlayers; i++) this.names[i] = typeof names[i] === "string" && names[i] ? names[i] : null;
+  }
+  team(p) { return this.teamOf[p]; }
+  teamNumber(p) { return this.slots[p - 1].team; }
+  isEnemy(a, b) { return a !== b && this.team(a) !== this.team(b); }
+  // color index 0..7 of player p (BLUE GREEN CYAN MAGENTA WHITE PINK VIOLET TEAL)
+  colorIndex(p) { return this.extended ? this.slots[p - 1].color : p - 1; }
+  // LORES color of player p (extended palette in extended mode, the original's 9 / 10 in classic)
+  playerColor(p) { return this.extended ? EXT_COLORS[this.colorIndex(p)] : p + 8; }
+  // closest text-mode color of player p
+  playerTextColor(p) { return this.extended ? EXT_TEXT_COLORS[this.colorIndex(p)] : p + 8; }
+  colorName(p) { return (this.strings.colors || STRINGS_EN.colors)[this.colorIndex(p)]; }
+  playerName(p) { return this.names[p - 1] || this.colorName(p); }
+  // label of team index t: "TEAM n" with its number
+  teamName(t) { return (this.strings.team || STRINGS_EN.team).replace("{n}", String(this.teamIds[t])); }
+  // players (1..N) of team index t
+  teamMembers(t) { const r = []; for (let p = 1; p <= this.nPlayers; p++) if (this.team(p) === t) r.push(p); return r; }
+  // number of teams still having a tank alive
+  sidesLeft() {
+    const seen = new Set();
+    for (let p = 1; p <= this.nPlayers; p++) if (this.alive[p]) seen.add(this.team(p));
+    return seen.size;
+  }
+
+  // coloured tank sprites: the original's shapes, treads 13, body = player colour, gun 14
+  initTablesExt() {
+    const S = this.tankSprites;
+    this.extSprites = [null];
+    for (let p = 1; p <= this.nPlayers; p++) {
+      const col = this.playerColor(p);
+      this.extSprites.push(S[1].map(rows => rows.map(r => r.map(v => v === 1 ? EXT_TREADS : v === 9 ? col : v))));
+    }
+  }
+  drawTankExt(p) { this.drawSprite7(this.tankX[p] - 3, this.tankY[p] - 3, this.extSprites[p][this.tankDir[p] & 7]); }
+  eraseTankExt(p) { this.drawTank(this.tankX[p], this.tankY[p], 3, this.tankDir[p]); }
+
+  // run fn with this.vram pointing at player p's view buffer (all drawing helpers write this.vram)
+  inView(p, fn) {
+    const v = this.vram;
+    this.vram = this.views[p - 1];
+    try { fn(); } finally { this.vram = v; }
+  }
+
+  // N bases with the engine RNG in the original's area (scaled with the world size), every pair farther
+  // apart than 100 (scaled; relaxed to 80, then 60, if the random placement keeps failing; never closer
+  // than 40 - a base is 35 pixels wide)
+  newMatchExt() {
+    const N = this.nPlayers;
+    this.round = 1;
+    for (let i = 1; i <= N; i++) {
+      this.shotsFired[i] = 0; this.shotsHit[i] = 0; this.metersDug[i] = 0; this.metersMoved[i] = 0; this.wins[i] = 0;
+    }
+    this.teamWins = new Array(this.nTeams).fill(0);
+    this.roundWinner = 0; this.roundWinnerTeam = -1;
+    const dist = d => Math.max(this.sc(d), 40 + (d - 60) / 5);       // small world: 50 / 44 / 40
+    let minDist = dist(100);
+    for (let attempt = 1; ; attempt++) {
+      if (attempt > 100) minDist = dist(80);
+      if (attempt > 300) minDist = dist(60);
+      let ok = true;
+      for (let i = 1; i <= N && ok; i++) {
+        let tries = 0, good;
+        do {
+          this.baseX[i] = this.random(this.sc(704)) + this.sc(160);
+          this.baseY[i] = this.random(this.sc(192)) + this.sc(160);
+          good = true;
+          for (let j = 1; j < i && good; j++)
+            if (!(this.distance(Math.abs(this.baseX[i] - this.baseX[j]), Math.abs(this.baseY[i] - this.baseY[j])) > minDist)) good = false;
+        } while (!good && ++tries < 50);
+        ok = good;
+      }
+      if (ok) break;
+    }
+    this.baseMinDist = minDist;
+  }
+
+  newRoundExt() {
+    this.numExplosions = 0;
+    for (let i = 1; i <= MaxExplosions; i++) this.explosions[i].active = false;
+    this.clearSoundQueue();
+    for (let i = 1; i <= this.nPlayers; i++) {
+      this.tankDir[i] = this.baseX[i] < (this.worldW >> 1) ? 2 : 6;   // facing the middle of the world
+      this.tankX[i] = this.baseX[i]; this.tankY[i] = this.baseY[i];
+      this.digDelay[i] = -1; this.staticTimer[i] = 0; this.alive[i] = true; this.fireDelay[i] = 0;
+      for (let j = 1; j <= MaxShots; j++) this.shotX[i][j] = -1;
+      this.moving[i] = false;
+      this.energy[i] = MaxPower; this.shownEnergy[i] = 0;
+      this.shield[i] = MaxPower; this.shownShield[i] = 0;
+    }
+    this.endTimer = -1;
+  }
+
+  // every tank that runs out of energy / shield dies; the round ends 25 frames after at most one
+  // player (team) is left
+  killTankExt(p, x, y) {
+    if (!this.alive[p]) return;
+    this.eraseTankExt(p);
+    this.queueSound(3, x, y);
+    this.addExplosion(x, y, 24, 40);
+    this.addExplosion(x, y, 20, 40);
+    this.addExplosion(x, y, 16, 40);
+    this.addExplosion(x, y, 12, 40);
+    this.alive[p] = false;
+    if (this.endTimer < 0 && this.sidesLeft() <= 1) this.endTimer = 25;
+  }
+
+  // movement is blocked within distance 6 of any other tank alive
+  tankClear(P, x, y) {
+    for (let q = 1; q <= this.nPlayers; q++)
+      if (q !== P && this.alive[q] && this.distance(Math.abs(x - this.tankX[q]), Math.abs(y - this.tankY[q])) < 6) return false;
+    return true;
+  }
+
+  // MoveShots for N players: a shot hits the first other tank alive (lowest number) within distance
+  // < 4; without friendly fire only enemies count - a shot reaching a teammate explodes like on a wall
+  moveShotsExt() {
+    const N = this.nPlayers, ff = this.friendlyFire;
+    for (let p = 1; p <= N; p++)
+      for (let s = 1; s <= MaxShots; s++)
+        if (this.shotX[p][s] !== -1) {
+          const DX = DirDX[this.shotDir[p][s]], DY = DirDY[this.shotDir[p][s]];
+          let k = 1, x = this.shotX[p][s], y = this.shotY[p][s];
+          do {
+            x += DX; y += DY;
+            const c = this.getPixel(x, y);
+            if (c !== 12 && c !== 0)
+              if (this.distance(Math.abs(x - this.tankX[p]), Math.abs(y - this.tankY[p])) > 3) {
+                let q = 0;
+                for (let t = 1; t <= N && !q; t++)
+                  if (t !== p && this.alive[t] && (ff || this.isEnemy(p, t))
+                    && this.distance(Math.abs(x - this.tankX[t]), Math.abs(y - this.tankY[t])) < 4) q = t;
+                if (q) {
+                  this.shotsHit[p] = i16(this.shotsHit[p] + 1);
+                  this.shield[q] -= 0x700;
+                  this.gaugeTurn = 2;
+                  if (this.shield[q] > 0) {
+                    this.addExplosion(x - DX, y - DY, 7, 20);
+                    this.queueSound(2, x - DX, y - DY);
+                  } else
+                    this.killTankExt(q, x + DX + DX, y + DX + DX);   // original: DX, not DY
+                } else {
+                  this.addExplosion(x - DX, y - DY, 3, 7);
+                  this.queueSound(0, x - DX, y - DY);
+                }
+                x = -1;
+              }
+            k++;
+          } while (x !== -1 && k <= 4);
+          this.shotX[p][s] = x;
+          this.shotY[p][s] = y;
+        }
+  }
+
+  // the original's left half (border, view screen, instrument panel) in a player's view buffer; the
+  // border is drawn in the player's colour
+  drawFrameExt(p) {
+    const panel = 13, ofs = 0;
+    this.fillBox(0, 0, 79, 99, 176, 0, this.playerColor(p));
+    this.fillBox(1, 2, 38, 72, 221, 0, 0);
+    this.fillBox(ofs + 3, 74, ofs + 36, 98, 221, panel, panel);
+    this.fillBox(ofs + 3, 74, ofs + 36, 74, 176, panel, 7);
+    this.fillBox(ofs + 3, 98, ofs + 36, 98, 177, 0, panel);
+    for (let j = 75; j <= 97; j++) {
+      this.putCell(ofs + 3, j, 176, (panel << 4) + 7);
+      this.putCell(ofs + 36, j, 177, panel);
+    }
+    this.fillBox(ofs + 12, 79, ofs + 32, 82, 221, 0, 0);
+    this.fillBox(ofs + 12, 90, ofs + 32, 93, 221, 0, 0);
+    this.fillBox(ofs + 9, 77, ofs + 34, 77, 176, panel, 7);
+    this.fillBox(ofs + 9, 88, ofs + 34, 88, 176, panel, 7);
+    this.fillBox(ofs + 9, 84, ofs + 34, 84, 177, 0, panel);
+    this.fillBox(ofs + 9, 95, ofs + 34, 95, 177, 0, panel);
+    for (let j = 78; j <= 83; j++) {
+      this.putCell(ofs + 9, j, 176, (panel << 4) + 7);
+      this.putCell(ofs + 34, j, 177, panel);
+    }
+    for (let j = 89; j <= 94; j++) {
+      this.putCell(ofs + 9, j, 176, (panel << 4) + 7);
+      this.putCell(ofs + 34, j, 177, panel);
+    }
+    for (let i = 0; i <= 2; i++)
+      for (let j = 0; j <= 5; j++) {
+        this.plotLores(j + 10, i + 79 + i, 14);
+        this.plotLores(j + 10, i + 90 + i, EXT_SHIELD);
+      }
+    this.plotLores(10, 80, 14);
+    this.plotLores(10, 91, EXT_SHIELD);
+    this.plotLores(10, 82, 14);
+    this.plotLores(15, 93, EXT_SHIELD);
+  }
+
+  // DrawGauge into player p's view (always the left-half position)
+  drawGaugeExt(p, which) {
+    let nw, old, y0, color;
+    if (which === 1) {
+      nw = hiB(this.energy[p]); old = hiB(this.shownEnergy[p]); this.shownEnergy[p] = this.energy[p]; y0 = 79; color = 14;
+    } else {
+      nw = hiB(this.shield[p]); old = hiB(this.shownShield[p]); this.shownShield[p] = this.shield[p]; y0 = 90; color = EXT_SHIELD;
+    }
+    if (old < 1) old = 1;
+    this.inView(p, () => {
+      if (nw > old) {
+        for (let i = old; i <= nw; i++) for (let j = 0; j <= 3; j++) this.plotLores(i + 21, j + y0, color);
+      } else {
+        for (let i = nw + 1; i <= old; i++) for (let j = 0; j <= 3; j++) this.plotLores(i + 21, j + y0, 0);
+      }
+    });
+  }
+
+  // shields every frame, energy of odd / even players on alternate frames (as BLUE / GREEN)
+  updateGaugesExt() {
+    this.gaugeTurn++;
+    if (this.gaugeTurn > 2) this.gaugeTurn = 1;
+    for (let p = 1; p <= this.nPlayers; p++) {
+      if (hiB(this.shield[p]) !== hiB(this.shownShield[p]) && this.shield[p] > 0) this.drawGaugeExt(p, 2);
+      if (((p - 1) & 1) + 1 === this.gaugeTurn && hiB(this.energy[p]) !== hiB(this.shownEnergy[p])) this.drawGaugeExt(p, 1);
+    }
+  }
+
+  // "ROUND n" title: every player's color name (or display name) and wins; with shared teams the teams
+  // ("TEAM n", their wins and members) side by side (up to 4 teams), or one line per team (5 or more)
+  roundTitleExt() {
+    const N = this.nPlayers, T = this.nTeams;
+    if (this.teams && T <= 4) {
+      const cols = T === 2 ? [28, 53] : Array.from({ length: T }, (_, k) => Math.round(80 * (2 * k + 1) / (2 * T)) + 1);
+      const cw = Math.trunc(80 / T) - 1;
+      cols.forEach((c, t) => {
+        const tn = this.teamName(t), w = String(this.teamWins[t]);
+        this.textColor(15);
+        this.gotoXY(c - (visLen(tn) >> 1), 14); this.write(tn);
+        this.gotoXY(c - (w.length >> 1), 16); this.write(w);
+        let y = 18;
+        for (const p of this.teamMembers(t)) {
+          const n = this.playerName(p).slice(0, cw);
+          this.textColor(this.playerTextColor(p));
+          this.gotoXY(c - (visLen(n) >> 1), y++); this.write(n);
+        }
+      });
+      return;
+    }
+    if (this.teams) {
+      let lw = 0, mw = 0;
+      for (let t = 0; t < T; t++) {
+        lw = Math.max(lw, visLen(this.teamName(t)));
+        mw = Math.max(mw, this.teamMembers(t).reduce((a, p) => a + visLen(this.playerName(p)) + 2, -2));
+      }
+      const x = Math.max(1, 41 - ((lw + 5 + mw) >> 1)), gap = T <= 6 ? 2 : 1;
+      for (let t = 0; t < T; t++) {
+        const tn = this.teamName(t);
+        this.gotoXY(x, 13 + t * gap);
+        this.textColor(15);
+        this.write(tn + " ".repeat(lw - visLen(tn) + 2) + this.teamWins[t] + "  ");
+        this.teamMembers(t).forEach((p, i) => {
+          this.textColor(this.playerTextColor(p));
+          this.write((i ? "  " : "") + this.playerName(p));
+        });
+      }
+      return;
+    }
+    let nw = 0;
+    for (let p = 1; p <= N; p++) nw = Math.max(nw, visLen(this.playerName(p)));
+    const x = 41 - ((nw + 4) >> 1), gap = N <= 5 ? 2 : 1;
+    for (let p = 1; p <= N; p++) {
+      const n = this.playerName(p);
+      this.textColor(this.playerTextColor(p));
+      this.gotoXY(x, 13 + (p - 1) * gap);
+      this.write(n + " ".repeat(nw - visLen(n) + 3) + this.wins[p]);
+    }
+  }
+
+  // the team index that has won the match (winScore round wins), or -1
+  matchWinnerTeam() {
+    for (let t = 0; t < this.nTeams; t++) if (this.teamWins[t] >= this.winScore) return t;
+    return -1;
+  }
+
+  // statistics after a match (right of the menu): one row per player - color name (blinking for the
+  // winners), shots fired, hits, percent, meters dug, meters traveled - grouped by team (a blank row
+  // between teams) when teams are shared
+  statsExt() {
+    const st = this.strings.stats, N = this.nPlayers;
+    const head = st.head || STRINGS_EN.stats.head, widths = [5, 5, 5, 6, 6];
+    this.window(43, 5, 79, 25);                                  // 37 columns
+    this.textColor(11);
+    this.gotoXY(19 - (visLen(st.title) >> 1), 1);
+    this.write(st.title);
+    const winT = this.matchWinnerTeam(), members = winT >= 0 ? this.teamMembers(winT) : [];
+    const name = p => this.playerName(p).slice(0, 9);
+    let nw = 0;
+    for (let p = 1; p <= N; p++) nw = Math.max(nw, visLen(name(p)));
+    nw++;
+    const x0 = 1 + Math.max(0, (37 - nw - 27) >> 1);
+    let y = 3;
+    this.gotoXY(x0, y);
+    this.textColor(6);
+    this.write(" ".repeat(nw));
+    head.forEach((h, i) => this.write(h.slice(0, widths[i] - 1).padStart(widths[i])));
+    const order = [];
+    if (this.teams) for (let t = 0; t < this.nTeams; t++) { if (t) order.push(0); order.push(...this.teamMembers(t)); }
+    else for (let p = 1; p <= N; p++) order.push(p);
+    for (const p of order) {
+      y++;
+      if (!p) continue;
+      const c = this.playerTextColor(p), n = name(p);
+      this.gotoXY(x0, y);
+      this.textColor(c + (this.team(p) === winT ? 128 : 0));
+      this.write(n);
+      this.textColor(c);
+      const fired = this.shotsFired[p], hit = this.shotsHit[p];
+      const pct = Math.trunc(hit * 100 / (fired > 0 ? fired : 1));
+      this.write(" ".repeat(nw - visLen(n)), this.num(fired, 5), this.num(hit, 5), this.num(pct + "%", 5),
+        this.num(this.metersDug[p], 6), this.num(this.metersMoved[p], 6));
+    }
+    if (winT >= 0) {
+      this.gotoXY(x0, y + 2);
+      this.textColor(6);
+      this.write(st.winner);
+      const solo = members.length === 1 ? members[0] : 0;
+      this.textColor(solo ? this.playerTextColor(solo) : 15);
+      this.write(solo ? this.playerName(solo) : this.teamName(winT));
+      this.textColor(6);
+      this.write(".");
+    }
+  }
+
+  // PlayGame for N players
+  *playGameExt() {
+    const N = this.nPlayers, B = this.bits;
+    this.newMatchExt();
+    this.installKbd();
+    this.matchOver = false;
+    this.soundOn = true;
+    do {
+      this.roundOver = false;
+      this.newRoundExt();
+      this.gaugeTurn = 2;
+      yield* this.showRoundTitle();
+      this.initLores("play");
+      this.drawBases();
+      for (let p = 1; p <= N; p++) this.inView(p, () => this.drawFrameExt(p));
+      do {
+        if (this.escHeld) { this.roundOver = true; this.matchOver = true; }   // (escEnds only)
+        for (let P = 1; P <= N; P++) {
+          this.P = P;
+          if (this.alive[P]) {
+            this.energy[P] -= 2;
+            if (this.shield[P] > 0 && this.energy[P] > 0) {
+              const b = B[P], fire = (b & B_FIRE) !== 0;
+              this.newX = this.tankX[P];
+              this.newY = this.tankY[P];
+              this.keyBits = 0;
+              if (fire) this.fireShot(P);
+              else this.fireDelay[P] = 0;
+              const up = (b & B_UP) !== 0, down = (b & B_DOWN) !== 0, left = (b & B_LEFT) !== 0, right = (b & B_RIGHT) !== 0;
+              if (up !== down) {
+                if (up) { this.keyBits += 1; this.newY--; }
+                else { this.keyBits += 4; this.newY++; }
+              }
+              if (right !== left) {
+                if (right) { this.keyBits += 2; this.newX++; }
+                else { this.keyBits += 8; this.newX--; }
+              }
+              this.newDir = this.tankDir[P];
+              const kb = this.keyBits;
+              if (kb !== 0) {
+                if (kb & 1) this.newDir = (kb & 2) ? 1 : (kb & 8) ? 7 : 0;
+                else if (kb & 4) this.newDir = (kb & 2) ? 3 : (kb & 8) ? 5 : 4;
+                else if (kb & 2) this.newDir = 2;
+                else this.newDir = 6;
+                if (this.tankDir[P] !== this.newDir)
+                  if (this.tankBlocked(this.tankX[P], this.tankY[P], this.newDir) <= 2) this.tankDir[P] = this.newDir;
+                if (this.moving[P]) {
+                  this.obstacle = this.tankBlocked(this.newX, this.newY, this.newDir);
+                  if (this.obstacle > 2) this.queueSound(5, this.tankX[P], this.tankY[P]);
+                  else if (this.tankClear(P, this.newX, this.newY)) {
+                    if (this.obstacle === 1) {
+                      this.queueSound(1, this.newX, this.newY);
+                      this.digTunnel(kb);
+                      this.energy[P] -= 2;
+                      this.metersDug[P] = i16(this.metersDug[P] + 1);
+                      this.digDelay[P] = 1;
+                    } else if (this.digDelay[P] > 0) this.digDelay[P]--;
+                    else {
+                      if (fire) {
+                        this.digTunnel(kb);
+                        this.metersDug[P] = i16(this.metersDug[P] + 1);
+                      }
+                      this.tankX[P] = this.newX;
+                      this.tankY[P] = this.newY;
+                      this.tankDir[P] = this.newDir;
+                      this.energy[P] -= 2;
+                      this.metersMoved[P] = i16(this.metersMoved[P] + 1);
+                    }
+                  }
+                }
+                this.moving[P] = true;
+              } else this.moving[P] = false;
+              // own base: refuel and repair; any other base: refuel only, slower
+              for (let q = 1; q <= N; q++)
+                if (this.distance(Math.abs(this.tankX[P] - this.baseX[q]), Math.abs(this.tankY[P] - this.baseY[q])) < 15) {
+                  if (q === P) {
+                    this.energy[P] += 80;
+                    if (this.energy[P] > MaxPower) this.energy[P] = MaxPower;
+                    this.shield[P] += 40;
+                    if (this.shield[P] > MaxPower) this.shield[P] = MaxPower;
+                  } else {
+                    this.energy[P] += 30;
+                    if (this.energy[P] > MaxPower) this.energy[P] = MaxPower;
+                  }
+                }
+            } else this.killTankExt(P, this.tankX[P], this.tankY[P]);
+          }
+          if (P === 1) this.soundTick();          // one shared speaker queue: 3 ticks a frame as the original
+        }
+        this.cpu += CPU_PLAYERS;
+
+        for (let I = 1; I <= N; I++) {
+          this.I = I;
+          if (this.energy[I] <= 0) this.energy[I] = 1;
+          if (this.shield[I] <= 0) this.shield[I] = 1;
+          if (this.alive[I]) this.drawTankExt(I);
+        }
+        this.moveShotsExt();
+        this.drawShots();
+        for (let I = 1; I <= N; I++) {
+          this.I = I;
+          if (I <= 2) this.soundTick();
+          // low energy: random bursts of static (a dead tank's view stays clear on the spot it died)
+          if (this.alive[I] && this.energy[I] < 3200) {
+            if (this.energy[I] < 1400) {
+              if (this.random(this.energy[I]) < 80) this.staticTimer[I] = this.random(5);
+            } else if (this.random(this.energy[I]) < 25) this.staticTimer[I] = this.random(4);
+          }
+          this.static = this.alive[I] && this.staticTimer[I] > 0;
+          if (this.static) this.staticTimer[I]--;
+          this.inView(I, () => this.blitView(shr(this.tankX[I], 1) - 19, this.tankY[I] - 38, ViewOfs[1], this.static));
+          if (I <= 2) this.cpu += CPU_BLIT;       // sound timing within the frame as the original's 2 blits
+        }
+        for (let I = 1; I <= N; I++) if (this.alive[I]) this.eraseTankExt(I);
+        this.eraseShots();
+        if (this.endTimer > 0) this.endTimer--;
+        if (this.endTimer === 0) this.roundOver = true;
+        this.updateExplosions();
+        this.updateGaugesExt();
+        yield WAIT_TICK;
+      } while (!this.roundOver);
+
+      // ---- end of round
+      this.noSound();
+      for (let I = 1; I <= N; I++) if (this.alive[I]) this.drawTankExt(I);
+      for (let I = 1; I <= 20; I++) {
+        this.I = I;
+        for (let p = 1; p <= N; p++)
+          this.inView(p, () => this.blitView(shr(this.tankX[p], 1) - 19, this.tankY[p] - 38, ViewOfs[1], !this.alive[p]));
+        yield END_BLIT_DELAY;
+      }
+      this.doneLores();
+      this.textBackground(0);
+      this.clrScr();
+      for (let I = 1; I <= N; I++) if (this.alive[I]) this.eraseTankExt(I);
+      this.eraseShots();
+      for (let I = 1; I <= 20; I++) { this.I = I; this.updateExplosions(); }
+      this.round = i16(this.round + 1);
+      // round winner: the team whose tanks are the only ones left (free-for-all: the last tank); nobody if
+      // all died (or Esc ended it with several teams alive). Every member's wins go up with the team's.
+      const left = [];
+      for (let p = 1; p <= N; p++) if (this.alive[p]) left.push(p);
+      this.roundWinner = 0; this.roundWinnerTeam = -1;
+      if (left.length && left.every(p => this.team(p) === this.team(left[0]))) {
+        const t = this.team(left[0]), members = this.teamMembers(t);
+        this.teamWins[t]++;
+        this.roundWinnerTeam = t;
+        for (const p of members) this.wins[p]++;
+        if (members.length === 1) this.roundWinner = members[0];
+      }
+      if (this.matchWinnerTeam() >= 0) this.matchOver = true;
     } while (!this.matchOver);
     this.removeKbd();
     yield* this.showWorldMap();
@@ -1039,7 +1695,7 @@ class TunnelerEngine {
       const half = (r + 1) >> 1;
       for (let i = -(r >> 1); i <= half; i++)
         for (let j = y - (half - Math.abs(i)); j <= y + half - Math.abs(i); j++)
-          if (x + i > 0 && j > 0 && x + i < 1023 && j < 511) this.setPixel(x + i, j, 7);
+          if (x + i > 0 && j > 0 && x + i < this.worldW - 1 && j < this.worldH - 1) this.setPixel(x + i, j, 7);
       r += grow;
       if (r >= size) grow = -1;
     } while (!(r <= 1));
@@ -1069,93 +1725,105 @@ class TunnelerEngine {
     }
   }
 
+  // The original's numbers are for the medium 1024 x 512 world. Other sizes (option size) scale every
+  // position and size with sc(); the edge random walks (edgeStep) still run once per row / column of the
+  // original world (mFor), in the original's units, so a small world is a scaled-down medium one and a
+  // large one a scaled-up one. For the medium world every expression is the original's.
   *createWorldStep() {
-    const W = this.world;
+    const W = this.world, ws = this.ws, WW = this.worldW, H = this.worldH;
+    const top = this.sc(40), Y1 = this.sc(472) - 1, X1 = this.sc(984) - 1, five = this.sc(5);
+    const blobSize = rnd => this.sc(this.random(21 - Math.trunc(rnd / 7)) + 6);
     if (this.worldStage === -2) this.worldStage = 1;
     if (this.worldStage !== -1) {
       do {
         switch (this.worldStage) {
           case 1: {
-            const buf = new Uint8Array(512);
-            for (let i = 0; i <= 471; i++) {
+            const L = this.sc(472), x0 = this.sc(20);          // dirt: L bytes per row from byte x0
+            const buf = new Uint8Array(L);
+            for (let i = 0; i < L; i++) {
               const h = this.random(2) * 2 + 6;
               buf[i] = ((h << 4) + this.random(2) * 2 + 6) & 0xFF;
             }
             let last = -1;
-            for (let r = 40; r <= 472; r++) {
-              let cut = this.random(462);
+            for (let r = top; r <= L; r++) {
+              let cut = this.random(L - 10);
               if (cut === last) cut += 3;
               last = cut;
-              W.set(buf.subarray(cut, 472), r * 512 + 20);
-              W.set(buf.subarray(0, cut), r * 512 + 492 - cut);
+              W.set(buf.subarray(cut, L), r * ws + x0);
+              W.set(buf.subarray(0, cut), r * ws + x0 + L - cut);
             }
-            this.genI = 472;
+            this.genI = L;
             break;
           }
           case 2:
             this.edgeVel[1] = 0; this.edgeVel[2] = 0;
             this.edgePos[1] = 0x6000; this.edgePos[2] = 0x6000;
-            this.genY = 39;
+            this.genY = top - 1;
             break;
           case 3: {
-            for (let y = this.genY + 1; y <= 471; y++) {
+            for (let y = this.genY + 1; y <= Y1; y++) {
               this.genY = y;
-              if (y < 90 || y > 421) {
-                this.edgeVel[1] = i16(this.edgeVel[1] + 50);
-                this.edgeVel[2] = i16(this.edgeVel[2] + 50);
+              for (let m = this.mFor(y), m1 = this.mFor(y + 1); m < m1; m++) {
+                if (m < 90 || m > 421) {
+                  this.edgeVel[1] = i16(this.edgeVel[1] + 50);
+                  this.edgeVel[2] = i16(this.edgeVel[2] + 50);
+                }
+                this.edgeStep(false);
+                let rnd = this.random(30);
+                if (rnd === 1) {
+                  rnd = this.random(140);
+                  this.rockBlob(this.sc(hiB(this.edgePos[1]) + rnd), y, blobSize(rnd));
+                } else if (rnd === 2) {
+                  rnd = this.random(140);
+                  this.rockBlob(WW - 1 - this.sc(hiB(this.edgePos[2]) + rnd), y, blobSize(rnd));
+                }
               }
-              this.edgeStep(false);
-              let rnd = this.random(30);
-              if (rnd === 1) {
-                rnd = this.random(140);
-                this.rockBlob(hiB(this.edgePos[1]) + rnd, y, this.random(21 - Math.trunc(rnd / 7)) + 6);
-              } else if (rnd === 2) {
-                rnd = this.random(140);
-                this.rockBlob(1023 - hiB(this.edgePos[2]) - rnd, y, this.random(21 - Math.trunc(rnd / 7)) + 6);
-              }
-              this.setPixel(hiB(this.edgePos[1]), y, 7);
-              this.setPixel(1023 - hiB(this.edgePos[2]), y, 7);
-              const nl = shr(this.edgePos[1] + 0x100, 9);
-              W.fill(0x77, y * 512, y * 512 + nl);
-              const nr = shr(this.edgePos[2] + 0x100, 9);
-              W.fill(0x77, y * 512 + 512 - nr, y * 512 + 512);
+              this.setPixel(this.sc(hiB(this.edgePos[1])), y, 7);
+              this.setPixel(WW - 1 - this.sc(hiB(this.edgePos[2])), y, 7);
+              const nl = this.sc(shr(this.edgePos[1] + 0x100, 9));
+              W.fill(0x77, y * ws, y * ws + nl);
+              const nr = this.sc(shr(this.edgePos[2] + 0x100, 9));
+              W.fill(0x77, y * ws + ws - nr, y * ws + ws);
               yield CPU_WORLD_ROW;
               this.keyStr = this.inKey();
-              if (this.keyStr !== NO_KEY && y !== 471) return;
+              if (this.keyStr !== NO_KEY && y !== Y1) return;
             }
             this.edgeVel[1] = 0; this.edgeVel[2] = 0;
             this.edgePos[1] = 0x4000; this.edgePos[2] = 0x4000;
-            this.genX = 39;
+            this.genX = top - 1;
             break;
           }
           case 4: {
-            for (let x = this.genX + 1; x <= 983; x++) {
+            for (let x = this.genX + 1; x <= X1; x++) {
               this.genX = x;
-              this.edgeStep(true);
-              let rnd = this.random(35);
-              if (rnd === 1) {
-                rnd = this.random(140);
-                this.rockBlob(x, hiB(this.edgePos[1]), this.random(21 - Math.trunc(rnd / 7)) + 6);
-              } else if (rnd === 2) {
-                rnd = this.random(140);
-                const yy = 511 - hiB(this.edgePos[2]) - this.random(60);
-                this.rockBlob(x, yy, this.random(21 - Math.trunc(rnd / 7)) + 6);
+              for (let m = this.mFor(x), m1 = this.mFor(x + 1); m < m1; m++) {
+                this.edgeStep(true);
+                let rnd = this.random(35);
+                if (rnd === 1) {
+                  rnd = this.random(140);
+                  this.rockBlob(x, this.sc(hiB(this.edgePos[1])), blobSize(rnd));
+                } else if (rnd === 2) {
+                  rnd = this.random(140);
+                  const yy = H - 1 - this.sc(hiB(this.edgePos[2]) + this.random(60));
+                  this.rockBlob(x, yy, blobSize(rnd));
+                }
               }
-              for (let i = hiB(this.edgePos[1]) - 5; i <= hiB(this.edgePos[1]); i++) this.setPixel(x, i, 7);
-              for (let i = 516 - hiB(this.edgePos[2]); i >= 511 - hiB(this.edgePos[2]); i--) this.setPixel(x, i, 7);
+              const e1 = this.sc(hiB(this.edgePos[1])), e2 = H - 1 - this.sc(hiB(this.edgePos[2]));
+              for (let i = e1 - five; i <= e1; i++) this.setPixel(x, i, 7);
+              for (let i = e2 + five; i >= e2; i--) this.setPixel(x, i, 7);
               if ((x & 1) === 1) {
                 const b = x >> 1;
-                if (this.edgeVel[1] < -256) { for (let y = 40; y <= hiB(this.edgePos[1]); y++) W[y * 512 + b] = 0x77; }
-                else for (let y = 40; y <= hiB(this.edgePos[1]) - 5; y++) W[y * 512 + b] = 0x77;
-                if (this.edgeVel[2] < -256) { for (let y = 471; y >= 511 - hiB(this.edgePos[2]); y--) W[y * 512 + b] = 0x77; }
-                else for (let y = 471; y >= 516 - hiB(this.edgePos[2]); y--) W[y * 512 + b] = 0x77;
+                if (this.edgeVel[1] < -256) { for (let y = top; y <= e1; y++) W[y * ws + b] = 0x77; }
+                else for (let y = top; y <= e1 - five; y++) W[y * ws + b] = 0x77;
+                if (this.edgeVel[2] < -256) { for (let y = Y1; y >= e2; y--) W[y * ws + b] = 0x77; }
+                else for (let y = Y1; y >= e2 + five; y--) W[y * ws + b] = 0x77;
               }
               yield CPU_WORLD_ROW;
               this.keyStr = this.inKey();
-              if (this.keyStr !== NO_KEY && x !== 983) return;
+              if (this.keyStr !== NO_KEY && x !== X1) return;
             }
-            W.fill(0x77, 0, 40 * 512);
-            W.fill(0x77, 472 * 512, 512 * 512);
+            W.fill(0x77, 0, top * ws);
+            W.fill(0x77, (Y1 + 1) * ws, H * ws);
             break;
           }
         }
@@ -1195,6 +1863,7 @@ class TunnelerEngine {
     if (this.menuShift !== 0) {
       this.textColor(8);
       for (let i = 1; i <= 25; i++) { this.gotoXY(40, i); this.write("\xB3"); }
+      if (this.extended) { this.statsExt(); return; }
       this.window(43, 6, 79, 20);
       this.textColor(11);
       this.gotoXY(19 - (visLen(S.stats.title) >> 1), 1);
@@ -1279,6 +1948,25 @@ class TunnelerEngine {
     this.write(" " + this.strings.prompt);
   }
 
+  // lines of a paragraph with "{n}" replaced by the number of rounds to win (strings.instr.winRounds,
+  // e.g. "three rounds"); re-wrapped to 80 columns when a line no longer fits
+  winScoreText(lines) {
+    if (!lines.some(l => l.includes("{n}"))) return lines;
+    const words = this.strings.instr.winRounds || STRINGS_EN.instr.winRounds;
+    const w = words[this.winScore - 1] || String(this.winScore);
+    const out = lines.map(l => l.split("{n}").join(w));
+    if (out.every(l => visLen(l) <= 80)) return out;
+    // (only real spaces separate words: encoded text has letters such as 0xA0 = "á" that \s would match)
+    const wrapped = [], trim = t => t.replace(/ +$/, "");
+    let line = "";
+    for (const tok of out.join(" ").match(/[^ ]+ */g) || []) {
+      if (line && visLen(trim(line + tok)) > 80) { wrapped.push(trim(line)); line = ""; }
+      line += tok;
+    }
+    if (trim(line)) wrapped.push(trim(line));
+    return wrapped;
+  }
+
   // The original text, with the display and controls paragraphs describing this version
   // (no F keys; controls depend on split screen / vs CPU / online). Text from this.strings.instr.
   showInstructions() {
@@ -1289,7 +1977,8 @@ class TunnelerEngine {
     this.gotoXY(this.centreCol(I.title), 1);
     M(I.title);
     M("");
-    for (const l of I.intro) M("{3}" + l);
+    const ext = this.extended && I.introExt;           // (3-8 tanks / teams / computer tanks)
+    for (const l of this.winScoreText(ext ? I.introExt : I.intro)) M("{3}" + l);
     M("");
     const display = this.uiMode === "online" ? [...I.display.slice(0, -1), I.displayOnline] : I.display;
     M("{11}" + I.displayHead + "{3}" + display[0]);
@@ -1298,7 +1987,7 @@ class TunnelerEngine {
     if (this.uiMode === "hotseat") {
       const [l, r] = I.controls.hotseat, head = "{11}" + I.controlsHead + "{3}" + l;
       M(head + " ".repeat(Math.max(0, 39 - visLen(head))) + "\xFA" + r);
-    } else M("{11}" + I.controlsHead + "{3}" + I.controls[this.uiMode === "cpu" ? "cpu" : "online"]);
+    } else M("{11}" + I.controlsHead + "{3}" + I.controls[(this.uiMode === "cpu" ? "cpu" : "online") + (ext ? "Ext" : "")]);
     for (const [l, r] of I.table) row(l, r);
     M("{3}" + I.hold);
     M("");
@@ -1355,7 +2044,8 @@ class TunnelerEngine {
   }
 
   restartMenu() {
-    this.showMainMenu();
+    if (this.autoStartPending) { this.window(1, 1, 80, 24); this.clearScreen(); }   // no menu before an auto start
+    else this.showMainMenu();
     this.window(1, 1, 80, 25);
     this.worldStatus(this.strings.creating, this.menuShift, 1);
     this.worldReady = false;
@@ -1371,6 +2061,7 @@ class TunnelerEngine {
     this.textBackground(0);
     this.clearScreen();
     this.initTables();
+    if (this.extended) this.initTablesExt();
     this.quitProgram = false;
     this.menuShift = 0;
     do {
@@ -1387,6 +2078,7 @@ class TunnelerEngine {
             this.worldStatus("", this.menuShift, 0);     // world ready: the "(creating world)" line goes away
             this.worldReady = true;
           }
+          if (this.autoStartPending) { this.autoStartPending = false; this.keyStr = [0, MENU_SCANS[0]]; }   // "Start game"
           this.keyStr = this.menuKey(this.keyStr);
         } while (!([59, 60, 61, 68].includes(this.keyStr[1]) || this.keyStr[0] === 27));
         const key = this.keyStr;
@@ -1406,7 +2098,7 @@ class TunnelerEngine {
               this.worldStatus(this.strings.creating, 0, 129);
             }
             while (this.worldStage !== -1) yield* this.createWorldStep();
-            yield* this.playGame();
+            yield* (this.extended ? this.playGameExt() : this.playGame());
             this.menuShift = -20;
             this.restartMenu();
             this.worldReady = false;
@@ -1420,14 +2112,25 @@ class TunnelerEngine {
   }
 
   // ============================================================ read-only state for UI / AI
+  // wins / alive / tanks / players: 0-based, one entry per player (classic: [BLUE, GREEN])
   state() {
+    const ids = [];
+    for (let p = 1; p <= this.nPlayers; p++) ids.push(p);
     return {
       screen: this.screen, round: this.round,
-      wins: [this.wins[1], this.wins[2]],
-      alive: [this.alive[1], this.alive[2]],
-      tanks: [1, 2].map(p => ({ x: this.tankX[p], y: this.tankY[p], dir: this.tankDir[p],
+      wins: ids.map(p => this.wins[p]),
+      alive: ids.map(p => this.alive[p]),
+      tanks: ids.map(p => ({ x: this.tankX[p], y: this.tankY[p], dir: this.tankDir[p],
         energy: this.energy[p], shield: this.shield[p], baseX: this.baseX[p], baseY: this.baseY[p] })),
       endTimer: this.endTimer,
+      extended: this.extended, nPlayers: this.nPlayers, teams: this.teams,
+      teamWins: this.teamWins.slice(), roundWinner: this.roundWinner, roundWinnerTeam: this.roundWinnerTeam,
+      nTeams: this.nTeams, teamIds: this.teamIds.slice(), winScore: this.winScore, friendlyFire: this.friendlyFire,
+      size: this.size, worldW: this.worldW, worldH: this.worldH,
+      players: ids.map(p => ({ x: this.tankX[p], y: this.tankY[p], dir: this.tankDir[p], energy: this.energy[p],
+        shield: this.shield[p], alive: this.alive[p], wins: this.wins[p], team: this.team(p),
+        teamNo: this.teamNumber(p), color: this.colorIndex(p),
+        baseX: this.baseX[p], baseY: this.baseY[p] })),
     };
   }
 }
@@ -1437,6 +2140,16 @@ TunnelerEngine.KEYS = { KeyFire, KeyUp, KeyDown: PlayerKeys, KeyRight, KeyLeft }
 TunnelerEngine.DirDX = DirDX;
 TunnelerEngine.DirDY = DirDY;
 TunnelerEngine.PixelClass = PixelClass;
+// extended mode
+TunnelerEngine.PixelClassExt = PixelClassExt;
+TunnelerEngine.MAX_PLAYERS = EXT_MAX_PLAYERS;
+TunnelerEngine.PLAYER_KEYS = EXT_KEYS;              // role / lang key of player i (0-based)
+TunnelerEngine.PLAYER_COLORS = EXT_COLORS;          // LORES colour index of slot color i (extended palette; per player: engine.playerColor(p))
+TunnelerEngine.PLAYER_TEXT_COLORS = EXT_TEXT_COLORS; // closest text-mode colour of slot color i (engine.playerTextColor(p))
+TunnelerEngine.SIZES = Object.keys(WORLD_SIZES);      // world sizes: small, medium, large
+TunnelerEngine.EXT_PAL_RGB = EXT_PAL_RGB;           // extended palette, 6-bit DAC values
+TunnelerEngine.BITS = { UP: B_UP, DOWN: B_DOWN, LEFT: B_LEFT, RIGHT: B_RIGHT, FIRE: B_FIRE };
+TunnelerEngine.STRINGS_EN = STRINGS_EN;
 
 root.TunnelerEngine = TunnelerEngine;
 if (typeof module !== "undefined") module.exports = TunnelerEngine;

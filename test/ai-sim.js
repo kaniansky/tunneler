@@ -9,7 +9,7 @@ const TunnelerAI = require(path.join(__dirname, "../src/js/ai.js"));
 const K = TunnelerEngine.KEYS;
 
 const quick = process.argv.includes("quick");
-const SEEDS = quick ? [11, 22, 33] : [11, 22, 33, 44, 55, 66, 77, 88, 99, 1234];
+const SEEDS = quick ? [11, 22, 33, 44, 55, 66] : [11, 22, 33, 44, 55, 66, 77, 88, 99, 1234];
 const ROUND_CAP = 7000;      // frames per round before we call it a draw (~6.4 min)
 
 function newEngine(seed) {
@@ -103,6 +103,14 @@ for (const [A, B] of pairings) {
 }
 
 // ------------------------------------------------------------------ AI vs idle tank
+// The classic 1-vs-1 computer opponent must play exactly as the original 2-player AI did (docs/DESIGN-8P.md
+// 1: the classic modes stay as they are): frames it needs to destroy an idle tank, per level and seed.
+const CLASSIC_GOLDEN = {
+  easy:   { 11: 3601, 22: 270, 33: 466, 44: 491, 55: 434, 66: 389 },
+  normal: { 11: 1552, 22: 266, 33: 426, 44: 465, 55: 402, 66: 360 },
+  hard:   { 11: 1556, 22: 285, 33: 406, 44: 507, 55: 373, 66: 395 },
+  expert: { 11: 1511, 22: 197, 33: 331, 44: 380, 55: 319, 66: 291 },
+};
 console.log("\nAI (green) vs idle Blue: frames until the idle tank is destroyed (cap " + ROUND_CAP + ")");
 for (const lvl of ["easy", "normal", "hard", "expert"]) {
   const times = [];
@@ -119,6 +127,10 @@ for (const lvl of ["easy", "normal", "hard", "expert"]) {
     "  avg " + (ok ? Math.round(avg(times)) + " (" + (avg(times) * 0.0549).toFixed(0) + " s)" : "-") +
     "  stuck " + stuck + "  " + (ms / calls).toFixed(3) + " ms/update");
   check(ok, lvl + " must kill an idle tank on every seed");
+  SEEDS.forEach((seed, i) => {
+    const want = CLASSIC_GOLDEN[lvl][seed];
+    if (want !== undefined) check(times[i] === want, lvl + " seed " + seed + ": " + times[i] + " frames, the classic AI took " + want);
+  });
 }
 
 // the AI as Blue too
@@ -127,6 +139,7 @@ for (const lvl of ["easy", "normal", "hard", "expert"]) {
   const rd = r.rounds[0];
   console.log("normal as Blue vs idle Green: " + (rd && rd.winner === 1 ? rd.frames + " frames" : "FAIL"));
   check(rd && rd.winner === 1, "AI must work as player 1");
+  check(rd && rd.frames === 3148, "normal as Blue: the classic AI took 3148 frames");
 }
 
 console.log(failures ? "\n" + failures + " check(s) failed" : "\nall checks passed");

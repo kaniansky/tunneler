@@ -21,11 +21,13 @@
     "build": "node build.js",
     "watch": "node build.js --watch",
     "start": "node server.js",
-    "test": "node test/lang-check.js && node test/compare-wasm.js && node test/ai-sim.js quick && node test/net-sim.js && node test/net-page-smoke.js",
+    "test": "node test/lang-check.js && node test/compare-wasm.js && node test/ext-sim.js quick && node test/ai-sim.js quick && node test/ai-ext-sim.js quick && node test/net-sim.js && node test/net-page-smoke.js && node test/local-check.js",
     "test:engine": "node test/compare-wasm.js",
-    "test:ai": "node test/ai-sim.js quick",
+    "test:ext": "node test/ext-sim.js quick",
+    "test:ai": "node test/ai-sim.js quick && node test/ai-ext-sim.js quick",
     "test:net": "node test/net-sim.js && node test/net-page-smoke.js",
-    "test:lang": "node test/lang-check.js"
+    "test:lang": "node test/lang-check.js",
+    "test:local": "node test/local-check.js"
   },
   "dependencies": {
     "ws": "^8.18.0"

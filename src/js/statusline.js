@@ -3,7 +3,9 @@
 // canvas. They follow the game canvas: same on-screen width, 80 columns, or 40 while the play view is
 // cropped to one player's half, and the same pixel aspect as the game screen.
 //
-// status.set(rows): rows = [[segment, ...], ...], segment = {text, attr, prio, onClick}.
+// status.set(rows): rows = [[segment, ...], ...], segment = {text, attr, prio, onClick, raw}.
+// text is encoded for the font (Lang.t / Lang.enc), or with raw: true any Unicode text, drawn with the
+// Display's Unicode glyphs (every language at once - e.g. player names, docs/DESIGN-8P.md 22).
 // Segments are joined with two spaces and centred; when a row is too long the segments with the
 // highest prio number are dropped first. attr = DOS attribute byte (background << 4 | foreground).
 (function (root) {
@@ -36,9 +38,16 @@ class StatusLine {
     if (cols !== this.cols) this.draw();
   }
 
+  // a segment's cells: the 16 font rows of each character (+ whether column 9 repeats column 8)
+  glyphs(s) {
+    const font = root.VGA_FONT;
+    if (s.raw) return Array.from(String(s.text).normalize("NFC"), ch => ({ rows: root.Display.glyphOf(ch), dup: false }));
+    return Array.from(s.text, c => { const ch = c.charCodeAt(0) & 0xFF; return { rows: font.subarray(ch * 16, ch * 16 + 16), dup: ch >= 0xC0 && ch <= 0xDF }; });
+  }
+
   fit(row, cols) {
-    let segs = row.filter(s => s && s.text);
-    const len = list => list.reduce((n, s) => n + s.text.length, 0) + 2 * Math.max(0, list.length - 1);
+    let segs = row.filter(s => s && s.text).map(s => Object.assign({}, s, { cells: this.glyphs(s) }));
+    const len = list => list.reduce((n, s) => n + s.cells.length, 0) + 2 * Math.max(0, list.length - 1);
     while (segs.length > 1 && len(segs) > cols) {
       const worst = segs.reduce((a, b) => (b.prio || 0) >= (a.prio || 0) ? b : a);
       segs = segs.filter(s => s !== worst);
@@ -55,34 +64,34 @@ class StatusLine {
     const W = cols * 9, H = lines * 16;
     if (this.canvas.width !== W || this.canvas.height !== H) { this.canvas.width = W; this.canvas.height = H; }
     const img = this.ctx.createImageData(W, H);
-    const px = new Uint32Array(img.data.buffer), pal = root.Display.TEXT_U32, font = root.VGA_FONT;
+    const px = new Uint32Array(img.data.buffer), pal = root.Display.TEXT_U32, space = this.glyphs({ text: " " })[0];
     px.fill(pal[0]);
     this.cells = [];
     this.rows.forEach((row, r) => {
       const segs = this.fit(row, cols), cells = new Array(cols).fill(null);
-      let text = "", attrs = [];
+      let text = [], attrs = [];
       segs.forEach((s, i) => {
-        if (i) { text += "  "; attrs.push(0x07, 0x07); }
-        for (let k = 0; k < s.text.length; k++) attrs.push(s.attr == null ? 0x07 : s.attr);
-        text += s.text;
+        if (i) { text.push(space, space); attrs.push(0x07, 0x07); }
+        for (let k = 0; k < s.cells.length; k++) attrs.push(s.attr == null ? 0x07 : s.attr);
+        text = text.concat(s.cells);
       });
       text = text.slice(0, cols);
       const x0 = (cols - text.length) >> 1;
       let pos = 0;
       segs.forEach((s, i) => {
         if (i) pos += 2;
-        for (let k = 0; k < s.text.length && x0 + pos + k < cols; k++) cells[x0 + pos + k] = s;
-        pos += s.text.length;
+        for (let k = 0; k < s.cells.length && x0 + pos + k < cols; k++) cells[x0 + pos + k] = s;
+        pos += s.cells.length;
       });
       this.cells.push(cells);
       for (let c = 0; c < text.length; c++) {
-        const ch = text.charCodeAt(c) & 0xFF, a = attrs[c];
+        const g = text[c], a = attrs[c];
         const fg = pal[a & 15], bg = pal[(a >> 4) & 7];
         let p = r * 16 * W + (x0 + c) * 9;
         for (let l = 0; l < 16; l++, p += W) {
-          const bits = font[ch * 16 + l];
+          const bits = g.rows ? g.rows[l] : 0;
           for (let b = 0; b < 8; b++) px[p + b] = (bits & (0x80 >> b)) ? fg : bg;
-          px[p + 8] = ch >= 0xC0 && ch <= 0xDF && (bits & 1) ? fg : bg;
+          px[p + 8] = g.dup && (bits & 1) ? fg : bg;
         }
       }
     });

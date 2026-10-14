@@ -1,0 +1,351 @@
+# Design: 3-8 players ("extended mode")
+
+Status: **implemented** (2026-10-14) - every section below (0-24) is in the code and covered by `npm test`.
+Where sections conflict the later one won: 15 / 18 / 20 replaced the Players / Mode / Computer tanks switches of
+4 and 6, 12 replaced Pirate (10) with Gen Z, 23 replaced the vs computer "View: all" of 6. CLAUDE.md
+describes the code as it is now.
+
+Owner's decisions (2026-10-14):
+free-for-all **and** teams (chosen when creating a game); online games with 2-8 slots where any slot can
+be a computer tank (also gives an offline "you vs 1-7 computers" mode); a disconnected player's tank
+**stands still** (the game keeps running, no pause); spectators can switch between **all views in a
+grid**, **live map + scores** and **follow one player**.
+
+## 0. Ground rules - implemented
+
+- **Classic mode stays byte-for-byte the original.** `new TunnelerEngine(seed)` (2 players, no options)
+  must behave exactly as today; `test/compare-wasm.js` must stay green. Everything below is an
+  *extended mode* selected by engine options. Do not change the classic code paths' order of
+  operations / Random() calls.
+- Extended mode keeps the original game feel: same tank physics, digging, shot speed, energy costs,
+  explosions, static, gauges, sounds, frame rate, world generator.
+- Everything must stay **deterministic** (lockstep): integer maths, engine RNG only for game events,
+  no Math.random / Date / timing in simulation or computer players. Floating point is allowed only as
+  +, -, *, /, Math.sqrt, Math.abs, Math.floor/round/trunc/min/max (identical in every browser) - never
+  Math.sin/cos/atan2/exp/pow/hypot in anything that influences the game.
+- No F keys; menus in the DOS look (dosui.js); sentence case; all new texts in all 6 languages
+  (lang.js; `node test/lang-check.js` must pass).
+- Never `git push`. Never commit unless told.
+
+## 1. When which mode - implemented
+
+| Game | Engine |
+|---|---|
+| split screen (2 humans, 1 keyboard) | classic |
+| vs computer with 1 opponent, free-for-all | classic (as today: AI drives GREEN) |
+| vs computer with 2-7 opponents, or teams | extended |
+| online, 2 slots, both human, free-for-all | classic (as today) |
+| online, any computer slot, or 3-8 slots, or teams | extended |
+
+## 2. Engine API (src/js/engine.js) - implemented
+
+```js
+new TunnelerEngine(seed)                                   // classic, unchanged
+new TunnelerEngine(seed, { players: N, teams: false|true }) // extended when N > 2 || teams
+// N = 2..8. teams: 2 teams, player i (0-based) is in team i % 2 (BLUE/CYAN/... vs GREEN/...).
+engine.extended            // boolean
+engine.nPlayers            // N
+engine.step(input)
+```
+
+Input in extended mode: `{ bits: [b0, ..., bN-1], keys: [[ascii, scan], ...] }`; bit values as in
+netproto: 1 up, 2 down, 4 left, 8 right, 16 fire (32 esc is **ignored** in extended mode - one player
+must not be able to end everybody's match). Keystrokes work as in classic (menus, map). `keyDown` is
+not used in extended mode. (Classic input stays `{keyDown, keys}`.)
+
+Player slots, colours and names (index 0..7):
+
+| i | name key | colour index | 6-bit RGB (extended palette) |
+|---|---|---|---|
+| 0 | BLUE | 1 | 11,11,63 |
+| 1 | GREEN | 2 | 0,48,0 |
+| 2 | CYAN | 3 | 10,60,60 |
+| 3 | MAGENTA | 5 | 63,13,63 |
+| 4 | WHITE | 9 | 63,63,63 |
+| 5 | PINK | 10 | 63,40,48 |
+| 6 | VIOLET | 11 | 36,18,63 |
+| 7 | TEAL | 15 | 0,38,32 |
+
+Extended palette (all 16): 0 black 0,0,0 · 4 shot tail 46,0,0 · 6 dirt 48,30,12 · 7 rock / light edge
+38,38,38 · 8 dirt 46,22,1 · 12 shot head 63,13,2 · 13 panel + tank treads 25,25,25 · 14 yellow (gun,
+energy gauge) 60,58,7 · player colours as in the table. Snapshots carry `palette: "extended"` so the
+display picks it (classic snapshots keep using the LORES palette).
+
+Extended world semantics (`PixelClassExt`): 0 -> 0 free; 6, 8 -> 1 dirt; 12 -> 2 shot; player colours,
+13, 14 -> 3 tank/base; 7, 4 -> 4 rock. Tank sprite: treads 13, body = player colour, gun 14 (same
+shapes as the original). Base walls = player colour. Explosion particles 12 as in the original.
+
+Rules in extended mode (everything else = original):
+- Bases: N bases placed with the engine RNG, x in 160..863, y in 160..351 (the original's area), every
+  pair farther apart than 100 (`Distance` as in NewMatch); if a placement fails after many tries,
+  relax to 80. Classic NewMatch untouched.
+- Movement blocked within distance 6 of any *alive* other tank (original checks the one opponent).
+- Shots hit the first other alive tank (lowest index) within distance < 4; friendly fire is on.
+- Own base: energy + shield; any other base: energy only (as the original's "enemy base").
+- Deaths: every tank that runs out of energy / shield dies (KillTank per tank, not only the first).
+  The round ends 25 frames (EndTimer) after at most one tank (free-for-all) / one team (teams) is left.
+  Round win: the last tank alive (or the surviving team: `teamWins`); nobody if all die.
+- Match: first to 3 round wins (player or team) - same as original.
+- Esc ignored (see above). Sound: one shared PC speaker queue as in the original.
+
+Screens in extended mode:
+- **Per-player view buffers.** During play the engine keeps `engine.views[i]` (Uint8Array, 16000 bytes,
+  same B800 layout) for every player: the original's *left half* layout (border, 76x71 viewport at
+  cells 1..38 x rows 2..72, panel with E / S gauges at cols 3..36 rows 74..98) for player i - viewport
+  blitted from that player's tank (static when low on energy, as original), gauges of that player, the
+  panel shows the player's colour (e.g. a small colour bar or the tank colour on the panel edge).
+  Snapshots in extended play carry `views: [Uint8Array...]` (copies) and `screen: "play"`; `vram` is
+  `views[0]`. The other screens (title, map, menu) are normal full-screen `vram` as today.
+- Round title: "ROUND n" box as now, then a list of players with their colour names and wins (or the
+  two teams with team wins) instead of BLUE / GREEN.
+- Statistics (after a match): one row per player (name in colour, shots fired, hits, %, dug,
+  travelled) - full width; the winner line as original.
+- World map at the end: as original, all player colours hidden, all bases marked in their colours.
+- `engine.state()` extended: `players: [{x, y, dir, energy, shield, alive, wins, team, baseX, baseY}]`,
+  `teamWins`, plus existing fields.
+- Engine exposes for the AI and spectators: `tankX/tankY/tankDir/energy/shield/alive/baseX/baseY` as
+  arrays indexed 1..N (as today, just longer), `nPlayers`, `teams`, `team(i)`.
+
+## 3. Computer players (src/js/ai.js) - implemented
+
+`new TunnelerAI(level, player)` works for any player 1..N in both modes; it targets the nearest
+enemy (not its teammates in team mode), avoids teammates' fire lines, refuels at its own base.
+Bots are **deterministic functions of the engine state** (own seeded PRNG from `seed ^ player`, integer
+or exactly-reproducible float maths per the ground rules): every online client runs the same bots
+locally each frame, so bot keys never travel over the network. Helper:
+`TunnelerAI.bitsFor(ai, engine) -> bits` (up/down/left/right/fire bits as in netproto).
+
+## 4. Online (server.js, netproto.js, online.js, lobby.js) - implemented; the create-screen switches were replaced by the slot editor (15)
+
+- Room settings at creation: name, public, spectators, **players 2-8**, **mode free-for-all | teams**,
+  and per extra slot **human | computer (difficulty)**. Create screen: "Players: 4" switch, "Mode:
+  free-for-all / teams" switch, "Computer tanks: 0..N-1" switch + "Computer level: normal" switch
+  (computer slots are the last ones). Classic is used when players = 2, no computers, free-for-all.
+- Slots/roles: role = colour name lowercase (`blue`, `green`, `cyan`, `magenta`, `white`, `pink`,
+  `violet`, `teal`) or `spectate`. Lobby game screen lists "Play as <COLOUR>" for every human slot
+  (taken / free), computer slots shown as disabled lines "<COLOUR>: computer (hard)".
+- Frames in extended rooms: `[[b0..bN-1], count]` or `[[b0..bN-1], 1, [[who, ascii, scan], ...]]`
+  (classic rooms keep today's format). `frameToInput` produces `{bits, keys}` for extended rooms; bots'
+  bits are filled in on each client before `engine.step`.
+- Start: when every human slot is connected and every connected human chose "Start game" (bots are
+  always ready). The clock runs once all human slots have joined at least once; after that a
+  disconnected player's bits are 0 (tank stands still) and the game does **not** pause (classic rooms
+  keep pausing). Reconnecting to the same slot resumes.
+- Each player sees only their own view (`views[me]`). Status line shows their colour.
+- Lobby list shows "3/4" players and the mode.
+
+## 5. Spectator views (new src/js/views.js + online.js integration) - implemented
+
+Switch with Tab / 1 2 3 (and a status-line hint); Left / Right choose the player in "follow":
+1. **Grid** - every player's view (extended) side by side: columns = min(N, 4), rows = ceil(N / 4);
+   each cell is one 40x100-cell half view; classic = today's full split screen.
+2. **Map + scores** - the whole world live (1024x512 pixels scaled to fit) with tanks as coloured dots
+   / their sprites and bases outlined, plus a score table (colour name, round wins, energy, shield,
+   alive) in the DOS look.
+3. **Follow one player** - that player's view, large; Left/Right switch players.
+Display needs: render one view buffer cropped to 40 columns (exists: crop), a grid of several, and the
+map canvas. Keep everything in the same VGA style.
+
+## 6. Local "vs computers" (home.js, play.js) - implemented, then replaced by the slot editor (20) and self / team / everyone (23)
+
+Vs computer screen: "Opponents: 1..7" switch and "Mode: free-for-all / teams" (teams needs an even
+total or at least 2 per side - teams split by i % 2, the human is BLUE). 1 opponent + free-for-all =
+classic exactly as today; anything else = extended. The view: own view only, or (View: all) the grid.
+
+## 7. Tests - implemented
+
+- `test/compare-wasm.js` unchanged and green (classic).
+- New `test/ext-sim.js`: extended engine with 3..8 players driven by bots: determinism (two engines
+  same inputs -> identical world/state/hash every frame), rounds end, wins counted, teams, base
+  placement, no crashes, frame time budget.
+- `test/net-sim.js` extended: an 8-slot room (some bots, some humans, teams), disconnect -> tank
+  stands still and no pause, all clients + late spectator identical.
+- `test/lang-check.js` covers new strings; `test/net-page-smoke.js` covers new pages/scripts.
+
+## 8. Distance-attenuated sound (added 2026-10-14, implemented after the main work) - implemented
+
+The owner wants to hear other tanks quieter the farther they are. The engine attaches a source position
+to every queued sound (output only - never influences the simulation): the acting tank for fire / dig /
+bump, the hit point for wall / shield hits, the explosion point for a destroyed tank. Each speaker event
+then carries `{t, hz, x, y}`; a client that "is" a player scales the speaker volume by the distance
+between its own tank and the source (full volume near, fading to silent at roughly a viewport or two
+away). Split screen (two players at one speaker) and spectators keep full volume. Works in classic and
+extended mode.
+
+## 9. Footer / status line (owner's request, 2026-10-14 - do this) - implemented
+
+- No status line at all while playing against the computer (play.html?mode=cpu, any number of
+  opponents) - the instructions explain the controls.
+- No status line on the end-of-match world map ("PRESS ANY KEY"), in every mode.
+- Spectators: no status line on the waiting screen (the menu/statistics screen they see between matches,
+  including right after they close the end-of-match map); it shows again during play.
+- Remove the "how to play" hints (Move: W A S D ..., Fire: ..., BLUE: W A S D, fire ..., GREEN: arrows,
+  fire ...) from every status line; keep only state information (room, role, players, connection,
+  ping, sound state, spectator view mode hint).
+
+## 10. Translated "PRESS ANY KEY" banner (owner approved, 2026-10-14 - Claude does it after the workflow) - implemented; Pirate replaced by Gen Z (12)
+
+The world-map banner is pixel art (5 rows, original letter shapes). Add per-language banners in the same
+style (new letters incl. diacritics and Cyrillic drawn to match), box sized to the text: sk STLAČ
+KLÁVESU, cs STISKNI KLÁVESU, uk НАТИСНИ КЛАВІШУ, ru НАЖМИ КЛАВИШУ, pirate PRESS ANY KEY, ARR.
+
+## 11. Map size (owner's request, 2026-10-14 - after the workflow) - implemented
+
+Selectable world size: small 512x256, medium 1024x512 (default = the original, byte-for-byte), large
+2048x1024. Engine option `{ size: "small" | "medium" | "large" }` in classic and extended mode; the
+world generator's borders / rock edges / blobs scale with the size (medium keeps the original numbers and
+Random() order), bases are placed over the scaled area, the end-of-match map samples the world to fit
+the same 144x73 lores box, the spectator live map scales too. Online: synced via the room settings
+("Map size" switch on the create screen, shown in the lobby list). Vs computer: "Map size" switch.
+Split screen: a small settings screen (Start game / Map size / Back to main menu) like vs computer.
+
+## 12. Replace the Pirate language (owner, 2026-10-14 - after the workflow) - implemented
+
+The owner doesn't like Pirate: replace it with **Gen Z** slang, code "genz", name "Gen Z" ("lock in",
+"no cap", "it's giving", "you got cooked", "bestie is ready fr", "touch grass", "W / L", "slay"...),
+including its world-map banner (section 10, e.g. "PRESS ANY KEY FR"). Remove Pirate.
+
+## 13. Friendly fire optional (owner, 2026-10-14 - after the workflow) - implemented
+
+Team games get a "Friendly fire: on / off" switch (create-game screen and vs computer screen, shown only
+when Mode = teams; default off). Engine option `{ friendlyFire: bool }`. Off: a shot that reaches a
+teammate explodes like on a wall (small explosion, sound 0) without damaging the shield; on: as now.
+Computer players don't need to avoid teammates' fire lines when it is off. Synced via room settings.
+
+## 14. American English (owner, 2026-10-14) - implemented
+
+All English user-visible text uses American spelling (color, gray, center, meter, behavior, traveled,
+canceled, harbor, ...). Code identifiers/comments may stay as they are. Agents adding English strings:
+use American spelling.
+
+## 15. Slot editor - supersedes the Players / Mode / Computer tanks switches (owner, 2026-10-14 - after the workflow) - implemented
+
+Creating a game shows all **8 slots** (BLUE, GREEN, CYAN, MAGENTA, WHITE, PINK, VIOLET, TEAL), each row
+written in that player's color. For every slot the creator picks:
+- **who**: nobody / human / computer (easy, normal, hard, expert)
+- **team**: 1..8 (default: slot i -> team i, i.e. everyone on their own team = free-for-all)
+
+There is no separate free-for-all / teams mode any more: the teams follow from the slot settings
+(all different = free-for-all; shared numbers = teams, any split: 4v4, 2v2v2v2, 3v5, ...). At least 2
+slots must be used and at least 2 different teams. Friendly fire switch (section 13) shown when some
+team has 2+ players. The engine takes the used slots: `{ slots: [{ color: slotIndex, team }] }` - player
+colors come from the slot (a game with BLUE, CYAN, TEAL keeps those colors), a round ends when at most
+one team has tanks alive, round wins are counted per team (and shown per player/team on the round
+title and statistics). Classic engine = exactly BLUE + GREEN, both human (or human + computer in
+vs computer), different teams, medium map, no other options.
+Create screen: drop the "TUNNELER ONLINE" title to make room; rows: Name, Public, Spectators, Map size,
+Friendly fire (if relevant), then the 8 slot rows ("BLUE    human      team 1"), Create the game,
+Back. In a slot row Left / Right change who, Enter (or click) cycles the team. The lobby game screen
+lists the human slots to join (in their colors) and shows computer slots as disabled lines.
+Vs computer uses the same slot editor (the human slot is you, exactly one human).
+
+## 16. Wording (owner, 2026-10-14) - implemented
+
+English "Watch the game" -> "Spectate" (lobby game screen; translations keep their meaning, shortened
+where natural: sk "Sledovať", cs "Sledovat", uk "Спостерігати", ru "Наблюдать").
+
+## 17. Win score (owner, 2026-10-14 - after the workflow) - implemented
+
+"Rounds to win: 3" switch (1..9, default 3 = the original) on the create-game screen, the vs computer
+screen and the split-screen settings screen; engine option `{ winScore }` (classic with 3 = exact
+original), synced via room settings, shown in the lobby list / game screen. Instructions text "the first
+to win three rounds" follows the setting.
+
+## 18. Pre-game lobby with names and teams (owner, 2026-10-14 - after the workflow) - implemented
+
+After joining a slot, the online pre-game screen (replaces the local "Start game / Instructions / Back"
+menu of online players) shows all used slots: color, **name**, **team**, state (ready / not ready /
+computer / free / disconnected), each row in the player's color, and for the own slot:
+- **Name**: text input (default = the color name, max 12 chars, cleaned server-side)
+- **Team**: switch 1..8 (Left / Right)
+- **Start game** (ready; while ready the own row can't be edited - Esc cancels), **Instructions**,
+  **Back to the lobby**.
+The creator's slot settings (section 15) are the defaults; players may change their own team (the
+creator's choice is only the default; computer slots keep theirs). Validation: at least 2 different
+teams among used slots, otherwise "Start game" is disabled with a hint.
+Sync: names and teams live in the room on the server (`{t:"me", name, team}` from the player, broadcast
+in `st` as `slots: [{color, kind, name, team, ready, connected}]`). Names are display only (round title,
+statistics, status line, map) and may be applied locally. **Teams affect the simulation**, so they enter
+the lockstep stream: when everyone is ready the server appends a frame carrying the final config
+(`cfg: {teams, names}`) right before the start keystroke; every engine applies it at that exact step
+(between matches the same happens again). Late joiners replay it from the log.
+Spectators see the same list read-only. The lobby list / game screen (lobby.js) show names too.
+
+## 19. Host and kicking (owner, 2026-10-14 - after the workflow) - implemented
+
+- `POST /api/rooms` returns a random secret `hostKey` with the room; the creator's browser keeps it in
+  localStorage (`tunneler.host.<roomId>`) and sends it when opening the room's websocket
+  (`&host=<key>`). The server compares it with the stored key: that connection is the **host** (works
+  after reload / reconnect; the key is never sent to anyone else and is not part of invite links).
+- Every browser also has a random client id (localStorage `tunneler.client`) sent on connect.
+- In the pre-game lobby (section 18) the host sees "Kick" for other human players' rows (before the
+  start and between matches, not during play). `{t:"kick", slot}` from the host: the server closes that
+  player's socket with "You were removed by the host", frees the slot and bans that client id from the
+  room (rejoin refused). Spectators can be kicked the same way (from a "Spectators: n" line).
+- The host's own row is marked (e.g. "host" next to the name). If the host leaves, the game goes on;
+  there is no host transfer (keep it simple).
+
+## 20. Vs computer screen = slot editor (owner, 2026-10-14 - confirms section 15) - implemented
+
+Vs computer: 8 slot rows like the create-game screen. BLUE is "you" (always human, team selectable);
+every other slot: nobody / computer easy / normal / hard / expert, plus team. Plus Map size, Rounds to
+win, Friendly fire (when a team has 2+), View (own only / all), Start a new game, Instructions, Back to
+main menu. Default: GREEN = computer normal, team 2, others nobody (= today's 1v1 classic game).
+
+## 21. Ping per player (owner, 2026-10-14 - after the workflow) - implemented
+
+The server measures each connection's round-trip time (it already answers pings; add its own periodic
+ping per socket or keep the client-reported RTT: `{t:"rtt", ms}` every few seconds, clamped 0..9999)
+and includes it per slot in `st` (`slots[i].ping`). The pre-game lobby (section 18) shows it in each
+human row ("42 ms"; computer rows show nothing; disconnected rows "-"). Spectators see it too.
+
+## 22. Lobby chat (owner, 2026-10-14 - after the follow-up workflow) - implemented (except names inside the engine's own screens, see below)
+
+The online pre-game lobby gets a chat in the DOS look: the last ~6 messages under the slot list
+("NAME: text", the name in the player's color; spectators gray), and a "Say:" input line (Enter
+sends). Players and spectators can write. Not part of the lockstep stream: `{t:"chat", text}` to the
+server (max 60 chars, control chars stripped, rate-limited, kicked/banned clients can't send),
+broadcast `{t:"chat", from: {color|spectator, name}, text}`; the server keeps the last 50 per room and
+sends them to joiners. Letters a language's font slots don't cover show as "?" (the font holds one
+language's extra letters at a time). Only in the lobby (before the start / between matches), hidden
+during play.
+Update (owner asked for wider character support): chat lines and player names in the lobby are drawn as
+a **Unicode text layer** on top of the emulated screen (Display renders `{row, col, text, attr}` items
+after the vram, glyphs looked up in CP437 + EXTRA_GLYPHS for any language at once - not limited by the
+256 font slots). glyphs.js is extended with Greek and common punctuation from Uni2-VGA16
+(tools/make-glyphs.py). Names inside the engine's own screens (round title, statistics) use the same
+overlay where the engine reports name positions, otherwise fall back to "?" for letters outside the
+current language. Unknown characters (emoji...) show as "?".
+Implemented (2026-10-14): lobby chat panel right of the menu box, "Say:" item (players after "Start game",
+spectators first), server relay with cleaning / rate limit / ban check / last 50 in `hello`; the text layer
+(`snapshot.text`, `Display.paintText`, `unicodeGlyph` in glyphs.js) for chat, lobby player names, the
+Name / Say inputs and the status line's own name. Not done: names inside the engine's own screens (round
+title, statistics, world map) - the engine reports no name positions, so they keep the "?" fallback.
+
+## 23. Player view: self / team / everyone (owner, 2026-10-14 - after the follow-up workflow) - implemented
+
+Players choose what they see during play: **self** (own view only), **team** (own team's views),
+**everyone** (all views). Shown with the grid of views.js (own view first, then teammates / others in
+slot order); self = today's single view.
+- Online: a room setting "Visible: self / team / everyone" (create screen; default self) is the
+  maximum allowed - seeing enemies' screens would be cheating otherwise. Each player picks their own
+  view up to that maximum in the pre-game lobby ("View: self"); the server enforces nothing extra
+  (it's display only), the client never offers more than the room allows.
+- Vs computer: the "View" switch becomes self / team / everyone (no limit).
+- Split screen classic: unchanged (both halves).
+Implemented (2026-10-14): `ViewModes.setScope(own, view)`; room setting `visible` (create screen
+"Visible:"), "View:" in the pre-game lobby (only when the room allows more than self; `tunneler.view`);
+vs computer "View: self / team / everyone" (`?view=`, `tunneler.cpu.view`; old `hide` links still work).
+
+## 24. One file per language (owner, 2026-10-14 - after the follow-up workflow) - implemented
+
+Split src/js/lang.js: the core (encoding, font slots, t(), set(), apply()) stays in src/js/lang.js;
+each language moves to src/lang/<code>.js (en, sk, cs, uk, ru, genz) as plain scripts calling
+`Lang.register(code, { ...same structure... })` (loaded after lang.js, before page scripts; also
+require()-able from node tests). The language list = registered languages in load order. Adding a
+language = one new file + a script tag in the pages. build.js minifies them like other .js files.
+Refinement (owner): adding a language must be just one new file in src/lang/. build.js concatenates
+all src/lang/*.js (en first, then alphabetical or by an `order` field) into one generated
+public/js/langs.js that the pages load after lang.js; in dev (STATIC_DIR=src, npm run watch builds
+anyway) the server serves the same concatenation at /js/langs.js (or the pages load a small
+generated list) so no page or script tag has to change. Node tests load every file in src/lang/.

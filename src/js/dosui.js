@@ -9,15 +9,20 @@
 //   length half a column to the right), like the game's own menu.
 //   spec.box:    {x, y, w, rows}                   left border column / top border row (1-based),
 //                                                  interior width, max visible item rows (scrolls);
-//                                                  without w the box fits its longest item, centred
+//                                                  without w the box fits its longest item (boxWidth),
+//                                                  centred unless x is given
 //   spec.fixed:  the last N items always stay visible below the scrolling ones
 //   spec.header: "text"                            non-selectable heading row inside the box (yellow)
-//   spec.items:  [{label, go, info: [..], disabled, attr, align: "left", input: {value, max}}]
+//   spec.text:   [{row, col, text, color}]         raw Unicode text (any language, not encoded for the
+//                                                  font) drawn by the Display's text layer, rows / cols 1-based
+//   spec.items:  [{label, go, info: [..], disabled, attr, align: "left", input: {value, max, placeholder,
+//                width, unicode}}]   input.width: visible characters (the end of a longer value is shown);
+//                input.unicode: any characters may be typed / pasted (shown through the text layer), else ASCII
 //                {separator: true} draws a horizontal line across the box
 //                change(dir): a switch - Left / Right step its value back (-1) / forward (+1)
 //                info lines may be {text, color, onClick} - clickable (e.g. the invite link)
 //
-// ui.showPage(kind, uiMode, back) shows the game's own Instructions / Information page full screen
+// ui.showPage(kind, uiMode, back[, engineOpts]) shows the game's own Instructions / Information page full screen
 // (drawn by an engine instance, like in the game); Enter, Esc or a click calls back().
 //   spec.infoRow: row of the selected item's info lines (cyan, centred)
 //   spec.hint:   bottom line text;  spec.back: Esc handler;  spec.sel: initially selected item
@@ -38,6 +43,7 @@ class DosUI {
     this.t = new TunnelerEngine(0);          // only its Crt text routines and video buffer are used
     this.spec = null; this.sel = 0; this.top = 0;
     window.addEventListener("keydown", e => { if (this.active()) this.key(e); });
+    window.addEventListener("paste", e => { if (this.active()) this.paste(e); });
     canvas.addEventListener("mousemove", e => { if (this.active()) this.hover(e); });
     canvas.addEventListener("click", e => { if (this.active()) this.click(e); });
     if (!opts.display) {
@@ -48,8 +54,8 @@ class DosUI {
 
   // keepSel: keep the selected item (matched by its key, or label) when redrawing the same screen
   // with fresh data
-  showPage(kind, uiMode, back) {
-    const e = new TunnelerEngine(0);
+  showPage(kind, uiMode, back, engineOpts) {
+    const e = new TunnelerEngine(0, engineOpts);      // (engineOpts: extended games' instructions)
     if (root.Lang) {
       root.Lang.apply(e);
       e.strings = Object.assign({}, e.strings, { prompt: root.Lang.t("page.back") });
@@ -91,10 +97,8 @@ class DosUI {
   geom() {
     const s = this.spec, b = s.box;
     if (b.w) return b;
-    const len = Math.max(0, ...s.items.map(it => it.separator ? 0 : it.label.length + (it.input ? it.input.max + 1 : 0)));
-    let w = Math.max(14, len + 4);
-    w += w % 2;                                            // even: exactly centred
-    return { x: 41 - ((w + 2) >> 1), y: b.y, w, rows: b.rows };
+    const w = DosUI.boxWidth(s.items);
+    return { x: b.x || 41 - ((w + 2) >> 1), y: b.y, w, rows: b.rows };
   }
 
   // item index shown on each box row: a scrolling window over the items, then the fixed ones
@@ -116,6 +120,7 @@ class DosUI {
 
   draw() {
     const t = this.t, s = this.spec, b = this.geom();
+    const layer = (s.text || []).map(x => ({ row: x.row - 1, col: (x.col || 1) - 1, text: x.text, attr: x.color == null ? 7 : x.color }));
     t.textMode();
     t.window(1, 1, 80, 25);
     t.textBackground(0);
@@ -141,15 +146,26 @@ class DosUI {
       const i = shown[k], it = s.items[i];
       if (k === this.scrollRows) moreRow = row;
       if (it.separator) { line(row, "\xC3", "\xC4", "\xB4"); continue; }
-      let text = it.label + (it.input ? it.input.value : "");
+      // an empty input shows its placeholder (dimmed; the first key typed replaces it); a value longer
+      // than the input's width shows its end; a Unicode input's value goes through the text layer
+      const inp = it.input;
+      let chars = inp && inp.value ? Array.from(inp.value) : [];
+      if (inp && inp.width && chars.length >= inp.width) chars = chars.slice(chars.length - inp.width + 1);
+      const uni = !!(inp && inp.unicode && chars.length);
+      const value = !inp ? "" : uni ? " ".repeat(chars.length) : chars.length ? chars.join("") : inp.placeholder || "";
+      let text = it.label + value;
       text = it.align === "left" ? (" " + text).padEnd(b.w) : this.centre(text, b.w);
       text = text.slice(0, b.w);
       t.gotoXY(b.x, row); t.write("\xB3" + text + "\xB3");
       const o = (row - 1) * 160 + b.x * 2;
       const attr = i === this.sel ? SEL : it.disabled ? DISABLED : it.attr || ATTR;
       for (let c = 0; c < b.w; c++) t.vram[o + c * 2 + 1] = attr;
+      const x0 = (it.align === "left" ? 1 : (b.w - (it.label.length + value.length)) >> 1) + it.label.length;
+      if (uni && x0 < b.w) layer.push({ row: row - 1, col: b.x + x0, text: chars.slice(0, b.w - x0).join(""), attr });
+      if (it.input && !it.input.value && value)
+        for (let c = x0; c < Math.min(b.w, x0 + value.length); c++) t.vram[o + c * 2 + 1] = i === this.sel ? 0x57 : DISABLED;
       if (it.input && i === this.sel) {                     // blinking cursor after the text
-        const at = (it.align === "left" ? 1 : (b.w - (it.label.length + it.input.value.length)) >> 1) + it.label.length + it.input.value.length;
+        const at = x0 + value.length;
         if (at < b.w) { t.vram[o + at * 2] = 0x5F; t.vram[o + at * 2 + 1] = SEL | 0x80; }
       }
     }
@@ -175,7 +191,9 @@ class DosUI {
     t.textColor(1); t.gotoXY(2, 25); t.write(T("ui.pd", "public domain, 2026"));
     const hint = " " + (s.hint || T("ui.hint", "\x18\x19 and <ENTER>, or the mouse.") + (s.back ? "  " + T("ui.back", "<ESC> back.") : ""));
     t.textColor(15); t.gotoXY(80 - hint.length, 25); t.write(hint);
-    this.present({ t: 0, mode: "text", screen: "text", vram: t.vram.slice(0, 16000) });
+    const snap = { t: 0, mode: "text", screen: "text", vram: t.vram.slice(0, 16000) };
+    if (layer.length) snap.text = layer;
+    this.present(snap);
   }
 
   centre(s, w) { const l = Math.max(0, (w - s.length) >> 1); return (" ".repeat(l) + s).padEnd(w); }
@@ -194,14 +212,34 @@ class DosUI {
     else if ((e.code === "ArrowLeft" || e.code === "ArrowRight" || e.code === "Numpad4" || e.code === "Numpad6") && it && it.change)
       it.change(e.code === "ArrowLeft" || e.code === "Numpad4" ? -1 : 1);
     else if (e.code === "Escape") { if (s.back) s.back(); }
-    else if (it && it.input && e.code === "Backspace") { it.input.value = it.input.value.slice(0, -1); this.draw(); }
-    else if (it && it.input && e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
-      const c = e.key.charCodeAt(0);
-      if (c < 32 || c > 126 || it.input.value.length >= it.input.max) return;
-      it.input.value += e.key;
+    else if (it && it.input && e.code === "Backspace") { it.input.value = Array.from(it.input.value).slice(0, -1).join(""); this.draw(); }
+    else if (it && it.input && e.key && Array.from(e.key).length === 1 &&
+      (!(e.ctrlKey || e.metaKey || e.altKey) || (e.getModifierState && e.getModifierState("AltGraph")))) {   // (AltGr letters too)
+      if (!this.typed(it.input, e.key)) return;
       this.draw();
     } else return;
     e.preventDefault();
+  }
+
+  // adds text to an input (as far as it is allowed and fits); true when something was added
+  typed(input, str) {
+    let v = Array.from(input.value || ""), added = false;
+    for (const ch of String(str).normalize("NFC")) {
+      const c = ch.codePointAt(0);
+      if (c < 32 || (c >= 0x7F && c < 0xA0) || (!input.unicode && c > 126) || /[\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff]/.test(ch)) continue;
+      if (v.length >= input.max) break;
+      v.push(ch); added = true;
+    }
+    if (added) input.value = v.join("");
+    return added;
+  }
+  // pasting into the selected input
+  paste(e) {
+    const s = this.spec, it = s && !s.page ? s.items[this.sel] : null;
+    if (!it || !it.input || it.disabled) return;
+    const str = e.clipboardData ? e.clipboardData.getData("text") : "";
+    e.preventDefault();
+    if (this.typed(it.input, str.replace(/\s+/g, " "))) this.draw();
   }
 
   // clickable info line (link) under the mouse
@@ -232,6 +270,13 @@ class DosUI {
     if (i >= 0) { this.sel = i; this.spec.items[i].go(); }
   }
 }
+
+// interior width of a box that fits these items (even: exactly centred)
+DosUI.boxWidth = items => {
+  const len = Math.max(0, ...items.map(it => it.separator ? 0 : it.label.length + (it.input ? (it.input.width || it.input.max) + 1 : 0)));
+  const w = Math.max(14, len + 4);
+  return w + w % 2;
+};
 
 root.DosUI = DosUI;
 })(window);

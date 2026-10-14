@@ -22,10 +22,16 @@ window), create a game, join as BLUE in one and GREEN in the other, and add a th
 
 ## Releasing
 
-Tag a commit on `main` with `vX.Y.Z` and push the tag. That triggers:
+Every push to `main` is a release (`.github/workflows/release.yml`):
 
-- `docker-publish.yml` - builds and pushes `ghcr.io/<owner>/tunneler-online:X.Y.Z` (+ `latest`, `X.Y`, short sha).
-- `release.yml` - creates a GitHub Release with auto-generated notes.
+- the patch version is bumped from the latest `vX.Y.Z` tag (the first release uses `package.json`'s
+  version), the commit is tagged and a GitHub Release with auto-generated notes is created;
+- the Docker image is built (linux/amd64 + arm64) and pushed to `ghcr.io/<owner>/tunneler-online` as
+  `latest`, `X.Y.Z`, `X.Y` and the short commit sha.
+
+For a bigger jump, push a tag yourself (e.g. `v2.0.0`): it is released the same way, and the next push
+to `main` continues from it (`v2.0.1`). `docker-publish.yml` builds an image by hand (Actions tab ->
+Run workflow).
 
 ## Architecture
 
