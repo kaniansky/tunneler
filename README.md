@@ -4,6 +4,10 @@
 the decompiled original and playable in the browser: split screen, against the computer, or online
 against a friend, with spectators.
 
+**Play it now: <https://tunneler-online.onrender.com/>** - no install, just a browser. (Hosted on
+Render's free tier: if nobody has played for a while, the first visit can take up to a minute while the
+server wakes up.)
+
 ![Main menu](screenshots/home.png)
 
 ## Same game, same look
@@ -59,6 +63,13 @@ npm start          # http://localhost:8050  (PORT=... to change)
 ```
 
 `npm run watch` rebuilds on every change and restarts the server. `npm test` runs all the checks.
+
+### Hosting
+
+The live version at <https://tunneler-online.onrender.com/> runs this repo's `Dockerfile` on
+[Render](https://render.com) as a web service (port 8050, HTTPS and websockets handled by Render). Any
+host that runs a Docker image or `npm run build && npm start` and allows websockets works the same way.
+Games live in the server's memory, so a restart ends running games.
 
 ### Docker
 
