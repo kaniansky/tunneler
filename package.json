@@ -1,0 +1,36 @@
+{
+  "name": "tunneler-online",
+  "version": "1.0.0",
+  "description": "TUNNELER 2.0 (1991, Geoffrey Silverton) rewritten in JavaScript from the decompiled original: split screen, vs computer and online multiplayer in the browser",
+  "license": "Unlicense",
+  "author": "Norko Kaniansky",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kaniansky/tunneler-online.git"
+  },
+  "homepage": "https://github.com/kaniansky/tunneler-online#readme",
+  "bugs": {
+    "url": "https://github.com/kaniansky/tunneler-online/issues"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "private": true,
+  "main": "server.js",
+  "scripts": {
+    "build": "node build.js",
+    "watch": "node build.js --watch",
+    "start": "node server.js",
+    "test": "node test/lang-check.js && node test/compare-wasm.js && node test/ai-sim.js quick && node test/net-sim.js && node test/net-page-smoke.js",
+    "test:engine": "node test/compare-wasm.js",
+    "test:ai": "node test/ai-sim.js quick",
+    "test:net": "node test/net-sim.js && node test/net-page-smoke.js",
+    "test:lang": "node test/lang-check.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.1"
+  }
+}
