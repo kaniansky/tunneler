@@ -1,6 +1,6 @@
 {
   "name": "tunneler-online",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "TUNNELER 2.0 (1991, Geoffrey Silverton) rewritten in JavaScript from the decompiled original: split screen, vs computer and online multiplayer in the browser",
   "license": "Unlicense",
   "author": "Norko Kaniansky",
@@ -21,13 +21,15 @@
     "build": "node build.js",
     "watch": "node build.js --watch",
     "start": "node server.js",
-    "test": "node test/lang-check.js && node test/unicode-check.js && node test/compare-wasm.js && node test/ext-sim.js quick && node test/ai-sim.js quick && node test/ai-ext-sim.js quick && node test/net-sim.js && node test/idle-sim.js && node test/net-page-smoke.js && node test/local-check.js",
+    "test": "node test/lang-check.js && node test/unicode-check.js && node test/compare-wasm.js && node test/ext-sim.js quick && node test/time-sim.js && node test/sound-check.js && node test/ai-sim.js quick && node test/ai-ext-sim.js quick && node test/net-sim.js && node test/idle-sim.js && node test/net-page-smoke.js && node test/local-check.js",
     "test:engine": "node test/compare-wasm.js",
     "test:ext": "node test/ext-sim.js quick",
+    "test:time": "node test/time-sim.js",
     "test:ai": "node test/ai-sim.js quick && node test/ai-ext-sim.js quick",
     "test:net": "node test/net-sim.js && node test/net-page-smoke.js",
     "test:lang": "node test/lang-check.js && node test/unicode-check.js",
-    "test:local": "node test/local-check.js"
+    "test:local": "node test/local-check.js",
+    "test:sound": "node test/sound-check.js"
   },
   "dependencies": {
     "ws": "^8.18.0"

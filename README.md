@@ -36,7 +36,7 @@ All menus, the lobby and the status lines use the same DOS text screen.
 
 Settings (split screen: map size and rounds to win only):
 
-- **Slots and teams** - 8 slots (BLUE, GREEN, CYAN, MAGENTA, WHITE, PINK, VIOLET, TEAL), each nobody,
+- **Slots and teams** - 8 slots (BLUE, GREEN, CYAN, YELLOW, WHITE, PINK, VIOLET, TEAL), each nobody,
   human or a computer tank, each with a team number 1-8: all different = free-for-all, shared numbers =
   teams of any size (4 v 4, 2 v 2 v 2 v 2, 3 v 5, ...).
 - **Map size** - small (512x256), medium (1024x512, the original) or large (2048x1024).
@@ -80,10 +80,10 @@ language is one file in `src/lang/`.
 | | BLUE | GREEN |
 |---|---|---|
 | Move | W A S D | arrow keys |
-| Fire | Left Ctrl, Left Shift, Space | Enter, Right Ctrl |
+| Fire | Left Shift, Space | Enter, Right Shift |
 
 Online and against the computer you can use either set. Hold two direction keys to move diagonally;
-firing while moving digs faster. **M** turns the sound on/off, **Esc** ends the match (except in online
+firing while moving digs faster. **Esc** ends the match (except in online
 games with more than BLUE and GREEN, where one player must not end it for everybody). Menus: arrow keys
 and Enter, or the mouse.
 

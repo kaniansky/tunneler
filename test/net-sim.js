@@ -342,7 +342,7 @@ async function extended(srv, port) {
   const one = await http(port, "POST", "/api/rooms", { name: "Bot", players: 2, bots: 1 });
   check("2 players with a computer = extended", () => assert(one.json.ext && one.json.slots[1].bot));
 
-  const humans = ["blue", "green", "cyan", "magenta"];
+  const humans = ["blue", "green", "cyan", "yellow"];
   const c = {};
   for (const r of humans.slice(0, 3)) c[r] = await new FakeClient(port, id, r).connect();
   const spec1 = await new FakeClient(port, id, "spectate", "x-spec1").connect();
@@ -354,7 +354,7 @@ async function extended(srv, port) {
     await until(() => x.err && x.closed, r + " rejected");
     check(r + " slot rejected", () => assert(why.test(x.err), x.err));
   }
-  c.magenta = await new FakeClient(port, id, "magenta").connect();
+  c.yellow = await new FakeClient(port, id, "yellow").connect();
   await until(() => c.blue.frames > 20, "extended frames to flow");
   check("frames carry 8 slots", () => assert(c.blue.received.every(f => Array.isArray(f[0]) && f[0].length === 8)));
   check("the engine is extended", () => assert(c.blue.engine.extended && c.blue.engine.nPlayers === 8 && c.blue.engine.teams));
@@ -364,32 +364,32 @@ async function extended(srv, port) {
   await until(() => c.blue.status.ready.filter(Boolean).length === 3, "3 ready");
   await sleep(TICK * 30);
   check("3 of 4 ready does not start", () => assert(c.blue.received.every(f => !(f[1] || []).some(k => k[2] === 0x3B))));
-  c.magenta.send({ t: "ready", v: 1 });
+  c.yellow.send({ t: "ready", v: 1 });
   await until(() => c.blue.engine.screen === "play", "extended play screen", 40000);
   console.log("  in play at frame", c.blue.frames);
 
   // humans drive, computers drive themselves
   const script = [RIGHT, UP | FIRE, LEFT, DOWN | FIRE, UP | RIGHT, DOWN | LEFT];
   for (let i = 0; i < 20; i++) {
-    humans.forEach((r, k) => c[r].bits(script[(i + k) % script.length] | (r === "magenta" ? FIRE : 0)));
+    humans.forEach((r, k) => c[r].bits(script[(i + k) % script.length] | (r === "yellow" ? FIRE : 0)));
     await sleep(TICK * 6);
   }
   const pos = p => [c.blue.engine.tankX[p], c.blue.engine.tankY[p]];
   check("stream has no bits for computer slots", () => assert(c.blue.received.every(f => !Array.isArray(f[0]) || f[0].slice(4).every(v => v === 0))));
   check("ESC never in an extended frame", () => assert(c.blue.received.every(f => f[0].every(v => !(v & 32)))));
 
-  // magenta leaves while holding a key: no pause, its tank stands still from then on
-  c.magenta.bits(RIGHT);
+  // yellow leaves while holding a key: no pause, its tank stands still from then on
+  c.yellow.bits(RIGHT);
   await sleep(TICK * 10);
   const leftAt = c.blue.frames + c.blue.queue.length;
-  await c.magenta.close();
+  await c.yellow.close();
   await sleep(TICK * 3);
   const after = c.blue.frames + c.blue.queue.length, round = c.blue.engine.round, still = pos(4);
   let moved = false, zero = true;
   c.blue.onFrame = f => {
     if (c.blue.frames > after) { if (f[0][3] !== 0) zero = false; if (c.blue.engine.round === round && pos(4).join() !== still.join()) moved = true; }
   };
-  await until(() => c.blue.frames > after + 80, "running without magenta");
+  await until(() => c.blue.frames > after + 80, "running without yellow");
   c.blue.onFrame = null;
   check("no pause while a player is away", () => assert(c.blue.status.running && c.blue.frames > leftAt + 80));
   check("away player's bits are 0", () => assert(zero));
@@ -399,10 +399,10 @@ async function extended(srv, port) {
   const list = (await http(port, "GET", "/api/rooms")).json;
   check("public list shows players / mode", () => { const r = list.find(x => x.id === id); assert(r && r.players === 8 && r.teams && r.humans === 4); });
 
-  // magenta comes back from scratch (page reload) and fast-forwards, computers included
-  c.magenta = await new FakeClient(port, id, "magenta", "magenta-reload").connect();
-  check("reloaded player fast-forwarded from 0", () => assert.strictEqual(c.magenta.hello.from, 0));
-  c.magenta.bits(LEFT | FIRE); await sleep(TICK * 20); c.magenta.bits(0);
+  // yellow comes back from scratch (page reload) and fast-forwards, computers included
+  c.yellow = await new FakeClient(port, id, "yellow", "yellow-reload").connect();
+  check("reloaded player fast-forwarded from 0", () => assert.strictEqual(c.yellow.hello.from, 0));
+  c.yellow.bits(LEFT | FIRE); await sleep(TICK * 20); c.yellow.bits(0);
   // a late spectator
   const spec2 = await new FakeClient(port, id, "spectate", "x-spec2").connect();
   check("late spectator got the log", () => assert(spec2.hello.n > 100 && spec2.hello.from === 0));
@@ -483,7 +483,7 @@ async function lobby(srv, port) {
   check("slot settings clamped", () => {
     const r = odd.json;
     assert.strictEqual(odd.status, 200);
-    assert.deepStrictEqual(r.slots.map(x => [x.role, x.bot, x.team]), [["blue", false, 8], ["cyan", true, 1], ["magenta", false, 4]]);
+    assert.deepStrictEqual(r.slots.map(x => [x.role, x.bot, x.team]), [["blue", false, 8], ["cyan", true, 1], ["yellow", false, 4]]);
     assert(r.size === "medium" && r.winScore === 9 && !r.friendlyFire);
   });
   const cl = await http(port, "POST", "/api/rooms", { name: "Classic slots", slots: [S("human", 1), S("human", 2)], size: "small", winScore: 5 });
@@ -657,7 +657,7 @@ async function lobby(srv, port) {
 // ---------------------------------------------------------------- lobby chat (docs/DESIGN-8P.md 22), visible (23)
 async function chat(srv, port) {
   console.log("lobby chat");
-  const res = await http(port, "POST", "/api/rooms", { name: "Chat", visible: "team",
+  const res = await http(port, "POST", "/api/rooms", { name: "Chat", visible: "team", watchOut: true,
     slots: [S("human", 1), S("human", 2), S("human", 1), S("hard", 2)] });
   const id = res.json.id, room = srv.rooms.get(id), key = res.json.hostKey;
   const vis = [(await http(port, "POST", "/api/rooms", { name: "V1", slots: [S("human", 1), S("human", 2)] })).json.visible,
@@ -668,6 +668,38 @@ async function chat(srv, port) {
     assert.strictEqual(res.json.visible, "team"); assert.strictEqual(blue.hello.cfg.visible, "team");
     assert.deepStrictEqual(vis, ["self", "self"]);
   });
+  // after death (docs/DESIGN-8P.md 25): "black" / "wreck" (default, anything unknown) / "others" (old true)
+  const ghost = [];
+  for (const w of [undefined, "yes", 1, "black", "others"])
+    ghost.push((await http(port, "POST", "/api/rooms", { name: "G" + ghost.length, watchOut: w, slots: [S("human", 1), S("human", 2)] })).json.watchOut);
+  check("after death: validated, in the room info, the list and hello's cfg", () => {
+    assert.strictEqual(res.json.watchOut, "others"); assert.strictEqual(blue.hello.cfg.watchOut, "others");
+    assert.deepStrictEqual(ghost, ["wreck", "wreck", "wreck", "black", "others"]);
+    assert.strictEqual(NetProto.roomSettings({ slots: [S("human", 1), S("human", 2)], watchOut: true }).watchOut, "others");
+  });
+  {
+    const list = (await http(port, "GET", "/api/rooms")).json;
+    check("after death in the public list", () => assert.strictEqual(list.find(r => r.id === id).watchOut, "others"));
+  }
+  // round time limit: 0 (none, also old rooms / invalid values) or 2 / 3 / 5 / 10 minutes; in the room
+  // info, the list and hello's cfg, and NetProto.engineOptions gives it to every client's engine
+  {
+    const times = [];
+    for (const v of [3, 7, undefined]) times.push((await http(port, "POST", "/api/rooms", { name: "T" + times.length, roundTime: v, slots: [S("human", 1), S("human", 2)] })).json);
+    const tc = await new FakeClient(port, times[0].id, "blue", "c-time", { cid: "timeblue1" }).connect();
+    const list = (await http(port, "GET", "/api/rooms")).json;
+    check("round time: validated, in the room info, the list and hello's cfg, engine options", () => {
+      assert.deepStrictEqual(times.map(r => r.roundTime), [3, 0, 0]);
+      assert.strictEqual(tc.hello.cfg.roundTime, 3); assert.strictEqual(blue.hello.cfg.roundTime, 0);
+      assert.strictEqual(list.find(r => r.id === times[0].id).roundTime, 3);
+      assert.deepStrictEqual([0, 2, 3, 5, 10, 4, -1, "x", null].map(v => NetProto.roomSettings({ slots: [S("human", 1), S("human", 2)], roundTime: v }).roundTime), [0, 2, 3, 5, 10, 0, 0, 0, 0]);
+      const cfg = { ext: true, slots: [{ color: 0, team: 1 }, { color: 2, team: 2 }], roundTime: 5 };
+      assert.strictEqual(NetProto.engineOptions(cfg).roundTime, 5);
+      assert.strictEqual(new TunnelerEngine(1, NetProto.engineOptions(cfg)).roundTime, 5);
+      assert(!("roundTime" in NetProto.engineOptions({ slots: cfg.slots })), "old rooms: no option (engine default 0)");
+    });
+    await tc.close();
+  }
   const spec = await new FakeClient(port, id, "spectate", "c-spec", { cid: "chatspec1" }).connect();
   blue.send({ t: "me", name: "Ľuboš" }); spec.send({ t: "me", name: "Σοφία" });
   await until(() => blue.status && blue.status.slots[0].name === "Ľuboš" && blue.status.specs.some(x => x.name === "Σοφία"), "names", 3000);

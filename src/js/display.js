@@ -20,7 +20,7 @@ const PAL_RGB = [
 // 1 2 3 5 9 10 11 15, the rest as PalRGB (tank treads use the panel grey 13). Snapshots with
 // palette "extended" are drawn with it.
 const EXT_PAL_RGB = [
-  [0, 0, 0], [11, 11, 63], [0, 48, 0], [10, 60, 60], [46, 0, 0], [63, 13, 63], [48, 30, 12], [38, 38, 38],
+  [0, 0, 0], [11, 11, 63], [0, 48, 0], [10, 60, 60], [46, 0, 0], [63, 63, 18], [48, 30, 12], [38, 38, 38],
   [46, 22, 1], [63, 63, 63], [63, 40, 48], [36, 18, 63], [63, 13, 2], [25, 25, 25], [60, 58, 7], [0, 38, 32]];
 const dac = pal => pal.map(c => c.map(v => (v << 2) | (v >> 4)));
 const LORES_PALETTE = dac(PAL_RGB), EXT_PALETTE = dac(EXT_PAL_RGB);

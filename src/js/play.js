@@ -1,12 +1,13 @@
 "use strict";
-// Local modes: split-screen hotseat (?mode=hotseat&size=small|medium|large&win=1..9) and against the
-// computer (?mode=cpu&slots=<color>:<who>:<team>,...&size=...&win=1..9&ff=0|1&view=self|team|everyone - home.js's slot
-// editor, docs/DESIGN-8P.md 20: the used slots in slot order, color 0..7, who = "you" (BLUE, always the
-// first) or a computer level easy|normal|hard|expert, team 1..8). Everything runs in this browser.
-// BLUE + GREEN in different teams is the classic engine exactly as the original (the AI drives GREEN; size
-// and rounds to win still apply); anything else runs the extended engine with a computer tank in every
-// slot but BLUE (the human, either key set). view (docs/DESIGN-8P.md 23): self = only BLUE's view screen,
-// team = BLUE's team's, everyone = all of them (BLUE's first; classic: the full split screen).
+// Local modes: split-screen hotseat (?mode=hotseat&size=small|medium|large&win=1..9[&time=2|3|5|10]) and against the
+// computer (?mode=cpu&slots=<color>:<who>:<team>,...&size=...&win=1..9&ff=0|1&view=self|team|everyone&watch=black|wreck|others[&time=minutes] - home.js's slot
+// editor, docs/DESIGN-8P.md 20: the used slots in slot order, color 0..7, who = "you" (any color, exactly
+// one) or a computer level easy|normal|hard|expert, team 1..8). Everything runs in this browser.
+// You as BLUE + a computer GREEN in different teams is the classic engine exactly as the original (the AI
+// drives GREEN; size and rounds to win still apply); anything else runs the extended engine with a
+// computer tank in every slot but yours (either key set drives your tank). view (docs/DESIGN-8P.md 23):
+// self = only your view screen, team = your team's, everyone = all of them (yours first; classic: the full
+// split screen).
 // Old links (?mode=cpu&level=...&opp=1..7&teams=0|1, hide=1 = self / hide=0 = everyone) still work.
 (function () {
   const params = new URLSearchParams(location.search);
@@ -15,22 +16,32 @@
   const int = (v, lo, hi, d) => { v = parseInt(v, 10); return v >= lo && v <= hi ? v : d; };
   const size = (TunnelerEngine.SIZES || []).includes(params.get("size")) ? params.get("size") : "medium";
   const winScore = int(params.get("win"), 1, 9, 3);
+  // round time limit in minutes (&time=2|3|5|10; none / anything else = no limit)
+  const roundTime = [2, 3, 5, 10].includes(int(params.get("time"), 0, 99, 0)) ? int(params.get("time"), 0, 99, 0) : 0;
   const VIEWS = ["self", "team", "everyone"];
   const view = VIEWS.includes(params.get("view")) ? params.get("view") : params.get("hide") === "0" ? "everyone" : "self";
+  // vs computer, after death (watch=black|wreck|others; old 1 = others): what you see once your tank
+  // is destroyed (views.js setWatchOut); split screen shows both halves anyway
+  const watchOut = TunnelerEngine.afterDeath(mode === "cpu" ? params.get("watch") : null);
 
-  // vs computer: [{color, team, level}] - BLUE (the human, level null) first, then the computer tanks
+  // vs computer: [{color, team, level}] in slot (color) order - you have level null, the computer tanks
+  // their difficulty
   function cpuSlots() {
-    const out = [{ color: 0, team: 1, level: null }];
+    let out = [];
     const list = params.get("slots");
     if (list) {
       for (const part of list.split(",")) {
         const [c, who, t] = part.split(":");
         const color = int(c, 0, 7, -1), team = int(t, 1, 8, color + 1);
-        if (color === 0) out[0].team = team;
-        else if (color > 0 && LEVELS.includes(who) && !out.some(s => s.color === color)) out.push({ color, team, level: who });
+        if (color < 0 || out.some(s => s.color === color)) continue;
+        if (who === "you" && !out.some(s => s.level === null)) out.push({ color, team, level: null });
+        else if (LEVELS.includes(who)) out.push({ color, team, level: who });
       }
+      if (!out.some(s => s.level === null))                // no "you": BLUE (or the first free color) is you
+        out.unshift({ color: [0, 1, 2, 3, 4, 5, 6, 7].find(c => !out.some(s => s.color === c)), team: 1, level: null });
       out.sort((a, b) => a.color - b.color);
-    } else {                                     // old links: opp computer tanks, teams = every second one
+    } else {
+      out = [{ color: 0, team: 1, level: null }];                                     // old links: opp computer tanks, teams = every second one
       const level = LEVELS.includes(params.get("level")) ? params.get("level") : "normal";
       const opp = int(params.get("opp"), 1, 7, 1), teams = params.get("teams") === "1" && opp >= 3;
       for (let i = 1; i <= opp; i++) out.push({ color: i, team: teams ? i % 2 + 1 : i + 1, level });
@@ -41,6 +52,7 @@
     return out;
   }
   const slots = mode === "cpu" ? cpuSlots() : null;
+  const me = slots ? slots.findIndex(s => s.level === null) : 0;   // your player index (0-based)
   const teamGame = !!slots && slots.some((s, i) => slots.some((o, j) => j !== i && o.team === s.team));
   const ff = teamGame && params.get("ff") === "1";
 
@@ -52,12 +64,17 @@
   // the engine itself picks classic (BLUE + GREEN in different teams) or extended
   // (escEnds: BLUE's Esc ends the match as in the original - the extended engine ignores Esc online)
   const engine = new TunnelerEngine(seed, slots
-    ? { slots: slots.map(s => ({ color: s.color, team: s.team })), size, winScore, friendlyFire: ff, escEnds: true, autoStart: true }
-    : { size, winScore, autoStart: true });   // settings were chosen on the page: no menu before round 1
+    ? { slots: slots.map(s => ({ color: s.color, team: s.team })), size, winScore, roundTime, friendlyFire: ff, escEnds: true, escPlayer: me, autoStart: true, noInstructions: true,
+        extended: me !== 0 }                    // the classic engine only with you as BLUE
+    : { size, winScore, roundTime, autoStart: true, noInstructions: true });   // settings were chosen on the page: no menu before round 1
   const ext = engine.extended;
   // vs computer: BLUE's own view, its team's or everyone's (BLUE first); split screen: the full split screen
-  const views = new ViewModes(canvas, display, () => engine, { mode: mode === "cpu" ? "follow" : "grid", follow: 0, lockFollow: true, keys: false, labels: mode === "cpu" });
-  if (mode === "cpu") views.setScope(0, view);
+  const views = new ViewModes(canvas, display, () => engine, { mode: mode === "cpu" ? "follow" : "grid", follow: me, lockFollow: true, keys: false, labels: mode === "cpu" });
+  if (mode === "cpu") { views.setScope(me, view); views.setWatchOut(watchOut); }
+  // display only: your tank marked on the round title / statistics (vs computer; split screen = two
+  // humans, no marker), the game's settings listed there
+  engine.youPlayer = mode === "cpu" ? me + 1 : null;
+  engine.showSettings = mode === "cpu" ? { view, visible: false, watchOut } : {};
   const runner = new Runner(engine, views, speaker);
 
   const unlock = () => speaker.unlock();
@@ -65,7 +82,11 @@
   window.addEventListener("pointerdown", unlock);
 
   keyboard.onKey = (code, e) => {
-    if (code === "KeyM" && engine.screen === "play") { speaker.setMuted(!speaker.muted); renderBar(); return true; }
+    // Esc on the game's menu (between matches): back to the screen this game was set up on
+    if (code === "Escape" && engine.screen === "text" && engine.menuPage === "menu" && !engine.kbdInstalled) {
+      leave(mode === "cpu" ? "/#cpu" : "/#split");
+      return true;
+    }
     return false;
   };
 
@@ -94,30 +115,16 @@
   const K = TunnelerEngine.KEYS;
   // classic: one AI drives GREEN; extended: one per player 2..N (slot order), each at its slot's level
   const ais = [];
-  if (mode === "cpu") for (let p = 2; p <= engine.nPlayers; p++) ais.push(new TunnelerAI(slots[p - 1].level, p));
+  if (mode === "cpu") for (let p = 1; p <= engine.nPlayers; p++) if (p !== me + 1) ais.push(new TunnelerAI(slots[p - 1].level, p));
 
   // Sound fades with the distance from BLUE's tank against the computer (docs/DESIGN-8P.md 8); split
   // screen (two players at one speaker) keeps full volume. Menus / title / map: full volume.
-  if (mode === "cpu") runner.listener = e => e.screen === "play" ? { x: e.tankX[1], y: e.tankY[1] } : null;
-
-  // The status line under the game shows state only (docs/DESIGN-8P.md 9): split screen and the sound
-  // state; none at all against the computer, and none on the end-of-match world map.
-  const statusCanvas = document.getElementById("status");
-  const statusLine = new StatusLine(statusCanvas, canvas, () => views.statusColumns());
-  function renderBar() {
-    if (mode === "cpu") return;
-    statusLine.set([[
-      { text: Lang.t("st.split"), attr: 0x0F, prio: 2 },
-      { text: Lang.t(speaker.muted ? "st.soff" : "st.son"), attr: 0x08, prio: 1 },
-    ]]);
-  }
-  renderBar();
-  const showStatus = () => {
-    const shown = mode !== "cpu" && !(views.snap && views.snap.screen === "map");
-    statusCanvas.style.display = shown ? "" : "none";     // (style.css's display: block beats [hidden])
+  // (after death "others": from the tank watched instead)
+  if (mode === "cpu") runner.listener = e => {
+    if (e.screen !== "play") return null;
+    const p = views.listenTo(me) + 1;
+    return { x: e.tankX[p], y: e.tankY[p] };
   };
-  showStatus();
-  setInterval(showStatus, 100);
 
   function classicInput() {
     const kd = keyboard.keyDown();
@@ -143,8 +150,9 @@
   function extInput() {
     const kd = keyboard.keyDown();
     const on = a => kd[a[1]] || kd[a[2]];
-    const bits = [keysToBits({ up: on(K.KeyUp), down: on(K.KeyDown), left: on(K.KeyLeft), right: on(K.KeyRight), fire: on(K.KeyFire) }) | (kd[1] ? 32 : 0)];
-    for (const ai of ais) bits.push(botBits(ai));
+    const bits = [];
+    for (const ai of ais) bits[ai.me - 1] = botBits(ai);
+    bits[me] = keysToBits({ up: on(K.KeyUp), down: on(K.KeyDown), left: on(K.KeyLeft), right: on(K.KeyRight), fire: on(K.KeyFire) }) | (kd[1] ? 32 : 0);
     return { bits, keys: keyboard.takeKeys().concat(clicks.splice(0)) };
   }
 

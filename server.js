@@ -36,14 +36,14 @@
 //        GET /api/rooms/<id>      one room (also private ones: their ids carry a random suffix)
 //        POST /api/rooms          {name, public, spectators, slots: [{kind: none|human|easy|normal|hard|expert,
 //                                  team: 1..8} x 8 (index = colour)], size: small|medium|large, winScore: 1..9,
-//                                  friendlyFire, visible: self|team|everyone} -> roomInfo + hostKey   (400 {error} when the slots don't
+//                                  friendlyFire, roundTime: 0|2|3|5|10 (minutes), visible: self|team|everyone, watchOut} -> roomInfo + hostKey   (400 {error} when the slots don't
 //                                  make a game: < 2 used, no human, < 2 teams). Older form: {players: 2-8,
 //                                  teams, bots: 0..players-1 (the last slots), level}.
 // WS:    /ws?room=<id>&role=<slot colour: blue|green|cyan|...>|spectate[&seed=<s>&have=<frames>]
 //            &cid=<client id: 8-64 of A-Z a-z 0-9 _ -, required>[&host=<hostKey>]
 //   server -> client  {t:"hello", id, name, role, seed, created, n, from, f:[entries], cfg, you, chat}   frames from
 //                           `from` on (a long log: the rest follows in "f" messages before any live frame)
-//                     cfg = {ext, players, slots: [{color, bot, level, team}], size, winScore, friendlyFire, visible}
+//                     cfg = {ext, players, slots: [{color, bot, level, team}], size, winScore, friendlyFire, roundTime, visible, watchOut}
 //                     chat = the room's last 50 chat messages [{from, text}] (oldest first)
 //                           (the teams as created: config frames in the log change them)
 //                     you = {slot: index or -1, host: bool, k: this connection's number}
@@ -156,7 +156,9 @@ function createServer(opts = {}) {
     for (let i = 2; rooms.has(id); i++) id = base + "-" + i;
     const room = {
       id, name, public: !!isPublic, allowSpec: !!allowSpec,
-      ext: st.ext, players: N, size: st.size, winScore: st.winScore, friendlyFire: st.friendlyFire, visible: st.visible || "self",
+      ext: st.ext, players: N, size: st.size, winScore: st.winScore, friendlyFire: st.friendlyFire, roundTime: NetProto.roundTime(st.roundTime),
+      visible: st.visible || "self",
+      watchOut: NetProto.afterDeath(st.watchOut),
       chat: [],                                    // the last CHAT_LOG chat messages [{from, text}]
       // per slot: colour, computer?, level, current team, team as created, display name ("" = colour name)
       slots: st.slots.map(s => ({ color: s.color, bot: s.bot, level: s.level, team: s.team, team0: s.team, name: "" })),
@@ -175,7 +177,7 @@ function createServer(opts = {}) {
     armCleanup(room);
     say("room created", id, JSON.stringify(name), "seed", room.seed, room.ext ? "slots " +
       room.slots.map(s => ROLES[s.color] + ":" + (s.bot ? s.level : "human") + ":" + s.team).join(" ") : "classic",
-      room.size, room.winScore + " to win", room.friendlyFire ? "friendly fire" : "");
+      room.size, room.winScore + " to win", room.friendlyFire ? "friendly fire" : "", room.roundTime ? room.roundTime + " min rounds" : "");
     return room;
   }
   const humanSlots = room => room.slots.map((s, i) => s.bot ? -1 : i).filter(i => i >= 0);
@@ -184,7 +186,7 @@ function createServer(opts = {}) {
   const roleOf = (room, i) => ROLES[room.slots[i].color];
   // what a client needs to build the room's engine (teams as created; config frames change them)
   const helloCfg = room => ({ ext: room.ext, players: room.players, size: room.size, winScore: room.winScore,
-    friendlyFire: room.friendlyFire, visible: room.visible,
+    friendlyFire: room.friendlyFire, roundTime: room.roundTime, visible: room.visible, watchOut: room.watchOut,
     slots: room.slots.map(s => ({ color: s.color, bot: s.bot, level: s.level, team: s.team0 })) });
 
   function armCleanup(room) {
@@ -205,7 +207,7 @@ function createServer(opts = {}) {
     return { id: r.id, name: r.name, public: r.public, spectators: r.allowSpec,
       blue: !!r.socks[0], green: !!r.socks[1], spec: r.sockets.size - connected(r),
       state, round: r.report.round, wins: r.report.wins, frames: r.log.length, created: r.created,
-      ext: r.ext, players: r.players, size: r.size, winScore: r.winScore, friendlyFire: r.friendlyFire, visible: r.visible,
+      ext: r.ext, players: r.players, size: r.size, winScore: r.winScore, friendlyFire: r.friendlyFire, roundTime: r.roundTime, visible: r.visible, watchOut: r.watchOut,
       teams: Object.values(teamSizes).some(n => n > 1), nTeams: nTeams(r),
       level: bots.length ? bots[0].level : null, bots: bots.length,
       humans: humans.length, joined: humans.filter(i => r.socks[i]).length, teamWins: r.report.teamWins,
@@ -694,7 +696,29 @@ function createServer(opts = {}) {
 
 module.exports = { createServer, slugify, cleanName, langBundle };
 
+// Readable start-up errors instead of a Node stack trace (exit code 1).
+function startupError(port, err) {
+  const tips = {
+    EACCES: [`Port ${port} needs administrator rights: on Linux / macOS only root may use ports below 1024.`,
+      "Use a port of 1024 or more (e.g. PORT=8050 npm start), or keep 8050 and forward port " + port + " to it",
+      "(docker: -p " + port + ":8050, or a reverse proxy such as Caddy / nginx)."],
+    EADDRINUSE: [`Port ${port} is already in use - another program (maybe another TUNNELER server) listens on it.`,
+      "Stop that program or pick another port, e.g. PORT=" + (port === 8050 ? 8051 : 8050) + " npm start."],
+    EADDRNOTAVAIL: [`Port ${port} can't be used on this computer's network addresses.`],
+  };
+  const lines = tips[err.code] || [`Could not start on port ${port}: ${err.message}`];
+  console.error("\nTUNNELER server could not start.\n\n  " + lines.join("\n  ") + "\n");
+  process.exit(1);
+}
+
 if (require.main === module) {
-  const port = +process.env.PORT || 8050;
-  createServer().listen(port, p => log("TUNNELER server on http://localhost:" + p));
+  const raw = process.env.PORT;
+  const port = raw == null || raw === "" ? 8050 : Number(raw);
+  if (!Number.isInteger(port) || port < 0 || port > 65535) {
+    console.error(`\nTUNNELER server could not start.\n\n  PORT=${raw} is not a valid port: use a whole number from 1 to 65535 (default 8050).\n`);
+    process.exit(1);
+  }
+  const srv = createServer();
+  srv.server.on("error", err => startupError(port, err));
+  srv.listen(port, p => log("TUNNELER server on http://localhost:" + p));
 }

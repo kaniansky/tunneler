@@ -189,7 +189,7 @@ console.log("\nsetTeams between matches");
   check(e.screen === "play" && e.teams && e.nTeams === 2, "setTeams: the next match did not start with 2 teams");
   const b = runMatch(42, null, levels, { engine: e, ais: a.ais, maxFrames: 40000 });
   const ok = b.mateFocus === 0 && a.ais[0].mates.join() === "2" && a.ais[2].mates.join() === "4" && a.ais[3].enemies.join() === "1,2";
-  console.log("  free-for-all, then BLUE + GREEN vs CYAN + MAGENTA: " + (ok ? "bots follow the new teams" : "WRONG") +
+  console.log("  free-for-all, then BLUE + GREEN vs CYAN + YELLOW: " + (ok ? "bots follow the new teams" : "WRONG") +
     " (" + b.rounds.length + " rounds, wins " + b.wins.join(":") + ")");
   check(ok, "bots did not follow setTeams (mates " + a.ais.map(ai => ai.mates.join("+")).join(" / ") + ")");
   check(b.finished, "setTeams: second match did not finish");
@@ -219,6 +219,102 @@ for (const [label, cfg, seed] of [["4v4", configs[4], 777], ["3v5 friendly fire"
   console.log("  8 players, bots replaced at round 2, " + a.frames + " frames, " + a.rounds.length + " rounds: " + (ok ? "identical" : "DIFFERENT"));
   check(a.rounds.length >= 2, "determinism test needs at least 2 rounds");
   check(ok, "fresh bots at a round start compute different bits");
+}
+
+// ------------------------------------------------------------------ the rock around the world
+// "the AI sometimes tries to go to the edge of the map for a long time": exploration waypoints used to
+// land in the 40-96 px (scaled) rock around the world, which can never be reached - the bot pushed
+// against the rock until the 700-frame waypoint timeout. Measured here independently of the AI's own
+// interior map, by scanning the rock in from the world's edges along every row and column:
+//   inRock  share of exploring frames whose waypoint lies in that rock (before the fix ~7 %, now 0)
+//   hug     frames a tank spends within 20 px of it while exploring / hunting (not fighting, retreating
+//           or near a base), and the longest such stretch (before: up to 660-830 frames, now < 50)
+// Classic engine (the 1-vs-1 vs computer game, keyDown input) and extended, every map size.
+function borderDist(e) {
+  const W = e.worldW, H = e.worldH, pc = e.pixelClass;
+  const rock = (x, y) => pc[e.getPixel(x, y)] === 4;
+  const L = new Int32Array(H), R = new Int32Array(H), T = new Int32Array(W), B = new Int32Array(W);
+  for (let y = 0; y < H; y++) {
+    let x = 0; while (x < W && rock(x, y)) x++; L[y] = x;
+    x = W - 1; while (x >= 0 && rock(x, y)) x--; R[y] = x;
+  }
+  for (let x = 0; x < W; x++) {
+    let y = 0; while (y < H && rock(x, y)) y++; T[x] = y;
+    y = H - 1; while (y >= 0 && rock(x, y)) y--; B[x] = y;
+  }
+  return (x, y) => {   // px from (x, y) to that rock along its row / column (<= 0: in it)
+    x = Math.max(0, Math.min(W - 1, x | 0)); y = Math.max(0, Math.min(H - 1, y | 0));
+    return Math.min(x - L[y], R[y] - x, y - T[x], B[x] - y);
+  };
+}
+function borderMatch(seed, engOpts, levels, maxFrames) {
+  const e = engOpts ? new E(seed, engOpts) : new E(seed);
+  for (let i = 0; i < 9000 && e.worldStage !== -1; i++) e.step({});
+  e.step({ keys: [[0, 59]] });
+  const N = e.nPlayers, K = E.KEYS;
+  const ais = levels.map((l, i) => (l ? new TunnelerAI(l, i + 1, { seed }) : null));
+  const r = { explore: 0, inRock: 0, play: 0, hug: 0, longest: 0 };
+  const runLen = new Array(N + 1).fill(0);
+  let bd = null, round = -1;
+  for (let f = 0; f < maxFrames && e.screen !== "map"; f++) {
+    if (e.screen === "play" && e.round !== round) { round = e.round; bd = borderDist(e); }
+    let input;
+    if (e.extended) input = { bits: ais.map(ai => TunnelerAI.bitsFor(ai, e)) };
+    else {
+      const kd = new Uint8Array(128);
+      ais.forEach((ai, i) => {
+        if (!ai) return;
+        const c = ai.update(e), p = i + 1;
+        if (c.up) kd[K.KeyUp[p]] = 1; if (c.down) kd[K.KeyDown[p]] = 1; if (c.left) kd[K.KeyLeft[p]] = 1;
+        if (c.right) kd[K.KeyRight[p]] = 1; if (c.fire) kd[K.KeyFire[p]] = 1;
+      });
+      input = { keyDown: kd };
+    }
+    if (e.screen === "play" && e.endTimer < 0 && bd) {
+      for (let i = 0; i < N; i++) {
+        const ai = ais[i], me = i + 1;
+        if (!ai || !ai.grid || !e.alive[me]) { runLen[me] = 0; continue; }
+        r.play++;
+        if (ai.mode === "explore" && ai.waypoint) { r.explore++; if (bd(ai.waypoint.x, ai.waypoint.y) <= 0) r.inRock++; }
+        const x = e.tankX[me], y = e.tankY[me];
+        let nearBase = false;
+        for (let q = 1; q <= N; q++) if (Math.max(Math.abs(x - e.baseX[q]), Math.abs(y - e.baseY[q])) < 40) nearBase = true;
+        if (bd(x, y) < 20 && !nearBase && (ai.mode === "explore" || ai.mode === "hunt")) {
+          r.hug++; if (++runLen[me] > r.longest) r.longest = runLen[me];
+        } else runLen[me] = 0;
+      }
+    }
+    e.step(input);
+  }
+  return r;
+}
+{
+  console.log("\nThe rock around the world: waypoints in it / time hugging it while exploring");
+  const games = [
+    ["classic small", { size: "small" }, ["normal", "easy"]],
+    ["classic medium", null, ["normal", "easy"]],
+    ["classic large", { size: "large" }, ["normal", "hard"]],
+    ["ext small 4", { players: 4, size: "small" }, lv(4)],
+    ["ext medium 4", { players: 4 }, lv(4)],
+    ["ext large 2 easy", { extended: true, size: "large" }, ["easy", "normal"]],
+    ["ext large 8", { players: 8, size: "large" }, lv(8)],
+  ];
+  const seeds = quick ? [1, 6] : [1, 2, 3, 4, 5, 6];
+  const frames = quick ? 12000 : 30000;
+  let explore = 0, inRock = 0, play = 0, hug = 0, longest = 0;
+  for (const [name, opts, levels] of games) {
+    const s = { explore: 0, inRock: 0, play: 0, hug: 0, longest: 0 };
+    for (const seed of seeds) {
+      const r = borderMatch(seed, opts, levels, frames);
+      for (const k in s) s[k] = k === "longest" ? Math.max(s[k], r[k]) : s[k] + r[k];
+    }
+    console.log("  " + pad(name, 18) + "waypoint in rock " + pad((100 * s.inRock / Math.max(1, s.explore)).toFixed(1) + "%", 7) +
+      "hugging " + pad((100 * s.hug / Math.max(1, s.play)).toFixed(2) + "%", 7) + "longest " + s.longest + " frames");
+    explore += s.explore; inRock += s.inRock; play += s.play; hug += s.hug; longest = Math.max(longest, s.longest);
+  }
+  check(inRock * 200 <= explore, "exploration waypoints in the rock around the world: " + inRock + " of " + explore + " frames");
+  check(hug * 100 <= play, "bots hug the rock around the world " + (100 * hug / play).toFixed(2) + "% of the time");
+  check(longest <= 150, "a bot hugged the rock around the world for " + longest + " frames in a row");
 }
 
 // ------------------------------------------------------------------ 7 bots + an idle BLUE: time per frame

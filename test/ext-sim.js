@@ -164,7 +164,7 @@ function soundCheck(e, label) {
   check([1, 2, 3, 4, 5].map(p => e.team(p)).join() === "1,0,1,2,0", "slots: team index per player");
   check([1, 2, 3, 4, 5].map(p => e.teamNumber(p)).join() === "4,2,4,8,2", "slots: team numbers");
   check(e.isEnemy(1, 2) && !e.isEnemy(1, 3) && !e.isEnemy(2, 5) && e.isEnemy(4, 5) && !e.isEnemy(3, 3), "isEnemy");
-  check([1, 2, 3, 4, 5].map(p => e.colorName(p)).join() === "TEAL,BLUE,MAGENTA,PINK,GREEN", "color names from the slots");
+  check([1, 2, 3, 4, 5].map(p => e.colorName(p)).join() === "TEAL,BLUE,YELLOW,PINK,GREEN", "color names from the slots");
   check([1, 2, 3, 4, 5].map(p => e.playerColor(p)).join() === [7, 0, 3, 5, 1].map(c => E.PLAYER_COLORS[c]).join(), "playerColor from the slots");
   check(e.playerTextColor(1) === E.PLAYER_TEXT_COLORS[7], "playerTextColor from the slots");
   check(e.teamName(2) === "TEAM 8" && e.teamMembers(0).join() === "2,5" && e.teamWins.length === 3, "teamName / teamMembers / teamWins");
@@ -390,7 +390,7 @@ const CASES = [
   [{ slots: slots([0, 1, 2, 3], [1, 1, 1, 2]) }, 2204, "uneven 3v1"],
   [{ slots: slots([0, 2, 7, 4], [5, 5, 2, 8]) }, 2304, "teams 2/1/1"],
   [{ slots: slots([0, 1, 2, 3, 4, 5, 6, 7], [1, 1, 2, 2, 3, 3, 4, 4]) }, 2408, "4 teams of 2"],
-  [{ slots: slots([0, 3], [1, 2]) }, 2502, "BLUE v MAGENTA"],
+  [{ slots: slots([0, 3], [1, 2]) }, 2502, "BLUE v YELLOW"],
   [{ players: 4, winScore: 1 }, 3004, "ffa 4 win 1"],
   [{ slots: slots([0, 1, 2, 3], [1, 2, 1, 2]), winScore: 4 }, 3104, "2v2 win 4"],
   [{ players: 4, size: "small" }, 4004, "ffa 4 small"],
@@ -483,7 +483,8 @@ function duel(ff, target) {
     e.initTables(); e.initTablesExt(); e.newMatchExt(); e.showWorldMap().next();
     for (let p = 1; p <= 8; p++) {
       const x = Math.trunc((e.unsc(e.baseX[p]) + 3) / 7) + 7, y = Math.trunc((e.unsc(e.baseY[p]) + 3) / 7) + 5;
-      check(x > 9 && x < 150 && y > 6 && y < 76 && e.getLores(x - 2, y) === e.playerColor(p), size + ": base " + p + " not on the world map");
+      const r = Math.max(1, Math.trunc(2.5 * e.scD / e.scN));   // the marker covers the whole base
+      check(x > 9 && x < 150 && y > 6 && y < 76 && e.getLores(x - r, y) === e.playerColor(p), size + ": base " + p + " not on the world map");
     }
   }
   ok("world map: banner from strings.banner (5 or 6 rows), box sized and centered; scaled map");
@@ -594,6 +595,57 @@ ok("extended texts lay out in every language (" + LAYOUTS.length + " team setups
   check(e.screen === "map" && e.wins.every(w => w === 0), "escEnds: player 1's Esc did not end the match (" + e.screen + ")");
   check(!new E(1, { escEnds: true }).escEnds, "escEnds must not touch the classic engine");
   ok("Esc: ignored online, escEnds ends the match locally");
+}
+
+// display only (docs/DESIGN-8P.md 25): the you marker ("►" / "◄", CP437 0x10 / 0x11) next to the local
+// player's own tank only, the game's settings on the round title (rows 3..) and above the statistics;
+// none of it without the options (the classic screens stay the original's)
+{
+  const title = e => { e.window(1, 1, 80, 25); e.textMode(); e.showRoundTitle().next(); return screenText(e.vram).split("\n"); };
+  const stats = e => { e.menuShift = -20; e.textMode(); e.showMainMenu(); return screenText(e.vram).split("\n"); };
+  const marks = rows => rows.join("").replace(/[^\x10\x11]/g, "").length;
+  // classic, defaults: no marker, no settings
+  {
+    const e = new E(5); e.initTables(); e.round = 1;
+    const t = title(e), st = stats(e);
+    check(marks(t) === 0 && marks(st) === 0, "classic default: no you marker");
+    check(!/rounds to win/.test(t.join("\n") + st.join("\n")), "classic default: no settings lines");
+  }
+  // classic, you = GREEN (online), settings listed
+  {
+    const e = new E(5); e.initTables(); e.round = 1;
+    e.youPlayer = 2; e.showSettings = { view: "self", visible: true, watchOut: "others" };
+    const t = title(e);
+    check(/\x10 GREEN \x11/.test(t[15]) && !/\x10 BLUE|BLUE \x11/.test(t[15]), "classic round title: the marker around GREEN only: " + t[15]);
+    const bottom = t.slice(18, 25).map(l => l.trim()).join(" ");
+    check(bottom.includes("map size: medium, rounds to win: 3, view limit: self, after death: watch others") && !/friendly/.test(t.join("")),
+      "classic round title settings at the bottom (no friendly fire without teams): " + bottom);
+    const st = stats(e);
+    check(/GREEN\x11/.test(st[8]) && !/\x10/.test(st[8]), "classic statistics: GREEN\u25c4 only: " + st[8]);
+    check(st.slice(0, 4).join(" ").includes("rounds to win: 3"), "classic statistics: settings above: " + st.slice(0, 4).join(" | "));
+    e.youPlayer = 1;
+    check(/\x10BLUE/.test(stats(e)[8]), "classic statistics: \u25baBLUE");
+  }
+  // extended 2 v 2 (player 3 = you), friendly fire on, large, 5 to win
+  {
+    const e = new E(5, { slots: slots([0, 1, 2, 3], [1, 2, 1, 2]), friendlyFire: true, size: "large", winScore: 5 });
+    e.initTables(); e.initTablesExt(); e.round = 2;
+    e.youPlayer = 3; e.showSettings = { view: "team", visible: false, watchOut: "black" };
+    const t = title(e), cyanRow = t.findIndex(r => r.includes("CYAN"));
+    check(marks(t) === 2 && /\x10 CYAN \x11/.test(t[cyanRow]), "extended round title: marker around CYAN only");
+    const bottom = t.slice(18, 25).map(l => l.trim()).join(" ");
+    check(bottom.includes("map size: large, rounds to win: 5, friendly fire: on, view: team, after death: black screen"), "extended settings at the bottom: " + bottom);
+    const st = stats(e), r = st.findIndex(l => /CYAN/.test(l) && /\d/.test(l));
+    check(marks(st) === 1 && /CYAN\x11/.test(st[r]), "extended statistics: CYAN\u25c4 only");
+    check(st.slice(0, 4).join(" ").includes("friendly fire: on"), "extended statistics settings");
+    // free-for-all list, 6 players, you = 6
+    const f = new E(5, { players: 6 }); f.initTables(); f.initTablesExt(); f.round = 1; f.youPlayer = 6;
+    const ft = title(f);
+    check(marks(ft) === 2 && ft.some(l => /\x10 PINK +0 \x11/.test(l)), "free-for-all round title: PINK's row marked: " + JSON.stringify(ft.filter(l => /PINK/.test(l))));
+    f.showSettings = { view: "self", visible: false, watchOut: "wreck" };
+    check(!/friendly fire/.test(title(f).join("")), "free-for-all: no friendly fire line");
+  }
+  ok("you marker on the local player's tank only; settings on the round title / statistics (display only)");
 }
 
 console.log(bad ? bad + " problem(s)" : "extended mode ok (worst average " + worstAvg.toFixed(3) + " ms/frame, worst frame " + worst.toFixed(1) + " ms)");

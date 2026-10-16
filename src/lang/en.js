@@ -8,16 +8,17 @@ Lang.register("en", {
   "menu.info": "Information", "menu.info.i": "About this version of the game.", "menu.instr": "Instructions", "menu.instr.i": "How to play.", "page.back": "Press <ENTER> to go back.", "rd.you1": "You are ready.", "rd.you2": "Waiting for {name}...", "rd.cancel": "<ESC> - not ready after all",
   blue: "BLUE", green: "GREEN",
   // extended mode (3-8 players): the other tank colours
-  cyan: "CYAN", magenta: "MAGENTA", white: "WHITE", pink: "PINK", violet: "VIOLET", teal: "TEAL",
-  "ui.hint": "↑↓ and <ENTER>, or the mouse.", "ui.back": "<ESC> back.", "ui.pd": "public domain, 2026",
+  cyan: "CYAN", yellow: "YELLOW", white: "WHITE", pink: "PINK", violet: "VIOLET", teal: "TEAL",
+  "ui.hint": "↑↓ and <ENTER>, or the mouse.", "ui.back": "<ESC> back.",
   "home.split": "Split screen", "home.split.i1": "Two players on one keyboard, like the original.",
-  "home.split.i2": "{blue}: W A S D + CTRL     {green}: arrow keys + ENTER",
+  "home.split.i2": "{blue}: W A S D + SHIFT     {green}: arrow keys + ENTER",
   "home.cpu": "Vs computer",
   "home.cpu.i2": "Choose the difficulty on the next screen.",
   "home.online": "Online game", "home.online.i1": "Play with others on their computers (2 to 8 tanks),",
   "home.online.i2": "or watch a game as a spectator.",
   "home.lang": "Language: ", "home.lang.i1": "The language of the menus and the game.",
   "home.lang.i2": "← →, <ENTER> or a click switches it.",
+  "home.settings": "Settings", "home.settings.i": "Language and sound.", "set.sound": "Sound: ", "set.ping": "Show ping: ", "set.ping.on": "on", "set.ping.off": "off", "set.ping.i": "Online games: your round-trip time in ms, top left on the game's border.", "sound.muted": "muted", "sound.original": "original (PC speaker)", "sound.realistic": "realistic", "sound.cartoony": "cartoony", "sound.i1": "Original: the PC speaker beeps of 1991. Realistic: tank noises.", "sound.i2": "Cartoony: boings and pops. ← → switches it and plays a sample.",
   "cpu.title": "VS COMPUTER", "cpu.start": "Start a new game", "cpu.start.i1": "Start a game against the computer ({level}).",
   "cpu.own": "You see only your own view screen.", "cpu.both": "You see both view screens.",
   "cpu.level": "Difficulty: ", "cpu.level.i1": "How well the computer plays:", "cpu.level.i2": "{levels}.",
@@ -31,14 +32,14 @@ Lang.register("en", {
   "cpu.opp": "Opponents: ", "cpu.opp.i1": "How many computer tanks you fight.", "cpu.opp.i2": "1 is the original two-player game.",
   "cpu.mode": "Mode: ",
   "cpu.mode.i1": "Free-for-all: every tank for itself.", "cpu.mode.i2": "Teams (3+ opponents): you and every second tank against the rest.",
-  "vw.grid": "All views", "vw.map": "Map and scores", "vw.follow": "Following {name}", "vw.hint": "Tab or 1 2 3: view", "vw.hint2": "← →: tank",
+  "vw.grid": "All views", "vw.map": "Map and scores", "vw.follow": "Following {name}", "vw.hint": "Tab or 1 2 3: view", "vw.destroyed": "DESTROYED", "vw.hint2": "← →: tank",
   "vw.tank": "Tank", "vw.wins": "Wins", "vw.energy": "Energy", "vw.shield": "Shield", "vw.alive": "alive", "vw.dead": "destroyed",
   "back.main": "Back to main menu", "back.main.i": "Back to the main menu.",
   "lobby.title": "ONLINE GAMES", "lobby.name": "NAME", "lobby.players": "PLAYERS", "lobby.state": "STATE",
   "state.waiting": "Waiting", "state.menu": "In menu", "state.paused": "Paused", "state.round": "Round {n}",
   "lobby.who": "Playing: {names}", "lobby.join": "<ENTER> to join this game", "lobby.none": "No public games right now",
   "lobby.create": "Create a new game", "lobby.create.i": "Start a game and invite someone to it.",
-  "create.title": "CREATE A GAME", "create.hint": "↑↓ <ENTER> or the mouse.  Type a name.  <ESC> back.",
+  "create.title": "CREATE A GAME", "create.hint": "↑↓ ← → <ENTER>, <TAB> other box, or mouse.  <ESC> back.",
   "create.name": "Name: ", "create.name.i": "Type a name for your game.",
   "create.public": "List publicly: ", "create.public.i1": "Public games are listed in the lobby;",
   "create.public.i2": "private ones are joined with the invite link.",
@@ -57,12 +58,12 @@ Lang.register("en", {
   "on.waitjoin": "Waiting for {name} to join...", "on.waitplayers": "Waiting for the players to join...",
   "on.paused": "Game paused.", "on.waitre": "Waiting for {names} to reconnect...", "on.and": " and ",
   "on.players": "the players", "on.youplay": "you play {name}", "on.spectator": "spectator", "on.leave": "Leave this game.",
-  "st.you": "You are ready - waiting for {name} (<ESC> to cancel)", "st.other": "{name} is ready - choose \"{start}\"",
-  "st.none": "Choose \"{start}\" when you are ready; the game starts when both players are.",
-  "st.spec": "{name} is ready",
-  "st.son": "M: sound on", "st.soff": "M: sound off",
-  "st.lobby": "Lobby", "st.home": "Home", "st.youare": "You are {name}", "st.spectator": "SPECTATOR",
-  "st.watching": "{n} watching", "st.split": "Split screen",
+
+ 
+
+ 
+  "st.youare": "You are {name}", "on.escagain": "Press <ESC> again to leave the game.",
+
   "conn.connecting": "connecting", "conn.reconnecting": "reconnecting", "conn.retry": "disconnected, retrying in {s} s",
   "conn.closed": "closed", "conn.connected": "connected",
   // online rooms with 2-8 slots, teams, computer tanks (lobby.js create / game screens, online.js)
@@ -77,9 +78,9 @@ Lang.register("en", {
   "room.play.i2n": "The game starts when all players choose \"{start}\".",
   "room.watch.in": "Watch the game as a spectator.", "room.copy.in": "Send this link to the other players:",
   "lobby.best": "best {n}", "rd.others": "Waiting for the others...",
-  "st.nready": "{n} of {m} players ready - choose \"{start}\"",
-  "st.nonen": "Choose \"{start}\" when you are ready; the game starts when all players are.",
-  "st.specn": "{n} of {m} players ready", "st.players": "players {n}/{m}",
+
+ 
+
   "on.waitothers": "Waiting for the other players to join:",
   engine: null,                     // the engine's own English text
 
@@ -87,9 +88,9 @@ Lang.register("en", {
   // docs/DESIGN-8P.md 11, 13, 17, 20)
   "lc.split.title": "SPLIT SCREEN",
   "lc.you": "you", "lc.none": "nobody", "lc.cpu": "computer ({level})", "lc.team": "team {n}",
-  "lc.slot.i1": "← →: nobody, or the computer: {levels}.",
-  "lc.slot.i2": "<ENTER> or a click: team. Tanks with the same team number are teammates.",
-  "lc.you.i1": "This is your tank.", "lc.you.i2": "← →, <ENTER> or a click: your team.",
+  "lc.slot.i1": "← →: nobody, you, or the computer: {levels}.",
+  "lc.slot.i2": "1-8, <ENTER> or a click: team. Tanks with the same team number are teammates.",
+  "lc.you.i1": "This is your tank.", "lc.you.i2": "← →: give this tank away (pick \"you\" elsewhere). 1-8, <ENTER>: your team.",
   "lc.size": "Map size: ", "lc.size.small": "small", "lc.size.medium": "medium", "lc.size.large": "large",
   "lc.size.i1": "How big the world is. Medium is the original;", "lc.size.i2": "small is a quarter of it, large four times as big.",
   "lc.win": "Rounds to win: ", "lc.win.i1": "How many round wins win the match.", "lc.win.i2": "3 is the original.",
@@ -97,7 +98,7 @@ Lang.register("en", {
   "lc.ff.i1": "On: your shots hurt your teammates too.", "lc.ff.i2": "Off: they explode on teammates like on a wall.",
   "lc.go.1": "You against one computer tank ({level}).", "lc.go.n": "You against {n} computer tanks, every tank for itself.",
   "lc.go.t": "{t} teams, {n} computer tanks, {m} of them on your team.",
-  "lc.err.cpu": "Choose at least one computer tank first.", "lc.err.team": "Put at least one tank in another team first.",
+  "lc.err.you": "Choose \"you\" in one of the slots first.", "lc.err.cpu": "Choose at least one computer tank first.", "lc.err.team": "Put at least one tank in another team first.",
 
   // online: the create screen's slot editor (lobby.js, "os.") and the pre-game lobby (online.js,
   // "pg.") - docs/DESIGN-8P.md 15, 18, 19, 21
@@ -107,16 +108,16 @@ Lang.register("en", {
   "os.ff": "Friendly fire: ", "os.on": "on", "os.off": "off",
   "os.ff.i1": "On: shots hurt teammates too.", "os.ff.i2": "Off: a shot explodes on a teammate like on a wall.",
   "os.who.none": "nobody", "os.who.human": "human", "os.who.cpu": "computer, {level}",
-  "os.slot.i1": "← →: nobody, a human player or a computer tank.", "os.slot.i2": "<ENTER> or a click: team 1-8 (same number = teammates).",
+  "os.slot.i1": "← →: nobody, a human player or a computer tank.", "os.slot.i2": "1-8, <ENTER> or a click: team 1-8 (same number = teammates).",
   "os.err.slots": "Use at least 2 slots.", "os.err.teams": "At least 2 different teams are needed.",
   "os.err.human": "At least one slot must be human.", "os.players": "{n} tanks",
   "pg.h.tank": "TANK", "pg.h.name": "NAME", "pg.h.team": "TEAM", "pg.h.state": "STATE", "pg.h.ping": "PING",
-  "pg.teamn": "team {n}", "pg.host": "host",
+  "pg.teamn": "team {n}",
   "pg.computer": "computer ({level})", "pg.ready": "ready", "pg.notready": "not ready", "pg.free": "free", "pg.disconnected": "disconnected",
-  "pg.size.small": "small map", "pg.size.medium": "medium map", "pg.size.large": "large map",
-  "pg.win": "rounds to win: {n}", "pg.ff.on": "friendly fire on", "pg.ff.off": "friendly fire off", "pg.specs": "spectators: {n}",
+  "pg.size.small": "map size: small", "pg.size.medium": "map size: medium", "pg.size.large": "map size: large",
+  "pg.win": "rounds to win: {n}", "pg.ff.on": "friendly fire: on", "pg.ff.off": "friendly fire: off", "pg.specs": "spectators: {n}",
   "pg.name": "Name: ", "pg.name.i": "Your name in this game (up to 12 characters).",
-  "pg.team": "Team: ", "pg.team.i": "← →: your team. The same number means teammates.",
+  "pg.team": "Team: ", "pg.team.i": "← → / 1-8: your team. The same number means teammates.",
   "pg.start": "{start}", "pg.start.i": "You are ready; the game starts when everybody is.",
   "pg.cancel": "Not ready after all", "pg.ready.i": "You are ready. <ENTER> or <ESC>: not ready after all.",
   "pg.need2": "At least 2 teams are needed to start.",
@@ -130,10 +131,22 @@ Lang.register("en", {
   "pg.chat": "Chat", "pg.chat.none": "No messages yet.", "pg.chat.spec": "spectator",
   "pg.say": "Say: ", "pg.say.i": "Type a message, <ENTER> sends it to everyone in this game.",
   "pg.view": "View: ", "pg.view.i1": "What you see during play: your own view screen,",
-  "pg.view.i2": "your team's or everyone's (this game allows up to: {max}).", "pg.visible": "visible: {v}",
+  "pg.view.i2": "your team's or everyone's (this game allows up to: {max}).", "pg.visible": "view limit: {v}",
   "view.self": "self", "view.team": "team", "view.everyone": "everyone",
   "view.i1": "What you see during play: only your own view screen,", "view.i2": "your team's or every tank's (yours first).",
   "cpu.team": "You see your team's view screens.",
-  "os.visible": "Visible: ", "os.visible.i1": "The most a player may see during play: their own",
+  "os.visible": "View limit: ", "os.visible.i1": "The most a player may see during play: their own",
   "os.visible.i2": "view screen, their team's or everyone's.",
+  // ghost mode (home.js vs computer, lobby.js create screen, online.js pre-game lobby; docs/DESIGN-8P.md 25)
+  "lc.watch": "After death: ", "os.watch": "After death: ", "watch.black": "black screen", "watch.wreck": "my wreck", "watch.others": "watch others",
+  "watch.i1": "What you see once your tank is destroyed, until the round ends: a black",
+  "watch.i2": "screen, your wreck, or the tank that destroyed you (else another one alive).",
+  "pg.watch.black": "after death: black screen", "pg.watch.wreck": "after death: my wreck", "pg.watch.others": "after death: watch others",
+  // the titles of the two boxes on the vs computer / create-a-game screens
+  "box.game": "Game", "box.players": "Players", "box.settings": "Settings", "pg.h.settings": "SETTINGS",
+  // round time limit (home.js vs computer + split screen, lobby.js create screen, the pre-game lobby's settings)
+  "lc.time": "Round time: ", "os.time": "Round time: ", "time.off": "no limit", "time.n": "{n} min",
+  "time.i1": "When the time is up, the side that did the most damage to enemy tanks",
+  "time.i2": "wins the round (the other tanks blow up); a tie: nobody wins.",
+  "pg.time": "round time: {n} min", "pg.time.off": "round time: no limit",
 });

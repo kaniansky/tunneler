@@ -23,9 +23,11 @@ const SCAN = {
 };
 
 // Browser-friendly changes to the held keys (Kbd.KeyDown). Blue moves with W A S D: S drives the
-// original's "down" key (X, scan 0x2D) and X itself does nothing (null). LCtrl+W closes the browser
-// tab, so blue can also fire with Left Shift / Space / Tab.
-const HELD_ALIASES = { ShiftLeft: 0x1D, Space: 0x1D, Tab: 0x1D, KeyS: 0x2D, KeyX: null, ControlRight: 0x1C };
+// original's "down" key (X, scan 0x2D) and X itself does nothing (null). Ctrl+W closes the browser tab
+// (and two players share the keyboard), so neither Ctrl fires: BLUE fires with Left Shift / Space
+// (Tab), GREEN with Enter / Right Shift.
+const HELD_ALIASES = { ShiftLeft: 0x1D, Space: 0x1D, Tab: 0x1D, KeyS: 0x2D, KeyX: null,
+  ControlLeft: null, ControlRight: null, ShiftRight: 0x1C };   // no Ctrl at all: Ctrl+W closes the tab
 
 const NAMED_ASCII = { Enter: 13, NumpadEnter: 13, Escape: 27, Backspace: 8, Tab: 9, Space: 32 };
 

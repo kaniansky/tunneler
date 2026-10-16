@@ -60,6 +60,9 @@ may be redesigned, but always in the original's DOS look.
     other colors, winScore, sizes, friendly fire) with correct round / match winners, determinism, sound
     source positions, a staged friendly-fire duel, the world map banner, instructions' `{n}` in every
     language, extended texts fit in every language for many team setups, Esc (ignored; `escEnds`).
+  - `time-sim.js` - round time limit: damage to enemies counted (classic / extended, not teammates),
+    time up -> top-damage side wins / tie = nobody (classic, free-for-all, teams, destroyed members),
+    the countdown pixels, roundTime 0 = no option step for step, determinism with computer tanks.
   - `local-check.js` - home.js settings screens (vm with a stub DOM: default classic link, slot editor
     keys, validation, localStorage), play.js links -> engine options / AI levels / listener, and
     `Speaker.attenuation`, views.js coloring / naming players by their slot (not their index), views.js
@@ -262,7 +265,8 @@ project dependency; install playwright-core in a scratch dir when needed).
   `raw: true` is raw Unicode text; font text (Lang.t) shows names in any letters too (wide = 2 cells).
 - Input (`input.js`): browser codes -> PC scan codes. No function keys. BLUE moves with **W A S D** (S is
   mapped to the original's X scan code, X itself does nothing); BLUE fire also on Left Shift / Space / Tab
-  (Ctrl+W closes the tab); GREEN arrows + Enter / Right Ctrl. M toggles sound (local).
+  (Ctrl+W closes the tab, and two players share the keyboard, so no Ctrl key fires at all); GREEN
+  arrows + Enter / Right Shift. M toggles sound (local).
 
 ## Languages (`lang.js`, `src/lang/*.js`, `glyphs.js`)
 
@@ -334,7 +338,8 @@ the room info): the most a player may choose to see during play - display only, 
 ## Owner's preferences (keep following these)
 
 - Everything in the **original DOS look** (VGA text screen, CP437 font, magenta menu boxes with
-  white-on-magenta bar, cyan info text, bottom rule + white hint, "public domain, 2026" bottom-left).
+  white-on-magenta bar, cyan info text, bottom rule + white hint at the right; no "public domain" text
+  in the footer any more).
 - Title "TUNNELER ONLINE", "by Norko Kaniansky"; the Information page describes this version and still
   credits Geoffrey Silverton for the original.
 - Menu items in **sentence case** ("Start game", "Back to main menu"); tank names BLUE/GREEN in caps.
@@ -361,3 +366,79 @@ the room info): the most a player may choose to see during play - display only, 
   coin toss, which helps but does not remove it.
 - Low-energy "static" copies a simulated low-memory image (the original showed real-mode memory).
 - Sound timing within a frame uses a fixed fake CPU cost model (`CPU_PLAYERS`, `CPU_BLIT`).
+
+## Changes after v1.0.0 (release/v1.1.0 branch) - quick reference
+
+- Slot colors: BLUE GREEN CYAN **YELLOW** (was MAGENTA; the yellow tank's gun is gray like its treads,
+  since every other tank's gun is yellow) WHITE PINK VIOLET TEAL. Role keys are the lowercase names.
+- Unicode plane (src/js/unitext.js, unidata.js, src/fonts/unifont/): any script in names, room names
+  and chat on every screen; wide characters take two cells; user text goes through the plane, never
+  through the CP437 font slots. Player names replace color names wherever a player is shown.
+- Keys: no Ctrl fires (see Input). DosUI handles keys by `e.key`: digits 1..8 (top row and numeric
+  keypad with NumLock on) go to `item.digit` (slot rows: team); the keypad with NumLock off navigates.
+  DosUI also has `zones` (clickable columns inside a row: left click forward, right click back) and
+  `spec.boxes` (two boxes side by side: create-game and vs computer screens: "Game" + "Players").
+- Vs computer: "you" can sit in any color (to move: set your slot to something else, then pick "you"
+  elsewhere); play.js `me` = your player index (keys, view, sound listener, `escPlayer`). The classic
+  engine runs only for you=BLUE vs a computer GREEN.
+- Engine display options (no effect on the simulation): `youPlayer` (marker on round title and
+  statistics), settings lines on the round title / statistics, `autoStart` (local games skip the
+  first menu), "Rematch" instead of "Start game" after a match (`strings.rematch`, `Lang.setRematch`).
+- Rules: a teammate's base repairs the shield at half speed (+20/frame) besides the +30 energy.
+- **After death** setting (internally `watchOut`, URL `watch=black|wreck|others`; old `true`/`1` =
+  others; `TunnelerEngine.afterDeath` / `NetProto.afterDeath` normalize): what a player sees once their
+  tank is destroyed, until the round ends - "black" = every destroyed tank's view black with DESTROYED,
+  "wreck" (default) = the view stays on the wreck, "others" = one view: the tank that destroyed the
+  watched one (`engine.killedBy`, display only, not in stateHash; followed along the chain), else the
+  first one alive (own team first); it stays on that tank while it lives.
+- Server: rooms nobody plays in (no human player activity) for 10 minutes are closed with an "idle"
+  reason; readable start-up errors (port < 1024, in use, invalid PORT).
+- AI: exploration waypoints only in the reachable interior (`TunnelerAI.interior`, shared 8x8 rock
+  map per round), unreachable waypoints given up after 150 frames (no more pushing into the map edge).
+- Release: every push to main bumps the patch version + Release + Docker image; a commit already tagged
+  `vX.Y.Z` (pushed before main) is released by its tag only; CI also runs on release/** branches.
+  docker-compose.yml runs the published image.
+- Instructions: only on the homepage main menu (classic hotseat text). The engine's own menu in
+  play.html has no Instructions item (`noInstructions` option: "Start game"/"Rematch" + "Back");
+  the split / vs computer / lobby / pre-game screens have none either.
+- Lobby settings: `Lang.roomSettings(cfg, specs)` = map size, rounds to win, friendly fire (always -
+  also settable on the create form whatever the teams, since they may change in the pre-game lobby),
+  view limit, after death (+ spectators), "key: value" form. lobby.html's room
+  screen shows them in a right-hand "Settings" box (DosUI `static: true` read-only rows); the joined
+  pre-game lobby shows them as a SETTINGS column right of the player table (NAME TEAM STATE PING - no
+  host marker). The engine's own settings strings stay shorter where the 37x4 statistics area needs it.
+- Status bar under the game: none in play.html; online.html only for a spectator's view keys, a lost
+  connection or a desync (hidden otherwise).
+- Esc goes back everywhere: online pre-game lobby (unready first, then the room page), the connection
+  overlay, play.html's menu (to `/#cpu` / `/#split`). In an online game (player or spectator, alive or
+  not) Esc twice within 3 s leaves for the room page; the first shows "on.escagain" across the middle
+  of the game (`views.setNotice(text)` / `drawNotice()`: yellow on a black band; `escToLeave` in
+  online.js; not on the end-of-match map, where any key closes the map).
+- Sound styles: `Speaker.STYLES` muted / original (the PC speaker, unchanged) / realistic / cartoony
+  (WebAudio synthesis in speaker.js), stored in localStorage "tunneler.sound" (`Speaker.loadStyle` /
+  `saveStyle`; a new Speaker reads it). The engine emits semantic effects next to `soundEvents`:
+  `engine.fx` = [{t, kind, x, y}] per step, kinds `TunnelerEngine.FX_KINDS` (impact, dig, hit, destroy,
+  fire, bump) - output only, not in stateHash (`emitFx`). Distance fading applies to every style. The
+  homepage Settings screen (Language, Sound) plays `Speaker.preview(style)` on every change. No M key
+  any more. test/sound-check.js covers determinism, storage and the styles (mock AudioContext).
+- Settings also has "Show ping" (localStorage "tunneler.ping" = "1"): online.js passes each pong's
+  round-trip time to `views.setPing(ms)`, drawn by `views.drawPing()` as a small gray number on the
+  top border at the left (half-height font like the view labels) during play.
+- **Round time limit** (engine option `roundTime`, minutes, 0 = none = the original; choices off / 2 /
+  3 / 5 / 10 = `NetProto.ROUND_TIMES`): counted in engine steps from the round's first play frame
+  (`roundStart`, `roundTicks`; a paused classic online game doesn't step). `roundDamage[p]` = 0x700 per
+  hit on an ENEMY (teammates never count; reset every round; not in stateHash - derived from the
+  simulation). `roundClock()` (start of each play frame, only with a limit): at the limit (and no round
+  end already running) `timeUp()` sums damage per side (team / free-for-all tank / classic BLUE, GREEN;
+  destroyed members count) over the sides still alive; the top side wins - every other tank alive goes
+  through `killTank` / `killTankExt` (normal explosion, 25-frame round end, scoring); a tie destroys
+  everyone (classic: `timedOut` + both dead = nobody scores; without it the original would give both a
+  win). Countdown in the last 30 s: `drawRoundClock` - 3x5 pixel digits on a black tag in the dotted
+  frame beside the instrument panel (cells 0-2 / 77-79, rows 78-93; every extended view; yellow, red
+  from 10 s). UI: "Round time" row after Rounds to win (home.js vs computer + split screen,
+  `tunneler.cpu.time` / `tunneler.split.time`, URL `&time=N` only when set; lobby.js create form, body
+  `roundTime`, `tunneler.online`); `NetProto.roomSettings` validates, server room / roomInfo / hello cfg
+  carry it, `engineOptions` passes it (old rooms = none). Texts `lc.time`, `os.time`, `time.off`,
+  `time.n`, `time.i1/i2`, `pg.time(.off)` (Lang.roomSettings, always shown), engine `settings.time` /
+  `timeShort` (round title / statistics only when set; `settingsLines(width, maxLines)` falls back to the
+  short text, then leaves it out, so the statistics' 37 x 4 area never overflows).

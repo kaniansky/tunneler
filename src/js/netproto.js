@@ -36,7 +36,7 @@ const GREEN_SCAN = [0x48, 0x50, 0x4B, 0x4D, 0x1C];
 const F10 = 0x44;
 const EXT_BITS = UP | DOWN | LEFT | RIGHT | FIRE;        // extended rooms: no Esc
 // slot i's role (= tank colour, lang key); the first two are the classic BLUE / GREEN
-const ROLES = ["blue", "green", "cyan", "magenta", "white", "pink", "violet", "teal"];
+const ROLES = ["blue", "green", "cyan", "yellow", "white", "pink", "violet", "teal"];
 const MAX_SLOTS = ROLES.length;
 const LEVELS = ["easy", "normal", "hard", "expert"];     // computer levels (ai.js)
 const KINDS = ["none", "human", ...LEVELS];               // who plays a slot (slot editor)
@@ -44,6 +44,7 @@ const SIZES = ["small", "medium", "large"];              // world sizes (engine 
 const MAX_PLAYER_NAME = 12;                              // player names (pre-game lobby), display columns
 const MAX_CHAT = 60;                                     // characters per lobby chat message
 const VISIBLE = ["self", "team", "everyone"];            // what a player may see during play (room setting)
+const ROUND_TIMES = [0, 2, 3, 5, 10];                    // round time limit, minutes (0 = none; room setting)
 const clampInt = (v, lo, hi, def) => { v = Math.trunc(Number(v)); return Number.isFinite(v) ? Math.max(lo, Math.min(hi, v)) : def; };
 
 // characters never kept in names / chat: control, bidi, zero-width, variation selectors, private use
@@ -71,9 +72,18 @@ function cleanRoomName(s, n) {
   return cutCols(t, n).trim();
 }
 
+// "after death" values (watchOut): black / wreck / others; anything else = "wreck", true (old) = "others"
+const AFTER_DEATH = ["black", "wreck", "others"];
+const afterDeath = v => v === true || v === "1" ? "others" : ["black", "wreck", "others"].includes(v) ? v : "wreck";
+
 // Room settings from the create screen -> {slots: [{color, bot, level, team}] (the used slots in colour
-// order), size, winScore, friendlyFire, visible, ext} or {error}. visible: the most a player may see
-// during play - "self" (default), "team" or "everyone" (docs/DESIGN-8P.md 23; display only). o.slots: up to 8 entries {kind: KINDS, team}
+// order), size, winScore, friendlyFire, visible, watchOut, ext} or {error}. visible: the most a player may see
+// during play - "self" (default), "team" or "everyone" (docs/DESIGN-8P.md 23; display only). watchOut:
+// after death - what a player whose tank is destroyed sees until the round ends: "black" (a black
+// DESTROYED screen), "wreck" (default: the view stays on the wreck) or "others" (the tank that destroyed
+// it, else another one still alive); docs/DESIGN-8P.md 25, display only. Old rooms' true = "others". roundTime:
+// the round time limit in minutes, one of ROUND_TIMES (0 = none, also for old rooms / anything else; changes the
+// simulation - engineOptions passes it to every engine). o.slots: up to 8 entries {kind: KINDS, team}
 // (index = colour). The older {players, teams, bots, level} form (bots = the last slots) still works.
 function roomSettings(o) {
   o = o || {};
@@ -94,14 +104,18 @@ function roomSettings(o) {
   const slots = used.map(s => ({ color: s.color, bot: s.kind !== "human", level: s.kind === "human" ? null : s.kind, team: s.team }));
   const ext = !(slots.length === 2 && slots[0].color === 0 && slots[1].color === 1 && !slots[0].bot && !slots[1].bot);
   return { slots, ext, size: SIZES.includes(o.size) ? o.size : "medium", winScore: clampInt(o.winScore, 1, 9, 3),
-    friendlyFire: o.friendlyFire === true, visible: VISIBLE.includes(o.visible) ? o.visible : "self" };
+    friendlyFire: o.friendlyFire === true, roundTime: roundTime(o.roundTime), visible: VISIBLE.includes(o.visible) ? o.visible : "self", watchOut: afterDeath(o.watchOut) };
 }
 
+// a round time limit setting: one of ROUND_TIMES, else 0 (no limit)
+const roundTime = v => ROUND_TIMES.includes(Number(v)) ? Number(v) : 0;
+
 // TunnelerEngine options for a room's cfg (from "hello": {ext, slots: [{color, team}], size, winScore,
-// friendlyFire}). The teams are the room's initial ones; config frames change them later.
+// friendlyFire, roundTime}). The teams are the room's initial ones; config frames change them later.
 function engineOptions(cfg) {
   const o = { slots: cfg.slots.map(s => ({ color: s.color, team: s.team })), size: cfg.size || "medium",
     winScore: cfg.winScore || 3, friendlyFire: !!cfg.friendlyFire };
+  if (roundTime(cfg.roundTime)) o.roundTime = roundTime(cfg.roundTime);
   if (cfg.ext) o.extended = true;
   return o;
 }
@@ -265,7 +279,7 @@ function stateHash(e) {
 }
 
 const NetProto = { TICK_MS, UP, DOWN, LEFT, RIGHT, FIRE, ESC, ALL_BITS, EXT_BITS, BLUE_SCAN, GREEN_SCAN, F10,
-  ROLES, MAX_SLOTS, LEVELS, KINDS, SIZES, MAX_PLAYER_NAME, MAX_CHAT, VISIBLE, cleanPlayerName, cleanChat, cleanRoomName, roomSettings, engineOptions, applyFrameCfg,
+  AFTER_DEATH, afterDeath, ROLES, MAX_SLOTS, LEVELS, KINDS, SIZES, MAX_PLAYER_NAME, MAX_CHAT, VISIBLE, ROUND_TIMES, roundTime, cleanPlayerName, cleanChat, cleanRoomName, roomSettings, engineOptions, applyFrameCfg,
   checkCfg, frameToInput, frameToInputExt, FrameLog, FrameQueue, HASH_EVERY, stateHash };
 root.NetProto = NetProto;
 if (typeof module !== "undefined") module.exports = NetProto;

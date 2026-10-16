@@ -105,9 +105,12 @@ for (const [A, B] of pairings) {
 // ------------------------------------------------------------------ AI vs idle tank
 // The classic 1-vs-1 computer opponent must play exactly as the original 2-player AI did (docs/DESIGN-8P.md
 // 1: the classic modes stay as they are): frames it needs to destroy an idle tank, per level and seed.
+// One deliberate change since: exploration waypoints are kept out of the rock around the world (and about
+// 16 px away from rock - TunnelerAI.interior); normal seed 11 picks a waypoint at (154, 156), 12 px from
+// rock, which is now moved to (161, 153): 1552 -> 1560 frames. Everything else is still the original's.
 const CLASSIC_GOLDEN = {
   easy:   { 11: 3601, 22: 270, 33: 466, 44: 491, 55: 434, 66: 389 },
-  normal: { 11: 1552, 22: 266, 33: 426, 44: 465, 55: 402, 66: 360 },
+  normal: { 11: 1560, 22: 266, 33: 426, 44: 465, 55: 402, 66: 360 },
   hard:   { 11: 1556, 22: 285, 33: 406, 44: 507, 55: 373, 66: 395 },
   expert: { 11: 1511, 22: 197, 33: 331, 44: 380, 55: 319, 66: 291 },
 };

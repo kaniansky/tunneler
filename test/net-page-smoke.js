@@ -1,4 +1,8 @@
 "use strict";
+// the KeyboardEvent.key a browser reports for a code (NumLock on: keypad digits are digits)
+const keyOf = code => /^(Arrow|Enter|Escape|Tab|Backspace)/.test(code) ? code.replace(/^NumpadEnter$/, "Enter")
+  : code === "NumpadEnter" ? "Enter" : /^(Digit|Numpad)\d$/.test(code) ? code.slice(-1) : code === "Space" ? " "
+  : /^Key[A-Z]$/.test(code) ? code.slice(3).toLowerCase() : "";
 // Browser-less smoke test of online.html / lobby.html: loads the page scripts into a vm with a minimal
 // DOM / WebSocket stub, feeds it a hello + live frames and checks the engine runs and input is sent.
 //   node test/net-page-smoke.js
@@ -54,7 +58,7 @@ function makeEnv(search) {
 }
 
 function key(env, type, code, key) {
-  const e = { code, key: key || "", target: {}, ctrlKey: false, altKey: false, metaKey: false, repeat: false, preventDefault() {} };
+  const e = { code, key: key || keyOf(code), target: {}, ctrlKey: false, altKey: false, metaKey: false, repeat: false, preventDefault() {} };
   for (const f of env.listeners[type] || []) f(e);
 }
 // the text of a snapshot's screen, one line per row: font bytes as code page 437 (English: no letters in
@@ -134,14 +138,25 @@ function loadPage(page, search, stored) {
     await wait(300);
     const e = env.win.tunnelerEngine();
     assert(e.extended && e.nPlayers === 3 && e.worldW === 512 && e.winScore === 2 && e.colorIndex(3) === 7, "engine from cfg");
+    // the selection starts on "Start game" (not in the Name input); number keys set the own team from
+    // any row but the inputs
+    const lui = env.win.tunnelerLobbyUI();
+    assert.strictEqual(lui.spec.items[lui.sel].key, "start", "selection starts on Start game");
+    press(env, "Digit4", "4");
+    assert(ws.sent.some(m => m.t === "me" && m.team === 4), "digit 4 on Start game: team 4");
+    press(env, "ArrowUp"); press(env, "ArrowUp");                // Team, Name
+    assert.strictEqual(lui.spec.items[lui.sel].key, "name");
     type(env, "Zed");
+    press(env, "Digit7", "7");                                    // typed into the name, not a team
+    assert(!ws.sent.some(m => m.t === "me" && m.team === 7), "digits in the Name input are text");
+    press(env, "Backspace");
     await wait(450);
     assert(ws.sent.some(m => m.t === "me" && m.name === "Zed"), "name sent: " + JSON.stringify(ws.sent.filter(m => m.t === "me")));
     assert.strictEqual(env.ls.get("tunneler.name"), "Zed");
     assert(!ws.sent.some(m => m.t === "k"), "lobby keys are not relayed");
     assert(!ws.sent.some(m => m.t === "b" && m.v), "no held bits while typing");
     press(env, "ArrowDown"); press(env, "ArrowRight");
-    assert(ws.sent.some(m => m.t === "me" && m.team === 3), "team sent");
+    assert(ws.sent.some(m => m.t === "me" && m.team === 5), "team sent");
     press(env, "ArrowDown"); press(env, "Enter");
     assert(ws.sent.some(m => m.t === "ready" && m.v === 1), "ready sent");
     ws.recv({ ...st([{}, { ready: true, team: 3 }]), ready: [false, true, false] });
@@ -164,8 +179,8 @@ function loadPage(page, search, stored) {
     const shown = screenText(env.win, snap);
     assert(shown.includes("Bob: Привет, Σοφία!") && shown.includes("hi"), "chat in the Unicode plane: " + shown);
     assert(snap.uni && snap.uni.some(u => u === "П".codePointAt(0)), "Cyrillic through the plane");
-    // the host's kick item: Down to it (after Instructions, Copy invite link), Enter twice (confirm)
-    for (let i = 0; i < 3; i++) press(env, "ArrowDown");
+    // the host's kick item: Down to it (after Copy invite link), Enter twice (confirm)
+    for (let i = 0; i < 2; i++) press(env, "ArrowDown");
     press(env, "Enter"); press(env, "Enter");
     assert(ws.sent.some(m => m.t === "kick" && m.slot === 0), "kick sent: " + JSON.stringify(ws.sent.filter(m => m.t === "kick")));
     ws.recv({ t: "pong", c: performance.now() - 20 });
@@ -185,13 +200,13 @@ function loadPage(page, search, stored) {
     ws.recv({ t: "hello", id: "lob", name: "Lobby", role: "spectate", seed: 99, created: 1, n: 0, from: 0, f: [],
       cfg: { ext: false, players: 2, slots: [{ color: 0, team: 1 }, { color: 1, team: 2 }] }, you: { slot: -1, host: false, k: 3 } });
     await wait(200);
-    for (const c of ["ArrowDown", "Enter", "Escape", "Tab"]) press(env, c);
+    for (const c of ["ArrowDown", "Enter", "Tab"]) press(env, c);
     assert(!ws.sent.some(m => ["me", "ready", "kick", "k", "b", "chat"].includes(m.t)), "spectators are read-only");
     // ... but they chat: "Say:" is their first item
     ws.recv({ t: "hello", id: "lob", name: "Lobby", role: "spectate", seed: 99, created: 1, n: 0, from: 0, f: [], chat: [{ from: { color: 1, name: "" }, text: "old" }],
       cfg: { ext: false, players: 2, slots: [{ color: 0, team: 1 }, { color: 1, team: 2 }] }, you: { slot: -1, host: false, k: 3 } });
     await wait(250);
-    press(env, "Escape"); press(env, "Home");
+    press(env, "Home");
     const ui = env.win.tunnelerLobbyUI();
     ui.sel = ui.spec.items.findIndex(it => it.key === "say");
     type(env, "Hello all");
@@ -201,15 +216,41 @@ function loadPage(page, search, stored) {
     console.log("  ok  online.js spectator lobby: read-only, but chats (history from hello)");
   }
 
+  // a classic room (BLUE against GREEN, no teams): no TEAM column and no team text in the pre-game lobby
+  {
+    const env = loadPage("online.html", "?room=cl&role=blue");
+    await wait(20);
+    const ws = env.sockets[0];
+    ws.recv({ t: "hello", id: "cl", name: "Classic", role: "blue", seed: 7, created: 1, n: 0, from: 0, f: [],
+      cfg: { ext: false, players: 2, slots: [{ color: 0, team: 1 }, { color: 1, team: 5 }] }, you: { slot: 0, host: false, k: 1 } });
+    ws.recv({ t: "st", running: false, n: 0, spec: 0, conn: [true, true], ready: [false, false],
+      slots: [{ color: 0, kind: "human", name: "", team: 1, connected: true, joined: true, ping: 20 },
+        { color: 1, kind: "human", name: "", team: 5, connected: true, joined: true, ping: 20 }], specs: [] });
+    await wait(250);
+    const ui = env.win.tunnelerLobbyUI(), shown = screenText(env.win, ui.display.snap);
+    assert(/BLUE/.test(shown) && /GREEN/.test(shown), "slot rows shown: " + shown);
+    assert(!/TEAM|team \d/.test(shown), "classic room: no team column / text: " + shown);
+    assert(!ui.spec.items.some(it => it.key === "team"), "no Team row");
+    assert.strictEqual(ui.spec.items[ui.sel].key, "start", "selection starts on Start game");
+    console.log("  ok  online.js classic room: no TEAM column, selection on Start game");
+  }
+
   // the create screen's slot editor: CYAN becomes human in team 4, then "Create the game"
   {
     const env = loadPage("lobby.html", "");
     await wait(30);
     press(env, "Enter");                                   // "Create a new game"
     type(env, "My game");
-    for (let i = 0; i < 8; i++) press(env, "ArrowDown");   // name, public, spectators, size, win, visible, BLUE, GREEN -> CYAN
+    // two boxes, one selection: Game = name, public, spectators, size, win, round time, ff, visible, watch, gap, create,
+    // back; Players = BLUE..TEAL. Up from the name wraps to TEAL.
+    for (let i = 0; i < 6; i++) press(env, "ArrowUp");     // TEAL .. CYAN
     press(env, "ArrowRight"); press(env, "Enter");         // nobody -> human, team 3 -> 4
-    for (let i = 0; i < 6; i++) press(env, "ArrowDown");   // -> "Create the game"
+    press(env, "Tab");                                     // the Game box: its first item (Name)
+    for (let i = 0; i < 5; i++) press(env, "ArrowDown");   // public .. round time
+    press(env, "ArrowLeft");                               // round time: no limit -> 10 min (wraps back)
+    for (let i = 0; i < 3; i++) press(env, "ArrowDown");   // .. after death (friendly fire always shown)
+    press(env, "Enter");                                   // after death: wreck -> others
+    press(env, "ArrowDown");                               // (the gap is skipped) "Create the game"
     press(env, "Enter");
     await wait(50);
     const post = env.fetches.find(f => f.o && f.o.method === "POST");
@@ -217,7 +258,8 @@ function loadPage(page, search, stored) {
     const body = JSON.parse(post.o.body);
     assert.strictEqual(body.name, "My game");
     assert.deepStrictEqual(body.slots.slice(0, 4).map(s => [s.kind, s.team]), [["human", 1], ["human", 2], ["human", 4], ["none", 4]]);
-    assert(body.size === "medium" && body.winScore === 3 && body.friendlyFire === false && body.visible === "self");
+    assert(body.size === "medium" && body.winScore === 3 && body.friendlyFire === false && body.visible === "self" && body.watchOut === "others" && body.roundTime === 10);
+    assert.strictEqual(JSON.parse(env.ls.get("tunneler.online")).roundTime, 10, "round time remembered");
     assert.strictEqual(env.ls.get("tunneler.host.new-game"), "f".repeat(32));
     console.log("  ok  lobby.js slot editor creates a game and keeps its host key");
   }

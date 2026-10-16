@@ -1,4 +1,8 @@
 "use strict";
+// the KeyboardEvent.key a browser reports for a code (NumLock on: keypad digits are digits)
+const keyOf = code => /^(Arrow|Enter|Escape|Tab|Backspace)/.test(code) ? code.replace(/^NumpadEnter$/, "Enter")
+  : code === "NumpadEnter" ? "Enter" : /^(Digit|Numpad)\d$/.test(code) ? code.slice(-1) : code === "Space" ? " "
+  : /^Key[A-Z]$/.test(code) ? code.slice(3).toLowerCase() : "";
 // Local games without a browser: the vs computer slot editor / split-screen settings (home.js) build the
 // right play.html links and remember their settings, play.js turns those links into the right engine
 // (classic for BLUE + GREEN, extended otherwise; size, rounds to win, friendly fire, computer levels),
@@ -37,7 +41,7 @@ function makeEnv(search, store) {
     for (const [, src] of fs.readFileSync(path.join(SRC, f), "utf8").matchAll(/<script src="\/([^"]+)"/g))
       vm.runInContext(src === "js/langs.js" ? langBundle(path.join(SRC, "lang")) : fs.readFileSync(path.join(SRC, src), "utf8"), ctx, { filename: src });
   };
-  const key = code => { for (const f of listeners.keydown || []) f({ code, key: "", target: {}, preventDefault() {} }); };
+  const key = code => { for (const f of listeners.keydown || []) f({ code, key: keyOf(code), target: {}, preventDefault() {} }); };
   return { win, page, key, storage };
 }
 
@@ -101,14 +105,15 @@ function play(search) {
   const e = w.tunnelerEngine();
   assert(e.extended && e.nPlayers === 3 && e.size === "small" && !e.friendlyFire && e.winScore === 3);
   same(Array.from(e.slots, s => s.color), [0, 3, 7]);
-  ok("BLUE + MAGENTA + TEAL keep their colors; small map; no friendly fire without teams");
+  ok("BLUE + YELLOW + TEAL keep their colors; small map; no friendly fire without teams");
 }
 {
   const w = play("?mode=cpu&slots=" + encodeURIComponent("0:you:1,1:normal:2,2:normal:3,3:normal:4,4:normal:5,5:normal:6,6:normal:7,7:normal:8") + "&size=large");
   assert(w.tunnelerEngine().nPlayers === 8 && w.tunnelerEngine().nTeams === 8);
-  // garbage / everyone in one team: still a playable game (2+ teams, BLUE first)
+  // garbage: the first "you" wins (PINK here; you may sit in any color), a second "you", a bogus kind
+  // and a repeated color are dropped; still a playable game (2+ teams)
   const g = play("?mode=cpu&slots=" + encodeURIComponent("5:you:1,0:you:3,1:bogus:2,2:hard:3,2:hard:4") + "&win=42&size=huge").tunnelerEngine();
-  same(Array.from(g.slots, s => [s.color, s.team]), [[0, 3], [2, 4]]);
+  same(Array.from(g.slots, s => [s.color, s.team]), [[2, 3], [5, 1]]);
   assert(g.winScore === 3 && g.size === "medium");
   // old links (?opp=..&teams=..&level=..) still work
   const o = play("?mode=cpu&level=hard&opp=3&teams=1&hide=0");
@@ -122,7 +127,10 @@ function play(search) {
   assert(!e.extended && e.size === "small" && e.winScore === 1 && w.tunnelerAIs().length === 0);
   assert.strictEqual(w.tunnelerRunner().listener, null, "split screen: full volume");
   const d = play("?mode=hotseat").tunnelerEngine();
-  assert(!d.extended && d.size === "medium" && d.winScore === 3);
+  assert(!d.extended && d.size === "medium" && d.winScore === 3 && d.roundTime === 0);
+  assert.strictEqual(play("?mode=hotseat&time=5").tunnelerEngine().roundTime, 5, "&time=5: 5-minute rounds");
+  assert.strictEqual(play("?mode=hotseat&time=7").tunnelerEngine().roundTime, 0, "&time=7: not a choice - no limit");
+  assert.strictEqual(play("?mode=cpu&slots=0:you:1,2:easy:2&time=10").tunnelerEngine().roundTime, 10, "vs computer &time=10");
   ok("split screen: classic engine with size / rounds to win from the link, full-volume sound");
 }
 
@@ -133,14 +141,15 @@ function play(search) {
   env.page("index.html");
   env.key("ArrowDown"); env.key("Enter");                  // Vs computer
   env.key("Enter");                                        // Start a new game (selected first)
-  assert.strictEqual(decodeURIComponent(env.win.location.href), "/play.html?mode=cpu&slots=0:you:1,1:normal:2&size=medium&win=3&ff=0&view=self",
+  assert.strictEqual(decodeURIComponent(env.win.location.href), "/play.html?mode=cpu&slots=0:you:1,1:normal:2&size=medium&win=3&ff=0&view=self&watch=wreck",
     "default = the classic game");
   // CYAN: computer (easy) in team 2 -> 1 vs 2 teams; large map; 5 to win; friendly fire on; view everyone
   env = makeEnv("", store);
   env.page("index.html");
   env.key("ArrowDown"); env.key("Enter");
-  // items: slot0..7, gap, size, win, view, gap, play, instr, back (play selected)
-  for (let i = 0; i < 4; i++) env.key("ArrowUp");           // view, win, size, slot7
+  // items (two boxes, one selection): Game = size, win, round time, view, ghost mode, gap, play, instr, back;
+  // Players = slot0..7 (play selected; Up from size wraps to slot7, Down from slot7 to size)
+  for (let i = 0; i < 6; i++) env.key("ArrowUp");           // watch, view, time, win, size, slot7
   env.key("ArrowLeft");                                    // TEAL: nobody -> expert
   for (let i = 0; i < 5; i++) env.key("ArrowUp");           // slot2 CYAN
   env.key("ArrowRight");                                   // nobody -> easy
@@ -149,17 +158,63 @@ function play(search) {
   for (let i = 0; i < 6; i++) env.key("ArrowDown");         // slot3..7, size
   env.key("ArrowRight");                                   // large
   env.key("ArrowDown"); env.key("ArrowRight"); env.key("ArrowRight");   // win 5
+  env.key("ArrowDown"); env.key("ArrowRight"); env.key("Enter");   // round time: no limit -> 2 -> 3 min
   env.key("ArrowDown"); env.key("Enter");                  // friendly fire (a team has 2+): on
   env.key("ArrowDown"); env.key("Enter"); env.key("Enter");   // view: self -> team -> everyone
+  env.key("ArrowDown"); env.key("Enter");                  // after death: wreck -> others
+  // (with friendly fire shown the gap above "Start a new game" goes: 17 rows)
   env.key("ArrowDown"); env.key("Enter");                  // start
   assert.strictEqual(decodeURIComponent(env.win.location.href),
-    "/play.html?mode=cpu&slots=0:you:1,1:normal:2,2:easy:2,7:expert:8&size=large&win=5&ff=1&view=everyone");
+    "/play.html?mode=cpu&slots=0:you:1,1:normal:2,2:easy:2,7:expert:8&size=large&win=5&ff=1&view=everyone&watch=others&time=3");
+  assert.strictEqual(store.get("tunneler.cpu.watch"), "others", "after death remembered");
+  assert.strictEqual(store.get("tunneler.cpu.time"), "3", "round time remembered");
+  // number keys (top row and the numeric keypad with NumLock on) set the team of the selected slot row
+  {
+    const st = new Map(), en = makeEnv("", st);
+    en.page("index.html"); en.key("ArrowDown"); en.key("Enter");
+    for (let i = 0; i < 11; i++) en.key("ArrowUp");         // watch, view, time, win, size, TEAL..CYAN (rows: see above)
+    en.key("ArrowUp");                                     // GREEN
+    for (const [code, t] of [["Numpad2", 2], ["Numpad4", 4], ["Numpad6", 6], ["Numpad8", 8], ["Digit3", 3], ["Numpad7", 7]]) {
+      en.key(code);
+      const saved = JSON.parse(st.get("tunneler.cpu.slots"));
+      assert.strictEqual(saved[1].team, t, code + " -> team " + t);
+    }
+    ok("number keys and the numeric keypad (2/4/6/8 too) set a slot's team");
+  }
+  // mouse on the slot rows (DosUI zones): a click on the who column / the team cycles it forward, a
+  // right click backward, a click elsewhere on the row only selects it
+  {
+    const st = new Map(), en = makeEnv("", st);
+    en.page("index.html"); en.key("ArrowDown"); en.key("Enter");
+    const ui = en.win.tunnelerHomeUI();
+    const at = (key, labelCol) => {
+      const i = ui.spec.items.findIndex(it => it.key === key), b = ui.boxOf(i);
+      return { clientX: (b.x + 1 + labelCol) * 9 + 4, clientY: (b.y + (i - b.start)) * 16 + 8 };
+    };
+    const zone = (key, z) => ui.spec.items.find(it => it.key === key).zones[z].from;
+    const saved = () => JSON.parse(st.get("tunneler.cpu.slots"));
+    ui.click(at("slot1", zone("slot1", 1)));
+    assert.strictEqual(saved()[1].team, 3, "click on GREEN's team: 2 -> 3");
+    ui.zoneClick(at("slot1", zone("slot1", 1) + 2), -1);
+    assert.strictEqual(saved()[1].team, 2, "right click: back to 2");
+    ui.click(at("slot1", zone("slot1", 0)));
+    assert.strictEqual(saved()[1].kind, "hard", "click on GREEN's who: normal -> hard");
+    ui.zoneClick(at("slot1", zone("slot1", 0) + 1), -1);
+    assert.strictEqual(saved()[1].kind, "normal", "right click: back to normal");
+    ui.click(at("slot2", zone("slot2", 0)));
+    assert.strictEqual(saved()[2].kind, "easy", "CYAN: nobody -> easy (not \"you\": BLUE is yours)");
+    const before = st.get("tunneler.cpu.slots");
+    ui.click(at("slot3", 1));                               // the color name: selects only
+    assert.strictEqual(ui.spec.items[ui.sel].key, "slot3", "a click on the name selects the row");
+    assert.strictEqual(st.get("tunneler.cpu.slots"), before, "... and changes nothing");
+    ok("vs computer slot rows: clicks on the who / team columns cycle them (right click back), elsewhere select");
+  }
   // remembered
   env = makeEnv("", store);
   env.page("index.html");
   env.key("ArrowDown"); env.key("Enter"); env.key("Enter");
   assert.strictEqual(decodeURIComponent(env.win.location.href),
-    "/play.html?mode=cpu&slots=0:you:1,1:normal:2,2:easy:2,7:expert:8&size=large&win=5&ff=1&view=everyone");
+    "/play.html?mode=cpu&slots=0:you:1,1:normal:2,2:easy:2,7:expert:8&size=large&win=5&ff=1&view=everyone&watch=others&time=3");
   ok("vs computer slot editor: default classic, slots / teams / options, remembered in localStorage");
 
   // nobody but you: "Start a new game" does nothing
@@ -185,10 +240,32 @@ function play(search) {
   env.key("Enter");
   env.key("ArrowDown"); env.key("ArrowLeft");              // small
   env.key("ArrowDown"); env.key("ArrowLeft");              // 2
-  env.key("ArrowUp"); env.key("ArrowUp"); env.key("Enter");
-  assert.strictEqual(env.win.location.href, "/play.html?mode=hotseat&size=small&win=2");
+  env.key("ArrowDown"); env.key("ArrowLeft");              // round time: no limit -> 10 min (wraps back)
+  env.key("ArrowUp"); env.key("ArrowUp"); env.key("ArrowUp"); env.key("Enter");
+  assert.strictEqual(env.win.location.href, "/play.html?mode=hotseat&size=small&win=2&time=10");
   assert.strictEqual(store.get("tunneler.split.size"), "small");
-  ok("split-screen settings: default classic, map size and rounds to win, remembered");
+  assert.strictEqual(store.get("tunneler.split.time"), "10");
+  ok("split-screen settings: default classic, map size, rounds to win and round time, remembered");
+}
+
+// ---------------------------------------------------------------- home.js Settings: language, sound
+{
+  const store = new Map();
+  const env = makeEnv("", store);
+  env.page("index.html");
+  env.key("ArrowUp"); env.key("Enter");                    // (wraps to the last item) Settings
+  env.key("ArrowDown"); env.key("ArrowRight");             // Sound: original -> realistic
+  assert.strictEqual(store.get("tunneler.sound"), "realistic", "sound style remembered");
+  env.key("ArrowLeft"); env.key("ArrowLeft");              // -> muted
+  assert.strictEqual(store.get("tunneler.sound"), "muted");
+  env.key("ArrowDown"); env.key("Enter");                  // Show ping: off -> on
+  assert.strictEqual(store.get("tunneler.ping"), "1", "show ping remembered");
+  env.key("ArrowUp");
+  env.key("ArrowUp"); env.key("ArrowRight");               // Language: the next one
+  assert.notStrictEqual(store.get("tunneler.lang") || "en", "en", "language switched");
+  env.key("ArrowLeft");
+  env.key("Escape"); env.key("ArrowDown"); env.key("Enter");   // back on the main menu: split screen ...
+  ok("homepage Settings: language, sound style (muted / original / realistic / cartoony), show ping - remembered");
 }
 
 // ---------------------------------------------------------------- views.js: players by their slot's color
@@ -208,16 +285,16 @@ function play(search) {
   const lines = v.teamLines(e);
   assert.strictEqual(lines.reduce((a, l) => a + l.length, 0), e.nTeams, "every team listed");
   for (const l of lines) assert(l.reduce((a, [t]) => a + t.length, 0) + 5 * (l.length - 1) <= 78, "team line fits");
-  assert.strictEqual(lines[0][1][1], E.PLAYER_TEXT_COLORS[3], "team 2 in its first tank's color (MAGENTA)");
+  assert.strictEqual(lines[0][1][1], E.PLAYER_TEXT_COLORS[3], "team 2 in its first tank's color (YELLOW)");
   // classic: BLUE / GREEN as the original
   const c = play("?mode=cpu&slots=0:you:1,1:normal:2").tunnelerViews();
   same([c.playerColor(0), c.playerColor(1), c.teamLines(c.engine()).length], [9, 10, 0], "classic colors");
-  ok("views.js: players colored / named by their slot (BLUE, MAGENTA, TEAL...), all teams on the map");
+  ok("views.js: players colored / named by their slot (BLUE, YELLOW, TEAL...), all teams on the map");
 }
 
 // ---------------------------------------------------------------- views.js: self / team / everyone (DESIGN-8P 23)
 {
-  // BLUE + MAGENTA in team 1, CYAN + TEAL in team 2, GREEN alone in team 3
+  // BLUE + YELLOW in team 1, CYAN + TEAL in team 2, GREEN alone in team 3
   const link = "?mode=cpu&slots=" + encodeURIComponent("0:you:1,1:normal:3,2:normal:2,3:normal:1,7:normal:2");
   const layoutOf = q => {
     const w = play(link + q), v = w.tunnelerViews(), e = w.tunnelerEngine();
@@ -226,7 +303,7 @@ function play(search) {
   };
   const self = layoutOf("&view=self"), team = layoutOf("&view=team"), all = layoutOf("&view=everyone"), old = layoutOf("&hide=0");
   same([self.kind, self.cells, self.cols], ["grid", [0], 1], "self: own view only");
-  same([team.cells, team.cols, team.rows], [[0, 3], 2, 1], "team: own, then MAGENTA (player 4)");
+  same([team.cells, team.cols, team.rows], [[0, 3], 2, 1], "team: own, then YELLOW (player 4)");
   same([all.cells, all.cols, all.rows], [[0, 1, 2, 3, 4], 3, 2], "everyone: own first, then slot order, 3 + 2");
   same(old.cells, [0, 1, 2, 3, 4], "old hide=0 links: everyone");
   same(layoutOf("").cells, [0], "default: self");
@@ -251,6 +328,59 @@ function play(search) {
   const hs = play("?mode=hotseat").tunnelerViews(); hs.snap = { screen: "play", mode: "lores" };
   same([hs.layout().kind, hs.layout().crop], ["display", null], "hotseat: the original screen");
   ok("views.js: self / team / everyone - own view first, teammates / others in slot order; classic halves");
+}
+
+// ---------------------------------------------------------------- ghost mode, you marker, settings (DESIGN-8P 25)
+{
+  // BLUE (you) + YELLOW in team 1, CYAN + TEAL in team 2, GREEN alone in team 3
+  const link = "?mode=cpu&slots=" + encodeURIComponent("0:you:1,1:normal:3,2:normal:2,3:normal:1,7:normal:2");
+  const w = play(link + "&watch=others&view=team"), v = w.tunnelerViews(), e = w.tunnelerEngine();
+  assert.strictEqual(v.watchOut, "others", "watch=others: views.watchOut");
+  assert.strictEqual(play(link + "&watch=1").tunnelerViews().watchOut, "others", "old links: watch=1 = others");
+  assert.strictEqual(e.youPlayer, 1, "you marker on player 1");
+  same(e.showSettings, { view: "team", visible: false, watchOut: "others" }, "settings listed");
+  v.snap = { screen: "play", mode: "lores", views: e.views || [] };
+  e.killedBy = [0, 0, 0, 0, 0, 0];
+  const alive = (...on) => { e.alive = [false, ...on]; return v.layout(); };
+  same(alive(true, true, true, true, true).cells, [0, 3], "alive: the scope's views (own team)");
+  let L = alive(false, true, true, true, true);
+  same([L.cells, !!L.labels], [[3], true], "out, no killer (energy): the first alive, own team's first (YELLOW)");
+  alive(true, true, true, true, true);                      // (next round)
+  e.killedBy[1] = 3;                                        // CYAN shot you
+  L = alive(false, true, true, true, true);
+  same([L.cells, L.cols, !!L.labels], [[2], 1, true], "out: the tank that destroyed you (CYAN), labeled");
+  assert.strictEqual(v.listenTo(0), 2, "sounds fade from the watched tank (CYAN)");
+  e.killedBy[3] = 5;                                        // TEAL shot CYAN
+  same(alive(false, true, false, true, true).cells, [4], "the watched one destroyed: its killer (TEAL)");
+  e.killedBy[4] = 2;                                        // GREEN... but TEAL still alive: stays
+  same(alive(false, true, false, true, true).cells, [4], "stays on the watched tank while it lives");
+  same(alive(false, false, false, false, false).cells, [0, 3], "nobody left: the scope's views");
+  same(alive(true, false, false, false, false).cells, [0, 3], "next round (own tank alive): back to normal");
+  assert.strictEqual(v.listenTo(0), 0, "own tank alive: sounds fade from it again");
+  const off = play(link + "&view=team"), vo = off.tunnelerViews(), eo = off.tunnelerEngine();
+  vo.snap = { screen: "play", mode: "lores", views: eo.views || [] };
+  eo.alive = [false, false, true, true, true, true];
+  assert.strictEqual(vo.watchOut, "wreck", "default: wreck");
+  same(vo.layout().cells, [0, 3], "wreck: the scope's views stay");
+  assert(!vo.blackedOut(0, eo), "wreck: not black");
+  assert.strictEqual(eo.showSettings.watchOut, "wreck");
+  const bl = play(link + "&view=team&watch=black"), vb = bl.tunnelerViews(), eb = bl.tunnelerEngine();
+  eb.alive = [false, false, true, true, true, true];
+  assert(vb.blackedOut(0, eb) && !vb.blackedOut(3, eb), "black: the destroyed tank's view is black (DESTROYED), the living one's not");
+  assert(!v.blackedOut(0, e), "others: never black");
+  // classic (you BLUE against GREEN): out -> GREEN's half, labeled
+  const c = play("?mode=cpu&slots=0:you:1,1:normal:2&watch=1"), cv = c.tunnelerViews(), ce = c.tunnelerEngine();
+  cv.snap = { screen: "play", mode: "lores" };
+  ce.alive = [false, true, true];
+  same([cv.layout().kind, cv.layout().crop], ["display", "blue"], "classic alive: BLUE's half");
+  ce.alive = [false, false, true];
+  same([cv.layout().kind, cv.layout().cells, !!cv.layout().labels], ["grid", [1], true], "classic out: GREEN's half");
+  // you in another color: the marker follows "you"
+  assert.strictEqual(play("?mode=cpu&slots=" + encodeURIComponent("0:hard:1,4:you:2")).tunnelerEngine().youPlayer, 2, "you = WHITE (player 2)");
+  // split screen: two humans - no marker, no watching; the settings (size / rounds) still listed
+  const h = play("?mode=hotseat&size=small"), he = h.tunnelerEngine();
+  assert(he.youPlayer === null && h.tunnelerViews().watchOut === "wreck" && he.showSettings && he.showSettings.watchOut === undefined, "split screen");
+  ok("after death: black = DESTROYED, wreck, others = the killer (chained, else the first alive), back next round; you marker / settings set by play.js");
 }
 
 console.log("all " + n + " passed");

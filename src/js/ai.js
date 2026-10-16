@@ -15,6 +15,9 @@
 // with a teammate on the line and dodges teammates' shots; with it off (the default) a teammate only
 // stops a shot like a wall, so none of that is needed. Map size: the grid and the exploration follow
 // engine.worldW / worldH (small 512x256, medium 1024x512, large 2048x1024). winScore does not matter.
+// Both engines: exploration waypoints are kept in the open interior reachable from the own base (never in
+// the rock around the world or in rock pockets - interior / intoInterior, no PRNG draw) and given up after
+// GIVE_UP frames without getting closer (test/ai-ext-sim.js "rock around the world").
 // Extended engine only (the classic 1-vs-1 AI stays exactly as it was - test/ai-sim.js golden values):
 // steering through other bases' doorways (doorway), breaking dirt standoffs on a firing line (engage),
 // a coin toss to break off a losing head-on duel (decide), a bigger A* budget on the large map.
@@ -72,6 +75,7 @@ const COS32 = [1, 0.980785, 0.92388, 0.83147, 0.707107, 0.55557, 0.382683, 0.195
   -0.382683, -0.19509, 0, 0.19509, 0.382683, 0.55557, 0.707107, 0.83147, 0.92388, 0.980785];
 const VIEW_L = 38, VIEW_R = 37, VIEW_U = 38, VIEW_D = 32;   // the 76 x 71 px view window around a tank
 const RING = 16;                                            // perception history length (> max delay)
+const GIVE_UP = 150;                                        // frames without getting closer to a waypoint
 
 // world size in pixels (the original's 1024 x 512 unless the engine says otherwise)
 const worldW = e => e.worldW || 1024;
@@ -150,6 +154,31 @@ function getScratch(n, budget) {
     scratch.heapK = new Float64Array(hn);
   }
   return scratch;
+}
+
+// ------------------------------------------------------------------ rock cells, shared by all AIs
+// The world in CELL x CELL px cells: open (1) unless more than a quarter of 16 sampled pixels is rock.
+// Rock never changes during a round (shots and explosions only clear dirt), so one map per engine and
+// round serves every computer tank (a pure function of the world: sharing never changes a result).
+// Used to keep exploration waypoints out of the rock around the world (and rock pockets) - see interior.
+const CELL = 8;
+const rockCache = typeof WeakMap !== "undefined" ? new WeakMap() : null;
+function rockCells(e, key) {
+  let c = rockCache && rockCache.get(e);
+  if (c && c.key === key) return c;
+  const W = worldW(e), H = worldH(e), cw = W >> 3, ch = H >> 3, pc = e.pixelClass || PC;
+  const open = new Uint8Array(cw * ch);
+  for (let j = 0; j < ch; j++)
+    for (let i = 0; i < cw; i++) {
+      let rock = 0;
+      for (let y = j * CELL + 1; y < j * CELL + CELL; y += 2)
+        for (let x = i * CELL + 1; x < i * CELL + CELL; x += 2)
+          if (pc[e.getPixel(x, y)] === 4) rock++;
+      open[j * cw + i] = rock <= 4 ? 1 : 0;
+    }
+  c = { key, cw, ch, open };
+  if (rockCache) rockCache.set(e, c);
+  return c;
 }
 
 // ------------------------------------------------------------------ navigation grid
@@ -411,6 +440,9 @@ class TunnelerAI {
     this.noisy = null; this.noisyT = -9999;
     this.path = null; this.pathIdx = 0; this.pathGoal = null; this.replanT = 0; this.minReplanT = 0;
     this.waypoint = null; this.waypointT = 0;
+    this.wpBest = Infinity; this.wpBestT = 0;   // closest it got to the waypoint, and when
+    this.wpSeenT = 0;                // last frame it explored
+    this.reach = null;               // interior cells (see interior), built on first use
     this.retreating = false;
     this.spot = null; this.spotT = -9999;
     this.dodgeDir = -1; this.dodgeT = 0; this.threatSeen = new Set();
@@ -694,7 +726,17 @@ class TunnelerAI {
     // The base explored is the nearest one of an enemy still alive, chosen with every new waypoint.
     if (this.exploreQ && !e.alive[this.exploreQ]) { this.exploreQ = 0; this.waypoint = null; }
     const W = worldW(e), H = worldH(e);
-    if (!this.waypoint || cheb(mx, my, this.waypoint.x, this.waypoint.y) < 8 || this.t - this.waypointT > 700) {
+    // progress towards the waypoint: no 4 px closer for GIVE_UP frames = it cannot be reached (rock,
+    // a pocket, a long detour): give it up and pick another one instead of pushing on for 700 frames
+    // (only frames spent exploring count: time spent hunting / fighting / retreating meanwhile does not)
+    let dw = Infinity;
+    if (this.t - this.wpSeenT > 1) this.wpBestT += this.t - this.wpSeenT - 1;
+    this.wpSeenT = this.t;
+    if (this.waypoint) {
+      dw = cheb(mx, my, this.waypoint.x, this.waypoint.y);
+      if (dw <= this.wpBest - 4) { this.wpBest = dw; this.wpBestT = this.t; }
+    }
+    if (!this.waypoint || dw < 8 || this.t - this.waypointT > 700 || this.t - this.wpBestT > GIVE_UP) {
       this.waypointT = this.t;
       let bestD = Infinity;
       for (const q of this.enemies) {
@@ -720,9 +762,59 @@ class TunnelerAI {
       }
       this.waypoint.x = Math.max(30, Math.min(W - 34, this.waypoint.x));
       this.waypoint.y = Math.max(50, Math.min(H - 52, this.waypoint.y));
+      // the rock around the world is 40-96 px thick (scaled with the map size) plus rock blobs: a
+      // waypoint in it can never be reached - pull it towards the enemy base's doorway on its side until
+      // it is in the open interior (no PRNG draw: the stream stays the same)
+      const ay = eby + (this.waypoint.y < eby ? -27 : 27);
+      this.waypoint = this.intoInterior(e, this.waypoint.x, this.waypoint.y, ebx, ay);
+      this.wpBest = cheb(mx, my, this.waypoint.x, this.waypoint.y); this.wpBestT = this.t;
       this.path = null;
     }
     return { x: this.waypoint.x, y: this.waypoint.y, mode: "explore", dig: false };
+  }
+
+  // Is (x, y) in the open interior: in a rock cell's map region reachable from the own base (4-connected
+  // open cells - rock pockets and the rock around the world are not) and at least 2 cells (16 px) inside
+  // it? The region is built on first use from the shared rock map (rockCells), eroded by 2 cells.
+  interior(e, x, y) {
+    if (!this.reach) {
+      const R = rockCells(e, this.roundKey), cw = R.cw, ch = R.ch, open = R.open, n = cw * ch;
+      let a = new Uint8Array(n);
+      const s0 = Math.min(ch - 1, e.baseY[this.me] >> 3) * cw + Math.min(cw - 1, e.baseX[this.me] >> 3);
+      const q = new Int32Array(n);
+      let qh = 0, qt = 0;
+      a[s0] = 1; q[qt++] = s0;
+      while (qh < qt) {
+        const c = q[qh++], i = c % cw, j = (c - i) / cw;
+        if (i > 0 && !a[c - 1] && open[c - 1]) { a[c - 1] = 1; q[qt++] = c - 1; }
+        if (i < cw - 1 && !a[c + 1] && open[c + 1]) { a[c + 1] = 1; q[qt++] = c + 1; }
+        if (j > 0 && !a[c - cw] && open[c - cw]) { a[c - cw] = 1; q[qt++] = c - cw; }
+        if (j < ch - 1 && !a[c + cw] && open[c + cw]) { a[c + cw] = 1; q[qt++] = c + cw; }
+      }
+      for (let pass = 0; pass < 2; pass++) {      // erode: a cell stays if its 8 neighbours are in too
+        const b = new Uint8Array(n);
+        for (let j = 1; j < ch - 1; j++)
+          for (let i = 1; i < cw - 1; i++) {
+            const c = j * cw + i;
+            b[c] = a[c] & a[c - 1] & a[c + 1] & a[c - cw] & a[c + cw] &
+              a[c - cw - 1] & a[c - cw + 1] & a[c + cw - 1] & a[c + cw + 1];
+          }
+        a = b;
+      }
+      this.reach = { cw, ch, a };
+    }
+    const R = this.reach, i = x >> 3, j = y >> 3;
+    return i >= 0 && j >= 0 && i < R.cw && j < R.ch && R.a[j * R.cw + i] === 1;
+  }
+
+  // (x, y) if it is in the interior, else the first interior point on the way from it to (ax, ay)
+  // (16 steps; (ax, ay) itself if none is)
+  intoInterior(e, x, y, ax, ay) {
+    for (let k = 0; k < 16; k++) {
+      const px = x + Math.trunc((ax - x) * k / 16), py = y + Math.trunc((ay - y) * k / 16);
+      if (this.interior(e, px, py)) return { x: px, y: py };
+    }
+    return { x: ax, y: ay };
   }
 
   // ---------------------------------------------------------------- movement

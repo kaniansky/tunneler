@@ -35,6 +35,9 @@ for (const c of Lang.codes) {
   for (const k of ["home.split", "home.cpu", "home.online", "cpu.start", "back.main", "room.watch", "room.copy", "room.copied", "back.lobby", "create.go", "lobby.create"])
     fits(c, k, t(k), k.startsWith("lobby") ? 66 : 34);      // menu boxes size themselves to their items
   for (const n of Lang.codes) fits(c, "home.lang", t("home.lang") + Lang.name(n), 34);
+  for (const v of ["muted", "original", "realistic", "cartoony"]) fits(c, "set.sound", t("set.sound") + t("sound." + v), 34);
+  for (const k of ["sound.i1", "sound.i2", "home.settings.i", "set.ping.i"]) fits(c, k, t(k), 78);
+  for (const v of ["set.ping.on", "set.ping.off"]) fits(c, "set.ping", t("set.ping") + t(v), 34);
   for (const l of ["easy", "normal", "hard", "expert"]) fits(c, "cpu.level", t("cpu.level") + t("level." + l), 34);
   fits(c, "cpu.view", t("cpu.view") + t("cpu.view.own"), 34); fits(c, "cpu.view", t("cpu.view") + t("cpu.view.both"), 34);
   // view self / team / everyone (vs computer, pre-game lobby, create screen) and the chat's "Say:" input (16 shown)
@@ -42,14 +45,48 @@ for (const c of Lang.codes) {
     fits(c, "cpu.view", t("cpu.view") + t("view." + v), 34); fits(c, "pg.view", t("pg.view") + t("view." + v), 34);
     fits(c, "os.visible", t("os.visible") + t("view." + v), 39);
   }
+  // ghost mode switches, and the pre-game lobby's settings line with every setting at its longest
+  for (const v of ["watch.black", "watch.wreck", "watch.others"]) { fits(c, "lc.watch", t("lc.watch") + t(v), 34); fits(c, "os.watch", t("os.watch") + t(v), 39); }
+  {
+    const longest = list => list.sort((x, y) => vis(y) - vis(x))[0];
+    const parts = [longest(["small", "medium", "large"].map(z => t("pg.size." + z))), t("pg.win", { n: 9 }),
+      longest([t("pg.time", { n: 10 }), t("pg.time.off")]), longest([t("pg.ff.on"), t("pg.ff.off")]), longest(["self", "team", "everyone"].map(v => t("pg.visible", { v: Lang.raw("view." + v) }))),
+      longest([t("pg.watch.black"), t("pg.watch.wreck"), t("pg.watch.others")])];
+    const out = [];
+    for (const p of parts) {
+      if (out.length && vis(out[out.length - 1]) + 2 + vis(p) + 1 <= 78) out[out.length - 1] += ", " + p;
+      else out.push(p);
+    }
+    if (out.length > 2) fail(c, "pre-game lobby settings need " + out.length + " lines (max 2)");
+  }
+  // the two-box screens (vs computer, create a game): "Game" + "Players" side by side within 80 columns
+  {
+    const bw = len => { const w = Math.max(14, len + 4); return w + w % 2; };
+    const mx = a => Math.max(...a.map(x => typeof x === "number" ? x : vis(x)));
+    const lv = ["easy", "normal", "hard", "expert"], names = ["blue", "green", "cyan", "yellow", "white", "pink", "violet", "teal"].map(r => t(r));
+    const cpuL = [...["small", "medium", "large"].map(z => t("lc.size") + t("lc.size." + z)), t("lc.win") + "9", t("lc.time") + t("time.off"), t("lc.time") + t("time.n", { n: 10 }), t("lc.ff") + t("lc.on"), t("lc.ff") + t("lc.off"),
+      ...["self", "team", "everyone"].map(v => t("cpu.view") + t("view." + v)), ...["black", "wreck", "others"].map(v => t("lc.watch") + t("watch." + v)),
+      t("cpu.start"), t("menu.instr"), t("back.main")];
+    const cpuR = mx(names) + 2 + mx([t("lc.you"), t("lc.none"), ...lv.map(l => t("lc.cpu", { level: Lang.raw("level." + l) }))]) + 2 + vis(t("lc.team", { n: 8 }));
+    const onL = [vis(t("create.name")) + 18 + 1, ...["yes", "no"].map(y => t("create.public") + t(y)), ...["yes", "no"].map(y => t("create.spect") + t(y)),
+      ...["small", "medium", "large"].map(z => t("os.size") + t("os.size." + z)), t("os.win") + "9", t("os.time") + t("time.off"), t("os.time") + t("time.n", { n: 10 }), ...["self", "team", "everyone"].map(v => t("os.visible") + t("view." + v)),
+      t("os.ff") + t("os.off"), t("os.ff") + t("os.on"), ...["black", "wreck", "others"].map(v => t("os.watch") + t("watch." + v)), t("create.go"), t("back.lobby")];
+    const onR = mx(names) + 2 + mx([t("os.who.none"), t("os.who.human"), ...lv.map(l => t("os.who.cpu", { level: Lang.raw("level." + l) }))]) + 2 + vis(t("pg.teamn", { n: 8 }));
+    for (const [what, l, r] of [["vs computer", mx(cpuL), cpuR], ["create a game", mx(onL), onR]]) {
+      const total = bw(l) + 2 + 1 + bw(r) + 2;
+      if (total > 80) fail(c, what + ": the two boxes are " + total + " columns wide (> 80)");
+    }
+    for (const k of ["box.game", "box.players"]) fits(c, k, t(k), 10);
+  }
+  for (const k of ["time.i1", "time.i2"]) fits(c, k, t(k), 78);
   fits(c, "pg.say", t("pg.say") + "x".repeat(17), 34); fits(c, "pg.chat", " " + t("pg.chat") + " ", 20);
   for (const r of ["blue", "green"]) { fits(c, "room.play", t("room.play", { name: Lang.raw(r) }), 34); fits(c, "room.taken", t("room.taken", { name: Lang.raw(r) }), 34); }
   fits(c, "create.name", t("create.name") + "x".repeat(26), 38);
   for (const k of ["create.public", "create.spect"]) for (const y of ["yes", "no"]) fits(c, k, t(k) + t(y), 39);
   // single lines on the 80-column screen
   for (const k in D) if (typeof D[k] === "string" && k !== "name") fits(c, k, t(k, { name: "GREEN", names: "BLUE and GREEN", level: "expert", levels: "easy, normal, hard, expert", msg: "x", n: 99, s: 9 }), 79);
-  fits(c, "ui hint", t("ui.pd") + "  " + t("ui.hint") + "  " + t("ui.back"), 78);
-  fits(c, "create hint", t("ui.pd") + "  " + t("create.hint"), 78);
+  fits(c, "ui hint", t("ui.hint") + "  " + t("ui.back"), 78);
+  fits(c, "create hint", t("create.hint"), 78);
   // the engine's own pages
   const e = new E(1);
   Lang.apply(e);
@@ -59,6 +96,26 @@ for (const c of Lang.codes) {
   for (const k of ["fired", "hit", "percent", "dug", "moved"]) fits(c, "stats." + k, S.stats[k], 16);
   fits(c, "stats.winner", S.stats.winner + S.green + ".", 36); fits(c, "stats blue/green", S.blue, 9); fits(c, "stats blue/green", S.green, 9);
   e.initTables();
+  // the game's settings (display only) on the statistics (37 columns, rows 1-4) and the round title
+  // (76 columns, rows 3-6): every setting, each at its longest
+  const stShort = [0, 0];                      // statistics cases / those showing the round time
+  for (const size of ["small", "medium", "large"]) for (const view of ["self", "team", "everyone"]) for (const vsb of [false, true]) for (const w of ["black", "wreck", "others"]) {
+    const st = new E(1, { players: 4, teams: true, size, winScore: 9, roundTime: 10 });
+    Lang.apply(st);
+    st.showSettings = { view, visible: vsb, watchOut: w };
+    const parts = st.settingsParts();
+    if (parts.length !== 6) fail(c, "settings: " + parts.length + " parts, not 6");
+    parts.forEach(p => fits(c, "settings part", p, 37));
+    fits(c, "settings timeShort", st.settingsParts(1)[4], 37);
+    // (the round title has room for the full text; the statistics fall back to the short one / none)
+    if (st.settingsLines(76).join(" ").indexOf(parts[4]) < 0) fail(c, "round title settings lack the round time");
+    stShort[0]++; if (st.settingsLines(37).some(l => l.includes(st.settingsParts(1)[4]) || l.includes(parts[4]))) stShort[1]++;
+    const l37 = st.settingsLines(37), l76 = st.settingsLines(76);
+    l37.forEach(l => fits(c, "statistics settings line", l, 37)); l76.forEach(l => fits(c, "round title settings line", l, 76));
+    if (l37.length > 4) fail(c, "statistics settings take " + l37.length + " lines (max 4): " + l37.join(" / "));
+    if (l76.length > 4) fail(c, "round title settings take " + l76.length + " lines (max 4)");
+  }
+  if (stShort[1] * 2 < stShort[0]) fail(c, "the statistics show the round time in only " + stShort[1] + " of " + stShort[0] + " cases");
   // classic, then extended (3-8 tanks / teams / computer tanks: its own intro and controls lines)
   const ex = new E(1, { players: 4 });
   Lang.apply(ex);

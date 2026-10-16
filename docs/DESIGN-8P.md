@@ -60,7 +60,7 @@ Player slots, colours and names (index 0..7):
 | 0 | BLUE | 1 | 11,11,63 |
 | 1 | GREEN | 2 | 0,48,0 |
 | 2 | CYAN | 3 | 10,60,60 |
-| 3 | MAGENTA | 5 | 63,13,63 |
+| 3 | YELLOW (was MAGENTA; gray gun) | 5 | 63,63,18 |
 | 4 | WHITE | 9 | 63,63,63 |
 | 5 | PINK | 10 | 63,40,48 |
 | 6 | VIOLET | 11 | 36,18,63 |
@@ -121,7 +121,7 @@ locally each frame, so bot keys never travel over the network. Helper:
   and per extra slot **human | computer (difficulty)**. Create screen: "Players: 4" switch, "Mode:
   free-for-all / teams" switch, "Computer tanks: 0..N-1" switch + "Computer level: normal" switch
   (computer slots are the last ones). Classic is used when players = 2, no computers, free-for-all.
-- Slots/roles: role = colour name lowercase (`blue`, `green`, `cyan`, `magenta`, `white`, `pink`,
+- Slots/roles: role = colour name lowercase (`blue`, `green`, `cyan`, `yellow`, `white`, `pink`,
   `violet`, `teal`) or `spectate`. Lobby game screen lists "Play as <COLOUR>" for every human slot
   (taken / free), computer slots shown as disabled lines "<COLOUR>: computer (hard)".
 - Frames in extended rooms: `[[b0..bN-1], count]` or `[[b0..bN-1], 1, [[who, ascii, scan], ...]]`
@@ -220,7 +220,7 @@ use American spelling.
 
 ## 15. Slot editor - supersedes the Players / Mode / Computer tanks switches (owner, 2026-10-14 - after the workflow) - implemented
 
-Creating a game shows all **8 slots** (BLUE, GREEN, CYAN, MAGENTA, WHITE, PINK, VIOLET, TEAL), each row
+Creating a game shows all **8 slots** (BLUE, GREEN, CYAN, YELLOW, WHITE, PINK, VIOLET, TEAL), each row
 written in that player's color. For every slot the creator picks:
 - **who**: nobody / human / computer (easy, normal, hard, expert)
 - **team**: 1..8 (default: slot i -> team i, i.e. everyone on their own team = free-for-all)
@@ -349,3 +349,35 @@ all src/lang/*.js (en first, then alphabetical or by an `order` field) into one 
 public/js/langs.js that the pages load after lang.js; in dev (STATIC_DIR=src, npm run watch builds
 anyway) the server serves the same concatenation at /js/langs.js (or the pages load a small
 generated list) so no page or script tag has to change. Node tests load every file in src/lang/.
+
+## 25. Settings on the screens, "you" marker, ghost mode, two-box settings screens (owner, 2026-10-16) - implemented
+
+- **The game's settings** are listed (display only, `engine.showSettings = {view, visible, watchOut}`;
+  null = not at all, so the classic engine's screens stay the original's) on every round title (rows 3..,
+  centred, 76 columns) and above the statistics after a match (rows 1-4 of the right half, 37 columns):
+  map size, rounds to win, friendly fire (only when a team has 2+ tanks), the view (vs computer) /
+  the room's visible limit (online), ghost mode. Compact parts joined by ", " and wrapped
+  (`engine.settingsParts / settingsLines`, `strings.settings`, every language; lang-check: 4 lines at
+  most). Split screen: map size and rounds to win. The online pre-game lobby lists every setting too
+  (1 or 2 lines under the room name; the spectator count drops out first).
+- **"Show me which one is me"**: `engine.youPlayer = p | null` (display only) marks the local player's tank
+  with "► NAME ◄" (CP437 0x10 / 0x11, language neutral) on the round title and with an arrow pointing at
+  the name in the statistics ("NAME◄"; classic BLUE "►BLUE"). Vs computer: the "you" slot (any color);
+  online: the player's own slot (also on the lobby's private statistics engine); split screen and
+  spectators: none.
+- **Ghost mode: on / off** (`watchOut`, default off): after the own tank is destroyed, the rest of the
+  round shows the views of the tanks still alive (views.js `setWatchOut`: grid of the alive players, own
+  team's first, then slot order; one left = followed, labeled); the next round (own tank alive again)
+  brings the normal view back. Vs computer: a switch on the vs computer screen (`tunneler.cpu.watch`,
+  `play.html?...&watch=0|1`); online: a room setting on the create screen (`POST /api/rooms {watchOut}`,
+  `NetProto.roomSettings`: only `true` turns it on; in the room info, the lobby list's description when on,
+  `hello`'s cfg and the pre-game lobby's settings), for every player of the room (spectators see
+  everything anyway). Split screen: not applicable. Display only - never part of the simulation.
+- **Two boxes**: the create-a-game screen and the vs computer screen show "Game" (the settings, then
+  Create / Start, Instructions, Back) and "Players" (the 8 slot rows) side by side (`DosUI` `spec.boxes`:
+  titles in the top border, one selection - Up / Down continue into the other box, Tab jumps to it), the
+  selected item's help centred below. Slot rows: a click on the who column / the team cycles it (right
+  click: back; `zones` on DosUI items), elsewhere selects the row. lang-check keeps both boxes within 80
+  columns in every language.
+- Pre-game lobby: the selection starts on "Start game" (not in the Name input); number keys 1..8 set the
+  own team from any row but the Name / Say inputs; classic rooms (BLUE against GREEN) show no TEAM column.

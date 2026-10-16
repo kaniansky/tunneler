@@ -20,6 +20,10 @@
 //                            their own view, their team's or every view - as a grid with their own first,
 //                            then the others in slot order (classic: own half / the full split screen);
 //                            setScope(null) goes back to the modes above
+//   views.setWatchOut(v)     // "after death" (a game setting), with a scope: "black" - every destroyed
+//                            tank's view is black with "DESTROYED"; "wreck" - the views stay on the
+//                            wrecks; "others" - once the own tank is destroyed, one view: its killer
+//                            (else another tank still alive). The next round brings it all back.
 // opts: mode, follow, lockFollow (no Left / Right), keys (false: handleKey does nothing),
 //       storageKey (remember mode / follow in localStorage), onChange(views) after a switch,
 //       labels (default true; false: the hotseat split screen stays exactly the original).
@@ -37,6 +41,7 @@ const MAP_TOP = 17;                // map box: text rows 0..MAP_TOP (border), ma
 const CLASSIC_COLORS = [9, 10];    // classic tanks / bases: LORES colours 9 (BLUE), 10 (GREEN)
 const GAP = 5;                     // columns between the teams on the map's team lines
 
+const afterDeath = v => root.TunnelerEngine ? root.TunnelerEngine.afterDeath(v) : "wreck";
 const T = (k, p) => root.Lang ? root.Lang.t(k, p) : k;
 const raw = k => root.Lang ? root.Lang.raw(k) : k.toUpperCase();
 const enc = s => root.Lang ? root.Lang.enc(s) : s;
@@ -66,6 +71,8 @@ class ViewModes {
     this.aspectKey = "";
     this.mapImg = null; this.mapTick = -1; this.mapEngine = null;
     this.scope = null;             // {own, view} - a player's own view (setScope)
+    this.watchOut = afterDeath(opts.watchOut);   // after the own tank is destroyed: "black" / "wreck" / "others"
+    this.ghost = null;                 // "others": the player watched now (0-based)
     if (root.UniFont) root.UniFont.onLoad(() => { this.key = ""; });   // a glyph block arrived: redraw
   }
 
@@ -103,6 +110,41 @@ class ViewModes {
     this.scope = next;
     if (next) this.follow = next.own;
     this.changed();
+  }
+  setWatchOut(v) {
+    v = afterDeath(v);
+    if (v === this.watchOut) return;
+    this.watchOut = v;
+    this.changed();
+  }
+  // after death "others": the own tank is destroyed - one view: the tank that destroyed the one watched
+  // (following the chain while those are destroyed too), else the first still alive (own team's first,
+  // then slot order); it stays on that tank while it lives. null while the own tank is alive (or nobody
+  // is left, or another setting)
+  outCells() {
+    const e = this.engine();
+    if (this.watchOut !== "others" || !this.scope || !e || !e.alive) { this.ghost = null; return null; }
+    const n = this.nPlayers(), own = Math.min(this.scope.own, n - 1);
+    if (e.alive[own + 1]) { this.ghost = null; return null; }
+    let t = this.ghost == null ? own : this.ghost;
+    for (let k = 0; k < n && !e.alive[t + 1]; k++) {
+      const by = e.killedBy ? e.killedBy[t + 1] | 0 : 0;
+      if (!by || by - 1 === t) break;
+      t = by - 1;
+    }
+    if (!e.alive[t + 1]) {
+      const mate = i => e.extended && e.team ? e.team(i + 1) === e.team(own + 1) : false;
+      const alive = [];
+      for (let i = 0; i < n; i++) if (e.alive[i + 1]) alive.push(i);
+      if (!alive.length) { this.ghost = null; return null; }
+      t = alive.filter(mate).concat(alive.filter(i => !mate(i)))[0];
+    }
+    this.ghost = t;
+    return [t];
+  }
+  // whose position sounds fade from (0-based): the tank watched after death ("others"), else `own`
+  listenTo(own) {
+    return this.watchOut === "others" && this.ghost != null ? this.ghost : own;
   }
   // the players shown for the scope: own first, then teammates / everybody else in slot order
   scopeCells() {
@@ -184,10 +226,11 @@ class ViewModes {
     const follow = Math.min(Math.max(this.follow, 0), n - 1);
     const labels = this.opts.labels !== false && play && !!this.engine();
     if (play && this.scope) {
-      const cells = this.scopeCells();
-      if (!s.views && !(labels && cells.length > 1)) return { kind: "display", crop: cells.length > 1 ? null : cells[0] === 1 ? "green" : "blue" };
+      const out = this.outCells();                   // watching the others after the own tank is out
+      const cells = out || this.scopeCells();
+      if (!s.views && !(labels && (cells.length > 1 || out))) return { kind: "display", crop: cells.length > 1 ? null : cells[0] === 1 ? "green" : "blue" };
       const c = cells.length, cols = c <= 4 ? c : Math.ceil(c / 2);
-      return { kind: "grid", cells, cols, rows: Math.ceil(c / cols), labels: labels && c > 1 };
+      return { kind: "grid", cells, cols, rows: Math.ceil(c / cols), labels: labels && (c > 1 || !!out) };
     }
     if (play && this.mode === "map" && this.engine()) return { kind: "map" };
     if (!play || (!s.views && !labels)) {
@@ -209,11 +252,65 @@ class ViewModes {
       this.display.draw(now);
       const [c0, c1] = this.display.columns();
       this.fit(c1 - c0 === 40 ? "half" : "full");
+      this.drawPing();
+      this.drawNotice();
       return;
     }
     this.owned = true;
-    if (L.kind === "grid") this.drawGrid(L);
+    if (L.kind === "grid") { this.drawGrid(L); this.drawPing(); }
     else this.drawMap(now);
+    this.drawNotice();
+  }
+
+  // a one-line message across the middle of the game (font text, null = none), e.g. "Press <ESC> again
+  // to leave the game": yellow on a black band the whole width of the canvas
+  setNotice(text) {
+    text = text || "";
+    if (text === this.noticeText) return;
+    this.noticeText = text;
+    this.key = "";
+    this.display.lastKey = "";
+  }
+  drawNotice() {
+    if (!this.noticeText) return;
+    const U = root.UniText, D = root.Display, c = this.canvas;
+    const cols = Math.floor(c.width / 9), W = cols * 9;
+    const vram = new Uint8Array(cols * 2), uni = new Uint32Array(cols);
+    for (let k = 0; k < cols; k++) { vram[k * 2] = 0x20; vram[k * 2 + 1] = 0x0E; }
+    const cells = U.cells(U.slice(this.noticeText, cols - 2)), c0 = (cols - cells.length) >> 1;
+    cells.forEach(([b, cp], k) => { vram[(c0 + k) * 2] = b; uni[c0 + k] = cp; });
+    const tmp = new Uint32Array(W * 16);
+    D.paint(tmp, W, 0, 0, vram, 0, cols, 1, true, D.TEXT_U32, true, root.VGA_FONT, uni);
+    const y = ((c.height - 16) >> 1) - 8, img = this.ctx.createImageData(W, 32), out = new Uint32Array(img.data.buffer);
+    out.fill(D.TEXT_U32[0]);                            // (a black band: 8 lines above and below the text)
+    out.set(tmp, W * 8);
+    this.ctx.putImageData(img, (c.width - W) >> 1, y);
+  }
+
+  // the ping (ms, null = none): a small gray number on the top border at the left, like the view labels
+  setPing(ms) {
+    const t = ms == null ? "" : String(ms);
+    if (t === this.pingText) return;
+    this.pingText = t;
+    this.key = "";                                     // (redraw: the old digits go away)
+    this.display.lastKey = "";
+  }
+  drawPing() {
+    if (!this.pingText || !this.snap || this.snap.screen !== "play") return;
+    const U = root.UniText, D = root.Display;
+    const vram = new Uint8Array(80);
+    for (let c = 0; c < 80; c += 2) { vram[c] = 0x20; vram[c + 1] = 0x07; }
+    const cells = U.cells(" " + this.pingText + " "), c0 = 1, w = (c0 + cells.length) * 9;
+    cells.forEach(([b], k) => { vram[(c0 + k) * 2] = b; });
+    const tmp = new Uint32Array(360 * 16);
+    D.paint(tmp, 360, 0, 0, vram, 0, 40, 1, true, D.TEXT_U32, true, root.VGA_FONT);
+    const img = this.ctx.getImageData(0, 0, w, 8), out = new Uint32Array(img.data.buffer), bg = D.TEXT_U32[0] >>> 0;
+    for (let l = 0; l < 8; l++)                         // (half height: each pair of font lines merged)
+      for (let d = c0 * 9; d < w; d++) {
+        const a = tmp[2 * l * 360 + d], b = tmp[(2 * l + 1) * 360 + d];
+        out[l * w + d] = (a >>> 0) !== bg ? a : b;
+      }
+    this.ctx.putImageData(img, 0, 0);
   }
 
   // on-screen size: like canvas.game (4:3) / canvas.game.half (2:3) in style.css, other shapes inline
@@ -250,12 +347,36 @@ class ViewModes {
       const x = (k % L.cols) * 360, y = Math.floor(k / L.cols) * CH;
       if (s.views) { if (s.views[v]) D.paint(px, W, x, y + top, s.views[v], 0, 40, 100, false, pal, true, root.VGA_FONT); }
       else D.paint(px, W, x, y + top, s.vram, v * 40, v * 40 + 40, 100, false, pal, true, root.VGA_FONT);
+      // after death "black": the view window (cells 1-38 x 2-72, 9 x 4 pixels each) black with DESTROYED;
+      // the frame and the instrument panel stay
+      if (this.blackedOut(v, e)) {
+        for (let r = y + top + 2 * 4; r < y + top + 73 * 4; r++) px.fill(pal[0], r * W + x + 9, r * W + x + 39 * 9);
+        this.paintText(px, W, x, y + top + 37 * 4 - 8, T("vw.destroyed"), 0x0C);
+      }
       if (L.labels) this.paintLabel(px, W, x, y, v, e);
     });
     this.ctx.putImageData(this.img, 0, 0);
     this.fit(L.cols === 1 && L.rows === 1 && !L.labels ? "half" : "grid");
   }
 
+  // after death "black" (a player's own scope): a destroyed tank's view is black with "DESTROYED" until
+  // the next round ("wreck": it stays on the wreck; "others": see outCells)
+  blackedOut(i, e) {
+    return !!(this.scope && this.watchOut === "black" && e && e.alive && !e.alive[i + 1]);
+  }
+  // one line of font text centred in a 40-column view at pixel row y, in DOS attribute `attr`
+  paintText(px, W, x, y, text, attr) {
+    const U = root.UniText, D = root.Display;
+    const vram = new Uint8Array(80), uni = new Uint32Array(40);
+    for (let c = 0; c < 80; c += 2) { vram[c] = 0x20; vram[c + 1] = 0x00; }
+    const cells = U.cells(U.slice(text, 40)), c0 = (40 - cells.length) >> 1;
+    cells.forEach(([b, cp], k) => { vram[(c0 + k) * 2] = b; vram[(c0 + k) * 2 + 1] = attr; uni[c0 + k] = cp; });
+    // (drawn aside, then only the letters' pixels copied: what is under the text stays)
+    const tmp = new Uint32Array(360 * 16), bg = D.TEXT_U32[0] >>> 0;
+    D.paint(tmp, 360, 0, 0, vram, 0, 40, 1, true, D.TEXT_U32, true, root.VGA_FONT, uni);
+    for (let l = 0; l < 16; l++)
+      for (let d = c0 * 9; d < (c0 + cells.length) * 9; d++) if ((tmp[l * 360 + d] >>> 0) !== bg) px[(y + l) * W + x + d] = tmp[l * 360 + d];
+  }
   // view label: "NAME" (+ "  TEAM n" when teams are shared), font text, at most 38 columns
   viewLabel(i) {
     const e = this.engine(), U = root.UniText;

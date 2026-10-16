@@ -24,6 +24,9 @@ const UniText = root.UniText || (typeof require === "function" ? require("./unit
 const PIT_HZ = 1193182;
 const TICK = 65536;                       // PIT clocks per BIOS tick = one game frame
 const WAIT_TICK = -1;                     // yield value: wait for the next BIOS tick
+// queueSound kinds by number, as semantic sound effects (engine.fx): 0 shot hits dirt / rock, 1 digging,
+// 2 shot hits a tank that survives (shield), 3 tank destroyed, 4 firing, 5 bumping into rock / the border
+const FX_KINDS = ["impact", "dig", "hit", "destroy", "fire", "bump"];
 const ms = v => Math.round(v * PIT_HZ / 1000);   // yield value > 0: wait that many PIT clocks
 
 // Not real waits - CPU time spent by the original between events, used only to place speaker events
@@ -76,11 +79,11 @@ const PixelClass = [0, 3, 3, 4, 4, 4, 1, 4, 1, 3, 3, 4, 2, 4, 3, 4];
 // Slot color c (0..7) is EXT_COLORS[c] in the extended palette (EXT_PAL_RGB, used for the LORES screens
 // instead of the original PalRGB); EXT_TEXT_COLORS[c] is the closest text-mode colour for the round
 // title / statistics screens. A player's color is its slot's (engine.playerColor(p)).
-const EXT_KEYS = ["blue", "green", "cyan", "magenta", "white", "pink", "violet", "teal"];
+const EXT_KEYS = ["blue", "green", "cyan", "yellow", "white", "pink", "violet", "teal"];
 const EXT_COLORS = [1, 2, 3, 5, 9, 10, 11, 15];
-const EXT_TEXT_COLORS = [9, 10, 11, 13, 15, 12, 5, 3];
+const EXT_TEXT_COLORS = [9, 10, 11, 14, 15, 12, 5, 3];
 const EXT_PAL_RGB = [
-  [0, 0, 0], [11, 11, 63], [0, 48, 0], [10, 60, 60], [46, 0, 0], [63, 13, 63], [48, 30, 12], [38, 38, 38],
+  [0, 0, 0], [11, 11, 63], [0, 48, 0], [10, 60, 60], [46, 0, 0], [63, 63, 18], [48, 30, 12], [38, 38, 38],
   [46, 22, 1], [63, 63, 63], [63, 40, 48], [36, 18, 63], [63, 13, 2], [25, 25, 25], [60, 58, 7], [0, 38, 32]];
 // colour -> 0 free, 1 dirt (6, 8), 2 shot (12), 3 tank / base (player colours, treads 13, gun 14), 4 rock (7, 4)
 const PixelClassExt = [0, 3, 3, 3, 4, 3, 1, 4, 1, 3, 3, 3, 2, 3, 3, 3];
@@ -102,6 +105,7 @@ const Banner = [
 // Main menu. The DOS version chose these with F1 / F2 / F3 / F10; here the arrow keys move a highlight
 // bar and Enter (or a mouse click) picks the item. The item's old F-key scan code is still what the menu
 // loop dispatches on internally, so a keystroke with that scan code selects the item directly.
+const AFTER_DEATH = ["black", "wreck", "others"];         // the "after death" setting (watchOut), display only
 const MENU_SCANS = [59, 60, 68];
 const MENU_ROWS = [0, 2, 4];                         // box row of each item (blank rows between groups)
 const MENU_ATTR = 0x05, MENU_SEL_ATTR = 0x5F;          // magenta text / white on magenta bar
@@ -111,6 +115,7 @@ const MENU_ATTR = 0x05, MENU_SEL_ATTR = 0x5F;          // magenta text / white o
 const STRINGS_EN = {
   title: "TUNNELER ONLINE", by: "by Norko Kaniansky",
   menu: ["Start game", "Instructions", "Back to main menu"],
+  rematch: "Rematch",                   // replaces "Start game" after a match (same settings again)
   waiting: ["Waiting for the", "players to start"],
   creating: "(creating world)", ready: "(world ready)",
   round: "ROUND", blue: "BLUE", green: "GREEN",
@@ -120,9 +125,16 @@ const STRINGS_EN = {
     head: ["shot", "hit", "hit%", "dug", "moved"] },
   // extended mode: tank color names (slot color 0..7); "team" labels a team ("{n}" = its number 1..8;
   // "teams" is no longer used - teams are numbered now)
-  colors: ["BLUE", "GREEN", "CYAN", "MAGENTA", "WHITE", "PINK", "VIOLET", "TEAL"],
+  colors: ["BLUE", "GREEN", "CYAN", "YELLOW", "WHITE", "PINK", "VIOLET", "TEAL"],
   teams: ["BLUE TEAM", "GREEN TEAM"],
   team: "TEAM {n}",
+  // the game's settings, a compact list (display only, `showSettings`): round title and statistics
+  settings: { size: ["map size: small", "map size: medium", "map size: large"], win: "rounds to win: {n}",
+    ff: ["friendly fire: off", "friendly fire: on"], view: "view: {v}", visible: "view limit: {v}",
+    // the round time limit, only when there is one (option roundTime); the statistics' 37 x 4 area takes
+    // timeShort when time does not fit there, and leaves it out when neither does
+    time: "round time: {n} min", timeShort: "time: {n} min",
+    views: ["self", "team", "everyone"], watch: ["after death: black screen", "after death: my wreck", "after death: watch others"] },
   // the world map's "PRESS ANY KEY" pixel-art banner (5 rows of '*' / ' ', all the same length); a
   // translation may replace it (see Banner below for the original)
   // banner: [...],
@@ -156,8 +168,8 @@ const STRINGS_EN = {
     table: [["        <W> up", "             <\x18> up"],
       ["left <A>   <D> right", "    left <\x1B>   <\x1A> right"],
       ["        <S> down", "            <\x19> down"],
-      ["fire <CTRL>, <SHIFT> or <SPACE>", "           fire <ENTER>"]],
-    hold: "Hold two direction keys at once to move diagonally.  <M> sound on, off.",
+      ["fire <SHIFT> or <SPACE>", "   fire <ENTER> or right <SHIFT>"]],
+    hold: "Hold two direction keys at once to move diagonally.",
     gameHead: "The game:  ",
     game: ["Players can move in one of 8 directions.  Movement in tunnels is",
       "three times as fast as normal digging.  Fast digging can be accomplished by",
@@ -189,6 +201,10 @@ const STRINGS_EN = {
 const visLen = t => UniText.cols(t.replace(/\{\d+\}/g, ""));
 
 const centre = (t, w) => { const n = UniText.cols(t), l = (w - n) >> 1; return " ".repeat(l) + t + " ".repeat(w - n - l); };
+
+// 3 x 5 pixel digits 0-9 (rows, bit 4 = the left pixel) for the round time countdown (not in the original)
+const CLOCK_DIGITS = [[7, 5, 5, 5, 7], [2, 6, 2, 2, 7], [7, 1, 7, 4, 7], [7, 1, 7, 1, 7], [5, 5, 7, 1, 1],
+  [7, 4, 7, 1, 7], [7, 4, 7, 5, 7], [7, 1, 1, 2, 2], [7, 5, 7, 5, 7], [7, 5, 7, 1, 7]];
 
 const MaxShots = 6, MaxExplosions = 30, MaxParticles = 40, MaxPower = 11400;
 
@@ -223,16 +239,21 @@ class TunnelerEngine {
   // seed: Turbo Pascal RandSeed (what Randomize would have put there)
   // opts (not in the original, docs/DESIGN-8P.md):
   //   slots: [{color: 0..7, team: 1..8}, ...]  the used slots in slot order (2..8): player p (1..N) has the
-  //          color of slots[p - 1] (BLUE GREEN CYAN MAGENTA WHITE PINK VIOLET TEAL) and its team number
+  //          color of slots[p - 1] (BLUE GREEN CYAN YELLOW WHITE PINK VIOLET TEAL) and its team number
   //   players: 2..8, teams: bool              shorthand: slot i = color i, team i + 1 (teams: i % 2 + 1;
   //                                           teams: true always runs the extended engine)
   //   extended: bool                          force the extended engine (e.g. 2 players, one a computer online)
-  //   escEnds: bool                           extended, local games: player 1's Esc ends the match
+  //   escEnds: bool                           extended, local games: the human's Esc (bit 32) ends the match
+  //   escPlayer: 0..N-1                       whose Esc that is (default 0: player 1)
   //   size: "small" | "medium" | "large"      world 512x256 / 1024x512 (the original) / 2048x1024
   //   winScore: 1..9                          round wins that win the match (3 = the original)
   //   friendlyFire: bool                      shots hurt teammates (default false: they hit like a wall)
   //   autoStart: bool                         local games: skip the first main menu (settings were already
   //                                           chosen on the page) - straight to creating the world and round 1
+  //   roundTime: minutes (0 = no limit)       round time limit, counted in engine steps (BIOS ticks) of play:
+  //                                           when it runs out the side that did the most shield damage to
+  //                                           enemy tanks this round wins it (the others' tanks blow up); a
+  //                                           tie blows up everybody (nobody wins). 0 = the original.
   // The classic engine (the original, byte for byte with size medium and winScore 3) runs for exactly
   // BLUE + GREEN in different teams; anything else is the extended engine (N tanks, own palette, input bits).
   constructor(seed, opts) {
@@ -258,6 +279,8 @@ class TunnelerEngine {
     this.computeTeams();
     this.winScore = clampInt(o.winScore, 1, 9, 3);
     this.friendlyFire = !!o.friendlyFire;
+    this.roundTime = clampInt(o.roundTime, 0, 60, 0);
+    this.roundTicks = Math.round(this.roundTime * 60 * PIT_HZ / TICK);   // the limit in steps (BIOS ticks)
     // world size: W x H pixels, 2 per byte (odd x = high nibble), ws bytes per row
     this.size = WORLD_SIZES[o.size] ? o.size : "medium";
     [this.scN, this.scD] = WORLD_SIZES[this.size];
@@ -266,7 +289,11 @@ class TunnelerEngine {
     // the extended engine ignores Esc - one player must not end everybody's match)
     this.escEnds = this.extended && !!o.escEnds;
     this.escHeld = false;
+    this.escPlayer = Number.isInteger(o.escPlayer) && o.escPlayer >= 0 ? o.escPlayer : 0;
     this.autoStartPending = !!o.autoStart;
+    // noInstructions: the menu without "Instructions" (the site's main menu has them)
+    this.menuScans = o.noInstructions ? [MENU_SCANS[0], MENU_SCANS[2]] : MENU_SCANS;
+    this.menuRows = o.noInstructions ? [MENU_ROWS[0], MENU_ROWS[1]] : MENU_ROWS;
     const n1 = this.nPlayers + 1, arr = v => new Array(n1).fill(v);
     this.randSeed = seed >>> 0;
     this.vram = new Uint8Array(0x8000);          // B800:0000
@@ -294,6 +321,11 @@ class TunnelerEngine {
     this.round = 0;
     this.wins = arr(0); this.shotsFired = arr(0); this.shotsHit = arr(0);
     this.metersDug = arr(0); this.metersMoved = arr(0); this.alive = arr(false);
+    this.killedBy = arr(0);                       // extended, display only (views' "after death: others"): who shot it, 0 = none
+    // round time limit (option roundTime): shield damage each tank dealt to enemy tanks this round (0x700
+    // per hit; teammates never count), the step the round's play began, the countdown digits shown (-1 =
+    // none), whether the last round ended by the time limit (until the next round's play begins)
+    this.roundDamage = arr(0); this.roundStart = 0; this.clockShown = -1; this.timedOut = false;
     this.keyStr = NO_KEY;
     this.genX = 0; this.genY = 0; this.genI = 0; this.worldStage = -2;
     this.edgeVel = [0, 0, 0]; this.edgePos = [0, 0, 0];
@@ -305,6 +337,10 @@ class TunnelerEngine {
     this.uiMode = "hotseat";                      // "hotseat", "cpu" or "online": which controls the instructions describe
     this.menuWaiting = false;                     // draw the menu box as a "waiting for the players" notice
     this.menuNotice = null;                       // or as this notice (lines) instead of the items
+    // display only (never read by the simulation, not in stateHash; may differ per client):
+    this.youPlayer = null;                        // player 1..N marked "► you ◄" on the round title / statistics
+    this.showSettings = null;                     // {view, visible, watchOut}: list the game's settings on the
+                                                  // round title / statistics (null = not at all, as the original)
 
     // PlayGame locals
     this.obstacle = 0; this.static = false; this.soundOn = true; this.roundOver = false; this.matchOver = false;
@@ -343,6 +379,11 @@ class TunnelerEngine {
     this.tick = 0; this.now = 0; this.waitUntil = 0; this.cpu = 0;
     this.stepStart = 0;
     this.snapshots = []; this.soundEvents = []; this.dirty = true;
+    // semantic sound effects of the current step (output only, like soundEvents): {t: ms offset inside
+    // the step, kind: FX_KINDS name, x, y: world pixel of the source}, one per queueSound call while the
+    // game's sound is on. Used by the synthesized sound styles (speaker.js); never read by the
+    // simulation, not in stateHash. emitFx = false skips them (tests).
+    this.fx = []; this.emitFx = true;
     this.halted = false;
     this.gen = this.main();
   }
@@ -355,7 +396,7 @@ class TunnelerEngine {
       if (input.keyDown && !this.extended) for (let i = 0; i < 128; i++) this.keyDown[i] = input.keyDown[i] ? 1 : 0;
       if (input.bits && this.extended)
         for (let p = 1; p <= this.nPlayers; p++) this.bits[p] = (input.bits[p - 1] | 0) & (B_UP | B_DOWN | B_LEFT | B_RIGHT | B_FIRE);
-      if (input.bits && this.escEnds) this.escHeld = ((input.bits[0] | 0) & 32) !== 0;
+      if (input.bits && this.escEnds) this.escHeld = ((input.bits[this.escPlayer] | 0) & 32) !== 0;
       // INT 9 is replaced while playing and does not chain to the BIOS: no keys get buffered then
       if (input.keys && !this.kbdInstalled)
         for (const k of input.keys) if (this.keyBuf.length < 15) this.keyBuf.push(k);
@@ -364,6 +405,7 @@ class TunnelerEngine {
     this.stepStart = t0;
     this.snapshots = [];
     this.soundEvents = [];
+    this.fx = [];
     while (!this.halted && this.waitUntil < end) {
       if (this.waitUntil > this.now) this.now = this.waitUntil;
       this.cpu = 0;
@@ -658,6 +700,8 @@ class TunnelerEngine {
 
   // x, y: world position of the source (not in the original, output only - see sound())
   queueSound(kind, x, y) {
+    if (this.emitFx && this.soundOn)
+      this.fx.push({ t: (this.now + this.cpu - this.stepStart) * 1000 / PIT_HZ, kind: FX_KINDS[kind], x, y });
     const q = this.soundQueue, pos = this.soundPos, sx = this.soundSrcX, sy = this.soundSrcY;
     const put = (i, v) => { q[i] = v; sx[i] = x; sy[i] = y; };
     switch (kind) {
@@ -834,6 +878,7 @@ class TunnelerEngine {
                 if (this.distance(Math.abs(x - this.tankX[3 - p]), Math.abs(y - this.tankY[3 - p])) < 4) {
                   this.shotsHit[p] = i16(this.shotsHit[p] + 1);
                   this.shield[3 - p] -= 0x700;
+                  this.roundDamage[p] += 0x700;               // (round time limit; not in the original)
                   this.gaugeTurn = 2;
                   if (this.shield[3 - p] > 0) {
                     this.addExplosion(x - DX, y - DY, 7, 20);
@@ -942,6 +987,59 @@ class TunnelerEngine {
     else if (this.gaugeTurn === 2) { if (hiB(this.energy[2]) !== hiB(this.shownEnergy[2])) this.drawGauge(2, 1); }
   }
 
+  // ---- round time limit (option roundTime; not in the original - never runs with roundTime 0)
+  // Once per play frame, before the tanks move: the countdown in the last 30 seconds, and the end of
+  // the time. Steps are counted from the round's first play frame, so it is the same on every client
+  // (online: a paused classic game doesn't step, so the pause doesn't count).
+  roundClock() {
+    const left = this.roundTicks - (this.tick - this.roundStart);
+    if (left <= 0 && this.endTimer < 0) this.timeUp();
+    const secs = left <= 0 ? 0 : Math.ceil(left * TICK / PIT_HZ);
+    if (secs <= 30 && secs !== this.clockShown) { this.clockShown = secs; this.drawRoundClock(secs); }
+  }
+  // Time is up with 2+ sides still having a tank alive: every side's damage to enemy tanks this round
+  // (its members' sum, also of those already destroyed; free-for-all: each tank on its own; classic:
+  // BLUE / GREEN) - the side with the most among the sides still alive wins: every other tank alive blows
+  // up the normal way (explosion, round end, scoring). A tie at the top: every tank alive blows up, so
+  // nobody wins the round.
+  timeUp() {
+    const N = this.nPlayers, dmg = new Map(), sides = [];
+    for (let p = 1; p <= N; p++) {
+      const t = this.team(p);
+      dmg.set(t, (dmg.get(t) || 0) + this.roundDamage[p]);
+      if (this.alive[p] && !sides.includes(t)) sides.push(t);
+    }
+    let best = -1, top = [];
+    for (const t of sides) {
+      const d = dmg.get(t);
+      if (d > best) { best = d; top = [t]; } else if (d === best) top.push(t);
+    }
+    const winner = top.length === 1 ? top[0] : -1;
+    this.timedOut = true;
+    for (let p = 1; p <= N; p++)
+      if (this.alive[p] && this.team(p) !== winner) {
+        if (this.extended) this.killTankExt(p, this.tankX[p], this.tankY[p]);
+        else { this.endTimer = -1; this.killTank(p, this.tankX[p], this.tankY[p]); }   // (a tie: both)
+      }
+  }
+  // the remaining seconds (0..30) as small digits on a black tag in the frame beside the instrument
+  // panel (the dotted border, outside the view screen and the panel): the outer edge of each half
+  // (classic: BLUE's left, GREEN's right) / of every player's view; yellow, red from 10 seconds on
+  drawRoundClock(secs) {
+    const color = secs <= 10 ? 12 : 14;
+    const tag = (cx, px) => {
+      for (let y = 78; y <= 93; y++) for (let c = cx; c <= cx + 2; c++) this.putCell(c, y, 221, 0);
+      const ds = secs >= 10 ? [Math.trunc(secs / 10), secs % 10] : [secs];
+      ds.forEach((d, k) => {
+        const y0 = ds.length === 2 ? 80 + k * 7 : 83;
+        for (let r = 0; r < 5; r++)
+          for (let c = 0; c < 3; c++) if (CLOCK_DIGITS[d][r] & (4 >> c)) this.plotLores(px + c, y0 + r, color);
+      });
+    };
+    if (this.extended) for (let p = 1; p <= this.nPlayers; p++) this.inView(p, () => tag(0, 2));
+    else { tag(0, 2); tag(77, 155); }
+  }
+
   newMatch() {
     this.round = 1;
     for (let i = 1; i <= 2; i++) {
@@ -963,11 +1061,12 @@ class TunnelerEngine {
     this.tankDir[2] = 6;
     for (let i = 1; i <= 2; i++) {
       this.tankX[i] = this.baseX[i]; this.tankY[i] = this.baseY[i];
-      this.digDelay[i] = -1; this.staticTimer[i] = 0; this.alive[i] = true; this.fireDelay[i] = 0;
+      this.digDelay[i] = -1; this.staticTimer[i] = 0; this.alive[i] = true; this.killedBy[i] = 0; this.fireDelay[i] = 0;
       for (let j = 1; j <= MaxShots; j++) this.shotX[i][j] = -1;
       this.moving[i] = false;
       this.energy[i] = MaxPower; this.shownEnergy[i] = 0;
       this.shield[i] = MaxPower; this.shownShield[i] = 0;
+      this.roundDamage[i] = 0;
     }
     this.endTimer = -1;
   }
@@ -981,6 +1080,53 @@ class TunnelerEngine {
       for (let x = bx + 17; x >= bx + 4; x--) { this.setPixel(x, by - 17, c); this.setPixel(x, by + 17, c); }
       for (let y = by - 16; y <= by + 16; y++) { this.setPixel(bx - 17, y, c); this.setPixel(bx + 17, y, c); }
     }
+  }
+
+  // the game's settings as compact font-text parts ("map size: medium", "rounds to win: 3", ...): map size,
+  // rounds to win, friendly fire (only when a team has 2+ tanks), the view / online visible limit and
+  // ghost mode when the page set them (showSettings), the round time limit when there is one (time: 0 =
+  // the full text, 1 = the short one, 2 = left out); [] without showSettings
+  settingsParts(time = 0) {
+    const o = this.showSettings;
+    if (!o) return [];
+    const S = Object.assign({}, STRINGS_EN.settings, this.strings.settings);
+    const sizes = TunnelerEngine.SIZES || ["small", "medium", "large"];
+    const parts = [S.size[Math.max(0, sizes.indexOf(this.size))], S.win.replace("{n}", String(this.winScore))];
+    if (this.teams) parts.push(S.ff[this.friendlyFire ? 1 : 0]);
+    const vi = ["self", "team", "everyone"].indexOf(o.view);
+    if (vi >= 0) parts.push((o.visible ? S.visible : S.view).replace("{v}", S.views[vi]));
+    // the round time limit only when there is one (here, before the longest part, it fits best)
+    if (this.roundTime && time < 2) parts.push((time ? S.timeShort || S.time : S.time).replace("{n}", String(this.roundTime)));
+    if (o.watchOut != null) parts.push(S.watch[AFTER_DEATH.indexOf(TunnelerEngine.afterDeath(o.watchOut))] || S.watch[1]);
+    return parts;
+  }
+  // the parts joined by ", " and wrapped into lines of at most `width` columns; more than maxLines lines:
+  // the round time's short text, else without it
+  settingsLines(width, maxLines = 4) {
+    let lines;
+    for (let time = 0; time < (this.roundTime ? 3 : 1); time++) {
+      lines = [];
+      let cur = "";
+      for (const p of this.settingsParts(time)) {
+        if (cur && visLen(cur) + 2 + visLen(p) + 1 > width) { lines.push(cur + ","); cur = p; }
+        else cur = cur ? cur + ", " + p : p;
+      }
+      if (cur) lines.push(cur);
+      if (lines.length <= maxLines) break;
+    }
+    return lines;
+  }
+  // the settings lines centred on column c (screen columns), from row y, in cyan
+  writeSettings(c, y, width) {
+    this.textColor(3);
+    this.settingsLines(width).forEach((l, i) => { this.gotoXY(c - (visLen(l) >> 1), y + i); this.write(l); });
+  }
+  // the "you" marker around player p's text at columns x..x+w-1 of row y (display only)
+  markYou(p, x, w, y, color) {
+    if (this.youPlayer !== p) return;
+    this.textColor(color);
+    if (x > 2) { this.gotoXY(x - 2, y); this.write("\x10"); }
+    if (x + w + 1 <= 80) { this.gotoXY(x + w + 1, y); this.write("\x11"); }
   }
 
   *showRoundTitle() {
@@ -1006,6 +1152,12 @@ class TunnelerEngine {
       this.textColor(10);
       name(green, 53, 16); this.write(green);
       name(String(this.wins[2]), 53, 18); this.write(this.wins[2]);
+      this.markYou(1, 28 - (visLen(blue) >> 1), visLen(blue), 16, 9);
+      this.markYou(2, 53 - (visLen(green) >> 1), visLen(green), 16, 10);
+    }
+    if (this.showSettings) {                                   // at the bottom, wrapped onto several rows
+      const n = this.settingsLines(48).length;
+      this.writeSettings(41, 25 - n, 48);
     }
     const at = 8 * 160 + (x + 1) * 2 + 1;                      // attribute of the first label cell
     for (let i = 1; i <= 80; i++) {
@@ -1036,13 +1188,19 @@ class TunnelerEngine {
         if (this.extended ? PixelClassExt[c] === 3 : (c === 10 || c === 9)) c = 0;   // tanks and bases hidden
         this.plotLores(x + 7, y + 5, c);
       }
+    // base markers: the original's 5x5 outline with a 1-pixel doorway gap top and bottom; on other map
+    // sizes scaled to cover the whole base (a base is 35 pixels wide whatever the world size)
+    const k = this.scD / this.scN;                             // medium 1, small 2, large 0.5
+    const r = Math.max(1, Math.trunc(2.5 * k)), door = Math.trunc(0.5 * k);
     for (let p = 1; p <= this.nPlayers; p++) {
       const color = this.playerColor(p);
       const x = Math.trunc((this.unsc(this.baseX[p]) + 3) / 7) + 7;
       const yc = Math.trunc((this.unsc(this.baseY[p]) + 3) / 7) + 5;
-      for (let y = yc - 2; y <= yc + 2; y++) { this.plotLores(x - 2, y, color); this.plotLores(x + 2, y, color); }
-      this.plotLores(x - 1, yc - 2, color); this.plotLores(x - 1, yc + 2, color);
-      this.plotLores(x + 1, yc - 2, color); this.plotLores(x + 1, yc + 2, color);
+      if (this.size === "small")                               // the black cleared base area too
+        for (let y = yc - r + 1; y <= yc + r - 1; y++) for (let dx = -r + 1; dx <= r - 1; dx++) this.plotLores(x + dx, y, 0);
+      for (let y = yc - r; y <= yc + r; y++) { this.plotLores(x - r, y, color); this.plotLores(x + r, y, color); }
+      for (let dx = -r + 1; dx <= r - 1; dx++)
+        if (Math.abs(dx) > door) { this.plotLores(x + dx, yc - r, color); this.plotLores(x + dx, yc + r, color); }
     }
     for (let y = 1; y <= B.length; y++)                       // (the capitals always on rows 87..91)
       for (let x = 1; x <= bw; x++)
@@ -1070,10 +1228,12 @@ class TunnelerEngine {
       this.initLores("play");
       this.drawBases();
       this.drawFrame();
+      this.roundStart = this.tick; this.clockShown = -1; this.timedOut = false;
       do {
         if (KD[1]) { this.roundOver = true; this.matchOver = true; }
         if (KD[0x3B]) this.soundOn = true;
         if (KD[0x3C]) { this.soundOn = false; this.noSound(); }
+        if (this.roundTicks) this.roundClock();               // (not in the original: off by default)
 
         for (let P = 1; P <= 2; P++) {
           this.P = P;
@@ -1211,8 +1371,11 @@ class TunnelerEngine {
       this.eraseShots();
       for (let I = 1; I <= 20; I++) { this.I = I; this.updateExplosions(); }
       this.round = i16(this.round + 1);
-      if (!this.alive[1]) this.wins[2]++;
-      if (!this.alive[2]) this.wins[1]++;
+      // (both destroyed only happens when the round time ran out with a tie: a draw, nobody wins)
+      if (!(this.timedOut && !this.alive[1] && !this.alive[2])) {
+        if (!this.alive[1]) this.wins[2]++;
+        if (!this.alive[2]) this.wins[1]++;
+      }
       if (this.wins[2] >= this.winScore || this.wins[1] >= this.winScore) this.matchOver = true;
     } while (!this.matchOver);
     this.removeKbd();
@@ -1255,7 +1418,7 @@ class TunnelerEngine {
   team(p) { return this.teamOf[p]; }
   teamNumber(p) { return this.slots[p - 1].team; }
   isEnemy(a, b) { return a !== b && this.team(a) !== this.team(b); }
-  // color index 0..7 of player p (BLUE GREEN CYAN MAGENTA WHITE PINK VIOLET TEAL)
+  // color index 0..7 of player p (BLUE GREEN CYAN YELLOW WHITE PINK VIOLET TEAL)
   colorIndex(p) { return this.extended ? this.slots[p - 1].color : p - 1; }
   // LORES color of player p (extended palette in extended mode, the original's 9 / 10 in classic)
   playerColor(p) { return this.extended ? EXT_COLORS[this.colorIndex(p)] : p + 8; }
@@ -1286,7 +1449,9 @@ class TunnelerEngine {
     this.extSprites = [null];
     for (let p = 1; p <= this.nPlayers; p++) {
       const col = this.playerColor(p);
-      this.extSprites.push(S[1].map(rows => rows.map(r => r.map(v => v === 1 ? EXT_TREADS : v === 9 ? col : v))));
+      // the gun is yellow (14) on every tank - on the YELLOW tank (slot color 3) it is gray like the treads
+      const gun = this.colorIndex(p) === 3 ? EXT_TREADS : EXT_GUN;
+      this.extSprites.push(S[1].map(rows => rows.map(r => r.map(v => v === 1 ? EXT_TREADS : v === 9 ? col : v === 14 ? gun : v))));
     }
   }
   drawTankExt(p) { this.drawSprite7(this.tankX[p] - 3, this.tankY[p] - 3, this.extSprites[p][this.tankDir[p] & 7]); }
@@ -1339,11 +1504,12 @@ class TunnelerEngine {
     for (let i = 1; i <= this.nPlayers; i++) {
       this.tankDir[i] = this.baseX[i] < (this.worldW >> 1) ? 2 : 6;   // facing the middle of the world
       this.tankX[i] = this.baseX[i]; this.tankY[i] = this.baseY[i];
-      this.digDelay[i] = -1; this.staticTimer[i] = 0; this.alive[i] = true; this.fireDelay[i] = 0;
+      this.digDelay[i] = -1; this.staticTimer[i] = 0; this.alive[i] = true; this.killedBy[i] = 0; this.fireDelay[i] = 0;
       for (let j = 1; j <= MaxShots; j++) this.shotX[i][j] = -1;
       this.moving[i] = false;
       this.energy[i] = MaxPower; this.shownEnergy[i] = 0;
       this.shield[i] = MaxPower; this.shownShield[i] = 0;
+      this.roundDamage[i] = 0;
     }
     this.endTimer = -1;
   }
@@ -1390,12 +1556,15 @@ class TunnelerEngine {
                 if (q) {
                   this.shotsHit[p] = i16(this.shotsHit[p] + 1);
                   this.shield[q] -= 0x700;
+                  if (this.isEnemy(p, q)) this.roundDamage[p] += 0x700;   // (round time limit: enemies only)
                   this.gaugeTurn = 2;
                   if (this.shield[q] > 0) {
                     this.addExplosion(x - DX, y - DY, 7, 20);
                     this.queueSound(2, x - DX, y - DY);
-                  } else
+                  } else {
+                    if (this.alive[q]) this.killedBy[q] = p;
                     this.killTankExt(q, x + DX + DX, y + DX + DX);   // original: DX, not DY
+                  }
                 } else {
                   this.addExplosion(x - DX, y - DY, 3, 7);
                   this.queueSound(0, x - DX, y - DY);
@@ -1489,9 +1658,10 @@ class TunnelerEngine {
         this.gotoXY(c - (w.length >> 1), 16); this.write(w);
         let y = 18;
         for (const p of this.teamMembers(t)) {
-          const n = UniText.slice(this.playerName(p), cw);
+          const n = UniText.slice(this.playerName(p), p === this.youPlayer ? cw - 4 : cw);
           this.textColor(this.playerTextColor(p));
-          this.gotoXY(c - (visLen(n) >> 1), y++); this.write(n);
+          this.gotoXY(c - (visLen(n) >> 1), y); this.write(n);
+          this.markYou(p, c - (visLen(n) >> 1), visLen(n), y++, this.playerTextColor(p));
         }
       });
       return;
@@ -1500,7 +1670,7 @@ class TunnelerEngine {
       let lw = 0, mw = 0;
       for (let t = 0; t < T; t++) {
         lw = Math.max(lw, visLen(this.teamName(t)));
-        mw = Math.max(mw, this.teamMembers(t).reduce((a, p) => a + visLen(this.playerName(p)) + 2, -2));
+        mw = Math.max(mw, this.teamMembers(t).reduce((a, p) => a + visLen(this.playerName(p)) + (p === this.youPlayer ? 4 : 2), -2));
       }
       const x = Math.max(1, 41 - ((lw + 5 + mw) >> 1)), gap = T <= 6 ? 2 : 1;
       for (let t = 0; t < T; t++) {
@@ -1510,7 +1680,8 @@ class TunnelerEngine {
         this.write(tn + " ".repeat(lw - visLen(tn) + 2) + this.teamWins[t] + "  ");
         this.teamMembers(t).forEach((p, i) => {
           this.textColor(this.playerTextColor(p));
-          this.write((i ? "  " : "") + this.playerName(p));
+          const you = p === this.youPlayer;          // "►NAME◄" (display only)
+          this.write((i ? "  " : "") + (you ? "\x10" : "") + this.playerName(p) + (you ? "\x11" : ""));
         });
       }
       return;
@@ -1523,6 +1694,7 @@ class TunnelerEngine {
       this.textColor(this.playerTextColor(p));
       this.gotoXY(x, 13 + (p - 1) * gap);
       this.write(n + " ".repeat(nw - visLen(n) + 3) + this.wins[p]);
+      this.markYou(p, x, nw + 3 + String(this.wins[p]).length, 13 + (p - 1) * gap, this.playerTextColor(p));
     }
   }
 
@@ -1566,7 +1738,8 @@ class TunnelerEngine {
       this.textColor(c);
       const fired = this.shotsFired[p], hit = this.shotsHit[p];
       const pct = Math.trunc(hit * 100 / (fired > 0 ? fired : 1));
-      this.write(" ".repeat(nw - visLen(n)), this.num(fired, 5), this.num(hit, 5), this.num(pct + "%", 5),
+      // "NAME◄": the you marker in the gap after the name (display only)
+      this.write(p === this.youPlayer ? "\x11" + " ".repeat(nw - visLen(n) - 1) : " ".repeat(nw - visLen(n)), this.num(fired, 5), this.num(hit, 5), this.num(pct + "%", 5),
         this.num(this.metersDug[p], 6), this.num(this.metersMoved[p], 6));
     }
     if (winT >= 0) {
@@ -1579,6 +1752,15 @@ class TunnelerEngine {
       this.textColor(6);
       this.write(".");
     }
+    this.statsSettings();
+  }
+  // the game's settings above the statistics (rows 1-4 of the right half; display only)
+  statsSettings() {
+    if (!this.showSettings) return;
+    const w = [this.wx1, this.wy1, this.wx2, this.wy2, this.cx, this.cy, this.textAttr];
+    this.window(1, 1, 80, 25);
+    this.writeSettings(61, 1, 37);
+    [this.wx1, this.wy1, this.wx2, this.wy2, this.cx, this.cy, this.textAttr] = w;
   }
 
   // PlayGame for N players
@@ -1596,8 +1778,10 @@ class TunnelerEngine {
       this.initLores("play");
       this.drawBases();
       for (let p = 1; p <= N; p++) this.inView(p, () => this.drawFrameExt(p));
+      this.roundStart = this.tick; this.clockShown = -1; this.timedOut = false;
       do {
         if (this.escHeld) { this.roundOver = true; this.matchOver = true; }   // (escEnds only)
+        if (this.roundTicks) this.roundClock();
         for (let P = 1; P <= N; P++) {
           this.P = P;
           if (this.alive[P]) {
@@ -1909,13 +2093,15 @@ class TunnelerEngine {
     this.write(S.by);
     // the box fits its longest line (20 wide in the original), centred
     const notice = this.menuNotice || (this.menuWaiting ? S.waiting : null);
-    const W = this.menuW = Math.max(16, ...(notice || S.menu).map(t => visLen(t) + 4)) + 1 >> 1 << 1;
+    let items = this.menuShift !== 0 && S.rematch ? [S.rematch, ...S.menu.slice(1)] : S.menu;   // after a match
+    if (this.menuScans.length < MENU_SCANS.length) items = [items[0], items[2]];
+    const W = this.menuW = Math.max(16, ...(notice || items).map(t => visLen(t) + 4)) + 1 >> 1 << 1;
     const X = this.menuX = this.menuShift + 41 - ((W + 2) >> 1);
     this.textColor(5);
     this.window(X, 11, Math.min(80, X + W + 5), 22);
     this.write("\xDA", "\xC4".repeat(W)); this.writeLn("\xBF");
-    const lines = notice ? ["", ...notice, ""] : new Array(MENU_ROWS[MENU_ROWS.length - 1] + 1).fill("");
-    if (!notice) MENU_ROWS.forEach((r, i) => { lines[r] = S.menu[i]; });
+    const lines = notice ? ["", ...notice, ""] : new Array(this.menuRows[this.menuRows.length - 1] + 1).fill("");
+    if (!notice) this.menuRows.forEach((r, i) => { lines[r] = items[i]; });
     for (const t of lines) this.writeLn("\xB3" + centre(t, W) + "\xB3");
     this.write("\xC0", "\xC4".repeat(W)); this.writeLn("\xD9");
     this.window(1, 1, 80, 25);
@@ -1932,10 +2118,21 @@ class TunnelerEngine {
       this.writeLn();
       this.writeLn();
       if (this.alive[1] === this.alive[2]) { this.alive[1] = false; this.alive[2] = false; }
-      this.textColor(((this.wins[1] > this.wins[2]) ? 1 : 0) * 128 + 1);
-      this.write(UniText.padStart(this.classicName(1), 25));
+      if (this.youPlayer === 1) {                 // "►BLUE" (display only)
+        this.textColor(9);
+        this.write(" ".repeat(24 - visLen(this.classicName(1))) + "\x10");
+        this.textColor(((this.wins[1] > this.wins[2]) ? 1 : 0) * 128 + 1);
+        this.write(this.classicName(1));
+      } else {
+        this.textColor(((this.wins[1] > this.wins[2]) ? 1 : 0) * 128 + 1);
+        this.write(UniText.padStart(this.classicName(1), 25));
+      }
       this.textColor(((this.wins[2] > this.wins[1]) ? 1 : 0) * 128 + 2);
-      this.writeLn(UniText.padStart(this.classicName(2), 9));
+      if (this.youPlayer === 2) {                 // "GREEN◄" (display only)
+        this.write(UniText.padStart(this.classicName(2), 9));
+        this.textColor(10);
+        this.writeLn("\x11");
+      } else this.writeLn(UniText.padStart(this.classicName(2), 9));
       this.writeLn();
       const row = (label, f) => {
         this.textColor(6);
@@ -1964,13 +2161,14 @@ class TunnelerEngine {
         this.textColor(6);
         this.writeLn(".");
       }
+      this.statsSettings();
     }
   }
 
   // highlight bar over the selected item (text rows 12..15, inside the box)
   drawMenuSel() {
-    for (let i = 0; i < MENU_SCANS.length; i++) {
-      const o = (11 + MENU_ROWS[i]) * 160 + this.menuX * 2;
+    for (let i = 0; i < this.menuScans.length; i++) {
+      const o = (11 + this.menuRows[i]) * 160 + this.menuX * 2;
       for (let c = 0; c < this.menuW; c++) this.vram[o + c * 2 + 1] = i === this.menuSel ? MENU_SEL_ATTR : MENU_ATTR;
     }
     this.dirty = true;
@@ -1978,7 +2176,7 @@ class TunnelerEngine {
   // menu item under text cell (col, row), 0-based, or -1
   menuItemAt(col, row) {
     const x = col - (this.menuX - 1);
-    return x >= 0 && x <= this.menuW + 1 ? MENU_ROWS.indexOf(row - 11) : -1;
+    return x >= 0 && x <= this.menuW + 1 ? this.menuRows.indexOf(row - 11) : -1;
   }
   // Arrow keys / Enter on the main menu and its pages. Returns the key the menu loop should act on:
   // Up/Down only move the bar (NO_KEY), Enter becomes the selected item's scan code, Enter on a page
@@ -1987,12 +2185,12 @@ class TunnelerEngine {
     if (k === NO_KEY) return k;
     if (this.menuPage !== "menu") return k[0] === 13 ? [27, 1] : k;
     if (k[0] === 0 && (k[1] === 0x48 || k[1] === 0x50)) {
-      const n = MENU_SCANS.length;
+      const n = this.menuScans.length;
       this.menuSel = (this.menuSel + (k[1] === 0x48 ? n - 1 : 1)) % n;
       this.drawMenuSel();
       return NO_KEY;
     }
-    if (k[0] === 13) return [0, MENU_SCANS[this.menuSel]];
+    if (k[0] === 13) return [0, this.menuScans[this.menuSel]];
     return k;
   }
 
@@ -2142,7 +2340,7 @@ class TunnelerEngine {
           }
           if (this.autoStartPending) { this.autoStartPending = false; this.keyStr = [0, MENU_SCANS[0]]; }   // "Start game"
           this.keyStr = this.menuKey(this.keyStr);
-        } while (!([59, 60, 61, 68].includes(this.keyStr[1]) || this.keyStr[0] === 27));
+        } while (!((this.menuScans.includes(this.keyStr[1]) || this.keyStr[1] === 61) || this.keyStr[0] === 27));
         const key = this.keyStr;
         this.window(50, 25, 80, 25);
         this.clearScreen();
@@ -2189,6 +2387,7 @@ class TunnelerEngine {
       teamWins: this.teamWins.slice(), roundWinner: this.roundWinner, roundWinnerTeam: this.roundWinnerTeam,
       nTeams: this.nTeams, teamIds: this.teamIds.slice(), winScore: this.winScore, friendlyFire: this.friendlyFire,
       size: this.size, worldW: this.worldW, worldH: this.worldH,
+      roundTime: this.roundTime, timedOut: this.timedOut, roundDamage: ids.map(p => this.roundDamage[p]),
       players: ids.map(p => ({ x: this.tankX[p], y: this.tankY[p], dir: this.tankDir[p], energy: this.energy[p],
         shield: this.shield[p], alive: this.alive[p], wins: this.wins[p], team: this.team(p),
         teamNo: this.teamNumber(p), color: this.colorIndex(p),
@@ -2198,6 +2397,7 @@ class TunnelerEngine {
 }
 
 TunnelerEngine.TICK_MS = TICK * 1000 / PIT_HZ;
+TunnelerEngine.FX_KINDS = FX_KINDS;
 TunnelerEngine.KEYS = { KeyFire, KeyUp, KeyDown: PlayerKeys, KeyRight, KeyLeft };
 TunnelerEngine.DirDX = DirDX;
 TunnelerEngine.DirDY = DirDY;
@@ -2205,6 +2405,8 @@ TunnelerEngine.PixelClass = PixelClass;
 // extended mode
 TunnelerEngine.PixelClassExt = PixelClassExt;
 TunnelerEngine.MAX_PLAYERS = EXT_MAX_PLAYERS;
+TunnelerEngine.AFTER_DEATH = AFTER_DEATH;
+TunnelerEngine.afterDeath = v => v === true || v === "1" ? "others" : AFTER_DEATH.includes(v) ? v : "wreck";   // (true / "1": older "ghost mode on")
 TunnelerEngine.PLAYER_KEYS = EXT_KEYS;              // role / lang key of player i (0-based)
 TunnelerEngine.PLAYER_COLORS = EXT_COLORS;          // LORES colour index of slot color i (extended palette; per player: engine.playerColor(p))
 TunnelerEngine.PLAYER_TEXT_COLORS = EXT_TEXT_COLORS; // closest text-mode colour of slot color i (engine.playerTextColor(p))
