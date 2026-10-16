@@ -119,12 +119,8 @@
 
   // Sound fades with the distance from BLUE's tank against the computer (docs/DESIGN-8P.md 8); split
   // screen (two players at one speaker) keeps full volume. Menus / title / map: full volume.
-  // (after death "others": from the tank watched instead)
-  if (mode === "cpu") runner.listener = e => {
-    if (e.screen !== "play") return null;
-    const p = views.listenTo(me) + 1;
-    return { x: e.tankX[p], y: e.tankY[p] };
-  };
+  // (after death: "others" - from the tank watched, "wreck" - from the wreck, "black" - nothing)
+  if (mode === "cpu") runner.listener = e => e.screen === "play" ? views.hearAt(me, e) : null;
 
   function classicInput() {
     const kd = keyboard.keyDown();

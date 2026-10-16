@@ -350,6 +350,8 @@ function play(search) {
   L = alive(false, true, true, true, true);
   same([L.cells, L.cols, !!L.labels], [[2], 1, true], "out: the tank that destroyed you (CYAN), labeled");
   assert.strictEqual(v.listenTo(0), 2, "sounds fade from the watched tank (CYAN)");
+  e.tankX = [0, 100, 200, 300, 400, 500]; e.tankY = [0, 10, 20, 30, 40, 50];
+  same(v.hearAt(0, e), { x: 300, y: 30 }, "others: heard at the watched tank");
   e.killedBy[3] = 5;                                        // TEAL shot CYAN
   same(alive(false, true, false, true, true).cells, [4], "the watched one destroyed: its killer (TEAL)");
   e.killedBy[4] = 2;                                        // GREEN... but TEAL still alive: stays
@@ -367,6 +369,10 @@ function play(search) {
   const bl = play(link + "&view=team&watch=black"), vb = bl.tunnelerViews(), eb = bl.tunnelerEngine();
   eb.alive = [false, false, true, true, true, true];
   assert(vb.blackedOut(0, eb) && !vb.blackedOut(3, eb), "black: the destroyed tank's view is black (DESTROYED), the living one's not");
+  eb.tankX = [0, 100, 200, 300, 400, 500]; eb.tankY = [0, 10, 20, 30, 40, 50];
+  same(vb.hearAt(0, eb), { mute: true }, "black: nothing heard");
+  eo.tankX = eb.tankX; eo.tankY = eb.tankY; eo.killedBy = [0, 3, 0, 0, 0, 0];
+  same(vo.hearAt(0, eo), { x: 100, y: 10 }, "wreck: heard at the wreck, not at the killer");
   assert(!v.blackedOut(0, e), "others: never black");
   // classic (you BLUE against GREEN): out -> GREEN's half, labeled
   const c = play("?mode=cpu&slots=0:you:1,1:normal:2&watch=1"), cv = c.tunnelerViews(), ce = c.tunnelerEngine();

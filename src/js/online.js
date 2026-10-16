@@ -115,11 +115,8 @@
     runner = new Runner(engine, views, speaker);
     // a player hears the other tanks quieter the farther they are from their own (docs/DESIGN-8P.md 8);
     // spectators hear everything at full volume
-    runner.listener = e => {                             // (after death "others": from the tank watched)
-      if (!player || me < 0 || e.screen !== "play") return null;
-      const p = views.listenTo(me) + 1;
-      return { x: e.tankX[p], y: e.tankY[p] };
-    };
+    // (after death: "others" - from the tank watched, "wreck" - from the wreck, "black" - nothing)
+    runner.listener = e => player && me >= 0 && e.screen === "play" ? views.hearAt(me, e) : null;
     if (player && me >= 0) views.setScope(me, viewChoice());
     else if (views.follow >= engine.nPlayers) views.setFollow(views.follow);   // (remembered from a bigger room: wraps)
     views.setWatchOut(player && me >= 0 ? cfg.watchOut : "wreck");   // (spectators see everything anyway)

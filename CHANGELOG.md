@@ -3,7 +3,14 @@
 All notable changes to TUNNELER ONLINE. Versions follow [semantic versioning](https://semver.org/);
 every push to `main` is released (see CONTRIBUTING.md).
 
+## 1.2.1
+
+- After death "black screen": no sound while your view is black.
+- After death "my wreck": sounds are heard at your wreck, never at the tank that destroyed you.
+
 ## 1.2.0
+
+Also the first release of everything in 1.1.0 (which was not released on its own).
 
 ### Game
 - **After death** setting (vs computer and online rooms): what you see once your tank is destroyed,
@@ -14,7 +21,6 @@ every push to `main` is released (see CONTRIBUTING.md).
   rooms): when the time is up, the side that hit enemy tanks the most wins the round (the other tanks
   blow up); a tie - nobody wins. The last 30 seconds count down next to the instrument panel.
 - Vs computer: you can take any color (unset your slot, then pick "you" in another one).
-- A teammate's base repairs your shield too, at half the speed of your own.
 - Player colors: magenta replaced by **yellow** (with a gray gun).
 - After a match the menu offers **Rematch** (same settings) instead of "Start game".
 - Fire keys: BLUE fires with Left Shift / Space, GREEN with Enter / Right Shift - no Ctrl any more
@@ -48,12 +54,69 @@ every push to `main` is released (see CONTRIBUTING.md).
 - The status line under the game only appears when it has something to say (a spectator's view
   keys, a lost connection).
 
-### Everything from the unreleased 1.1.0
-- Names, room names and chat in any script (Unicode, wide characters included) on every screen.
-- Player names instead of color names everywhere; name (and team) labels on every view when more
-  than one is shown.
-- Rooms nobody plays in for 10 minutes are closed.
-- docker-compose.yml.
-
 ### Server
 - Readable start-up errors for a port that needs root, is in use or is invalid.
+
+## 1.1.0 (not released on its own - shipped in 1.2.0)
+
+### Any script in names and chat
+- Player names, room names and chat show in any script on every screen: a Unicode layer next to the
+  emulated text screen draws what the VGA ROM font lacks - VGA-style Latin / Cyrillic / Greek first,
+  then GNU Unifont glyphs (src/fonts/unifont/, loaded on demand); wide characters (CJK, emoji) take two
+  cells. Inputs accept any printable character; room names are cleaned of control, bidi and zero-width
+  characters.
+
+### Names everywhere
+- Player names instead of color names on the round title, statistics, lobby, status lines and
+  spectator views; one name column in the pre-game lobby.
+- When more than one view is shown, every view has its player's name (and team) on its top border.
+
+### Game
+- A teammate's base repairs your shield too, at half the speed of your own.
+
+### Server
+- Rooms nobody plays in for 10 minutes are closed ("This game was closed because nobody played for 10
+  minutes."); spectators, computer tanks and forgotten tabs no longer keep them alive.
+
+### Project
+- docker-compose.yml and a Docker section in the README; the Docker image carries the text helpers the
+  server needs.
+- CI also runs on release/** branches; a push to main whose commit is already version-tagged doesn't
+  create an extra patch release.
+- LICENSE: the GNU Unifont glyphs' license (SIL OFL 1.1 / GPL 2+ with the font embedding exception).
+
+## 1.0.0
+
+The first release: TUNNELER 2.0 (1991, Geoffrey Silverton) rewritten in JavaScript from the decompiled
+original, with online play.
+
+### The game
+- A deterministic engine that matches the original frame by frame (verified against the WebAssembly
+  build of TUNNELER.EXE); an emulated VGA text screen with the IBM ROM font and a simulated PC speaker.
+- DOS-style menus, six languages (in `src/lang/`, bundled at build; Gen Z instead of Pirate; American
+  English; translated world-map banners).
+- Computer opponent with four difficulty levels.
+- Up to 8 tanks (the classic 2-player game unchanged): 8 slot colors, any team setup, per-player views,
+  round / match rules per team, map sizes (small / medium / large), rounds to win, optional friendly
+  fire, distance-faded sound.
+- Slot editor (nobody / human / computer level + team) for online games and vs computer; split screen
+  settings; local games start straight in.
+- Statistics no longer change 0 shots fired to 1 while drawing.
+
+### Online
+- Lockstep server with a lobby and spectators.
+- Pre-game lobby: names, teams, ready, ping, chat (any alphabet via a Unicode text layer), host kick /
+  ban, per-player view (self / team / everyone, up to the room's limit); teams applied via lockstep
+  config frames; a disconnected tank stands still in rooms with more than two tanks.
+- After "Start game" the menu box shows "You are ready" (only Esc works); who is ready is shown under
+  the box.
+- The end-of-match world map is per viewer: it closes only for whoever presses a key; auto-repeated
+  keys never skip it.
+- Leaving an online game closes the socket at once so the slot is freed.
+- Clickable invite link; "Link copied" reverts after 3 seconds.
+- Spectator views: grid, live map + scores, follow one player.
+
+### Project
+- Build script (esbuild), Dockerfile, CI, Docker publish and release workflows (every push to main is a
+  release with a Docker image on ghcr.io), the test suite, README (with the live version on Render),
+  Information page, CLAUDE.md and docs/DESIGN-8P.md.

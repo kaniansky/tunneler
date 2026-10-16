@@ -143,8 +143,17 @@ class ViewModes {
     return [t];
   }
   // whose position sounds fade from (0-based): the tank watched after death ("others"), else `own`
+  // (alive, or its wreck)
   listenTo(own) {
-    return this.watchOut === "others" && this.ghost != null ? this.ghost : own;
+    const e = this.engine(), dead = !!(e && e.alive && !e.alive[own + 1]);
+    return dead && this.watchOut === "others" && this.ghost != null ? this.ghost : own;
+  }
+  // the speaker's listener for player `own` (runner.listener): {x, y} of the tank listened to, or
+  // {mute: true} while the own view is a black DESTROYED screen (after death "black")
+  hearAt(own, e) {
+    if (this.blackedOut(own, e)) return { mute: true };
+    const p = this.listenTo(own) + 1;
+    return { x: e.tankX[p], y: e.tankY[p] };
   }
   // the players shown for the scope: own first, then teammates / everybody else in slot order
   scopeCells() {

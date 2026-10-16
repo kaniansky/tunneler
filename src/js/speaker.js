@@ -33,6 +33,7 @@ const TICK_MS = 65536 * 1000 / PIT_HZ;
 
 // 0..1 volume factor of one sound event heard at `listener` ({x, y} or null)
 function attenuation(ev, listener) {
+  if (listener && listener.mute) return 0;          // ({mute: true}: hear nothing, e.g. a black DESTROYED view)
   if (!listener || !ev || !(ev.x >= 0) || !(ev.y >= 0)) return 1;
   const dx = ev.x - listener.x, dy = ev.y - listener.y;
   const d2 = dx * dx + dy * dy;

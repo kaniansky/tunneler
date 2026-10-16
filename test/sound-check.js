@@ -265,5 +265,13 @@ class MockCtx {
   ok("speaker.js standalone (no engine, no runner, no AudioContext, no storage)");
 }
 
+// a {mute: true} listener (after death "black"): every sound at volume 0
+{
+  const S = require(path.join(JS, "speaker.js"));
+  check(S.attenuation({ t: 0, x: 10, y: 10 }, { mute: true }) === 0 && S.attenuation({ t: 0 }, { mute: true }) === 0
+    && S.attenuation({ t: 0, x: 10, y: 10 }, { x: 10, y: 10 }) === 1, "mute listener: volume 0");
+  ok("a {mute: true} listener hears nothing");
+}
+
 if (bad) { console.log(bad + " check(s) failed"); process.exit(1); }
 console.log("all passed");
