@@ -4,8 +4,9 @@
 // cropped to one player's half, and the same pixel aspect as the game screen.
 //
 // status.set(rows): rows = [[segment, ...], ...], segment = {text, attr, prio, onClick, raw}.
-// text is encoded for the font (Lang.t / Lang.enc), or with raw: true any Unicode text, drawn with the
-// Display's Unicode glyphs (every language at once - e.g. player names, docs/DESIGN-8P.md 22).
+// text is font text (Lang.t / Lang.enc; unitext.js - characters the font lacks, e.g. in a room name, are
+// drawn with their Unicode glyphs), or with raw: true any Unicode text (e.g. player names,
+// docs/DESIGN-8P.md 22). Widths are display columns (CJK / emoji: 2).
 // Segments are joined with two spaces and centred; when a row is too long the segments with the
 // highest prio number are dropped first. attr = DOS attribute byte (background << 4 | foreground).
 (function (root) {
@@ -24,6 +25,7 @@ class StatusLine {
     canvas.addEventListener("click", e => { const s = this.segAt(e); if (s && s.onClick) s.onClick(); });
     canvas.addEventListener("mousemove", e => { const s = this.segAt(e); canvas.style.cursor = s && s.onClick ? "pointer" : ""; });
     window.addEventListener("resize", () => this.layout());
+    if (root.UniFont) root.UniFont.onLoad(() => { this.key = ""; this.draw(); });   // a glyph block arrived
     setInterval(() => this.layout(), 250);
   }
 
@@ -38,11 +40,12 @@ class StatusLine {
     if (cols !== this.cols) this.draw();
   }
 
-  // a segment's cells: the 16 font rows of each character (+ whether column 9 repeats column 8)
+  // a segment's cells: the 16 font rows of each byte (+ whether column 9 repeats column 8), or a
+  // Unicode character ({uni: code point}; a wide one is followed by a {cont: true} cell)
   glyphs(s) {
-    const font = root.VGA_FONT;
-    if (s.raw) return Array.from(String(s.text).normalize("NFC"), ch => ({ rows: root.Display.glyphOf(ch), dup: false }));
-    return Array.from(s.text, c => { const ch = c.charCodeAt(0) & 0xFF; return { rows: font.subarray(ch * 16, ch * 16 + 16), dup: ch >= 0xC0 && ch <= 0xDF }; });
+    const font = root.VGA_FONT, U = root.UniText;
+    return U.cells(s.raw ? U.fromRaw(s.text) : s.text).map(([ch, cp]) => cp === U.CONT ? { cont: true } : cp ? { uni: cp }
+      : { rows: font.subarray(ch * 16, ch * 16 + 16), dup: ch >= 0xC0 && ch <= 0xDF });
   }
 
   fit(row, cols) {
@@ -76,6 +79,7 @@ class StatusLine {
         text = text.concat(s.cells);
       });
       text = text.slice(0, cols);
+      if (text.length && text[text.length - 1].uni && root.UniText.charCols(text[text.length - 1].uni) === 2) text[text.length - 1] = space;
       const x0 = (cols - text.length) >> 1;
       let pos = 0;
       segs.forEach((s, i) => {
@@ -88,6 +92,8 @@ class StatusLine {
         const g = text[c], a = attrs[c];
         const fg = pal[a & 15], bg = pal[(a >> 4) & 7];
         let p = r * 16 * W + (x0 + c) * 9;
+        if (g.cont) continue;                                    // (drawn with the cell before)
+        if (g.uni) { root.Display.uniCell(px, W, p, g.uni, fg, bg, (cols - x0 - c) * 9); continue; }
         for (let l = 0; l < 16; l++, p += W) {
           const bits = g.rows ? g.rows[l] : 0;
           for (let b = 0; b < 8; b++) px[p + b] = (bits & (0x80 >> b)) ? fg : bg;

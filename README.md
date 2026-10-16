@@ -110,10 +110,24 @@ Games live in the server's memory, so a restart ends running games.
 
 ### Docker
 
+The easiest way is Docker Compose with the published image (`docker-compose.yml` in this repo):
+
 ```bash
-docker build -t tunneler-online .
-docker run -d -p 8050:8050 tunneler-online
+docker compose up -d                            # http://localhost:8050
+TUNNELER_PORT=80 docker compose up -d           # another port on the host
+docker compose pull && docker compose up -d     # update to the latest release
+docker compose up -d --build                    # build from this checkout instead
 ```
+
+Or plain Docker:
+
+```bash
+docker run -d -p 8050:8050 --restart unless-stopped ghcr.io/kaniansky/tunneler-online:latest
+docker build -t tunneler-online . && docker run -d -p 8050:8050 tunneler-online   # from source
+```
+
+Games live in the server's memory (a restart ends running games); a game nobody plays in for 10 minutes
+is closed automatically.
 
 Every push to `main` is a release: the version goes up (v1.0.0, v1.0.1, ...), a GitHub Release is
 created and the Docker image is published to `ghcr.io/kaniansky/tunneler-online` (`latest` and the

@@ -14,8 +14,8 @@
 // the live map + scores and following one player (Tab / 1 2 3, Left / Right choose the player).
 // Between matches every player / spectator sees the pre-game lobby (docs/DESIGN-8P.md 18): the slots
 // with names, teams, state and ping; a player edits their own name / team / view and chooses "Start game";
-// players and spectators chat there (section 22: names and messages go through the Display's Unicode text
-// layer, so every language shows at once). During play a player sees their own view, their team's or
+// players and spectators chat there (section 22: names and messages go through the Unicode plane
+// (unitext.js), so every language shows at once). During play a player sees their own view, their team's or
 // everyone's (section 23: their choice, up to the room's "visible" setting; ViewModes.setScope).
 (function () {
   const { TICK_MS, UP, DOWN, LEFT, RIGHT, FIRE, ESC, ROLES, MAX_PLAYER_NAME, MAX_CHAT, VISIBLE, frameToInput, frameToInputExt, FrameQueue,
@@ -125,17 +125,11 @@
   }
 
   // A config frame (the pre-game lobby's teams and names, see netproto.js): into the engine right before
-  // its frame is stepped. Names are display only: the extended engine shows them on the round title /
-  // statistics; the classic one (whose screens have room for 9 letters) instead of BLUE / GREEN.
+  // its frame is stepped. Names (raw Unicode, any letters - the Unicode plane draws them) are display
+  // only: the extended engine shows them on the round title / statistics; the classic one (whose screens
+  // have room for 9 columns) instead of BLUE / GREEN.
   function applyCfg(c) {
-    applyFrameCfg(engine, c, n => Lang.enc(n));
-    classicNames(engine);
-  }
-  function classicNames(e) {
-    if (e.extended) return;
-    Lang.apply(e);
-    const n = e.names || [];
-    e.strings = Object.assign({}, e.strings, n[0] ? { blue: n[0].slice(0, 9) } : {}, n[1] ? { green: n[1].slice(0, 9) } : {});
+    applyFrameCfg(engine, c);
   }
 
   // a computer player's bits for this frame (from the engine state before the step, like a human's)
@@ -260,9 +254,9 @@
   // gets the same list read-only. The server starts the game once every connected player is ready and
   // there are at least 2 teams; the teams / names enter the frame stream as a config frame then.
   let lobby = null;                                        // {page: "lobby" | "page", key}
-  const nameForm = { value: Array.from(store.get("tunneler.name") || "").slice(0, MAX_PLAYER_NAME).join(""), max: MAX_PLAYER_NAME, unicode: true };
+  const nameForm = { value: UniText.truncRaw(store.get("tunneler.name") || "", MAX_PLAYER_NAME), max: MAX_PLAYER_NAME };
   // chat (docs/DESIGN-8P.md 22): the room's messages [{from: {color, name} | {spectator, name}, text}]
-  const chatForm = { value: "", max: MAX_CHAT, width: 16, unicode: true };
+  const chatForm = { value: "", max: MAX_CHAT, width: 16 };
   let chat = [], chatSeq = 0;
   // what this player sees during play: self / team / everyone, at most the room's "visible" (section 23)
   let myView = VISIBLE.includes(store.get("tunneler.view")) ? store.get("tunneler.view") : "self";
@@ -286,7 +280,10 @@
   }
   const teamCount = sl => new Set(sl.map(s => s.team)).size;
   // a player's name (default: the tank's colour); computer tanks have none
-  const slotName = (s, i) => s.name ? Lang.enc(s.name) : s.kind === "computer" ? "" : T(colorKey(i));
+  // (font text; the slot's text colour identifies the tank)
+  const slotName = (s, i) => s.name ? Lang.enc(s.name) : T(colorKey(i));
+  // player i's name for {name} parameters (raw): the lobby name, else the tank's colour name
+  function rawName(i) { const sl = Array.isArray(status.slots) ? status.slots[i] : null; return (sl && sl.name) || NAME(colorKey(i)); }
   function stateOf(s) {
     if (s.kind === "computer") return { text: T("pg.computer", { level: Lang.raw("level." + (s.level || "normal")) }), color: 7 };
     if (!s.connected) return s.joined ? { text: T("pg.disconnected"), color: 12 } : { text: T("pg.free"), color: 8 };
@@ -300,7 +297,7 @@
     if (Object.values(sizes).some(n => n > 1)) parts.push(T(cfg.friendlyFire ? "pg.ff.on" : "pg.ff.off"));
     if (cfg.visible && cfg.visible !== "self") parts.push(T("pg.visible", { v: Lang.raw("view." + cfg.visible) }));
     if (specs) parts.push(T("pg.specs", { n: specs }));
-    while (parts.length > 2 && parts.join(", ").length > 78) parts.pop();   // (the last ones drop out when it's too long)
+    while (parts.length > 2 && UniText.cols(parts.join(", ")) > 78) parts.pop();   // (the last ones drop out when it's too long)
     return parts.join(", ");
   }
   // whom the host may remove: the other connected players and the spectators (labels raw, for T's {name})
@@ -309,7 +306,7 @@
     const out = [];
     sl.forEach((s, i) => {
       if (s.kind === "human" && s.connected && i !== me && !s.host)
-        out.push({ id: "s" + i, slot: i, label: NAME(colorKey(i)) + (s.name ? " (" + s.name + ")" : "") });
+        out.push({ id: "s" + i, slot: i, label: s.name || NAME(colorKey(i)) });
     });
     (status.specs || []).forEach((x, k) => {
       if (x.k !== myK && !x.host) out.push({ id: "k" + x.k, k: x.k, label: Lang.raw("pg.spectator").replace("{n}", k + 1) });
@@ -321,31 +318,31 @@
     if (!lobby) return;
     lobby.page = "lobby";
     const sl = lobbySlots(), nSpec = status.specs ? status.specs.length : status.spec || 0, ready = isReady();
-    const lines = [{ row: 1, text: Lang.enc(roomName || roomId).slice(0, 78), color: 15 },
+    const lines = [{ row: 1, text: UniText.slice(Lang.enc(roomName || roomId), 78), color: 15 },
       { row: 2, text: settingsText(sl, nSpec), color: 7 }];
-    const text = [];                                       // the Unicode text layer: names, chat (raw text)
-    // the table: TANK  NAME  TEAM  (host)  STATE  PING, each row in the tank's colour; "►" = you
-    const cw = Math.max(T("pg.h.tank").length, ...ROLES.map(r => T(r).length));
-    const tw = Math.max(T("pg.h.team").length, ...[1, 8].map(n => T("pg.teamn", { n }).length));
-    const sw = Math.max(T("pg.h.state").length, ...["pg.ready", "pg.notready", "pg.free", "pg.disconnected"].map(k => T(k).length),
-      ...["easy", "normal", "hard", "expert"].map(l => T("pg.computer", { level: Lang.raw("level." + l) }).length));
-    const cols = [1, cw, Math.max(MAX_PLAYER_NAME, T("pg.h.name").length), tw, T("pg.host").length, sw, 7];
+    const text = [];                                       // raw Unicode (the Unicode plane): names, chat
+    // the table: NAME  TEAM  (host)  STATE  PING, each row in the tank's colour (which identifies the
+    // slot: the name, else the colour name); "►" = you
+    const W = UniText.cols;
+    const cw = Math.max(MAX_PLAYER_NAME, W(T("pg.h.name")), ...ROLES.map(r => W(T(r))));
+    const tw = Math.max(W(T("pg.h.team")), ...[1, 8].map(n => W(T("pg.teamn", { n }))));
+    const sw = Math.max(W(T("pg.h.state")), ...["pg.ready", "pg.notready", "pg.free", "pg.disconnected"].map(k => W(T(k))),
+      ...["easy", "normal", "hard", "expert"].map(l => W(T("pg.computer", { level: Lang.raw("level." + l) }))));
+    const cols = [1, cw, tw, W(T("pg.host")), sw, 7];
     const width = cols.reduce((a, b) => a + b + 1, -1);
     const x0 = Math.max(1, 41 - (width >> 1));
     const at = k => x0 + cols.slice(0, k).reduce((a, b) => a + b + 1, 0);
-    lines.push({ row: 3, col: at(1), text: T("pg.h.tank"), color: 14 }, { row: 3, col: at(2), text: T("pg.h.name"), color: 14 },
-      { row: 3, col: at(3), text: T("pg.h.team"), color: 14 }, { row: 3, col: at(5), text: T("pg.h.state"), color: 14 },
-      { row: 3, col: at(6), text: T("pg.h.ping"), color: 14 });
+    lines.push({ row: 3, col: at(1), text: T("pg.h.name"), color: 14 },
+      { row: 3, col: at(2), text: T("pg.h.team"), color: 14 }, { row: 3, col: at(4), text: T("pg.h.state"), color: 14 },
+      { row: 3, col: at(5), text: T("pg.h.ping"), color: 14 });
     sl.forEach((s, i) => {
       const row = 4 + i, c = TEXT_COLORS[s.color], st = stateOf(s);
       if (i === me) lines.push({ row, col: at(0), text: "\x10", color: 15 });
-      lines.push({ row, col: at(1), text: T(colorKey(i)), color: c }, { row, col: at(3), text: T("pg.teamn", { n: s.team }), color: c });
-      // a player's own name in any letters (text layer); else the colour name
-      if (s.name) text.push({ row, col: at(2), text: s.name, color: c });
-      else lines.push({ row, col: at(2), text: slotName(s, i), color: c });
-      if (s.host) lines.push({ row, col: at(4), text: T("pg.host"), color: 13 });
-      lines.push({ row, col: at(5), text: st.text, color: st.color });
-      if (s.kind === "human") lines.push({ row, col: at(6), text: s.connected && s.ping != null ? s.ping + " ms" : "-", color: 8 });
+      // the player's name in any letters (Unicode plane), else the colour name - in the tank's colour
+      lines.push({ row, col: at(1), text: slotName(s, i), color: c }, { row, col: at(2), text: T("pg.teamn", { n: s.team }), color: c });
+      if (s.host) lines.push({ row, col: at(3), text: T("pg.host"), color: 13 });
+      lines.push({ row, col: at(4), text: st.text, color: st.color });
+      if (s.kind === "human") lines.push({ row, col: at(5), text: s.connected && s.ping != null ? s.ping + " ms" : "-", color: 8 });
     });
     const items = [];
     const enough = !cfg.ext || teamCount(sl) >= 2;          // (classic: BLUE against GREEN, always)
@@ -400,39 +397,45 @@
   }
   // The chat: a box from column x0 to x1, rows y0 to y1 (1-based, borders included) with the last
   // messages that fit, "NAME: text" wrapped to its width - the name in the tank's colour (a spectator's
-  // gray), all of it through the text layer.
+  // gray), all of it raw Unicode (the Unicode plane).
   function chatPanel(lines, text, x0, y0, x1, y1) {
     const w = x1 - x0 - 1, h = y1 - y0 - 1;
     if (w < 10 || h < 1) return;
     lines.push({ row: y0, col: x0, text: "\xDA" + "\xC4".repeat(w) + "\xBF", color: 5 }, { row: y1, col: x0, text: "\xC0" + "\xC4".repeat(w) + "\xD9", color: 5 });
     for (let r = y0 + 1; r < y1; r++) lines.push({ row: r, col: x0, text: "\xB3", color: 5 }, { row: r, col: x1, text: "\xB3", color: 5 });
     lines.push({ row: y0, col: x0 + 2, text: " " + T("pg.chat") + " ", color: 13 });
-    if (!chat.length) { lines.push({ row: y0 + 1, col: x0 + 2, text: T("pg.chat.none").slice(0, w - 2), color: 8 }); return; }
+    if (!chat.length) { lines.push({ row: y0 + 1, col: x0 + 2, text: UniText.slice(T("pg.chat.none"), w - 2), color: 8 }); return; }
     const out = [];                                        // [{name, nameColor, text}] per screen line
     for (const m of chat) {
       const f = m.from || {};
       const name = f.name || (f.spectator ? Lang.raw("pg.chat.spec") : Lang.raw(ROLES[f.color] || "blue"));
       const nameColor = f.spectator ? 8 : TEXT_COLORS[f.color] || 7;
-      wrapChars(Array.from(name + ": " + m.text), w - 1).forEach((l, k) => {
-        const n = k ? 0 : Math.min(l.length, Array.from(name).length + 1);
+      const nameLen = Array.from(name).length + 1;           // (with the colon)
+      let done = 0;
+      wrapChars(Array.from(name + ": " + m.text), w - 1).forEach(l => {
+        const n = Math.max(0, Math.min(l.length, nameLen - done));
+        done += l.length;
         out.push({ name: l.slice(0, n).join(""), nameColor, text: l.slice(n).join("") });
       });
     }
     out.slice(-h).forEach((l, k) => {
       if (l.name) text.push({ row: y0 + 1 + k, col: x0 + 2, text: l.name, color: l.nameColor });
-      if (l.text) text.push({ row: y0 + 1 + k, col: x0 + 2 + Array.from(l.name).length, text: l.text, color: 7 });
+      if (l.text) text.push({ row: y0 + 1 + k, col: x0 + 2 + UniText.rawCols(l.name), text: l.text, color: 7 });
     });
   }
-  // characters -> lines of at most w, broken after a space where possible
+  // characters -> lines of at most w display columns (CJK / emoji take 2), broken after a space where possible
   function wrapChars(ch, w) {
-    const out = [];
-    while (ch.length > w) {
-      let cut = ch.lastIndexOf(" ", w);
-      if (cut <= 0) cut = w; else cut++;
+    const out = [], cw = c => UniText.charCols(c.codePointAt(0));
+    while (ch.length) {
+      let n = 0, k = 0;
+      while (k < ch.length && n + cw(ch[k]) <= w) n += cw(ch[k++]);
+      if (k >= ch.length) { out.push(ch); break; }
+      let cut = ch.lastIndexOf(" ", k);
+      if (cut <= 0) cut = Math.max(1, k); else cut++;
       out.push(ch.slice(0, cut));
       ch = ch.slice(cut);
     }
-    out.push(ch);
+    if (!out.length) out.push([]);
     return out;
   }
   function sendChat() {
@@ -481,7 +484,6 @@
     const o = new TunnelerEngine(0, opts);
     Lang.apply(o);
     o.setNames(engine.names);
-    classicNames(o);
     o.uiMode = "online";
     for (const f of STATS) o[f] = Array.isArray(engine[f]) ? engine[f].slice() : engine[f];
     if (!o.menuShift) o.menuShift = -20;
@@ -490,7 +492,9 @@
     o.showMainMenu();
     lobby.page = "page";
     lobbyUI.spec = { page: true, items: [], back: () => drawLobby(false, "stats") };
-    lobbyUI.present({ t: 0, mode: "text", screen: "text", vram: o.vram.slice(0, 16000) });
+    const snap = { t: 0, mode: "text", screen: "text", vram: o.vram.slice(0, 16000) };
+    o.snapUni(snap);
+    lobbyUI.present(snap);
   }
 
   const lobbyKey = () => JSON.stringify([lobbySlots(), status.specs ? status.specs.map(x => x.k) : status.spec, isReady(), isHost,
@@ -625,7 +629,7 @@
         }
         break;
       case "err":
-        fatal = m.code === "kicked" ? T("pg.kicked") : Lang.enc(String(m.msg));
+        fatal = m.code === "kicked" ? T("pg.kicked") : m.code === "idle" ? T("on.idle") : Lang.enc(String(m.msg));
         updateOverlay();
         break;
     }
@@ -654,8 +658,8 @@
     const humans = humanSlots(), on = humans.filter(i => status.conn ? status.conn[i] : i === 0 ? status.blue : status.green).length;
     // (before the room's "hello" - e.g. refused - nothing is known about its slots)
     const slots = seed === null ? [] : cfg.ext ? [{ text: T("st.players", { n: on, m: humans.length }), attr: 0x07, prio: 2 }]
-      : [{ text: T("blue") + " " + (status.blue ? "\xFB" : "-"), attr: 0x09, prio: 2 },
-        { text: T("green") + " " + (status.green ? "\xFB" : "-"), attr: 0x0A, prio: 2 }];
+      : [{ text: Lang.enc(rawName(0)) + " " + (status.blue ? "\xFB" : "-"), attr: 0x09, prio: 2 },
+        { text: Lang.enc(rawName(1)) + " " + (status.green ? "\xFB" : "-"), attr: 0x0A, prio: 2 }];
     const sound = { text: T(speaker.muted ? "st.soff" : "st.son"), attr: 0x08, prio: 2 };
     // (no "how to play" hints: the instructions explain the controls - docs/DESIGN-8P.md 9)
     const rows = [];
@@ -668,12 +672,11 @@
       rows.push([label, follow ? { text: T("vw.hint2"), attr: 0x08, prio: 1 } : null,
         { text: T("vw.hint"), attr: 0x08, prio: 2 }, { ...sound, prio: 3 }]);
     }
-    const mine = me >= 0 && Array.isArray(status.slots) && status.slots[me] ? status.slots[me].name : "";
+    const mine = me >= 0 ? rawName(me) : "";
     statusLine.set([...rows, [
-      { text: Lang.enc(roomName || roomId).slice(0, 24), attr: 0x0F, prio: 4 },
-      // (a player's own name in any letters: a raw segment, drawn with the Unicode glyphs)
-      player && mine ? { text: Lang.raw("st.youare").replace("{name}", mine), raw: true, attr: roleAttr, prio: 1 }
-        : { text: player ? T("st.youare", { name: NAME(role) }) : T("st.spectator"), attr: roleAttr, prio: 1 },
+      { text: UniText.slice(Lang.enc(roomName || roomId), 24), attr: 0x0F, prio: 4 },
+      // (a player's own name in any letters: Lang.t keeps what the font lacks for the Unicode plane)
+      { text: player ? T("st.youare", { name: mine || NAME(role) }) : T("st.spectator"), attr: roleAttr, prio: 1 },
       ...slots,
       status.spec ? { text: T("st.watching", { n: status.spec }), attr: 0x07, prio: 5 } : null,
       connKey !== "conn.connected" ? { text: T(connKey, connParams), attr: 0x0C, prio: 3 } : null,
@@ -699,10 +702,10 @@
     else if (catching) msg = [T("on.catching"), frames + " / " + (frames + queue.length)];
     else if (!status.running && !atMenu()) {
       if (cfg.ext) {                                       // (the clock never pauses once it ran)
-        const missing = humanSlots().filter(i => !(status.conn && status.conn[i])).map(i => NAME(colorKey(i)));
+        const missing = humanSlots().filter(i => !(status.conn && status.conn[i])).map(rawName);
         msg = [T("on.waitothers"), { text: Lang.enc(missing.join(", ")), color: 7 }];
       } else {
-        const missing = ["blue", "green"].filter(r => !status[r]).map(NAME);
+        const missing = [0, 1].filter(i => !status[ROLES[i]]).map(rawName);
         msg = [T("on.paused"), T("on.waitre", { names: missing.join(Lang.raw("on.and")) || Lang.raw("on.players") })];
       }
     }
@@ -711,7 +714,7 @@
       return;
     }
     const items = [{ key: "lobby", label: T("back.lobby"), info: [T("on.leave")], go: () => leave(lobbyHref) }];
-    const you = player ? { text: T("on.youplay", { name: NAME(role) }), color: TEXT_COLORS[myColor] } : { text: T("on.spectator"), color: 7 };
+    const you = player ? { text: T("on.youplay", { name: me >= 0 ? rawName(me) : NAME(role) }), color: TEXT_COLORS[myColor] } : { text: T("on.spectator"), color: 7 };
     dos.show({
       lines: [{ row: 2, text: "TUNNELER ONLINE", color: 12 }, { row: 4, text: Lang.enc(roomName || roomId), color: 15 }, { row: 5, ...you },
         ...msg.map((m, k) => ({ row: 9 + k, ...(typeof m === "string" ? { text: m, color: 14 } : m) }))],

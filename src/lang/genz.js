@@ -107,7 +107,7 @@ Lang.register("genz", {
         "ran out of energy - aka got cooked)."],
       introExt: ["Every tank for itself, or teams go at it.  The goal: be the first to win",
         "{n}.  A round lasts until only one tank (or one team) is left; tanks blow",
-        "up when shot or out of energy."],
+        "up when shot or out of energy.", "Your teammate's base heals your shield too, just at half speed. Teamwork W."],
       displayHead: "The screen:  ",
       display: ["Each player gets a view screen and a panel with two meters",
         "(energy and shield).  The view screen shows your area from above",
@@ -195,6 +195,7 @@ Lang.register("genz", {
   "pg.kick.i2": "or a lurker, <ENTER> yeets them out.",
   "pg.kick.sure": "Hit <ENTER> again to yeet {name}.", "pg.spectator": "lurker {n}",
   "pg.kicked": "The host yeeted you from this game. L.",
+  "on.idle": "Game got shut down, nobody played for 10 min. Dead lobby fr.",
   // lobby chat (online.js, docs/DESIGN-8P.md 22) and what a player sees during play (section 23)
   "pg.chat": "Group chat", "pg.chat.none": "Dead chat. Say something fr.", "pg.chat.spec": "lurker",
   "pg.say": "Yap: ", "pg.say.i": "Type the tea, <ENTER> spills it to everyone in this game.",

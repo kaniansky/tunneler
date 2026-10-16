@@ -106,7 +106,7 @@ Lang.register("sk", {
         "jednoducho došla energia)."],
       introExt: ["Každý tank bojuje sám za seba alebo proti sebe bojujú tímy.  Cieľom hry je",
         "ako prvý vyhrať {n}.  Kolo trvá, kým nezostane iba jeden tank (alebo jeden",
-        "tím); tanky vybuchujú po zásahu alebo keď im dôjde energia."],
+        "tím); tanky vybuchujú po zásahu alebo keď im dôjde energia.", "Základňa spoluhráča tiež opravuje štít, ale polovičnou rýchlosťou."],
       displayHead: "Obrazovka:  ",
       display: ["Každý hráč má svoju obrazovku a prístrojový panel s dvoma",
         "ukazovateľmi (energia a štít).  Obrazovka ukazuje okolie tanku zhora",
@@ -194,6 +194,7 @@ Lang.register("sk", {
   "pg.kick.i2": "alebo diváka, <ENTER> ho z nej vyhodí.",
   "pg.kick.sure": "Stlač <ENTER> ešte raz a {name} letí von.", "pg.spectator": "divák {n}",
   "pg.kicked": "Hostiteľ ťa z tejto hry vyhodil.",
+  "on.idle": "Hra bola zatvorená, lebo 10 minút nikto nehral.",
   // chat v predsieni (online.js, docs/DESIGN-8P.md 22) a čo hráč počas hry vidí (časť 23)
   "pg.chat": "Chat", "pg.chat.none": "Zatiaľ žiadne správy.", "pg.chat.spec": "divák",
   "pg.say": "Povedz: ", "pg.say.i": "Napíš správu, <ENTER> ju pošle všetkým v tejto hre.",

@@ -23,6 +23,9 @@
 // joiner replaying the log) switches teams at the same step. Names are display only.
 (function (root) {
 
+// display columns of user text (CJK / emoji take 2) - names are limited by columns, not characters
+const UniText = root.UniText || (typeof require === "function" ? require("./unitext.js") : null);
+
 const TICK_MS = 65536 * 1000 / 1193182;
 
 // held-key bits
@@ -38,26 +41,34 @@ const MAX_SLOTS = ROLES.length;
 const LEVELS = ["easy", "normal", "hard", "expert"];     // computer levels (ai.js)
 const KINDS = ["none", "human", ...LEVELS];               // who plays a slot (slot editor)
 const SIZES = ["small", "medium", "large"];              // world sizes (engine option size)
-const MAX_PLAYER_NAME = 12;                              // player names (pre-game lobby)
+const MAX_PLAYER_NAME = 12;                              // player names (pre-game lobby), display columns
 const MAX_CHAT = 60;                                     // characters per lobby chat message
 const VISIBLE = ["self", "team", "everyone"];            // what a player may see during play (room setting)
 const clampInt = (v, lo, hi, def) => { v = Math.trunc(Number(v)); return Number.isFinite(v) ? Math.max(lo, Math.min(hi, v)) : def; };
 
-// characters never kept in names / chat: control, bidi, zero-width, < >
-const BAD_CHARS = /[\u0000-\u001f\u007f-\u009f<>\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff]/g;
-// A player's display name: no control / bidi / zero-width characters or <>, spaces collapsed, at most
-// MAX_PLAYER_NAME characters ("" = the tank's colour name).
+// characters never kept in names / chat: control, bidi, zero-width, variation selectors, private use
+// (font text uses U+F780..U+F7FF, unitext.js), lone surrogates, < >
+const BAD_CHARS = /[\u0000-\u001f\u007f-\u009f<>\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff\ue000-\uf8ff\ufe00-\ufe0f]|[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/g;
+const BAD_CHAT = /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff\ue000-\uf8ff\ufe00-\ufe0f]|[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/g;
+// text cut to n display columns (whole characters)
+const cutCols = (t, n) => UniText ? UniText.truncRaw(t, n) : Array.from(t).slice(0, n).join("");
+// A player's display name: any letters (NFC), no control / bidi / zero-width characters or <>, spaces
+// collapsed, at most MAX_PLAYER_NAME display columns ("" = the tank's colour name).
 function cleanPlayerName(s) {
   const t = String(s == null ? "" : s).normalize("NFC").replace(BAD_CHARS, "")
     .replace(/\s+/g, " ").trim();
-  return Array.from(t).slice(0, MAX_PLAYER_NAME).join("").trim();
+  return cutCols(t, MAX_PLAYER_NAME).trim();
 }
 // A lobby chat message (docs/DESIGN-8P.md 22): no control / bidi / zero-width characters (< > stay: "<3";
 // chat is only ever drawn on the canvas), spaces collapsed, at most MAX_CHAT characters; "" = nothing to send.
-const BAD_CHAT = /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff]/g;
 function cleanChat(s) {
   const t = String(s == null ? "" : s).normalize("NFC").replace(BAD_CHAT, "").replace(/\s+/g, " ").trim();
   return Array.from(t).slice(0, MAX_CHAT).join("").trim();
+}
+// A room's name: like a player's name, at most n display columns
+function cleanRoomName(s, n) {
+  const t = String(s == null ? "" : s).normalize("NFC").replace(BAD_CHARS, "").replace(/\s+/g, " ").trim();
+  return cutCols(t, n).trim();
 }
 
 // Room settings from the create screen -> {slots: [{color, bot, level, team}] (the used slots in colour
@@ -95,8 +106,8 @@ function engineOptions(cfg) {
   return o;
 }
 
-// A config frame's cfg (see the top) -> the engine, before the frame is stepped. name(s) turns a raw
-// player name into the engine's text (e.g. Lang.enc); names are display only. Only at the menu: a
+// A config frame's cfg (see the top) -> the engine, before the frame is stepped. Names stay raw Unicode
+// (engine.setNames; name(s) may still transform them); names are display only. Only at the menu: a
 // config frame that arrives during a match (PlayGame's keyboard handler installed, or the world map at its
 // end) is ignored - teams never change mid-match. (The engine's state decides, so every client agrees.)
 function applyFrameCfg(engine, c, name) {
@@ -254,7 +265,7 @@ function stateHash(e) {
 }
 
 const NetProto = { TICK_MS, UP, DOWN, LEFT, RIGHT, FIRE, ESC, ALL_BITS, EXT_BITS, BLUE_SCAN, GREEN_SCAN, F10,
-  ROLES, MAX_SLOTS, LEVELS, KINDS, SIZES, MAX_PLAYER_NAME, MAX_CHAT, VISIBLE, cleanPlayerName, cleanChat, roomSettings, engineOptions, applyFrameCfg,
+  ROLES, MAX_SLOTS, LEVELS, KINDS, SIZES, MAX_PLAYER_NAME, MAX_CHAT, VISIBLE, cleanPlayerName, cleanChat, cleanRoomName, roomSettings, engineOptions, applyFrameCfg,
   checkCfg, frameToInput, frameToInputExt, FrameLog, FrameQueue, HASH_EVERY, stateHash };
 root.NetProto = NetProto;
 if (typeof module !== "undefined") module.exports = NetProto;

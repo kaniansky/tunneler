@@ -14,7 +14,12 @@
 // Video: the B800 text-mode buffer is emulated byte-for-byte. Text screens are 80x25, the game screen is
 // the LORES 80x100 "text mode" in which every cell attribute holds two 4-bit pixels (160x100).
 // display.js renders that buffer like a VGA would (9x16 / 9x4 character cells, CP437 font, blink, DAC).
+// Text written to it is "font text" (unitext.js): code units 0..0xFF are font bytes, anything else is a
+// Unicode character (player names) that goes into the Unicode plane `uni` next to the buffer - display
+// only, never read by the game (snapshots carry a copy while it holds something).
 (function (root) {
+
+const UniText = root.UniText || (typeof require === "function" ? require("./unitext.js") : null);
 
 const PIT_HZ = 1193182;
 const TICK = 65536;                       // PIT clocks per BIOS tick = one game frame
@@ -131,7 +136,8 @@ const STRINGS_EN = {
     // extended mode (3-8 tanks, teams, computer tanks)
     introExt: ["Every tank fights for itself, or teams fight each other.  The objective is",
       "to be the first to win {n}.  A round continues until only one tank (or",
-      "one team) is left; tanks blow up when shot or simply out of energy."],
+      "one team) is left; tanks blow up when shot or simply out of energy.",
+      "A teammate's base repairs your shield too, at half the speed of your own."],
     winRounds: ["one round", "two rounds", "three rounds", "four rounds", "five rounds", "six rounds",
       "seven rounds", "eight rounds", "nine rounds"],
     displayHead: "The display:  ",
@@ -179,9 +185,10 @@ const STRINGS_EN = {
     credits: ["Norko Kaniansky, 2026", "original TUNNELER 2.0:", "Geoffrey Silverton, 1991"],
   },
 };
-const visLen = t => t.replace(/\{\d+\}/g, "").length;
+// display columns of font text (markup "{n}" excluded; wide Unicode characters count 2)
+const visLen = t => UniText.cols(t.replace(/\{\d+\}/g, ""));
 
-const centre = (t, w) => { const l = (w - t.length) >> 1; return " ".repeat(l) + t + " ".repeat(w - t.length - l); };
+const centre = (t, w) => { const n = UniText.cols(t), l = (w - n) >> 1; return " ".repeat(l) + t + " ".repeat(w - n - l); };
 
 const MaxShots = 6, MaxExplosions = 30, MaxParticles = 40, MaxPower = 11400;
 
@@ -263,6 +270,8 @@ class TunnelerEngine {
     const n1 = this.nPlayers + 1, arr = v => new Array(n1).fill(v);
     this.randSeed = seed >>> 0;
     this.vram = new Uint8Array(0x8000);          // B800:0000
+    this.uni = new Uint32Array(8000);             // Unicode plane: per cell of the first 16000 bytes (display only)
+    this.uniUsed = false;                         // something may be in it
     this.world = new Uint8Array(this.ws * this.worldH);   // medium: 1024 x 512 pixels in 512 x 512 bytes
     this.keyDown = new Uint8Array(256);           // Kbd.KeyDown
     this.kbdInstalled = false;
@@ -371,15 +380,23 @@ class TunnelerEngine {
   snapshot(t) {
     this.dirty = false;
     if (this.extended) return this.snapshotExt(t);
-    this.snapshots.push({ t: (t - this.stepStart) * 1000 / PIT_HZ, mode: this.mode, screen: this.screen,
-      vram: this.vram.slice(0, 16000) });
+    const s = { t: (t - this.stepStart) * 1000 / PIT_HZ, mode: this.mode, screen: this.screen,
+      vram: this.vram.slice(0, 16000) };
+    this.snapUni(s);
+    this.snapshots.push(s);
+  }
+  // a copy of the Unicode plane when it holds something (most snapshots: none)
+  snapUni(s) {
+    if (!this.uniUsed) return;
+    if (this.uni.some(v => v !== 0)) s.uni = this.uni.slice();
+    else this.uniUsed = false;
   }
   // extended mode: LORES screens use the extended palette; during play every player has a view buffer
   // (vram = views[0])
   snapshotExt(t) {
     const s = { t: (t - this.stepStart) * 1000 / PIT_HZ, mode: this.mode, screen: this.screen, palette: "extended" };
     if (this.screen === "play") { s.views = this.views.map(v => v.slice()); s.vram = s.views[0]; }
-    else s.vram = this.vram.slice(0, 16000);
+    else { s.vram = this.vram.slice(0, 16000); this.snapUni(s); }
     this.snapshots.push(s);
   }
 
@@ -415,6 +432,7 @@ class TunnelerEngine {
   // ------------------------------------------------------------ video memory
   biosModeSet() {
     for (let i = 0; i < 0x8000; i += 2) { this.vram[i] = 0x20; this.vram[i + 1] = 0x07; }
+    if (this.uniUsed) { this.uni.fill(0); this.uniUsed = false; }
     this.dirty = true;
   }
   // Crt.TextMode: BIOS mode set, full-screen window, TextAttr := NormAttr
@@ -424,7 +442,10 @@ class TunnelerEngine {
     this.wx1 = 0; this.wy1 = 0; this.wx2 = 79; this.wy2 = 24; this.cx = 0; this.cy = 0;
     this.textAttr = this.normAttr;
   }
-  vpoke(ofs, v) { this.vram[ofs & 0x7FFF] = v; this.dirty = true; }
+  vpoke(ofs, v) {
+    this.vram[ofs & 0x7FFF] = v; this.dirty = true;
+    if (this.uniUsed && !(ofs & 1) && (ofs & 0x7FFF) < 16000) this.uni[(ofs & 0x7FFF) >> 1] = 0;
+  }
 
   // ------------------------------------------------------------ Crt text output
   window(x1, y1, x2, y2) {
@@ -442,6 +463,7 @@ class TunnelerEngine {
   clrScr() {
     for (let y = this.wy1; y <= this.wy2; y++)
       for (let x = this.wx1; x <= this.wx2; x++) { this.vram[y * 160 + x * 2] = 0x20; this.vram[y * 160 + x * 2 + 1] = this.textAttr; }
+    if (this.uniUsed) for (let y = this.wy1; y <= this.wy2; y++) this.uni.fill(0, y * 80 + this.wx1, y * 80 + this.wx2 + 1);
     this.cx = this.wx1; this.cy = this.wy1;
     this.dirty = true;
   }
@@ -452,13 +474,29 @@ class TunnelerEngine {
         this.vram[y * 160 + x * 2 + 1] = this.vram[(y + 1) * 160 + x * 2 + 1];
       }
     for (let x = this.wx1; x <= this.wx2; x++) { this.vram[this.wy2 * 160 + x * 2] = 0x20; this.vram[this.wy2 * 160 + x * 2 + 1] = this.textAttr; }
+    if (this.uniUsed) {
+      for (let y = this.wy1; y < this.wy2; y++) this.uni.copyWithin(y * 80 + this.wx1, (y + 1) * 80 + this.wx1, (y + 1) * 80 + this.wx2 + 1);
+      this.uni.fill(0, this.wy2 * 80 + this.wx1, this.wy2 * 80 + this.wx2 + 1);
+    }
   }
-  // strings use one JS char per CP437 byte ("\xDA" = #218)
+  // strings use one JS char per CP437 byte ("\xDA" = #218); characters above 0xFF are Unicode (font
+  // text, unitext.js): "?" in the buffer, the character in the Unicode plane (a wide one: two cells)
   write(...items) {
     for (const item of items) {
       const s = String(item);
       for (let i = 0; i < s.length; i++) {
-        const c = s.charCodeAt(i) & 0xFF;
+        let c = s.charCodeAt(i);
+        if (c > 0xFF) {
+          if (c >= 0xD800 && c < 0xDC00 && i + 1 < s.length) {
+            const d = s.charCodeAt(i + 1);
+            if (d >= 0xDC00 && d < 0xE000) { c = ((c - 0xD800) << 10) + (d - 0xDC00) + 0x10000; i++; }
+          }
+          c = UniText.planeCp(c);
+          const w = UniText.charCols(c);
+          if (w > 0) this.outCell(0x3F, c);
+          if (w > 1) this.outCell(0x20, UniText.CONT);
+          continue;
+        }
         if (c === 7) { /* bell */ }
         else if (c === 8) { if (this.cx > this.wx1) this.cx--; }
         else if (c === 10) this.cy++;
@@ -466,12 +504,22 @@ class TunnelerEngine {
         else {
           this.vram[this.cy * 160 + this.cx * 2] = c;
           this.vram[this.cy * 160 + this.cx * 2 + 1] = this.textAttr;
+          if (this.uniUsed) this.uni[this.cy * 80 + this.cx] = 0;
           if (++this.cx > this.wx2) { this.cx = this.wx1; this.cy++; }
         }
         if (this.cy > this.wy2) { this.scrollUp(); this.cy = this.wy2; }
       }
     }
     this.dirty = true;
+  }
+  // one cell of a Unicode character: byte b in the buffer, code point u in the plane
+  outCell(b, u) {
+    this.vram[this.cy * 160 + this.cx * 2] = b;
+    this.vram[this.cy * 160 + this.cx * 2 + 1] = this.textAttr;
+    this.uni[this.cy * 80 + this.cx] = u;
+    this.uniUsed = true;
+    if (++this.cx > this.wx2) { this.cx = this.wx1; this.cy++; }
+    if (this.cy > this.wy2) { this.scrollUp(); this.cy = this.wy2; }
   }
   writeLn(...items) { this.write(...items, "\r\n"); }
   // write text with "{n}" colour switches; a line filling the whole 80 columns wraps by itself, so
@@ -951,11 +999,12 @@ class TunnelerEngine {
     const name = (t, c, y) => this.gotoXY(c - (visLen(t) >> 1), y);
     if (this.extended) this.roundTitleExt();
     else {
+      const blue = this.classicName(1), green = this.classicName(2);
       this.textColor(9);
-      name(S.blue, 28, 16); this.write(S.blue);
+      name(blue, 28, 16); this.write(blue);
       name(String(this.wins[1]), 28, 18); this.write(this.wins[1]);
       this.textColor(10);
-      name(S.green, 53, 16); this.write(S.green);
+      name(green, 53, 16); this.write(green);
       name(String(this.wins[2]), 53, 18); this.write(this.wins[2]);
     }
     const at = 8 * 160 + (x + 1) * 2 + 1;                      // attribute of the first label cell
@@ -1196,8 +1245,9 @@ class TunnelerEngine {
     this.slots.forEach((s, i) => { if (teams[i] !== undefined) s.team = clampInt(teams[i], 1, 8, s.team); });
     this.computeTeams();
   }
-  // display names per player (0-based array, already encoded for the font, e.g. Lang.enc; null = the
-  // color name). Display only (round title, statistics) - never part of the simulation.
+  // display names per player (0-based array of raw Unicode names - any language, drawn through the
+  // Unicode plane; null = the color name). Display only (round title, statistics) - never part of the
+  // simulation.
   setNames(names) {
     if (!Array.isArray(names)) return;
     for (let i = 0; i < this.nPlayers; i++) this.names[i] = typeof names[i] === "string" && names[i] ? names[i] : null;
@@ -1212,7 +1262,13 @@ class TunnelerEngine {
   // closest text-mode color of player p
   playerTextColor(p) { return this.extended ? EXT_TEXT_COLORS[this.colorIndex(p)] : p + 8; }
   colorName(p) { return (this.strings.colors || STRINGS_EN.colors)[this.colorIndex(p)]; }
-  playerName(p) { return this.names[p - 1] || this.colorName(p); }
+  // player p's name as font text: the display name, else the color name (classic: BLUE / GREEN)
+  playerName(p) {
+    if (this.names[p - 1]) return UniText.fromRaw(this.names[p - 1]);
+    return this.extended ? this.colorName(p) : p === 1 ? this.strings.blue : this.strings.green;
+  }
+  // classic screens have room for 9 columns of a display name (the color name is shown as it is)
+  classicName(p) { return this.names[p - 1] ? UniText.slice(this.playerName(p), 9) : this.playerName(p); }
   // label of team index t: "TEAM n" with its number
   teamName(t) { return (this.strings.team || STRINGS_EN.team).replace("{n}", String(this.teamIds[t])); }
   // players (1..N) of team index t
@@ -1433,7 +1489,7 @@ class TunnelerEngine {
         this.gotoXY(c - (w.length >> 1), 16); this.write(w);
         let y = 18;
         for (const p of this.teamMembers(t)) {
-          const n = this.playerName(p).slice(0, cw);
+          const n = UniText.slice(this.playerName(p), cw);
           this.textColor(this.playerTextColor(p));
           this.gotoXY(c - (visLen(n) >> 1), y++); this.write(n);
         }
@@ -1487,7 +1543,7 @@ class TunnelerEngine {
     this.gotoXY(19 - (visLen(st.title) >> 1), 1);
     this.write(st.title);
     const winT = this.matchWinnerTeam(), members = winT >= 0 ? this.teamMembers(winT) : [];
-    const name = p => this.playerName(p).slice(0, 9);
+    const name = p => UniText.slice(this.playerName(p), 9);
     let nw = 0;
     for (let p = 1; p <= N; p++) nw = Math.max(nw, visLen(name(p)));
     nw++;
@@ -1597,7 +1653,8 @@ class TunnelerEngine {
                 }
                 this.moving[P] = true;
               } else this.moving[P] = false;
-              // own base: refuel and repair; any other base: refuel only, slower
+              // own base: refuel and repair; a teammate's base: refuel slower, repair at half speed;
+              // an enemy base: refuel only, slower
               for (let q = 1; q <= N; q++)
                 if (this.distance(Math.abs(this.tankX[P] - this.baseX[q]), Math.abs(this.tankY[P] - this.baseY[q])) < 15) {
                   if (q === P) {
@@ -1608,6 +1665,10 @@ class TunnelerEngine {
                   } else {
                     this.energy[P] += 30;
                     if (this.energy[P] > MaxPower) this.energy[P] = MaxPower;
+                    if (this.team(q) === this.team(P)) {
+                      this.shield[P] += 20;
+                      if (this.shield[P] > MaxPower) this.shield[P] = MaxPower;
+                    }
                   }
                 }
             } else this.killTankExt(P, this.tankX[P], this.tankY[P]);
@@ -1872,9 +1933,9 @@ class TunnelerEngine {
       this.writeLn();
       if (this.alive[1] === this.alive[2]) { this.alive[1] = false; this.alive[2] = false; }
       this.textColor(((this.wins[1] > this.wins[2]) ? 1 : 0) * 128 + 1);
-      this.write(S.blue.padStart(25));
+      this.write(UniText.padStart(this.classicName(1), 25));
       this.textColor(((this.wins[2] > this.wins[1]) ? 1 : 0) * 128 + 2);
-      this.writeLn(S.green.padStart(9));
+      this.writeLn(UniText.padStart(this.classicName(2), 9));
       this.writeLn();
       const row = (label, f) => {
         this.textColor(6);
@@ -1898,8 +1959,8 @@ class TunnelerEngine {
       if (this.alive[1] !== this.alive[2]) {
         this.textColor(6);
         this.write(S.stats.winner);
-        if (this.wins[1] > this.wins[2]) { this.textColor(1); this.write(S.blue); }
-        else { this.textColor(2); this.write(S.green); }
+        if (this.wins[1] > this.wins[2]) { this.textColor(1); this.write(this.classicName(1)); }
+        else { this.textColor(2); this.write(this.classicName(2)); }
         this.textColor(6);
         this.writeLn(".");
       }
@@ -1937,6 +1998,7 @@ class TunnelerEngine {
 
   drawBottomRule() {
     for (let i = 0; i <= 79; i++) { this.vram[0xE60 + i * 2] = 0x5F; this.vram[0xE60 + i * 2 + 1] = 0x08; }
+    if (this.uniUsed) this.uni.fill(0, 0xE60 >> 1, (0xE60 >> 1) + 80);
     this.dirty = true;
   }
 

@@ -106,7 +106,7 @@ Lang.register("cs", {
         "prostě došla energie)."],
       introExt: ["Každý tank bojuje sám za sebe nebo proti sobě bojují týmy.  Cílem hry je",
         "jako první vyhrát {n}.  Kolo trvá, dokud nezbude jen jeden tank (nebo jeden",
-        "tým); tanky vybuchují po zásahu nebo když jim dojde energie."],
+        "tým); tanky vybuchují po zásahu nebo když jim dojde energie.", "Základna spoluhráče také opravuje štít, ale poloviční rychlostí."],
       displayHead: "Obrazovka:  ",
       display: ["Každý hráč má svou obrazovku a přístrojový panel se dvěma",
         "ukazateli (energie a štít).  Obrazovka ukazuje okolí tanku shora",
@@ -194,6 +194,7 @@ Lang.register("cs", {
   "pg.kick.i2": "nebo diváka, <ENTER> ho z ní vyhodí.",
   "pg.kick.sure": "Stiskni <ENTER> ještě jednou a {name} letí ven.", "pg.spectator": "divák {n}",
   "pg.kicked": "Hostitel tě z této hry vyhodil.",
+  "on.idle": "Hra byla zavřena, protože 10 minut nikdo nehrál.",
   // chat v předsíni (online.js, docs/DESIGN-8P.md 22) a co hráč během hry vidí (část 23)
   "pg.chat": "Chat", "pg.chat.none": "Zatím žádné zprávy.", "pg.chat.spec": "divák",
   "pg.say": "Řekni: ", "pg.say.i": "Napiš zprávu, <ENTER> ji pošle všem v této hře.",

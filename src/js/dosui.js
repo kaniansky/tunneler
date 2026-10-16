@@ -14,10 +14,13 @@
 //   spec.fixed:  the last N items always stay visible below the scrolling ones
 //   spec.header: "text"                            non-selectable heading row inside the box (yellow)
 //   spec.text:   [{row, col, text, color}]         raw Unicode text (any language, not encoded for the
-//                                                  font) drawn by the Display's text layer, rows / cols 1-based
+//                                                  font; drawn through the Unicode plane), rows / cols 1-based
+//   All other texts are font text (Lang.t / Lang.enc - unitext.js: other characters, e.g. a player's
+//   name inside a translated line, go through the Unicode plane); widths are display columns
+//   (UniText.cols: CJK / emoji take 2).
 //   spec.items:  [{label, go, info: [..], disabled, attr, align: "left", input: {value, max, placeholder,
-//                width, unicode}}]   input.width: visible characters (the end of a longer value is shown);
-//                input.unicode: any characters may be typed / pasted (shown through the text layer), else ASCII
+//                width}}]   input.value: raw Unicode, any printable characters may be typed / pasted;
+//                input.max / input.width: display columns (the end of a value wider than width is shown)
 //                {separator: true} draws a horizontal line across the box
 //                change(dir): a switch - Left / Right step its value back (-1) / forward (+1)
 //                info lines may be {text, color, onClick} - clickable (e.g. the invite link)
@@ -33,6 +36,9 @@
 (function (root) {
 
 const ATTR = 0x05, SEL = 0x5F, DISABLED = 0x08;
+const U = root.UniText;
+// characters an input never takes: control, bidi, zero-width, private use (see NetProto's cleaning)
+const BAD_INPUT = /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff\ue000-\uf8ff\ufe00-\ufe0f]/;
 
 class DosUI {
   constructor(canvas, opts = {}) {
@@ -120,16 +126,17 @@ class DosUI {
 
   draw() {
     const t = this.t, s = this.spec, b = this.geom();
-    const layer = (s.text || []).map(x => ({ row: x.row - 1, col: (x.col || 1) - 1, text: x.text, attr: x.color == null ? 7 : x.color }));
     t.textMode();
     t.window(1, 1, 80, 25);
     t.textBackground(0);
     t.clearScreen();
-    for (const l of s.lines || []) {
+    const put = (l, txt) => {
       t.textColor(l.color == null ? 7 : l.color);
-      t.gotoXY(l.col || Math.max(1, 41 - (l.text.length >> 1)), l.row);
-      t.write(l.text.slice(0, 80 - (l.col || 1)));
-    }
+      t.gotoXY(l.col || Math.max(1, 41 - (U.cols(txt) >> 1)), l.row);
+      t.write(U.slice(txt, 80 - (l.col || 1)));
+    };
+    for (const l of s.lines || []) put(l, l.text);
+    for (const l of s.text || []) put(l, U.fromRaw(l.text));
     // box
     const shown = this.rowItems();
     t.textColor(5);
@@ -137,7 +144,7 @@ class DosUI {
     line(b.y, "\xDA", "\xC4", "\xBF");
     let row = b.y + 1;
     if (s.header) {
-      t.gotoXY(b.x, row); t.write("\xB3"); t.textColor(14); t.write(s.header.padEnd(b.w).slice(0, b.w)); t.textColor(5); t.write("\xB3");
+      t.gotoXY(b.x, row); t.write("\xB3"); t.textColor(14); t.write(U.padEnd(U.slice(s.header, b.w), b.w)); t.textColor(5); t.write("\xB3");
       line(row + 1, "\xC3", "\xC4", "\xB4");
       row += 2;
     }
@@ -146,27 +153,31 @@ class DosUI {
       const i = shown[k], it = s.items[i];
       if (k === this.scrollRows) moreRow = row;
       if (it.separator) { line(row, "\xC3", "\xC4", "\xB4"); continue; }
-      // an empty input shows its placeholder (dimmed; the first key typed replaces it); a value longer
-      // than the input's width shows its end; a Unicode input's value goes through the text layer
+      // an empty input shows its placeholder (dimmed; the first key typed replaces it); a value wider
+      // than the input's width shows its end
       const inp = it.input;
-      let chars = inp && inp.value ? Array.from(inp.value) : [];
-      if (inp && inp.width && chars.length >= inp.width) chars = chars.slice(chars.length - inp.width + 1);
-      const uni = !!(inp && inp.unicode && chars.length);
-      const value = !inp ? "" : uni ? " ".repeat(chars.length) : chars.length ? chars.join("") : inp.placeholder || "";
+      let value = !inp ? "" : inp.value ? U.fromRaw(inp.value) : inp.placeholder || "";
+      if (inp && inp.value && inp.width && U.cols(value) >= inp.width) {
+        const ch = [];
+        U.each(value, (bt, cp, w, a, z) => { ch.push([a, z, w]); });
+        let n = 0, k = ch.length;
+        while (k > 0 && n + ch[k - 1][2] <= inp.width - 1) n += ch[--k][2];
+        value = value.slice(k < ch.length ? ch[k][0] : value.length);
+      }
+      const labelW = U.cols(it.label), valueW = U.cols(value);
       let text = it.label + value;
-      text = it.align === "left" ? (" " + text).padEnd(b.w) : this.centre(text, b.w);
-      text = text.slice(0, b.w);
+      text = it.align === "left" ? U.padEnd(" " + text, b.w) : this.centre(text, b.w);
+      text = U.padEnd(U.slice(text, b.w), b.w);
       t.gotoXY(b.x, row); t.write("\xB3" + text + "\xB3");
       const o = (row - 1) * 160 + b.x * 2;
       const attr = i === this.sel ? SEL : it.disabled ? DISABLED : it.attr || ATTR;
       for (let c = 0; c < b.w; c++) t.vram[o + c * 2 + 1] = attr;
-      const x0 = (it.align === "left" ? 1 : (b.w - (it.label.length + value.length)) >> 1) + it.label.length;
-      if (uni && x0 < b.w) layer.push({ row: row - 1, col: b.x + x0, text: chars.slice(0, b.w - x0).join(""), attr });
+      const x0 = (it.align === "left" ? 1 : (b.w - (labelW + valueW)) >> 1) + labelW;
       if (it.input && !it.input.value && value)
-        for (let c = x0; c < Math.min(b.w, x0 + value.length); c++) t.vram[o + c * 2 + 1] = i === this.sel ? 0x57 : DISABLED;
+        for (let c = x0; c < Math.min(b.w, x0 + valueW); c++) t.vram[o + c * 2 + 1] = i === this.sel ? 0x57 : DISABLED;
       if (it.input && i === this.sel) {                     // blinking cursor after the text
-        const at = x0 + value.length;
-        if (at < b.w) { t.vram[o + at * 2] = 0x5F; t.vram[o + at * 2 + 1] = SEL | 0x80; }
+        const at = x0 + valueW;
+        if (at < b.w) { t.vram[o + at * 2] = 0x5F; t.vram[o + at * 2 + 1] = SEL | 0x80; t.uni[(o >> 1) + at] = 0; }
       }
     }
     line(row, "\xC0", "\xC4", "\xD9");
@@ -180,23 +191,23 @@ class DosUI {
     (it && it.info || []).forEach((l, i) => {
       t.textColor(l.color == null ? 3 : l.color);
       const text = typeof l === "string" ? l : l.text;
-      const x = Math.max(1, 41 - (text.length >> 1)), y = (s.infoRow || row + 3) + i;
+      const x = Math.max(1, 41 - (U.cols(text) >> 1)), y = (s.infoRow || row + 3) + i;
       t.gotoXY(x, y);
-      t.write(text.slice(0, 79));
-      if (l.onClick) this.links.push({ x, y, w: Math.min(text.length, 79), onClick: l.onClick });
+      t.write(U.slice(text, 79));
+      if (l.onClick) this.links.push({ x, y, w: Math.min(U.cols(text), 79), onClick: l.onClick });
     });
     // bottom line, like the game's "Press <ENTER> for main menu."
     t.drawBottomRule();
     const T = (k, d) => root.Lang ? root.Lang.t(k) : d;
     t.textColor(1); t.gotoXY(2, 25); t.write(T("ui.pd", "public domain, 2026"));
     const hint = " " + (s.hint || T("ui.hint", "\x18\x19 and <ENTER>, or the mouse.") + (s.back ? "  " + T("ui.back", "<ESC> back.") : ""));
-    t.textColor(15); t.gotoXY(80 - hint.length, 25); t.write(hint);
+    t.textColor(15); t.gotoXY(80 - U.cols(hint), 25); t.write(hint);
     const snap = { t: 0, mode: "text", screen: "text", vram: t.vram.slice(0, 16000) };
-    if (layer.length) snap.text = layer;
+    t.snapUni(snap);
     this.present(snap);
   }
 
-  centre(s, w) { const l = Math.max(0, (w - s.length) >> 1); return (" ".repeat(l) + s).padEnd(w); }
+  centre(s, w) { const l = Math.max(0, (w - U.cols(s)) >> 1); return U.padEnd(" ".repeat(l) + s, w); }
 
   key(e) {
     const s = this.spec;
@@ -221,16 +232,17 @@ class DosUI {
     e.preventDefault();
   }
 
-  // adds text to an input (as far as it is allowed and fits); true when something was added
+  // adds text to an input (any printable characters, as many as fit its max display columns); true when
+  // something was added
   typed(input, str) {
-    let v = Array.from(input.value || ""), added = false;
+    let v = String(input.value || ""), n = U.rawCols(v), added = false;
     for (const ch of String(str).normalize("NFC")) {
-      const c = ch.codePointAt(0);
-      if (c < 32 || (c >= 0x7F && c < 0xA0) || (!input.unicode && c > 126) || /[\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff]/.test(ch)) continue;
-      if (v.length >= input.max) break;
-      v.push(ch); added = true;
+      if (BAD_INPUT.test(ch)) continue;
+      const w = U.charCols(ch.codePointAt(0));
+      if (n + w > input.max) break;
+      v += ch; n += w; added = true;
     }
-    if (added) input.value = v.join("");
+    if (added) input.value = v.normalize("NFC");
     return added;
   }
   // pasting into the selected input
@@ -273,7 +285,7 @@ class DosUI {
 
 // interior width of a box that fits these items (even: exactly centred)
 DosUI.boxWidth = items => {
-  const len = Math.max(0, ...items.map(it => it.separator ? 0 : it.label.length + (it.input ? (it.input.width || it.input.max) + 1 : 0)));
+  const len = Math.max(0, ...items.map(it => it.separator ? 0 : U.cols(it.label) + (it.input ? (it.input.width || it.input.max) + 1 : 0)));
   const w = Math.max(14, len + 4);
   return w + w % 2;
 };

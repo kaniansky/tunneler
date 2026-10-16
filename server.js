@@ -98,8 +98,10 @@ function slugify(s) {
   return s.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "")
     .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, MAX_NAME) || "room";
 }
+// a room's display name: any letters (NFC), no control / bidi / zero-width characters or <>, at most
+// MAX_NAME display columns (wide CJK / emoji count 2)
 function cleanName(s) {
-  return String(s == null ? "" : s).replace(/[\u0000-\u001f\u007f<>]/g, "").replace(/\s+/g, " ").trim().slice(0, MAX_NAME);
+  return NetProto.cleanRoomName(s, MAX_NAME);
 }
 
 // /js/langs.js: every src/lang/<code>.js joined into one script, en.js first (the fallback), then
@@ -117,6 +119,9 @@ function langBundle(dir) {
 function createServer(opts = {}) {
   const tickMs = opts.tickMs || NetProto.TICK_MS;
   const cleanupMs = opts.cleanupMs != null ? opts.cleanupMs : 10 * 60 * 1000;
+  // a room nobody plays in (no human player joined or did anything - spectators don't count) for this
+  // long is closed, even with connections still open (a forgotten tab, spectators, computer tanks)
+  const idleMs = opts.idleMs != null ? opts.idleMs : 10 * 60 * 1000;
   const quiet = !!opts.quiet;
   const ownerGraceMs = opts.ownerGraceMs != null ? opts.ownerGraceMs : OWNER_GRACE_MS;
   const maxRoomsPerAddr = opts.maxRoomsPerAddr || MAX_ROOMS_PER_ADDR;
@@ -164,7 +169,7 @@ function createServer(opts = {}) {
       // owner: per slot, the client id that played it in this match and when it left (see onConnect)
       match: false, owner: new Array(N).fill(null),
       report: { screen: "text", playing: false, round: 0, wins: new Array(N).fill(0), teamWins: [] },
-      hashes: new Map(), desyncs: 0, cleanupTimer: null,
+      hashes: new Map(), desyncs: 0, cleanupTimer: null, lastActive: Date.now(),
     };
     rooms.set(id, room);
     armCleanup(room);
@@ -479,6 +484,7 @@ function createServer(opts = {}) {
     room.sockets.add(ws);
     clearTimeout(room.cleanupTimer);
     if (who >= 0) {
+      room.lastActive = Date.now();
       room.socks[who] = ws;
       room.joined[who] = true;
       room.held[who] = 0; room.latch[who] = 0;
@@ -509,6 +515,8 @@ function createServer(opts = {}) {
       let m;
       try { m = JSON.parse(data.toString("utf8")); } catch (e) { return; }
       if (!m || typeof m !== "object") return;
+      // a player doing something keeps the room alive (automatic pings / hashes / reports don't)
+      if (who >= 0 && ["b", "k", "ready", "me", "chat", "kick"].includes(m.t)) room.lastActive = t;
       switch (m.t) {
         case "ping": ws.send(JSON.stringify({ t: "pong", c: Number(m.c) || 0 })); break;
         case "rtt": {
@@ -655,11 +663,27 @@ function createServer(opts = {}) {
   }, opts.heartbeatMs || 15000);
   heartbeat.unref();
 
+  // close rooms nobody has played in for idleMs
+  const idleSweep = setInterval(() => {
+    const now = Date.now();
+    for (const room of [...rooms.values()]) {
+      if (now - room.lastActive < idleMs) continue;
+      for (const s of room.sockets) {
+        try { s.send(JSON.stringify({ t: "err", code: "idle", msg: "This game was closed because nobody played for a while." })); } catch (e) { /* closing */ }
+        try { s.close(4410, "idle"); } catch (e) { /* closing */ }
+      }
+      stopClock(room); clearTimeout(room.cleanupTimer); clearTimeout(room.stTimer);
+      rooms.delete(room.id);
+      say("room closed (idle)", room.id);
+    }
+  }, opts.idleCheckMs || 30000);
+  idleSweep.unref();
+
   return {
     server, rooms, createRoom,
     listen(port, cb) { server.listen(port, () => cb && cb(server.address().port)); return this; },
     close(cb) {
-      clearInterval(heartbeat);
+      clearInterval(heartbeat); clearInterval(idleSweep);
       for (const r of rooms.values()) { stopClock(r); clearTimeout(r.cleanupTimer); clearTimeout(r.stTimer); }
       for (const ws of wss.clients) ws.terminate();
       wss.close();

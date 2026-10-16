@@ -57,6 +57,21 @@ function key(env, type, code, key) {
   const e = { code, key: key || "", target: {}, ctrlKey: false, altKey: false, metaKey: false, repeat: false, preventDefault() {} };
   for (const f of env.listeners[type] || []) f(e);
 }
+// the text of a snapshot's screen, one line per row: font bytes as code page 437 (English: no letters in
+// the free slots), cells of the Unicode plane as their characters (unitext.js)
+function screenText(win, snap) {
+  const rows = [];
+  for (let r = 0; r < 25; r++) {
+    let l = "";
+    for (let c = 0; c < 80; c++) {
+      const u = snap.uni ? snap.uni[r * 80 + c] : 0;
+      if (u === win.UniText.CONT) continue;
+      l += u ? String.fromCodePoint(u) : win.CP437_CHARS[snap.vram[r * 160 + c * 2]];
+    }
+    rows.push(l);
+  }
+  return rows.join("\n");
+}
 const press = (env, code, k) => { key(env, "keydown", code, k); key(env, "keyup", code, k); };
 const type = (env, text) => { for (const ch of text) press(env, /[a-z]/i.test(ch) ? "Key" + ch.toUpperCase() : "Space", ch); };
 const wait = ms => new Promise(r => setTimeout(r, ms));
@@ -136,7 +151,7 @@ function loadPage(page, search, stored) {
     ws.recv(st());
     await wait(150);
     // chat: "Say:" right after Start game - any letters, Enter sends; received messages are drawn
-    // through the text layer (names and text in Unicode)
+    // through the Unicode plane (names and text in any letters)
     press(env, "ArrowDown");
     type(env, "Ahoj ");
     for (const ch of "ľudia, αβγ ж") key(env, "keydown", "KeyQ", ch);
@@ -145,9 +160,10 @@ function loadPage(page, search, stored) {
     ws.recv({ t: "chat", from: { color: 0, name: "Bob" }, text: "Привет, Σοφία!" });
     ws.recv({ t: "chat", from: { spectator: true, name: "" }, text: "hi" });
     await wait(250);
-    const layer = (env.win.tunnelerLobbyUI().display.snap || {}).text || [];
-    const shown = layer.map(x => x.text).join("|");
-    assert(shown.includes("Bob") && shown.includes("Привет, Σοφία!") && shown.includes("hi"), "chat in the text layer: " + shown);
+    const snap = env.win.tunnelerLobbyUI().display.snap;
+    const shown = screenText(env.win, snap);
+    assert(shown.includes("Bob: Привет, Σοφία!") && shown.includes("hi"), "chat in the Unicode plane: " + shown);
+    assert(snap.uni && snap.uni.some(u => u === "П".codePointAt(0)), "Cyrillic through the plane");
     // the host's kick item: Down to it (after Instructions, Copy invite link), Enter twice (confirm)
     for (let i = 0; i < 3; i++) press(env, "ArrowDown");
     press(env, "Enter"); press(env, "Enter");
@@ -181,7 +197,7 @@ function loadPage(page, search, stored) {
     type(env, "Hello all");
     press(env, "Enter");
     assert(ws.sent.some(m => m.t === "chat" && m.text === "Hello all"), "spectator chat sent");
-    assert(((ui.display.snap || {}).text || []).some(x => x.text.trim() === "old"), "history from hello shown");
+    assert(/: old/.test(screenText(env.win, ui.display.snap)), "history from hello shown");
     console.log("  ok  online.js spectator lobby: read-only, but chats (history from hello)");
   }
 

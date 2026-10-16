@@ -56,7 +56,7 @@
     : { size, winScore, autoStart: true });   // settings were chosen on the page: no menu before round 1
   const ext = engine.extended;
   // vs computer: BLUE's own view, its team's or everyone's (BLUE first); split screen: the full split screen
-  const views = new ViewModes(canvas, display, () => engine, { mode: mode === "cpu" ? "follow" : "grid", follow: 0, lockFollow: true, keys: false });
+  const views = new ViewModes(canvas, display, () => engine, { mode: mode === "cpu" ? "follow" : "grid", follow: 0, lockFollow: true, keys: false, labels: mode === "cpu" });
   if (mode === "cpu") views.setScope(0, view);
   const runner = new Runner(engine, views, speaker);
 

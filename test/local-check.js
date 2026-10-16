@@ -238,8 +238,18 @@ function play(search) {
   same(v.layout().cells, [2, 4], "team of player 3 (CYAN + TEAL)");
   // classic (vs computer: BLUE against GREEN): self = BLUE's half, team = the same, everyone = the full split screen
   const cl = q => { const x = play("?mode=cpu&slots=0:you:1,1:normal:2" + q).tunnelerViews(); x.snap = { screen: "play", mode: "lores" }; return x.layout(); };
-  same([cl("&view=self"), cl("&view=team"), cl("&view=everyone")].map(L => [L.kind, L.crop]),
-    [["display", "blue"], ["display", "blue"], ["display", null]], "classic");
+  // (everyone: the two halves as two labeled views - the same picture plus the names on the top borders)
+  same([cl("&view=self"), cl("&view=team"), cl("&view=everyone")].map(L => [L.kind, L.crop || L.cells, !!L.labels]),
+    [["display", "blue", false], ["display", "blue", false], ["grid", [0, 1], true]], "classic");
+  same([self.labels, team.labels, all.labels], [false, true, true], "labels only when more than one view");
+  // the label: name (any letters) + team when teams are shared, at most 38 columns
+  const lw = play(link + "&view=everyone"), lv = lw.tunnelerViews(), le = lw.tunnelerEngine();
+  le.setNames(["王小明王小明", "Дмитро"]);
+  assert.strictEqual(lv.viewLabel(0), lw.UniText.fromRaw("王小明王小明") + "  " + le.teamName(le.team(1)));
+  assert.strictEqual(lv.viewLabel(2), le.colorName(3) + "  " + le.teamName(le.team(3)), "no name: the color");
+  // hotseat: the original split screen, no labels
+  const hs = play("?mode=hotseat").tunnelerViews(); hs.snap = { screen: "play", mode: "lores" };
+  same([hs.layout().kind, hs.layout().crop], ["display", null], "hotseat: the original screen");
   ok("views.js: self / team / everyone - own view first, teammates / others in slot order; classic halves");
 }
 

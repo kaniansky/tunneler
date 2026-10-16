@@ -21,7 +21,13 @@
 //                            then the others in slot order (classic: own half / the full split screen);
 //                            setScope(null) goes back to the modes above
 // opts: mode, follow, lockFollow (no Left / Right), keys (false: handleKey does nothing),
-//       storageKey (remember mode / follow in localStorage), onChange(views) after a switch.
+//       storageKey (remember mode / follow in localStorage), onChange(views) after a switch,
+//       labels (default true; false: the hotseat split screen stays exactly the original).
+// Labels: whenever more than one player's view is shown (and for the followed view), each view's top
+// border (the 8-pixel dotted row above the viewport) names its player (lobby name in any letters, else
+// the colour name) in the player's colour, plus "TEAM n" when teams are shared - in half-height VGA
+// letters (like 80x50 text mode) on black, never over the playfield. Classic games: the two halves of
+// the split screen are shown as two such views.
 (function (root) {
 
 const MODES = ["grid", "map", "follow"];
@@ -34,7 +40,8 @@ const GAP = 5;                     // columns between the teams on the map's tea
 const T = (k, p) => root.Lang ? root.Lang.t(k, p) : k;
 const raw = k => root.Lang ? root.Lang.raw(k) : k.toUpperCase();
 const enc = s => root.Lang ? root.Lang.enc(s) : s;
-const visLen = s => s.replace(/\{\d+\}/g, "").length;
+// display columns of font text (unitext.js: CJK / emoji take 2)
+const visLen = s => root.UniText.cols(s.replace(/\{\d+\}/g, ""));
 const load = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
 const save = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* private mode */ } };
 
@@ -59,6 +66,7 @@ class ViewModes {
     this.aspectKey = "";
     this.mapImg = null; this.mapTick = -1; this.mapEngine = null;
     this.scope = null;             // {own, view} - a player's own view (setScope)
+    if (root.UniFont) root.UniFont.onLoad(() => { this.key = ""; });   // a glyph block arrived: redraw
   }
 
   // ------------------------------------------------------------ Display interface (for Runner)
@@ -129,7 +137,10 @@ class ViewModes {
   // status line: what is shown now / which keys switch it (font-encoded)
   label() {
     if (this.mode === "map") return T("vw.map");
-    if (this.mode === "follow") return T("vw.follow", { name: raw(this.playerKey(Math.min(this.follow, this.nPlayers() - 1))) });
+    if (this.mode === "follow") {
+      const i = Math.min(this.follow, this.nPlayers() - 1), e = this.engine();
+      return T("vw.follow", { name: (e && e.names && e.names[i]) || raw(this.playerKey(i)) });
+    }
     return T("vw.grid");
   }
   hint() {
@@ -155,10 +166,10 @@ class ViewModes {
     if (e && e.playerTextColor) return e.playerTextColor(i + 1);
     return this.isExtended() ? root.TunnelerEngine.PLAYER_TEXT_COLORS[i] : CLASSIC_COLORS[i];
   }
+  // player i's name as font text (a display name from the pre-game lobby in any letters, else the color)
   playerName(i) {
     const e = this.engine();
-    if (e && e.playerName && e.extended) return e.playerName(i + 1);
-    if (e && e.strings) return i ? e.strings.green : e.strings.blue;
+    if (e && e.playerName) return e.playerName(i + 1);
     return enc(raw(this.playerKey(i)));
   }
 
@@ -171,21 +182,22 @@ class ViewModes {
     const play = s && s.screen === "play";
     const n = this.nPlayers();
     const follow = Math.min(Math.max(this.follow, 0), n - 1);
+    const labels = this.opts.labels !== false && play && !!this.engine();
     if (play && this.scope) {
       const cells = this.scopeCells();
-      if (!s.views) return { kind: "display", crop: cells.length > 1 ? null : cells[0] === 1 ? "green" : "blue" };
+      if (!s.views && !(labels && cells.length > 1)) return { kind: "display", crop: cells.length > 1 ? null : cells[0] === 1 ? "green" : "blue" };
       const c = cells.length, cols = c <= 4 ? c : Math.ceil(c / 2);
-      return { kind: "grid", cells, cols, rows: Math.ceil(c / cols) };
+      return { kind: "grid", cells, cols, rows: Math.ceil(c / cols), labels: labels && c > 1 };
     }
     if (play && this.mode === "map" && this.engine()) return { kind: "map" };
-    if (!play || !s.views) {
+    if (!play || (!s.views && !labels)) {
       const crop = this.mode === "follow" ? (follow === 1 ? "green" : "blue") : null;
       return { kind: "display", crop };
     }
-    if (this.mode === "follow") return { kind: "grid", cells: [follow], cols: 1, rows: 1 };
+    if (this.mode === "follow") return { kind: "grid", cells: [follow], cols: 1, rows: 1, labels };
     // up to 4 per row; 5 and 6 players fill 3 + 3 rather than 4 + 1 / 4 + 2
     const cols = n <= 4 ? n : Math.ceil(n / 2), rows = Math.ceil(n / cols);
-    return { kind: "grid", cells: Array.from({ length: n }, (_, i) => i), cols, rows };
+    return { kind: "grid", cells: Array.from({ length: n }, (_, i) => i), cols, rows, labels };
   }
 
   // ------------------------------------------------------------ drawing
@@ -222,21 +234,53 @@ class ViewModes {
     return new Uint32Array(this.img.data.buffer);
   }
 
+  // the views of L.cells side by side (extended: each player's view buffer; classic: a half of the split
+  // screen), with a label row above each when L.labels
   drawGrid(L) {
-    const s = this.snap;
-    const key = "grid" + L.cells.join(",") + L.cols;
+    const s = this.snap, e = this.engine();
+    const key = "grid" + L.cells.join(",") + L.cols + (L.labels ? "L" + L.cells.map(v => this.viewLabel(v)).join("|") : "");
     if (this.key === key && this.drawn === s) return;
     this.key = key; this.drawn = s;
-    const W = L.cols * 360, H = L.rows * 400;
+    const top = 0, CH = 400;
+    const W = L.cols * 360, H = L.rows * CH;
     const px = this.surface(W, H);
     const D = root.Display, pal = D.paletteOf(s);
     px.fill(pal[0]);
     L.cells.forEach((v, k) => {
-      const buf = s.views[v];
-      if (buf) D.paint(px, W, (k % L.cols) * 360, Math.floor(k / L.cols) * 400, buf, 0, 40, 100, false, pal, true, root.VGA_FONT);
+      const x = (k % L.cols) * 360, y = Math.floor(k / L.cols) * CH;
+      if (s.views) { if (s.views[v]) D.paint(px, W, x, y + top, s.views[v], 0, 40, 100, false, pal, true, root.VGA_FONT); }
+      else D.paint(px, W, x, y + top, s.vram, v * 40, v * 40 + 40, 100, false, pal, true, root.VGA_FONT);
+      if (L.labels) this.paintLabel(px, W, x, y, v, e);
     });
     this.ctx.putImageData(this.img, 0, 0);
-    this.fit(L.cols === 1 && L.rows === 1 ? "half" : "grid");
+    this.fit(L.cols === 1 && L.rows === 1 && !L.labels ? "half" : "grid");
+  }
+
+  // view label: "NAME" (+ "  TEAM n" when teams are shared), font text, at most 38 columns
+  viewLabel(i) {
+    const e = this.engine(), U = root.UniText;
+    const team = e && e.extended && e.teams && e.teamName ? "  " + e.teamName(e.team(i + 1)) : "";
+    return U.slice(this.playerName(i), 38 - U.cols(team)) + team;
+  }
+  // the label on the view's top border at (x, y): one text row (40 cells) drawn at half height (8 lines:
+  // each pair of font lines merged), centred with a blank cell either side, the name in the player's colour
+  paintLabel(px, W, x, y, i, e) {
+    const U = root.UniText, D = root.Display;
+    const vram = new Uint8Array(160), uni = new Uint32Array(80);
+    for (let c = 0; c < 80; c += 2) { vram[c] = 0x20; vram[c + 1] = 0x07; }
+    const label = this.viewLabel(i), name = U.slice(this.playerName(i), U.cols(label));
+    const cells = U.cells(" " + label + " "), nameCells = U.cells(" " + name).length, c0 = (40 - cells.length) >> 1;
+    cells.forEach(([b, cp], k) => {
+      vram[(c0 + k) * 2] = b; uni[c0 + k] = cp;
+      vram[(c0 + k) * 2 + 1] = k < nameCells ? this.playerTextColor(i) & 15 : 0x07;
+    });
+    const tmp = new Uint32Array(360 * 16), bg = D.TEXT_U32[0] >>> 0;
+    D.paint(tmp, 360, 0, 0, vram, 0, 40, 1, true, D.TEXT_U32, true, root.VGA_FONT, uni);
+    for (let l = 0; l < 8; l++)
+      for (let d = c0 * 9; d < (c0 + cells.length) * 9; d++) {
+        const a = tmp[2 * l * 360 + d], b = tmp[(2 * l + 1) * 360 + d];
+        px[(y + l) * W + x + d] = (a >>> 0) !== bg ? a : b;
+      }
   }
 
   // ------------------------------------------------------------ live map + score table
@@ -253,14 +297,16 @@ class ViewModes {
     const px = this.surface(W, H);
     const D = root.Display;
     // text part
-    const vram = new Uint8Array(rows * 160);
+    const vram = new Uint8Array(rows * 160), uni = new Uint32Array(rows * 80);
     for (let i = 0; i < vram.length; i += 2) { vram[i] = 0x20; vram[i + 1] = 0x07; }
+    // font text (names: Unicode characters through the plane `uni`)
     const put = (col, row, text, attr) => {
-      for (let i = 0; i < text.length && col + i < 80; i++) {
-        if (col + i < 0) continue;
-        vram[row * 160 + (col + i) * 2] = text.charCodeAt(i) & 0xFF;
+      root.UniText.cells(text).forEach(([b, cp], i) => {
+        if (col + i < 0 || col + i >= 80) return;
+        vram[row * 160 + (col + i) * 2] = b;
         vram[row * 160 + (col + i) * 2 + 1] = attr;
-      }
+        uni[row * 80 + col + i] = cp;
+      });
     };
     const BOX = 0x05;
     put(0, 0, "\xDA" + "\xC4".repeat(78) + "\xBF", BOX);
@@ -269,7 +315,7 @@ class ViewModes {
     const title = " " + ((e.strings && e.strings.round) || "ROUND") + " " + Math.max(1, e.round) + " ";
     put(40 - (title.length >> 1), 0, title, 0x0E);
     this.scoreTable(e, put, MAP_TOP + 1);
-    D.paint(px, W, 0, 0, vram, 0, 80, rows, true, D.TEXT_U32, Math.floor(now / D.BLINK_MS) % 2 === 0, root.VGA_FONT);
+    D.paint(px, W, 0, 0, vram, 0, 80, rows, true, D.TEXT_U32, Math.floor(now / D.BLINK_MS) % 2 === 0, root.VGA_FONT, uni);
     // the world
     const MX = 9, MY = 16, MW = 702, MH = (MAP_TOP - 1) * 16;
     const pal = D.paletteOf(s);

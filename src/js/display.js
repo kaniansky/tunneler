@@ -3,10 +3,11 @@
 // cells (column 9 repeats column 8 for the line-drawing range C0..DF), 16 scan lines per row in 80x25
 // text mode, 4 scan lines per row in LORES mode (CRTC max scan line = 3), blinking attribute bit in
 // text mode, LORES custom DAC palette (LORES.PAS PalRGB) while the game screen is up.
-// Unicode text layer (docs/DESIGN-8P.md 22): a text-mode snapshot may carry `text: [{row, col, text, attr}]`
-// (0-based cells, text = any Unicode string, attr = a text attribute byte) drawn over the buffer with
-// glyphs.js's unicodeGlyph - CP437 and every extra glyph at once, not limited to the font slots of the
-// current language (lang.js). Characters without a glyph (emoji, ...) show as "?".
+// Unicode plane (docs/DESIGN-8P.md 22): a text-mode snapshot may carry `uni` (Uint32Array, one code
+// point per cell of the buffer, 0 = draw the byte; unitext.js): those cells are drawn with the cell's
+// attribute but the character's own glyph (UniFont: the ROM font, glyphs.js, else GNU Unifont blocks
+// loaded on first use - blank until they arrive, then redrawn). A wide character (CJK, emoji: 16 pixels)
+// spans its cell and the next (UniText.CONT). Characters without any glyph show as "?".
 (function (root) {
 
 const TEXT_PALETTE = [
@@ -38,6 +39,7 @@ class Display {
     this.crop = null;            // null (full screen), "blue" (left half) or "green" (right half)
     this.lastKey = "";
     this.img = null;
+    if (root.UniFont) root.UniFont.onLoad(() => { this.lastKey = ""; });   // a glyph block arrived: redraw
   }
 
   setSnapshot(snap) { this.snap = snap; this.lastKey = ""; }
@@ -78,8 +80,7 @@ class Display {
     if (!this.img) this.img = this.ctx.createImageData(width, height);
     const px = new Uint32Array(this.img.data.buffer);
     const text = s.mode === "text";
-    paint(px, width, 0, 0, s.vram, c0, c1, text ? 25 : 100, text, paletteOf(s), blinkOn, this.font);
-    if (text && s.text) paintText(px, width, 0, 0, s.text, c0, c1, 25, blinkOn);
+    paint(px, width, 0, 0, s.vram, c0, c1, text ? 25 : 100, text, paletteOf(s), blinkOn, this.font, text ? s.uni : null);
     this.ctx.putImageData(this.img, 0, 0);
   }
 }
@@ -89,9 +90,11 @@ function paletteOf(s) { return s.mode === "text" ? TEXT_U32 : s.palette === "ext
 
 // Draws columns c0..c1-1 of rows 0..rows-1 of a B800-layout buffer (160 bytes per row) into px (32-bit
 // pixels, width W) with its top-left corner at (x0, y0): 9 dots per cell, 16 scan lines per row in
-// text mode (blink bit honoured), 4 in LORES. Also used by views.js for the multi-view screens.
-function paint(px, W, x0, y0, vram, c0, c1, rows, text, pal, blinkOn, font) {
+// text mode (blink bit honoured), 4 in LORES. uni: the Unicode plane (text mode; 80 cells per row) or
+// null. Also used by views.js for the multi-view screens and the map's score table.
+function paint(px, W, x0, y0, vram, c0, c1, rows, text, pal, blinkOn, font, uni) {
   const lines = text ? 16 : 4;
+  const CONT = root.UniText ? root.UniText.CONT : -1;
   for (let row = 0; row < rows; row++)
     for (let col = c0; col < c1; col++) {
       const o = row * 160 + col * 2;
@@ -99,8 +102,18 @@ function paint(px, W, x0, y0, vram, c0, c1, rows, text, pal, blinkOn, font) {
       let fg = attr & 15, bg = attr >> 4;
       if (text) { bg &= 7; if ((attr & 0x80) && !blinkOn) fg = bg; }
       const fgc = pal[fg], bgc = pal[bg];
-      const dup = ch >= 0xC0 && ch <= 0xDF;
       let p = (y0 + row * lines) * W + x0 + (col - c0) * 9;
+      const u = uni && text ? uni[row * 80 + col] : 0;
+      if (u === CONT) {
+        // the right half of a wide character: drawn with its left half (blank when that is cropped off)
+        const left = col > c0 ? uni[row * 80 + col - 1] : 0;
+        if (col === c0) { uniCell(px, W, p, 0x20, bgc, bgc, 9); continue; }
+        if (left && left !== CONT && root.UniText.charCols(left) === 2) continue;
+      } else if (u) {
+        uniCell(px, W, p, u, fgc, bgc, (c1 - col) * 9);
+        continue;
+      }
+      const dup = ch >= 0xC0 && ch <= 0xDF;
       for (let l = 0; l < lines; l++, p += W) {
         const bits = font[ch * 16 + l];
         for (let b = 0; b < 8; b++) px[p + b] = (bits & (0x80 >> b)) ? fgc : bgc;
@@ -109,37 +122,29 @@ function paint(px, W, x0, y0, vram, c0, c1, rows, text, pal, blinkOn, font) {
     }
 }
 
-// The Unicode text layer: items {row, col, text, attr} over a text screen painted by paint() (same
-// cells: columns c0..c1-1, rows 0..rows-1, 9 dots x 16 lines, blink bit honoured).
-const QUESTION = 0x3F;
-function glyphOf(ch) {
-  const g = root.unicodeGlyph ? root.unicodeGlyph(ch) : null;
+// The glyph of a Unicode code point: {rows, wide} (rows: 16 bytes, or 32 when wide - two bytes per row),
+// {rows: null} while its Unifont block is loading (drawn blank), or "?" when there is none.
+const QUESTION = { rows: null, wide: false };
+function glyphOf(cp) {
+  if (typeof cp === "string") cp = cp.codePointAt(0);
+  const F = root.UniFont, g = F ? F.glyph(cp) : null;
+  if (g && g.pending) return { rows: null, wide: !!(root.UniText && root.UniText.isWide(cp)), pending: true };
   if (g) return g;
-  const f = root.VGA_FONT, b = ch.length === 1 && ch.charCodeAt(0) < 0x7F && ch.charCodeAt(0) >= 0x20 ? ch.charCodeAt(0) : QUESTION;
-  return f ? f.subarray(b * 16, b * 16 + 16) : null;
+  if (!QUESTION.rows && root.VGA_FONT) {
+    const f = root.unicodeGlyph ? root.unicodeGlyph("?") : null;
+    QUESTION.rows = f || root.VGA_FONT.slice(0x3F * 16, 0x40 * 16);
+  }
+  return QUESTION;
 }
-function paintText(px, W, x0, y0, items, c0, c1, rows, blinkOn) {
-  for (const it of items) {
-    if (!it || it.row < 0 || it.row >= rows) continue;
-    const attr = it.attr == null ? 0x07 : it.attr;
-    let fg = attr & 15;
-    const bg = (attr >> 4) & 7;
-    if ((attr & 0x80) && !blinkOn) fg = bg;
-    const fgc = TEXT_U32[fg], bgc = TEXT_U32[bg];
-    let col = it.col | 0;
-    for (const ch of String(it.text == null ? "" : it.text).normalize("NFC")) {
-      if (col >= c1) break;
-      if (col >= c0) {
-        const g = glyphOf(ch) || glyphOf("?");
-        let p = (y0 + it.row * 16) * W + x0 + (col - c0) * 9;
-        for (let l = 0; l < 16; l++, p += W) {
-          const bits = g ? g[l] : 0;
-          for (let b = 0; b < 8; b++) px[p + b] = (bits & (0x80 >> b)) ? fgc : bgc;
-          px[p + 8] = bgc;
-        }
-      }
-      col++;
-    }
+// One Unicode character at pixel offset p (16 scan lines, 9 dots per cell; a wide glyph: 16 dots centred
+// in 18 = two cells), at most maxW dots wide (cropped screens).
+function uniCell(px, W, p, cp, fgc, bgc, maxW) {
+  const g = cp === 0x20 ? { rows: null, wide: false } : glyphOf(cp);
+  const cw = Math.min(g.wide ? 18 : 9, maxW == null ? 18 : maxW);
+  for (let l = 0; l < 16; l++, p += W) {
+    let bits = 0;
+    if (g.rows) bits = g.wide ? (g.rows[l * 2] << 9) | (g.rows[l * 2 + 1] << 1) : g.rows[l] << 1;   // (bit 17 = dot 0)
+    for (let b = 0; b < cw; b++) px[p + b] = g.wide ? ((bits >> (17 - b)) & 1 ? fgc : bgc) : b < 8 && ((bits >> (8 - b)) & 1) ? fgc : bgc;
   }
 }
 
@@ -147,10 +152,10 @@ Display.TEXT_U32 = TEXT_U32;
 Display.LORES_U32 = LORES_U32;
 Display.EXT_U32 = EXT_U32;
 Display.EXT_PALETTE = EXT_PALETTE;   // 8-bit RGB of the extended palette (map / scoreboard drawing)
-Display.paint = paint;              // (px, W, x0, y0, vram, c0, c1, rows, text, pal, blinkOn, font)
+Display.paint = paint;              // (px, W, x0, y0, vram, c0, c1, rows, text, pal, blinkOn, font, uni)
 Display.paletteOf = paletteOf;
-Display.paintText = paintText;      // (px, W, x0, y0, items, c0, c1, rows, blinkOn) - the Unicode text layer
-Display.glyphOf = glyphOf;          // Unicode character -> 16 font rows ("?" when there is none)
+Display.uniCell = uniCell;          // (px, W, p, codePoint, fgc, bgc, maxW) - one Unicode character
+Display.glyphOf = glyphOf;          // code point (or character) -> {rows, wide} ("?" when there is none)
 Display.BLINK_MS = BLINK_MS;
 root.Display = Display;
 })(window);

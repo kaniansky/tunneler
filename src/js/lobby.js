@@ -61,14 +61,16 @@
     if (r.state === "paused") return T("state.paused");
     return T("state.waiting");
   }
-  const dash = s => "-".repeat(s.length);
+  const dash = s => "-".repeat(UniText.cols(s));
+  // a classic room: who plays BLUE / GREEN - their names (8 columns at most), else the colour; dashes = free
+  const who = (r, i, key) => { const sl = (r.slots || [])[i]; return sl && sl.name ? UniText.slice(E(sl.name), 8) : T(key); };
   const playersText = r => (r.ext ? r.joined + "/" + r.humans + " " + T(r.teams ? "mode.teams.s" : "mode.ffa.s")
-    : (r.blue ? T("blue") : dash(T("blue"))) + " " + (r.green ? T("green") : dash(T("green")))) + (r.spec ? " +" + r.spec : "");
+    : (r.blue ? who(r, 0, "blue") : dash(T("blue"))) + " " + (r.green ? who(r, 1, "green") : dash(T("green")))) + (r.spec ? " +" + r.spec : "");
 
   // who is in the game: "Playing: Norko, GREEN, Jano" (the connected players' names, else their colour)
   function namesLine(r) {
     const on = (r.slots || []).filter(s => !s.bot && s.connected).map(s => s.name || Lang.raw(s.role));
-    return on.length ? { text: T("lobby.who", { names: on.join(", ") }).slice(0, 79), color: 7 } : null;
+    return on.length ? { text: UniText.slice(T("lobby.who", { names: on.join(", ") }), 79), color: 7 } : null;
   }
 
   // ------------------------------------------------------------ the list of public games
@@ -76,7 +78,7 @@
   function list(keep) {
     view = "list"; setUrl(null);
     const items = rooms.map(r => ({
-      label: E(r.name).slice(0, 27).padEnd(28) + playersText(r).padEnd(18) + stateText(r), align: "left", key: "room:" + r.id,
+      label: UniText.padEnd(UniText.slice(E(r.name), 27), 28) + UniText.padEnd(playersText(r), 18) + stateText(r), align: "left", key: "room:" + r.id,
       info: [E(r.name), roomDesc(r) + "   " + stateText(r), namesLine(r), T("lobby.join")].filter(Boolean),
       go: () => openRoom(r.id),
     }));
@@ -192,7 +194,7 @@
       const color = Lang.raw(s.role), team = r.teams ? "  " + T("pg.teamn", { n: s.team }) : "";
       if (s.bot) items.push({ key: s.role, label: T("room.cpu", { name: color, level: Lang.raw("level." + (s.level || "normal")) }) + team, disabled: true });
       else items.push({ key: s.role, attr: TEXT_COLORS[s.color != null ? s.color : i], disabled: s.connected,
-        label: (s.connected ? T("room.taken", { name: color + (s.name ? " (" + s.name + ")" : "") }) : T("room.play", { name: color })) + team,
+        label: (s.connected ? T("room.taken", { name: s.name || color }) : T("room.play", { name: color })) + team,
         info: [T("room.play.i1", { name: color }), T(slots.length === 2 && !r.ext ? "room.play.i2" : "room.play.i2n")],
         go: () => { location.href = gameUrl(r.id, s.role); } });
     });

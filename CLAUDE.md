@@ -44,6 +44,10 @@ may be redesigned, but always in the original's DOS look.
   win over earlier ones.
 - `test/` - `npm test` runs all (no browser needed; `npm run test:engine | test:ext | test:ai | test:net |
   test:lang | test:local` run parts):
+  - `unicode-check.js` - names / room names / chat in any letters (Slovak, Cyrillic, Greek, CJK, emoji)
+    through the Unicode plane: widths, glyph lookup order and lazy blocks, Display.paint of wide glyphs,
+    Lang.enc pass-through, engine round title / statistics (classic 9 columns), DosUI, status line, the
+    map's score table, cleaning, no plane / no font block without user text.
   - `lang-check.js` - every language: all letters have glyphs, menu items/lines fit, instructions,
     information and statistics lay out without wrapping.
   - `compare-wasm.js` - runs the ORIGINAL game (`test/fixtures/original/`: `tunneler.wasm` = cicoparser
@@ -79,7 +83,10 @@ may be redesigned, but always in the original's DOS look.
   - `net-page-smoke.js` - loads each page's scripts (parsed from the html) in a vm with a stub DOM; drives
     online.js's pre-game lobby (name, team, ready / Esc, kick, rtt, config frame), a read-only spectator,
     and lobby.js's slot editor (POST body, host key stored); the chat (Unicode input, `{t:"chat"}`, messages
-    in the text layer, spectators chat too, history from `hello`).
+    in the Unicode plane, spectators chat too, history from `hello`).
+- `tools/make-unifont.py` - regenerates `src/fonts/unifont/*.bin` + `src/js/unidata.js` from GNU Unifont's
+  `unifont_all-<ver>.hex.gz` (`python3 -I tools/make-unifont.py <hex.gz>`; BMP + U+1F000..1FAFF, without
+  what CP437 / glyphs.js draw; ~1.8 MB in 233 block files; OFL-1.1, see `src/fonts/unifont/LICENSE`).
 - `tools/make-glyphs.py` - regenerates `src/js/glyphs.js` from `/usr/share/consolefonts/Uni2-VGA16.psf.gz`
   (`python3 tools/make-glyphs.py`): Latin-1 / Extended-A / B, Greek, Cyrillic, common punctuation,
   currency, arrows, shapes; plus `unicodeGlyph(ch)` (a pristine ROM font copy + those glyphs).
@@ -110,12 +117,21 @@ project dependency; install playwright-core in a scratch dir when needed).
 - Video: emulated B800 buffer. Text screens are 80x25; the game uses LORES: 80x100 cells, 4 scan lines
   each, each attribute byte = 2 pixels (160x100x16), custom DAC palette (`PalRGB`). `display.js` renders
   like a VGA: 720x400, 9-dot cells (col 9 repeats col 8 for 0xC0-0xDF), blink bit in text mode, shown
-  at 4:3 (so pixels are a bit taller than wide - intentional, real hardware look). **Unicode text layer**
-  (DESIGN-8P 22): a text-mode snapshot may carry `text: [{row, col, text, attr}]` (0-based cells, raw
-  Unicode), drawn after the vram with `unicodeGlyph` (CP437 + every extra glyph at once - not limited by
-  the language's font slots; no glyph = "?"; `Display.paintText`, `Display.glyphOf`). Used for player
-  names and chat in the online lobby; the engine's own screens still use the encoded font ("?" for
-  letters outside the current language).
+  at 4:3 (so pixels are a bit taller than wide - intentional, real hardware look). **Unicode plane**
+  (DESIGN-8P 22, `src/js/unitext.js`): every screen text is "font text" - code units 0..0xFF are font
+  bytes, anything else a Unicode character (U+0080..00FF written as U+F780..F7FF); `engine.write` puts
+  "?" in the vram and the code point into `engine.uni` (Uint32Array(8000), one per cell; a wide
+  character = 2 cells, the second `UniText.CONT`). Display only: never read by the game, not in
+  `stateHash`, compare-wasm compares the vram only. Snapshots carry `uni` only while it holds something.
+  `Lang.enc` / `Lang.t` give letters the font lacks this way (no more "?"), `UniText.fromRaw(raw)` any
+  raw text; widths are display columns (`UniText.cols / slice / padEnd / padStart / rawCols / truncRaw`
+  - CJK / emoji count 2; use them for every layout of user text). Glyphs (`UniFont.glyph(cp)`,
+  `Display.glyphOf / uniCell`): ROM font, glyphs.js, then GNU Unifont blocks `src/fonts/unifont/<cp >>
+  8 hex>.bin` (8x16 / 16x16, fetched on first use, blank until they arrive, then redrawn via
+  `UniFont.onLoad`; node reads them from disk; `UniFont.loader` for tests). `unidata.js` (generated) knows
+  the wide ranges without loading glyphs (also used by the server for name lengths). Player names
+  (`engine.setNames`, raw Unicode) are shown everywhere a player is: round title, statistics, views,
+  status lines, lobby lists (color name only when there is no name).
 - Engine text is data: `engine.strings` (default `STRINGS_EN`, translations from `Lang.apply(engine)`),
   lines may contain `{n}` colour codes (`markup()`); positions are computed from text length
   (`centreCol(t) = 41 - (visibleLength >> 1)`; boxes of even width centred exactly).
@@ -186,7 +202,7 @@ project dependency; install playwright-core in a scratch dir when needed).
   `Speaker.attenuation(event, listener)`: 1 within `Speaker.NEAR` (40 px), quadratic fade to 0 at
   `Speaker.FAR` (240 px; the viewport is 76 x 71), 1 for events without a source (x < 0). Output only.
 - `views.js` - `ViewModes`: stands in for the Display (Runner draws through it); during play shows the
-  grid of all views, the live map + score table, or one followed player (Tab / 1 2 3, Left / Right);
+  grid of all views, the live map + score table, or one followed player (Tab / 1 2 3, Left / Right); when more than one view (or the followed one) is shown, each view's top border carries its player's name (+ "TEAM n" with shared teams) in half-height letters in the player's color (`viewLabel`, `paintLabel`; classic halves too, but never the hotseat split screen: `labels: false`);
   every other screen goes to the Display unchanged. Players are colored and named as the engine has them
   (`playerColor(p)` / `playerTextColor(p)` / `playerName(p)`: slot colors, lobby names); the map's score
   table lists every team (`teamLines`, wrapped to fit). `setScope(own, "self"|"team"|"everyone")` (a
@@ -204,8 +220,9 @@ project dependency; install playwright-core in a scratch dir when needed).
   line above. `/lobby.html?room=<id>` opens a game directly (private games are shared this way).
 - `online.html` + `online.js` - online play. Between matches (and before the first) every viewer sees
   the **pre-game lobby** (DESIGN-8P 18), drawn locally by a `DosUI` over the shared game
-  (`runner.setOverlay`): room name, settings line, a table of the used slots (tank, name, team, "host",
-  ready / not ready / computer (level) / free / disconnected, ping; each row in its color, "►" = you),
+  (`runner.setOverlay`): room name, settings line, a table of the used slots (name - else the color name -,
+  team, "host", ready / not ready / computer (level) / free / disconnected, ping; each row in its color,
+  which identifies the slot; "►" = you),
   and a box: Name (input, max 12, sent as `{t:"me", name}` a few times a second at most and remembered
   in `tunneler.name`), Team (Left / Right, `{t:"me", team}`), Start game (`{t:"ready"}`; while ready the
   row is locked, the item reads "Not ready after all", Esc cancels; disabled with a hint when there are
@@ -218,8 +235,7 @@ project dependency; install playwright-core in a scratch dir when needed).
   read-only (Say / Instructions / Statistics / Copy / Back; their stored name goes as `{t:"me", name}`).
   **Chat** (DESIGN-8P 22): the box sits on the left, the chat panel (magenta frame, "Chat") on its right
   with the last messages that fit, "NAME: text" wrapped, the name in the tank's color (spectators dark
-  gray); player names in the table and all chat text go through the Display's Unicode text layer
-  (`spec.text`), so every language shows at once. Hidden during play (the lobby is). The settings line
+  gray); player names and all chat text go through the Unicode plane, so every language shows at once. Hidden during play (the lobby is). The settings line
   drops its last parts when it would not fit. Lobby keys are never relayed and send no held bits. A config frame's teams / names are
   applied right before its step (`applyFrameCfg`; classic: names replace BLUE / GREEN, max 9 letters).
   A player hears sounds fading with distance from their own tank (`runner.listener`); spectators at
@@ -235,15 +251,15 @@ project dependency; install playwright-core in a scratch dir when needed).
   game's own page full screen; info lines can be clickable links): title lines, magenta box, white-on-magenta highlight, items with
   `info` lines, `separator`, disabled gaps (`label: ""`), text `input`, switches (`change(dir)` for
   Left/Right), `fixed` footer items, scrolling, auto width (omit `box.w`; `box.x` places it, else
-  centred; `DosUI.boxWidth(items)`), keep selection by `key`. `spec.text` = raw Unicode lines for the
-  text layer; `input.unicode` (any characters typed / pasted, AltGr too, drawn by the text layer) and
-  `input.width` (visible characters, the end of a longer value shown).
+  centred; `DosUI.boxWidth(items)`), keep selection by `key`. `spec.text` = raw Unicode lines (other texts
+  are font text); inputs take any printable characters typed / pasted (AltGr too), `input.max` /
+  `input.width` in display columns (the end of a wider value shown).
 - `statusline.js` - the DOS text lines under the game canvas: state only, never "how to play" hints
   (DESIGN-8P 9): split screen + sound; online room, role, players, connection, ping, sound (a spectator
   also gets a view-mode line). None vs computer and none on the end-of-match world map; a spectator gets it only on the play screen
   (not on the menu / statistics / waiting screens between matches). Same width as the
   game canvas (80 or 40 columns when cropped); drops low-priority segments to fit. A segment with
-  `raw: true` is any Unicode text (e.g. "You are <name>"), drawn with `Display.glyphOf`.
+  `raw: true` is raw Unicode text; font text (Lang.t) shows names in any letters too (wide = 2 cells).
 - Input (`input.js`): browser codes -> PC scan codes. No function keys. BLUE moves with **W A S D** (S is
   mapped to the original's X scan code, X itself does nothing); BLUE fire also on Left Shift / Space / Tab
   (Ctrl+W closes the tab); GREEN arrows + Enter / Right Ctrl. M toggles sound (local).

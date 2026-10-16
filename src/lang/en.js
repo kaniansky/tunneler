@@ -125,6 +125,7 @@ Lang.register("en", {
   "pg.kick.i2": "or a spectator, <ENTER> removes them from it.",
   "pg.kick.sure": "Press <ENTER> again to kick {name}.", "pg.spectator": "spectator {n}",
   "pg.kicked": "You were removed from this game by the host.",
+  "on.idle": "This game was closed because nobody played for 10 minutes.",
   // lobby chat (online.js, docs/DESIGN-8P.md 22) and what a player sees during play (section 23)
   "pg.chat": "Chat", "pg.chat.none": "No messages yet.", "pg.chat.spec": "spectator",
   "pg.say": "Say: ", "pg.say.i": "Type a message, <ENTER> sends it to everyone in this game.",

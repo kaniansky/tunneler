@@ -1,0 +1,26 @@
+# TUNNELER ONLINE in Docker.
+#
+#   docker compose up -d            # run the published image, open http://localhost:8050
+#   docker compose up -d --build    # build the image from this checkout instead
+#   docker compose pull && docker compose up -d   # update to the latest release
+#
+# Set TUNNELER_PORT to use another port on the host (e.g. TUNNELER_PORT=80 docker compose up -d).
+# Games live in the server's memory: restarting the container ends running games.
+# For HTTPS put a reverse proxy (Caddy, nginx, Traefik...) in front; websockets must be passed through.
+
+services:
+  tunneler:
+    image: ghcr.io/kaniansky/tunneler-online:latest
+    build: .
+    container_name: tunneler-online
+    restart: unless-stopped
+    ports:
+      - "${TUNNELER_PORT:-8050}:8050"
+    environment:
+      PORT: "8050"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:8050/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

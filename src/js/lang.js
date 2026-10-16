@@ -47,11 +47,21 @@ function allText(o, out) {
   return out;
 }
 
-// Unicode text -> font bytes (unknown characters become "?")
+// Unicode text -> font text (unitext.js): font bytes for what the font has (code page 437 + the current
+// language's letters), every other character as itself - drawn through the Unicode plane (player and
+// room names, chat: any language, docs/DESIGN-8P.md 22). Control characters are dropped.
+const UT = () => root.UniText;
 function enc(s) {
   let r = "";
   s = s == null ? "" : String(s);
-  for (const c of s) { const b = map.get(c); r += b === undefined ? (c.charCodeAt(0) < 128 ? c : "?") : String.fromCharCode(b); }
+  if (/[^\x00-\x7f]/.test(s)) s = s.normalize("NFC");
+  for (const c of s) {
+    const b = map.get(c);
+    if (b !== undefined) { r += String.fromCharCode(b); continue; }
+    const cp = c.codePointAt(0);
+    if (cp < 128) r += c;
+    else if (cp >= 0xA0) r += UT() ? UT().passChar(cp) : "?";
+  }
   return r;
 }
 
@@ -65,13 +75,15 @@ function use(c) {
   map = new Map(TO437);
   const font = root.VGA_FONT;
   if (font && BASE_FONT) font.set(BASE_FONT);
-  const need = new Set();
-  for (const s of allText(L[c], [])) for (const ch of s) if (!map.has(ch) && ch.charCodeAt(0) >= 128) need.add(ch);
+  const need = new Set(), uses = new Set();
+  for (const s of allText(L[c], [])) for (const ch of s) { uses.add(ch); if (!map.has(ch) && ch.charCodeAt(0) >= 128) need.add(ch); }
+  const free = CP437 ? FREE.filter(b => !uses.has(CP437[b])) : FREE;      // (slots of letters the language itself uses stay)
   let slot = 0;
   for (const ch of need) {
     const g = GLYPHS[ch];
-    if (!g || slot >= FREE.length) continue;
-    const b = FREE[slot++];
+    if (!g || slot >= free.length) continue;
+    const b = free[slot++];
+    if (CP437) map.delete(CP437[b]);                // (that slot's own character is no longer in the font)
     map.set(ch, b);
     if (font) for (let r = 0; r < 16; r++) font[b * 16 + r] = g[r];
   }

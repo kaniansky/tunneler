@@ -20,3 +20,6 @@ For more information, please refer to <https://unlicense.org/>
 The original TUNNELER 2.0 (1991) by Geoffrey Silverton was released by its author into the public domain.
 The VGA font data (src/js/vgafont.js) is the standard IBM VGA 8x16 font; the extra letters in
 src/js/glyphs.js come from the Linux console font Uni2-VGA16 (kbd project).
+The glyphs in src/fonts/unifont/ (any other letters and emoji in player names, room names and chat)
+are from GNU Unifont 16.0.04 (Roman Czyborra, Paul Hardy and contributors), licensed under the SIL Open
+Font License 1.1 / GNU GPL 2+ with the font embedding exception - see src/fonts/unifont/LICENSE.
