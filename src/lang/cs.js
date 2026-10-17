@@ -201,7 +201,7 @@ Lang.register("cs", {
     },
     info: {
       title: "INFORMACE",
-      p1: ["TUNNELER ONLINE přináší hru TUNNELER 2.0 do prohlížeče.  Program pro DOS byl",
+      p1: ["Tunneler Online přináší hru TUNNELER 2.0 do prohlížeče.  Program pro DOS byl",
         "dekompilován a přepsán do JavaScriptu rutinu po rutině, takže tanky, kopání,",
         "střely, energie i generátor světa se chovají přesně jako v roce 1991, na stejné",
         "obrazovce (160x100 v 16 barvách) se zvukem PC reproduktoru."],
@@ -215,7 +215,7 @@ Lang.register("cs", {
         "zvolí jména a týmy, chatují a začnou, když jsou všichni připraveni.  Všechny",
         "počítače hrají tutéž hru synchronně; po síti jdou jen stisknuté klávesy."],
       sections: [
-        ["Desktopová aplikace:  ", "TUNNELER ONLINE je i malý program pro Windows, Linux a macOS - " +
+        ["Desktopová aplikace:  ", "Tunneler Online je i malý program pro Windows, Linux a macOS - " +
           "stáhneš ho ze stránky vydání na GitHubu (github.com/kaniansky/tunneler-online/releases).  " +
           "Dělenou obrazovku a hru proti počítači hraje bez sítě, hry online na veřejném serveru nebo " +
           "na jakémkoli jiném (Nastavení, Server)."],

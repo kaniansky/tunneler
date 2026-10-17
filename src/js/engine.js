@@ -242,7 +242,7 @@ const STRINGS_EN = {
   },
   info: {
     title: "INFORMATION",
-    p1: ["TUNNELER ONLINE brings TUNNELER 2.0 to the web browser.  The DOS program was",
+    p1: ["Tunneler Online brings TUNNELER 2.0 to the web browser.  The DOS program was",
       "decompiled and rewritten in JavaScript routine by routine, so tanks, digging,",
       "shots, energy and the world generator behave exactly like in 1991, on the same",
       "low-res screen (160x100 in 16 colors) with the sound of a simulated PC speaker."],
@@ -257,7 +257,7 @@ const STRINGS_EN = {
       "computer runs the same game in lockstep; only key presses go over the network."],
     // more paragraphs, one [head, text] each (wrapped to the page's width)
     sections: [
-      ["The desktop app:  ", "TUNNELER ONLINE also comes as a small program for Windows, Linux and " +
+      ["The desktop app:  ", "Tunneler Online also comes as a small program for Windows, Linux and " +
         "macOS - download it from the releases page on GitHub " +
         "(github.com/kaniansky/tunneler-online/releases).  It plays split screen and vs computer " +
         "without a network, and online games on the public server or any other one (Settings, " +

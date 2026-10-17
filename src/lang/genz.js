@@ -199,7 +199,7 @@ Lang.register("genz", {
     },
     info: {
       title: "THE LORE",
-      p1: ["TUNNELER ONLINE brings TUNNELER 2.0 to your browser.  The OG DOS program was",
+      p1: ["Tunneler Online brings TUNNELER 2.0 to your browser.  The OG DOS program was",
         "decompiled and rewritten in JavaScript routine by routine, so tanks, digging,",
         "shots, energy and the world generator act exactly like in 1991, no cap, on the",
         "same low-res screen (160x100 in 16 colors) with a simulated PC speaker."],
@@ -213,7 +213,7 @@ Lang.register("genz", {
         "a name and squad in the lobby, yaps in chat, and locks in when ready.  Every",
         "computer runs the same game in lockstep; only key presses go over the net."],
       sections: [
-        ["The desktop app:  ", "TUNNELER ONLINE also comes as a lil program for Windows, Linux and " +
+        ["The desktop app:  ", "Tunneler Online also comes as a lil program for Windows, Linux and " +
           "macOS - grab it from the releases page on GitHub " +
           "(github.com/kaniansky/tunneler-online/releases).  Split screen and vs the bots work with " +
           "no internet, and online games run on the public server or any other one (Settings, " +

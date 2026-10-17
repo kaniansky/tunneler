@@ -4,7 +4,7 @@ Guidance for Claude Code (and humans) working in this repo. Read it before non-t
 
 ## What this is
 
-**TUNNELER ONLINE**: TUNNELER 2.0 (1991 DOS game by Geoffrey Silverton, Turbo Pascal 4.0, public domain)
+**Tunneler Online**: TUNNELER 2.0 (1991 DOS game by Geoffrey Silverton, Turbo Pascal 4.0, public domain)
 rewritten in JavaScript from its **decompiled** source, playable in the browser in three modes:
 split screen (hotseat), vs computer (1-7 computer tanks, free-for-all or teams, 4 difficulties, seeing
 your own screen, your team's or everyone's) and online (lobby, 2-8 slots, any of them computer tanks,
@@ -358,7 +358,7 @@ the room info): the most a player may choose to see during play - display only, 
 - Everything in the **original DOS look** (VGA text screen, CP437 font, magenta menu boxes with
   white-on-magenta bar, cyan info text, bottom rule + white hint at the right; no "public domain" text
   in the footer any more).
-- Title "TUNNELER ONLINE", "by Norko Kaniansky"; the Information page describes this version and still
+- Title "Tunneler Online", "by Norko Kaniansky"; the Information page describes this version and still
   credits Geoffrey Silverton for the original.
 - Menu items in **sentence case** ("Start game", "Back to main menu"); tank names BLUE/GREEN in caps.
 - Menus: arrow keys + Enter + mouse; switches also with Left/Right; menus auto-size and are centred;

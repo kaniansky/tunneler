@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "TUNNELER ONLINE",
+  "productName": "Tunneler Online",
   "mainBinaryName": "tunneler-online",
   "version": "../package.json",
   "identifier": "io.github.kaniansky.tunneler-online",
@@ -10,7 +10,7 @@
   "app": {
     "windows": [
       {
-        "title": "TUNNELER ONLINE",
+        "title": "Tunneler Online",
         "width": 1000,
         "height": 760,
         "minWidth": 400,
@@ -33,7 +33,7 @@
     ],
     "category": "ArcadeGame",
     "shortDescription": "TUNNELER (1991) in a window, with online play",
-    "longDescription": "TUNNELER 2.0 (1991, Geoffrey Silverton) rewritten in JavaScript: split screen, versus the computer and online play on a TUNNELER ONLINE server.",
+    "longDescription": "TUNNELER 2.0 (1991, Geoffrey Silverton) rewritten in JavaScript: split screen, versus the computer and online play on a Tunneler Online server.",
     "copyright": "Public domain (Unlicense); GNU Unifont glyphs under SIL OFL 1.1 / GPL 2+",
     "icon": [
       "icons/32x32.png",

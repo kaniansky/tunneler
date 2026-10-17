@@ -1,4 +1,4 @@
-# TUNNELER ONLINE in Docker.
+# Tunneler Online in Docker.
 #
 #   docker compose up -d            # run the published image, open http://localhost:8050
 #   docker compose up -d --build    # build the image from this checkout instead

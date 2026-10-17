@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to TUNNELER ONLINE. Versions follow [semantic versioning](https://semver.org/);
+All notable changes to Tunneler Online. Versions follow [semantic versioning](https://semver.org/);
 every push to `main` is released (see CONTRIBUTING.md).
 
 ## Unreleased

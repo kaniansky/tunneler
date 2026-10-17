@@ -1,4 +1,4 @@
-# TUNNELER ONLINE
+# Tunneler Online
 
 **TUNNELER 2.0** - the 1991 DOS two-player tank game by Geoffrey Silverton - rewritten in JavaScript from
 the decompiled original and playable in the browser: split screen, against computer tanks, or online with
@@ -200,5 +200,5 @@ More detail for contributors in [CONTRIBUTING.md](CONTRIBUTING.md) and [CLAUDE.m
 
 ## Credits
 
-TUNNELER 2.0 (1991) by Geoffrey Silverton, released by him into the public domain. TUNNELER ONLINE by
+TUNNELER 2.0 (1991) by Geoffrey Silverton, released by him into the public domain. Tunneler Online by
 Norko Kaniansky, 2026 - also public domain ([Unlicense](LICENSE)).

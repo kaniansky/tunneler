@@ -233,7 +233,7 @@ colors come from the slot (a game with BLUE, CYAN, TEAL keeps those colors), a r
 one team has tanks alive, round wins are counted per team (and shown per player/team on the round
 title and statistics). Classic engine = exactly BLUE + GREEN, both human (or human + computer in
 vs computer), different teams, medium map, no other options.
-Create screen: drop the "TUNNELER ONLINE" title to make room; rows: Name, Public, Spectators, Map size,
+Create screen: drop the "Tunneler Online" title to make room; rows: Name, Public, Spectators, Map size,
 Friendly fire (if relevant), then the 8 slot rows ("BLUE    human      team 1"), Create the game,
 Back. In a slot row Left / Right change who, Enter (or click) cycles the team. The lobby game screen
 lists the human slots to join (in their colors) and shows computer slots as disabled lines.
