@@ -1977,7 +1977,7 @@ class TunnelerEngine {
     this.roundLog.forEach((r, i) => {
       let name, color = 7;
       if (r.winner < 0) name = r.how === "esc" ? S.ended : S.draw;
-      else if (!this.extended) { name = this.classicName(r.winner); color = r.winner; }   // (as in the table: 1 BLUE, 2 GREEN)
+      else if (!this.extended) { name = this.classicName(r.winner); color = r.winner + 8; }   // (the lighter BLUE / GREEN, as in the table there)
       else if (r.player) { name = this.playerName(r.player); color = this.playerTextColor(r.player); }
       else { name = this.teamName(r.winner); color = this.playerTextColor(this.teamMembers(r.winner)[0]); }
       const num = String(i + 1).padStart(2) + " ", time = " " + mmss(r.secs);
@@ -1989,7 +1989,7 @@ class TunnelerEngine {
   matchAwardLines(w) {
     const S = Object.assign({}, STRINGS_EN.stats, this.strings.stats), N = this.extended ? this.nPlayers : 2;
     const name = p => this.extended ? this.playerName(p) : this.classicName(p);
-    const color = p => this.extended ? this.playerTextColor(p) : p;   // (classic: as in the table)
+    const color = p => this.extended ? this.playerTextColor(p) : p + 8;   // (classic: the lighter BLUE / GREEN)
     const best = (score, ok) => {
       let b = 0;
       for (let p = 1; p <= N; p++) if (ok(p) && (!b || score(p) > score(b))) b = p;
@@ -2039,6 +2039,9 @@ class TunnelerEngine {
   // the classic game's statistics (BLUE / GREEN), in the 37 columns from statsLeft (the menu's right half)
   statsClassic() {
     const S = this.strings;
+    // BLUE / GREEN: the original's darker colours on the original screen (split screen); the lighter ones
+    // (easier to read) against the computer and online
+    const L = this.matchExtras || this.statsFull ? 8 : 0;
     this.window(this.statsLeft, 6, this.statsLeft + 36, 20);
     this.textColor(11);
     this.gotoXY(19 - (visLen(S.stats.title) >> 1), 1);
@@ -2049,13 +2052,13 @@ class TunnelerEngine {
     if (this.youPlayer === 1) {                 // "►BLUE" (display only)
       this.textColor(9);
       this.write(" ".repeat(24 - visLen(this.classicName(1))) + "\x10");
-      this.textColor(((this.wins[1] > this.wins[2]) ? 1 : 0) * 128 + 1);
+      this.textColor(((this.wins[1] > this.wins[2]) ? 1 : 0) * 128 + 1 + L);
       this.write(this.classicName(1));
     } else {
-      this.textColor(((this.wins[1] > this.wins[2]) ? 1 : 0) * 128 + 1);
+      this.textColor(((this.wins[1] > this.wins[2]) ? 1 : 0) * 128 + 1 + L);
       this.write(UniText.padStart(this.classicName(1), 25));
     }
-    this.textColor(((this.wins[2] > this.wins[1]) ? 1 : 0) * 128 + 2);
+    this.textColor(((this.wins[2] > this.wins[1]) ? 1 : 0) * 128 + 2 + L);
     if (this.youPlayer === 2) {                 // "GREEN◄" (display only)
       this.write(UniText.padStart(this.classicName(2), 9));
       this.textColor(10);
@@ -2065,7 +2068,7 @@ class TunnelerEngine {
     const row = (label, f) => {
       this.textColor(6);
       this.write(label.slice(0, 16).padEnd(16));
-      for (let i = 1; i <= 2; i++) { this.textColor(i); f(i); }
+      for (let i = 1; i <= 2; i++) { this.textColor(i + L); f(i); }
       this.writeLn();
     };
     row(S.stats.fired, i => this.write(this.num(this.shotsFired[i], 9)));
@@ -2084,8 +2087,8 @@ class TunnelerEngine {
     if (this.alive[1] !== this.alive[2]) {
       this.textColor(6);
       this.write(S.stats.winner);
-      if (this.wins[1] > this.wins[2]) { this.textColor(1); this.write(this.classicName(1)); }
-      else { this.textColor(2); this.write(this.classicName(2)); }
+      if (this.wins[1] > this.wins[2]) { this.textColor(1 + L); this.write(this.classicName(1)); }
+      else { this.textColor(2 + L); this.write(this.classicName(2)); }
       this.textColor(6);
       this.writeLn(".");
     }
