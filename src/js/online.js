@@ -20,9 +20,9 @@
 (function () {
   const { TICK_MS, UP, DOWN, LEFT, RIGHT, FIRE, ESC, ROLES, MAX_PLAYER_NAME, MAX_CHAT, VISIBLE, frameToInput, frameToInputExt, FrameQueue,
     HASH_EVERY, stateHash, engineOptions, applyFrameCfg } = NetProto;
-  const params = new URLSearchParams(location.search);
-  const roomId = (params.get("room") || "").toLowerCase();
-  const role = ROLES.includes(params.get("role")) ? params.get("role") : "spectate";
+  const here = Links.here();                           // /game/<id>/<color|watch> or ?room=&role=
+  const roomId = (here.room || "").toLowerCase();
+  const role = ROLES.includes(here.role) ? here.role : "spectate";
   const player = role !== "spectate";
   const myColor = ROLES.indexOf(role);                 // tank colour 0..7, -1 for a spectator
   const T = Lang.t, NAME = r => Lang.raw(r);          // translated text / raw tank name for {name}
@@ -46,7 +46,7 @@
     ? { mode: "follow", follow: 0, lockFollow: true, keys: false }
     : { mode: "grid", follow: 0, storageKey: "tunneler.spec", onChange: () => renderBar() });
 
-  const lobbyHref = "/lobby.html" + (roomId ? "?room=" + encodeURIComponent(roomId) : "");
+  const lobbyHref = roomId ? Links.room(roomId) : Links.games();
   const store = {
     get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
     set(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* private mode */ } },

@@ -141,7 +141,7 @@ function play(search) {
   env.page("index.html");
   env.key("ArrowDown"); env.key("Enter");                  // Vs computer
   env.key("Enter");                                        // Start a new game (selected first)
-  assert.strictEqual(decodeURIComponent(env.win.location.href), "/play.html?mode=cpu&slots=0:you:1,1:normal:2&size=medium&win=3&ff=0&view=self&watch=wreck",
+  assert.strictEqual(decodeURIComponent(env.win.location.href), "/vs-computer?slots=0:you:1,1:normal:2&size=medium&win=3&ff=0&view=self&watch=wreck",
     "default = the classic game");
   // CYAN: computer (easy) in team 2 -> 1 vs 2 teams; large map; 5 to win; friendly fire on; view everyone
   env = makeEnv("", store);
@@ -165,7 +165,7 @@ function play(search) {
   // (with friendly fire shown the gap above "Start a new game" goes: 17 rows)
   env.key("ArrowDown"); env.key("Enter");                  // start
   assert.strictEqual(decodeURIComponent(env.win.location.href),
-    "/play.html?mode=cpu&slots=0:you:1,1:normal:2,2:easy:2,7:expert:8&size=large&win=5&ff=1&view=everyone&watch=team&time=3");
+    "/vs-computer?slots=0:you:1,1:normal:2,2:easy:2,7:expert:8&size=large&win=5&ff=1&view=everyone&watch=team&time=3");
   assert.strictEqual(store.get("tunneler.cpu.watch"), "team", "after death remembered");
   assert.strictEqual(store.get("tunneler.cpu.time"), "3", "round time remembered");
   // number keys (top row and the numeric keypad with NumLock on) set the team of the selected slot row
@@ -214,7 +214,7 @@ function play(search) {
   env.page("index.html");
   env.key("ArrowDown"); env.key("Enter"); env.key("Enter");
   assert.strictEqual(decodeURIComponent(env.win.location.href),
-    "/play.html?mode=cpu&slots=0:you:1,1:normal:2,2:easy:2,7:expert:8&size=large&win=5&ff=1&view=everyone&watch=team&time=3");
+    "/vs-computer?slots=0:you:1,1:normal:2,2:easy:2,7:expert:8&size=large&win=5&ff=1&view=everyone&watch=team&time=3");
   ok("vs computer slot editor: default classic, slots / teams / options, remembered in localStorage");
 
   // nobody but you: "Start a new game" does nothing
@@ -234,7 +234,7 @@ function play(search) {
   env = makeEnv("", store);
   env.page("index.html");
   env.key("Enter"); env.key("Enter");
-  assert.strictEqual(env.win.location.href, "/play.html?mode=hotseat&size=medium&win=3");
+  assert.strictEqual(env.win.location.href, "/split?size=medium&win=3");
   env = makeEnv("", store);
   env.page("index.html");
   env.key("Enter");
@@ -242,7 +242,7 @@ function play(search) {
   env.key("ArrowDown"); env.key("ArrowLeft");              // 2
   env.key("ArrowDown"); env.key("ArrowLeft");              // round time: no limit -> 10 min (wraps back)
   env.key("ArrowUp"); env.key("ArrowUp"); env.key("ArrowUp"); env.key("Enter");
-  assert.strictEqual(env.win.location.href, "/play.html?mode=hotseat&size=small&win=2&time=10");
+  assert.strictEqual(env.win.location.href, "/split?size=small&win=2&time=10");
   assert.strictEqual(store.get("tunneler.split.size"), "small");
   assert.strictEqual(store.get("tunneler.split.time"), "10");
   ok("split-screen settings: default classic, map size, rounds to win and round time, remembered");

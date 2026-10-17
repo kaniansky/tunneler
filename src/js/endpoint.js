@@ -11,11 +11,16 @@
 // Endpoint.web(path)             a link to give other players (the server's own web pages)
 // Endpoint.get() / set(text)     the stored server ("" = default); set() normalizes and stores it
 // Endpoint.DEFAULT               the public server
+//
+// Links: the pages' addresses - short ones on a server (/games, /game/<id>, /game/<id>/<color|watch>,
+// /split, /vs-computer; server.js maps them to the pages), the plain files in the desktop app (no
+// server behind its pages: /lobby.html?room=..., /online.html?room=...&role=..., /play.html?mode=...).
+// Links.room / game / here() read either form. Invite links (Endpoint.web) always use the short form.
 (function (root) {
 
 const DEFAULT = "https://tunneler-online.onrender.com";
 const KEY = "tunneler.server";
-const loc = root.location || { protocol: "http:", hostname: "localhost", host: "localhost", origin: "http://localhost" };
+const loc = root.location || { protocol: "http:", hostname: "localhost", host: "localhost", origin: "http://localhost", pathname: "/", search: "" };
 const isApp = loc.protocol === "tauri:" || /^tauri\.localhost$/i.test(loc.hostname);
 
 // "example.com:8050" -> "https://example.com:8050"; "" stays ""; anything unusable -> ""
@@ -43,6 +48,25 @@ function base() {
   if (v) return v;
   return isApp ? DEFAULT : "";
 }
+
+const enc = encodeURIComponent;
+const watchRole = r => r === "spectate" ? "watch" : r;
+const Links = {
+  games: () => isApp ? "/lobby.html" : "/games",
+  room: id => isApp ? "/lobby.html?room=" + enc(id) : "/game/" + enc(id),
+  game: (id, role) => isApp ? "/online.html?room=" + enc(id) + "&role=" + role : "/game/" + enc(id) + "/" + watchRole(role),
+  split: query => (isApp ? "/play.html?mode=hotseat" + (query ? "&" + query : "") : "/split" + (query ? "?" + query : "")),
+  cpu: query => (isApp ? "/play.html?mode=cpu" + (query ? "&" + query : "") : "/vs-computer" + (query ? "?" + query : "")),
+  invite: id => "/game/" + enc(id),              // (for Endpoint.web: always on a server)
+  // this page's room id and role, from /game/<id>[/<role>] or ?room=&role= ("watch" = "spectate")
+  here() {
+    const q = new URLSearchParams(loc.search || ""), m = /^\/game\/([^/]+)(?:\/([a-z]+))?\/?$/.exec(loc.pathname || "");
+    let room = q.get("room"), role = q.get("role");
+    if (m) { try { room = decodeURIComponent(m[1]); } catch (e) { room = m[1]; } role = m[2] || role; }
+    return { room: room || null, role: role === "watch" ? "spectate" : role };
+  },
+};
+root.Links = Links;
 
 root.Endpoint = {
   DEFAULT, isApp, normalize, get, set, base,

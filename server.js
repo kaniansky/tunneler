@@ -368,6 +368,13 @@ function createServer(opts = {}) {
       req.on("error", reject);
     });
   }
+  const PRETTY = [
+    [/^\/games\/?$/, "/lobby.html"],                       // the games list
+    [/^\/game\/[^/]+\/?$/, "/lobby.html"],                 // one game's page
+    [/^\/game\/[^/]+\/[a-z]+\/?$/, "/online.html"],         // playing it as a colour / watching it
+    [/^\/split\/?$/, "/play.html"],                         // split screen
+    [/^\/vs-computer\/?$/, "/play.html"],                   // against the computer
+  ];
   // the API answers any origin (CORS): the desktop app's pages come from tauri://localhost /
   // tauri.localhost, not from this server; nothing here uses cookies or other credentials
   const CORS = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
@@ -425,6 +432,9 @@ function createServer(opts = {}) {
     if (p.startsWith("/api/") && req.method === "OPTIONS") { res.writeHead(204, CORS); return res.end(); }   // (CORS preflight)
     if (p.startsWith("/api/")) return api(req, res, p).catch(() => json(res, 500, { error: "server error" }));
     if (req.method !== "GET" && req.method !== "HEAD") { res.writeHead(405); return res.end(); }
+    // short addresses for the pages (src/js/endpoint.js Links): the page reads its room / role / mode
+    // from the path itself
+    for (const [re, page] of PRETTY) if (re.test(p)) { p = page; break; }
     if (p.endsWith("/")) p += "index.html";
     const f = path.join(PUB, path.normalize(p));
     if (!f.startsWith(PUB + path.sep) || p.includes("\0")) { res.writeHead(403); return res.end(); }

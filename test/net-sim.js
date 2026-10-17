@@ -147,6 +147,14 @@ async function main() {
   console.log("lobby api");
   const created = await http(port, "POST", "/api/rooms", { name: "Test <b>Game</b> & Co", public: true, spectators: true });
   const id = created.json.id;
+  {
+    // the short addresses serve the pages
+    const page = async u => (await http(port, "GET", u)).text;
+    const lobbyHtml = await page("/lobby.html"), onlineHtml = await page("/online.html"), playHtml = await page("/play.html");
+    const got = await Promise.all(["/games", "/game/some-room", "/game/some-room/", "/game/some-room/blue", "/game/some-room/watch", "/split", "/vs-computer"].map(page));
+    check("short addresses: /games, /game/<id>[/<role>], /split, /vs-computer", () => assert.deepStrictEqual(got,
+      [lobbyHtml, lobbyHtml, lobbyHtml, onlineHtml, onlineHtml, playHtml, playHtml]));
+  }
   check("create room", () => { assert.strictEqual(created.status, 200); assert(/^[a-z0-9-]+$/.test(id)); assert(!/[<>]/.test(created.json.name)); });
   {
     // CORS (the desktop app's pages come from tauri://localhost): any origin, preflight answered

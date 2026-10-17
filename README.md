@@ -32,7 +32,9 @@ All menus, the lobby and the status lines use the same DOS text screen.
 - **Vs computer** - you (in any color) against 1 to 7 computer tanks (easy, normal, hard or expert),
   every tank for itself or in teams. See your own screen, your team's screens or everybody's.
 - **Online game** - create a game in the lobby (public or private, with or without spectators), send
-  the invite link, and play with 2 to 8 tanks from several computers; any slot can be a computer tank.
+  the invite link (`/game/<name>`), and play with 2 to 8 tanks from several computers; any slot can be
+  a computer tank. Addresses: `/games` (the list), `/game/<name>/<color>` (playing), `/game/<name>/watch`
+  (spectating), `/split`, `/vs-computer`.
 
 Settings (split screen: map size, rounds to win and round time only):
 

@@ -473,3 +473,8 @@ the room info): the most a player may choose to see during play - display only, 
   main menu; one request at a time (`poll()`), the 2 s polling keeps retrying.
 - README screenshots: `tools/readme-screenshots.js <port> screenshots` against a fresh local server
   (scripted session: menus, split screen, a 4-tank online game with chat, spectator views; GPU off).
+- Short addresses: server.js `PRETTY` maps `/games`, `/game/<id>` -> lobby.html, `/game/<id>/<role|watch>`
+  -> online.html, `/split`, `/vs-computer` -> play.html (the pages read room / role / mode from the path:
+  `Links.here()` in endpoint.js, play.js checks the path). `Links` builds them (games, room, game, split,
+  cpu, invite); in the desktop app (no server behind the pages) it builds the `.html?...` forms instead.
+  The old `.html` addresses keep working everywhere.

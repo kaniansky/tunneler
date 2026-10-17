@@ -7,12 +7,12 @@ const SRC = fs.readFileSync(path.join(__dirname, "..", "src", "js", "endpoint.js
 function load(href, stored) {
   const store = new Map(stored ? [["tunneler.server", stored]] : []);
   const u = new URL(href);
-  const win = { location: { protocol: u.protocol, hostname: u.hostname, host: u.host, origin: u.origin },
+  const win = { location: { protocol: u.protocol, hostname: u.hostname, host: u.host, origin: u.origin, pathname: u.pathname, search: u.search },
     localStorage: { getItem: k => store.has(k) ? store.get(k) : null, setItem: (k, v) => store.set(k, String(v)), removeItem: k => store.delete(k) }, URL };
-  win.window = win;
+  win.window = win; win.URLSearchParams = URLSearchParams;
   vm.createContext(win);
   vm.runInContext(SRC, win);
-  return { E: win.Endpoint, store };
+  return { E: win.Endpoint, L: win.Links, store };
 }
 let n = 0;
 const ok = m => { n++; console.log("  ok  " + m); };
@@ -48,5 +48,21 @@ ok("desktop app (tauri://localhost, tauri.localhost): the public server by defau
   assert.strictEqual(E.base(), "https://tunneler-online.onrender.com");
   assert.strictEqual(load("tauri://localhost/", "garbage:// /").E.base(), "https://tunneler-online.onrender.com");
   ok("server setting: normalized (https by default, http for local addresses), stored, empty = public");
+}
+{
+  // short addresses on a server, the plain files in the app; both read back
+  const web = load("https://x.example/").L, app = load("tauri://localhost/").L;
+  assert.deepStrictEqual([web.games(), web.room("friday-night"), web.game("friday-night", "blue"), web.game("a b", "spectate"),
+    web.split("size=small"), web.cpu("slots=0:you:1")],
+    ["/games", "/game/friday-night", "/game/friday-night/blue", "/game/a%20b/watch", "/split?size=small", "/vs-computer?slots=0:you:1"]);
+  assert.deepStrictEqual([app.games(), app.room("x"), app.game("x", "green"), app.split("win=2"), app.cpu(""), app.invite("x")],
+    ["/lobby.html", "/lobby.html?room=x", "/online.html?room=x&role=green", "/play.html?mode=hotseat&win=2", "/play.html?mode=cpu", "/game/x"]);
+  const here = href => JSON.parse(JSON.stringify(load(href).L.here()));   // (out of the vm context)
+  assert.deepStrictEqual(here("https://x.example/game/friday-night/blue"), { room: "friday-night", role: "blue" });
+  assert.deepStrictEqual(here("https://x.example/game/friday-night/watch"), { room: "friday-night", role: "spectate" });
+  assert.deepStrictEqual(here("https://x.example/game/" + encodeURIComponent("żółw") + "/"), { room: "żółw", role: null });
+  assert.deepStrictEqual(here("https://x.example/online.html?room=r1&role=green"), { room: "r1", role: "green" });
+  assert.deepStrictEqual(here("https://x.example/games"), { room: null, role: null });
+  ok("Links: /games, /game/<id>[/<color|watch>], /split, /vs-computer (app: the .html files); read back from either");
 }
 console.log("all " + n + " passed");

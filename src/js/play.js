@@ -11,7 +11,8 @@
 // Old links (?mode=cpu&level=...&opp=1..7&teams=0|1, hide=1 = self / hide=0 = everyone) still work.
 (function () {
   const params = new URLSearchParams(location.search);
-  const mode = params.get("mode") === "cpu" ? "cpu" : "hotseat";
+  // /vs-computer?... or /split?... (play.html?mode=cpu|hotseat&... in the desktop app)
+  const mode = params.get("mode") === "cpu" || /^\/vs-computer\/?$/.test(location.pathname) ? "cpu" : "hotseat";
   const LEVELS = ["easy", "normal", "hard", "expert"];
   const int = (v, lo, hi, d) => { v = parseInt(v, 10); return v >= lo && v <= hi ? v : d; };
   const size = (TunnelerEngine.SIZES || []).includes(params.get("size")) ? params.get("size") : "medium";

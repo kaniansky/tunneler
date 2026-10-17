@@ -8,6 +8,8 @@ every push to `main` is released (see CONTRIBUTING.md).
 - Round title: a blank row between the players and the game's settings (the settings use the last
   screen row when the list of players is long).
 - README screenshots updated (tools/readme-screenshots.js makes them).
+- Short addresses: `/games`, `/game/<name>` (a game's page and invite link), `/game/<name>/blue` (play
+  as BLUE; `/watch` to spectate), `/split`, `/vs-computer`; the old `.html` addresses still work.
 - **After death** has five choices: black screen, my wreck, **watch team** (all your teammates still
   alive), **watch killer** (one view: the tank that destroyed you, then its killer...) and **watch all**
   (every tank still alive). Nobody left to watch: the screen goes black with DESTROYED.

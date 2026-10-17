@@ -93,7 +93,7 @@
         { key: "split", label: T("home.split"), info: [T("home.split.i1"), T("home.split.i2")], go: () => split() },
         { key: "cpu", label: T("home.cpu"), info: [T("home.cpu.i1n"), T("home.cpu.i2")], go: () => cpu() },
         { key: "online", label: T("home.online"), info: [T("home.online.i1"), T("home.online.i2")],
-          go: () => { location.href = "/lobby.html"; } },
+          go: () => { location.href = Links.games(); } },
         { key: "gap", label: "", disabled: true },
         { key: "instr", label: T("menu.instr"), info: [T("menu.instr.i")], go: () => ui.showPage("instructions", "hotseat", () => main(4)) },
         { key: "info", label: T("menu.info"), info: [T("menu.info.i")], go: () => ui.showPage("information", "hotseat", () => main(5)) },
@@ -138,7 +138,7 @@
 
   // ------------------------------------------------------------------ split screen (DESIGN-8P 11, 17)
   function split(keep, sel) {
-    const start = () => { location.href = "/play.html?mode=hotseat&size=" + splitSize + "&win=" + splitWin + timeArg(splitTime); };
+    const start = () => { location.href = Links.split("size=" + splitSize + "&win=" + splitWin + timeArg(splitTime)); };
     const set = f => v => { f(v); saveSplit(); split(true); };
     ui.show({
       lines: title(), box: { y: 9 }, sel: sel || 0, infoRow: 20,
@@ -181,8 +181,8 @@
     const start = () => {
       if (S.error) return;
       const list = S.used.map(u => u.color + ":" + u.kind + ":" + u.team).join(",");
-      location.href = "/play.html?mode=cpu&slots=" + encodeURIComponent(list) + "&size=" + cpuSize + "&win=" + cpuWin +
-        "&ff=" + (ff && S.teamGame ? 1 : 0) + "&view=" + view + "&watch=" + watchOut + timeArg(cpuTime);
+      location.href = Links.cpu("slots=" + encodeURIComponent(list) + "&size=" + cpuSize + "&win=" + cpuWin +
+        "&ff=" + (ff && S.teamGame ? 1 : 0) + "&view=" + view + "&watch=" + watchOut + timeArg(cpuTime));
     };
     // slot rows: "BLUE      you                team 1", the name and who columns padded to the longest
     // text in this language, each row in its tank's color

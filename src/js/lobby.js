@@ -9,8 +9,8 @@
 (function () {
   const ui = new DosUI(document.getElementById("screen"));
   window.tunnelerLobbyUI = () => ui;                   // tests / debugging
-  const gameUrl = (id, role) => "/online.html?room=" + encodeURIComponent(id) + "&role=" + role;
-  const roomUrl = id => Endpoint.web("/lobby.html?room=" + encodeURIComponent(id));   // (the server's page: also from the app)
+  const gameUrl = (id, role) => Links.game(id, role);
+  const roomUrl = id => Endpoint.web(Links.invite(id));   // (the server's page: also from the app)
   const T = Lang.t, E = Lang.enc;
   const TITLE = [{ row: 2, text: "TUNNELER ONLINE", color: 12 }];
   const ROLES = Lang.colorKeys, TEXT_COLORS = TunnelerEngine.PLAYER_TEXT_COLORS, MAX = ROLES.length;
@@ -21,7 +21,7 @@
   };
 
   let view = null;                                   // "list" | "create" | "room" | "page"
-  let rooms = [], room = null, roomId = new URLSearchParams(location.search).get("room");
+  let rooms = [], room = null, roomId = Links.here().room;
   // the create screen; default: BLUE and GREEN, both human, in teams 1 and 2 (= the original game)
   // visible: the most a player may see during play (docs/DESIGN-8P.md 23) - self / team / everyone
   const form = { value: "", max: 26, width: 18, public: true, spectators: true, error: "", size: "medium", winScore: 3, friendlyFire: false, visible: "self",
@@ -48,7 +48,7 @@
   let copied = false;
 
   function setUrl(id) {
-    try { history.replaceState(null, "", id ? "/lobby.html?room=" + encodeURIComponent(id) : "/lobby.html"); } catch (e) { /* ignore */ }
+    try { history.replaceState(null, "", id ? Links.room(id) : Links.games()); } catch (e) { /* ignore */ }
   }
 
   // "4 tanks, teams, map size: medium, rounds to win: 3"
