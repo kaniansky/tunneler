@@ -390,7 +390,8 @@ the room info): the most a player may choose to see during play - display only, 
   tank is destroyed, until the round ends - "black" = every destroyed tank's view black with DESTROYED,
   "wreck" (default) = the view stays on the wreck, "others" = one view: the tank that destroyed the
   watched one (`engine.killedBy`, display only, not in stateHash; followed along the chain), else the
-  first one alive (own team first); it stays on that tank while it lives.
+  first one alive (own team first); it stays on that tank while it lives. Only tanks within the view
+  limit (scope): "team" - teammates only (an enemy killer is skipped), "self" - nobody (the wreck).
 - Server: rooms nobody plays in (no human player activity) for 10 minutes are closed with an "idle"
   reason; readable start-up errors (port < 1024, in use, invalid PORT).
 - AI: exploration waypoints only in the reachable interior (`TunnelerAI.interior`, shared 8x8 rock
@@ -468,3 +469,5 @@ the room info): the most a player may choose to see during play - display only, 
 - lobby.html: until the server first answers, `connecting()` shows "Connecting to the server..." + the
   server's address (after 300 ms; the wake-up hint after 3 s or a failed request), Esc / Back to the
   main menu; one request at a time (`poll()`), the 2 s polling keeps retrying.
+- README screenshots: `tools/readme-screenshots.js <port> screenshots` against a fresh local server
+  (scripted session: menus, split screen, a 4-tank online game with chat, spectator views; GPU off).

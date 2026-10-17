@@ -119,23 +119,26 @@ class ViewModes {
   }
   // after death "others": the own tank is destroyed - one view: the tank that destroyed the one watched
   // (following the chain while those are destroyed too), else the first still alive (own team's first,
-  // then slot order); it stays on that tank while it lives. null while the own tank is alive (or nobody
-  // is left, or another setting)
+  // then slot order); it stays on that tank while it lives. Only tanks within the view limit: "team" -
+  // teammates only, "self" - none (the views stay on the wreck). null while the own tank is alive (or
+  // nobody allowed is left, or another setting)
   outCells() {
     const e = this.engine();
     if (this.watchOut !== "others" || !this.scope || !e || !e.alive) { this.ghost = null; return null; }
     const n = this.nPlayers(), own = Math.min(this.scope.own, n - 1);
     if (e.alive[own + 1]) { this.ghost = null; return null; }
+    // only tanks the view limit lets this player see: "team" - teammates, "self" - nobody else
+    const mate = i => e.extended && e.team ? e.team(i + 1) === e.team(own + 1) : false;
+    const v = this.scope.view, allowed = i => v === "everyone" || (v === "team" && mate(i));
     let t = this.ghost == null ? own : this.ghost;
-    for (let k = 0; k < n && !e.alive[t + 1]; k++) {
+    for (let k = 0; k < n && !(e.alive[t + 1] && allowed(t)); k++) {
       const by = e.killedBy ? e.killedBy[t + 1] | 0 : 0;
       if (!by || by - 1 === t) break;
       t = by - 1;
     }
-    if (!e.alive[t + 1]) {
-      const mate = i => e.extended && e.team ? e.team(i + 1) === e.team(own + 1) : false;
+    if (!(e.alive[t + 1] && allowed(t))) {
       const alive = [];
-      for (let i = 0; i < n; i++) if (e.alive[i + 1]) alive.push(i);
+      for (let i = 0; i < n; i++) if (e.alive[i + 1] && allowed(i)) alive.push(i);
       if (!alive.length) { this.ghost = null; return null; }
       t = alive.filter(mate).concat(alive.filter(i => !mate(i)))[0];
     }

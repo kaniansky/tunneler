@@ -343,6 +343,16 @@ function play(search) {
   e.killedBy = [0, 0, 0, 0, 0, 0];
   const alive = (...on) => { e.alive = [false, ...on]; return v.layout(); };
   same(alive(true, true, true, true, true).cells, [0, 3], "alive: the scope's views (own team)");
+  // view limit "team": only teammates are watched - not the enemy that shot you
+  e.killedBy[1] = 3;                                        // CYAN (team 2) shot you
+  same(alive(false, true, true, true, true).cells, [3], "team view: your teammate (YELLOW), not your killer");
+  same(alive(false, true, true, false, true).cells, [0, 3], "team view, no teammate left: the team's views (wrecks)");
+  alive(true, true, true, true, true);
+  v.setScope(0, "self");
+  same(alive(false, true, true, true, true).cells, [0], "self view: nobody else, your wreck");
+  alive(true, true, true, true, true);
+  v.setScope(0, "everyone");                                // (everyone: any tank alive)
+  e.killedBy[1] = 0;
   let L = alive(false, true, true, true, true);
   same([L.cells, !!L.labels], [[3], true], "out, no killer (energy): the first alive, own team's first (YELLOW)");
   alive(true, true, true, true, true);                      // (next round)
@@ -356,8 +366,8 @@ function play(search) {
   same(alive(false, true, false, true, true).cells, [4], "the watched one destroyed: its killer (TEAL)");
   e.killedBy[4] = 2;                                        // GREEN... but TEAL still alive: stays
   same(alive(false, true, false, true, true).cells, [4], "stays on the watched tank while it lives");
-  same(alive(false, false, false, false, false).cells, [0, 3], "nobody left: the scope's views");
-  same(alive(true, false, false, false, false).cells, [0, 3], "next round (own tank alive): back to normal");
+  same(alive(false, false, false, false, false).cells, [0, 1, 2, 3, 4], "nobody left: the scope's views");
+  same(alive(true, false, false, false, false).cells, [0, 1, 2, 3, 4], "next round (own tank alive): back to normal");
   assert.strictEqual(v.listenTo(0), 0, "own tank alive: sounds fade from it again");
   const off = play(link + "&view=team"), vo = off.tunnelerViews(), eo = off.tunnelerEngine();
   vo.snap = { screen: "play", mode: "lores", views: eo.views || [] };
@@ -375,10 +385,15 @@ function play(search) {
   same(vo.hearAt(0, eo), { x: 100, y: 10 }, "wreck: heard at the wreck, not at the killer");
   assert(!v.blackedOut(0, e), "others: never black");
   // classic (you BLUE against GREEN): out -> GREEN's half, labeled
-  const c = play("?mode=cpu&slots=0:you:1,1:normal:2&watch=1"), cv = c.tunnelerViews(), ce = c.tunnelerEngine();
+  {   // (view limit "self": nobody else to watch - your own half, the wreck)
+    const cs = play("?mode=cpu&slots=0:you:1,1:normal:2&watch=1"), csv = cs.tunnelerViews(), cse = cs.tunnelerEngine();
+    csv.snap = { screen: "play", mode: "lores" }; cse.alive = [false, false, true];
+    same([csv.layout().kind, csv.layout().crop], ["display", "blue"], "classic out, own view only: still BLUE's half");
+  }
+  const c = play("?mode=cpu&slots=0:you:1,1:normal:2&watch=1&view=everyone"), cv = c.tunnelerViews(), ce = c.tunnelerEngine();
   cv.snap = { screen: "play", mode: "lores" };
   ce.alive = [false, true, true];
-  same([cv.layout().kind, cv.layout().crop], ["display", "blue"], "classic alive: BLUE's half");
+  same(cv.layout().cells, [0, 1], "classic alive, everyone: both halves");
   ce.alive = [false, false, true];
   same([cv.layout().kind, cv.layout().cells, !!cv.layout().labels], ["grid", [1], true], "classic out: GREEN's half");
   // you in another color: the marker follows "you"
