@@ -44,7 +44,7 @@
   .hero h1 { font-size: clamp(3.4rem, 9vw, 6.2rem); line-height: .9; margin: 0; color: var(--red); text-shadow: 4px 4px 0 #400; }
   .hero h1 small { display: block; font-size: .42em; color: var(--cyan); text-shadow: none; letter-spacing: .3em; margin-top: 10px; }
   .hero p.lead { font-size: 1.08rem; color: var(--white); margin: 22px 0 28px; max-width: 34em; }
-  .hero .shot { border: 3px solid var(--magenta); box-shadow: 0 0 0 3px #000, 0 20px 60px rgba(0,0,0,.8); width: 100%; image-rendering: pixelated; }
+  .hero .shot { border: 3px solid var(--magenta); box-shadow: 0 0 0 3px #000, 0 20px 60px rgba(0,0,0,.8); width: 100%; height: auto; image-rendering: pixelated; }
   .btns { display: flex; flex-wrap: wrap; gap: 14px; }
   .btn { display: inline-block; font: 1.5rem VT323, monospace; letter-spacing: .05em; text-decoration: none; padding: 10px 22px; border: 2px solid; }
   .btn.play { background: var(--magenta); color: var(--white); border-color: var(--pink); }
@@ -61,7 +61,7 @@
 
   .gallery { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
   .gallery figure { margin: 0; }
-  .gallery img { width: 100%; display: block; border: 2px solid var(--rule); image-rendering: pixelated; cursor: zoom-in; transition: border-color .15s; }
+  .gallery img { width: 100%; height: auto; display: block; border: 2px solid var(--rule); image-rendering: pixelated; cursor: zoom-in; transition: border-color .15s; }
   .gallery img:hover { border-color: var(--pink); }
   .gallery figcaption { color: var(--dim); font-size: .85rem; margin-top: 6px; }
 
@@ -116,7 +116,7 @@
     </div>
     <p class="note">Free, no account, no install. The free server may take up to a minute to wake up.</p>
   </div>
-  <img class="shot" src="img/split-screen.png" alt="Split screen: two tanks digging out of their bases" width="1000" height="820">
+  <img class="shot" src="img/split-screen.png" alt="Split screen: two tanks digging out of their bases" width="984" height="742">
 </div></header>
 
 <section id="about"><div class="wrap">
