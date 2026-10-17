@@ -63,6 +63,7 @@ class DosUI {
     canvas.addEventListener("mousemove", e => { if (this.active()) this.hover(e); });
     canvas.addEventListener("click", e => { if (this.active()) this.click(e); });
     canvas.addEventListener("contextmenu", e => { if (this.active() && this.zoneClick(e, -1)) e.preventDefault(); });
+    canvas.addEventListener("wheel", e => { if (this.active() && this.wheel(e)) e.preventDefault(); }, { passive: false });
     if (!opts.display) {
       const loop = now => { this.display.draw(now); requestAnimationFrame(loop); };
       requestAnimationFrame(loop);
@@ -109,6 +110,21 @@ class DosUI {
       if (this.enabled(i)) { this.sel = i; break; }
     }
     if (!quiet) this.draw();
+  }
+
+  // mouse wheel over a box that scrolls (more items than rows): the selection moves through its list -
+  // and the list scrolls with it - one row per notch (trackpads: per ~50 pixels), not wrapping around
+  wheel(ev) {
+    const s = this.spec;
+    if (!s || s.page || s.boxes || !s.box || !(this.scrollRows < this.scrollN)) return false;
+    this.wheelAcc = (this.wheelAcc || 0) + ev.deltaY * (ev.deltaMode === 1 ? 40 : ev.deltaMode === 2 ? 400 : 1);
+    while (Math.abs(this.wheelAcc) >= 50) {
+      const d = Math.sign(this.wheelAcc);
+      this.wheelAcc -= d * 50;
+      for (let i = this.sel + d; i >= 0 && i < this.scrollN; i += d) if (this.enabled(i)) { this.sel = i; break; }
+    }
+    this.draw();
+    return true;
   }
 
   // Tab with spec.boxes: the first selectable item of the next (d = -1: previous) box

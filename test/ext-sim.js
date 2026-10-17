@@ -622,7 +622,9 @@ ok("extended texts lay out in every language (" + LAYOUTS.length + " team setups
       "classic round title settings at the bottom (no friendly fire without teams): " + bottom);
     const st = stats(e);
     check(/GREEN\x11/.test(st[8]) && !/\x10/.test(st[8]), "classic statistics: GREEN\u25c4 only: " + st[8]);
-    check(st.slice(0, 4).join(" ").includes("rounds to win: 3"), "classic statistics: settings above: " + st.slice(0, 4).join(" | "));
+    const stBottom = st.slice(19, 24).map(l => l.slice(40).trim()).join(" ");
+    check(stBottom.includes("rounds to win: 3") && !st.slice(0, 4).join("").slice(40).includes("rounds"),
+      "classic statistics: settings at the bottom: " + stBottom);
     e.youPlayer = 1;
     check(/\x10BLUE/.test(stats(e)[8]), "classic statistics: \u25baBLUE");
   }
@@ -637,7 +639,7 @@ ok("extended texts lay out in every language (" + LAYOUTS.length + " team setups
     check(bottom.includes("map size: large, rounds to win: 5, friendly fire: on, view: team, after death: black screen"), "extended settings at the bottom: " + bottom);
     const st = stats(e), r = st.findIndex(l => /CYAN/.test(l) && /\d/.test(l));
     check(marks(st) === 1 && /CYAN\x11/.test(st[r]), "extended statistics: CYAN\u25c4 only");
-    check(st.slice(0, 4).join(" ").includes("friendly fire: on"), "extended statistics settings");
+    check(st.slice(19, 24).map(l => l.slice(40).trim()).join(" ").includes("friendly fire: on"), "extended statistics settings at the bottom");
     // free-for-all list, 6 players, you = 6
     const f = new E(5, { players: 6 }); f.initTables(); f.initTablesExt(); f.round = 1; f.youPlayer = 6;
     const ft = title(f);

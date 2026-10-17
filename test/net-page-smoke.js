@@ -36,12 +36,12 @@ function makeEnv(search) {
     close() { this.readyState = 3; this.onclose && this.onclose(); }
     recv(m) { this.onmessage({ data: JSON.stringify(m) }); }
   }
-  const ls = new Map(), fetches = [];
+  const ls = new Map(), fetches = [], rooms = [];         // rooms: what GET /api/rooms returns
   const localStorage = { getItem: k => ls.has(k) ? ls.get(k) : null, setItem: (k, v) => ls.set(k, String(v)), removeItem: k => ls.delete(k) };
   const fetch = async (url, o) => {
     fetches.push({ url, o });
     const post = o && o.method === "POST";
-    return { ok: true, json: async () => post ? { id: "new-game", hostKey: "f".repeat(32) } : [] };
+    return { ok: true, json: async () => post ? { id: "new-game", hostKey: "f".repeat(32) } : rooms };
   };
   const win = {
     document, location: { search, protocol: "http:", host: "localhost:8050", origin: "http://localhost:8050", href: "" },
@@ -53,7 +53,7 @@ function makeEnv(search) {
   };
   win.window = win; win.globalThis = win;
   const ctx = vm.createContext(win);
-  return { ctx, win, elements, listeners, sockets, ls, fetches,
+  return { ctx, win, elements, listeners, sockets, ls, fetches, rooms,
     load(f) { vm.runInContext(script(f), ctx, { filename: f }); } };
 }
 
@@ -239,6 +239,25 @@ function loadPage(page, search, stored) {
     console.log("  ok  online.js classic room: no TEAM column, selection on Start game");
   }
 
+  // the games list scrolls with the mouse wheel (more rooms than its 8 rows), one row per notch, no wrap
+  {
+    const env = loadPage("lobby.html", "");
+    for (let i = 0; i < 12; i++) env.rooms.push({ id: "r" + i, name: "Room " + i, public: true, ext: true, players: 3, humans: 2, joined: 1,
+      teams: false, state: "waiting", round: 0, wins: [0, 0, 0], spec: 0, size: "medium", winScore: 3, slots: [] });
+    await wait(80);
+    const ui = env.win.tunnelerLobbyUI();
+    const key = () => ui.spec.items[ui.sel].key;
+    assert(ui.scrollRows < ui.scrollN, "the list scrolls: " + ui.scrollRows + " / " + ui.scrollN);
+    ui.sel = ui.spec.items.findIndex(it => it.key === "room:r0"); ui.draw();
+    for (let i = 0; i < 9; i++) ui.wheel({ deltaY: 100, deltaMode: 0 });     // 18 notches: down to the last room
+    assert.strictEqual(key(), "room:r11", "wheel down to the last room: " + key());
+    assert(ui.top > 0, "the list scrolled");
+    ui.wheel({ deltaY: 30, deltaMode: 0 }); ui.wheel({ deltaY: 30, deltaMode: 0 });   // (no wrap past the end)
+    assert.strictEqual(key(), "room:r11");
+    ui.wheel({ deltaY: -3, deltaMode: 1 });                                          // 3 lines up = 120 px: 2 rows
+    assert.strictEqual(key(), "room:r9");
+    console.log("  ok  lobby.js games list: mouse wheel scrolls it");
+  }
   // the create screen's slot editor: CYAN becomes human in team 4, then "Create the game"
   {
     const env = loadPage("lobby.html", "");

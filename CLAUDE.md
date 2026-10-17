@@ -456,3 +456,8 @@ the room info): the most a player may choose to see during play - display only, 
   with more than two tanks, shown once the host is ready while some other human isn't connected + ready): `{t:"start"}` -> server `checkStart(room, true)` starts the clock if it wasn't
   running and the game without the ready check; missing players' tanks stand still, they can join the
   running game later. Ignored from non-hosts, in classic rooms and during a match.
+- Statistics page: `statsSettings()` writes the settings bottom-aligned in the right half (last line
+  on row 24, a blank row above when there is room, else right below the statistics, fewer / shorter
+  lines when crowded); the round title keeps them at the bottom too.
+- DosUI `wheel(ev)`: the mouse wheel moves the selection through a scrolling single box (more items
+  than `box.rows`), one row per notch / ~50 px, no wrap-around.

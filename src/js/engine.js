@@ -1754,12 +1754,22 @@ class TunnelerEngine {
     }
     this.statsSettings();
   }
-  // the game's settings above the statistics (rows 1-4 of the right half; display only)
+  // the game's settings at the bottom of the right half, below the statistics (a blank row between when
+  // there is room, the last line on row 24, at most 4 lines of 37 columns; display only). The
+  // statistics end where the cursor is.
   statsSettings() {
     if (!this.showSettings) return;
+    const last = this.cx === this.wx1 ? this.cy : this.cy + 1;   // (1-based screen row of the last text)
+    let lines = this.settingsLines(37, 4);
+    if (lines.length > 23 - last) {                       // (no room for the blank row: right below them)
+      const room = 24 - last;
+      if (room < 1) return;
+      lines = this.settingsLines(37, room).slice(0, room);
+    }
     const w = [this.wx1, this.wy1, this.wx2, this.wy2, this.cx, this.cy, this.textAttr];
     this.window(1, 1, 80, 25);
-    this.writeSettings(61, 1, 37);
+    this.textColor(3);
+    lines.forEach((l, i) => { this.gotoXY(61 - (visLen(l) >> 1), 25 - lines.length + i); this.write(l); });
     [this.wx1, this.wy1, this.wx2, this.wy2, this.cx, this.cy, this.textAttr] = w;
   }
 
