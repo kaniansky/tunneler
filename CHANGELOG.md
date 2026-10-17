@@ -3,6 +3,11 @@
 All notable changes to TUNNELER ONLINE. Versions follow [semantic versioning](https://semver.org/);
 every push to `main` is released (see CONTRIBUTING.md).
 
+## Unreleased
+
+- Online game: while the server doesn't answer yet (e.g. waking up on a free host), the lobby says
+  "Connecting to the server..." with its address instead of a black screen; Esc goes back.
+
 ## 1.2.2
 
 - **Desktop app** for Windows, Linux and macOS (Tauri: the system's own web view, a few MB), attached

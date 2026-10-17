@@ -39,7 +39,7 @@ Lang.register("genz", {
   "lobby.title": "ONLINE GAMES", "lobby.name": "NAME", "lobby.players": "SQUAD", "lobby.state": "VIBE",
   "state.waiting": "Waiting", "state.menu": "In menu", "state.paused": "AFK", "state.round": "Round {n}",
   "lobby.who": "Squad rn: {names}", "lobby.join": "<ENTER> to pull up", "lobby.none": "No public games rn, dead lobby",
-  "lobby.create": "Start a new game", "lobby.create.i": "Start a game and invite the squad.",
+  "lobby.create": "Start a new game", "lobby.create.i": "Start a game and invite the squad.", "lobby.connecting": "Connecting to the server...", "lobby.wake": "The server was sleeping, it can take a minute to wake up. be patient.",
   "create.title": "NEW GAME", "create.hint": "↑↓ ← → <ENTER>, <TAB> other box, or mouse.  <ESC> dip.",
   "create.name": "Name: ", "create.name.i": "Give your game a name that slaps.",
   "create.public": "Public: ", "create.public.i1": "Public games show up in the lobby;",

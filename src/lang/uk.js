@@ -38,7 +38,7 @@ Lang.register("uk", {
   "lobby.title": "ІГРИ ОНЛАЙН", "lobby.name": "НАЗВА", "lobby.players": "ГРАВЦІ", "lobby.state": "СТАН",
   "state.waiting": "Чекає", "state.menu": "У меню", "state.paused": "Пауза", "state.round": "Раунд {n}",
   "lobby.who": "Грають: {names}", "lobby.join": "<ENTER> - приєднатися до гри", "lobby.none": "Зараз немає відкритих ігор",
-  "lobby.create": "Створити нову гру", "lobby.create.i": "Створи гру й запроси когось.",
+  "lobby.create": "Створити нову гру", "lobby.create.i": "Створи гру й запроси когось.", "lobby.connecting": "Підключення до сервера...", "lobby.wake": "Сервер, що спав, може прокидатися до хвилини.",
   "create.title": "НОВА ГРА", "create.hint": "↑↓ ← → <ENTER>, <TAB>: блок, миша.  <ESC> назад.",
   "create.name": "Назва: ", "create.name.i": "Введи назву своєї гри.",
   "create.public": "Відкрита: ", "create.public.i1": "Відкриті ігри є в списку ігор;",

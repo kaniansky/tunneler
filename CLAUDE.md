@@ -465,3 +465,6 @@ the room info): the most a player may choose to see during play - display only, 
   targets (other connected players in their tank's colour, spectators gray), Enter arms (4 s, red
   "pg.kick.sure"), a second Enter sends `{t:"kick"}` and returns to the lobby; Esc / Back returns
   without kicking. Redrawn when the targets change.
+- lobby.html: until the server first answers, `connecting()` shows "Connecting to the server..." + the
+  server's address (after 300 ms; the wake-up hint after 3 s or a failed request), Esc / Back to the
+  main menu; one request at a time (`poll()`), the 2 s polling keeps retrying.

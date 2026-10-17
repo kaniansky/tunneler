@@ -40,6 +40,7 @@ function makeEnv(search) {
   const localStorage = { getItem: k => ls.has(k) ? ls.get(k) : null, setItem: (k, v) => ls.set(k, String(v)), removeItem: k => ls.delete(k) };
   const fetch = async (url, o) => {
     fetches.push({ url, o });
+    if (ls.has("test.offline")) throw new TypeError("Failed to fetch");   // (a server that doesn't answer yet)
     const post = o && o.method === "POST";
     return { ok: true, json: async () => post ? { id: "new-game", hostKey: "f".repeat(32) } : rooms };
   };
@@ -247,6 +248,22 @@ function loadPage(page, search, stored) {
     console.log("  ok  online.js classic room: no TEAM column, selection on Start game");
   }
 
+  // a server that doesn't answer yet (asleep): "Connecting to the server..." with the server's address,
+  // Esc / Back to the main menu; the list as soon as it answers
+  {
+    const env = loadPage("lobby.html", "", { "test.offline": "1" });
+    await wait(400);
+    const ui = env.win.tunnelerLobbyUI(), text = () => screenText(env.win, ui.display.snap);
+    assert(/Connecting to the server/.test(text()) && /localhost:8050/.test(text()) && /wake up/.test(text()), "connecting: " + text());
+    env.ls.delete("test.offline");
+    await wait(2200);
+    assert(!/Connecting to the server/.test(text()) && /Create a new game/i.test(text()), "the list once it answers: " + text());
+    const env2 = loadPage("lobby.html", "", { "test.offline": "1" });
+    await wait(400);
+    press(env2, "Escape");
+    assert.strictEqual(env2.win.location.href, "/", "Esc: back to the main menu");
+    console.log("  ok  lobby.js: connecting to a server that doesn't answer yet, Esc cancels");
+  }
   // the games list scrolls with the mouse wheel (more rooms than its 8 rows), one row per notch, no wrap
   {
     const env = loadPage("lobby.html", "");

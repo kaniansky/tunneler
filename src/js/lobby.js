@@ -237,24 +237,52 @@
   }
 
   // ------------------------------------------------------------ polling
+  // Until the server first answers (a server that was asleep - e.g. on a free host - can take up to a
+  // minute to wake up): "Connecting to <server>...", <ESC> / Back to the main menu. One request at a time.
+  let reached = false, busy = false, failed = false;
+  function connecting() {
+    const host = (Endpoint.base() || location.origin).replace(/^https?:\/\//, "");
+    const home = () => { location.href = "/"; };
+    ui.show({
+      lines: [...TITLE, { row: 9, text: T("lobby.connecting"), color: 14 }, { row: 11, text: E(host), color: 7 },
+        ...(failed ? [{ row: 13, text: T("lobby.wake"), color: 3 }] : [])],
+      box: { y: 16 }, back: home, items: [{ key: "back", label: T("back.main"), info: [T("back.main.i")], go: home }],
+    }, true);
+  }
+  async function poll(url) {
+    if (busy) return undefined;
+    busy = true;
+    try {
+      const res = await fetch(Endpoint.api(url), { cache: "no-store" });
+      reached = true;
+      return res.ok ? await res.json() : null;
+    } catch (e) {
+      failed = true;
+      if (!reached) connecting();
+      return undefined;
+    } finally { busy = false; }
+  }
   async function refreshList(keep) {
-    try { rooms = await (await fetch(Endpoint.api("/api/rooms"), { cache: "no-store" })).json(); } catch (e) { /* server down */ }
-    if (!Array.isArray(rooms)) rooms = [];
+    const r = await poll("/api/rooms");
+    if (r === undefined) return;
+    rooms = Array.isArray(r) ? r : [];
     if (!keep && view === "list") return list(false);
     if (view === "list") list(keep);
   }
   async function refreshRoom(keep) {
-    try {
-      const res = await fetch(Endpoint.api("/api/rooms/" + encodeURIComponent(roomId)), { cache: "no-store" });
-      room = res.ok ? await res.json() : null;
-    } catch (e) { return; }
-    if (view === "room") roomScreen(keep);
+    const wasReached = reached;
+    const r = await poll("/api/rooms/" + encodeURIComponent(roomId));
+    if (r === undefined) return;
+    room = r;
+    if (view === "room") roomScreen(keep && wasReached);
   }
   setInterval(() => {
     if (view === "list") refreshList(true);
     else if (view === "room") refreshRoom(true);
   }, 2000);
 
+  setTimeout(() => { if (!reached) connecting(); }, 300);   // (until the server answers; no flash when it's quick)
+  setTimeout(() => { if (!reached) { failed = true; connecting(); } }, 3000);   // (still waiting: the wake-up hint)
   if (roomId) openRoom(roomId);
   else { view = "list"; refreshList(false); }
 })();

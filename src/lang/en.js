@@ -39,7 +39,7 @@ Lang.register("en", {
   "lobby.title": "ONLINE GAMES", "lobby.name": "NAME", "lobby.players": "PLAYERS", "lobby.state": "STATE",
   "state.waiting": "Waiting", "state.menu": "In menu", "state.paused": "Paused", "state.round": "Round {n}",
   "lobby.who": "Playing: {names}", "lobby.join": "<ENTER> to join this game", "lobby.none": "No public games right now",
-  "lobby.create": "Create a new game", "lobby.create.i": "Start a game and invite someone to it.",
+  "lobby.create": "Create a new game", "lobby.create.i": "Start a game and invite someone to it.", "lobby.connecting": "Connecting to the server...", "lobby.wake": "A server that was asleep can take up to a minute to wake up.",
   "create.title": "CREATE A GAME", "create.hint": "↑↓ ← → <ENTER>, <TAB> other box, or mouse.  <ESC> back.",
   "create.name": "Name: ", "create.name.i": "Type a name for your game.",
   "create.public": "List publicly: ", "create.public.i1": "Public games are listed in the lobby;",

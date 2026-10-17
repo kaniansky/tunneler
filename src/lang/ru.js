@@ -38,7 +38,7 @@ Lang.register("ru", {
   "lobby.title": "ИГРЫ ОНЛАЙН", "lobby.name": "НАЗВАНИЕ", "lobby.players": "ИГРОКИ", "lobby.state": "СОСТОЯНИЕ",
   "state.waiting": "Ждёт", "state.menu": "В меню", "state.paused": "Пауза", "state.round": "Раунд {n}",
   "lobby.who": "Играют: {names}", "lobby.join": "<ENTER> - присоединиться к игре", "lobby.none": "Сейчас нет открытых игр",
-  "lobby.create": "Создать новую игру", "lobby.create.i": "Создай игру и пригласи кого-нибудь.",
+  "lobby.create": "Создать новую игру", "lobby.create.i": "Создай игру и пригласи кого-нибудь.", "lobby.connecting": "Подключение к серверу...", "lobby.wake": "Уснувший сервер может просыпаться до минуты.",
   "create.title": "НОВАЯ ИГРА", "create.hint": "↑↓ ← → <ENTER>, <TAB>: блок, мышь.  <ESC> назад.",
   "create.name": "Название: ", "create.name.i": "Введи название своей игры.",
   "create.public": "Открытая: ", "create.public.i1": "Открытые игры видны в списке игр;",

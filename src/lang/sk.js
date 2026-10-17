@@ -38,7 +38,7 @@ Lang.register("sk", {
   "lobby.title": "HRY ONLINE", "lobby.name": "NÁZOV", "lobby.players": "HRÁČI", "lobby.state": "STAV",
   "state.waiting": "Čaká", "state.menu": "V menu", "state.paused": "Pozastavená", "state.round": "Kolo {n}",
   "lobby.who": "Hrajú: {names}", "lobby.join": "<ENTER> - pripojiť sa k hre", "lobby.none": "Momentálne žiadne verejné hry",
-  "lobby.create": "Vytvoriť novú hru", "lobby.create.i": "Založ hru a pozvi do nej niekoho.",
+  "lobby.create": "Vytvoriť novú hru", "lobby.create.i": "Založ hru a pozvi do nej niekoho.", "lobby.connecting": "Pripájam sa k serveru...", "lobby.wake": "Server, ktorý spal, sa môže prebúdzať až minútu.",
   "create.title": "NOVÁ HRA", "create.hint": "↑↓ ← → <ENTER>, <TAB> druhý box, alebo myš.  <ESC> späť.",
   "create.name": "Názov: ", "create.name.i": "Napíš názov svojej hry.",
   "create.public": "Verejná: ", "create.public.i1": "Verejné hry sú v zozname hier;",
