@@ -121,10 +121,12 @@
   const ais = [];
   if (mode === "cpu") for (let p = 1; p <= engine.nPlayers; p++) if (p !== me + 1) ais.push(new TunnelerAI(slots[p - 1].level, p));
 
-  // Sound fades with the distance from BLUE's tank against the computer (docs/DESIGN-8P.md 8); split
-  // screen (two players at one speaker) keeps full volume. Menus / title / map: full volume.
+  // Sound fades with the distance from your tank against the computer (docs/DESIGN-8P.md 8), panned by
+  // its x offset from it; split screen (two players at one speaker) keeps full volume, panned left near
+  // BLUE's tank (the left half), right near GREEN's. Menus / title / map: full volume, centred.
   // (after death: "others" - from the tank watched, "wreck" - from the wreck, "black" - nothing)
   if (mode === "cpu") runner.listener = e => e.screen === "play" ? views.hearAt(me, e) : null;
+  else runner.listener = e => views.splitHearAt(e);
 
   function classicInput() {
     const kd = keyboard.keyDown();

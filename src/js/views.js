@@ -167,6 +167,14 @@ class ViewModes {
     return { x: e.tankX[p], y: e.tankY[p] };
   }
 
+  // the speaker's listener for the classic split screen (both players at one speaker): BLUE's tank on the
+  // left, GREEN's on the right - Speaker.pan places a sound between them by which one it is nearer, at
+  // full volume. null off the play screen and for an extended engine (centred).
+  splitHearAt(e) {
+    if (!e || e.screen !== "play" || e.extended) return null;
+    return { left: { x: e.tankX[1], y: e.tankY[1] }, right: { x: e.tankX[2], y: e.tankY[2] } };
+  }
+
   // the players shown for the scope: own first, then teammates / everybody else in slot order
   scopeCells() {
     const e = this.engine(), n = this.nPlayers(), own = Math.min(this.scope.own, n - 1), v = this.scope.view;

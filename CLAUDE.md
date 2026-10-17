@@ -200,13 +200,19 @@ project dependency; install playwright-core in a scratch dir when needed).
   AI drives GREEN) or extended (a `TunnelerAI` per player 2..N at its slot's level, `TunnelerAI.bitsFor`).
   The screen goes through `ViewModes` (`setScope(0, view)`: BLUE's view, its team's or everyone's - BLUE's
   first; classic: BLUE's half / the full split screen). No status line vs computer.
-  Sound vs computer fades with the distance from BLUE's tank (`runner.listener`); split screen full volume.
+  Sound vs computer fades with the distance from BLUE's tank (`runner.listener`), panned by its x offset;
+  split screen full volume, panned left / right by the nearer tank (`views.splitHearAt`).
   `window.tunnelerEngine / tunnelerViews / tunnelerRunner / tunnelerAIs` for tests.
 - `speaker.js` + `runner.js` - distance-attenuated sound (DESIGN-8P 8): `runner.listener = engine =>
   ({x, y}) | null` (world pixels, called after each step with sound; null = full volume - split screen,
   spectators, menus); `speaker.play(events, at, listener)` scales each tone by
   `Speaker.attenuation(event, listener)`: 1 within `Speaker.NEAR` (40 px), quadratic fade to 0 at
   `Speaker.FAR` (240 px; the viewport is 76 x 71), 1 for events without a source (x < 0). Output only.
+  Stereo: `Speaker.pan(event, listener)` -1..1 through a StereoPannerNode (original: one panner on the
+  speaker voice, `pan.setValueAtTime` per tone; realistic / cartoony: one per effect; no
+  StereoPannerNode = centred): x offset from the listener, +-`EDGE_PAN` 0.8 at the view's edge
+  (`VIEW_W` / 2 = 38 px), clamped +-0.9. Split screen: `views.splitHearAt(e)` = `{left: BLUE's tank,
+  right: GREEN's}` - pan +-0.6 by which is nearer, full volume (classic only; null off play = centred).
 - `views.js` - `ViewModes`: stands in for the Display (Runner draws through it); during play shows the
   grid of all views, the live map + score table, or one followed player (Tab / 1 2 3, Left / Right); when more than one view (or the followed one) is shown, each view's top border carries its player's name (+ "TEAM n" with shared teams) in half-height letters in the player's color (`viewLabel`, `paintLabel`; classic halves too, but never the hotseat split screen: `labels: false`);
   every other screen goes to the Display unchanged. Players are colored and named as the engine has them
@@ -244,7 +250,7 @@ project dependency; install playwright-core in a scratch dir when needed).
   gray); player names and all chat text go through the Unicode plane, so every language shows at once. Hidden during play (the lobby is). The settings line
   drops its last parts when it would not fit. Lobby keys are never relayed and send no held bits. A config frame's teams / names are
   applied right before its step (`applyFrameCfg`; classic: names replace BLUE / GREEN, max 9 letters).
-  A player hears sounds fading with distance from their own tank (`runner.listener`); spectators at
+  A player hears sounds fading with distance from their own tank, panned by their x offset (`runner.listener`); spectators at
   full volume. Client id `tunneler.client` (random) and the host key go with the websocket URL; the
   round-trip time is reported (`{t:"rtt"}`) every other ping.
   The end-of-match world map ("PRESS ANY KEY") is per viewer: it stays on each screen until that

@@ -126,13 +126,18 @@ function play(search) {
   const w = play("?mode=hotseat&size=small&win=1");
   const e = w.tunnelerEngine();
   assert(!e.extended && e.size === "small" && e.winScore === 1 && w.tunnelerAIs().length === 0);
-  assert.strictEqual(w.tunnelerRunner().listener, null, "split screen: full volume");
+  // split screen: full volume, panned between BLUE's tank (left) and GREEN's (right); null off play
+  const hl = w.tunnelerRunner().listener;
+  const hr = { screen: "play", tankX: [0, 100, 300], tankY: [0, 50, 60] };
+  same(hl(hr), { left: { x: 100, y: 50 }, right: { x: 300, y: 60 } }, "split screen listener");
+  assert.strictEqual(hl(Object.assign({}, hr, { screen: "map" })), null, "split screen: menus centred");
+  assert.strictEqual(hl(Object.assign({}, hr, { extended: true })), null, "split screen: classic only");
   const d = play("?mode=hotseat").tunnelerEngine();
   assert(!d.extended && d.size === "medium" && d.winScore === 3 && d.roundTime === 0);
   assert.strictEqual(play("?mode=hotseat&time=5").tunnelerEngine().roundTime, 5, "&time=5: 5-minute rounds");
   assert.strictEqual(play("?mode=hotseat&time=7").tunnelerEngine().roundTime, 0, "&time=7: not a choice - no limit");
   assert.strictEqual(play("?mode=cpu&slots=0:you:1,2:easy:2&time=10").tunnelerEngine().roundTime, 10, "vs computer &time=10");
-  ok("split screen: classic engine with size / rounds to win from the link, full-volume sound");
+  ok("split screen: classic engine with size / rounds to win from the link, full-volume stereo sound");
 }
 
 // ---------------------------------------------------------------- home.js settings screens

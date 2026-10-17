@@ -192,7 +192,7 @@ Lang.register("genz", {
           "all screens, the map with the scores, and following one tank (<←> <→> pick which)."],
         ["Sound:  ", "Pick the vibe in Settings: OG (the PC speaker " +
           "beeps of 1991), realistic (tank noises) or cartoony (boings and pops), or muted.  Other " +
-          "tanks get quieter the farther they are from yours."],
+          "tanks get quieter the farther they are from yours and pan to their side (stereo)."],
         ["Settings:  ", "the language of the menus and the game, the sound, and \"Show ping\" " +
           "(online games: your round-trip time in ms, top left on the game's border).  The desktop " +
           "app also has Server for online games (empty = the public server)."],

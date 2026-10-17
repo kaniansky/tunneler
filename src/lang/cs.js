@@ -194,7 +194,7 @@ Lang.register("cs", {
           "obrazovkami, mapou se skóre a sledováním jednoho tanku (<←> <→> vyberou kterého)."],
         ["Zvuk:  ", "V Nastavení zvolíš jeho styl: původní (pípání PC " +
           "speakeru z roku 1991), realistický (zvuky tanků), pohádkový (boing a puk) nebo vypnutý.  " +
-          "Zvuky ostatních tanků slábnou se vzdáleností od tvého."],
+          "Zvuky ostatních tanků slábnou se vzdáleností od tvého a znějí z jejich strany (stereo)."],
         ["Nastavení:  ", "jazyk menu a hry, zvuk a \"Zobrazit ping\" (hry online: doba odezvy v ms, " +
           "vlevo nahoře na okraji hry).  V desktopové aplikaci i Server pro hry online (prázdný = " +
           "veřejný server)."],

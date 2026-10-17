@@ -238,7 +238,7 @@ const STRINGS_EN = {
         "which one)."],
       ["Sound:  ", "Settings chooses its style: original (the PC " +
         "speaker beeps of 1991), realistic (tank noises) or cartoony (boings and pops), or muted.  " +
-        "The sounds of the other tanks fade with their distance from yours."],
+        "The sounds of the other tanks fade with their distance from yours and come from their side (stereo)."],
       ["Settings:  ", "the language of the menus and the game, the sound, and \"Show ping\" (online " +
         "games: your round-trip time in ms, top left on the game's border).  In the desktop app also " +
         "the Server for online games (empty = the public server)."],

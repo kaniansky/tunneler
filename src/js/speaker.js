@@ -15,8 +15,15 @@
 // e.g. the player's own tank) scales each sound's volume by Speaker.attenuation(event, listener): full
 // volume within NEAR pixels, fading to silence at FAR pixels (the play viewport is 76 x 71 world pixels,
 // so the fade starts just past the edge of your own screen and ends about three screens away). listener
-// null / undefined, or an event without a source (x < 0), plays at full volume (split screen,
-// spectators, menus). Same for every style. Output only - nothing here feeds back into the game.
+// null / undefined, a split screen listener, or an event without a source (x < 0), plays at full volume
+// (split screen, spectators, menus). Same for every style. Output only - nothing here feeds back into the game.
+//
+// Stereo: Speaker.pan(event, listener) places each sound left / right (-1 .. 1) through a
+// StereoPannerNode (none in the browser: centred, as before). With an {x, y} listener the pan is the
+// sound's x offset from it: the edge of a view screen (VIEW_W / 2 = 38 world pixels from its tank) is
+// +-EDGE_PAN, clamped to +-MAX_PAN beyond. A split screen listener {left: {x, y}, right: {x, y}} (BLUE's
+// and GREEN's tanks) pans by which tank the sound is nearer: at the left one -SPLIT_PAN, at the right one
+// +SPLIT_PAN, in between in between, always at full volume. No listener / no source: centred.
 //
 // Settings page API (works without engine / runner; no AudioContext until a sound is played):
 //   Speaker.STYLES, Speaker.DEFAULT_STYLE, Speaker.loadStyle(), Speaker.saveStyle(style),
@@ -24,6 +31,8 @@
 (function (root) {
 
 const NEAR = 40, FAR = 240;
+const VIEW_W = 76;                         // a view screen's width in world pixels (engine blitView: 38 bytes)
+const EDGE_PAN = 0.8, MAX_PAN = 0.9, SPLIT_PAN = 0.6;
 const STYLES = ["muted", "original", "realistic", "cartoony"];
 const DEFAULT_STYLE = "original";
 const STORE_KEY = "tunneler.sound";
@@ -34,7 +43,7 @@ const TICK_MS = 65536 * 1000 / PIT_HZ;
 // 0..1 volume factor of one sound event heard at `listener` ({x, y} or null)
 function attenuation(ev, listener) {
   if (listener && listener.mute) return 0;          // ({mute: true}: hear nothing, e.g. a black DESTROYED view)
-  if (!listener || !ev || !(ev.x >= 0) || !(ev.y >= 0)) return 1;
+  if (!listener || listener.left || !ev || !(ev.x >= 0) || !(ev.y >= 0)) return 1;   // (split screen: full)
   const dx = ev.x - listener.x, dy = ev.y - listener.y;
   const d2 = dx * dx + dy * dy;
   if (d2 <= NEAR * NEAR) return 1;
@@ -43,6 +52,28 @@ function attenuation(ev, listener) {
   // sounds like a smooth fade on the square wave (a linear fade stays loud for too long)
   const f = (FAR - Math.sqrt(d2)) / (FAR - NEAR);
   return f * f;
+}
+
+// -1 (left) .. 1 (right) stereo position of one sound event heard at `listener` (see the top)
+function pan(ev, listener) {
+  if (!listener || listener.mute || !ev || !(ev.x >= 0) || !(ev.y >= 0)) return 0;
+  if (listener.left && listener.right) {
+    const d = q => Math.hypot(ev.x - q.x, ev.y - q.y);
+    const dl = d(listener.left), dr = d(listener.right);
+    return dl + dr > 0 ? SPLIT_PAN * (dl - dr) / (dl + dr) : 0;
+  }
+  if (!(listener.x >= 0)) return 0;
+  const p = EDGE_PAN * (ev.x - listener.x) / (VIEW_W / 2);
+  return Math.max(-MAX_PAN, Math.min(MAX_PAN, p));
+}
+
+// a StereoPannerNode at `p` feeding `out` (no StereoPannerNode, or p = 0: `out` itself)
+function panTo(ctx, out, p) {
+  if (!p || typeof ctx.createStereoPanner !== "function") return out;
+  const n = ctx.createStereoPanner();
+  n.pan.value = p;
+  n.connect(out);
+  return n;
 }
 
 // ------------------------------------------------------------ stored style
@@ -203,9 +234,9 @@ function makeBus(ctx) {
   g.connect(comp).connect(ctx.destination);
   return g;
 }
-function synth(ctx, bus, style, kind, t, v) {
+function synth(ctx, bus, style, kind, t, v, p) {
   const s = SYNTH[style] && SYNTH[style][kind];
-  if (s && v > 0) s(ctx, bus, Math.max(t, ctx.currentTime), v * STYLE_GAIN[style]);
+  if (s && v > 0) s(ctx, panTo(ctx, bus, p), Math.max(t, ctx.currentTime), v * STYLE_GAIN[style]);
 }
 
 class Speaker {
@@ -233,7 +264,10 @@ class Speaker {
       this.osc.type = "square";
       this.gain = this.ctx.createGain();
       this.gain.gain.value = 0;
-      this.osc.connect(this.gain).connect(this.ctx.destination);
+      // the one PC speaker voice, panned per event where the browser can (StereoPannerNode)
+      this.panner = typeof this.ctx.createStereoPanner === "function" ? this.ctx.createStereoPanner() : null;
+      if (this.panner) this.panner.connect(this.ctx.destination);
+      this.osc.connect(this.gain).connect(this.panner || this.ctx.destination);
       this.osc.start();
       this.bus = makeBus(this.ctx);
     }
@@ -260,7 +294,8 @@ class Speaker {
   }
 
   // events (engine.soundEvents) and fx (engine.fx) of one engine step presented at performance.now()
-  // time `at`, heard at `listener` ({x, y} world pixels, or null = full volume)
+  // time `at`, heard at `listener` ({x, y} world pixels, {left, right} split screen, {mute: true}, or
+  // null = full volume, centred)
   play(events, at, listener, fx) {
     if (!this.ctx || this.style === "muted" || this.ctx.state !== "running") return;
     if (this.style === "original") {
@@ -272,6 +307,7 @@ class Speaker {
         if (e.hz > 0) {
           this.osc.frequency.setValueAtTime(e.hz, t);
           this.gain.gain.setValueAtTime(this.volume * attenuation(e, listener), t);
+          if (this.panner) this.panner.pan.setValueAtTime(pan(e, listener), t);
         } else this.gain.gain.setValueAtTime(0, t);
       }
       return;
@@ -285,7 +321,7 @@ class Speaker {
       const v = attenuation(e, listener);
       if (v <= 0) continue;
       this.lastFx[e.kind] = t;
-      synth(this.ctx, this.bus, this.style, e.kind, t, v);
+      synth(this.ctx, this.bus, this.style, e.kind, t, v, pan(e, listener));
     }
   }
 
@@ -375,6 +411,11 @@ function preview(style) {
 }
 
 Speaker.attenuation = attenuation;
+Speaker.pan = pan;
+Speaker.VIEW_W = VIEW_W;
+Speaker.EDGE_PAN = EDGE_PAN;
+Speaker.MAX_PAN = MAX_PAN;
+Speaker.SPLIT_PAN = SPLIT_PAN;
 Speaker.NEAR = NEAR;
 Speaker.FAR = FAR;
 Speaker.STYLES = STYLES;

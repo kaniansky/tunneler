@@ -5,6 +5,9 @@ a release is made by pushing a version tag (see CONTRIBUTING.md).
 
 ## Unreleased
 
+- Stereo sound: sounds come from the left or right by where they happen - against the computer and
+  online by their offset from your tank (the edge of your view screen = far left / right), on the split
+  screen by which tank they are nearer (BLUE left, GREEN right); menus stay centred. Every sound style.
 - "Gamepad 1 connected" (split screen: "...: BLUE") appears when a gamepad is found; the Instructions say
   to press a button on it first.
 - The online lobby's Statistics page is full screen: the statistics centred, the settings across the

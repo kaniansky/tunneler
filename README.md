@@ -55,7 +55,7 @@ Settings (split screen: map size, rounds to win and round time only):
 The homepage's **Settings** screen holds the language, the **sound** - muted, original (the PC speaker),
 realistic or cartoony (a sample plays when you change it) - and **Show ping** (your round-trip time as
 a small number on the game's border online). Sounds of other tanks fade with their distance from the
-tank you watch.
+tank you watch and come from their side, in stereo (split screen: left near BLUE, right near GREEN).
 
 | Create a game | Pre-game lobby: names, teams, ping, chat |
 |---|---|

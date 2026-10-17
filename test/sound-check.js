@@ -9,6 +9,9 @@
 //   - play() with a mock AudioContext: "original" drives the square wave exactly as before (fx ignored),
 //     realistic / cartoony build voices for every kind and ignore the speaker events, muted is silent,
 //     distance attenuation (out of earshot = nothing), dig / bump throttled
+//   - stereo: Speaker.pan for left / right / centre / far / no source / mute, the split screen listener
+//     (between BLUE's and GREEN's tanks, full volume); original pans its one voice per event, realistic /
+//     cartoony pan each effect; without StereoPannerNode everything plays as before, centred
 //   - Speaker.preview: no AudioContext -> false, no throw; with one it plays every style; the original
 //     preview sequence starts with the shot (5000 Hz) and ends silent
 //   node test/sound-check.js
@@ -173,7 +176,7 @@ class Store {
 }
 
 // ------------------------------------------------------------------ 3. play() with a mock AudioContext
-const made = { osc: 0, noise: 0, gain: 0 };
+const made = { osc: 0, noise: 0, gain: 0, pans: [] };
 class Param {
   constructor(v) { this.value = v || 0; this.calls = []; }
   setValueAtTime(v, t) { this.calls.push(["set", v, t]); this.value = v; return this; }
@@ -190,6 +193,7 @@ class MockCtx {
   createBufferSource() { made.noise++; const n = new Node(); n.start = n.stop = () => {}; return n; }
   createBiquadFilter() { const n = new Node(); n.frequency = new Param(1000); n.Q = new Param(1); return n; }
   createDynamicsCompressor() { return new Node(); }
+  createStereoPanner() { const n = new Node(); n.pan = new Param(0); made.pans.push(n); return n; }
   createBuffer(c, len) { const d = new Float32Array(len); return { getChannelData: () => d }; }
 }
 {
@@ -263,6 +267,97 @@ class MockCtx {
   sp.play([{ t: 0, hz: 100 }], 0, null, [{ t: 0, kind: "fire", x: 1, y: 1 }]);
   sp.silence(); sp.setMuted(true);
   ok("speaker.js standalone (no engine, no runner, no AudioContext, no storage)");
+}
+
+// ------------------------------------------------------------------ 4. stereo
+{
+  const S = Speaker, L = { x: 100, y: 50 }, near = (a, b) => Math.abs(a - b) < 1e-9;
+  const at = (x, y) => ({ t: 0, x, y: y === undefined ? 50 : y });
+  check(S.VIEW_W === 76 && S.EDGE_PAN === 0.8 && S.MAX_PAN === 0.9 && S.SPLIT_PAN === 0.6, "stereo constants");
+  check(S.pan(at(100), L) === 0 && S.pan(at(100, 200), L) === 0, "centre: straight above / below = 0");
+  check(near(S.pan(at(138), L), 0.8) && near(S.pan(at(62), L), -0.8), "view screen edge = +-0.8 ("
+    + S.pan(at(138), L) + ", " + S.pan(at(62), L) + ")");
+  check(near(S.pan(at(119), L), 0.4) && near(S.pan(at(81), L), -0.4), "half way to the edge = +-0.4");
+  check(S.pan(at(500), L) === 0.9 && S.pan(at(0), L) === -0.9 && S.pan(at(143), L) === 0.9, "beyond the edge: clamped to +-0.9");
+  check(S.pan({ t: 0, x: -1, y: -1 }, L) === 0 && S.pan({ t: 0 }, L) === 0, "no source: centred");
+  check(S.pan(at(500), null) === 0 && S.pan(at(500), undefined) === 0, "no listener (menus): centred");
+  check(S.pan(at(500), { mute: true }) === 0 && S.attenuation(at(500), { mute: true }) === 0, "mute listener: silent, centred");
+  // attenuation unchanged by stereo
+  check(S.attenuation(at(138), L) === 1 && S.attenuation(at(500), L) === 0, "distance attenuation as before");
+  // split screen: BLUE's tank at (100, 50) left, GREEN's at (300, 50) right
+  const SP = { left: { x: 100, y: 50 }, right: { x: 300, y: 50 } };
+  check(near(S.pan(at(100), SP), -0.6) && near(S.pan(at(300), SP), 0.6) && near(S.pan(at(200), SP), 0), "split: at BLUE -0.6, at GREEN +0.6, midway 0");
+  const q = S.pan(at(150), SP);
+  check(q < 0 && q > -0.6 && near(q, -0.3), "split: in between (" + q + ")");
+  check(near(S.pan(at(200, 900), SP), 0) && S.pan(at(2000), SP) > 0 && S.pan(at(2000), SP) < 0.6, "split: far away stays between");
+  check(S.attenuation(at(2000), SP) === 1 && S.attenuation(at(100), SP) === 1, "split: full volume, no distance fade");
+  check(S.pan(at(5), { left: { x: 5, y: 50 }, right: { x: 5, y: 50 } }) === 0, "split: both tanks at the sound = centre");
+  ok("Speaker.pan: centre, +-0.8 at the view's edge, clamped +-0.9, no source / listener / mute centred, split screen");
+
+  // original: one voice panned per event, at the event's time; tone / volume exactly as without stereo
+  globalThis.AudioContext = MockCtx;
+  globalThis.localStorage = new Store();
+  made.pans = [];
+  const sp = new Speaker();
+  sp.unlock();
+  check(sp.panner && made.pans.length === 1, "original: one StereoPannerNode for the speaker voice");
+  const t0 = performance.now();
+  const events = [{ t: 0, hz: 4970, x: 138, y: 50 }, { t: 18, hz: 0, x: -1, y: -1 }, { t: 36, hz: 1000, x: 62, y: 50 }, { t: 40, hz: 700, x: -1, y: -1 }];
+  sp.gain.gain.calls = []; sp.panner.pan.calls = [];
+  sp.play(events, t0, L, []);
+  const g = sp.gain.gain.calls, pc = sp.panner.pan.calls;
+  check(pc.length === 3 && near(pc[0][1], 0.8) && near(pc[1][1], -0.8) && pc[2][1] === 0
+    && pc[0][2] === g[0][2] && pc[1][2] === g[2][2] && pc[2][2] === g[3][2], "original: pan set at each tone's time (" + JSON.stringify(pc) + ")");
+  check(g.length === 4 && g[0][1] === 0.07 && g[1][1] === 0 && g[2][1] === 0.07 && g[3][1] === 0.07, "original: volumes unchanged");
+  sp.panner.pan.calls = [];
+  sp.play(events, t0, SP, []);
+  check(near(sp.panner.pan.calls[0][1], S.pan(events[0], SP)) && sp.panner.pan.calls[0][1] < 0
+    && sp.gain.gain.calls.slice(-4)[0][1] === 0.07, "original: split screen listener panned, full volume");
+  sp.panner.pan.calls = [];
+  sp.play(events, t0, null, []);
+  check(sp.panner.pan.calls.every(c => c[1] === 0), "original: no listener = centred");
+
+  // realistic / cartoony: a StereoPannerNode per effect, none when centred
+  for (const style of ["realistic", "cartoony"]) {
+    sp.setStyle(style);
+    made.pans = []; sp.lastFx = {};
+    sp.play([], t0, L, [{ t: 0, kind: "fire", x: 145, y: 50 }, { t: 5, kind: "hit", x: 81, y: 50 }]);
+    check(made.pans.length === 2 && made.pans[0].pan.value === 0.9 && near(made.pans[1].pan.value, -0.4), style + ": a panner per effect ("
+      + made.pans.map(n => n.pan.value) + ")");
+    made.pans = []; sp.lastFx = {};
+    sp.play([], t0, null, [{ t: 0, kind: "fire", x: 500, y: 50 }]);
+    check(made.pans.length === 0, style + ": no listener = no panner (centred)");
+    made.pans = []; sp.lastFx = {};
+    sp.play([], t0, SP, [{ t: 0, kind: "destroy", x: 290, y: 50 }]);
+    check(made.pans.length === 1 && made.pans[0].pan.value > 0.5 && made.pans[0].pan.value < 0.6, style + ": split screen near GREEN = right");
+    made.pans = []; sp.lastFx = {};
+    sp.play([], t0, { mute: true }, [{ t: 0, kind: "destroy", x: 290, y: 50 }]);
+    check(made.pans.length === 0, style + ": mute = nothing");
+  }
+  sp.silence();
+  ok("original pans its one voice per event; realistic / cartoony pan each effect");
+
+  // no StereoPannerNode (older browsers): everything plays as before, centred
+  class NoPanCtx extends MockCtx {}
+  NoPanCtx.prototype.createStereoPanner = undefined;
+  globalThis.AudioContext = NoPanCtx;
+  const np = new Speaker();
+  np.setStyle("original", true);
+  np.unlock();
+  check(!np.panner, "fallback: no panner");
+  np.gain.gain.calls = [];
+  np.play(events, t0, L, []);
+  check(np.gain.gain.calls.length === 4 && np.gain.gain.calls[0][1] === 0.07, "fallback: original plays as before");
+  for (const style of ["realistic", "cartoony"]) {
+    np.setStyle(style, true);
+    made.osc = made.noise = 0; np.lastFx = {};
+    np.play([], t0, L, [{ t: 0, kind: "fire", x: 130, y: 50 }]);
+    check(made.osc + made.noise > 0, "fallback: " + style + " plays, centred");
+  }
+  np.silence();
+  delete globalThis.AudioContext;
+  delete globalThis.localStorage;
+  ok("without StereoPannerNode: no pan, sound as before");
 }
 
 // a {mute: true} listener (after death "black"): every sound at volume 0
