@@ -353,7 +353,7 @@ function play(search) {
   e.killedBy[3] = 5;                                        // TEAL shot CYAN
   same(alive(false, true, false, true, true).cells, [3, 1, 4], "CYAN destroyed too: the rest");
   assert.strictEqual(v.listenTo(0), 4, "sounds from CYAN's killer (TEAL)");
-  same(alive(false, false, false, false, false).cells, [0, 3], "nobody left: the scope's views...");
+  same(alive(false, false, false, false, false).cells, [0], "nobody left: only your own view...");
   assert(v.blackedOut(0, e), "... black (DESTROYED)");
   same(alive(true, false, false, false, false).cells, [0, 3], "next round (own tank alive): back to normal");
   assert.strictEqual(v.listenTo(0), 0, "own tank alive: sounds fade from it again");
@@ -393,7 +393,7 @@ function play(search) {
   }
   assert.strictEqual(vt.listenTo(0), 3, "sounds from the teammate shown (the killer isn't)");
   et.alive = [false, false, true, true, false, true];
-  same(vt.layout().cells, [0], "watch team, no teammate left: the scope's views...");
+  same(vt.layout().cells, [0], "watch team, no teammate left: only your own view...");
   assert(vt.blackedOut(0, et), "... black (DESTROYED)");
   same(vt.hearAt(0, et), { mute: true }, "... and silent");
   const off = play(link + "&view=team"), vo = off.tunnelerViews(), eo = off.tunnelerEngine();

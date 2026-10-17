@@ -248,7 +248,8 @@ class ViewModes {
     const labels = this.opts.labels !== false && play && !!this.engine();
     if (play && this.scope) {
       const out = this.outCells();                   // watching the others after the own tank is out
-      const cells = out || this.scopeCells();
+      // (nobody left to watch: only the own view, black)
+      const cells = out || (this.ghostNone ? [Math.min(this.scope.own, this.nPlayers() - 1)] : this.scopeCells());
       if (!s.views && !(labels && (cells.length > 1 || out))) return { kind: "display", crop: cells.length > 1 ? null : cells[0] === 1 ? "green" : "blue" };
       const c = cells.length, cols = c <= 4 ? c : Math.ceil(c / 2);
       return { kind: "grid", cells, cols, rows: Math.ceil(c / cols), labels: labels && (c > 1 || !!out) };
