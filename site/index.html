@@ -61,7 +61,8 @@
 
   .gallery { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
   .gallery figure { margin: 0; }
-  .gallery img { width: 100%; height: auto; display: block; border: 2px solid var(--rule); image-rendering: pixelated; cursor: zoom-in; transition: border-color .15s; }
+  /* every screenshot in the same 4:3 tile (fitted, black around it) */
+  .gallery img { width: 100%; height: auto; aspect-ratio: 4 / 3; object-fit: contain; background: #000; display: block; border: 2px solid var(--rule); image-rendering: pixelated; cursor: zoom-in; transition: border-color .15s; }
   .gallery img:hover { border-color: var(--pink); }
   .gallery figcaption { color: var(--dim); font-size: .85rem; margin-top: 6px; }
 

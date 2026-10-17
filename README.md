@@ -169,9 +169,8 @@ docker build -t tunneler-online . && docker run -d -p 8050:8050 tunneler-online 
 Games live in the server's memory (a restart ends running games); a game nobody plays in for 10 minutes
 is closed automatically.
 
-Every push to `main` is a release: the version goes up (v1.0.0, v1.0.1, ...), a GitHub Release is
-created and the Docker image is published to `ghcr.io/kaniansky/tunneler-online` (`latest` and the
-version; see `.github/workflows/release.yml`).
+Every release (a pushed version tag) publishes the Docker image to `ghcr.io/kaniansky/tunneler-online`
+(`latest` and the version; see `.github/workflows/release.yml`).
 Put a reverse proxy (nginx, Caddy, ...) in front for HTTPS; the game connects its websocket over `wss:`
 automatically when the page is served over HTTPS.
 

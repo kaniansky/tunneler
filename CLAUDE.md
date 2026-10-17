@@ -33,11 +33,11 @@ may be redesigned, but always in the original's DOS look.
   lockstep relay. Requires `src/js/netproto.js` directly (shared with the browser). Port `PORT` (8050).
 - `build.js` - `node build.js` once, `node build.js --watch` = rebuild on change + `node --watch server.js`.
 - `Dockerfile` - two stages (build with esbuild, then prod deps + server.js + netproto.js + public/), runs
-  as `node`, port 8050. `.github/workflows`: ci (npm ci, build, test, docker build), **release** (every
-  push to `main` = a release: patch version bumped from the latest `vX.Y.Z` tag - the first one from
-  `package.json` -, the commit tagged, a GitHub Release with generated notes, the Docker image pushed to
-  ghcr.io as `latest` / `X.Y.Z` / `X.Y` / short sha, amd64 + arm64; a hand-pushed tag such as `v2.0.0`
-  is released the same way and the next push continues from it), docker-publish (manual image build
+  as `node`, port 8050. `.github/workflows`: ci (npm ci, build, test, docker build), **release** (only a pushed
+  `vX.Y.Z` tag: a GitHub Release with that version's CHANGELOG.md section as notes
+  (`tools/changelog-notes.sh`), the desktop app, the Docker image on ghcr.io as `latest` / `X.Y.Z` /
+  `X.Y` / short sha, amd64 + arm64, the homepage upload; pushes to main only run CI; release-notes.yml
+  rewrites an old release's notes by hand), docker-publish (manual image build
   only), dependabot. So pushing to main publishes - another reason never to push unasked.
 - `docs/DESIGN-8P.md` - the design of everything beyond the original (extended mode, slots / teams,
   online lobby, views, sound, map sizes, languages...), in the owner's numbered requests; later sections
@@ -429,8 +429,8 @@ the room info): the most a player may choose to see during play - display only, 
   the cheapest way out (Dijkstra) becomes dirt. Worlds with a way out are unchanged; classic untouched
   (it can have the same rare flaw). Tests: ext-sim "a way out of every base", ai-ext-sim "time at the
   own base" (longest stretch there while not retreating, every level, was 462 expert / 1242 normal).
-- Release: every push to main bumps the patch version + Release + Docker image; a commit already tagged
-  `vX.Y.Z` (pushed before main) is released by its tag only; CI also runs on release/** branches.
+- Release: push a `vX.Y.Z` tag (package.json + CHANGELOG heading set to it first); a push to main is no
+  release any more (since 1.4.1); CI also runs on release/** branches.
   docker-compose.yml runs the published image.
 - Instructions: only on the homepage main menu (classic hotseat text). The engine's own menu in
   play.html has no Instructions item (`noInstructions` option: "Start game"/"Rematch" + "Back");

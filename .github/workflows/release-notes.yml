@@ -1,0 +1,33 @@
+name: Release notes
+
+# Puts a version's CHANGELOG.md section into an existing GitHub release's notes (e.g. releases made
+# before the notes came from the changelog): Actions -> Release notes -> Run workflow -> the tag.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "release tag, e.g. v1.4.0"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  notes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Write the notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          v="${TAG#v}"
+          { tools/changelog-notes.sh "$v"
+            echo
+            echo "**Downloads:** the desktop app for Windows, Linux and macOS below; play in the browser at https://tunneler-online.onrender.com/"
+          } > "$RUNNER_TEMP/notes.md"
+          cat "$RUNNER_TEMP/notes.md"
+          gh release edit "$TAG" --repo "${{ github.repository }}" --notes-file "$RUNNER_TEMP/notes.md"

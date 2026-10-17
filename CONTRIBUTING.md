@@ -22,16 +22,23 @@ window), create a game, join as BLUE in one and GREEN in the other, and add a th
 
 ## Releasing
 
-Every push to `main` is a release (`.github/workflows/release.yml`):
+A release is made by pushing a version tag; pushes to `main` only run CI.
 
-- the patch version is bumped from the latest `vX.Y.Z` tag (the first release uses `package.json`'s
-  version), the commit is tagged and a GitHub Release with auto-generated notes is created;
-- the Docker image is built (linux/amd64 + arm64) and pushed to `ghcr.io/<owner>/tunneler-online` as
-  `latest`, `X.Y.Z`, `X.Y` and the short commit sha.
+1. Set the version in `package.json` / `package-lock.json` and rename CHANGELOG.md's "## Unreleased"
+   section to it (e.g. `## 1.4.1`).
+2. Commit, push `main`, wait for CI, then tag and push the tag:
+   `git tag -a v1.4.1 -m v1.4.1 && git push origin v1.4.1`.
 
-For a bigger jump, push a tag yourself (e.g. `v2.0.0`): it is released the same way, and the next push
-to `main` continues from it (`v2.0.1`). `docker-publish.yml` builds an image by hand (Actions tab ->
-Run workflow).
+The tag runs `.github/workflows/release.yml`:
+
+- a GitHub Release whose notes are that version's CHANGELOG.md section (`tools/changelog-notes.sh`);
+- the desktop app for Windows, Linux and macOS attached to it (`app-build.yml`);
+- the Docker image (linux/amd64 + arm64) pushed to `ghcr.io/<owner>/tunneler-online` as `latest`,
+  `X.Y.Z`, `X.Y` and the short commit sha;
+- the homepage (`site/`) uploaded to https://kaniansky.com/tunneler/.
+
+`release-notes.yml` (Actions tab -> Run workflow) rewrites an existing release's notes from the
+changelog; `docker-publish.yml` builds an image by hand.
 
 ## Architecture
 

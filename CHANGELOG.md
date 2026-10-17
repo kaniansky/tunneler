@@ -1,12 +1,14 @@
 # Changelog
 
 All notable changes to Tunneler Online. Versions follow [semantic versioning](https://semver.org/);
-every push to `main` is released (see CONTRIBUTING.md).
+a release is made by pushing a version tag (see CONTRIBUTING.md).
 
 ## 1.4.1
 
 - LICENSE is the plain Unlicense text again (so GitHub recognizes it); the third-party font notes moved
   to NOTICE.
+- Release notes come from this changelog; a push to main is no release any more - a version tag is.
+- Homepage: all screenshots in the gallery have the same size.
 
 ## 1.4.0
 
