@@ -14,7 +14,8 @@ a release is made by pushing a version tag (see CONTRIBUTING.md).
   width, "Press <ENTER> to go back." on the bottom line.
 - Statistics with **rounds** (each round's winner and length, draws, time-ups) and **awards**
   (Sharpshooter, Hunter, Mole, Traveler): on the online page beside the table, and against the computer
-  in the left half (rounds and awards on top, the Rematch menu at the bottom, no title). Split screen keeps the original screen.
+  in the left half (rounds and awards on top, the Rematch menu at the bottom, no title). The statistics and
+  the settings below them are centred vertically (vs computer, the online page). Split screen keeps the original screen.
 - Computer tanks no longer spin in place for seconds after destroying a tank (or in a base's doorway,
   or next to a teammate in their way).
 

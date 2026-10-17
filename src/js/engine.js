@@ -415,6 +415,7 @@ class TunnelerEngine {
     this.menuSel = 0;                             // highlighted main menu item
     this.menuTop = 11;                              // the menu box's top row (showMainMenu)
     this.statsLeft = 43; this.statsFull = false;    // where the statistics go (showStatsPage: centred)
+    this.statsCentred = false;                      // (centreStats draws the settings then)
     this.menuPage = "menu";                       // "menu", "instructions" or "information"
     this.strings = STRINGS_EN;                    // all visible text (see STRINGS_EN)
     this.menuX = 30; this.menuW = 20;              // main menu box (set by showMainMenu)
@@ -2090,10 +2091,11 @@ class TunnelerEngine {
   showStatsPage(prompt) {
     this.window(1, 1, 80, 25);
     this.clearScreen();
-    this.statsLeft = 22; this.statsFull = true;
+    this.statsLeft = 22; this.statsFull = true; this.statsCentred = true;
     if (this.extended) this.statsExt(); else this.statsClassic();
-    this.statsLeft = 43; this.statsFull = false;
+    this.statsLeft = 43; this.statsFull = false; this.statsCentred = false;
     this.matchExtrasAt(2, 61, 19, 5, 20);                     // (rounds left of the table, awards right of it)
+    this.centreStats(1, 80, 1, 23, 76, 41);                   // (all of it in the middle, above the bottom line)
     this.window(1, 1, 80, 25);
     if (prompt) this.strings = Object.assign({}, this.strings, { prompt });
     this.showEscPrompt();
@@ -2104,7 +2106,7 @@ class TunnelerEngine {
   // there is room, the last line on row 24, at most 4 lines of 37 columns; display only). The
   // statistics end where the cursor is.
   statsSettings() {
-    if (!this.showSettings) return;
+    if (!this.showSettings || this.statsCentred) return;      // (centred pages: centreStats draws them)
     const last = this.cx === this.wx1 ? this.cy : this.cy + 1;   // (1-based screen row of the last text)
     // (the full-screen page: 76 columns centred, the bottom line row 24 is the prompt's rule)
     const width = this.statsFull ? 76 : 37, mid = this.statsFull ? 41 : 61, bottom = this.statsFull ? 23 : 24;
@@ -2119,6 +2121,46 @@ class TunnelerEngine {
     this.textColor(3);
     lines.forEach((l, i) => { this.gotoXY(mid - (visLen(l) >> 1), bottom + 1 - lines.length + i); this.write(l); });
     [this.wx1, this.wy1, this.wx2, this.wy2, this.cx, this.cy, this.textAttr] = w;
+  }
+
+  // Centre what is drawn in columns c0..c1, rows r0..r1 vertically, together with the settings (width
+  // columns centred on mid) one blank row below it: the vs computer statistics, the online page
+  centreStats(c0, c1, r0, r1, width, mid) {
+    const used = r => {
+      for (let c = c0; c <= c1; c++) { const b = this.vram[((r - 1) * 80 + c - 1) * 2]; if (b !== 0 && b !== 0x20) return true; }
+      return false;
+    };
+    let first = 0, last = 0;
+    for (let r = r0; r <= r1; r++) if (used(r)) { if (!first) first = r; last = r; }
+    if (!first) return;
+    let lines = this.showSettings ? this.settingsLines(width, 4) : [];
+    const room = (r1 - r0 + 1) - (last - first + 1) - 1;     // (rows left for the settings, after a blank one)
+    if (lines.length > room) lines = room > 0 ? this.settingsLines(width, room).slice(0, room) : [];
+    const h = last - first + 1 + (lines.length ? lines.length + 1 : 0);
+    const delta = r0 + Math.max(0, (r1 - r0 + 1 - h) >> 1) - first;
+    if (delta) this.shiftRows(c0, c1, first, last, delta);
+    if (!lines.length) return;
+    const keep = [this.wx1, this.wy1, this.wx2, this.wy2, this.cx, this.cy, this.textAttr];
+    this.window(1, 1, 80, 25);
+    this.textColor(3);
+    lines.forEach((l, i) => { this.gotoXY(mid - (visLen(l) >> 1), last + delta + 2 + i); this.write(l); });
+    [this.wx1, this.wy1, this.wx2, this.wy2, this.cx, this.cy, this.textAttr] = keep;
+  }
+  // move the cells of columns c0..c1, rows ra..rb (1-based) by d rows (the text and its Unicode plane)
+  shiftRows(c0, c1, ra, rb, d) {
+    const cells = [];
+    for (let r = ra; r <= rb; r++)
+      for (let c = c0; c <= c1; c++) {
+        const i = (r - 1) * 80 + c - 1;
+        cells.push([r, c, this.vram[i * 2], this.vram[i * 2 + 1], this.uni[i]]);
+        this.vram[i * 2] = 0x20; this.vram[i * 2 + 1] = 0; this.uni[i] = 0;
+      }
+    for (const [r, c, ch, at, u] of cells) {
+      const i = (r + d - 1) * 80 + c - 1;
+      if (r + d < 1 || r + d > 25) continue;
+      this.vram[i * 2] = ch; this.vram[i * 2 + 1] = at; this.uni[i] = u;
+    }
+    this.dirty = true;
   }
 
   // PlayGame for N players
@@ -2477,8 +2519,10 @@ class TunnelerEngine {
       this.textColor(8);
       for (let i = 1; i <= 25; i++) { this.gotoXY(40, i); this.write("\xB3"); }
       if (extras) this.matchExtrasAt(2, 21, 18, 2, top - 2);   // (vs computer: above the menu box)
-      if (this.extended) { this.statsExt(); return; }
-      this.statsClassic();
+      this.statsCentred = extras;                     // (vs computer: the statistics + settings in the middle)
+      if (this.extended) this.statsExt(); else this.statsClassic();
+      this.statsCentred = false;
+      if (extras) this.centreStats(42, 80, 1, 24, 37, 61);
     }
   }
 

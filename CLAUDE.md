@@ -545,3 +545,6 @@ the room info): the most a player may choose to see during play - display only, 
   `engine.matchExtras`: rounds + awards on top of the left half, the menu box at its bottom (`menuTop`,
   default 11 = the original), no title (play.js: vs computer only - split screen stays the original).
   online.js copies kills / roundLog into its private statistics engine (STATS).
+- Statistics centred vertically (vs computer's right half, the online page): drawn with `statsCentred`
+  (settings held back), then `centreStats(c0, c1, r0, r1, width, mid)` finds the used rows, moves them
+  (`shiftRows`, text + Unicode plane) to the middle and writes the settings one blank row below.
