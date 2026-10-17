@@ -3,6 +3,11 @@
 All notable changes to Tunneler Online. Versions follow [semantic versioning](https://semver.org/);
 every push to `main` is released (see CONTRIBUTING.md).
 
+## Unreleased
+
+- LICENSE is the plain Unlicense text again (so GitHub recognizes it); the third-party font notes moved
+  to NOTICE.
+
 ## 1.4.0
 
 - The project's name is now written **Tunneler Online**.

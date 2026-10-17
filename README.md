@@ -201,4 +201,5 @@ More detail for contributors in [CONTRIBUTING.md](CONTRIBUTING.md) and [CLAUDE.m
 ## Credits
 
 TUNNELER 2.0 (1991) by Geoffrey Silverton, released by him into the public domain. Tunneler Online by
-Norko Kaniansky, 2026 - also public domain ([Unlicense](LICENSE)).
+Norko Kaniansky, 2026 - also public domain ([Unlicense](LICENSE)). The fonts and glyph data come from
+third parties under their own licenses: see [NOTICE](NOTICE).
