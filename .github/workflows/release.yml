@@ -70,6 +70,16 @@ jobs:
           generate_release_notes: true
           prerelease: ${{ contains(steps.version.outputs.version, '-') }}
 
+  # the desktop app for Windows, Linux and macOS, attached to the release (app-build.yml)
+  app:
+    needs: release
+    if: needs.release.outputs.skip != 'true'
+    uses: ./.github/workflows/app-build.yml
+    with:
+      tag: v${{ needs.release.outputs.version }}
+    permissions:
+      contents: write
+
   docker:
     needs: release
     if: needs.release.outputs.skip != 'true'

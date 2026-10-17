@@ -9,3 +9,4 @@ screenshots
 .editorconfig
 .nvmrc
 .gitignore
+src-tauri

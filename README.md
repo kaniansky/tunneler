@@ -101,6 +101,23 @@ npm start          # http://localhost:8050  (PORT=... to change)
 
 `npm run watch` rebuilds on every change and restarts the server. `npm test` runs all the checks.
 
+### Desktop app
+
+Every [release](https://github.com/kaniansky/tunneler-online/releases) has a small desktop app: the game
+in its own window, using the web view the system already has (a few MB, no browser needed).
+
+| System | File | Needs |
+|---|---|---|
+| Windows 10 / 11 | `tunneler-online-<version>-windows-x64.exe` (just run it) | WebView2 (built in) |
+| Linux | `.deb`, `.rpm`, or the bare binary in `-linux-x64.tar.gz` | `libwebkit2gtk-4.1` |
+| macOS | `-macos-arm64.dmg` (Apple silicon) / `-macos-x64.dmg` (Intel) | not signed: right click -> Open the first time |
+
+Split screen and vs computer work offline. Online play goes to the public server; to play on your own,
+set **Server** on the homepage's Settings screen (e.g. `example.com:8050`, empty = the public one). The
+app is built by `.github/workflows/app-build.yml` from `src-tauri/` ([Tauri](https://tauri.app)); to
+build it yourself: install Rust and the [Tauri prerequisites](https://tauri.app/start/prerequisites/),
+then `npm run build && npx @tauri-apps/cli@2 build`.
+
 ### Hosting
 
 The live version at <https://tunneler-online.onrender.com/> runs this repo's `Dockerfile` on

@@ -442,3 +442,12 @@ the room info): the most a player may choose to see during play - display only, 
   `time.n`, `time.i1/i2`, `pg.time(.off)` (Lang.roomSettings, always shown), engine `settings.time` /
   `timeShort` (round title / statistics only when set; `settingsLines(width, maxLines)` falls back to the
   short text, then leaves it out, so the statistics' 37 x 4 area never overflows).
+- Desktop app (`src-tauri/`, Tauri v2): a native window showing `public/` (embedded at build time, no
+  IPC / plugins); Cargo release profile is size-optimized. `src/js/endpoint.js` decides where online play
+  goes: in a browser the page's own site, in the app (`tauri://localhost` / `tauri.localhost`) the server
+  stored in localStorage "tunneler.server" (Settings screen row "Server", app only), else
+  https://tunneler-online.onrender.com. lobby.js / online.js use `Endpoint.api()` / `ws()` / `web()`
+  (invite links point at the server's own pages). The server's `/api` sends CORS headers (any origin,
+  OPTIONS preflight). `.github/workflows/app-build.yml` builds Windows exe, Linux tar.gz / deb / rpm and
+  macOS arm64 / x64 dmg; release.yml calls it and attaches them to the release; pushes to app/**
+  branches build artifacts only. Icons: `src-tauri/app-icon.png` -> `npx @tauri-apps/cli@2 icon`.

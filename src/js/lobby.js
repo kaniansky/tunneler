@@ -10,7 +10,7 @@
   const ui = new DosUI(document.getElementById("screen"));
   window.tunnelerLobbyUI = () => ui;                   // tests / debugging
   const gameUrl = (id, role) => "/online.html?room=" + encodeURIComponent(id) + "&role=" + role;
-  const roomUrl = id => location.origin + "/lobby.html?room=" + encodeURIComponent(id);
+  const roomUrl = id => Endpoint.web("/lobby.html?room=" + encodeURIComponent(id));   // (the server's page: also from the app)
   const T = Lang.t, E = Lang.enc;
   const TITLE = [{ row: 2, text: "TUNNELER ONLINE", color: 12 }];
   const ROLES = Lang.colorKeys, TEXT_COLORS = TunnelerEngine.PLAYER_TEXT_COLORS, MAX = ROLES.length;
@@ -177,7 +177,7 @@
     if (!form.error && roomSettings(body).error) form.error = E(roomSettings(body).error);   // (the server's own check)
     if (form.error) return create(true);
     try {
-      const res = await fetch("/api/rooms", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const res = await fetch(Endpoint.api("/api/rooms"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const r = await res.json();
       if (!res.ok) throw new Error(r.error || "failed");
       if (r.hostKey) store.set("tunneler.host." + r.id, r.hostKey);   // this browser is the game's host
@@ -238,14 +238,14 @@
 
   // ------------------------------------------------------------ polling
   async function refreshList(keep) {
-    try { rooms = await (await fetch("/api/rooms", { cache: "no-store" })).json(); } catch (e) { /* server down */ }
+    try { rooms = await (await fetch(Endpoint.api("/api/rooms"), { cache: "no-store" })).json(); } catch (e) { /* server down */ }
     if (!Array.isArray(rooms)) rooms = [];
     if (!keep && view === "list") return list(false);
     if (view === "list") list(keep);
   }
   async function refreshRoom(keep) {
     try {
-      const res = await fetch("/api/rooms/" + encodeURIComponent(roomId), { cache: "no-store" });
+      const res = await fetch(Endpoint.api("/api/rooms/" + encodeURIComponent(roomId)), { cache: "no-store" });
       room = res.ok ? await res.json() : null;
     } catch (e) { return; }
     if (view === "room") roomScreen(keep);

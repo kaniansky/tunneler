@@ -377,7 +377,7 @@
     }
     items.push({ key: "say", label: T("pg.say"), input: chatForm, align: "left", info: [T("pg.say.i")], go: sendChat });
     if (engine && engine.menuShift !== 0) items.push({ key: "stats", label: T("pg.stats"), info: [...hint, T("pg.stats.i")], go: showStats });
-    const share = location.origin + "/lobby.html?room=" + encodeURIComponent(roomId);
+    const share = Endpoint.web("/lobby.html?room=" + encodeURIComponent(roomId));
     const copy = () => copyLink(share);
     items.push({ key: "gap", label: "", disabled: true });
     items.push({ key: "copy", label: T(copied ? "room.copied" : "room.copy"),
@@ -544,9 +544,8 @@
 
   function connect() {
     if (!roomId) { fatal = "No room given."; updateOverlay(); return; }
-    const proto = location.protocol === "https:" ? "wss:" : "ws:";
     const have = seed === null ? 0 : frames + queue.length;
-    let url = proto + "//" + location.host + "/ws?room=" + encodeURIComponent(roomId) + "&role=" + role +
+    let url = Endpoint.ws("/ws?room=" + encodeURIComponent(roomId)) + "&role=" + role +
       "&cid=" + encodeURIComponent(clientId);
     if (hostKey) url += "&host=" + encodeURIComponent(hostKey);
     if (seed !== null) url += "&seed=" + seed + "&have=" + have;

@@ -362,8 +362,12 @@ function createServer(opts = {}) {
       req.on("error", reject);
     });
   }
+  // the API answers any origin (CORS): the desktop app's pages come from tauri://localhost /
+  // tauri.localhost, not from this server; nothing here uses cookies or other credentials
+  const CORS = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type", "Access-Control-Max-Age": "86400" };
   function json(res, code, obj) {
-    res.writeHead(code, { "Content-Type": "application/json", "Cache-Control": "no-store" });
+    res.writeHead(code, { "Content-Type": "application/json", "Cache-Control": "no-store", ...CORS });
     res.end(JSON.stringify(obj));
   }
 
@@ -412,6 +416,7 @@ function createServer(opts = {}) {
   const server = http.createServer((req, res) => {
     let p;
     try { p = decodeURIComponent(new URL(req.url, "http://x").pathname); } catch (e) { res.writeHead(400); return res.end(); }
+    if (p.startsWith("/api/") && req.method === "OPTIONS") { res.writeHead(204, CORS); return res.end(); }   // (CORS preflight)
     if (p.startsWith("/api/")) return api(req, res, p).catch(() => json(res, 500, { error: "server error" }));
     if (req.method !== "GET" && req.method !== "HEAD") { res.writeHead(405); return res.end(); }
     if (p.endsWith("/")) p += "index.html";

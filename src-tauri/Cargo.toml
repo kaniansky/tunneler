@@ -1,0 +1,22 @@
+[package]
+name = "tunneler-online"
+version = "0.0.0"            # (the app's version comes from package.json via tauri.conf.json)
+description = "TUNNELER ONLINE desktop app: the game's web pages in a native window"
+license = "Unlicense"
+edition = "2021"
+rust-version = "1.77"
+publish = false
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+
+# as small as possible: size-optimized, link-time optimized, no unwinding, symbols stripped
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

@@ -148,6 +148,18 @@ async function main() {
   const created = await http(port, "POST", "/api/rooms", { name: "Test <b>Game</b> & Co", public: true, spectators: true });
   const id = created.json.id;
   check("create room", () => { assert.strictEqual(created.status, 200); assert(/^[a-z0-9-]+$/.test(id)); assert(!/[<>]/.test(created.json.name)); });
+  {
+    // CORS (the desktop app's pages come from tauri://localhost): any origin, preflight answered
+    const pre = await fetch(`http://127.0.0.1:${port}/api/rooms`, { method: "OPTIONS",
+      headers: { Origin: "tauri://localhost", "Access-Control-Request-Method": "POST", "Access-Control-Request-Headers": "content-type" } });
+    const list = await fetch(`http://127.0.0.1:${port}/api/rooms`, { headers: { Origin: "tauri://localhost" } });
+    check("CORS: preflight + any origin on /api", () => {
+      assert.strictEqual(pre.status, 204);
+      assert.strictEqual(pre.headers.get("access-control-allow-origin"), "*");
+      assert(/POST/.test(pre.headers.get("access-control-allow-methods")) && /content-type/i.test(pre.headers.get("access-control-allow-headers")));
+      assert.strictEqual(list.headers.get("access-control-allow-origin"), "*");
+    });
+  }
   const dup = await http(port, "POST", "/api/rooms", { name: "Test <b>Game</b> & Co", public: true });
   check("duplicate name gets a new slug", () => assert.strictEqual(dup.json.id, id + "-2"));
   const hidden = await http(port, "POST", "/api/rooms", { name: "Test <b>Game</b> & Co", public: false });

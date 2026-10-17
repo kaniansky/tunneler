@@ -3,6 +3,12 @@
 All notable changes to TUNNELER ONLINE. Versions follow [semantic versioning](https://semver.org/);
 every push to `main` is released (see CONTRIBUTING.md).
 
+## Unreleased
+
+- **Desktop app** for Windows, Linux and macOS (Tauri: the system's own web view, a few MB), attached
+  to every GitHub release. Online play goes to the public server or one set on the Settings screen.
+- The server's `/api` answers any origin (CORS), so the desktop app can use it.
+
 ## 1.2.1
 
 - After death "black screen": no sound while your view is black.

@@ -103,10 +103,16 @@
   }
 
   // ------------------------------------------------------------------ settings: language, sound
+  // desktop app only: the online server (Endpoint, "tunneler.server"; empty = the public one), stored on
+  // Enter and when leaving the screen
+  const serverForm = { value: window.Endpoint ? Endpoint.get() : "", max: 120, width: 36,
+    placeholder: window.Endpoint ? Endpoint.DEFAULT.replace(/^https:\/\//, "") : "" };
+  const saveServer = () => { serverForm.value = Endpoint.set(serverForm.value); };
   function settings(keep) {
+    const leave = () => { if (window.Endpoint && Endpoint.isApp) saveServer(); main(6); };
     ui.show({
       lines: title(), box: { y: 11 }, sel: 0, infoRow: 20,
-      back: () => main(6),
+      back: leave,
       items: [
         { key: "lang", label: T("home.lang") + Lang.name(Lang.code), info: [T("home.lang.i1"), T("home.lang.i2")],
           go: () => setLang(1), change: setLang },
@@ -114,8 +120,10 @@
           go: () => setSound(1), change: setSound },
         { key: "ping", label: T("set.ping") + T(load("tunneler.ping", "0") === "1" ? "set.ping.on" : "set.ping.off"),
           info: [T("set.ping.i"), T("home.lang.i2")], go: togglePing, change: togglePing },
+        ...(window.Endpoint && Endpoint.isApp ? [{ key: "server", label: T("set.server"), input: serverForm, align: "left",
+          info: [T("set.server.i1"), T("set.server.i2")], go: () => { saveServer(); settings(true); } }] : []),
         { key: "gap", label: "", disabled: true },
-        { key: "back", label: T("back.main"), info: [T("back.main.i")], go: () => main(6) },
+        { key: "back", label: T("back.main"), info: [T("back.main.i")], go: leave },
       ],
     }, keep);
   }
