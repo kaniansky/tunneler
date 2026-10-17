@@ -191,7 +191,7 @@ Lang.register("cs", {
           "<ESC>."],
         ["Diváci:  ", "sledují hru online bez hraní.  <TAB> nebo <1> <2> <3> přepíná mezi všemi " +
           "obrazovkami, mapou se skóre a sledováním jednoho tanku (<←> <→> vyberou kterého)."],
-        ["Zvuk:  ", "<M> vypne a zapne zvuk.  V Nastavení zvolíš jeho styl: původní (pípání PC " +
+        ["Zvuk:  ", "V Nastavení zvolíš jeho styl: původní (pípání PC " +
           "speakeru z roku 1991), realistický (zvuky tanků), pohádkový (boing a puk) nebo vypnutý.  " +
           "Zvuky ostatních tanků slábnou se vzdáleností od tvého."],
         ["Nastavení:  ", "jazyk menu a hry, zvuk a \"Zobrazit ping\" (hry online: doba odezvy v ms, " +

@@ -232,7 +232,7 @@ const STRINGS_EN = {
       ["Spectators:  ", "watch an online game without playing.  <TAB> or <1> <2> <3> switch between " +
         "all the view screens, the map with the scores, and following one tank (<\x1B> <\x1A> choose " +
         "which one)."],
-      ["Sound:  ", "<M> switches the sound off and on.  Settings chooses its style: original (the PC " +
+      ["Sound:  ", "Settings chooses its style: original (the PC " +
         "speaker beeps of 1991), realistic (tank noises) or cartoony (boings and pops), or muted.  " +
         "The sounds of the other tanks fade with their distance from yours."],
       ["Settings:  ", "the language of the menus and the game, the sound, and \"Show ping\" (online " +

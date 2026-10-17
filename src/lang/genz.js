@@ -189,7 +189,7 @@ Lang.register("genz", {
           "online game."],
         ["Lurkers:  ", "watch an online game without playing.  <TAB> or <1> <2> <3> switch between " +
           "all screens, the map with the scores, and following one tank (<←> <→> pick which)."],
-        ["Sound:  ", "<M> turns the sound off and on.  Pick the vibe in Settings: OG (the PC speaker " +
+        ["Sound:  ", "Pick the vibe in Settings: OG (the PC speaker " +
           "beeps of 1991), realistic (tank noises) or cartoony (boings and pops), or muted.  Other " +
           "tanks get quieter the farther they are from yours."],
         ["Settings:  ", "the language of the menus and the game, the sound, and \"Show ping\" " +
