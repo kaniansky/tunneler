@@ -5,6 +5,8 @@ every push to `main` is released (see CONTRIBUTING.md).
 
 ## Unreleased
 
+- When the host leaves, the first connected player becomes the host (Kick, Start now), and keeps the
+  role after a reload.
 - Three computer levels instead of four: **easy**, **medium** and **hard** (the former normal, hard and
   expert); the former "easy" is gone - old games and links that used it get the new easy.
 

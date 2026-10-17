@@ -67,7 +67,7 @@ After joining a slot, every player is in the **pre-game lobby**: the list of all
 names, teams, state (ready, not ready, computer, free, disconnected) and ping, the game's settings, and
 a chat for players and spectators (any alphabet). Each player sets their name and team and chooses
 **I am ready!**; the game starts when every player is ready and there are at least two teams. The
-creator of the game is its **host**: once ready, the host can **Start now** without waiting for players
+creator of the game is its **host** (when the host leaves, the next player takes over): once ready, the host can **Start now** without waiting for players
 who haven't joined or aren't ready (their tanks stand still until they join), and **Kick a player...**
 opens the list of players and spectators to remove (who then can't come back). Between matches everyone
 returns to the lobby, with the statistics of the last match.

@@ -60,7 +60,6 @@
   }
   let clientId = store.get("tunneler.client");
   if (!clientId || !/^[A-Za-z0-9_-]{8,64}$/.test(clientId)) { clientId = randomId(); store.set("tunneler.client", clientId); }
-  const hostKey = roomId ? store.get("tunneler.host." + roomId) : null;
 
   const unlock = () => speaker.unlock();
   window.addEventListener("keydown", unlock);
@@ -555,6 +554,7 @@
     const have = seed === null ? 0 : frames + queue.length;
     let url = Endpoint.ws("/ws?room=" + encodeURIComponent(roomId)) + "&role=" + role +
       "&cid=" + encodeURIComponent(clientId);
+    const hostKey = roomId ? store.get("tunneler.host." + roomId) : null;   // (read now: it may have been handed over)
     if (hostKey) url += "&host=" + encodeURIComponent(hostKey);
     if (seed !== null) url += "&seed=" + seed + "&have=" + have;
     setConn(retry ? "conn.reconnecting" : "conn.connecting");
@@ -639,6 +639,11 @@
         status = m;
         renderBar();
         updateOverlay();
+        break;
+      case "host":                                   // the host left: this page hosts the room now
+        if (typeof m.key === "string" && roomId) store.set("tunneler.host." + roomId, m.key);
+        isHost = true;
+        if (lobby && lobby.page === "lobby") drawLobby(true);
         break;
       case "pong":
         rtt = performance.now() - m.c;

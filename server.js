@@ -55,6 +55,8 @@
 //                     {t:"chat", from: {color, name} | {spectator: true, name}, text}   a lobby chat message
 //                           (name "" = the tank's colour name / an unnamed spectator)
 //                     {t:"pong", c}  {t:"desync", n}  {t:"err", msg, code?}   (code "kicked")
+//                     {t:"host", key}  this connection hosts the room now (the host left): the host key
+//                     for its later reconnects
 //                     (desync: players' hashes differ - to everyone; a spectator's differs - to it only)
 //   client -> server  {t:"b", v}  held bits      {t:"k", a, s}  keystroke (relayed as ANY_KEY)     {t:"ping", c}
 //                     {t:"ready", v}  "Start game" (v 1) / Esc (v 0). The game is started (an F1 keystroke
@@ -526,6 +528,7 @@ function createServer(opts = {}) {
       n: room.log.length, from, f: part.f, cfg: helloCfg(room), you: { slot: who, host: ws.host, k: ws.serial }, chat: room.chat }));
     if (ws.syncing) setImmediate(() => sendLog(room, ws));
     say("room", room.id, role, "connected" + (ws.host ? " (host)" : ""));
+    ensureHost(room);
     updateClock(room);
     sendStatus(room);
 
@@ -675,11 +678,25 @@ function createServer(opts = {}) {
         if (room.owner[who] && room.owner[who].cid === ws.cid) room.owner[who].left = Date.now();
       }
       say("room", room.id, role, "disconnected");
+      ensureHost(room);                             // (the host left: somebody else hosts now)
       matchReport(room);                            // (the others may be most of the players now)
       updateClock(room);                            // (extended: the others may all be ready now)
       sendStatus(room);
       if (room.sockets.size === 0) armCleanup(room);
     });
+  }
+
+  // A room always has a host while anybody is connected: when no connected socket is one (the host
+  // left, or everybody left and others came), the first connected player becomes it (else the first
+  // spectator) and gets the host key ({t:"host", key}) so that its page keeps the role on a reload. The
+  // creator's key keeps working too.
+  function ensureHost(room) {
+    const open = [...room.sockets].filter(s => s.readyState === 1 && !s.kicked);
+    if (!open.length || open.some(s => s.host)) return;
+    const next = room.socks.find(s => s && open.includes(s)) || open[0];
+    next.host = true;
+    try { next.send(JSON.stringify({ t: "host", key: room.hostKey })); } catch (e) { /* closing */ }
+    say("room", room.id, "host now", next.slot >= 0 ? "slot " + next.slot : "a spectator");
   }
 
   // drop half-open connections so they don't keep a slot

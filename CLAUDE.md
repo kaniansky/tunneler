@@ -496,3 +496,7 @@ the room info): the most a player may choose to see during play - display only, 
 - Computer levels offered: `LEVELS = ["normal", "hard", "expert"]` (netproto / home / play), shown as
   easy / medium / hard (`level.*` strings); ai.js still knows "easy", but an old "easy" (links, stored
   settings, room requests) is turned into "normal" everywhere.
+- Host handover: `ensureHost(room)` (server.js, after every connect / disconnect) - when no connected
+  socket is a host, the first connected player (else a spectator) becomes one and gets
+  `{t:"host", key}`; online.js stores the key (`tunneler.host.<id>`, read again at every connect) and
+  turns its host items on. The creator's key keeps working.

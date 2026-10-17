@@ -92,6 +92,7 @@ class FakeClient {
     else if (m.t === "err") { this.err = m.msg; this.errCode = m.code; }
     else if (m.t === "desync") this.desync = true;
     else if (m.t === "chat") this.chat.push(m);
+    else if (m.t === "host") this.hostKey = m.key;
   }
   run() {
     while (this.queue.length) {
@@ -337,6 +338,7 @@ async function main() {
   await lobby(srv, port);
   await chat(srv, port);
   await hostStart(srv, port);
+  await hostHandover();
   await limits();
 
   srv.close();
@@ -837,4 +839,34 @@ async function hostStart(srv, port) {
   await until(() => late.frames >= blue.frames - 2, "late join catches up");
   check("a missing player joins the running game later", () => assert(late.frames > 0 && !late.err));
   await late.close(); await blue.close(); await cb.close();
+}
+
+// ---------------------------------------------------------------- the host leaves: somebody else hosts
+async function hostHandover() {
+  console.log("host handover");
+  // (its own server: the main one's per-address connection limit is used up by now)
+  const srv = createServer({ tickMs: TICK, quiet: true, cleanupMs: 400 });
+  const port = await new Promise(r => srv.listen(0, r));
+  const res = await http(port, "POST", "/api/rooms", { name: "Handover", slots: [S("human", 1), S("human", 2), S("human", 1), S("hard", 2)] });
+  const id = res.json.id, key = res.json.hostKey;
+  const blue = await new FakeClient(port, id, "blue", "ho-blue", { cid: "handover-blue", host: key }).connect();
+  const green = await new FakeClient(port, id, "green", "ho-green", { cid: "handover-green" }).connect();
+  const cyan = await new FakeClient(port, id, "cyan", "ho-cyan", { cid: "handover-cyan" }).connect();
+  await sleep(150);
+  check("one host while it is there", () => assert(!green.hostKey && !cyan.hostKey));
+  await blue.close();
+  await until(() => green.hostKey, "host handed over");
+  check("the host leaves: the first connected player (GREEN) hosts, with the key", () => {
+    assert.strictEqual(green.hostKey, key); assert(!cyan.hostKey);
+    assert(green.status && green.status.slots[1].host, "status shows it");
+  });
+  green.send({ t: "kick", slot: 2 });
+  await until(() => cyan.errCode === "kicked", "the new host kicks");
+  check("the new host can kick", () => assert.strictEqual(cyan.errCode, "kicked"));
+  // a reload with the handed-over key keeps the role
+  await green.close();
+  const again = await new FakeClient(port, id, "green", "ho-green2", { cid: "handover-green", host: green.hostKey }).connect();
+  check("a reload with the key: still the host", () => assert.strictEqual(again.hello.you.host, true));
+  await again.close();
+  await new Promise(r => srv.close(r));
 }
