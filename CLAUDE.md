@@ -385,14 +385,15 @@ the room info): the most a player may choose to see during play - display only, 
   statistics), settings lines on the round title / statistics, `autoStart` (local games skip the
   first menu), "Rematch" instead of "Start game" after a match (`strings.rematch`).
 - Rules: a teammate's base repairs the shield at half speed (+20/frame) besides the +30 energy.
-- **After death** setting (internally `watchOut`, URL `watch=black|wreck|others`; old `true`/`1` =
-  others; `TunnelerEngine.afterDeath` / `NetProto.afterDeath` normalize): what a player sees once their
-  tank is destroyed, until the round ends - "black" = every destroyed tank's view black with DESTROYED,
-  "wreck" (default) = the view stays on the wreck, "others" = one view: the tank that destroyed the
-  watched one (`engine.killedBy`, display only, not in stateHash; followed along the chain), else the
-  first one alive (own team first); it stays on that tank while it lives. Only tanks within the view
-  limit (scope): "team" - teammates only (an enemy killer is skipped), "self" - nobody. Nobody left to
-  watch (`ghostNone`): the destroyed views go black with DESTROYED and the sound is muted, as "black".
+- **After death** setting (internally `watchOut`, URL `watch=black|wreck|team|killer|others`; old
+  `true`/`1` = others; `TunnelerEngine.afterDeath` / `NetProto.afterDeath` normalize, unknown = wreck):
+  what a player sees once their tank is destroyed, until the round ends - "black" = the destroyed
+  views black with DESTROYED (frame and panel stay, sound muted), "wreck" (default) = the views stay,
+  "team" = the views of all teammates still alive, "killer" ("watch killer") = one view: the tank that
+  destroyed the watched one (`engine.killedBy`, display only, not in stateHash; followed along the
+  chain), else the first alive (own team first), staying on it while it lives, "others" ("watch all")
+  = every tank still alive (own team first). These ignore the view limit. Nobody left to watch
+  (`views.ghostNone`): black, as "black". Sound fades from the killer when shown, else the first shown.
 - Server: rooms nobody plays in (no human player activity) for 10 minutes are closed with an "idle"
   reason; readable start-up errors (port < 1024, in use, invalid PORT).
 - AI: exploration waypoints only in the reachable interior (`TunnelerAI.interior`, shared 8x8 rock

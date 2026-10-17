@@ -297,7 +297,7 @@ function loadPage(page, search, stored) {
     for (let i = 0; i < 5; i++) press(env, "ArrowDown");   // public .. round time
     press(env, "ArrowLeft");                               // round time: no limit -> 10 min (wraps back)
     for (let i = 0; i < 3; i++) press(env, "ArrowDown");   // .. after death (friendly fire always shown)
-    press(env, "Enter");                                   // after death: wreck -> others
+    press(env, "Enter");                                   // after death: wreck -> team
     press(env, "ArrowDown");                               // (the gap is skipped) "Create the game"
     press(env, "Enter");
     await wait(50);
@@ -306,7 +306,7 @@ function loadPage(page, search, stored) {
     const body = JSON.parse(post.o.body);
     assert.strictEqual(body.name, "My game");
     assert.deepStrictEqual(body.slots.slice(0, 4).map(s => [s.kind, s.team]), [["human", 1], ["human", 2], ["human", 4], ["none", 4]]);
-    assert(body.size === "medium" && body.winScore === 3 && body.friendlyFire === false && body.visible === "self" && body.watchOut === "others" && body.roundTime === 10);
+    assert(body.size === "medium" && body.winScore === 3 && body.friendlyFire === false && body.visible === "self" && body.watchOut === "team" && body.roundTime === 10);
     assert.strictEqual(JSON.parse(env.ls.get("tunneler.online")).roundTime, 10, "round time remembered");
     assert.strictEqual(env.ls.get("tunneler.host.new-game"), "f".repeat(32));
     console.log("  ok  lobby.js slot editor creates a game and keeps its host key");

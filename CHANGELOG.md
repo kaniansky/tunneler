@@ -8,9 +8,9 @@ every push to `main` is released (see CONTRIBUTING.md).
 - Round title: a blank row between the players and the game's settings (the settings use the last
   screen row when the list of players is long).
 - README screenshots updated (tools/readme-screenshots.js makes them).
-- After death "watch others" respects the view limit: with "team" you only watch your teammates
-  (never the opponent); once there is nobody left to watch (your team is out, or "self"), the screen
-  goes black with DESTROYED.
+- **After death** has five choices: black screen, my wreck, **watch team** (all your teammates still
+  alive), **watch killer** (one view: the tank that destroyed you, then its killer...) and **watch all**
+  (every tank still alive). Nobody left to watch: the screen goes black with DESTROYED.
 - Online game: while the server doesn't answer yet (e.g. waking up on a free host), the lobby says
   "Connecting to the server..." with its address instead of a black screen; Esc goes back.
 

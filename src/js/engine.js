@@ -105,7 +105,7 @@ const Banner = [
 // Main menu. The DOS version chose these with F1 / F2 / F3 / F10; here the arrow keys move a highlight
 // bar and Enter (or a mouse click) picks the item. The item's old F-key scan code is still what the menu
 // loop dispatches on internally, so a keystroke with that scan code selects the item directly.
-const AFTER_DEATH = ["black", "wreck", "others"];         // the "after death" setting (watchOut), display only
+const AFTER_DEATH = ["black", "wreck", "team", "killer", "others"];         // the "after death" setting (watchOut), display only
 const MENU_SCANS = [59, 60, 68];
 const MENU_ROWS = [0, 2, 4];                         // box row of each item (blank rows between groups)
 const MENU_ATTR = 0x05, MENU_SEL_ATTR = 0x5F;          // magenta text / white on magenta bar
@@ -134,7 +134,7 @@ const STRINGS_EN = {
     // the round time limit, only when there is one (option roundTime); the statistics' 37 x 4 area takes
     // timeShort when time does not fit there, and leaves it out when neither does
     time: "round time: {n} min", timeShort: "time: {n} min",
-    views: ["self", "team", "everyone"], watch: ["after death: black screen", "after death: my wreck", "after death: watch others"] },
+    views: ["self", "team", "everyone"], watch: ["after death: black screen", "after death: my wreck", "after death: watch team", "after death: watch killer", "after death: watch all"] },
   // the world map's "PRESS ANY KEY" pixel-art banner (5 rows of '*' / ' ', all the same length); a
   // translation may replace it (see Banner below for the original)
   // banner: [...],

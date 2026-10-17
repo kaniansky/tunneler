@@ -101,7 +101,7 @@ Lang.register("uk", {
     // the game's settings on the round title / statistics (display only)
     settings: { size: ["мала мапа", "середня мапа", "велика мапа"], win: "раундів до перемоги: {n}",
       ff: ["свій вогонь: вимк.", "свій вогонь: увімк."], view: "вигляд: {v}", visible: "межа огляду: {v}",
-      views: ["лише я", "команда", "усі"], watch: ["після загибелі: чорний екран", "після загибелі: мої уламки", "після загибелі: дивитися інших"],
+      views: ["лише я", "команда", "усі"], watch: ["після смерті: чорний екран", "після смерті: мої уламки", "після смерті: дивитися своїх", "після смерті: дивитися вбивцю", "після смерті: дивитися всіх"],
       time: "час раунду: {n} хв", timeShort: "час: {n} хв" },
     prompt: "<ENTER> - головне меню.",
     instr: {
@@ -214,10 +214,10 @@ Lang.register("uk", {
   "os.visible": "Межа огляду: ", "os.visible.i1": "Найбільше, що гравець може бачити під час гри:",
   "os.visible.i2": "свій екран, екрани своєї команди чи всіх.",
   // ghost mode (home.js vs computer, lobby.js create screen, online.js pre-game lobby; docs/DESIGN-8P.md 25)
-  "lc.watch": "Після загибелі: ", "os.watch": "Після загибелі: ", "watch.black": "чорний екран", "watch.wreck": "мої уламки", "watch.others": "дивитися інших",
+  "lc.watch": "Після смерті: ", "os.watch": "Після смерті: ", "watch.black": "чорний екран", "watch.wreck": "мої уламки", "watch.team": "дивитися своїх", "watch.killer": "дивитися вбивцю", "watch.others": "дивитися всіх",
   "watch.i1": "Що ти бачиш після загибелі свого танка до кінця раунду: чорний екран,",
-  "watch.i2": "свої уламки або танк, який тебе знищив (інакше інший живий).",
-  "pg.watch.black": "після загибелі: чорний екран", "pg.watch.wreck": "після загибелі: мої уламки", "pg.watch.others": "після загибелі: дивитися інших",
+  "watch.i2": "свої уламки, свою команду, один танк (спершу вбивцю) чи всіх.",
+  "pg.watch.black": "після смерті: чорний екран", "pg.watch.wreck": "після смерті: мої уламки", "pg.watch.team": "після смерті: дивитися своїх", "pg.watch.killer": "після смерті: дивитися вбивцю", "pg.watch.others": "після смерті: дивитися всіх",
   // the titles of the two boxes on the vs computer / create-a-game screens
   "box.game": "Гра", "box.players": "Гравці", "box.settings": "Налаштування", "pg.h.settings": "НАЛАШТУВАННЯ",
   // round time limit (home.js vs computer + split screen, lobby.js create screen, the pre-game lobby's settings)

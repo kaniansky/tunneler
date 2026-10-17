@@ -22,8 +22,10 @@
 //                            setScope(null) goes back to the modes above
 //   views.setWatchOut(v)     // "after death" (a game setting), with a scope: "black" - every destroyed
 //                            tank's view is black with "DESTROYED"; "wreck" - the views stay on the
-//                            wrecks; "others" - once the own tank is destroyed, one view: its killer
-//                            (else another tank still alive). The next round brings it all back.
+//                            wrecks; "killer" - once the own tank is destroyed, one view: its killer
+//                            (else another tank alive); "team" - all teammates still alive;
+//                            "others" - all tanks still alive (own team first); nobody left to
+//                            watch: black. The next round brings it all back.
 // opts: mode, follow, lockFollow (no Left / Right), keys (false: handleKey does nothing),
 //       storageKey (remember mode / follow in localStorage), onChange(views) after a switch,
 //       labels (default true; false: the hotseat split screen stays exactly the original).
@@ -117,48 +119,54 @@ class ViewModes {
     this.watchOut = v;
     this.changed();
   }
-  // after death "others": the own tank is destroyed - one view: the tank that destroyed the one watched
-  // (following the chain while those are destroyed too), else the first still alive (own team's first,
-  // then slot order); it stays on that tank while it lives. Only tanks within the view limit: "team" -
-  // teammates only, "self" - none. null while the own tank is alive, or another setting, or nobody allowed
-  // is left (then ghostNone: the destroyed views go black)
+  // after death, once the own tank is destroyed (null while it is alive, or with another setting):
+  //   "killer" - one view: the tank that destroyed the one watched (following the chain while those are
+  //              destroyed too), else the first still alive (own team's first); it stays on that tank
+  //              while it lives
+  //   "team"   - the views of all teammates still alive (slot order)
+  //   "others" - the views of all tanks still alive (own team's first, then slot order)
+  // Nobody left to watch: null and ghostNone - the destroyed views go black with DESTROYED.
   outCells() {
     const e = this.engine();
     this.ghostNone = false;
-    if (this.watchOut !== "others" || !this.scope || !e || !e.alive) { this.ghost = null; return null; }
+    const mode = this.watchOut;
+    if (!["team", "killer", "others"].includes(mode) || !this.scope || !e || !e.alive) { this.ghost = null; return null; }
     const n = this.nPlayers(), own = Math.min(this.scope.own, n - 1);
     if (e.alive[own + 1]) { this.ghost = null; return null; }
-    // only tanks the view limit lets this player see: "team" - teammates, "self" - nobody else
     const mate = i => e.extended && e.team ? e.team(i + 1) === e.team(own + 1) : false;
-    const v = this.scope.view, allowed = i => v === "everyone" || (v === "team" && mate(i));
+    const alive = [];
+    for (let i = 0; i < n; i++) if (e.alive[i + 1] && (mode !== "team" || mate(i))) alive.push(i);
+    if (!alive.length) { this.ghost = null; this.ghostNone = true; return null; }
+    const cells = alive.filter(mate).concat(alive.filter(i => !mate(i)));   // (own team's first)
+    // the sound: from the tank that destroyed you (following the chain while those are destroyed too)
+    // when it is shown, else from the first one shown
     let t = this.ghost == null ? own : this.ghost;
-    for (let k = 0; k < n && !(e.alive[t + 1] && allowed(t)); k++) {
+    for (let k = 0; k < n && !e.alive[t + 1]; k++) {
       const by = e.killedBy ? e.killedBy[t + 1] | 0 : 0;
       if (!by || by - 1 === t) break;
       t = by - 1;
     }
-    if (!(e.alive[t + 1] && allowed(t))) {
-      const alive = [];
-      for (let i = 0; i < n; i++) if (e.alive[i + 1] && allowed(i)) alive.push(i);
-      if (!alive.length) { this.ghost = null; this.ghostNone = true; return null; }   // (nobody to watch: black)
-      t = alive.filter(mate).concat(alive.filter(i => !mate(i)))[0];
+    if (mode === "killer") {                             // one view: that tank, else the first still alive
+      this.ghost = e.alive[t + 1] ? t : cells[0];
+      return [this.ghost];
     }
-    this.ghost = t;
-    return [t];
+    this.ghost = cells.includes(t) ? t : cells[0];
+    return cells;
   }
-  // whose position sounds fade from (0-based): the tank watched after death ("others"), else `own`
-  // (alive, or its wreck)
+  // whose position sounds fade from (0-based): after death ("team" / "others") the tank that destroyed
+  // you if it is shown, else the first one shown; else `own` (alive, or its wreck)
   listenTo(own) {
     const e = this.engine(), dead = !!(e && e.alive && !e.alive[own + 1]);
-    return dead && this.watchOut === "others" && this.ghost != null ? this.ghost : own;
+    return dead && ["team", "killer", "others"].includes(this.watchOut) && this.ghost != null ? this.ghost : own;
   }
   // the speaker's listener for player `own` (runner.listener): {x, y} of the tank listened to, or
-  // {mute: true} while the own view is a black DESTROYED screen (after death "black")
+  // {mute: true} while the own view is a black DESTROYED screen
   hearAt(own, e) {
     if (this.blackedOut(own, e)) return { mute: true };
     const p = this.listenTo(own) + 1;
     return { x: e.tankX[p], y: e.tankY[p] };
   }
+
   // the players shown for the scope: own first, then teammates / everybody else in slot order
   scopeCells() {
     const e = this.engine(), n = this.nPlayers(), own = Math.min(this.scope.own, n - 1), v = this.scope.view;
@@ -376,7 +384,7 @@ class ViewModes {
   // the next round ("wreck": it stays on the wreck; "others": see outCells - black too once nobody it
   // may watch is left)
   blackedOut(i, e) {
-    return !!(this.scope && (this.watchOut === "black" || (this.watchOut === "others" && this.ghostNone)) && e && e.alive && !e.alive[i + 1]);
+    return !!(this.scope && (this.watchOut === "black" || this.ghostNone) && e && e.alive && !e.alive[i + 1]);
   }
   // one line of font text centred in a 40-column view at pixel row y, in DOS attribute `attr`
   paintText(px, W, x, y, text, attr) {

@@ -46,8 +46,8 @@ Settings (split screen: map size, rounds to win and round time only):
 - **Friendly fire** - on or off in team games (off: a shot at a teammate explodes like on a wall).
 - **View limit** - the most a player may see during play: their own view, their team's or everybody's.
 - **After death** - what you see once your tank is destroyed, until the round ends: a black DESTROYED
-  screen, your wreck (the original), or the tank that destroyed you (else another one still alive) -
-  within the view limit: with "team" only your teammates; nobody left to watch - black.
+  screen, your wreck (the original), all your teammates still alive, the tank that destroyed you (then
+  its killer, ...) or every tank still alive; nobody left to watch - black.
 
 The homepage's **Settings** screen holds the language, the **sound** - muted, original (the PC speaker),
 realistic or cartoony (a sample plays when you change it) - and **Show ping** (your round-trip time as

@@ -161,7 +161,7 @@ root.Lang = {
   roomSettings: (c, specs) => [t("pg.size." + (c.size || "medium")), t("pg.win", { n: c.winScore || 3 }),
     c.roundTime ? t("pg.time", { n: c.roundTime }) : t("pg.time.off"),
     t(c.friendlyFire ? "pg.ff.on" : "pg.ff.off"),
-    t("pg.visible", { v: root.Lang.raw("view." + (c.visible || "self")) }), t("pg.watch." + (c.watchOut === true ? "others" : ["black", "wreck", "others"].includes(c.watchOut) ? c.watchOut : "wreck")),
+    t("pg.visible", { v: root.Lang.raw("view." + (c.visible || "self")) }), t("pg.watch." + (c.watchOut === true ? "others" : ["black", "wreck", "team", "killer", "others"].includes(c.watchOut) ? c.watchOut : "wreck")),
     ...(specs ? [t("pg.specs", { n: specs })] : [])],
 };
 

@@ -67,12 +67,12 @@ for (const c of Lang.codes) {
     const mx = a => Math.max(...a.map(x => typeof x === "number" ? x : vis(x)));
     const lv = ["easy", "normal", "hard", "expert"], names = ["blue", "green", "cyan", "yellow", "white", "pink", "violet", "teal"].map(r => t(r));
     const cpuL = [...["small", "medium", "large"].map(z => t("lc.size") + t("lc.size." + z)), t("lc.win") + "9", t("lc.time") + t("time.off"), t("lc.time") + t("time.n", { n: 10 }), t("lc.ff") + t("lc.on"), t("lc.ff") + t("lc.off"),
-      ...["self", "team", "everyone"].map(v => t("cpu.view") + t("view." + v)), ...["black", "wreck", "others"].map(v => t("lc.watch") + t("watch." + v)),
+      ...["self", "team", "everyone"].map(v => t("cpu.view") + t("view." + v)), ...["black", "wreck", "team", "killer", "others"].map(v => t("lc.watch") + t("watch." + v)),
       t("cpu.start"), t("menu.instr"), t("back.main")];
     const cpuR = mx(names) + 2 + mx([t("lc.you"), t("lc.none"), ...lv.map(l => t("lc.cpu", { level: Lang.raw("level." + l) }))]) + 2 + vis(t("lc.team", { n: 8 }));
     const onL = [vis(t("create.name")) + 18 + 1, ...["yes", "no"].map(y => t("create.public") + t(y)), ...["yes", "no"].map(y => t("create.spect") + t(y)),
       ...["small", "medium", "large"].map(z => t("os.size") + t("os.size." + z)), t("os.win") + "9", t("os.time") + t("time.off"), t("os.time") + t("time.n", { n: 10 }), ...["self", "team", "everyone"].map(v => t("os.visible") + t("view." + v)),
-      t("os.ff") + t("os.off"), t("os.ff") + t("os.on"), ...["black", "wreck", "others"].map(v => t("os.watch") + t("watch." + v)), t("create.go"), t("back.lobby")];
+      t("os.ff") + t("os.off"), t("os.ff") + t("os.on"), ...["black", "wreck", "team", "killer", "others"].map(v => t("os.watch") + t("watch." + v)), t("create.go"), t("back.lobby")];
     const onR = mx(names) + 2 + mx([t("os.who.none"), t("os.who.human"), ...lv.map(l => t("os.who.cpu", { level: Lang.raw("level." + l) }))]) + 2 + vis(t("pg.teamn", { n: 8 }));
     for (const [what, l, r] of [["vs computer", mx(cpuL), cpuR], ["create a game", mx(onL), onR]]) {
       const total = bw(l) + 2 + 1 + bw(r) + 2;
@@ -101,7 +101,7 @@ for (const c of Lang.codes) {
   // the game's settings (display only) on the statistics (37 columns, rows 1-4) and the round title
   // (76 columns, rows 3-6): every setting, each at its longest
   const stShort = [0, 0];                      // statistics cases / those showing the round time
-  for (const size of ["small", "medium", "large"]) for (const view of ["self", "team", "everyone"]) for (const vsb of [false, true]) for (const w of ["black", "wreck", "others"]) {
+  for (const size of ["small", "medium", "large"]) for (const view of ["self", "team", "everyone"]) for (const vsb of [false, true]) for (const w of ["black", "wreck", "team", "killer", "others"]) {
     const st = new E(1, { players: 4, teams: true, size, winScore: 9, roundTime: 10 });
     Lang.apply(st);
     st.showSettings = { view, visible: vsb, watchOut: w };

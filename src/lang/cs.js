@@ -103,7 +103,7 @@ Lang.register("cs", {
     // the game's settings on the round title / statistics (display only)
     settings: { size: ["mapa: malá", "mapa: střední", "mapa: velká"], win: "kol na vítězství: {n}",
       ff: ["přátelská palba: vypnutá", "přátelská palba: zapnutá"], view: "pohled: {v}", visible: "limit pohledu: {v}",
-      views: ["jen já", "tým", "všichni"], watch: ["po smrti: černá obrazovka", "po smrti: můj vrak", "po smrti: sledovat jiné"],
+      views: ["jen já", "tým", "všichni"], watch: ["po smrti: černá obrazovka", "po smrti: můj vrak", "po smrti: sledovat tým", "po smrti: sledovat vraha", "po smrti: sledovat všechny"],
       time: "čas kola: {n} min", timeShort: "čas: {n} min" },
     prompt: "<ENTER> - hlavní menu.",
     instr: {
@@ -214,10 +214,10 @@ Lang.register("cs", {
   "os.visible": "Limit pohledu: ", "os.visible.i1": "Nejvíc, co hráč během hry smí vidět: svou",
   "os.visible.i2": "obrazovku, obrazovky svého týmu nebo všech.",
   // ghost mode (home.js vs computer, lobby.js create screen, online.js pre-game lobby; docs/DESIGN-8P.md 25)
-  "lc.watch": "Po smrti: ", "os.watch": "Po smrti: ", "watch.black": "černá obrazovka", "watch.wreck": "můj vrak", "watch.others": "sledovat jiné",
+  "lc.watch": "Po smrti: ", "os.watch": "Po smrti: ", "watch.black": "černá obrazovka", "watch.wreck": "můj vrak", "watch.team": "sledovat tým", "watch.killer": "sledovat vraha", "watch.others": "sledovat všechny",
   "watch.i1": "Co vidíš po zničení svého tanku až do konce kola: černou obrazovku,",
-  "watch.i2": "svůj vrak, nebo tank, který tě zničil (jinak jiný, který ještě žije).",
-  "pg.watch.black": "po smrti: černá obrazovka", "pg.watch.wreck": "po smrti: můj vrak", "pg.watch.others": "po smrti: sledovat jiné",
+  "watch.i2": "svůj vrak, svůj tým, jeden tank (nejdřív toho, kdo tě zničil) či všechny.",
+  "pg.watch.black": "po smrti: černá obrazovka", "pg.watch.wreck": "po smrti: můj vrak", "pg.watch.team": "po smrti: sledovat tým", "pg.watch.killer": "po smrti: sledovat vraha", "pg.watch.others": "po smrti: sledovat všechny",
   // the titles of the two boxes on the vs computer / create-a-game screens
   "box.game": "Hra", "box.players": "Hráči", "box.settings": "Nastavení", "pg.h.settings": "NASTAVENÍ",
   // round time limit (home.js vs computer + split screen, lobby.js create screen, the pre-game lobby's settings)

@@ -72,16 +72,16 @@ function cleanRoomName(s, n) {
   return cutCols(t, n).trim();
 }
 
-// "after death" values (watchOut): black / wreck / others; anything else = "wreck", true (old) = "others"
-const AFTER_DEATH = ["black", "wreck", "others"];
-const afterDeath = v => v === true || v === "1" ? "others" : ["black", "wreck", "others"].includes(v) ? v : "wreck";
+// "after death" values (watchOut): black / wreck / team / killer / others (= all); anything else = "wreck", true (old) = "others"
+const AFTER_DEATH = ["black", "wreck", "team", "killer", "others"];
+const afterDeath = v => v === true || v === "1" ? "others" : AFTER_DEATH.includes(v) ? v : "wreck";
 
 // Room settings from the create screen -> {slots: [{color, bot, level, team}] (the used slots in colour
 // order), size, winScore, friendlyFire, visible, watchOut, ext} or {error}. visible: the most a player may see
 // during play - "self" (default), "team" or "everyone" (docs/DESIGN-8P.md 23; display only). watchOut:
 // after death - what a player whose tank is destroyed sees until the round ends: "black" (a black
-// DESTROYED screen), "wreck" (default: the view stays on the wreck) or "others" (the tank that destroyed
-// it, else another one still alive); docs/DESIGN-8P.md 25, display only. Old rooms' true = "others". roundTime:
+// DESTROYED screen), "wreck" (default: the view stays on the wreck) or "killer" (the tank that destroyed
+// it, else another one still alive), "team" (all teammates still alive), "others" (all tanks alive); docs/DESIGN-8P.md 25, display only. Old rooms' true = "others". roundTime:
 // the round time limit in minutes, one of ROUND_TIMES (0 = none, also for old rooms / anything else; changes the
 // simulation - engineOptions passes it to every engine). o.slots: up to 8 entries {kind: KINDS, team}
 // (index = colour). The older {players, teams, bots, level} form (bots = the last slots) still works.

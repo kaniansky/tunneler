@@ -103,7 +103,7 @@ Lang.register("genz", {
     // the game's settings on the round title / statistics (display only)
     settings: { size: ["map size: smol", "map size: mid", "map size: huge"], win: "W's to win: {n}",
       ff: ["friendly fire: off", "friendly fire: on"], view: "POV: {v}", visible: "max POV: {v}",
-      views: ["main character", "the squad", "everyone fr"], watch: ["after you die: black screen", "after you die: my wreck", "after you die: spectate others"],
+      views: ["main character", "the squad", "everyone fr"], watch: ["after you die: black screen", "after you die: my wreck", "after you die: spectate the squad", "after you die: spectate your killer", "after you die: spectate everyone"],
       time: "round timer: {n} min", timeShort: "timer: {n} min" },
     prompt: "<ENTER> for the main menu.",
     instr: {
@@ -215,10 +215,10 @@ Lang.register("genz", {
   "os.visible": "Max POV: ", "os.visible.i1": "The most a player may peep during play: their own",
   "os.visible.i2": "screen, their squad's or everyone's.",
   // ghost mode (home.js vs computer, lobby.js create screen, online.js pre-game lobby; docs/DESIGN-8P.md 25)
-  "lc.watch": "After you die: ", "os.watch": "After you die: ", "watch.black": "black screen", "watch.wreck": "my wreck", "watch.others": "spectate others",
+  "lc.watch": "After you die: ", "os.watch": "After you die: ", "watch.black": "black screen", "watch.wreck": "my wreck", "watch.team": "spectate the squad", "watch.killer": "spectate your killer", "watch.others": "spectate everyone",
   "watch.i1": "What you see after getting wrecked, till the round ends: black screen,",
-  "watch.i2": "your wreck, or whoever wrecked you (else anyone still alive).",
-  "pg.watch.black": "after you die: black screen", "pg.watch.wreck": "after you die: my wreck", "pg.watch.others": "after you die: spectate others",
+  "watch.i2": "your wreck, your squad, one tank (your killer first), or everyone.",
+  "pg.watch.black": "after you die: black screen", "pg.watch.wreck": "after you die: my wreck", "pg.watch.team": "after you die: spectate the squad", "pg.watch.killer": "after you die: spectate your killer", "pg.watch.others": "after you die: spectate everyone",
   // the titles of the two boxes on the vs computer / create-a-game screens
   "box.game": "The game", "box.players": "The squad", "box.settings": "The rules", "pg.h.settings": "THE RULES",
   // round time limit (home.js vs computer + split screen, lobby.js create screen, the pre-game lobby's settings)

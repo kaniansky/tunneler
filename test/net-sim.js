@@ -683,11 +683,11 @@ async function chat(srv, port) {
   });
   // after death (docs/DESIGN-8P.md 25): "black" / "wreck" (default, anything unknown) / "others" (old true)
   const ghost = [];
-  for (const w of [undefined, "yes", 1, "black", "others"])
+  for (const w of [undefined, "yes", 1, "black", "team", "killer", "others"])
     ghost.push((await http(port, "POST", "/api/rooms", { name: "G" + ghost.length, watchOut: w, slots: [S("human", 1), S("human", 2)] })).json.watchOut);
   check("after death: validated, in the room info, the list and hello's cfg", () => {
     assert.strictEqual(res.json.watchOut, "others"); assert.strictEqual(blue.hello.cfg.watchOut, "others");
-    assert.deepStrictEqual(ghost, ["wreck", "wreck", "wreck", "black", "others"]);
+    assert.deepStrictEqual(ghost, ["wreck", "wreck", "wreck", "black", "team", "killer", "others"]);
     assert.strictEqual(NetProto.roomSettings({ slots: [S("human", 1), S("human", 2)], watchOut: true }).watchOut, "others");
   });
   {

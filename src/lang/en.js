@@ -139,10 +139,10 @@ Lang.register("en", {
   "os.visible": "View limit: ", "os.visible.i1": "The most a player may see during play: their own",
   "os.visible.i2": "view screen, their team's or everyone's.",
   // ghost mode (home.js vs computer, lobby.js create screen, online.js pre-game lobby; docs/DESIGN-8P.md 25)
-  "lc.watch": "After death: ", "os.watch": "After death: ", "watch.black": "black screen", "watch.wreck": "my wreck", "watch.others": "watch others",
+  "lc.watch": "After death: ", "os.watch": "After death: ", "watch.black": "black screen", "watch.wreck": "my wreck", "watch.team": "watch team", "watch.killer": "watch killer", "watch.others": "watch all",
   "watch.i1": "What you see once your tank is destroyed, until the round ends: a black",
-  "watch.i2": "screen, your wreck, or the tank that destroyed you (else another one alive).",
-  "pg.watch.black": "after death: black screen", "pg.watch.wreck": "after death: my wreck", "pg.watch.others": "after death: watch others",
+  "watch.i2": "screen, your wreck, your teammates, one tank (your killer first) or all.",
+  "pg.watch.black": "after death: black screen", "pg.watch.wreck": "after death: my wreck", "pg.watch.team": "after death: watch team", "pg.watch.killer": "after death: watch killer", "pg.watch.others": "after death: watch all",
   // the titles of the two boxes on the vs computer / create-a-game screens
   "box.game": "Game", "box.players": "Players", "box.settings": "Settings", "pg.h.settings": "SETTINGS",
   // round time limit (home.js vs computer + split screen, lobby.js create screen, the pre-game lobby's settings)

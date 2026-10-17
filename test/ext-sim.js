@@ -618,7 +618,7 @@ ok("extended texts lay out in every language (" + LAYOUTS.length + " team setups
     const t = title(e);
     check(/\x10 GREEN \x11/.test(t[15]) && !/\x10 BLUE|BLUE \x11/.test(t[15]), "classic round title: the marker around GREEN only: " + t[15]);
     const bottom = t.slice(18, 25).map(l => l.trim()).join(" ");
-    check(bottom.includes("map size: medium, rounds to win: 3, view limit: self, after death: watch others") && !/friendly/.test(t.join("")),
+    check(bottom.includes("map size: medium, rounds to win: 3, view limit: self, after death: watch all") && !/friendly/.test(t.join("")),
       "classic round title settings at the bottom (no friendly fire without teams): " + bottom);
     const st = stats(e);
     check(/GREEN\x11/.test(st[8]) && !/\x10/.test(st[8]), "classic statistics: GREEN\u25c4 only: " + st[8]);
