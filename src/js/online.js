@@ -64,6 +64,7 @@
   const unlock = () => speaker.unlock();
   window.addEventListener("keydown", unlock);
   window.addEventListener("pointerdown", unlock);
+  window.addEventListener("touchend", unlock);           // (a touch unlocks audio on its end, not its start)
 
   // ------------------------------------------------------------ simulation state
   let engine = null, runner = null, seed = null, created = null, roomName = "";
@@ -230,6 +231,9 @@
       if (e.code === "Tab") e.preventDefault();                                          // (never move the focus)
     });
   }
+  // gamepads / touch controls (pads.js): turned into the same keys as the keyboard - a player's tank
+  // during play (any gamepad, the on-screen joystick + FIRE), arrows / Enter / Esc everywhere else
+  if (window.Pads) Pads.start({ menu: () => !player || !inPlay(), gamepadSet: () => "blue", touchSet: player ? "blue" : null });
 
   function sendKeys() {
     const keys = keyboard.takeKeys();

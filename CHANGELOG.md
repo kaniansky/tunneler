@@ -5,6 +5,8 @@ every push to `main` is released (see CONTRIBUTING.md).
 
 ## Unreleased
 
+- Gamepads and touch screens: a gamepad drives a tank (split screen: gamepad 1 BLUE, 2 GREEN) and the
+  menus; on phones / tablets an on-screen joystick + FIRE button, and the game fits the screen.
 - When the host leaves, the first connected player becomes the host (Kick, Start now), and keeps the
   role after a reload.
 - Three computer levels instead of four: **easy**, **medium** and **hard** (the former normal, hard and

@@ -82,6 +82,7 @@
   const unlock = () => speaker.unlock();
   window.addEventListener("keydown", unlock);
   window.addEventListener("pointerdown", unlock);
+  window.addEventListener("touchend", unlock);           // (a touch unlocks audio on its end, not its start)
 
   keyboard.onKey = (code, e) => {
     // Esc on the game's menu (between matches): back to the screen this game was set up on
@@ -159,6 +160,11 @@
   runner.onStep = e => { if (e.halted) leave("/"); };
 
   const clock = new LocalClock(runner, ext ? extInput : classicInput);
+  // gamepads / touch controls (pads.js) make the same keys as the keyboard: split screen - gamepad 1
+  // BLUE (W A S D + Space), gamepad 2 GREEN (arrows + Enter); vs computer - any gamepad your tank;
+  // the on-screen joystick + FIRE drive BLUE / your tank; menus: arrows, Enter, Esc
+  if (window.Pads) Pads.start({ menu: () => !engine.kbdInstalled,
+    gamepadSet: i => mode === "hotseat" ? ["blue", "green"][i] || null : "blue", touchSet: "blue" });
   window.tunnelerEngine = () => engine;
   window.tunnelerViews = () => views;         // tests / debugging
   window.tunnelerRunner = () => runner;

@@ -7,6 +7,7 @@ Lang.register("sk", {
   name: "Slovensky",
   "menu.info": "Informácie", "menu.info.i": "O tejto verzii hry.", "menu.instr": "Návod", "menu.instr.i": "Ako sa hrá.", "page.back": "<ENTER> - späť.", "rd.you1": "Si pripravený.", "rd.you2": "Čakám na {name}...", "rd.cancel": "<ESC> - predsa nie som pripravený",
   blue: "MODRÝ", green: "ZELENÝ",
+  "touch.fire": "PAĽBA", "touch.esc": "ESC",
   // extended mode (3-8 players): the other tank colours
   cyan: "AZÚROVÝ", yellow: "ŽLTÝ", white: "BIELY", pink: "RUŽOVÝ", violet: "FIALOVÝ", teal: "TYRKYSOVÝ",
   "ui.hint": "↑↓ a <ENTER>, alebo myš.", "ui.back": "<ESC> späť.",

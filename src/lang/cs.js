@@ -7,6 +7,7 @@ Lang.register("cs", {
   name: "Česky",
   "menu.info": "Informace", "menu.info.i": "O této verzi hry.", "menu.instr": "Návod", "menu.instr.i": "Jak se hraje.", "page.back": "<ENTER> - zpět.", "rd.you1": "Jsi připraven.", "rd.you2": "Čekám na {name}...", "rd.cancel": "<ESC> - přece nejsem připraven",
   blue: "MODRÝ", green: "ZELENÝ",
+  "touch.fire": "PAL", "touch.esc": "ESC",
   // extended mode (3-8 players): the other tank colours
   cyan: "AZUROVÝ", yellow: "ŽLUTÝ", white: "BÍLÝ", pink: "RŮŽOVÝ", violet: "FIALOVÝ", teal: "TYRKYSOVÝ",
   "ui.hint": "↑↓ a <ENTER>, nebo myš.", "ui.back": "<ESC> zpět.",

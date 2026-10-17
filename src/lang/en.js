@@ -7,6 +7,8 @@ Lang.register("en", {
   name: "English",
   "menu.info": "Information", "menu.info.i": "About this version of the game.", "menu.instr": "Instructions", "menu.instr.i": "How to play.", "page.back": "Press <ENTER> to go back.", "rd.you1": "You are ready.", "rd.you2": "Waiting for {name}...", "rd.cancel": "<ESC> - not ready after all",
   blue: "BLUE", green: "GREEN",
+  // touch controls (pads.js): the on-screen buttons
+  "touch.fire": "FIRE", "touch.esc": "ESC",
   // extended mode (3-8 players): the other tank colours
   cyan: "CYAN", yellow: "YELLOW", white: "WHITE", pink: "PINK", violet: "VIOLET", teal: "TEAL",
   "ui.hint": "↑↓ and <ENTER>, or the mouse.", "ui.back": "<ESC> back.",

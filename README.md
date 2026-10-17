@@ -101,6 +101,15 @@ firing while moving digs faster. **Esc** ends the match on one computer; online,
 game (one player can't end it for everybody). Menus: arrow keys and Enter, number keys 1-8 for teams, or
 the mouse (clicks, the wheel in long lists); Esc goes back.
 
+**Gamepads** work too: the left stick or the d-pad drives the tank in 8 directions, A / B / X / Y, the
+shoulder buttons and the triggers fire, Start is Esc. In split screen the first gamepad is BLUE and the
+second GREEN (the keyboard still works); against the computer and online any gamepad drives your tank.
+In menus the d-pad moves, A selects, B goes back.
+
+**Phones and tablets**: touch the screen and an on-screen joystick (left) and a FIRE button (right)
+appear, plus an ESC button; they drive your tank (BLUE in split screen). Tap menu items to choose them.
+The game fits the screen in portrait and landscape.
+
 The rules are in the game's own *Instructions* page: win the set number of rounds (three in the
 original); a round ends when only one tank (or one team) is left - tanks blow up when shot or out of
 energy; refuel at any base, repair your shield at your own (and, at half the speed, at a teammate's).

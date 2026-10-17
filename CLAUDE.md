@@ -84,6 +84,7 @@ may be redesigned, but always in the original's DOS look.
     id (players and spectators, host only), ping per slot; lobby chat (relayed to players and spectators,
     cleaned, max 60, rate limit, kicked / banned clients can't send, the last 50 in `hello` for joiners,
     never in the frame stream) and the room's `visible` setting.
+  - `input-check.js` - gamepads / touch controls (pads.js) -> the keyboard's keys, held bits online.
   - `net-page-smoke.js` - loads each page's scripts (parsed from the html) in a vm with a stub DOM; drives
     online.js's pre-game lobby (name, team, ready / Esc, kick, rtt, config frame), a read-only spectator,
     and lobby.js's slot editor (POST body, host key stored); the chat (Unicode input, `{t:"chat"}`, messages
@@ -268,6 +269,20 @@ project dependency; install playwright-core in a scratch dir when needed).
   mapped to the original's X scan code, X itself does nothing); BLUE fire also on Left Shift / Space / Tab
   (Ctrl+W closes the tab, and two players share the keyboard, so no Ctrl key fires at all); GREEN
   arrows + Enter / Right Shift. M toggles sound (local).
+- Gamepads + touch (`pads.js`, loaded by play.html / online.html; index.html / lobby.html load it with
+  `data-menu` = menus only): every controller becomes **synthesized KeyboardEvents on window** (so
+  Keyboard, DosUI, online.js's held bits / Esc twice take them like real keys - nothing else knows about
+  pads; determinism untouched). `Pads.start({menu, gamepadSet(i), touchSet})`: `menu()` true = arrows /
+  Enter (A, X) / Esc (B, Start), held directions repeat; false = the tank's key set (`SETS.blue` W A S D +
+  Space, `SETS.green` arrows + Enter; any face / shoulder button / trigger fires, Start = Esc). Taps are
+  held >= `MIN_HOLD` (120 ms, 2+ ticks). A button held across a play -> menu switch is latched until
+  released (no accidental Enter). Stick: 8 sectors, dead zone 0.35 (touch 0.3). play.js: menu =
+  `!engine.kbdInstalled`, split screen gamepad 1 BLUE / 2 GREEN, else "blue" (your tank); online.js:
+  menu = not on the play screen (spectators: always). Touch controls (joystick left, FIRE right, ESC;
+  `touch.fire` / `touch.esc` in every language) and `body.touch` (no scroll / zoom, portrait: game at
+  the top, controls below; landscape: game between them; style.css) appear on the first touch.
+  Name / chat inputs still need a real keyboard. `test/input-check.js` (mock `navigator.getGamepads`,
+  synthesized pointer events, online.html's held bits and lobby).
 
 ## Languages (`lang.js`, `src/lang/*.js`, `glyphs.js`)
 

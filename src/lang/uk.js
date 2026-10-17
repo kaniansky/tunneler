@@ -7,6 +7,7 @@ Lang.register("uk", {
   name: "Українська",
   "menu.info": "Інформація", "menu.info.i": "Про цю версію гри.", "menu.instr": "Інструкція", "menu.instr.i": "Як грати.", "page.back": "<ENTER> - назад.", "rd.you1": "Ти готовий.", "rd.you2": "Чекаю на {name}...", "rd.cancel": "<ESC> - все-таки не готовий",
   blue: "СИНІЙ", green: "ЗЕЛЕНИЙ",
+  "touch.fire": "ВОГОНЬ", "touch.esc": "ESC",
   // extended mode (3-8 players): the other tank colours
   cyan: "БЛАКИТНИЙ", yellow: "ЖОВТИЙ", white: "БІЛИЙ", pink: "РОЖЕВИЙ", violet: "БУЗКОВИЙ", teal: "БІРЮЗОВИЙ",
   "ui.hint": "↑↓ і <ENTER>, або миша.", "ui.back": "<ESC> назад.",

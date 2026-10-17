@@ -7,6 +7,7 @@ Lang.register("genz", {
   name: "Gen Z",
   "menu.info": "The lore", "menu.info.i": "The tea on this version of the game.", "menu.instr": "How to play", "menu.instr.i": "How not to get cooked.", "page.back": "<ENTER> to dip back.", "rd.you1": "You're locked in.", "rd.you2": "Waiting on {name}...", "rd.cancel": "<ESC> - nvm, not ready",
   blue: "BLUE", green: "GREEN",
+  "touch.fire": "YEET", "touch.esc": "BAIL",
   // extended mode (3-8 players): the other tank colors
   cyan: "CYAN", yellow: "YELLOW", white: "WHITE", pink: "PINK", violet: "VIOLET", teal: "TEAL",
   "ui.hint": "↑↓ and <ENTER>, or the mouse ig.", "ui.back": "<ESC> to dip.",
