@@ -281,7 +281,7 @@
   window.tunnelerLobbyUI = () => lobbyUI;                  // tests / debugging
   // at the DOS menu - or still on the shared world map after this viewer already closed it
   const atMenu = () => engine && !engine.kbdInstalled && (engine.screen === "text" || (engine.screen === "map" && !mapPending));
-  const STATS = ["menuShift", "wins", "teamWins", "alive", "shotsFired", "shotsHit", "metersDug", "metersMoved"];
+  const STATS = ["menuShift", "wins", "teamWins", "alive", "shotsFired", "shotsHit", "metersDug", "metersMoved", "kills", "roundLog"];
   const isReady = () => player && me >= 0 && !!(status.ready && status.ready[me]);
 
   // the slots as the server last reported them (before the first status: from the room's settings)

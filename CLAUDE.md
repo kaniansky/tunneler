@@ -532,3 +532,9 @@ the room info): the most a player may choose to see during play - display only, 
   socket is a host, the first connected player (else a spectator) becomes one and gets
   `{t:"host", key}`; online.js stores the key (`tunneler.host.<id>`, read again at every connect) and
   turns its host items on. The creator's key keeps working.
+- Statistics extras (display only, not in stateHash): `engine.kills` (enemy tanks each one destroyed,
+  per match) and `engine.roundLog` (`logRound(winner, player)` at every round end: winner, secs, how =
+  shot / time / draw / esc). `matchExtrasAt()` draws ROUNDS + AWARDS (Sharpshooter >= 5 shots, Hunter,
+  Mole, Traveler): `showStatsPage()` (online, full screen) beside the table; `showMainMenu()` under the
+  menu box when `engine.matchExtras` (play.js: vs computer only - split screen stays the original).
+  online.js copies kills / roundLog into its private statistics engine (STATS).

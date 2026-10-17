@@ -97,7 +97,7 @@ Lang.register("sk", {
     waiting: ["Čaká sa, kým hráči", "začnú hru"],
     creating: "(vytváram svet)", ready: "(svet je hotový)", round: "KOLO",
     stats: { title: "Štatistika", fired: "výstrely", hit: "zásahy", percent: "úspešnosť", dug: "vykopané metre",
-      moved: "prejdené metre", winner: "Víťaz je ",
+      moved: "prejdené metre", winner: "Víťaz je ", rounds: "Kolá", awards: "Ocenenia", draw: "remíza", ended: "koniec", sharp: "Ostrostrelec", hunter: "Lovec", mole: "Krtko", traveler: "Cestovateľ",
       head: ["str.", "zás.", "%", "kop.", "jazda"] },
     teams: ["MODRÝ TÍM", "ZELENÝ TÍM"],
     team: "TÍM {n}",

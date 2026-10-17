@@ -97,7 +97,7 @@ Lang.register("cs", {
     waiting: ["Čeká se, až hráči", "začnou hru"],
     creating: "(vytvářím svět)", ready: "(svět je hotov)", round: "KOLO",
     stats: { title: "Statistika", fired: "výstřely", hit: "zásahy", percent: "úspěšnost", dug: "vykopané metry",
-      moved: "ujeté metry", winner: "Vítěz je ",
+      moved: "ujeté metry", winner: "Vítěz je ", rounds: "Kola", awards: "Ocenění", draw: "remíza", ended: "konec", sharp: "Ostrostřelec", hunter: "Lovec", mole: "Krtek", traveler: "Cestovatel",
       head: ["str.", "zás.", "%", "kop.", "jízda"] },
     teams: ["MODRÝ TÝM", "ZELENÝ TÝM"],
     team: "TÝM {n}",

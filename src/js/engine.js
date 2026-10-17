@@ -125,6 +125,9 @@ const STRINGS_EN = {
   round: "ROUND", blue: "BLUE", green: "GREEN",
   stats: { title: "Statistics", fired: "shots fired", hit: "shots hit", percent: "percent hit", dug: "meters dug",
     moved: "meters traveled", winner: "The winner is ",
+    // the rounds / awards next to the statistics (vs computer, online)
+    rounds: "Rounds", awards: "Awards", draw: "draw", ended: "ended", sharp: "Sharpshooter", hunter: "Hunter",
+    mole: "Mole", traveler: "Traveler",
     // extended mode: column headings of the one-row-per-player table (max 4, 4, 4, 5, 5 characters)
     head: ["shot", "hit", "hit%", "dug", "moved"] },
   // extended mode: tank color names (slot color 0..7); "team" labels a team ("{n}" = its number 1..8;
@@ -396,6 +399,11 @@ class TunnelerEngine {
     this.wins = arr(0); this.shotsFired = arr(0); this.shotsHit = arr(0);
     this.metersDug = arr(0); this.metersMoved = arr(0); this.alive = arr(false);
     this.killedBy = arr(0);                       // extended, display only (views' "after death: others"): who shot it, 0 = none
+    // display only (the statistics' rounds and awards), not part of the game state: tanks each one destroyed
+    // this match, and every round's {winner (classic: 1 / 2, extended: a team index), player (one tank's win
+    // or 0), secs, how: "shot" | "time" | "draw" | "esc"}
+    this.kills = arr(0); this.roundLog = [];
+    this.matchExtras = false;                     // the menu after a match shows the rounds and awards (vs computer)
     // round time limit (option roundTime): shield damage each tank dealt to enemy tanks this round (0x700
     // per hit; teammates never count), the step the round's play began, the countdown digits shown (-1 =
     // none), whether the last round ended by the time limit (until the next round's play begins)
@@ -958,8 +966,10 @@ class TunnelerEngine {
                   if (this.shield[3 - p] > 0) {
                     this.addExplosion(x - DX, y - DY, 7, 20);
                     this.queueSound(2, x - DX, y - DY);
-                  } else
+                  } else {
+                    if (this.alive[3 - p]) this.kills[p]++;       // (display only)
                     this.killTank(3 - p, x + DX + DX, y + DX + DX);   // original: DX, not DY
+                  }
                 } else {
                   this.addExplosion(x - DX, y - DY, 3, 7);
                   this.queueSound(0, x - DX, y - DY);
@@ -1117,6 +1127,7 @@ class TunnelerEngine {
 
   newMatch() {
     this.round = 1;
+    this.kills.fill(0); this.roundLog = [];
     for (let i = 1; i <= 2; i++) {
       this.shotsFired[i] = 0; this.shotsHit[i] = 0; this.metersDug[i] = 0; this.metersMoved[i] = 0; this.wins[i] = 0;
     }
@@ -1458,6 +1469,7 @@ class TunnelerEngine {
         if (!this.alive[1]) this.wins[2]++;
         if (!this.alive[2]) this.wins[1]++;
       }
+      this.logRound(this.alive[1] && !this.alive[2] ? 1 : this.alive[2] && !this.alive[1] ? 2 : 0, 0);
       if (this.wins[2] >= this.winScore || this.wins[1] >= this.winScore) this.matchOver = true;
     } while (!this.matchOver);
     this.removeKbd();
@@ -1552,6 +1564,7 @@ class TunnelerEngine {
   newMatchExt() {
     const N = this.nPlayers;
     this.round = 1;
+    this.kills.fill(0); this.roundLog = [];
     for (let i = 1; i <= N; i++) {
       this.shotsFired[i] = 0; this.shotsHit[i] = 0; this.metersDug[i] = 0; this.metersMoved[i] = 0; this.wins[i] = 0;
     }
@@ -1755,7 +1768,7 @@ class TunnelerEngine {
                     this.addExplosion(x - DX, y - DY, 7, 20);
                     this.queueSound(2, x - DX, y - DY);
                   } else {
-                    if (this.alive[q]) this.killedBy[q] = p;
+                    if (this.alive[q]) { this.killedBy[q] = p; if (this.isEnemy(p, q)) this.kills[p]++; }
                     this.killTankExt(q, x + DX + DX, y + DX + DX);   // original: DX, not DY
                   }
                 } else {
@@ -1947,6 +1960,75 @@ class TunnelerEngine {
     }
     this.statsSettings();
   }
+  // a round's end for the statistics (display only): winner (classic 1 / 2, 0 = none; extended a team
+  // index, -1 = none), player = the one tank that won it (or 0)
+  logRound(winner, player) {
+    const won = this.extended ? winner >= 0 : winner > 0;
+    const how = this.timedOut ? "time" : won ? "shot" : this.matchOver ? "esc" : "draw";
+    this.roundLog.push({ winner: won ? winner : -1, player, how,
+      secs: Math.round((this.tick - this.roundStart) * TICK * 1000 / PIT_HZ / 1000) });
+  }
+  // the rounds (number, winner, length) and the awards as lines of at most w columns: [{text, color}]
+  matchRoundLines(w) {
+    const S = Object.assign({}, STRINGS_EN.stats, this.strings.stats), out = [];
+    const mmss = t => Math.floor(t / 60) + ":" + String(t % 60).padStart(2, "0");
+    this.roundLog.forEach((r, i) => {
+      let name, color = 7;
+      if (r.winner < 0) name = r.how === "esc" ? S.ended : S.draw;
+      else if (!this.extended) { name = this.classicName(r.winner); color = r.winner === 1 ? 9 : 10; }
+      else if (r.player) { name = this.playerName(r.player); color = this.playerTextColor(r.player); }
+      else { name = this.teamName(r.winner); color = this.playerTextColor(this.teamMembers(r.winner)[0]); }
+      const num = String(i + 1).padStart(2) + " ", time = " " + mmss(r.secs);
+      const n = UniText.slice(name, Math.max(1, w - num.length - time.length));
+      out.push({ text: num + n + " ".repeat(Math.max(0, w - num.length - visLen(n) - time.length)) + time, color });
+    });
+    return out;
+  }
+  matchAwardLines(w) {
+    const S = Object.assign({}, STRINGS_EN.stats, this.strings.stats), N = this.extended ? this.nPlayers : 2;
+    const name = p => this.extended ? this.playerName(p) : this.classicName(p);
+    const color = p => this.extended ? this.playerTextColor(p) : p === 1 ? 9 : 10;
+    const best = (score, ok) => {
+      let b = 0;
+      for (let p = 1; p <= N; p++) if (ok(p) && (!b || score(p) > score(b))) b = p;
+      return b;
+    };
+    const pct = p => Math.trunc(this.shotsHit[p] * 100 / Math.max(1, this.shotsFired[p]));
+    const awards = [
+      [S.sharp, best(pct, p => this.shotsFired[p] >= 5 && this.shotsHit[p] > 0), p => pct(p) + "%"],
+      [S.hunter, best(p => this.kills[p], p => this.kills[p] > 0), p => String(this.kills[p])],
+      [S.mole, best(p => this.metersDug[p], p => this.metersDug[p] > 0), p => String(this.metersDug[p])],
+      [S.traveler, best(p => this.metersMoved[p], p => this.metersMoved[p] > 0), p => String(this.metersMoved[p])],
+    ];
+    const out = [];
+    for (const [title, p, value] of awards) {
+      if (!p) continue;
+      const v = " " + value(p), n = UniText.slice(name(p), Math.max(1, w - 1 - v.length));
+      out.push({ text: UniText.slice(title, w), color: 6 });
+      out.push({ text: " " + n + " ".repeat(Math.max(0, w - 1 - visLen(n) - v.length)) + v, color: color(p) });
+    }
+    return out;
+  }
+  // a block of lines at column x, rows y..y2 (1-based): a heading, then as many lines as fit (the
+  // rounds: the latest ones, "..." in front when some don't fit)
+  writeBlock(x, y, y2, w, head, lines, latest) {
+    if (!lines.length || y2 - y < 1) return;
+    const room = y2 - y;
+    let show = lines;
+    if (lines.length > room) show = latest ? [{ text: " ...", color: 8 }, ...lines.slice(lines.length - room + 1)] : lines.slice(0, room - room % 2);
+    this.textColor(14); this.gotoXY(x, y); this.write(UniText.slice(head, w));
+    show.forEach((l, i) => { this.textColor(l.color); this.gotoXY(x, y + 1 + i); this.write(UniText.slice(l.text, w)); });
+  }
+  // the rounds and awards in two columns: x1 (rounds) and x2 (awards), w wide, rows y..y2
+  matchExtrasAt(x1, x2, w, y, y2) {
+    const S = Object.assign({}, STRINGS_EN.stats, this.strings.stats);
+    const keep = [this.wx1, this.wy1, this.wx2, this.wy2, this.cx, this.cy, this.textAttr];
+    this.window(1, 1, 80, 25);
+    this.writeBlock(x1, y, y2, w, S.rounds, this.matchRoundLines(w), true);
+    this.writeBlock(x2, y, y2, w, S.awards, this.matchAwardLines(w), false);
+    [this.wx1, this.wy1, this.wx2, this.wy2, this.cx, this.cy, this.textAttr] = keep;
+  }
+
   // the classic game's statistics (BLUE / GREEN), in the 37 columns from statsLeft (the menu's right half)
   statsClassic() {
     const S = this.strings;
@@ -2010,6 +2092,7 @@ class TunnelerEngine {
     this.statsLeft = 22; this.statsFull = true;
     if (this.extended) this.statsExt(); else this.statsClassic();
     this.statsLeft = 43; this.statsFull = false;
+    this.matchExtrasAt(2, 61, 19, 5, 20);                     // (rounds left of the table, awards right of it)
     this.window(1, 1, 80, 25);
     if (prompt) this.strings = Object.assign({}, this.strings, { prompt });
     this.showEscPrompt();
@@ -2194,6 +2277,7 @@ class TunnelerEngine {
         for (const p of members) this.wins[p]++;
         if (members.length === 1) this.roundWinner = members[0];
       }
+      this.logRound(this.roundWinnerTeam, this.roundWinner);
       if (this.matchWinnerTeam() >= 0) this.matchOver = true;
     } while (!this.matchOver);
     this.removeKbd();
@@ -2384,6 +2468,7 @@ class TunnelerEngine {
     if (this.menuShift !== 0) {
       this.textColor(8);
       for (let i = 1; i <= 25; i++) { this.gotoXY(40, i); this.write("\xB3"); }
+      if (this.matchExtras) this.matchExtrasAt(2, 21, 18, 11 + lines.length + 3, 24);   // (vs computer: under the menu box)
       if (this.extended) { this.statsExt(); return; }
       this.statsClassic();
     }

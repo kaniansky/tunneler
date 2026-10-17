@@ -76,6 +76,7 @@
   // display only: your tank marked on the round title / statistics (vs computer; split screen = two
   // humans, no marker), the game's settings listed there
   engine.youPlayer = mode === "cpu" ? me + 1 : null;
+  engine.matchExtras = mode === "cpu";             // (the menu after a match: rounds and awards; split screen: the original)
   engine.showSettings = mode === "cpu" ? { view, visible: false, watchOut } : {};
   const runner = new Runner(engine, views, speaker);
 

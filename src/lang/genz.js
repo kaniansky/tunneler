@@ -97,7 +97,7 @@ Lang.register("genz", {
     waiting: ["Waiting for the", "squad to lock in"],
     creating: "(cooking the world)", ready: "(world is ready fr)", round: "ROUND",
     stats: { title: "The receipts", fired: "shots fired", hit: "shots hit", percent: "hit rate", dug: "meters dug",
-      moved: "meters traveled", winner: "The W goes to ",
+      moved: "meters traveled", winner: "The W goes to ", rounds: "Rounds", awards: "Awards", draw: "draw", ended: "ended", sharp: "Aimbot", hunter: "Hunter", mole: "Mole", traveler: "Touring",
       head: ["shot", "hit", "hit%", "dug", "moved"] },
     teams: ["BLUE SQUAD", "GREEN SQUAD"],
     team: "SQUAD {n}",
