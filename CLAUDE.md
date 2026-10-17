@@ -49,7 +49,8 @@ may be redesigned, but always in the original's DOS look.
     Lang.enc pass-through, engine round title / statistics (classic 9 columns), DosUI, status line, the
     map's score table, cleaning, no plane / no font block without user text.
   - `lang-check.js` - every language: all letters have glyphs, menu items/lines fit, instructions,
-    information and statistics lay out without wrapping.
+    information and statistics lay out without wrapping (page rows <= `PAGE_W`, every English
+    `instr.sections` / `info.sections` paragraph translated, scroll keys + prompt fit the bottom line).
   - `compare-wasm.js` - runs the ORIGINAL game (`test/fixtures/original/`: `tunneler.wasm` = cicoparser
     C++ transpile of TUNNELER.EXE, its loader `wasmapp.js`, `TUNNELER.EXE`) next to `engine.js` with the
     same seed and scripted inputs and compares every frame (world, tanks, shots, explosions, RandSeed,
@@ -59,7 +60,7 @@ may be redesigned, but always in the original's DOS look.
     placement per size, a way out of every base (openBase), bot-driven classic and extended matches
     (free-for-all, 2-7 teams, uneven teams, other colors, winScore, sizes, friendly fire) with correct round / match winners, determinism, sound
     source positions, a staged friendly-fire duel, the world map banner, instructions' `{n}` in every
-    language, extended texts fit in every language for many team setups, Esc (ignored; `escEnds`).
+    language, the pages' scrolling (menuKey scan codes, scroll bar), extended texts fit in every language for many team setups, Esc (ignored; `escEnds`).
   - `time-sim.js` - round time limit: damage to enemies counted (classic / extended, not teammates),
     time up -> top-damage side wins / tie = nobody (classic, free-for-all, teams, destroyed members),
     the countdown pixels, roundTime 0 = no option step for step, determinism with computer tanks.
@@ -253,7 +254,8 @@ project dependency; install playwright-core in a scratch dir when needed).
   classic game during play) / catching up / errors (also "You were removed from this game by the host",
   `err` code `kicked`) are DOS screens too (`DosUI` with `present` override).
 - `dosui.js` - shared DOS menu screen (`showPage("instructions"|"information", uiMode, back)` shows the
-  game's own page full screen; info lines can be clickable links): title lines, magenta box, white-on-magenta highlight, items with
+  game's own page full screen, scrolled with Up / Down, PgUp / PgDn, Home / End, the wheel (3 rows a
+  notch) and a touch drag via `engine.pageScroll`; Enter / Esc / Space / a click go back; info lines can be clickable links): title lines, magenta box, white-on-magenta highlight, items with
   `info` lines, `separator`, disabled gaps (`label: ""`), text `input`, switches (`change(dir)` for
   Left/Right), `fixed` footer items, scrolling, auto width (omit `box.w`; `box.x` places it, else
   centred; `DosUI.boxWidth(items)`), keep selection by `key`. `spec.text` = raw Unicode lines (other texts
@@ -366,9 +368,12 @@ the room info): the most a player may choose to see during play - display only, 
   https://tunneler-online.onrender.com/). Leave changes local for review.
 - Online: every human player must choose "Start game" in the pre-game lobby (computer slots are always
   ready); spectators get the same lobby read-only, never the engine's menu.
-- Information page (`strings.info` in `STRINGS_EN` + every `src/lang/*.js`): describes the current game
-  (modes, up to 8 tanks, teams, computer tanks, the online lobby, spectators); it has at most 23 rows
-  (`test/lang-check.js`) - keep it up to date when features change, in all 6 languages.
+- Instructions / Information pages (`strings.instr` / `strings.info` in `STRINGS_EN` + every
+  `src/lang/*.js`) explain the whole current game - keep them up to date when features change, in all 6
+  languages. They are row lists (`instructionRows()` / `informationRows()`: the original paragraphs, then
+  `sections: [[head, text], ...]` auto-wrapped by `wrapPage` to `PAGE_W` = 78 columns) of any length:
+  rows 1-23 show `pageTop..`, a scroll bar in column 80 and `strings.scroll` (the keys) left of the prompt
+  when longer; `pageScroll(what)`, also from `menuKey` on the engine's own menu pages.
 - The owner works iteratively and checks in the browser - verify UI changes with screenshots
   (playwright) and keep `npm test` green.
 
@@ -471,6 +476,11 @@ the room info): the most a player may choose to see during play - display only, 
   `time.n`, `time.i1/i2`, `pg.time(.off)` (Lang.roomSettings, always shown), engine `settings.time` /
   `timeShort` (round title / statistics only when set; `settingsLines(width, maxLines)` falls back to the
   short text, then leaves it out, so the statistics' 37 x 4 area never overflows).
+- Homepage: `site/` (static, relative paths) = https://kaniansky.com/tunneler/. Its download list comes
+  from the GitHub API (latest release) at page load. release.yml's `site` job uploads it after every
+  release by FTPS (`ing.r4.websupport.sk`, the host its TLS certificate names; dir `web/tunneler/`)
+  with the repo secrets SITE_FTP_USER / SITE_FTP_PASSWORD (skipped without them), after refreshing
+  site/img from screenshots/ (`tools/site-images.py`).
 - Desktop app (`src-tauri/`, Tauri v2): a native window showing `public/` (embedded at build time, no
   IPC / plugins); Cargo release profile is size-optimized. `src/js/endpoint.js` decides where online play
   goes: in a browser the page's own site, in the app (`tauri://localhost` / `tauri.localhost`) the server
