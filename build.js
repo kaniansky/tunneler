@@ -39,6 +39,9 @@ function build() {
   fs.rmSync(OUT, { recursive: true, force: true });
   fs.cpSync(SRC, OUT, { recursive: true, filter: f => f !== LANG });   // the language files go into js/langs.js
   fs.writeFileSync(path.join(OUT, "js", "langs.js"), langBundle());
+  // the version shown on the main menu ("TUNNELER 1.3.0")
+  const version = JSON.parse(fs.readFileSync(path.join(__dirname, "package.json"), "utf8")).version;
+  fs.writeFileSync(path.join(OUT, "js", "version.js"), "window.TUNNELER_VERSION = " + JSON.stringify(version) + ";\n");
   for (const ext of [".js", ".css"]) {
     const entryPoints = files(OUT, ext);
     if (entryPoints.length)

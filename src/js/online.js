@@ -731,7 +731,7 @@
     const items = [{ key: "lobby", label: T("back.lobby"), info: [T("on.leave")], go: () => leave(lobbyHref) }];
     const you = player ? { text: T("on.youplay", { name: me >= 0 ? rawName(me) : NAME(role) }), color: TEXT_COLORS[myColor] } : { text: T("on.spectator"), color: 7 };
     dos.show({
-      lines: [{ row: 2, text: "TUNNELER ONLINE", color: 12 }, { row: 4, text: Lang.enc(roomName || roomId), color: 15 }, { row: 5, ...you },
+      lines: [{ row: 2, text: T("room.title"), color: 12 }, { row: 4, text: Lang.enc(roomName || roomId), color: 15 }, { row: 5, ...you },
         ...msg.map((m, k) => ({ row: 9 + k, ...(typeof m === "string" ? { text: m, color: 14 } : m) }))],
       box: { y: 13 }, infoRow: 19, items, back: () => leave(lobbyHref),
     }, !!msgSnap);

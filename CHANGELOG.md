@@ -8,6 +8,8 @@ every push to `main` is released (see CONTRIBUTING.md).
 - Round title: a blank row between the players and the game's settings (the settings use the last
   screen row when the list of players is long).
 - README screenshots updated (tools/readme-screenshots.js makes them).
+- The main menu says **TUNNELER 1.3** (the version; a trailing ".0" left out); the other screens have
+  their own titles (SETTINGS, SPLIT SCREEN, ONLINE GAMES, ONLINE GAME, ...).
 - Short addresses: `/games`, `/game/<name>` (a game's page and invite link), `/game/<name>/blue` (play
   as BLUE; `/watch` to spectate), `/split`, `/vs-computer`; the old `.html` addresses still work.
 - **After death** has five choices: black screen, my wreck, **watch team** (all your teammates still

@@ -12,7 +12,7 @@
   const gameUrl = (id, role) => Links.game(id, role);
   const roomUrl = id => Endpoint.web(Links.invite(id));   // (the server's page: also from the app)
   const T = Lang.t, E = Lang.enc;
-  const TITLE = [{ row: 2, text: "TUNNELER ONLINE", color: 12 }];
+  const ROOM_TITLE = () => [{ row: 2, text: T("room.title"), color: 12 }];  // one game ("ONLINE GAME")
   const ROLES = Lang.colorKeys, TEXT_COLORS = TunnelerEngine.PLAYER_TEXT_COLORS, MAX = ROLES.length;
   const { KINDS, SIZES, VISIBLE, ROUND_TIMES, roomSettings } = NetProto;
   const store = {
@@ -92,7 +92,7 @@
     items.push({ key: "create", label: T("lobby.create"), info: [T("lobby.create.i")], go: () => create() });
     items.push({ key: "back", label: T("back.main"), info: [T("back.main.i")], go: () => { location.href = "/"; } });
     ui.show({
-      lines: TITLE,
+      lines: [{ row: 2, text: T("lobby.title"), color: 12 }],
       box: { x: 6, y: 4, w: 68, rows: 8 }, fixed: 3,
       header: (" " + T("lobby.name")).padEnd(29) + T("lobby.players").padEnd(18) + T("lobby.state"),
       items, infoRow: 20, back: () => { location.href = "/"; },
@@ -205,7 +205,7 @@
   function roomScreen(keep, selKey) {
     view = "room";
     if (!room) {
-      return ui.show({ lines: [...TITLE, { row: 9, text: T("room.notfound"), color: 12 }, { row: 11, text: T("room.expired"), color: 3 }],
+      return ui.show({ lines: [...ROOM_TITLE(), { row: 9, text: T("room.notfound"), color: 12 }, { row: 11, text: T("room.expired"), color: 3 }],
         box: { y: 14 }, back: () => list(),
         items: [{ key: "back", label: T("back.lobby"), go: () => list() }] }, keep);
     }
@@ -228,7 +228,7 @@
     items.push({ key: "back", label: T("back.lobby"), info: [T("back.lobby.i")], go: () => list() });
     // the players (and the buttons) on the left, every setting of the room in a box on the right
     const settings = Lang.roomSettings(r, r.spec).map((text, k) => ({ key: "set" + k, label: text, align: "left", static: true }));
-    const lines = [...TITLE, { row: 4, text: E(r.name) + (r.public ? "" : "  " + T("room.private")), color: 15 }];
+    const lines = [...ROOM_TITLE(), { row: 4, text: E(r.name) + (r.public ? "" : "  " + T("room.private")), color: 15 }];
     ui.show({
       lines, boxes: [{ y: 6, title: T("box.players"), items }, { y: 6, title: T("box.settings"), items: settings }],
       infoRow: 22, back: () => list(),
@@ -244,7 +244,7 @@
     const host = (Endpoint.base() || location.origin).replace(/^https?:\/\//, "");
     const home = () => { location.href = "/"; };
     ui.show({
-      lines: [...TITLE, { row: 9, text: T("lobby.connecting"), color: 14 }, { row: 11, text: E(host), color: 7 },
+      lines: [{ row: 2, text: T("lobby.title"), color: 12 }, { row: 9, text: T("lobby.connecting"), color: 14 }, { row: 11, text: E(host), color: 7 },
         ...(failed ? [{ row: 13, text: T("lobby.wake"), color: 3 }] : [])],
       box: { y: 16 }, back: home, items: [{ key: "back", label: T("back.main"), info: [T("back.main.i")], go: home }],
     }, true);

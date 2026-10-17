@@ -61,10 +61,12 @@
   let splitTime = loadTime("tunneler.split.time");
   const saveSplit = () => { save("tunneler.split.size", splitSize); save("tunneler.split.win", String(splitWin)); save("tunneler.split.time", String(splitTime)); };
 
+  // the main menu: "TUNNELER 1.3.0" and the author; the other screens: their own title (like VS COMPUTER)
   const title = () => {
     const by = Lang.data[Lang.code].engine ? Lang.data[Lang.code].engine.by : "by Norko Kaniansky";
-    return [{ row: 4, text: "TUNNELER ONLINE", color: 12 }, { row: 6, text: Lang.enc(by), color: 4 }];
+    return [{ row: 4, text: Lang.title(), color: 12 }, { row: 6, text: Lang.enc(by), color: 4 }];
   };
+  const screenTitle = key => [{ row: 4, text: T(key), color: 12 }];
   const levelsText = () => LEVELS.map(l => Lang.raw("level." + l)).join(", ");
 
   function setLang(d) { Lang.set(step(Lang.codes, Lang.code, d)); settings(true); }
@@ -111,7 +113,7 @@
   function settings(keep) {
     const leave = () => { if (window.Endpoint && Endpoint.isApp) saveServer(); main(6); };
     ui.show({
-      lines: title(), box: { y: 11 }, sel: 0, infoRow: 20,
+      lines: screenTitle("set.title"), box: { y: 11 }, sel: 0, infoRow: 20,
       back: leave,
       items: [
         { key: "lang", label: T("home.lang") + Lang.name(Lang.code), info: [T("home.lang.i1"), T("home.lang.i2")],
@@ -141,7 +143,7 @@
     const start = () => { location.href = Links.split("size=" + splitSize + "&win=" + splitWin + timeArg(splitTime)); };
     const set = f => v => { f(v); saveSplit(); split(true); };
     ui.show({
-      lines: title(), box: { y: 9 }, sel: sel || 0, infoRow: 20,
+      lines: screenTitle("lc.split.title"), box: { y: 9 }, sel: sel || 0, infoRow: 20,
       back: () => main(0),
       items: [
         { key: "play", label: T("cpu.start"), info: [T("home.split.i1"), T("home.split.i2")], go: start },
