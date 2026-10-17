@@ -1116,6 +1116,11 @@ class TunnelerEngine {
     }
     return lines;
   }
+  // something drawn on screen row y (1-based)?
+  rowUsed(y) {
+    for (let c = 0; c < 80; c++) { const b = this.vram[((y - 1) * 80 + c) * 2]; if (b !== 0 && b !== 0x20) return true; }
+    return false;
+  }
   // the settings lines centred on column c (screen columns), from row y, in cyan
   writeSettings(c, y, width) {
     this.textColor(3);
@@ -1155,9 +1160,11 @@ class TunnelerEngine {
       this.markYou(1, 28 - (visLen(blue) >> 1), visLen(blue), 16, 9);
       this.markYou(2, 53 - (visLen(green) >> 1), visLen(green), 16, 10);
     }
-    if (this.showSettings) {                                   // at the bottom, wrapped onto several rows
+    if (this.showSettings) {                                   // at the bottom, wrapped onto several rows,
+      let last = 24;                                           // with a blank row above them (row 25 if
+      while (last > 11 && !this.rowUsed(last)) last--;         // the players' list needs the room)
       const n = this.settingsLines(48).length;
-      this.writeSettings(41, 25 - n, 48);
+      this.writeSettings(41, Math.min(26 - n, Math.max(25 - n, last + 2)), 48);
     }
     const at = 8 * 160 + (x + 1) * 2 + 1;                      // attribute of the first label cell
     for (let i = 1; i <= 80; i++) {

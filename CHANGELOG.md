@@ -5,6 +5,8 @@ every push to `main` is released (see CONTRIBUTING.md).
 
 ## Unreleased
 
+- Round title: a blank row between the players and the game's settings (the settings use the last
+  screen row when the list of players is long).
 - README screenshots updated (tools/readme-screenshots.js makes them).
 - After death "watch others" respects the view limit: with "team" you only watch your teammates
   (never the opponent), with "self" you stay on your wreck.
