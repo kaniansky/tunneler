@@ -368,6 +368,68 @@ function borderMatch(seed, engOpts, levels, maxFrames) {
   for (const l of LV) check((perLevel[l] || 0) <= 150, l + ": a bot stayed at its own base for " + perLevel[l] + " frames without retreating");
 }
 
+// ------------------------------------------------------------------ spinning in place
+// "right after destroying a tank a computer tank sometimes keeps spinning in place for a few seconds".
+// A spin: the last 18 frames (~1 s) with >= 9 direction changes while the tank stayed within 3 px. Per
+// level: the longest stretch (from the start of its first such window) a bot spends spinning. Causes
+// (fixed in ai.js): the victim's shots still flying (and hard's rough position of it) became a clue to
+// the wreck; a reached clue / rough position lost to the next goal and won again 1 px later; a tank in a
+// base's doorway sent out by the doorway rule and in again by its path; a teammate on the next path node
+// circled around (moving every frame, so the stuck counter never saw it - now the "dither" counter).
+// Before the fix (full run): normal 1421, hard 373, expert 739 frames; now <= 30 (short turns in close
+// combat, two teammates squeezing past each other in a dirt tunnel). Limit: 36 frames (~2 s, i.e. at most
+// 18 frames past the first spinning window). The classic AI is unchanged (never more than 21 there).
+{
+  console.log("\nSpinning in place (longest stretch in frames)");
+  const WIN = 18;
+  const games = [
+    ["2v2", { players: 4, teams: true }, ["hard", "normal", "expert", "hard"]],
+    ["4 free-for-all hard", { players: 4 }, ["hard", "hard", "hard", "hard"]],
+    ["5 free-for-all", { players: 5 }, ["normal", "hard", "expert", "hard", "normal"]],
+    ["6 free-for-all", { players: 6 }, ["hard", "normal", "expert", "hard", "normal", "expert"]],
+    ["6 free-for-all normal", { players: 6 }, lv(6).fill("normal")],
+    ["3v3", { slots: slots([1, 2, 1, 2, 1, 2]) }, ["hard", "normal", "expert", "hard", "normal", "expert"]],
+  ];
+  const seeds = quick ? [111, 148] : [37, 74, 111, 148, 185, 222, 259, 296];
+  const frames = quick ? 6000 : 20000;
+  const perLevel = {};
+  for (const [name, opts, levels] of games) {
+    let longest = 0, spins = 0, who = "";
+    for (const seed of seeds) {
+      const e = startEngine(seed, opts), N = e.nPlayers;
+      const ais = levels.map((l, i) => new TunnelerAI(l, i + 1, { seed }));
+      const hist = Array.from({ length: N + 1 }, () => []), run = new Array(N + 1).fill(0);
+      let round = -1;
+      for (let f = 0; f < frames && e.screen !== "map"; f++) {
+        e.step({ bits: ais.map(ai => TunnelerAI.bitsFor(ai, e)) });
+        if (e.screen !== "play") continue;
+        if (e.round !== round) { round = e.round; hist.forEach(h => (h.length = 0)); run.fill(0); }
+        for (let p = 1; p <= N; p++) {
+          const h = hist[p];
+          if (!e.alive[p]) { h.length = 0; run[p] = 0; continue; }
+          h.push([e.tankX[p], e.tankY[p], e.tankDir[p]]);
+          if (h.length > WIN + 1) h.shift();
+          if (h.length <= WIN) continue;
+          let turns = 0, far = 0;
+          for (let i = 1; i < h.length; i++) {
+            if (h[i][2] !== h[i - 1][2]) turns++;
+            far = Math.max(far, Math.abs(h[i][0] - h[0][0]), Math.abs(h[i][1] - h[0][1]));
+          }
+          if (turns < WIN / 2 || far > 3) { run[p] = 0; continue; }
+          if (!run[p]++) spins++;
+          const len = WIN + run[p], l = ais[p - 1].levelName;
+          if (len > longest) { longest = len; who = "seed " + seed + " player " + p + " " + l + " frame " + f; }
+          perLevel[l] = Math.max(perLevel[l] || 0, len);
+        }
+      }
+    }
+    console.log("  " + pad(name, 24) + "spins " + pad(spins, 5) + "longest " + pad(longest, 5) + (who ? "(" + who + ")" : ""));
+  }
+  console.log("  longest per level: " + ["normal", "hard", "expert"].map(l => l + " " + (perLevel[l] || 0)).join(", "));
+  for (const l of ["normal", "hard", "expert"])
+    check((perLevel[l] || 0) <= 36, l + ": a bot spun in place for " + perLevel[l] + " frames");
+}
+
 // ------------------------------------------------------------------ 7 bots + an idle BLUE: time per frame
 for (const size of ["medium", "large"]) {
   console.log("\nTime: 7 bots (every level) + idle BLUE, 8 players free-for-all, " + size + " map");

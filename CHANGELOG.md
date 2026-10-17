@@ -3,6 +3,11 @@
 All notable changes to Tunneler Online. Versions follow [semantic versioning](https://semver.org/);
 a release is made by pushing a version tag (see CONTRIBUTING.md).
 
+## Unreleased
+
+- Computer tanks no longer spin in place for seconds after destroying a tank (or in a base's doorway,
+  or next to a teammate in their way).
+
 ## 1.4.2
 
 - Homepage in the game's six languages (a language menu; the first visit follows the browser), and its

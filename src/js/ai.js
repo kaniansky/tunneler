@@ -20,7 +20,8 @@
 // GIVE_UP frames without getting closer (test/ai-ext-sim.js "rock around the world").
 // Extended engine only (the classic 1-vs-1 AI stays exactly as it was - test/ai-sim.js golden values):
 // steering through other bases' doorways (doorway), breaking dirt standoffs on a firing line (engage),
-// a coin toss to break off a losing head-on duel (decide), a bigger A* budget on the large map.
+// a coin toss to break off a losing head-on duel (decide), a bigger A* budget on the large map, no spinning
+// in place (clues of dead tanks dropped, reached clues used up, doorway hysteresis, ditherN -> unstick).
 //
 // The AI only *reads* engine state (tank positions, world pixels, shots) and presses the same keys a human
 // would; it never touches the engine and never calls engine.random(), so games stay deterministic.
@@ -453,6 +454,7 @@ class TunnelerAI {
     this.duel = 0; this.duelT = -9999;          // extended: hits landed - hits taken lately (see decide)
     this.prevHits = e.shotsHit[me];
     this.stillFrames = 0; this.lastX = e.tankX[me]; this.lastY = e.tankY[me];
+    this.ditherN = 0; this.ditherX = 0; this.ditherY = 0;   // extended: frames moving without getting anywhere
     this.prevKeys = false;
     this.prevShield = e.shield[me];
     this.mode = "explore";
@@ -485,6 +487,14 @@ class TunnelerAI {
     if (moving && mx === this.lastX && my === this.lastY) this.stillFrames++;
     else this.stillFrames = 0;
     if (this.stillFrames > 10) this.stuckFrames++;
+    // extended: keys held every frame, yet still within 2 px of where it was - two goals or two steering
+    // rules taking turns (e.g. a tank in the way that the planner does not see): the tank turns back and
+    // forth on the spot without the "still" counter ever seeing it stand still. Treated as stuck (decide).
+    if (e.extended) {
+      if (!moving) this.ditherN = 0;
+      else if (!this.ditherN || cheb(mx, my, this.ditherX, this.ditherY) > 2) { this.ditherN = 1; this.ditherX = mx; this.ditherY = my; }
+      else this.ditherN++;
+    }
     this.lastX = mx; this.lastY = my;
     this.prevKeys = moving;
     return out;
@@ -548,20 +558,26 @@ class TunnelerAI {
       this.mem[q] = { x, y, vx, vy, svx, svy, dir: P.obs[i + 3], t: P.t, exact: true };
       if (vis) { anyVis = true; this.lastSeenT = P.t; if (this.firstSight < 0) this.firstSight = this.t; }
     }
-    // enemy shots seen: the shooter is somewhere back along the shot line
+    // enemy shots seen: the shooter is somewhere back along the shot line (not the shots of a tank already
+    // destroyed - right after a kill they still fly and would send it to the wreck, see huntGoal)
     if (!anyVis && cfg.intel !== "exact")
       for (let i = 0; i < P.shots.length; i += 4) {
-        if (!enemyOf(e, me, P.shots[i + 3])) continue;
+        const q = P.shots[i + 3];
+        if (!enemyOf(e, me, q) || !e.alive[q]) continue;
         const d = P.shots[i + 2];
-        this.clue = { x: P.shots[i] - DX[d] * 24, y: P.shots[i + 1] - DY[d] * 24, t: P.t };
+        this.clue = { x: P.shots[i] - DX[d] * 24, y: P.shots[i + 1] - DY[d] * 24, t: P.t, q };
         break;
       }
+
     // hard: rough position of the nearest enemy every ~3 s
     if (cfg.intel === "noisy" && this.t - this.noisyT >= 55) {
       this.noisyT = this.t;
       const q = this.nearestEnemy(e, mx, my);
-      if (q) this.noisy = { x: e.tankX[q] + Math.round((this.rng() - 0.5) * 50), y: e.tankY[q] + Math.round((this.rng() - 0.5) * 50) };
+      if (q) this.noisy = { x: e.tankX[q] + Math.round((this.rng() - 0.5) * 50), y: e.tankY[q] + Math.round((this.rng() - 0.5) * 50), q };
     }
+    // a rough position / clue of a tank destroyed since is worthless (it led to the wreck after a kill)
+    if (this.noisy && !e.alive[this.noisy.q]) this.noisy = null;
+    if (this.clue && !e.alive[this.clue.q]) this.clue = null;
     this.chooseFocus(e);
   }
 
@@ -666,8 +682,8 @@ class TunnelerAI {
     } else if (this.unstickT > 0) {
       this.unstickT--;
       dir = this.unstickDir;
-    } else if (this.stillFrames > 12) {
-      // stuck: back off in a random free direction for a few frames, then plan again
+    } else if (this.stillFrames > 12 || this.ditherN > 12) {
+      // stuck (or dithering on the spot): back off in a random free direction for a few frames, then plan again
       this.unstick(e, mx, my);
       dir = this.unstickDir;
     } else {
@@ -718,10 +734,18 @@ class TunnelerAI {
     const E = this.enemy;
     if (E && this.t - cfg.delay - E.t <= cfg.memory && cheb(mx, my, E.x, E.y) > 6)
       return { x: E.x, y: E.y, mode: "hunt", dig: close(E.x, E.y) };
-    if (this.clue && this.t - this.clue.t < 150 && cheb(mx, my, this.clue.x, this.clue.y) > 8)
-      return { x: this.clue.x, y: this.clue.y, mode: "hunt", dig: close(this.clue.x, this.clue.y) };
-    if (cfg.intel === "noisy" && this.noisy && cheb(mx, my, this.noisy.x, this.noisy.y) > 10)
-      return { x: this.noisy.x, y: this.noisy.y, mode: "hunt", dig: false };
+    // extended: a clue / rough position it has reached (nothing found there) is used up - otherwise it
+    // turned back to it as soon as the next goal had taken it 1 px away, and the two goals alternated
+    // every frame: the tank spun in place (classic: kept as it was)
+    if (this.clue && this.t - this.clue.t < 150) {
+      if (cheb(mx, my, this.clue.x, this.clue.y) > 8)
+        return { x: this.clue.x, y: this.clue.y, mode: "hunt", dig: close(this.clue.x, this.clue.y) };
+      if (e.extended) this.clue = null;
+    }
+    if (cfg.intel === "noisy" && this.noisy) {
+      if (cheb(mx, my, this.noisy.x, this.noisy.y) > 10) return { x: this.noisy.x, y: this.noisy.y, mode: "hunt", dig: false };
+      if (e.extended) this.noisy = null;
+    }
     // explore: first look around an enemy base (it starts there and comes back to refuel), then wander.
     // The base explored is the nearest one of an enemy still alive, chosen with every new waypoint.
     if (this.exploreQ && !e.alive[this.exploreQ]) { this.exploreQ = 0; this.waypoint = null; }
@@ -886,11 +910,17 @@ class TunnelerAI {
       const tankIn = Math.abs(mx - bx) <= 13 && Math.abs(my - by) <= 20;   // inside or in a doorway
       const goalIn = Math.abs(gx - bx) <= 16 && Math.abs(gy - by) <= 16;
       if (tankIn && !goalIn) {
-        // out: through the gap on the goal's side (already in a doorway: on through it)
-        const side = Math.abs(my - by) > 13 ? sgn(my - by) : gy < by ? -1 : 1;
+        // out: through the gap on the goal's side; already in a doorway: on through it the way it faces
+        // (a tank driving in on its path - the grid sees a base's doorway when it happens to align with it -
+        // was sent back out, one pixel later its path took it in again: it spun in the doorway)
+        const fy = DY[e.tankDir[this.me]];
+        const side = Math.abs(my - by) > 13 ? (fy || sgn(my - by)) : gy < by ? -1 : 1;
         if (mx !== bx) return { dir: dirOf(sgn(bx - mx), 0) };
         return { dir: dirOf(0, side) };
       }
+      // in a doorway on the way in (the goal is inside): on in (the planner, which does not see the
+      // inside of a base its grid is not aligned with, would lead it out again)
+      if (tankIn && goalIn && mx === bx && Math.abs(my - by) > 13) return { dir: dirOf(0, -sgn(my - by)) };
       if (!tankIn && goalIn && !(Math.abs(mx - bx) <= 16 && Math.abs(my - by) <= 16)) {
         // in: first to the point in front of the nearer gap, then line up and drive in
         const side = my < by ? -1 : 1, dx = bx, dy = by + side * 24;
@@ -925,7 +955,7 @@ class TunnelerAI {
     }
     this.unstickDir = free.length ? free[Math.floor(this.rng() * free.length)] : Math.floor(this.rng() * 8);
     this.unstickT = 6 + Math.floor(this.rng() * 6);
-    this.stillFrames = 0;
+    this.stillFrames = 0; this.ditherN = 0;
     this.path = null;
   }
 

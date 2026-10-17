@@ -422,6 +422,12 @@ the room info): the most a player may choose to see during play - display only, 
   reason; readable start-up errors (port < 1024, in use, invalid PORT).
 - AI: exploration waypoints only in the reachable interior (`TunnelerAI.interior`, shared 8x8 rock
   map per round), unreachable waypoints given up after 150 frames (no more pushing into the map edge).
+- AI spinning in place (extended only, classic golden values unchanged): clues / hard's rough position
+  remember their tank (`clue.q`, `noisy.q`) and are dropped when it dies (a victim's shots still flying
+  sent the killer to the wreck); a reached clue / rough position is used up; a tank in a doorway goes on
+  the way it faces / on in when its goal is inside (`doorway`); `ditherN` (keys held, still within 2 px
+  for > 12 frames) counts as stuck -> `unstick`. Test: ai-ext-sim "Spinning in place" (was up to 1421
+  frames, now <= 30; limit 36).
 - Bases (extended only, `newMatchExt` -> `openBase`, no RNG draw): a base whose two doorways both open
   into rock walled its tank in (bots drove in and out of it for whole rounds - a way a tank could only
   squeeze through pixel by pixel is invisible to the AI's 4 px grid). A doorway counts as passable if a
