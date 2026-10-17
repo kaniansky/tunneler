@@ -393,7 +393,9 @@ the room info): the most a player may choose to see during play - display only, 
   destroyed the watched one (`engine.killedBy`, display only, not in stateHash; followed along the
   chain), else the first alive (own team first), staying on it while it lives, "others" ("watch all")
   = every tank still alive (own team first). These ignore the view limit. Nobody left to watch
-  (`views.ghostNone`): black, as "black". Sound fades from the killer when shown, else the first shown.
+  (`views.ghostNone`): black, as "black". With every setting but "wreck", any destroyed tank's view in
+  the player's scope (e.g. a dead teammate's while you live) is black with DESTROYED (`blackedOut`);
+  the sound is muted only for "black" / nobody watched. Sound fades from the killer when shown, else the first shown.
 - Server: rooms nobody plays in (no human player activity) for 10 minutes are closed with an "idle"
   reason; readable start-up errors (port < 1024, in use, invalid PORT).
 - AI: exploration waypoints only in the reachable interior (`TunnelerAI.interior`, shared 8x8 rock

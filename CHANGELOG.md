@@ -14,7 +14,8 @@ every push to `main` is released (see CONTRIBUTING.md).
   as BLUE; `/watch` to spectate), `/split`, `/vs-computer`; the old `.html` addresses still work.
 - **After death** has five choices: black screen, my wreck, **watch team** (all your teammates still
   alive), **watch killer** (one view: the tank that destroyed you, then its killer...) and **watch all**
-  (every tank still alive). Nobody left to watch: the screen goes black with DESTROYED.
+  (every tank still alive). Nobody left to watch: the screen goes black with DESTROYED. With every
+  choice but "my wreck", a destroyed tank's view (e.g. a teammate's next to yours) goes black too.
 - Online game: while the server doesn't answer yet (e.g. waking up on a free host), the lobby says
   "Connecting to the server..." with its address instead of a black screen; Esc goes back.
 

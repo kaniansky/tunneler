@@ -381,6 +381,16 @@ function play(search) {
   et.killedBy = [0, 3, 0, 0, 0, 0]; et.tankX = e.tankX; et.tankY = e.tankY;
   et.alive = [false, false, true, true, true, true];
   same(vt.layout().cells, [3], "watch team: your teammate (YELLOW) - not your killer, whatever the view limit");
+  {   // while you live: a destroyed teammate's view is black (every setting but "wreck")
+    const tv = play(link + "&watch=team&view=team"), tvv = tv.tunnelerViews(), tve = tv.tunnelerEngine();
+    tvv.snap = { screen: "play", mode: "lores", views: tve.views || [] };
+    tve.alive = [false, true, true, true, false, true];
+    same(tvv.layout().cells, [0, 3], "view team, alive: you and YELLOW...");
+    assert(tvv.blackedOut(3, tve) && !tvv.blackedOut(0, tve), "... YELLOW destroyed: its view black (DESTROYED)");
+    const wr = play(link + "&view=team"), wrv = wr.tunnelerViews(), wre = wr.tunnelerEngine();
+    wre.alive = [false, true, true, true, false, true];
+    assert(!wrv.blackedOut(3, wre), "wreck: a destroyed teammate's view stays");
+  }
   assert.strictEqual(vt.listenTo(0), 3, "sounds from the teammate shown (the killer isn't)");
   et.alive = [false, false, true, true, false, true];
   same(vt.layout().cells, [0], "watch team, no teammate left: the scope's views...");

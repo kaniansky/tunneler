@@ -160,9 +160,9 @@ class ViewModes {
     return dead && ["team", "killer", "others"].includes(this.watchOut) && this.ghost != null ? this.ghost : own;
   }
   // the speaker's listener for player `own` (runner.listener): {x, y} of the tank listened to, or
-  // {mute: true} while the own view is a black DESTROYED screen
+  // {mute: true} while the own view is a black DESTROYED screen and nothing else is watched
   hearAt(own, e) {
-    if (this.blackedOut(own, e)) return { mute: true };
+    if (this.blackedOut(own, e) && (this.watchOut === "black" || this.ghostNone)) return { mute: true };   // (nothing watched)
     const p = this.listenTo(own) + 1;
     return { x: e.tankX[p], y: e.tankY[p] };
   }
@@ -380,11 +380,10 @@ class ViewModes {
     this.fit(L.cols === 1 && L.rows === 1 && !L.labels ? "half" : "grid");
   }
 
-  // after death "black" (a player's own scope): a destroyed tank's view is black with "DESTROYED" until
-  // the next round ("wreck": it stays on the wreck; "others": see outCells - black too once nobody it
-  // may watch is left)
+  // a player's own scope: a destroyed tank's view (own or a teammate's) is black with "DESTROYED" until
+  // the next round - with every after death setting but "wreck" (which keeps showing the wrecks)
   blackedOut(i, e) {
-    return !!(this.scope && (this.watchOut === "black" || this.ghostNone) && e && e.alive && !e.alive[i + 1]);
+    return !!(this.scope && this.watchOut !== "wreck" && e && e.alive && !e.alive[i + 1]);
   }
   // one line of font text centred in a 40-column view at pixel row y, in DOS attribute `attr`
   paintText(px, W, x, y, text, attr) {
