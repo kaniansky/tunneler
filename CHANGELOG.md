@@ -3,7 +3,7 @@
 All notable changes to Tunneler Online. Versions follow [semantic versioning](https://semver.org/);
 a release is made by pushing a version tag (see CONTRIBUTING.md).
 
-## Unreleased
+## 1.4.2
 
 - Homepage in the game's six languages (a language menu; the first visit follows the browser), and its
   Play links open the game in the same language (`?lang=sk` in the game's address chooses it).

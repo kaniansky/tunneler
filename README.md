@@ -86,8 +86,9 @@ the whole world with a score table (wins, energy, shield per tank and team), or 
 
 ![Game list](screenshots/lobby.png)
 
-Languages: English, Slovenčina, Čeština, Українська, Русский and Gen Z (on the Settings screen). Each
-language is one file in `src/lang/`.
+Languages: English, Slovenčina, Čeština, Українська, Русский and Gen Z (on the Settings screen, or
+`?lang=sk` / `cs` / `uk` / `ru` / `genz` / `en` in the address). Each language is one file in `src/lang/`.
+The homepage, https://kaniansky.com/tunneler/, comes in the same languages.
 
 ## Controls
 
