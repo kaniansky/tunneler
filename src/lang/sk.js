@@ -139,7 +139,66 @@ Lang.register("sk", {
         "ako kopanie.  Rýchlejšie sa kope, keď počas jazdy strieľaš z kanóna.  Každá",
         "činnosť míňa inak veľa energie: jazda trochu, kopanie viac a streľba najviac.",
         "Štít sa poškodí zásahom súperovho kanóna.  Energiu doplníš na ktorejkoľvek",
-        "základni, štít však opravíš iba na svojej vlastnej."],
+        "základni, štít však opravíš iba na svojej vlastnej (na základni spoluhráča tiež,",
+        "ale polovičnou rýchlosťou)."],
+      // everything added since 1991, one [head, text] per paragraph (wrapped to the page's width)
+      sections: [
+        ["Gamepady a dotykové obrazovky:  ", "tank riadi aj gamepad (delená obrazovka: gamepad 1 " +
+          "{9}MODRÝ{3}, gamepad 2 {10}ZELENÝ{3}; inak ktorýkoľvek gamepad riadi ten tvoj) - páčka alebo " +
+          "smerový ovládač ho pohybuje, ktorékoľvek tlačidlo strieľa, Start je <ESC>; v menu fungujú " +
+          "smerový ovládač a A / B ako šípky, <ENTER> a <ESC>.  Na telefónoch a tabletoch sa pri prvom " +
+          "dotyku objaví joystick na obrazovke a tlačidlá PAĽBA a ESC; mená a chat zatiaľ potrebujú " +
+          "klávesnicu."],
+        ["Víťazstvo:  ", "Zápas vyhrá tank (alebo tím), ktorý prvý vyhrá zvolený počet kôl - 1 až 9, " +
+          "v origináli 3.  Kolo môže mať aj časový limit 2, 3, 5 alebo 10 minút (posledných 30 sekúnd " +
+          "sa odpočítava vedľa prístrojového panelu).  Keď čas vyprší, kolo vyhrá strana, ktorá " +
+          "najviac zasiahla nepriateľské tanky, a ostatné tanky vybuchnú; pri remíze nevyhrá nikto.  " +
+          "Po zápase štatistika ukáže výstrely, zásahy, vykopané a prejdené metre každého tanku a " +
+          "\"Odveta\" spustí hru znova s rovnakými nastaveniami."],
+        ["Tímy:  ", "Okrem pôvodného súboja môže hrať až 8 tankov (MODRÝ, ZELENÝ, AZÚROVÝ, ŽLTÝ, " +
+          "BIELY, RUŽOVÝ, FIALOVÝ a TYRKYSOVÝ) každý sám za seba alebo v tímoch.  Tanky s rovnakým " +
+          "číslom tímu sú spoluhráči; tím vyhrá kolo, keď ostanú iba jeho tanky, a bod dostanú všetci " +
+          "jeho členovia.  Priateľská paľba zapnutá: tvoje strely zrania aj spoluhráčov.  Vypnutá: " +
+          "strela na spoluhráčovi vybuchne ako na stene."],
+        ["Počítačové tanky:  ", "počítač riadi tank na jednej z troch úrovní: ľahká, stredná alebo ťažká."],
+        ["Veľkosť mapy:  ", "malá (512 x 256 bodov, štvrtina originálu), stredná (1024 x 512, " +
+          "pôvodný svet) alebo veľká (2048 x 1024, štyrikrát väčšia).  Každý tank začína vo svojej " +
+          "vlastnej základni."],
+        ["Pohľad:  ", "čo vidíš počas hry: len ja - iba svoju obrazovku; tím - aj obrazovky " +
+          "spoluhráčov; všetci - obrazovky všetkých tankov, tvoju ako prvú.  V hre online nastaví jej " +
+          "tvorca limit pohľadu: najviac, čo si v nej hráč môže zvoliť."],
+        ["Po smrti:  ", "čo vidíš od zničenia svojho tanku do konca kola: čiernu obrazovku, svoj " +
+          "vrak, svojich spoluhráčov, svojho vraha (tank, ktorý ťa zničil, potom ten, ktorý zničil " +
+          "jeho...) alebo všetky tanky, ktoré ešte žijú."],
+        ["Delená obrazovka:  ", "pôvodná hra - dvaja hráči na jednej klávesnici, {9}MODRÝ{3} na " +
+          "ľavej polovici obrazovky a {10}ZELENÝ{3} na pravej.  Najprv si zvoľ veľkosť mapy, počet kôl " +
+          "na výhru a čas kola."],
+        ["Proti počítaču:  ", "riadiš {9}MODRÝ{3} tank ktoroukoľvek sadou kláves proti 1 až 7 " +
+          "počítačovým tankom.  Pre každú ďalšiu farbu zvoľ nikoho alebo počítač a jeho úroveň, pre " +
+          "každý tank jeho tím (1-8); potom veľkosť mapy, kolá na výhru, čas kola, priateľskú paľbu, " +
+          "pohľad a čo po smrti.  <ESC> počas hry ukončí zápas; <ESC> v menu hry ťa vráti k " +
+          "nastaveniam."],
+        ["Hra online:  ", "2 až 8 tankov na rôznych počítačoch, niektoré z nich môžu byť " +
+          "počítačové.  Vytvor hru - jej meno, verejná alebo súkromná (pripája sa odkazom s " +
+          "pozvánkou), diváci povolení alebo nie, každé miesto človek, počítač alebo nikto aj s tímom, " +
+          "a nastavenia vyššie - alebo sa pripoj k hre zo zoznamu.  Svoj tank riadiš ktoroukoľvek " +
+          "sadou kláves.  Všetky počítače počítajú tú istú hru krok za krokom; sieťou idú iba " +
+          "stlačené klávesy."],
+        ["Lobby hry:  ", "pred každým zápasom si zvoľ meno a tím, píš ostatným (Povedz:) a zvoľ " +
+          "\"Som pripravený!\" - zápas sa začne, keď sú pripravení všetci hráči (počítačové tanky sú " +
+          "vždy).  Hostiteľ - ten, kto hru vytvoril, alebo ďalší hráč, keď hostiteľ odíde - môže aj " +
+          "\"Spustiť hneď\" (tanky chýbajúcich hráčov stoja, kým sa nepripoja) a \"Vyhodiť " +
+          "hráča...\".  Po zápase lobby ukáže jeho štatistiku.  Hru online opustíš dvoma " +
+          "stlačeniami <ESC>."],
+        ["Diváci:  ", "sledujú hru online bez hrania.  <TAB> alebo <1> <2> <3> prepína medzi " +
+          "všetkými obrazovkami, mapou so skóre a sledovaním jedného tanku (<←> <→> vyberú ktorého)."],
+        ["Zvuk:  ", "<M> vypne a zapne zvuk.  V Nastaveniach zvolíš jeho štýl: pôvodný (pípanie PC " +
+          "speakera z roku 1991), realistický (zvuky tankov), rozprávkový (boing a puk) alebo " +
+          "vypnutý.  Zvuky ostatných tankov slabnú so vzdialenosťou od tvojho."],
+        ["Nastavenia:  ", "jazyk menu a hry, zvuk a \"Zobraziť ping\" (hry online: čas odozvy v " +
+          "ms, vľavo hore na okraji hry).  V desktopovej aplikácii aj Server pre hry online (prázdny " +
+          "= verejný server)."],
+      ],
     },
     info: {
       title: "INFORMÁCIE",
@@ -156,6 +215,15 @@ Lang.register("sk", {
         "na malej, strednej či veľkej mape, do 1 až 9 vyhraných kôl.  Online si hráči",
         "v lobby zvolia mená a tímy, četujú a začnú, keď sú všetci pripravení.  Všetky",
         "počítače hrajú tú istú hru synchrónne; po sieti idú len stlačené klávesy."],
+      sections: [
+        ["Desktopová aplikácia:  ", "TUNNELER ONLINE je aj malý program pre Windows, Linux a macOS " +
+          "- stiahneš ho zo stránky vydaní na GitHube (github.com/kaniansky/tunneler-online/releases).  " +
+          "Delenú obrazovku a hru proti počítaču hrá bez siete, hry online na verejnom serveri alebo " +
+          "na akomkoľvek inom (Nastavenia, Server)."],
+        ["Originál:  ", "TUNNELER 2.0 napísal Geoffrey Silverton v roku 1991 v Turbo Pascale: dva " +
+          "tanky sa prekopávajú podzemným svetom na jednom PC, s jednou klávesnicou a delenou " +
+          "obrazovkou.  Táto verzia z neho zachováva všetko a pridáva zvyšok."],
+      ],
       p3: ["Toto je voľné dielo (public domain); pokojne ho kopíruj kamarátom."],
       credits: ["Norko Kaniansky, 2026", "pôvodný TUNNELER 2.0:", "Geoffrey Silverton, 1991"],
     },

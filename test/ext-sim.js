@@ -16,7 +16,8 @@
 //     Esc does nothing, per-frame time, every sound event has a source position (fire = the firing tank)
 //   - friendly fire on / off in a staged duel
 //   - the world map banner from strings.banner (box sized to it, centered), the original by default
-//   - instructions: "{n}" follows winScore and stays inside 80 columns / 23 rows in every language
+//   - instructions: "{n}" follows winScore and every row fits PAGE_W columns in every language; the
+//     Instructions / Information pages scroll (keys, scroll bar, Enter / Esc back)
 //   - the statistics and round title lay out without wrapping in every language, for many team setups
 //   node test/ext-sim.js [quick]
 const path = require("path");
@@ -555,15 +556,15 @@ function duel(ff, target) {
 
 // ------------------------------------------------------------------ 8. instructions follow winScore
 {
+  // the whole page (it scrolls): its rows' text, and the rows that wrapped while drawing the screen
   const rowsOf = e => {
     e.window(1, 1, 80, 24); e.clearScreen();
-    const rows = [], write = e.write.bind(e), rule = e.drawBottomRule.bind(e);
-    let last = 0;
+    const rows = [], write = e.write.bind(e);
     e.write = (...a) => { const y = e.cy; write(...a); if (e.cy > y + 1 || (e.cy === y + 1 && e.cx !== e.wx1)) rows.push(y); };
-    e.drawBottomRule = () => { last = e.cy; rule(); };
     e.showInstructions();
-    e.write = write; e.drawBottomRule = rule;
-    return { wraps: rows, last, text: screenText(e.vram) };
+    e.write = write;
+    const long = e.pageRows.filter(r => r.col - 1 + r.text.replace(/\{\d+\}/g, "").length > E.PAGE_W);
+    return { wraps: rows.concat(long), last: 0, text: e.pageRows.map(r => r.text.replace(/\{\d+\}/g, "")).join("\n") };
   };
   for (const c of Lang.codes) {
     Lang.set(c);
@@ -587,6 +588,46 @@ function duel(ff, target) {
   const w = e.winScoreText(e.strings.instr.intro);
   check(w.every(l => l.length <= 80) && w.join(" ").replace(/ +/g, " ") === e.strings.instr.intro.join(" ").replace("{n}", e.strings.instr.winRounds[0]).replace(/ +/g, " "), "re-wrapped intro: " + JSON.stringify(w));
   ok("instructions: \"{n}\" follows winScore in every language");
+}
+
+// ------------------------------------------------------------------ 8b. the pages scroll
+{
+  Lang.set("en");
+  const e = new E(1);
+  e.initTables(); e.textMode();
+  e.showInstructions();
+  const n = e.pageRows.length, max = n - E.PAGE_ROWS, row = y => textRow(e.vram, y);
+  const at = (y, x) => e.vram[y * 160 + x * 2];
+  check(n > E.PAGE_ROWS * 3, "the instructions are longer than three screens (" + n + " rows)");
+  check(e.pageTop === 0 && row(0).includes("INSTRUCTIONS") && at(0, 79) === 0x18 && at(22, 79) === 0x19, "top: the title, the scroll bar's arrows in column 80");
+  check(e.vram[22 * 160 + 79 * 2 + 1] === 0x0F && e.vram[79 * 2 + 1] === 0x08, "top: only the down arrow is lit");
+  check(at(1, 79) === 0xDB, "top: the thumb at the top of the bar");
+  check(row(24).startsWith(" \x18\x19 PgUp PgDn Home End") && row(24).includes("Press <ENTER> for main menu."), "bottom line: scroll keys + prompt: " + row(24));
+  // the game's own menu loop: scan codes, Enter / Esc still go back
+  const key = (scan, ascii = 0) => e.menuKey([ascii, scan]);
+  const k = key(0x50);
+  check(k[0] === 219 && e.pageTop === 1 && !row(0).includes("INSTRUCTIONS"), "Down: row 2 on top");
+  key(0x48); check(e.pageTop === 0, "Up: back to the top");
+  key(0x48); check(e.pageTop === 0, "Up at the top stays");
+  key(0x51); check(e.pageTop === E.PAGE_ROWS - 1, "PgDn: a screen less one row");
+  key(0x49); check(e.pageTop === 0, "PgUp: back");
+  key(0x4F); check(e.pageTop === max && row(E.PAGE_ROWS - 1).trim().length > 0, "End: the last row at the bottom");
+  check(e.vram[22 * 160 + 79 * 2 + 1] === 0x08 && e.vram[79 * 2 + 1] === 0x0F && at(21, 79) === 0xDB, "end: up arrow lit, thumb at the bottom");
+  key(0x50); check(e.pageTop === max, "Down at the end stays");
+  key(0x47); check(e.pageTop === 0, "Home: the top");
+  check(e.pageScroll(5) && e.pageTop === 5 && !e.pageScroll("nonsense") && e.pageScroll(-99) && e.pageTop === 0, "pageScroll(rows)");
+  const enter = e.menuKey([13, 0x1C]), esc = e.menuKey([27, 1]);
+  check(enter[0] === 27 && esc[0] === 27, "Enter / Esc still leave the page");
+  // Information fits less tightly but scrolls the same way; the credits close it
+  const g = e.showInformation(); while (!g.next().done);
+  check(e.menuPage === "information" && e.pageTop === 0 && row(0).includes("INFORMATION"), "information: top");
+  e.pageScroll("end");
+  check(textRow(e.vram, E.PAGE_ROWS - 1).includes("Geoffrey Silverton, 1991"), "information: the credits at the end");
+  // a page that fits: no scroll bar, no scroll keys
+  const s = new E(1); s.initTables(); s.textMode();
+  s.showPageRows("instructions", [{ col: 1, text: "{3}short" }]);
+  check(s.vram[79 * 2] === 0x20 && !textRow(s.vram, 24).includes("PgUp") && !s.pageScroll("down"), "a short page: no scroll bar / keys");
+  ok("Instructions / Information scroll: Up / Down, PgUp / PgDn, Home / End, scroll bar, Enter / Esc back");
 }
 
 // ------------------------------------------------------------------ 9. layout in every language

@@ -140,7 +140,62 @@ Lang.register("genz", {
         "as fast as digging.  Life hack: fire the cannon while moving to dig way faster.",
         "Everything costs energy: moving a bit, digging more, and shooting the most.",
         "Your shield takes damage when the opps hit you.  Refuel at any base, but you",
-        "can only repair your shield at your own base.  Don't fumble it."],
+        "can only repair your shield at your own base (or at your squad's, at half speed).",
+        "Don't fumble it."],
+      // everything added since 1991, one [head, text] per paragraph (wrapped to the page's width)
+      sections: [
+        ["Controllers and touch screens:  ", "a gamepad drives a tank too (split screen: gamepad 1 " +
+          "is {9}BLUE{3}, gamepad 2 is {10}GREEN{3}; otherwise any gamepad drives yours) - the stick " +
+          "or d-pad moves, any button sends it, Start is <ESC>; in the menus the d-pad and A / B work " +
+          "as the arrows, <ENTER> and <ESC>.  On phones and tablets an on-screen joystick plus YEET " +
+          "and BAIL buttons pop up with the first touch; names and chat still need a real keyboard, sorry."],
+        ["Taking the W:  ", "First tank (or squad) to win the picked number of rounds - 1 to 9, the " +
+          "OG is 3 - wins the whole match.  Rounds can have a timer too: 2, 3, 5 or 10 minutes (the " +
+          "last 30 seconds count down next to the panel, no pressure).  When time's up, the side that " +
+          "landed the most hits on the opps wins the round and everyone else gets blown up; a tie " +
+          "means nobody wins, L for all.  After the match the receipts drop: everyone's shots, hits, " +
+          "meters dug and meters traveled, and \"Run it back\" replays with the same settings."],
+        ["Squads:  ", "Besides the OG 1v1, up to 8 tanks (BLUE, GREEN, CYAN, YELLOW, WHITE, PINK, " +
+          "VIOLET and TEAL) can go free-for-all - every tank for itself - or in squads.  Same squad " +
+          "number = same team; a squad wins the round when only its tanks are left, and the whole " +
+          "squad gets the W.  Friendly fire on: your shots hit your squad too, toxic.  Off: a shot " +
+          "pops on a teammate like on a wall."],
+        ["Bots:  ", "the computer drives a tank at one of three levels: chill, mid or goated."],
+        ["Map size:  ", "smol (512 x 256 pixels, a quarter of the OG), mid (1024 x 512, the OG " +
+          "world) or massive (2048 x 1024, 4x bigger).  Every tank spawns in its own base."],
+        ["POV:  ", "what you see while playing: main character - only your own screen; the squad - " +
+          "your squad's screens too; everyone fr - every tank's screen, yours first.  In an online " +
+          "game the creator sets a max POV, the most anyone in it can pick."],
+        ["After you die:  ", "what you see once you're cooked, until the round ends: a black " +
+          "screen, your wreck, your squad, your killer (the tank that got you, then whoever got " +
+          "them...) or every tank still alive."],
+        ["Split screen:  ", "the OG game - two besties on one keyboard, {9}BLUE{3} on the left half " +
+          "of the screen and {10}GREEN{3} on the right.  Pick the map size, W's to win and round timer " +
+          "first."],
+        ["Vs the bots:  ", "you drive {9}BLUE{3} with either set of keys against 1 to 7 bots.  For " +
+          "every other color pick nobody or a bot and its level, plus every tank's squad (1-8); then " +
+          "map size, W's to win, round timer, friendly fire, POV and after you die.  <ESC> while " +
+          "playing ends the match; <ESC> on the game's menu takes you back to the settings."],
+        ["Online game:  ", "2 to 8 tanks on different computers, bots allowed.  Make a game - its " +
+          "name, public or private (people join with the invite link), spectators or not, every slot " +
+          "human, bot or nobody with its squad, and all the settings above - or join one from the " +
+          "list.  You drive your tank with either set of keys.  Every computer runs the same game in " +
+          "lockstep; only key presses go over the net, so no lag excuses."],
+        ["The lobby:  ", "before every match pick your name and squad, yap in the chat (Yap:) and " +
+          "hit \"I'm locked in!\" - the match starts when everyone is locked in (bots always are).  " +
+          "The host - whoever made the game, or the next player if the host dips - can also \"Start " +
+          "now fr\" (missing players' tanks just stand there until they show up) and \"Yeet a " +
+          "player...\".  After a match the lobby shows the receipts.  Hit <ESC> twice to dip from an " +
+          "online game."],
+        ["Lurkers:  ", "watch an online game without playing.  <TAB> or <1> <2> <3> switch between " +
+          "all screens, the map with the scores, and following one tank (<←> <→> pick which)."],
+        ["Sound:  ", "<M> turns the sound off and on.  Pick the vibe in Settings: OG (the PC speaker " +
+          "beeps of 1991), realistic (tank noises) or cartoony (boings and pops), or muted.  Other " +
+          "tanks get quieter the farther they are from yours."],
+        ["Settings:  ", "the language of the menus and the game, the sound, and \"Show ping\" " +
+          "(online games: your round-trip time in ms, top left on the game's border).  The desktop " +
+          "app also has Server for online games (empty = the public server)."],
+      ],
     },
     info: {
       title: "THE LORE",
@@ -157,6 +212,16 @@ Lang.register("genz", {
         "a small, medium or large map, first to 1-9 rounds.  Online, everyone picks",
         "a name and squad in the lobby, yaps in chat, and locks in when ready.  Every",
         "computer runs the same game in lockstep; only key presses go over the net."],
+      sections: [
+        ["The desktop app:  ", "TUNNELER ONLINE also comes as a lil program for Windows, Linux and " +
+          "macOS - grab it from the releases page on GitHub " +
+          "(github.com/kaniansky/tunneler-online/releases).  Split screen and vs the bots work with " +
+          "no internet, and online games run on the public server or any other one (Settings, " +
+          "Server)."],
+        ["The OG:  ", "TUNNELER 2.0 was made by Geoffrey Silverton in 1991 in Turbo Pascal: two " +
+          "tanks dig through an underground world on one PC, one keyboard, one split screen.  " +
+          "Absolute legend.  This version keeps all of it and adds the rest."],
+      ],
       p3: ["This is public domain, so share it with the group chat.  Free real estate."],
       credits: ["Norko Kaniansky, 2026", "original TUNNELER 2.0:", "Geoffrey Silverton, 1991"],
     },

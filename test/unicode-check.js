@@ -291,6 +291,41 @@ function stats(e) { e.textMode(); e.menuShift = -20; e.showMainMenu(); return sc
   ok("cleaning: any letters kept (NFC), control / bidi / zero-width / private use removed, lengths in columns");
 }
 
+// ---------------------------------------------------------------- DosUI.showPage: the pages scroll
+{
+  let snap = null, backs = 0;
+  const ui = new W.DosUI(W.document.getElementById("c"), { display: new W.Display(W.document.getElementById("c")), present: s => { snap = s; } });
+  const ev = (key, code) => ({ key, code: code || key, preventDefault() {}, getModifierState: () => false });
+  for (const c of ["en", "uk"]) {
+    W.Lang.set(c);
+    for (const kind of ["instructions", "information"]) {
+      ui.showPage(kind, "hotseat", () => backs++);
+      const e = ui.spec.engine, max = e.pageRows.length - W.TunnelerEngine.PAGE_ROWS, first = snapScreen(snap)[0];
+      assert(max > 0 && e.pageTop === 0, c + " " + kind + ": longer than the screen, shown from the top");
+      assert.strictEqual(snap.vram[79 * 2], 0x18, "scroll bar in column 80");
+      ui.key(ev("ArrowDown")); assert.strictEqual(e.pageTop, 1, "Down");
+      assert.notStrictEqual(snapScreen(snap)[0], first, "the new view is presented");
+      ui.key(ev("ArrowUp")); assert.strictEqual(e.pageTop, 0, "Up");
+      ui.key(ev("PageDown")); assert.strictEqual(e.pageTop, Math.min(max, W.TunnelerEngine.PAGE_ROWS - 1), "PgDn");
+      ui.key(ev("PageUp")); assert.strictEqual(e.pageTop, 0, "PgUp");
+      ui.key(ev("End")); assert.strictEqual(e.pageTop, max, "End");
+      ui.key(ev("Home")); assert.strictEqual(e.pageTop, 0, "Home");
+      assert(ui.wheel({ deltaY: 100, deltaMode: 0 }) && e.pageTop === Math.min(max, 3), "a wheel notch: 3 rows");
+      ui.key(ev("Home"));
+      assert(ui.wheel({ deltaY: 1, deltaMode: 1 }) && e.pageTop === 1, "a line of wheel (Firefox): 1 row");
+      ui.wheel({ deltaY: -10000, deltaMode: 0 }); assert.strictEqual(e.pageTop, 0, "wheel up to the top, not beyond");
+      const b = backs;
+      ui.key(ev("Enter")); ui.key(ev("Escape")); ui.click({});
+      assert.strictEqual(backs, b + 3, "Enter / Esc / a click go back");
+    }
+  }
+  W.Lang.set("en");
+  // DosUI's other pages without an engine (the online statistics): the wheel does nothing there
+  ui.spec = { page: true, items: [], back() {} };
+  assert(!ui.wheel({ deltaY: 100, deltaMode: 0 }), "a page without an engine does not scroll");
+  ok("DosUI.showPage: Instructions / Information scroll with Up / Down, PgUp / PgDn, Home / End and the wheel (en, uk)");
+}
+
 // ---------------------------------------------------------------- page weight: no font block for plain text
 {
   const e2 = makeEnv();

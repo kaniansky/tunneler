@@ -1,7 +1,7 @@
 "use strict";
 // Checks every language: all letters have a glyph, menu items fit their boxes, text lines fit the
 // 80-column screen, the engine's instructions / information / statistics pages lay out without
-// wrapping, the world-map banner is 5 (or 6) equal rows of at most 72 pixels, every English text is
+// wrapping (the scrolling pages: every row within PAGE_W columns, all paragraphs translated), the world-map banner is 5 (or 6) equal rows of at most 72 pixels, every English text is
 // translated, and a removed language (pirate) falls back to English.   node test/lang-check.js
 const path = require("path");
 const PUB = path.join(__dirname, "..", "src", "js");
@@ -133,11 +133,8 @@ for (const c of Lang.codes) {
     const rows = [];
     const write = e.write.bind(e);
     e.write = (...a) => { const y = e.cy; write(...a); if (e.cy > y + 1 || (e.cy === y + 1 && e.cx !== e.wx1)) rows.push(y); };
-    let last = 0;
-    const rule = e.drawBottomRule.bind(e);
-    e.drawBottomRule = () => { last = e.cy; rule(); };
     e.showInstructions();
-    e.write = write; e.drawBottomRule = rule;
+    e.write = write;
     const what = "instructions (" + mode + (e.extended ? ", extended" : "") + ", " + ws + " to win)";
     if (e.extended && e.winScoreText) {
       const I = S.instr;
@@ -146,16 +143,26 @@ for (const c of Lang.codes) {
         fail(c, "instr.intro / introExt need \"{n}\" and instr.winRounds (the rounds-to-win setting)");
     }
     if (rows.length) fail(c, what + " wrap at row(s) " + rows.join(","));
-    if (last > 23) fail(c, what + " too many lines");
+    // the page scrolls: any number of rows, each within PAGE_W columns (column 80 is the scroll bar)
+    e.instructionRows().forEach(r => fits(c, what + " row", " ".repeat(r.col - 1) + r.text, E.PAGE_W));
+  }
+  // every paragraph of the English Instructions / Information is there, translated
+  const EN = E.STRINGS_EN;
+  for (const [k, n] of [["instr", 14], ["info", 2]]) {
+    const sec = S[k].sections, en = EN[k].sections;
+    if (en.length !== n) fail(c, k + ".sections: English has " + en.length + ", the test expects " + n);
+    if (!Array.isArray(sec) || sec.length !== en.length) { fail(c, k + ".sections: " + (sec ? sec.length : 0) + " paragraphs, English has " + en.length); continue; }
+    sec.forEach(([h, x], i) => {
+      if (!h || !x || vis([].concat(x).join(" ")) < 40) fail(c, k + ".sections[" + i + "] is missing or too short");
+      if (c !== "en" && D.engine && !(D.engine[k] && D.engine[k].sections && D.engine[k].sections[i])) fail(c, k + ".sections[" + i + "] is not translated");
+    });
   }
   e.window(1, 1, 80, 24); e.clearScreen();
-  const lines = [...S.info.p1, ...S.info.p2, ...S.info.p3];
-  lines.forEach(l => fits(c, "info", l, 79));
-  const w = Math.max(...S.info.ways.map(([n]) => vis(n))) + 3;
-  S.info.ways.forEach(([n, x]) => fits(c, "info way", "  " + " ".repeat(w) + x, 79));
-  const rowsInfo = 2 + S.info.p1.length + 1 + 1 + S.info.ways.length + 1 + S.info.p2.length + 1 + S.info.p3.length + 1 + S.info.credits.length;
-  if (rowsInfo > 23) fail(c, "information has " + rowsInfo + " lines");
-  [S.instr.intro, S.instr.introExt, S.instr.game].forEach(a => a.forEach(l => fits(c, "instr", l, 80)));
+  const info = e.informationRows();
+  info.forEach(r => fits(c, "information row", " ".repeat(r.col - 1) + r.text, E.PAGE_W));
+  for (const l of S.info.credits) if (!info.some(r => r.text.includes(l))) fail(c, "information lacks the credit \"" + l + "\"");
+  // the scroll keys and the prompt (the game's own, or DosUI's "page.back") share the bottom line
+  for (const p of [S.prompt, t("page.back")]) fits(c, "scroll hint + prompt", " " + (S.scroll || EN.scroll) + "  " + p + " ", 79);
   // the world map's "PRESS ANY KEY" banner: 5 rows of '*' / ' ' (or 6: a row of diacritics above the
   // capitals), all the same length, at most 72 pixels (the blue box under the map); every translation
   // draws its own

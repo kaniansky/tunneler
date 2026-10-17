@@ -109,6 +109,10 @@ const AFTER_DEATH = ["black", "wreck", "team", "killer", "others"];         // t
 const MENU_SCANS = [59, 60, 68];
 const MENU_ROWS = [0, 2, 4];                         // box row of each item (blank rows between groups)
 const MENU_ATTR = 0x05, MENU_SEL_ATTR = 0x5F;          // magenta text / white on magenta bar
+// Instructions / Information pages: rows 1-23 show the text, longer pages scroll (Up / Down, PgUp /
+// PgDn, Home / End: scan codes -> pageScroll), text up to PAGE_W columns (column 80: the scroll bar)
+const PAGE_ROWS = 23, PAGE_W = 78;
+const PAGE_KEYS = { 0x48: "up", 0x50: "down", 0x49: "pgup", 0x51: "pgdn", 0x47: "home", 0x4F: "end" };
 // All text the program shows. engine.strings can be replaced with a translation (lang.js builds one,
 // already encoded to the font's code page: one JS char per byte). "{n}" in a line switches the text
 // colour to n.
@@ -139,6 +143,7 @@ const STRINGS_EN = {
   // translation may replace it (see Banner below for the original)
   // banner: [...],
   prompt: "Press <ENTER> for main menu.",
+  scroll: "\x18\x19 PgUp PgDn Home End",   // a page that scrolls: its keys, left of the prompt
   instr: {
     title: "INSTRUCTIONS",
     // "{n}" = winRounds[winScore - 1]; the paragraph is re-wrapped when the result does not fit
@@ -176,7 +181,64 @@ const STRINGS_EN = {
       "firing the tank's cannon while moving.  Various actions use up different amounts",
       "of energy: moving costs some energy, digging costs more, and shooting costs the",
       "most.  Shields are damaged when hit by the other player's cannon.  Players can",
-      "refuel at either base but can repair their shields only at their own bases."],
+      "refuel at any base but can repair their shields only at their own bases (at a",
+      "teammate's base too, at half the speed)."],
+    // everything added since 1991, one [head, text] per paragraph (wrapped to the page's width)
+    sections: [
+      ["Gamepads and touch screens:  ", "a gamepad drives a tank too (split screen: gamepad 1 " +
+        "{9}BLUE{3}, gamepad 2 {10}GREEN{3}; otherwise any gamepad drives yours) - the stick or the " +
+        "d-pad moves, any button fires, Start is <ESC>; in the menus the d-pad and A / B work as the " +
+        "arrows, <ENTER> and <ESC>.  On phones and tablets an on-screen joystick and the FIRE and ESC " +
+        "buttons appear with the first touch; names and chat still need a keyboard."],
+      ["Winning:  ", "The first tank (or team) to win the chosen number of rounds - 1 to 9, the " +
+        "original is 3 - wins the match.  A round can also have a time limit of 2, 3, 5 or 10 minutes " +
+        "(the last 30 seconds count down beside the instrument panel).  When the time is up, the side " +
+        "that hit the enemy tanks the most wins the round and the other tanks blow up; a tie means " +
+        "nobody wins it.  After the match the statistics show everybody's shots, hits, meters dug and " +
+        "meters traveled, and \"Rematch\" plays again with the same settings."],
+      ["Teams:  ", "Besides the original duel, up to 8 tanks (BLUE, GREEN, CYAN, YELLOW, WHITE, PINK, " +
+        "VIOLET and TEAL) can play free-for-all - every tank for itself - or in teams.  Tanks with the " +
+        "same team number are teammates; a team wins the round when only its tanks are left, and all " +
+        "of them score it.  Friendly fire on: your shots hurt your teammates too.  Friendly fire off: " +
+        "a shot explodes on a teammate like on a wall."],
+      ["Computer tanks:  ", "the computer drives a tank at one of three levels: easy, medium or hard."],
+      ["Map size:  ", "small (512 x 256 pixels, a quarter of the original), medium (1024 x 512, the " +
+        "original world) or large (2048 x 1024, four times as big).  Every tank starts in its own base."],
+      ["View:  ", "what you see during play: self - only your own view screen; team - your " +
+        "teammates' view screens too; everyone - every tank's view screen, yours first.  In an online " +
+        "game its creator sets a view limit, the most any player in it may choose."],
+      ["After death:  ", "what you see once your tank is destroyed, until the round ends: a black " +
+        "screen, your wreck, your teammates, your killer (the tank that destroyed you, then the one " +
+        "that destroyed it...) or all the tanks still alive."],
+      ["Split screen:  ", "the original game - two players on one keyboard, {9}BLUE{3} on the left " +
+        "half of the screen and {10}GREEN{3} on the right.  First choose the map size, the rounds to " +
+        "win and the round time."],
+      ["Vs computer:  ", "you drive {9}BLUE{3} with either set of keys against 1 to 7 computer tanks.  " +
+        "For each of the other colors choose nobody or a computer tank and its level, and every " +
+        "tank's team (1-8); then the map size, rounds to win, round time, friendly fire, view and " +
+        "after death.  <ESC> during play ends the match; <ESC> on the game's menu goes back to the " +
+        "settings."],
+      ["Online game:  ", "2 to 8 tanks on different computers, some of them may be computer tanks.  " +
+        "Create a game - its name, listed publicly or private (joined with its invite link), " +
+        "spectators allowed or not, every slot human, computer or nobody with its team, and the " +
+        "settings above - or join one from the list of games.  You drive your tank with either set " +
+        "of keys.  Every computer runs the same game in lockstep; only key presses go over the network."],
+      ["The game lobby:  ", "before every match choose your name and team, chat with the others " +
+        "(Say:) and choose \"I am ready!\" - the match starts when every player is ready (computer " +
+        "tanks always are).  The host - who created the game, or the next player when the host " +
+        "leaves - can also \"Start now\" (the tanks of missing players stand still until they " +
+        "join) and \"Kick a player...\".  After a match the lobby shows its Statistics.  Press " +
+        "<ESC> twice to leave an online game."],
+      ["Spectators:  ", "watch an online game without playing.  <TAB> or <1> <2> <3> switch between " +
+        "all the view screens, the map with the scores, and following one tank (<\x1B> <\x1A> choose " +
+        "which one)."],
+      ["Sound:  ", "<M> switches the sound off and on.  Settings chooses its style: original (the PC " +
+        "speaker beeps of 1991), realistic (tank noises) or cartoony (boings and pops), or muted.  " +
+        "The sounds of the other tanks fade with their distance from yours."],
+      ["Settings:  ", "the language of the menus and the game, the sound, and \"Show ping\" (online " +
+        "games: your round-trip time in ms, top left on the game's border).  In the desktop app also " +
+        "the Server for online games (empty = the public server)."],
+    ],
   },
   info: {
     title: "INFORMATION",
@@ -193,6 +255,17 @@ const STRINGS_EN = {
       "a small, medium or large map, to win 1 to 9 rounds.  Online, players pick their",
       "names and teams in the lobby, chat, and start when everyone is ready.  Every",
       "computer runs the same game in lockstep; only key presses go over the network."],
+    // more paragraphs, one [head, text] each (wrapped to the page's width)
+    sections: [
+      ["The desktop app:  ", "TUNNELER ONLINE also comes as a small program for Windows, Linux and " +
+        "macOS - download it from the releases page on GitHub " +
+        "(github.com/kaniansky/tunneler-online/releases).  It plays split screen and vs computer " +
+        "without a network, and online games on the public server or any other one (Settings, " +
+        "Server)."],
+      ["The original:  ", "TUNNELER 2.0 was written by Geoffrey Silverton in 1991 in Turbo Pascal: " +
+        "two tanks dig through an underground world on one PC, one keyboard and one split screen.  " +
+        "This version keeps all of it and adds the rest."],
+    ],
     p3: ["This is a public-domain program; feel free to copy it for friends."],
     credits: ["Norko Kaniansky, 2026", "original TUNNELER 2.0:", "Geoffrey Silverton, 1991"],
   },
@@ -2308,10 +2381,14 @@ class TunnelerEngine {
   }
   // Arrow keys / Enter on the main menu and its pages. Returns the key the menu loop should act on:
   // Up/Down only move the bar (NO_KEY), Enter becomes the selected item's scan code, Enter on a page
-  // returns to the menu like Esc.
+  // returns to the menu like Esc, Up / Down / PgUp / PgDn / Home / End scroll a page.
   menuKey(k) {
     if (k === NO_KEY) return k;
-    if (this.menuPage !== "menu") return k[0] === 13 ? [27, 1] : k;
+    if (this.menuPage !== "menu") {
+      if (k[0] === 13) return [27, 1];
+      if (k[0] === 0 && PAGE_KEYS[k[1]]) { this.pageScroll(PAGE_KEYS[k[1]]); return NO_KEY; }
+      return k;
+    }
     if (k[0] === 0 && (k[1] === 0x48 || k[1] === 0x50)) {
       const n = this.menuScans.length;
       this.menuSel = (this.menuSel + (k[1] === 0x48 ? n - 1 : 1)) % n;
@@ -2355,60 +2432,122 @@ class TunnelerEngine {
     return wrapped;
   }
 
-  // The original text, with the display and controls paragraphs describing this version
-  // (no F keys; controls depend on split screen / vs CPU / online). Text from this.strings.instr.
-  showInstructions() {
-    const I = this.strings.instr, M = (t, nl = true) => this.markup(t, nl);
-    const row = (l, r) => M("{3}" + l + " ".repeat(Math.max(0, 39 - visLen(l))) + "\xFA" + r);
-    this.menuPage = "instructions";
-    this.textColor(14);
-    this.gotoXY(this.centreCol(I.title), 1);
-    M(I.title);
-    M("");
+  // ------------------------------------------------------------ Instructions / Information pages
+  // A page is a list of rows ({col, text}: font text with "{n}" colour codes), as long as its text needs:
+  // screen rows 1-23 show PAGE_ROWS of them from pageTop. A page that does not fit gets a scroll bar in
+  // column 80 and the keys that scroll it on the bottom line (strings.scroll); menuKey (the game's
+  // menu) and DosUI.showPage (the site's main menu) scroll it with pageScroll.
+
+  // a paragraph (one string, or lines joined with spaces) wrapped to PAGE_W columns; every row starts
+  // with the colour it continues in (only real spaces separate words - see winScoreText)
+  wrapPage(text, color) {
+    const out = [], trim = t => t.replace(/ +$/, "");
+    let line = "", lineColor = color, cur = color;
+    for (const tok of [].concat(text).join(" ").match(/[^ ]+ */g) || []) {
+      if (visLen(line) && visLen(trim(line + tok)) > PAGE_W) { out.push("{" + lineColor + "}" + trim(line)); line = ""; lineColor = cur; }
+      line += tok;
+      for (const m of tok.matchAll(/\{(\d+)\}/g)) cur = +m[1];
+    }
+    if (visLen(line)) out.push("{" + lineColor + "}" + trim(line));
+    return out;
+  }
+
+  // The original text (intro, display, controls, game), with the display and controls describing this
+  // version, then the sections about everything added since (strings.instr.sections: [head, text]).
+  instructionRows() {
+    const I = this.strings.instr, E = STRINGS_EN.instr, rows = [];
+    const add = (text, col) => rows.push({ col: col || 1, text });
+    const para = (head, text) => { for (const l of this.wrapPage((head ? "{11}" + head + "{3}" : "") + [].concat(text).join(" "), 3)) add(l); };
+    add("{14}" + I.title, this.centreCol(I.title));
+    add("");
     const ext = this.extended && I.introExt;           // (3-8 tanks / teams / computer tanks)
-    for (const l of this.winScoreText(ext ? I.introExt : I.intro)) M("{3}" + l);
-    M("");
-    const display = this.uiMode === "online" ? [...I.display.slice(0, -1), I.displayOnline] : I.display;
-    M("{11}" + I.displayHead + "{3}" + display[0]);
-    for (const l of display.slice(1)) M("{3}" + l);
-    M("");
+    para("", this.winScoreText(ext ? I.introExt : I.intro));
+    add("");
+    para(I.displayHead, this.uiMode === "online" ? [...I.display.slice(0, -1), I.displayOnline] : I.display);
+    add("");
     if (this.uiMode === "hotseat") {
       const [l, r] = I.controls.hotseat, head = "{11}" + I.controlsHead + "{3}" + l;
-      M(head + " ".repeat(Math.max(0, 39 - visLen(head))) + "\xFA" + r);
-    } else M("{11}" + I.controlsHead + "{3}" + I.controls[(this.uiMode === "cpu" ? "cpu" : "online") + (ext ? "Ext" : "")]);
-    for (const [l, r] of I.table) row(l, r);
-    M("{3}" + I.hold);
-    M("");
-    M("{11}" + I.gameHead + "{3}" + I.game[0]);
-    for (const l of I.game.slice(1)) M("{3}" + l);
-    this.showEscPrompt();
+      add(head + " ".repeat(Math.max(0, 39 - visLen(head))) + "\xFA" + r);
+      for (const [l, r] of I.table) add("{3}" + l + " ".repeat(Math.max(0, 39 - visLen(l))) + "\xFA" + r);
+      para("", I.hold);
+    } else para(I.controlsHead, I.controls[(this.uiMode === "cpu" ? "cpu" : "online") + (ext ? "Ext" : "")]);
+    add("");
+    para(I.gameHead, I.game);
+    for (const [head, text] of I.sections || E.sections) { add(""); para(head, text); }
+    return rows;
   }
+  showInstructions() { this.showPageRows("instructions", this.instructionRows()); }
 
   // About this version (the original page described the 1991 shareware offers and the author's
   // address). Text from this.strings.info.
-  *showInformation() {
-    const I = this.strings.info, M = (t, nl = true) => this.markup(t, nl);
-    this.menuPage = "information";
-    this.window(1, 1, 80, 23);
-    this.textColor(10);
-    this.gotoXY(this.centreCol(I.title), 1);
-    M(I.title);
-    M("");
-    for (const l of I.p1) M("{14}" + l);
-    M("");
-    M("{11}" + I.waysHead);
+  informationRows() {
+    const I = this.strings.info, E = STRINGS_EN.info, rows = [];
+    const add = (text, col) => rows.push({ col: col || 1, text });
+    const para = (head, text) => { for (const l of this.wrapPage((head ? "{11}" + head + "{14}" : "") + [].concat(text).join(" "), 14)) add(l); };
+    add("{10}" + I.title, this.centreCol(I.title));
+    add("");
+    para("", I.p1);
+    add("");
+    add("{11}" + I.waysHead);
     const w = Math.max(...I.ways.map(([n]) => visLen(n))) + 3;
-    for (const [n, t] of I.ways) M("{15}  " + n + " ".repeat(w - visLen(n)) + "{14}" + t);
-    M("");
-    for (const l of I.p2) M("{14}" + l);
-    M("");
-    for (const l of I.p3) M("{14}" + l);
-    M("");
-    const y = this.cy + 1;                                    // (window() moves the cursor home)
-    this.window(1, 1, 80, 25);
+    for (const [n, t] of I.ways) add("{15}  " + n + " ".repeat(w - visLen(n)) + "{14}" + t);
+    add("");
+    para("", I.p2);
+    for (const [head, text] of I.sections || E.sections) { add(""); para(head, text); }
+    add("");
+    para("", I.p3);
+    add("");
     const cw = Math.max(...I.credits.map(visLen)), cx = 41 - (cw >> 1);
-    I.credits.forEach((l, k) => { this.gotoXY(cx, y + k); M((k ? "{3}" : "{11}") + l, false); });
+    I.credits.forEach((l, k) => add((k ? "{3}" : "{11}") + l, cx));
+    return rows;
+  }
+  *showInformation() { this.showPageRows("information", this.informationRows()); }
+
+  showPageRows(kind, rows) {
+    this.menuPage = kind;
+    this.pageRows = rows;
+    this.pageTop = 0;
+    this.drawPageView();
+  }
+  pageMaxTop() { return Math.max(0, (this.pageRows || []).length - PAGE_ROWS); }
+  // what: "up" / "down" (a row), "pgup" / "pgdn" (a screen), "home" / "end", or a number of rows;
+  // true when the page moved (and was redrawn)
+  pageScroll(what) {
+    const d = typeof what === "number" ? what : { up: -1, down: 1, pgup: 1 - PAGE_ROWS, pgdn: PAGE_ROWS - 1,
+      home: -Infinity, end: Infinity }[what];
+    if (!this.pageRows || d === undefined) return false;
+    const top = Math.max(0, Math.min(this.pageMaxTop(), this.pageTop + d));
+    if (top === this.pageTop) return false;
+    this.pageTop = top;
+    this.drawPageView();
+    return true;
+  }
+  drawPageView() {
+    const rows = this.pageRows, max = this.pageMaxTop();
+    this.window(1, 1, 80, PAGE_ROWS);
+    this.textColor(7);
+    this.clearScreen();
+    this.window(1, 1, 80, 25);
+    for (let k = 0; k < PAGE_ROWS && this.pageTop + k < rows.length; k++) {
+      const r = rows[this.pageTop + k];
+      this.textColor(7);
+      this.gotoXY(r.col, k + 1);
+      this.markup(r.text, false);
+    }
     this.showEscPrompt();
+    if (!max) return;
+    // scroll bar (column 80): arrows white while there is more that way, the thumb where the view is
+    const cell = (row, ch, attr) => { const o = (row - 1) * 160 + 79 * 2; this.vram[o] = ch; this.vram[o + 1] = attr; if (this.uniUsed) this.uni[o >> 1] = 0; };
+    const track = PAGE_ROWS - 2, size = Math.max(1, Math.round(track * PAGE_ROWS / rows.length));
+    const at = Math.round((track - size) * this.pageTop / max);
+    cell(1, 0x18, this.pageTop > 0 ? 0x0F : 0x08);
+    for (let k = 0; k < track; k++) cell(2 + k, k >= at && k < at + size ? 0xDB : 0xB0, k >= at && k < at + size ? 0x07 : 0x08);
+    cell(PAGE_ROWS, 0x19, this.pageTop < max ? 0x0F : 0x08);
+    // the keys that scroll it, left of the prompt
+    this.gotoXY(2, 25);
+    this.textColor(7);
+    this.write(this.strings.scroll || STRINGS_EN.scroll);
+    this.dirty = true;
   }
 
   clearMenuWindow() {
@@ -2542,6 +2681,8 @@ TunnelerEngine.SIZES = Object.keys(WORLD_SIZES);      // world sizes: small, med
 TunnelerEngine.EXT_PAL_RGB = EXT_PAL_RGB;           // extended palette, 6-bit DAC values
 TunnelerEngine.BITS = { UP: B_UP, DOWN: B_DOWN, LEFT: B_LEFT, RIGHT: B_RIGHT, FIRE: B_FIRE };
 TunnelerEngine.STRINGS_EN = STRINGS_EN;
+TunnelerEngine.PAGE_ROWS = PAGE_ROWS;               // Instructions / Information: text rows on screen
+TunnelerEngine.PAGE_W = PAGE_W;                     // ... and their width (column 80: the scroll bar)
 
 root.TunnelerEngine = TunnelerEngine;
 if (typeof module !== "undefined") module.exports = TunnelerEngine;

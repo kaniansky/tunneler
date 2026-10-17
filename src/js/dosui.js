@@ -36,7 +36,9 @@
 //                static: a read-only text row (never selected; attr, default light gray)
 //
 // ui.showPage(kind, uiMode, back[, engineOpts]) shows the game's own Instructions / Information page full screen
-// (drawn by an engine instance, like in the game); Enter, Esc or a click calls back().
+// (drawn by an engine instance, like in the game); Enter, Esc or a click calls back(). A page longer
+// than the screen scrolls: Up / Down, PgUp / PgDn, Home / End, the mouse wheel, or dragging it on a
+// touch screen (engine.pageScroll; the engine draws the scroll bar).
 //   spec.infoRow: row of the selected item's info lines (cyan, centred)
 //   spec.hint:   bottom line text;  spec.back: Esc handler;  spec.sel: initially selected item
 //
@@ -46,6 +48,9 @@
 (function (root) {
 
 const ATTR = 0x05, SEL = 0x5F, DISABLED = 0x08;
+// keys that scroll an Instructions / Information page (KeyboardEvent.key; the numeric keypad with
+// NumLock off gives the same) -> engine.pageScroll
+const PAGE_KEYS = { ArrowUp: "up", ArrowDown: "down", PageUp: "pgup", PageDown: "pgdn", Home: "home", End: "end" };
 const U = root.UniText;
 // characters an input never takes: control, bidi, zero-width, private use (see NetProto's cleaning)
 const BAD_INPUT = /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff\ue000-\uf8ff\ufe00-\ufe0f]/;
@@ -64,6 +69,17 @@ class DosUI {
     canvas.addEventListener("click", e => { if (this.active()) this.click(e); });
     canvas.addEventListener("contextmenu", e => { if (this.active() && this.zoneClick(e, -1)) e.preventDefault(); });
     canvas.addEventListener("wheel", e => { if (this.active() && this.wheel(e)) e.preventDefault(); }, { passive: false });
+    // touch screens: dragging a page scrolls it (a tap still goes back)
+    canvas.addEventListener("touchstart", e => {
+      if (this.active() && this.spec && this.spec.engine && e.touches.length === 1) { this.touchY = e.touches[0].clientY; this.dragged = false; }
+    }, { passive: true });
+    canvas.addEventListener("touchmove", e => {
+      if (this.touchY == null || !this.active() || !this.spec || !this.spec.engine || e.touches.length !== 1) return;
+      const h = (canvas.getBoundingClientRect().height || 400) / 25, d = Math.trunc((this.touchY - e.touches[0].clientY) / h);
+      if (d) { this.touchY -= d * h; this.dragged = true; this.scrollPage(d); }
+      e.preventDefault();
+    }, { passive: false });
+    canvas.addEventListener("touchend", () => { this.touchY = null; });
     if (!opts.display) {
       const loop = now => { this.display.draw(now); requestAnimationFrame(loop); };
       requestAnimationFrame(loop);
@@ -85,8 +101,19 @@ class DosUI {
     e.clearScreen();
     if (kind === "instructions") e.showInstructions();
     else { const g = e.showInformation(); while (!g.next().done); }
-    this.spec = { page: true, back, items: [] };
-    this.present({ t: 0, mode: "text", screen: "text", vram: e.vram.slice(0, 16000) });
+    this.spec = { page: true, back, items: [], engine: e };
+    this.wheelAcc = 0; this.dragged = false;
+    this.presentPage();
+  }
+  presentPage() {
+    const e = this.spec.engine, snap = { t: 0, mode: "text", screen: "text", vram: e.vram.slice(0, 16000) };
+    e.snapUni(snap);
+    this.present(snap);
+  }
+  // scroll the page shown by showPage: "up" / "down" / "pgup" / "pgdn" / "home" / "end" or a number of rows
+  scrollPage(what) {
+    const s = this.spec;
+    if (s && s.engine && s.engine.pageScroll(what)) this.presentPage();
   }
 
   show(spec, keepSel) {
@@ -116,6 +143,13 @@ class DosUI {
   // and the list scrolls with it - one row per notch (trackpads: per ~50 pixels), not wrapping around
   wheel(ev) {
     const s = this.spec;
+    if (s && s.page) {                                   // a page: 3 rows per notch (trackpads: a row per ~33 pixels)
+      if (!s.engine) return false;
+      this.wheelAcc = (this.wheelAcc || 0) + ev.deltaY * (ev.deltaMode === 1 ? 33 : ev.deltaMode === 2 ? 700 : 1);
+      const d = Math.trunc(this.wheelAcc / 33);
+      if (d) { this.wheelAcc -= d * 33; this.scrollPage(d); }
+      return true;
+    }
     if (!s || s.page || s.boxes || !s.box || !(this.scrollRows < this.scrollN)) return false;
     this.wheelAcc = (this.wheelAcc || 0) + ev.deltaY * (ev.deltaMode === 1 ? 40 : ev.deltaMode === 2 ? 400 : 1);
     while (Math.abs(this.wheelAcc) >= 50) {
@@ -296,6 +330,7 @@ class DosUI {
     if (!s) return;
     if (s.page) {
       if (["Enter", "NumpadEnter", "Escape", "Space"].includes(e.code)) { e.preventDefault(); s.back(); }
+      else if (s.engine && PAGE_KEYS[e.key]) { e.preventDefault(); this.scrollPage(PAGE_KEYS[e.key]); }
       return;
     }
     const it = s.items[this.sel];
@@ -368,7 +403,10 @@ class DosUI {
     if (i >= 0 && i !== this.sel) { this.sel = i; this.draw(); }
   }
   click(ev) {
-    if (this.spec && this.spec.page) { this.spec.back(); return; }
+    if (this.spec && this.spec.page) {
+      if (this.dragged) { this.dragged = false; return; }      // (the end of a touch drag, not a tap)
+      this.spec.back(); return;
+    }
     const link = this.linkAt(ev);
     if (link) { link.onClick(); return; }
     if (this.zoneClick(ev, 1)) return;

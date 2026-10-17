@@ -5,6 +5,9 @@ every push to `main` is released (see CONTRIBUTING.md).
 
 ## Unreleased
 
+- Instructions and Information explain the whole game now (gamepads / touch, teams, map sizes, round
+  time, views, after death, computer levels, the online lobby, spectators, sound, settings, the desktop app) in all
+  languages; the pages scroll (arrows, PgUp / PgDn, Home / End, mouse wheel, touch drag) with a scroll bar.
 - Gamepads and touch screens: a gamepad drives a tank (split screen: gamepad 1 BLUE, 2 GREEN) and the
   menus; on phones / tablets an on-screen joystick + FIRE button, and the game fits the screen.
 - When the host leaves, the first connected player becomes the host (Kick, Start now), and keeps the
