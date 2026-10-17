@@ -41,6 +41,7 @@
 // touch screen (engine.pageScroll; the engine draws the scroll bar).
 //   spec.infoRow: row of the selected item's info lines (cyan, centred)
 //   spec.hint:   bottom line text;  spec.back: Esc handler;  spec.sel: initially selected item
+//   spec.footer: a short text at the bottom left (the main menu: the version)
 //
 // new DosUI(canvas) owns the canvas. new DosUI(canvas, {display, present, active}) draws over another
 // page's Display instead: present(snapshot) receives each drawn screen, and input is only handled
@@ -318,6 +319,7 @@ class DosUI {
     const T = (k, d) => root.Lang ? root.Lang.t(k) : d;
     const hint = " " + (s.hint || T("ui.hint", "\x18\x19 and <ENTER>, or the mouse.") + (s.back ? "  " + T("ui.back", "<ESC> back.") : ""));
     t.textColor(15); t.gotoXY(80 - U.cols(hint), 25); t.write(hint);
+    if (s.footer) { t.textColor(8); t.gotoXY(2, 25); t.write(" " + U.slice(s.footer, 78 - U.cols(hint) - 2) + " "); }   // (bottom left)
     const snap = { t: 0, mode: "text", screen: "text", vram: t.vram.slice(0, 16000) };
     t.snapUni(snap);
     this.present(snap);

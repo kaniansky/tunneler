@@ -145,17 +145,18 @@ function engineStrings(base) {
 function apply(engine) {
   if (!engine.baseStrings) engine.baseStrings = engine.strings;
   engine.strings = engineStrings(engine.baseStrings) || engine.baseStrings;
-  if (root.TUNNELER_VERSION) engine.strings = Object.assign({}, engine.strings, { title: title() });   // (the menu's title)
+  engine.strings = Object.assign({}, engine.strings, { title: title() });   // (the menu's title: TUNNELER)
 }
-// "TUNNELER 1.3" / "TUNNELER 1.3.1" (the version from build.js without a trailing ".0"; plain
-// "TUNNELER" without one)
-function title() { return "TUNNELER" + (root.TUNNELER_VERSION ? " " + String(root.TUNNELER_VERSION).replace(/\.0$/, "") : ""); }
+// the menus' title; the version is shown in the main menu's bottom-left corner (version())
+function title() { return "TUNNELER"; }
+// "v1.4" / "v1.4.1" (build.js's version without a trailing ".0"), "" without one
+function version() { return root.TUNNELER_VERSION ? "v" + String(root.TUNNELER_VERSION).replace(/\.0$/, "") : ""; }
 
 try { wanted = localStorage.getItem("tunneler.lang") || "en"; } catch (e) { /* private mode */ }
 code = wanted;
 
 root.Lang = {
-  codes: CODES, get code() { return code; }, set, t, enc, apply, register, title,
+  codes: CODES, get code() { return code; }, set, t, enc, apply, register, title, version,
   name: c => enc(L[c].name), next: () => CODES[(CODES.indexOf(code) + 1) % CODES.length],
   raw: (key, c) => (L[c || code] || {})[key] !== undefined ? L[c || code][key] : (L.en || {})[key], data: L,
   colorKeys: COLOR_KEYS,

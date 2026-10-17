@@ -3,8 +3,11 @@
 All notable changes to Tunneler Online. Versions follow [semantic versioning](https://semver.org/);
 every push to `main` is released (see CONTRIBUTING.md).
 
-## Unreleased
+## 1.4.0
 
+- The project's name is now written **Tunneler Online**.
+- Main menu: just **TUNNELER** on top, the version (e.g. v1.4) at the bottom left.
+- A homepage: https://kaniansky.com/tunneler/ (updated by every release).
 - Instructions and Information explain the whole game now (gamepads / touch, teams, map sizes, round
   time, views, after death, computer levels, the online lobby, spectators, sound, settings, the desktop app) in all
   languages; the pages scroll (arrows, PgUp / PgDn, Home / End, mouse wheel, touch drag) with a scroll bar.

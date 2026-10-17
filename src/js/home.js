@@ -62,7 +62,8 @@
   let splitTime = loadTime("tunneler.split.time");
   const saveSplit = () => { save("tunneler.split.size", splitSize); save("tunneler.split.win", String(splitWin)); save("tunneler.split.time", String(splitTime)); };
 
-  // the main menu: "TUNNELER 1.3.0" and the author; the other screens: their own title (like VS COMPUTER)
+  // the main menu: "TUNNELER" and the author (the version at the bottom left); the other screens: their
+  // own title (like VS COMPUTER)
   const title = () => {
     const by = Lang.data[Lang.code].engine ? Lang.data[Lang.code].engine.by : "by Norko Kaniansky";
     return [{ row: 4, text: Lang.title(), color: 12 }, { row: 6, text: Lang.enc(by), color: 4 }];
@@ -91,7 +92,7 @@
 
   function main(sel, keep) {
     ui.show({
-      lines: title(), box: { y: 11 }, sel, infoRow: 20,
+      lines: title(), box: { y: 11 }, sel, infoRow: 20, footer: Lang.version(),
       items: [
         { key: "split", label: T("home.split"), info: [T("home.split.i1"), T("home.split.i2")], go: () => split() },
         { key: "cpu", label: T("home.cpu"), info: [T("home.cpu.i1n"), T("home.cpu.i2")], go: () => cpu() },

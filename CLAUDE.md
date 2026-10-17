@@ -514,9 +514,10 @@ the room info): the most a player may choose to see during play - display only, 
   `Links.here()` in endpoint.js, play.js checks the path). `Links` builds them (games, room, game, split,
   cpu, invite); in the desktop app (no server behind the pages) it builds the `.html?...` forms instead.
   The old `.html` addresses keep working everywhere.
-- Titles: the main menu (and the engine's own menu, via `Lang.apply`) shows `Lang.title()` = "TUNNELER"
-  + package.json's version without a trailing ".0" (build.js writes public/js/version.js; src/js/version.js
-  has null = plain "TUNNELER"); every other screen has its own red title (set.title, lc.split.title,
+- Titles: the main menu (and the engine's own menu, via `Lang.apply`) shows "TUNNELER" (`Lang.title()`);
+  the main menu's bottom-left corner shows `Lang.version()` = "v" + package.json's version without a
+  trailing ".0" (DosUI `spec.footer`; build.js writes public/js/version.js, src/js/version.js has null =
+  no version); every other screen has its own red title (set.title, lc.split.title,
   cpu.title, lobby.title, room.title, create.title, pg.kick.title).
 - Computer levels offered: `LEVELS = ["normal", "hard", "expert"]` (netproto / home / play), shown as
   easy / medium / hard (`level.*` strings); ai.js still knows "easy", but an old "easy" (links, stored
