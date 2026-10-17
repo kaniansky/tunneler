@@ -153,6 +153,11 @@ function title() { return "TUNNELER"; }
 function version() { return root.TUNNELER_VERSION ? "v" + String(root.TUNNELER_VERSION).replace(/\.0$/, "") : ""; }
 
 try { wanted = localStorage.getItem("tunneler.lang") || "en"; } catch (e) { /* private mode */ }
+// ?lang=sk in the address (e.g. from the homepage's Play link) chooses the language and remembers it
+try {
+  const q = root.location && new URLSearchParams(root.location.search).get("lang");
+  if (q && /^[a-z]{2,5}$/.test(q)) { wanted = q; remember(q); }
+} catch (e) { /* no location */ }
 code = wanted;
 
 root.Lang = {

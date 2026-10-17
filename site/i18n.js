@@ -1,0 +1,270 @@
+// The homepage's texts in the game's languages. Elements with data-i18n="key" get T[lang][key] as
+// their HTML; the choice is remembered (localStorage "tunneler.site.lang"), the first visit follows the
+// browser's language. The Play links carry it to the game (?lang=xx).
+(function () {
+const L = {
+  en: {
+    name: "English",
+    "meta.title": "Tunneler Online - the 1991 tank game, back online",
+    "nav.about": "About", "nav.screens": "Screens", "nav.download": "Download",
+    "hero.lead": "The 1991 DOS tank game is back. Dig tunnels through the dirt, find the enemy tank, and blow it up before your energy runs out - on one keyboard, against the computer, or online with up to 8 tanks.",
+    "hero.play": "&#9658; PLAY IN THE BROWSER", "hero.download": "DOWNLOAD",
+    "hero.note": "Free, no account, no install. The free server may take up to a minute to wake up.",
+    "about.h": "Same game, same look",
+    "about.p": "TUNNELER 2.0 was written by Geoffrey Silverton in 1991 in Turbo Pascal. Tunneler Online is a routine-by-routine rewrite of the decompiled original in JavaScript: tanks, digging, shots, energy, shields, the sounds and the world generator behave exactly like the DOS game - an automated test runs the original next to the port and compares every frame. It even keeps the original's low-res text mode and VGA font.",
+    "c1.h": "Split screen", "c1.p": "Two players on one keyboard, like in 1991. <span class=\"blue\">BLUE</span> on the left, <span class=\"green\">GREEN</span> on the right.",
+    "c2.h": "Vs computer", "c2.p": "You against 1 to 7 computer tanks - easy, medium or hard - alone or in teams.",
+    "c3.h": "Online", "c3.p": "Create a game, send the invite link, play with up to 8 tanks from different computers. Friends can watch as spectators.",
+    "c4.h": "Teams &amp; settings", "c4.p": "Any team setup, three map sizes, rounds to win, friendly fire, a round time limit, and what you see after your tank is destroyed.",
+    "c5.h": "Sounds", "c5.p": "The original PC speaker - or realistic and cartoony sound effects. Sounds fade with distance.",
+    "c6.h": "Six languages", "c6.p": "English, Slovenčina, Čeština, Українська, Русский and Gen Z. Names and chat in any script.",
+    "screens.h": "Screens",
+    "s1": "The main menu", "s2": "Setting up a game against the computer", "s3": "The pre-game lobby: names, teams, chat",
+    "s4": "An online team game: your team's views", "s5": "Spectating: every tank at once", "s6": "Spectating: the live map and scores",
+    "howto.h": "How to play",
+    "howto.p": "Each tank starts in its own base. Dig through the dirt (rock can't be dug), find the enemy and shoot it. Moving costs energy, digging more, shooting the most; refuel at any base, repair your shield at your own (and, slower, at a teammate's). Firing while moving digs faster. Win the set number of rounds to win the match.",
+    "keys.move": "Move", "keys.fire": "Fire", "keys.arrows": "arrow keys", "keys.or": "or",
+    "keys.note": "Against the computer and online either set works. Online, <kbd>Esc</kbd> twice leaves the game. Gamepads and touch screens work too.",
+    "dl.h": "Download",
+    "dl.p": "A small desktop app - the game in its own window, using the web view your system already has (a few MB). Split screen and vs computer work offline; online play uses the public server or your own.",
+    "dl.latest": "Latest release:",
+    "dl.win": "Windows 10 / 11. Just run it.", "dl.linux": "Needs WebKitGTK 4.1 (most desktops have it).",
+    "dl.mac": "Not signed yet: right click &rarr; Open the first time.",
+    "dl.docker": "Prefer to host it yourself? The server is one Node.js file or a Docker image:",
+    "credits.h": "Credits",
+    "cr1": "<strong>TUNNELER 2.0</strong> (1991) - Geoffrey Silverton. The original game this is a faithful port of.",
+    "cr2": "<strong>Tunneler Online</strong> - Norko Kaniansky. JavaScript port, extended modes, online play.",
+    "cr3": "Fonts: the IBM VGA ROM font; other letters from <a href=\"https://unifoundry.com/unifont/\">GNU Unifont</a>.",
+    "cr4": "Source code: <a href=\"https://github.com/kaniansky/tunneler-online\">github.com/kaniansky/tunneler-online</a> (public domain, Unlicense).",
+    "privacy.h": "Privacy",
+    "privacy.p": "The game and the desktop app collect no personal data. Online, the server keeps game rooms (names, chat, moves) in memory only while a game exists; nothing is stored or shared. The desktop app connects to no server unless you choose online play.",
+    "foot.play": "play", "foot.source": "source", "foot.changelog": "changelog",
+  },
+  sk: {
+    name: "Slovenčina",
+    "meta.title": "Tunneler Online - tanková hra z roku 1991 opäť online",
+    "nav.about": "O hre", "nav.screens": "Obrázky", "nav.download": "Stiahnuť",
+    "hero.lead": "Tanková hra pre DOS z roku 1991 je späť. Hĺbte tunely v hline, nájdite nepriateľský tank a zničte ho skôr, než vám dôjde energia - na jednej klávesnici, proti počítaču alebo online až s 8 tankami.",
+    "hero.play": "&#9658; HRAŤ V PREHLIADAČI", "hero.download": "STIAHNUŤ",
+    "hero.note": "Zadarmo, bez účtu, bez inštalácie. Bezplatný server sa môže prebúdzať až minútu.",
+    "about.h": "Tá istá hra, ten istý vzhľad",
+    "about.p": "TUNNELER 2.0 napísal Geoffrey Silverton v roku 1991 v Turbo Pascale. Tunneler Online je prepis dekompilovaného originálu do JavaScriptu, funkciu po funkcii: tanky, hĺbenie, streľba, energia, štíty, zvuky aj generátor sveta sa správajú presne ako v hre pre DOS - automatický test spúšťa originál vedľa prepisu a porovnáva každý snímok. Zachováva aj pôvodný textový režim s nízkym rozlíšením a písmo VGA.",
+    "c1.h": "Delená obrazovka", "c1.p": "Dvaja hráči na jednej klávesnici ako v roku 1991. <span class=\"blue\">MODRÝ</span> vľavo, <span class=\"green\">ZELENÝ</span> vpravo.",
+    "c2.h": "Proti počítaču", "c2.p": "Vy proti 1 až 7 počítačovým tankom - ľahká, stredná alebo ťažká úroveň - sami alebo v tímoch.",
+    "c3.h": "Online", "c3.p": "Vytvorte hru, pošlite pozvánku a hrajte až s 8 tankami z rôznych počítačov. Kamaráti sa môžu pozerať ako diváci.",
+    "c4.h": "Tímy a nastavenia", "c4.p": "Ľubovoľné tímy, tri veľkosti mapy, počet víťazných kôl, streľba do vlastných, časový limit kola a čo vidíte po zničení svojho tanku.",
+    "c5.h": "Zvuky", "c5.p": "Pôvodný PC speaker - alebo realistické a rozprávkové zvukové efekty. Zvuky so vzdialenosťou slabnú.",
+    "c6.h": "Šesť jazykov", "c6.p": "English, Slovenčina, Čeština, Українська, Русский a Gen Z. Mená a chat v akomkoľvek písme.",
+    "screens.h": "Obrázky",
+    "s1": "Hlavné menu", "s2": "Nastavenie hry proti počítaču", "s3": "Lobby pred hrou: mená, tímy, chat",
+    "s4": "Tímová hra online: pohľady vášho tímu", "s5": "Divák: všetky tanky naraz", "s6": "Divák: živá mapa a skóre",
+    "howto.h": "Ako hrať",
+    "howto.p": "Každý tank začína vo svojej základni. Hĺbte cez hlinu (skala sa hĺbiť nedá), nájdite nepriateľa a zostreľte ho. Pohyb stojí energiu, hĺbenie viac, streľba najviac; tankovať môžete v ktorejkoľvek základni, štít opraviť vo svojej (a pomalšie v základni spoluhráča). Streľba počas pohybu hĺbi rýchlejšie. Vyhrajte nastavený počet kôl a vyhráte zápas.",
+    "keys.move": "Pohyb", "keys.fire": "Streľba", "keys.arrows": "šípky", "keys.or": "alebo",
+    "keys.note": "Proti počítaču a online funguje ktorákoľvek sada. Online <kbd>Esc</kbd> dvakrát opustí hru. Fungujú aj gamepady a dotykové obrazovky.",
+    "dl.h": "Stiahnuť",
+    "dl.p": "Malá aplikácia - hra vo vlastnom okne, používa webové zobrazenie, ktoré váš systém už má (pár MB). Delená obrazovka a hra proti počítaču fungujú offline; online hra používa verejný server alebo váš vlastný.",
+    "dl.latest": "Posledná verzia:",
+    "dl.win": "Windows 10 / 11. Stačí spustiť.", "dl.linux": "Potrebuje WebKitGTK 4.1 (väčšina desktopov ho má).",
+    "dl.mac": "Zatiaľ nepodpísané: prvýkrát pravý klik &rarr; Otvoriť.",
+    "dl.docker": "Chcete vlastný server? Je to jeden súbor pre Node.js alebo obraz pre Docker:",
+    "credits.h": "Autori",
+    "cr1": "<strong>TUNNELER 2.0</strong> (1991) - Geoffrey Silverton. Pôvodná hra, ktorej je toto verný prepis.",
+    "cr2": "<strong>Tunneler Online</strong> - Norko Kaniansky. Prepis do JavaScriptu, rozšírené režimy, hra online.",
+    "cr3": "Písma: ROM písmo IBM VGA; ostatné znaky z <a href=\"https://unifoundry.com/unifont/\">GNU Unifont</a>.",
+    "cr4": "Zdrojový kód: <a href=\"https://github.com/kaniansky/tunneler-online\">github.com/kaniansky/tunneler-online</a> (voľné dielo, Unlicense).",
+    "privacy.h": "Súkromie",
+    "privacy.p": "Hra ani aplikácia nezbierajú žiadne osobné údaje. Online server drží herné miestnosti (mená, chat, ťahy) iba v pamäti, kým hra existuje; nič sa neukladá ani nezdieľa. Aplikácia sa nepripojí k žiadnemu serveru, kým si nezvolíte hru online.",
+    "foot.play": "hrať", "foot.source": "zdrojový kód", "foot.changelog": "zmeny",
+  },
+  cs: {
+    name: "Čeština",
+    "meta.title": "Tunneler Online - tanková hra z roku 1991 opět online",
+    "nav.about": "O hře", "nav.screens": "Obrázky", "nav.download": "Stáhnout",
+    "hero.lead": "Tanková hra pro DOS z roku 1991 je zpět. Hloubejte tunely v hlíně, najděte nepřátelský tank a zničte ho dřív, než vám dojde energie - na jedné klávesnici, proti počítači nebo online až s 8 tanky.",
+    "hero.play": "&#9658; HRÁT V PROHLÍŽEČI", "hero.download": "STÁHNOUT",
+    "hero.note": "Zdarma, bez účtu, bez instalace. Bezplatný server se může probouzet až minutu.",
+    "about.h": "Stejná hra, stejný vzhled",
+    "about.p": "TUNNELER 2.0 napsal Geoffrey Silverton v roce 1991 v Turbo Pascalu. Tunneler Online je přepis dekompilovaného originálu do JavaScriptu, funkci po funkci: tanky, hloubení, střelba, energie, štíty, zvuky i generátor světa se chovají přesně jako ve hře pro DOS - automatický test spouští originál vedle přepisu a porovnává každý snímek. Zachovává i původní textový režim s nízkým rozlišením a písmo VGA.",
+    "c1.h": "Dělená obrazovka", "c1.p": "Dva hráči na jedné klávesnici jako v roce 1991. <span class=\"blue\">MODRÝ</span> vlevo, <span class=\"green\">ZELENÝ</span> vpravo.",
+    "c2.h": "Proti počítači", "c2.p": "Vy proti 1 až 7 počítačovým tankům - lehká, střední nebo těžká úroveň - sami nebo v týmech.",
+    "c3.h": "Online", "c3.p": "Založte hru, pošlete pozvánku a hrajte až s 8 tanky z různých počítačů. Kamarádi se mohou dívat jako diváci.",
+    "c4.h": "Týmy a nastavení", "c4.p": "Libovolné týmy, tři velikosti mapy, počet vítězných kol, střelba do vlastních, časový limit kola a co vidíte po zničení svého tanku.",
+    "c5.h": "Zvuky", "c5.p": "Původní PC speaker - nebo realistické a pohádkové zvukové efekty. Zvuky se vzdáleností slábnou.",
+    "c6.h": "Šest jazyků", "c6.p": "English, Slovenčina, Čeština, Українська, Русский a Gen Z. Jména a chat v jakémkoli písmu.",
+    "screens.h": "Obrázky",
+    "s1": "Hlavní menu", "s2": "Nastavení hry proti počítači", "s3": "Lobby před hrou: jména, týmy, chat",
+    "s4": "Týmová hra online: pohledy vašeho týmu", "s5": "Divák: všechny tanky najednou", "s6": "Divák: živá mapa a skóre",
+    "howto.h": "Jak hrát",
+    "howto.p": "Každý tank začíná ve své základně. Hloubejte hlínou (skála se hloubit nedá), najděte nepřítele a sestřelte ho. Pohyb stojí energii, hloubení víc, střelba nejvíc; tankovat můžete v kterékoli základně, štít opravit ve své (a pomaleji v základně spoluhráče). Střelba za pohybu hloubí rychleji. Vyhrajte nastavený počet kol a vyhrajete zápas.",
+    "keys.move": "Pohyb", "keys.fire": "Střelba", "keys.arrows": "šipky", "keys.or": "nebo",
+    "keys.note": "Proti počítači a online funguje kterákoli sada. Online <kbd>Esc</kbd> dvakrát opustí hru. Fungují i gamepady a dotykové obrazovky.",
+    "dl.h": "Stáhnout",
+    "dl.p": "Malá aplikace - hra ve vlastním okně, používá webové zobrazení, které váš systém už má (pár MB). Dělená obrazovka a hra proti počítači fungují offline; online hra používá veřejný server nebo váš vlastní.",
+    "dl.latest": "Poslední verze:",
+    "dl.win": "Windows 10 / 11. Stačí spustit.", "dl.linux": "Potřebuje WebKitGTK 4.1 (většina desktopů ho má).",
+    "dl.mac": "Zatím nepodepsané: poprvé pravý klik &rarr; Otevřít.",
+    "dl.docker": "Chcete vlastní server? Je to jeden soubor pro Node.js nebo obraz pro Docker:",
+    "credits.h": "Autoři",
+    "cr1": "<strong>TUNNELER 2.0</strong> (1991) - Geoffrey Silverton. Původní hra, jejíž je toto věrný přepis.",
+    "cr2": "<strong>Tunneler Online</strong> - Norko Kaniansky. Přepis do JavaScriptu, rozšířené režimy, hra online.",
+    "cr3": "Písma: ROM písmo IBM VGA; ostatní znaky z <a href=\"https://unifoundry.com/unifont/\">GNU Unifont</a>.",
+    "cr4": "Zdrojový kód: <a href=\"https://github.com/kaniansky/tunneler-online\">github.com/kaniansky/tunneler-online</a> (volné dílo, Unlicense).",
+    "privacy.h": "Soukromí",
+    "privacy.p": "Hra ani aplikace nesbírají žádné osobní údaje. Online server drží herní místnosti (jména, chat, tahy) jen v paměti, dokud hra existuje; nic se neukládá ani nesdílí. Aplikace se nepřipojí k žádnému serveru, dokud si nezvolíte hru online.",
+    "foot.play": "hrát", "foot.source": "zdrojový kód", "foot.changelog": "změny",
+  },
+  uk: {
+    name: "Українська",
+    "meta.title": "Tunneler Online - танкова гра 1991 року знову онлайн",
+    "nav.about": "Про гру", "nav.screens": "Знімки", "nav.download": "Завантажити",
+    "hero.lead": "Танкова гра для DOS 1991 року повернулася. Прокладайте тунелі в землі, знайдіть ворожий танк і знищте його, поки не скінчилася енергія - на одній клавіатурі, проти комп'ютера або онлайн до 8 танків.",
+    "hero.play": "&#9658; ГРАТИ В БРАУЗЕРІ", "hero.download": "ЗАВАНТАЖИТИ",
+    "hero.note": "Безкоштовно, без облікового запису, без встановлення. Безкоштовний сервер може прокидатися до хвилини.",
+    "about.h": "Та сама гра, той самий вигляд",
+    "about.p": "TUNNELER 2.0 написав Джефрі Сілвертон у 1991 році на Turbo Pascal. Tunneler Online - це переписаний функція за функцією декомпільований оригінал на JavaScript: танки, копання, постріли, енергія, щити, звуки та генератор світу поводяться точно як у грі для DOS - автоматичний тест запускає оригінал поруч із переписаною версією і порівнює кожен кадр. Збережено навіть оригінальний текстовий режим низької роздільності та шрифт VGA.",
+    "c1.h": "Розділений екран", "c1.p": "Двоє гравців на одній клавіатурі, як у 1991. <span class=\"blue\">СИНІЙ</span> ліворуч, <span class=\"green\">ЗЕЛЕНИЙ</span> праворуч.",
+    "c2.h": "Проти комп'ютера", "c2.p": "Ви проти 1-7 комп'ютерних танків - легкий, середній або складний рівень - самі або в командах.",
+    "c3.h": "Онлайн", "c3.p": "Створіть гру, надішліть запрошення і грайте до 8 танків з різних комп'ютерів. Друзі можуть дивитися як глядачі.",
+    "c4.h": "Команди й налаштування", "c4.p": "Будь-які команди, три розміри мапи, кількість раундів для перемоги, вогонь по своїх, ліміт часу раунду і що ви бачите після знищення свого танка.",
+    "c5.h": "Звуки", "c5.p": "Оригінальний PC speaker - або реалістичні й мультяшні звукові ефекти. Звуки слабшають з відстанню.",
+    "c6.h": "Шість мов", "c6.p": "English, Slovenčina, Čeština, Українська, Русский і Gen Z. Імена та чат будь-якою абеткою.",
+    "screens.h": "Знімки",
+    "s1": "Головне меню", "s2": "Налаштування гри проти комп'ютера", "s3": "Лобі перед грою: імена, команди, чат",
+    "s4": "Командна гра онлайн: огляди вашої команди", "s5": "Глядач: усі танки одразу", "s6": "Глядач: жива мапа й рахунок",
+    "howto.h": "Як грати",
+    "howto.p": "Кожен танк починає у своїй базі. Копайте крізь землю (скелю копати не можна), знайдіть ворога і підстрельте його. Рух коштує енергії, копання більше, постріл найбільше; заправитися можна в будь-якій базі, полагодити щит - у своїй (і повільніше в базі союзника). Постріл під час руху копає швидше. Виграйте задану кількість раундів - і виграєте матч.",
+    "keys.move": "Рух", "keys.fire": "Постріл", "keys.arrows": "стрілки", "keys.or": "або",
+    "keys.note": "Проти комп'ютера та онлайн працює будь-який набір. Онлайн <kbd>Esc</kbd> двічі - вихід з гри. Працюють також геймпади й сенсорні екрани.",
+    "dl.h": "Завантажити",
+    "dl.p": "Невеликий застосунок - гра у власному вікні з вебпереглядачем, який уже є у вашій системі (кілька МБ). Розділений екран і гра проти комп'ютера працюють офлайн; онлайн-гра використовує публічний сервер або ваш власний.",
+    "dl.latest": "Остання версія:",
+    "dl.win": "Windows 10 / 11. Просто запустіть.", "dl.linux": "Потрібен WebKitGTK 4.1 (є в більшості середовищ).",
+    "dl.mac": "Поки не підписано: першого разу правий клік &rarr; Відкрити.",
+    "dl.docker": "Хочете власний сервер? Це один файл для Node.js або образ Docker:",
+    "credits.h": "Автори",
+    "cr1": "<strong>TUNNELER 2.0</strong> (1991) - Джефрі Сілвертон. Оригінальна гра, яку тут точно відтворено.",
+    "cr2": "<strong>Tunneler Online</strong> - Норко Каніанський. Переписано на JavaScript, розширені режими, гра онлайн.",
+    "cr3": "Шрифти: шрифт IBM VGA ROM; інші символи з <a href=\"https://unifoundry.com/unifont/\">GNU Unifont</a>.",
+    "cr4": "Вихідний код: <a href=\"https://github.com/kaniansky/tunneler-online\">github.com/kaniansky/tunneler-online</a> (суспільне надбання, Unlicense).",
+    "privacy.h": "Приватність",
+    "privacy.p": "Гра й застосунок не збирають жодних персональних даних. Онлайн сервер тримає ігрові кімнати (імена, чат, ходи) лише в пам'яті, поки гра існує; нічого не зберігається і не передається. Застосунок не з'єднується з жодним сервером, поки ви не оберете онлайн-гру.",
+    "foot.play": "грати", "foot.source": "код", "foot.changelog": "зміни",
+  },
+  ru: {
+    name: "Русский",
+    "meta.title": "Tunneler Online - танковая игра 1991 года снова онлайн",
+    "nav.about": "Об игре", "nav.screens": "Скриншоты", "nav.download": "Скачать",
+    "hero.lead": "Танковая игра для DOS 1991 года вернулась. Копайте туннели в земле, найдите вражеский танк и уничтожьте его, пока не кончилась энергия - на одной клавиатуре, против компьютера или онлайн до 8 танков.",
+    "hero.play": "&#9658; ИГРАТЬ В БРАУЗЕРЕ", "hero.download": "СКАЧАТЬ",
+    "hero.note": "Бесплатно, без аккаунта, без установки. Бесплатный сервер может просыпаться до минуты.",
+    "about.h": "Та же игра, тот же вид",
+    "about.p": "TUNNELER 2.0 написал Джеффри Силвертон в 1991 году на Turbo Pascal. Tunneler Online - это переписанный функция за функцией декомпилированный оригинал на JavaScript: танки, копание, выстрелы, энергия, щиты, звуки и генератор мира ведут себя точно как в игре для DOS - автоматический тест запускает оригинал рядом с переписанной версией и сравнивает каждый кадр. Сохранён даже исходный текстовый режим низкого разрешения и шрифт VGA.",
+    "c1.h": "Разделённый экран", "c1.p": "Двое игроков на одной клавиатуре, как в 1991. <span class=\"blue\">СИНИЙ</span> слева, <span class=\"green\">ЗЕЛЁНЫЙ</span> справа.",
+    "c2.h": "Против компьютера", "c2.p": "Вы против 1-7 компьютерных танков - лёгкий, средний или сложный уровень - в одиночку или в командах.",
+    "c3.h": "Онлайн", "c3.p": "Создайте игру, отправьте приглашение и играйте до 8 танков с разных компьютеров. Друзья могут смотреть как зрители.",
+    "c4.h": "Команды и настройки", "c4.p": "Любые команды, три размера карты, число раундов для победы, огонь по своим, лимит времени раунда и что вы видите после гибели своего танка.",
+    "c5.h": "Звуки", "c5.p": "Оригинальный PC speaker - или реалистичные и мультяшные звуковые эффекты. Звуки затихают с расстоянием.",
+    "c6.h": "Шесть языков", "c6.p": "English, Slovenčina, Čeština, Українська, Русский и Gen Z. Имена и чат любым алфавитом.",
+    "screens.h": "Скриншоты",
+    "s1": "Главное меню", "s2": "Настройка игры против компьютера", "s3": "Лобби перед игрой: имена, команды, чат",
+    "s4": "Командная игра онлайн: обзоры вашей команды", "s5": "Зритель: все танки сразу", "s6": "Зритель: живая карта и счёт",
+    "howto.h": "Как играть",
+    "howto.p": "Каждый танк начинает на своей базе. Копайте сквозь землю (скалу копать нельзя), найдите врага и подстрелите его. Движение стоит энергии, копание больше, выстрел больше всего; заправиться можно на любой базе, починить щит - на своей (и медленнее на базе союзника). Выстрел на ходу копает быстрее. Выиграйте заданное число раундов - и выиграете матч.",
+    "keys.move": "Движение", "keys.fire": "Выстрел", "keys.arrows": "стрелки", "keys.or": "или",
+    "keys.note": "Против компьютера и онлайн работает любой набор. Онлайн <kbd>Esc</kbd> дважды - выход из игры. Работают и геймпады, и сенсорные экраны.",
+    "dl.h": "Скачать",
+    "dl.p": "Небольшое приложение - игра в своём окне с веб-просмотром, который уже есть в вашей системе (несколько МБ). Разделённый экран и игра против компьютера работают офлайн; онлайн-игра использует публичный сервер или ваш собственный.",
+    "dl.latest": "Последняя версия:",
+    "dl.win": "Windows 10 / 11. Просто запустите.", "dl.linux": "Нужен WebKitGTK 4.1 (есть в большинстве окружений).",
+    "dl.mac": "Пока не подписано: в первый раз правый клик &rarr; Открыть.",
+    "dl.docker": "Хотите свой сервер? Это один файл для Node.js или образ Docker:",
+    "credits.h": "Авторы",
+    "cr1": "<strong>TUNNELER 2.0</strong> (1991) - Джеффри Силвертон. Оригинальная игра, которую здесь точно воспроизвели.",
+    "cr2": "<strong>Tunneler Online</strong> - Норко Канянский. Переписано на JavaScript, расширенные режимы, игра онлайн.",
+    "cr3": "Шрифты: шрифт IBM VGA ROM; остальные символы из <a href=\"https://unifoundry.com/unifont/\">GNU Unifont</a>.",
+    "cr4": "Исходный код: <a href=\"https://github.com/kaniansky/tunneler-online\">github.com/kaniansky/tunneler-online</a> (общественное достояние, Unlicense).",
+    "privacy.h": "Конфиденциальность",
+    "privacy.p": "Игра и приложение не собирают никаких персональных данных. Онлайн сервер держит игровые комнаты (имена, чат, ходы) только в памяти, пока игра существует; ничего не сохраняется и не передаётся. Приложение не подключается ни к какому серверу, пока вы не выберете онлайн-игру.",
+    "foot.play": "играть", "foot.source": "код", "foot.changelog": "изменения",
+  },
+  genz: {
+    name: "Gen Z",
+    "meta.title": "Tunneler Online - the 1991 tank game, back and lowkey iconic",
+    "nav.about": "The lore", "nav.screens": "Pics", "nav.download": "Get it",
+    "hero.lead": "The 1991 DOS tank game is so back. Dig tunnels, find the enemy tank and delete it before your energy hits zero - on one keyboard, vs the bots, or online with up to 8 tanks. no cap.",
+    "hero.play": "&#9658; PLAY IN THE BROWSER", "hero.download": "GET THE APP",
+    "hero.note": "Free, no account, no install. The free server might need a minute to wake up, be patient bestie.",
+    "about.h": "Same game, same vibe",
+    "about.p": "TUNNELER 2.0 was made by Geoffrey Silverton in 1991 in Turbo Pascal (ancient tech fr). Tunneler Online rebuilds the decompiled original in JavaScript, routine by routine: tanks, digging, shots, energy, shields, sounds and the world generator act exactly like the DOS game - a test runs the original next to the port and checks every single frame. Even the low-res text mode and VGA font are still here. it's giving retro.",
+    "c1.h": "Split screen", "c1.p": "Two players, one keyboard, 1991 energy. <span class=\"blue\">BLUE</span> left, <span class=\"green\">GREEN</span> right.",
+    "c2.h": "Vs the bots", "c2.p": "You vs 1 to 7 computer tanks - chill, mid or goated - solo or with a squad.",
+    "c3.h": "Online", "c3.p": "Make a game, drop the invite link, play with up to 8 tanks from different computers. The besties can spectate.",
+    "c4.h": "Squads &amp; settings", "c4.p": "Any squad setup, three map sizes, W's to win, friendly fire, a round timer, and what you see after you get wrecked.",
+    "c5.h": "Sounds", "c5.p": "The OG PC speaker - or realistic and cartoony sounds. Far away = quieter, physics ate.",
+    "c6.h": "Six languages", "c6.p": "English, Slovenčina, Čeština, Українська, Русский and Gen Z (hi). Names and chat in any script.",
+    "screens.h": "Pics",
+    "s1": "The main menu", "s2": "Setting up a game vs the bots", "s3": "The lobby: names, squads, chat",
+    "s4": "An online squad game: your squad's POV", "s5": "Spectating: every tank at once", "s6": "Spectating: the live map and the scores",
+    "howto.h": "How to play",
+    "howto.p": "Every tank spawns in its own base. Dig through the dirt (rock is a no), find the enemy and shoot. Moving costs energy, digging more, shooting the most; refuel at any base, heal your shield at yours (and slower at a teammate's). Shooting while moving digs faster - big brain move. Win enough rounds and the match is yours.",
+    "keys.move": "Move", "keys.fire": "Fire", "keys.arrows": "arrow keys", "keys.or": "or",
+    "keys.note": "Vs the bots and online either set works. Online, <kbd>Esc</kbd> twice = you dip. Gamepads and touch screens work too.",
+    "dl.h": "Get it",
+    "dl.p": "A tiny desktop app - the game in its own window, using the web view your system already has (a few MB). Split screen and vs the bots work offline; online uses the public server or your own.",
+    "dl.latest": "Latest drop:",
+    "dl.win": "Windows 10 / 11. Just run it.", "dl.linux": "Needs WebKitGTK 4.1 (most desktops have it).",
+    "dl.mac": "Not signed yet: right click &rarr; Open the first time. trust.",
+    "dl.docker": "Wanna host it yourself? The server is one Node.js file or a Docker image:",
+    "credits.h": "Credits",
+    "cr1": "<strong>TUNNELER 2.0</strong> (1991) - Geoffrey Silverton. The OG game this faithfully rebuilds. legend.",
+    "cr2": "<strong>Tunneler Online</strong> - Norko Kaniansky. JavaScript port, extra modes, online play.",
+    "cr3": "Fonts: the IBM VGA ROM font; other letters from <a href=\"https://unifoundry.com/unifont/\">GNU Unifont</a>.",
+    "cr4": "Source code: <a href=\"https://github.com/kaniansky/tunneler-online\">github.com/kaniansky/tunneler-online</a> (public domain, Unlicense).",
+    "privacy.h": "Privacy",
+    "privacy.p": "The game and the app collect zero personal data. Online, the server keeps game rooms (names, chat, moves) in memory only while a game exists; nothing gets saved or shared. The app talks to no server unless you go online.",
+    "foot.play": "play", "foot.source": "source", "foot.changelog": "changelog",
+  },
+};
+const ORDER = ["en", "sk", "cs", "uk", "ru", "genz"];
+const KEY = "tunneler.site.lang";
+const store = { get() { try { return localStorage.getItem(KEY); } catch (e) { return null; } },
+  set(v) { try { localStorage.setItem(KEY, v); } catch (e) { /* private mode */ } } };
+// first visit: the browser's language (Czech, Slovak, Ukrainian, Russian - else English)
+function guess() {
+  for (const l of navigator.languages || [navigator.language || "en"]) {
+    const c = String(l).slice(0, 2).toLowerCase();
+    if (L[c]) return c;
+  }
+  return "en";
+}
+function apply(code) {
+  if (!L[code]) code = "en";
+  const T = L[code], E = L.en;
+  document.documentElement.lang = code === "genz" ? "en" : code;
+  document.querySelectorAll("[data-i18n]").forEach(el => {
+    const k = el.getAttribute("data-i18n");
+    el.innerHTML = T[k] != null ? T[k] : E[k];
+  });
+  document.title = T["meta.title"] || E["meta.title"];
+  // the game opens in the same language
+  document.querySelectorAll("a[data-play]").forEach(a => {
+    const u = new URL(a.getAttribute("data-play"));
+    u.searchParams.set("lang", code);
+    a.href = u.toString();
+  });
+  const sel = document.getElementById("lang");
+  if (sel) sel.value = code;
+  window.siteLang = code;
+}
+function init() {
+  const sel = document.getElementById("lang");
+  if (sel) {
+    sel.innerHTML = ORDER.map(c => '<option value="' + c + '">' + L[c].name + "</option>").join("");
+    sel.addEventListener("change", () => { store.set(sel.value); apply(sel.value); });
+  }
+  apply(store.get() || guess());
+}
+window.SiteText = (code, key) => (L[code] && L[code][key]) || L.en[key];
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init); else init();
+})();

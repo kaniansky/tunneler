@@ -3,6 +3,11 @@
 All notable changes to Tunneler Online. Versions follow [semantic versioning](https://semver.org/);
 a release is made by pushing a version tag (see CONTRIBUTING.md).
 
+## Unreleased
+
+- Homepage in the game's six languages (a language menu; the first visit follows the browser), and its
+  Play links open the game in the same language (`?lang=sk` in the game's address chooses it).
+
 ## 1.4.1
 
 - LICENSE is the plain Unlicense text again (so GitHub recognizes it); the third-party font notes moved
