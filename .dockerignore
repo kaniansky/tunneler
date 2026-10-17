@@ -10,3 +10,4 @@ screenshots
 .nvmrc
 .gitignore
 src-tauri
+site

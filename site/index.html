@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TUNNELER ONLINE - the 1991 tank game, back online</title>
+<meta name="description" content="TUNNELER 2.0 (1991, Geoffrey Silverton) rewritten in JavaScript: dig tunnels and hunt tanks in your browser or a small desktop app - split screen, against the computer, or online with up to 8 tanks.">
+<meta property="og:title" content="TUNNELER ONLINE">
+<meta property="og:description" content="The 1991 DOS tank-digging game, faithfully rewritten - play it in the browser, on the desktop, online with up to 8 tanks.">
+<meta property="og:image" content="img/og.png">
+<link rel="icon" href="favicon.ico">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=VT323&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #000; --panel: #0b0b14; --text: #c8c8c8; --dim: #8a8a9a; --white: #fff;
+    --red: #ff5555; --magenta: #aa00aa; --pink: #ff55ff; --cyan: #55ffff; --yellow: #ffff55;
+    --blue: #5555ff; --green: #55ff55; --dirt: #c0661c; --rule: #2a2a3a;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 "IBM Plex Mono", ui-monospace, monospace; }
+  a { color: var(--cyan); }
+  a:hover { color: var(--white); }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 20px; }
+  h1, h2, h3 { font-family: VT323, monospace; font-weight: 400; letter-spacing: .04em; }
+  h2 { font-size: 2.4rem; color: var(--red); margin: 0 0 .4em; }
+  h3 { font-size: 1.7rem; color: var(--yellow); margin: 1.2em 0 .2em; }
+
+  /* top bar */
+  nav { position: sticky; top: 0; z-index: 5; background: rgba(0,0,0,.92); border-bottom: 2px solid var(--magenta); }
+  nav .wrap { display: flex; align-items: center; gap: 22px; height: 52px; }
+  nav .brand { font: 1.9rem VT323, monospace; color: var(--red); text-decoration: none; margin-right: auto; }
+  nav a.link { color: var(--pink); text-decoration: none; font-size: .95rem; }
+  nav a.link:hover { color: var(--white); }
+
+  /* hero */
+  header.hero { position: relative; overflow: hidden; border-bottom: 2px solid var(--magenta);
+    background: repeating-linear-gradient(90deg, #b45c18 0 6px, #c96a1f 6px 9px, #a85414 9px 14px),
+                repeating-linear-gradient(0deg, transparent 0 5px, rgba(0,0,0,.18) 5px 8px); background-blend-mode: multiply; }
+  header.hero::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,.25), rgba(0,0,0,.85) 70%, #000); }
+  .hero .wrap { position: relative; z-index: 1; padding: 70px 20px 60px; display: grid; grid-template-columns: 1.05fr 1fr; gap: 40px; align-items: center; }
+  .hero h1 { font-size: clamp(3.4rem, 9vw, 6.2rem); line-height: .9; margin: 0; color: var(--red); text-shadow: 4px 4px 0 #400; }
+  .hero h1 small { display: block; font-size: .42em; color: var(--cyan); text-shadow: none; letter-spacing: .3em; margin-top: 10px; }
+  .hero p.lead { font-size: 1.08rem; color: var(--white); margin: 22px 0 28px; max-width: 34em; }
+  .hero .shot { border: 3px solid var(--magenta); box-shadow: 0 0 0 3px #000, 0 20px 60px rgba(0,0,0,.8); width: 100%; image-rendering: pixelated; }
+  .btns { display: flex; flex-wrap: wrap; gap: 14px; }
+  .btn { display: inline-block; font: 1.5rem VT323, monospace; letter-spacing: .05em; text-decoration: none; padding: 10px 22px; border: 2px solid; }
+  .btn.play { background: var(--magenta); color: var(--white); border-color: var(--pink); }
+  .btn.play:hover { background: var(--pink); color: #000; }
+  .btn.ghost { color: var(--cyan); border-color: var(--cyan); background: rgba(0,0,0,.5); }
+  .btn.ghost:hover { background: var(--cyan); color: #000; }
+  .note { color: var(--dim); font-size: .85rem; margin-top: 14px; }
+
+  section { padding: 64px 0; border-bottom: 1px solid var(--rule); }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; }
+  .card { background: var(--panel); border: 1px solid var(--rule); padding: 20px 22px; }
+  .card h3 { margin-top: 0; }
+  .card p { margin: 0; }
+
+  .gallery { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .gallery figure { margin: 0; }
+  .gallery img { width: 100%; display: block; border: 2px solid var(--rule); image-rendering: pixelated; cursor: zoom-in; transition: border-color .15s; }
+  .gallery img:hover { border-color: var(--pink); }
+  .gallery figcaption { color: var(--dim); font-size: .85rem; margin-top: 6px; }
+
+  table.keys { border-collapse: collapse; width: 100%; max-width: 640px; }
+  table.keys th, table.keys td { border: 1px solid var(--rule); padding: 8px 12px; text-align: left; }
+  table.keys th { color: var(--yellow); font-weight: 600; }
+  .blue { color: var(--blue); } .green { color: var(--green); }
+  kbd { font: inherit; color: var(--white); border: 1px solid #555; border-bottom-width: 3px; padding: 0 6px; background: #151515; }
+
+  .dl { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+  .dl .card a.file { display: block; margin: 6px 0; text-decoration: none; }
+  .dl .card a.file::before { content: "\25BA  "; color: var(--pink); }
+  .dl .size { color: var(--dim); font-size: .85rem; }
+  ul.plain { padding-left: 1.2em; }
+  ul.plain li { margin: .3em 0; }
+  footer { padding: 36px 0 50px; color: var(--dim); font-size: .85rem; }
+
+  /* lightbox */
+  #lb { position: fixed; inset: 0; background: rgba(0,0,0,.92); display: none; align-items: center; justify-content: center; z-index: 10; cursor: zoom-out; padding: 20px; }
+  #lb.on { display: flex; }
+  #lb img { max-width: 100%; max-height: 100%; image-rendering: pixelated; border: 3px solid var(--magenta); }
+
+  @media (max-width: 860px) {
+    .hero .wrap { grid-template-columns: 1fr; padding-top: 44px; }
+    .grid3, .gallery, .dl { grid-template-columns: 1fr 1fr; }
+    nav a.link.opt { display: none; }
+  }
+  @media (max-width: 560px) {
+    .grid3, .gallery, .dl { grid-template-columns: 1fr; }
+    nav .wrap { gap: 14px; }
+  }
+</style>
+</head>
+<body>
+
+<nav><div class="wrap">
+  <a class="brand" href="#">TUNNELER</a>
+  <a class="link opt" href="#about">About</a>
+  <a class="link opt" href="#screens">Screens</a>
+  <a class="link" href="#download">Download</a>
+  <a class="link" href="https://github.com/kaniansky/tunneler-online">GitHub</a>
+</div></nav>
+
+<header class="hero"><div class="wrap">
+  <div>
+    <h1>TUNNELER<small>ONLINE</small></h1>
+    <p class="lead">The 1991 DOS tank game is back. Dig tunnels through the dirt, find the enemy tank, and blow it up
+      before your energy runs out - on one keyboard, against the computer, or online with up to 8 tanks.</p>
+    <div class="btns">
+      <a class="btn play" href="https://tunneler-online.onrender.com/">&#9658; PLAY IN THE BROWSER</a>
+      <a class="btn ghost" href="#download">DOWNLOAD</a>
+    </div>
+    <p class="note">Free, no account, no install. The free server may take up to a minute to wake up.</p>
+  </div>
+  <img class="shot" src="img/split-screen.png" alt="Split screen: two tanks digging out of their bases" width="1000" height="820">
+</div></header>
+
+<section id="about"><div class="wrap">
+  <h2>Same game, same look</h2>
+  <p>TUNNELER 2.0 was written by Geoffrey Silverton in 1991 in Turbo Pascal. TUNNELER ONLINE is a routine-by-routine
+    rewrite of the decompiled original in JavaScript: tanks, digging, shots, energy, shields, the sounds and the world
+    generator behave exactly like the DOS game - an automated test runs the original next to the port and compares
+    every frame. It even keeps the original's low-res text mode and VGA font.</p>
+  <div class="grid3" style="margin-top:28px">
+    <div class="card"><h3>Split screen</h3><p>Two players on one keyboard, like in 1991. <span class="blue">BLUE</span> on the left,
+      <span class="green">GREEN</span> on the right.</p></div>
+    <div class="card"><h3>Vs computer</h3><p>You against 1 to 7 computer tanks - easy, medium or hard - alone or in teams.</p></div>
+    <div class="card"><h3>Online</h3><p>Create a game, send the invite link, play with up to 8 tanks from different computers.
+      Friends can watch as spectators.</p></div>
+    <div class="card"><h3>Teams &amp; settings</h3><p>Any team setup, three map sizes, rounds to win, friendly fire, a round time
+      limit, and what you see after your tank is destroyed.</p></div>
+    <div class="card"><h3>Sounds</h3><p>The original PC speaker - or realistic and cartoony sound effects. Sounds fade with
+      distance.</p></div>
+    <div class="card"><h3>Six languages</h3><p>English, Slovenčina, Čeština, Українська, Русский and Gen Z. Names and chat in
+      any script.</p></div>
+  </div>
+</div></section>
+
+<section id="screens"><div class="wrap">
+  <h2>Screens</h2>
+  <div class="gallery">
+    <figure><img src="img/home.png" alt="Main menu" loading="lazy"><figcaption>The main menu</figcaption></figure>
+    <figure><img src="img/vs-computer.png" alt="Vs computer setup" loading="lazy"><figcaption>Setting up a game against the computer</figcaption></figure>
+    <figure><img src="img/online-lobby.png" alt="Pre-game lobby" loading="lazy"><figcaption>The pre-game lobby: names, teams, chat</figcaption></figure>
+    <figure><img src="img/online-team.png" alt="Team view" loading="lazy"><figcaption>An online team game: your team's views</figcaption></figure>
+    <figure><img src="img/spectator-grid.png" alt="Spectator grid" loading="lazy"><figcaption>Spectating: every tank at once</figcaption></figure>
+    <figure><img src="img/spectator-map.png" alt="Live map" loading="lazy"><figcaption>Spectating: the live map and scores</figcaption></figure>
+  </div>
+</div></section>
+
+<section id="howto"><div class="wrap">
+  <h2>How to play</h2>
+  <p>Each tank starts in its own base. Dig through the dirt (rock can't be dug), find the enemy and shoot it. Moving costs
+    energy, digging more, shooting the most; refuel at any base, repair your shield at your own (and, slower, at a
+    teammate's). Firing while moving digs faster. Win the set number of rounds to win the match.</p>
+  <table class="keys">
+    <tr><th></th><th class="blue">BLUE</th><th class="green">GREEN</th></tr>
+    <tr><td>Move</td><td><kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd></td><td>arrow keys</td></tr>
+    <tr><td>Fire</td><td><kbd>Left Shift</kbd> or <kbd>Space</kbd></td><td><kbd>Enter</kbd> or <kbd>Right Shift</kbd></td></tr>
+  </table>
+  <p class="note">Against the computer and online either set works. Online, <kbd>Esc</kbd> twice leaves the game.</p>
+</div></section>
+
+<section id="download"><div class="wrap">
+  <h2>Download</h2>
+  <p>A small desktop app - the game in its own window, using the web view your system already has (a few MB).
+    Split screen and vs computer work offline; online play uses the public server or your own.</p>
+  <p id="relinfo" class="note">Latest release: <a href="https://github.com/kaniansky/tunneler-online/releases/latest">GitHub releases</a></p>
+  <div class="dl">
+    <div class="card"><h3>Windows</h3><div id="dl-win"><a class="file" href="https://github.com/kaniansky/tunneler-online/releases/latest">tunneler-online-…-windows-x64.exe</a></div>
+      <p class="size">Windows 10 / 11. Just run it.</p></div>
+    <div class="card"><h3>Linux</h3><div id="dl-linux"><a class="file" href="https://github.com/kaniansky/tunneler-online/releases/latest">.deb / .rpm / .tar.gz</a></div>
+      <p class="size">Needs WebKitGTK 4.1 (most desktops have it).</p></div>
+    <div class="card"><h3>macOS</h3><div id="dl-mac"><a class="file" href="https://github.com/kaniansky/tunneler-online/releases/latest">.dmg (Apple silicon / Intel)</a></div>
+      <p class="size">Not signed yet: right click &rarr; Open the first time.</p></div>
+  </div>
+  <p class="note">Prefer to host it yourself? The server is one Node.js file or a Docker image:
+    <code>docker run -p 8050:8050 ghcr.io/kaniansky/tunneler-online</code>.</p>
+</div></section>
+
+<section id="credits"><div class="wrap">
+  <h2>Credits</h2>
+  <ul class="plain">
+    <li><strong>TUNNELER 2.0</strong> (1991) - Geoffrey Silverton. The original game this is a faithful port of.</li>
+    <li><strong>TUNNELER ONLINE</strong> - Norko Kaniansky. JavaScript port, extended modes, online play.</li>
+    <li>Fonts: the IBM VGA ROM font; other letters from <a href="https://unifoundry.com/unifont/">GNU Unifont</a>.</li>
+    <li>Source code: <a href="https://github.com/kaniansky/tunneler-online">github.com/kaniansky/tunneler-online</a> (public domain, Unlicense).</li>
+  </ul>
+  <h3 id="privacy">Privacy</h3>
+  <p>The game and the desktop app collect no personal data. Online, the server keeps game rooms (names, chat, moves) in
+    memory only while a game exists; nothing is stored or shared. The desktop app connects to no server unless you
+    choose online play.</p>
+</div></section>
+
+<footer><div class="wrap">TUNNELER ONLINE &middot; <a href="https://tunneler-online.onrender.com/">play</a> &middot;
+  <a href="https://github.com/kaniansky/tunneler-online">source</a> &middot;
+  <a href="https://github.com/kaniansky/tunneler-online/blob/main/CHANGELOG.md">changelog</a></div></footer>
+
+<div id="lb" role="dialog" aria-label="Screenshot"><img alt=""></div>
+
+<script>
+  // enlarge a screenshot on click
+  const lb = document.getElementById("lb"), lbImg = lb.querySelector("img");
+  document.querySelectorAll(".gallery img, .hero .shot").forEach(img => img.addEventListener("click", () => {
+    lbImg.src = img.src; lbImg.alt = img.alt; lb.classList.add("on");
+  }));
+  lb.addEventListener("click", () => lb.classList.remove("on"));
+  addEventListener("keydown", e => { if (e.key === "Escape") lb.classList.remove("on"); });
+
+  // the latest release's files, straight from GitHub (the links above stay if this fails)
+  fetch("https://api.github.com/repos/kaniansky/tunneler-online/releases/latest").then(r => r.ok ? r.json() : null).then(rel => {
+    if (!rel || !rel.assets) return;
+    const mb = n => (n / 1048576).toFixed(1) + " MB";
+    const link = a => '<a class="file" href="' + a.browser_download_url + '">' + a.name + '</a><span class="size">' + mb(a.size) + "</span>";
+    const pick = re => rel.assets.filter(a => re.test(a.name)).map(link).join("");
+    const put = (id, html) => { if (html) document.getElementById(id).innerHTML = html; };
+    put("dl-win", pick(/windows.*\.exe$/));
+    put("dl-linux", pick(/(\.deb|\.rpm|linux.*\.tar\.gz)$/));
+    put("dl-mac", pick(/macos.*\.dmg$/));
+    document.getElementById("relinfo").innerHTML = 'Latest release: <a href="' + rel.html_url + '">' + rel.tag_name + "</a>";
+  }).catch(() => {});
+</script>
+</body>
+</html>
