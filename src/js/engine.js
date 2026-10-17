@@ -1977,7 +1977,7 @@ class TunnelerEngine {
     this.roundLog.forEach((r, i) => {
       let name, color = 7;
       if (r.winner < 0) name = r.how === "esc" ? S.ended : S.draw;
-      else if (!this.extended) { name = this.classicName(r.winner); color = r.winner === 1 ? 9 : 10; }
+      else if (!this.extended) { name = this.classicName(r.winner); color = r.winner; }   // (as in the table: 1 BLUE, 2 GREEN)
       else if (r.player) { name = this.playerName(r.player); color = this.playerTextColor(r.player); }
       else { name = this.teamName(r.winner); color = this.playerTextColor(this.teamMembers(r.winner)[0]); }
       const num = String(i + 1).padStart(2) + " ", time = " " + mmss(r.secs);
@@ -1989,7 +1989,7 @@ class TunnelerEngine {
   matchAwardLines(w) {
     const S = Object.assign({}, STRINGS_EN.stats, this.strings.stats), N = this.extended ? this.nPlayers : 2;
     const name = p => this.extended ? this.playerName(p) : this.classicName(p);
-    const color = p => this.extended ? this.playerTextColor(p) : p === 1 ? 9 : 10;
+    const color = p => this.extended ? this.playerTextColor(p) : p;   // (classic: as in the table)
     const best = (score, ok) => {
       let b = 0;
       for (let p = 1; p <= N; p++) if (ok(p) && (!b || score(p) > score(b))) b = p;
@@ -2020,6 +2020,11 @@ class TunnelerEngine {
     if (lines.length > room) show = latest ? [{ text: " ...", color: 8 }, ...lines.slice(lines.length - room + 1)] : lines.slice(0, room - room % 2);
     this.textColor(14); this.gotoXY(x, y); this.write(UniText.slice(head, w));
     show.forEach((l, i) => { this.textColor(l.color); this.gotoXY(x, y + 1 + i); this.write(UniText.slice(l.text, w)); });
+  }
+  // rows the rounds / awards take (a heading + the longer list), at most max
+  matchExtrasHeight(w, max) {
+    const n = Math.max(this.matchRoundLines(w).length, this.matchAwardLines(w).length);
+    return n ? Math.min(max, n + 1) : 0;
   }
   // the rounds and awards in two columns: x1 (rounds) and x2 (awards), w wide, rows y..y2
   matchExtrasAt(x1, x2, w, y, y2) {
@@ -2504,7 +2509,9 @@ class TunnelerEngine {
     const W = this.menuW = Math.max(16, ...(notice || items).map(t => visLen(t) + 4)) + 1 >> 1 << 1;
     const X = this.menuX = this.menuShift + 41 - ((W + 2) >> 1);
     const nLines = notice ? notice.length + 2 : this.menuRows[this.menuRows.length - 1] + 1;
-    const top = this.menuTop = extras ? 24 - nLines - 1 : 11;   // (extras: the box's bottom border on row 24)
+    // (extras: the rounds / awards above the box, both together centred in rows 1..24; else row 11)
+    const extraH = extras ? this.matchExtrasHeight(18, 24 - (nLines + 2) - 1) : 0;
+    const top = this.menuTop = extras ? 1 + ((24 - (extraH + (extraH ? 1 : 0) + nLines + 2)) >> 1) + extraH + (extraH ? 1 : 0) : 11;
     this.textColor(5);
     this.window(X, top, Math.min(80, X + W + 5), Math.min(25, top + 11));
     this.write("\xDA", "\xC4".repeat(W)); this.writeLn("\xBF");
@@ -2518,7 +2525,7 @@ class TunnelerEngine {
     if (this.menuShift !== 0) {
       this.textColor(8);
       for (let i = 1; i <= 25; i++) { this.gotoXY(40, i); this.write("\xB3"); }
-      if (extras) this.matchExtrasAt(2, 21, 18, 2, top - 2);   // (vs computer: above the menu box)
+      if (extras) this.matchExtrasAt(2, 21, 18, top - 1 - extraH, top - 2);   // (vs computer: above the menu box)
       this.statsCentred = extras;                     // (vs computer: the statistics + settings in the middle)
       if (this.extended) this.statsExt(); else this.statsClassic();
       this.statsCentred = false;
