@@ -18,7 +18,7 @@ Lang.register("sk", {
   "home.online.i2": "alebo sa pozeraj ako divák.",
   "home.lang": "Jazyk: ", "home.lang.i1": "Jazyk menu a hry.", "home.lang.i2": "← →, <ENTER> alebo klik ho prepne.",
   "home.settings": "Nastavenia", "home.settings.i": "Jazyk a zvuk.", "set.title": "NASTAVENIA", "set.sound": "Zvuk: ", "set.ping": "Zobraziť ping: ", "set.ping.on": "áno", "set.ping.off": "nie", "set.ping.i": "Online hry: odozva v ms, vľavo hore na okraji hry.",
-  "set.server": "Server: ", "set.server.i1": "Online hry: adresa servera, napr. example.com:8050.", "set.server.i2": "Prázdne = verejný server. <ENTER> ju uloží.", "sound.muted": "vypnutý", "sound.original": "pôvodný (PC speaker)", "sound.realistic": "realistický", "sound.cartoony": "kreslený", "sound.i1": "Pôvodný: pípanie PC speakera z roku 1991. Realistický: zvuky tankov.", "sound.i2": "Kreslený: boingy a puky. ← → ho zmení a prehrá ukážku.",
+  "set.server": "Server: ", "set.server.i1": "Online hry: adresa servera, napr. example.com:8050.", "set.server.i2": "Prázdne = verejný server. <ENTER> ju uloží.", "sound.muted": "vypnutý", "sound.original": "pôvodný (PC speaker)", "sound.realistic": "realistický", "sound.cartoony": "rozprávkový", "sound.i1": "Pôvodný: pípanie PC speakera z roku 1991. Realistický: zvuky tankov.", "sound.i2": "Rozprávkový: boingy a puky. ← → ho zmení a prehrá ukážku.",
   "cpu.title": "PROTI POČÍTAČU", "cpu.start": "Začať novú hru", "cpu.start.i1": "Začni hru proti počítaču ({level}).",
   "cpu.own": "Vidíš iba svoju obrazovku.", "cpu.both": "Vidíš obe obrazovky.",
   "cpu.level": "Obtiažnosť: ", "cpu.level.i1": "Ako dobre hrá počítač:", "cpu.level.i2": "{levels}.",
