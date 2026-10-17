@@ -513,9 +513,8 @@
     o.uiMode = "online";
     for (const f of STATS) o[f] = Array.isArray(engine[f]) ? engine[f].slice() : engine[f];
     if (!o.menuShift) o.menuShift = -20;
-    o.menuNotice = [T("page.back")];
     o.textBackground(0);
-    o.showMainMenu();
+    o.showStatsPage(T("page.back"));                  // (full screen, the prompt on the bottom line)
     lobby.page = "page";
     lobbyUI.spec = { page: true, items: [], back: () => drawLobby(false, "stats") };
     const snap = { t: 0, mode: "text", screen: "text", vram: o.vram.slice(0, 16000) };

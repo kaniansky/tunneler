@@ -405,6 +405,7 @@ class TunnelerEngine {
     this.edgeVel = [0, 0, 0]; this.edgePos = [0, 0, 0];
     this.worldReady = false; this.quitProgram = false; this.menuShift = 0;
     this.menuSel = 0;                             // highlighted main menu item
+    this.statsLeft = 43; this.statsFull = false;    // where the statistics go (showStatsPage: centred)
     this.menuPage = "menu";                       // "menu", "instructions" or "information"
     this.strings = STRINGS_EN;                    // all visible text (see STRINGS_EN)
     this.menuX = 30; this.menuW = 20;              // main menu box (set by showMainMenu)
@@ -1902,7 +1903,7 @@ class TunnelerEngine {
   statsExt() {
     const st = this.strings.stats, N = this.nPlayers;
     const head = st.head || STRINGS_EN.stats.head, widths = [5, 5, 5, 6, 6];
-    this.window(43, 5, 79, 25);                                  // 37 columns
+    this.window(this.statsLeft, 5, this.statsLeft + 36, 25);     // 37 columns
     this.textColor(11);
     this.gotoXY(19 - (visLen(st.title) >> 1), 1);
     this.write(st.title);
@@ -1946,22 +1947,93 @@ class TunnelerEngine {
     }
     this.statsSettings();
   }
+  // the classic game's statistics (BLUE / GREEN), in the 37 columns from statsLeft (the menu's right half)
+  statsClassic() {
+    const S = this.strings;
+    this.window(this.statsLeft, 6, this.statsLeft + 36, 20);
+    this.textColor(11);
+    this.gotoXY(19 - (visLen(S.stats.title) >> 1), 1);
+    this.writeLn(S.stats.title);
+    this.writeLn();
+    this.writeLn();
+    if (this.alive[1] === this.alive[2]) { this.alive[1] = false; this.alive[2] = false; }
+    if (this.youPlayer === 1) {                 // "►BLUE" (display only)
+      this.textColor(9);
+      this.write(" ".repeat(24 - visLen(this.classicName(1))) + "\x10");
+      this.textColor(((this.wins[1] > this.wins[2]) ? 1 : 0) * 128 + 1);
+      this.write(this.classicName(1));
+    } else {
+      this.textColor(((this.wins[1] > this.wins[2]) ? 1 : 0) * 128 + 1);
+      this.write(UniText.padStart(this.classicName(1), 25));
+    }
+    this.textColor(((this.wins[2] > this.wins[1]) ? 1 : 0) * 128 + 2);
+    if (this.youPlayer === 2) {                 // "GREEN◄" (display only)
+      this.write(UniText.padStart(this.classicName(2), 9));
+      this.textColor(10);
+      this.writeLn("\x11");
+    } else this.writeLn(UniText.padStart(this.classicName(2), 9));
+    this.writeLn();
+    const row = (label, f) => {
+      this.textColor(6);
+      this.write(label.slice(0, 16).padEnd(16));
+      for (let i = 1; i <= 2; i++) { this.textColor(i); f(i); }
+      this.writeLn();
+    };
+    row(S.stats.fired, i => this.write(this.num(this.shotsFired[i], 9)));
+    row(S.stats.hit, i => this.write(this.num(this.shotsHit[i], 9)));
+    // the original set ShotsFired to 1 here when 0 (to avoid dividing by zero), so a redraw of this
+    // screen showed 1 shot; online the statistics are drawn by several engine copies, so don't
+    row(S.stats.percent, i => {
+      const fired = this.shotsFired[i] === 0 ? 1 : this.shotsFired[i];
+      this.write(this.num(Math.trunc(i16(this.shotsHit[i] * 100) / fired), 8), "%");
+    });
+    this.writeLn();
+    row(S.stats.dug, i => this.write(this.num(this.metersDug[i], 9)));
+    row(S.stats.moved, i => this.write(this.num(this.metersMoved[i], 9)));
+    this.writeLn();
+    this.writeLn();
+    if (this.alive[1] !== this.alive[2]) {
+      this.textColor(6);
+      this.write(S.stats.winner);
+      if (this.wins[1] > this.wins[2]) { this.textColor(1); this.write(this.classicName(1)); }
+      else { this.textColor(2); this.write(this.classicName(2)); }
+      this.textColor(6);
+      this.writeLn(".");
+    }
+    this.statsSettings();
+  }
+  // The statistics alone, full screen (the online lobby's Statistics page): centred, the settings below
+  // them across the whole width, `prompt` on the bottom line
+  showStatsPage(prompt) {
+    this.window(1, 1, 80, 25);
+    this.clearScreen();
+    this.statsLeft = 22; this.statsFull = true;
+    if (this.extended) this.statsExt(); else this.statsClassic();
+    this.statsLeft = 43; this.statsFull = false;
+    this.window(1, 1, 80, 25);
+    if (prompt) this.strings = Object.assign({}, this.strings, { prompt });
+    this.showEscPrompt();
+    this.menuPage = "stats";
+  }
+
   // the game's settings at the bottom of the right half, below the statistics (a blank row between when
   // there is room, the last line on row 24, at most 4 lines of 37 columns; display only). The
   // statistics end where the cursor is.
   statsSettings() {
     if (!this.showSettings) return;
     const last = this.cx === this.wx1 ? this.cy : this.cy + 1;   // (1-based screen row of the last text)
-    let lines = this.settingsLines(37, 4);
-    if (lines.length > 23 - last) {                       // (no room for the blank row: right below them)
-      const room = 24 - last;
+    // (the full-screen page: 76 columns centred, the bottom line row 24 is the prompt's rule)
+    const width = this.statsFull ? 76 : 37, mid = this.statsFull ? 41 : 61, bottom = this.statsFull ? 23 : 24;
+    let lines = this.settingsLines(width, 4);
+    if (lines.length > bottom - 1 - last) {               // (no room for the blank row: right below them)
+      const room = bottom - last;
       if (room < 1) return;
-      lines = this.settingsLines(37, room).slice(0, room);
+      lines = this.settingsLines(width, room).slice(0, room);
     }
     const w = [this.wx1, this.wy1, this.wx2, this.wy2, this.cx, this.cy, this.textAttr];
     this.window(1, 1, 80, 25);
     this.textColor(3);
-    lines.forEach((l, i) => { this.gotoXY(61 - (visLen(l) >> 1), 25 - lines.length + i); this.write(l); });
+    lines.forEach((l, i) => { this.gotoXY(mid - (visLen(l) >> 1), bottom + 1 - lines.length + i); this.write(l); });
     [this.wx1, this.wy1, this.wx2, this.wy2, this.cx, this.cy, this.textAttr] = w;
   }
 
@@ -2313,57 +2385,7 @@ class TunnelerEngine {
       this.textColor(8);
       for (let i = 1; i <= 25; i++) { this.gotoXY(40, i); this.write("\xB3"); }
       if (this.extended) { this.statsExt(); return; }
-      this.window(43, 6, 79, 20);
-      this.textColor(11);
-      this.gotoXY(19 - (visLen(S.stats.title) >> 1), 1);
-      this.writeLn(S.stats.title);
-      this.writeLn();
-      this.writeLn();
-      if (this.alive[1] === this.alive[2]) { this.alive[1] = false; this.alive[2] = false; }
-      if (this.youPlayer === 1) {                 // "►BLUE" (display only)
-        this.textColor(9);
-        this.write(" ".repeat(24 - visLen(this.classicName(1))) + "\x10");
-        this.textColor(((this.wins[1] > this.wins[2]) ? 1 : 0) * 128 + 1);
-        this.write(this.classicName(1));
-      } else {
-        this.textColor(((this.wins[1] > this.wins[2]) ? 1 : 0) * 128 + 1);
-        this.write(UniText.padStart(this.classicName(1), 25));
-      }
-      this.textColor(((this.wins[2] > this.wins[1]) ? 1 : 0) * 128 + 2);
-      if (this.youPlayer === 2) {                 // "GREEN◄" (display only)
-        this.write(UniText.padStart(this.classicName(2), 9));
-        this.textColor(10);
-        this.writeLn("\x11");
-      } else this.writeLn(UniText.padStart(this.classicName(2), 9));
-      this.writeLn();
-      const row = (label, f) => {
-        this.textColor(6);
-        this.write(label.slice(0, 16).padEnd(16));
-        for (let i = 1; i <= 2; i++) { this.textColor(i); f(i); }
-        this.writeLn();
-      };
-      row(S.stats.fired, i => this.write(this.num(this.shotsFired[i], 9)));
-      row(S.stats.hit, i => this.write(this.num(this.shotsHit[i], 9)));
-      // the original set ShotsFired to 1 here when 0 (to avoid dividing by zero), so a redraw of this
-      // screen showed 1 shot; online the statistics are drawn by several engine copies, so don't
-      row(S.stats.percent, i => {
-        const fired = this.shotsFired[i] === 0 ? 1 : this.shotsFired[i];
-        this.write(this.num(Math.trunc(i16(this.shotsHit[i] * 100) / fired), 8), "%");
-      });
-      this.writeLn();
-      row(S.stats.dug, i => this.write(this.num(this.metersDug[i], 9)));
-      row(S.stats.moved, i => this.write(this.num(this.metersMoved[i], 9)));
-      this.writeLn();
-      this.writeLn();
-      if (this.alive[1] !== this.alive[2]) {
-        this.textColor(6);
-        this.write(S.stats.winner);
-        if (this.wins[1] > this.wins[2]) { this.textColor(1); this.write(this.classicName(1)); }
-        else { this.textColor(2); this.write(this.classicName(2)); }
-        this.textColor(6);
-        this.writeLn(".");
-      }
-      this.statsSettings();
+      this.statsClassic();
     }
   }
 
