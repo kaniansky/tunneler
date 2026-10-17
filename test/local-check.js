@@ -92,11 +92,12 @@ function play(search) {
   }
 }
 {
+  // (an old link's "easy" level becomes "normal" - the easiest one offered, shown as "easy")
   const w = play("?mode=cpu&slots=" + encodeURIComponent("0:you:1,1:hard:2,2:easy:2,3:expert:2") + "&size=large&win=5&ff=1&hide=0");
   const e = w.tunnelerEngine();
   assert(e.extended && e.nPlayers === 4 && e.nTeams === 2 && e.size === "large" && e.winScore === 5 && e.friendlyFire);
   same(Array.from(e.slots, s => [s.color, s.team]), [[0, 1], [1, 2], [2, 2], [3, 2]]);
-  same(w.tunnelerAIs().map(a => [a.me, a.levelName]), [[2, "hard"], [3, "easy"], [4, "expert"]]);
+  same(w.tunnelerAIs().map(a => [a.me, a.levelName]), [[2, "hard"], [3, "normal"], [4, "expert"]]);
   ok("1 vs 3 teams: extended, large, 5 to win, friendly fire, computer levels per slot");
 }
 {
@@ -152,7 +153,7 @@ function play(search) {
   for (let i = 0; i < 6; i++) env.key("ArrowUp");           // watch, view, time, win, size, slot7
   env.key("ArrowLeft");                                    // TEAL: nobody -> expert
   for (let i = 0; i < 5; i++) env.key("ArrowUp");           // slot2 CYAN
-  env.key("ArrowRight");                                   // nobody -> easy
+  env.key("ArrowRight");                                   // nobody -> normal (shown as easy)
   for (let i = 0; i < 6; i++) env.key("Enter");             // team 3 -> 8, then wraps to 1
   env.key("Enter");                                        // team 2
   for (let i = 0; i < 6; i++) env.key("ArrowDown");         // slot3..7, size
@@ -165,7 +166,7 @@ function play(search) {
   // (with friendly fire shown the gap above "Start a new game" goes: 17 rows)
   env.key("ArrowDown"); env.key("Enter");                  // start
   assert.strictEqual(decodeURIComponent(env.win.location.href),
-    "/vs-computer?slots=0:you:1,1:normal:2,2:easy:2,7:expert:8&size=large&win=5&ff=1&view=everyone&watch=team&time=3");
+    "/vs-computer?slots=0:you:1,1:normal:2,2:normal:2,7:expert:8&size=large&win=5&ff=1&view=everyone&watch=team&time=3");
   assert.strictEqual(store.get("tunneler.cpu.watch"), "team", "after death remembered");
   assert.strictEqual(store.get("tunneler.cpu.time"), "3", "round time remembered");
   // number keys (top row and the numeric keypad with NumLock on) set the team of the selected slot row
@@ -202,7 +203,7 @@ function play(search) {
     ui.zoneClick(at("slot1", zone("slot1", 0) + 1), -1);
     assert.strictEqual(saved()[1].kind, "normal", "right click: back to normal");
     ui.click(at("slot2", zone("slot2", 0)));
-    assert.strictEqual(saved()[2].kind, "easy", "CYAN: nobody -> easy (not \"you\": BLUE is yours)");
+    assert.strictEqual(saved()[2].kind, "normal", "CYAN: nobody -> normal (shown as easy; not \"you\": BLUE is yours)");
     const before = st.get("tunneler.cpu.slots");
     ui.click(at("slot3", 1));                               // the color name: selects only
     assert.strictEqual(ui.spec.items[ui.sel].key, "slot3", "a click on the name selects the row");
@@ -214,7 +215,7 @@ function play(search) {
   env.page("index.html");
   env.key("ArrowDown"); env.key("Enter"); env.key("Enter");
   assert.strictEqual(decodeURIComponent(env.win.location.href),
-    "/vs-computer?slots=0:you:1,1:normal:2,2:easy:2,7:expert:8&size=large&win=5&ff=1&view=everyone&watch=team&time=3");
+    "/vs-computer?slots=0:you:1,1:normal:2,2:normal:2,7:expert:8&size=large&win=5&ff=1&view=everyone&watch=team&time=3");
   ok("vs computer slot editor: default classic, slots / teams / options, remembered in localStorage");
 
   // nobody but you: "Start a new game" does nothing

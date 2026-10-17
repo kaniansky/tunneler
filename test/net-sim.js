@@ -352,7 +352,7 @@ async function extended(srv, port) {
   check("extended room created", () => {
     const r = res.json;
     assert.strictEqual(res.status, 200);
-    assert(r.ext && r.players === 8 && r.teams && r.bots === 4 && r.humans === 4 && r.level === "easy");
+    assert(r.ext && r.players === 8 && r.teams && r.bots === 4 && r.humans === 4 && r.level === "normal");
     assert.deepStrictEqual(r.slots.map(s => s.bot), [false, false, false, false, true, true, true, true]);
     assert.deepStrictEqual(r.slots.map(s => s.role), ROLES);
   });

@@ -493,3 +493,6 @@ the room info): the most a player may choose to see during play - display only, 
   + package.json's version without a trailing ".0" (build.js writes public/js/version.js; src/js/version.js
   has null = plain "TUNNELER"); every other screen has its own red title (set.title, lc.split.title,
   cpu.title, lobby.title, room.title, create.title, pg.kick.title).
+- Computer levels offered: `LEVELS = ["normal", "hard", "expert"]` (netproto / home / play), shown as
+  easy / medium / hard (`level.*` strings); ai.js still knows "easy", but an old "easy" (links, stored
+  settings, room requests) is turned into "normal" everywhere.

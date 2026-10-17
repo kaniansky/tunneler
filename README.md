@@ -29,7 +29,7 @@ All menus, the lobby and the status lines use the same DOS text screen.
 ## Modes
 
 - **Split screen** - two players on one keyboard, like the original.
-- **Vs computer** - you (in any color) against 1 to 7 computer tanks (easy, normal, hard or expert),
+- **Vs computer** - you (in any color) against 1 to 7 computer tanks (easy, medium or hard),
   every tank for itself or in teams. See your own screen, your team's screens or everybody's.
 - **Online game** - create a game in the lobby (public or private, with or without spectators), send
   the invite link (`/game/<name>`), and play with 2 to 8 tanks from several computers; any slot can be

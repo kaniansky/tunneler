@@ -25,7 +25,7 @@ Lang.register("en", {
   "cpu.level": "Difficulty: ", "cpu.level.i1": "How well the computer plays:", "cpu.level.i2": "{levels}.",
   "cpu.view": "View: ", "cpu.view.own": "own only", "cpu.view.both": "both",
   "cpu.view.i1": "Show only your own view screen, or the", "cpu.view.i2": "computer's too (like the split-screen original).",
-  "level.easy": "easy", "level.normal": "normal", "level.hard": "hard", "level.expert": "expert",
+  "level.normal": "easy", "level.hard": "medium", "level.expert": "hard",
   // vs computers with 1-7 opponents / teams, spectator view modes (views.js)
   "home.cpu.i1n": "Play {blue} against 1 to 7 computer-driven tanks.",
   "cpu.start.n": "Start a game against {n} computer tanks ({level}).", "cpu.start.t": "Start a team game against {n} computer tanks ({level}).",

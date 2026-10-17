@@ -8,7 +8,7 @@
   const T = Lang.t;
   const load = (k, d) => { try { const v = localStorage.getItem(k); return v == null ? d : v; } catch (e) { return d; } };
   const save = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* private mode */ } };
-  const LEVELS = ["easy", "normal", "hard", "expert"];
+  const LEVELS = ["normal", "hard", "expert"];              // shown as easy / medium / hard (an old "easy" = "normal")
   const KINDS = ["none", "you"].concat(LEVELS);           // who drives a slot: you can sit in any color
   const SIZES = TunnelerEngine.SIZES || ["small", "medium", "large"];
   const COLORS = TunnelerEngine.PLAYER_KEYS || ["blue", "green", "cyan", "yellow", "white", "pink", "violet", "teal"];
@@ -40,7 +40,8 @@
     try { stored = JSON.parse(load("tunneler.cpu.slots", "null")); } catch (e) { stored = null; }
     if (Array.isArray(stored)) stored.slice(0, 8).forEach((s, i) => {
       if (!s) return;
-      if (KINDS.includes(s.kind)) slots[i].kind = s.kind;
+      const k = s.kind === "easy" ? "normal" : s.kind;
+      if (KINDS.includes(k)) slots[i].kind = k;
       slots[i].team = clampInt(s.team, 1, 8, slots[i].team);
     });
   }

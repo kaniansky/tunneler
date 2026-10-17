@@ -24,7 +24,7 @@ Lang.register("cs", {
   "cpu.level": "Obtížnost: ", "cpu.level.i1": "Jak dobře hraje počítač:", "cpu.level.i2": "{levels}.",
   "cpu.view": "Pohled: ", "cpu.view.own": "jen můj", "cpu.view.both": "oba",
   "cpu.view.i1": "Ukaž jen svou obrazovku, nebo i obrazovku", "cpu.view.i2": "počítače (jako v původní dělené obrazovce).",
-  "level.easy": "lehká", "level.normal": "normální", "level.hard": "těžká", "level.expert": "expert",
+  "level.normal": "lehká", "level.hard": "střední", "level.expert": "těžká",
   // vs computers with 1-7 opponents / teams, spectator view modes (views.js)
   "home.cpu.i1n": "Hraj za {blue} proti 1 až 7 tankům počítače.",
   "cpu.start.n": "Začni hru proti {n} tankům počítače ({level}).", "cpu.start.t": "Začni týmovou hru proti {n} tankům počítače ({level}).",

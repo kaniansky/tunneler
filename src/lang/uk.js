@@ -24,7 +24,7 @@ Lang.register("uk", {
   "cpu.level": "Складність: ", "cpu.level.i1": "Наскільки добре грає комп'ютер:", "cpu.level.i2": "{levels}.",
   "cpu.view": "Огляд: ", "cpu.view.own": "лише мій", "cpu.view.both": "обидва",
   "cpu.view.i1": "Показувати лише свій екран або й екран", "cpu.view.i2": "комп'ютера (як в оригінальному розділеному екрані).",
-  "level.easy": "легка", "level.normal": "звичайна", "level.hard": "складна", "level.expert": "експерт",
+  "level.normal": "легка", "level.hard": "середня", "level.expert": "складна",
   // vs computers with 1-7 opponents / teams, spectator view modes (views.js)
   "home.cpu.i1n": "Грай за танк {blue} проти 1-7 танків комп'ютера.",
   "cpu.start.n": "Почати гру проти {n} танків комп'ютера ({level}).", "cpu.start.t": "Почати командну гру проти {n} танків комп'ютера ({level}).",

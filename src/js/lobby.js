@@ -39,7 +39,7 @@
     form.watchOut = NetProto.afterDeath(st.watchOut);
     if (Array.isArray(st.slots) && st.slots.length === MAX)
       st.slots.forEach((s, i) => {
-        if (s && KINDS.includes(s.kind)) form.slots[i].kind = s.kind;
+        if (s && KINDS.includes(s.kind === "easy" ? "normal" : s.kind)) form.slots[i].kind = s.kind === "easy" ? "normal" : s.kind;
         if (s && s.team >= 1 && s.team <= 8) form.slots[i].team = s.team | 0;
       });
   } catch (e) { /* private mode / bad data */ }

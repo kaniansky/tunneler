@@ -330,7 +330,7 @@
     const cw = Math.max(MAX_PLAYER_NAME, W(T("pg.h.name")), ...ROLES.map(r => W(T(r))));
     const tw = Math.max(W(T("pg.h.team")), ...[1, 8].map(n => W(T("pg.teamn", { n }))));
     const sw = Math.max(W(T("pg.h.state")), ...["pg.ready", "pg.notready", "pg.free", "pg.disconnected"].map(k => W(T(k))),
-      ...["easy", "normal", "hard", "expert"].map(l => W(T("pg.computer", { level: Lang.raw("level." + l) }))));
+      ...["normal", "hard", "expert"].map(l => W(T("pg.computer", { level: Lang.raw("level." + l) }))));
     // (a classic room - BLUE against GREEN - has no teams: no TEAM column, width -1 = not even its gap)
     const cols = [1, cw, cfg.ext ? tw + 1 : -1, sw, 7];   // (TEAM: one more column before STATE)
     const width = cols.reduce((a, b) => a + b + 1, -1);

@@ -13,7 +13,8 @@
   const params = new URLSearchParams(location.search);
   // /vs-computer?... or /split?... (play.html?mode=cpu|hotseat&... in the desktop app)
   const mode = params.get("mode") === "cpu" || /^\/vs-computer\/?$/.test(location.pathname) ? "cpu" : "hotseat";
-  const LEVELS = ["easy", "normal", "hard", "expert"];
+  const LEVELS = ["normal", "hard", "expert"];              // (easy / medium / hard; an old "easy" = "normal")
+  const lvl = v => v === "easy" ? "normal" : v;
   const int = (v, lo, hi, d) => { v = parseInt(v, 10); return v >= lo && v <= hi ? v : d; };
   const size = (TunnelerEngine.SIZES || []).includes(params.get("size")) ? params.get("size") : "medium";
   const winScore = int(params.get("win"), 1, 9, 3);
@@ -36,14 +37,14 @@
         const color = int(c, 0, 7, -1), team = int(t, 1, 8, color + 1);
         if (color < 0 || out.some(s => s.color === color)) continue;
         if (who === "you" && !out.some(s => s.level === null)) out.push({ color, team, level: null });
-        else if (LEVELS.includes(who)) out.push({ color, team, level: who });
+        else if (LEVELS.includes(lvl(who))) out.push({ color, team, level: lvl(who) });
       }
       if (!out.some(s => s.level === null))                // no "you": BLUE (or the first free color) is you
         out.unshift({ color: [0, 1, 2, 3, 4, 5, 6, 7].find(c => !out.some(s => s.color === c)), team: 1, level: null });
       out.sort((a, b) => a.color - b.color);
     } else {
       out = [{ color: 0, team: 1, level: null }];                                     // old links: opp computer tanks, teams = every second one
-      const level = LEVELS.includes(params.get("level")) ? params.get("level") : "normal";
+      const level = LEVELS.includes(lvl(params.get("level"))) ? lvl(params.get("level")) : "normal";
       const opp = int(params.get("opp"), 1, 7, 1), teams = params.get("teams") === "1" && opp >= 3;
       for (let i = 1; i <= opp; i++) out.push({ color: i, team: teams ? i % 2 + 1 : i + 1, level });
       if (teams) out[0].team = 1;

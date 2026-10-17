@@ -3,6 +3,11 @@
 All notable changes to TUNNELER ONLINE. Versions follow [semantic versioning](https://semver.org/);
 every push to `main` is released (see CONTRIBUTING.md).
 
+## Unreleased
+
+- Three computer levels instead of four: **easy**, **medium** and **hard** (the former normal, hard and
+  expert); the former "easy" is gone - old games and links that used it get the new easy.
+
 ## 1.3.0
 
 - Round title: a blank row between the players and the game's settings (the settings use the last

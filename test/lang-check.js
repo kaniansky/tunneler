@@ -40,7 +40,7 @@ for (const c of Lang.codes) {
   fits(c, "pg.kick.pick", t("pg.kick.pick", { name: "W".repeat(12) }), 78);
   fits(c, "pg.kick.sure", t("pg.kick.sure", { name: "W".repeat(12) }), 78);
   for (const v of ["set.ping.on", "set.ping.off"]) fits(c, "set.ping", t("set.ping") + t(v), 34);
-  for (const l of ["easy", "normal", "hard", "expert"]) fits(c, "cpu.level", t("cpu.level") + t("level." + l), 34);
+  for (const l of ["normal", "hard", "expert"]) fits(c, "cpu.level", t("cpu.level") + t("level." + l), 34);
   fits(c, "cpu.view", t("cpu.view") + t("cpu.view.own"), 34); fits(c, "cpu.view", t("cpu.view") + t("cpu.view.both"), 34);
   // view self / team / everyone (vs computer, pre-game lobby, create screen) and the chat's "Say:" input (16 shown)
   for (const v of ["self", "team", "everyone"]) {
@@ -65,7 +65,7 @@ for (const c of Lang.codes) {
   {
     const bw = len => { const w = Math.max(14, len + 4); return w + w % 2; };
     const mx = a => Math.max(...a.map(x => typeof x === "number" ? x : vis(x)));
-    const lv = ["easy", "normal", "hard", "expert"], names = ["blue", "green", "cyan", "yellow", "white", "pink", "violet", "teal"].map(r => t(r));
+    const lv = ["normal", "hard", "expert"], names = ["blue", "green", "cyan", "yellow", "white", "pink", "violet", "teal"].map(r => t(r));
     const cpuL = [...["small", "medium", "large"].map(z => t("lc.size") + t("lc.size." + z)), t("lc.win") + "9", t("lc.time") + t("time.off"), t("lc.time") + t("time.n", { n: 10 }), t("lc.ff") + t("lc.on"), t("lc.ff") + t("lc.off"),
       ...["self", "team", "everyone"].map(v => t("cpu.view") + t("view." + v)), ...["black", "wreck", "team", "killer", "others"].map(v => t("lc.watch") + t("watch." + v)),
       t("cpu.start"), t("menu.instr"), t("back.main")];

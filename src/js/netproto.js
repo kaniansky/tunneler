@@ -38,7 +38,10 @@ const EXT_BITS = UP | DOWN | LEFT | RIGHT | FIRE;        // extended rooms: no E
 // slot i's role (= tank colour, lang key); the first two are the classic BLUE / GREEN
 const ROLES = ["blue", "green", "cyan", "yellow", "white", "pink", "violet", "teal"];
 const MAX_SLOTS = ROLES.length;
-const LEVELS = ["easy", "normal", "hard", "expert"];     // computer levels (ai.js)
+// computer levels to choose (ai.js), shown as easy / medium / hard; ai.js's "easy" is no longer offered
+// (an old "easy" becomes "normal")
+const LEVELS = ["normal", "hard", "expert"];
+const level = v => v === "easy" ? "normal" : v;
 const KINDS = ["none", "human", ...LEVELS];               // who plays a slot (slot editor)
 const SIZES = ["small", "medium", "large"];              // world sizes (engine option size)
 const MAX_PLAYER_NAME = 12;                              // player names (pre-game lobby), display columns
@@ -89,13 +92,13 @@ function roomSettings(o) {
   o = o || {};
   let raw;
   if (Array.isArray(o.slots)) {
-    raw = o.slots.slice(0, MAX_SLOTS).map((s, i) => ({ kind: KINDS.includes(s && s.kind) ? s.kind : "none",
+    raw = o.slots.slice(0, MAX_SLOTS).map((s, i) => ({ kind: KINDS.includes(s && level(s.kind)) ? level(s.kind) : "none",
       team: clampInt(s && s.team, 1, 8, i + 1) }));
   } else {
     const n = clampInt(o.players, 2, MAX_SLOTS, 2), bots = clampInt(o.bots, 0, n - 1, 0);
-    const level = LEVELS.includes(o.level) ? o.level : "normal", teams = o.teams === true && n >= 3;
+    const lvl = LEVELS.includes(level(o.level)) ? level(o.level) : "normal", teams = o.teams === true && n >= 3;
     raw = [];
-    for (let i = 0; i < n; i++) raw.push({ kind: i >= n - bots ? level : "human", team: teams ? i % 2 + 1 : i + 1 });
+    for (let i = 0; i < n; i++) raw.push({ kind: i >= n - bots ? lvl : "human", team: teams ? i % 2 + 1 : i + 1 });
   }
   const used = raw.map((s, i) => ({ color: i, kind: s.kind, team: s.team })).filter(s => s.kind !== "none");
   if (used.length < 2) return { error: "At least 2 slots must be used." };
