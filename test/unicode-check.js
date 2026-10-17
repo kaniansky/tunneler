@@ -216,7 +216,7 @@ function stats(e) { e.textMode(); e.menuShift = -20; e.showMainMenu(); return sc
     text: [{ row: 3, col: 5, text: "Дмитро: 你好 👋", color: 7 }],
     box: { y: 5 },
     items: [{ key: "name", label: W.Lang.t("pg.name"), input: name, align: "left", go() {} },
-      { key: "kick", label: W.Lang.t("pg.kick", { name: "BLUE (王小明)" }), go() {} },
+      { key: "kick", label: W.Lang.t("pg.kick.pick", { name: "BLUE (王小明)" }), go() {} },
       { key: "back", label: "Back", go() {} }],
   });
   const sc = snapScreen(snap);
@@ -224,7 +224,7 @@ function stats(e) { e.textMode(); e.menuShift = -20; e.showMainMenu(); return sc
   assert.strictEqual(sc[0].indexOf(ROOM), 41 - (12 >> 1) - 1, "centred by display columns");
   assert(sc[2].includes("Дмитро: 你好 👋"), "raw text item");
   assert(sc.some(l => l.includes("Name: 🐙Octo")), "input value");
-  assert(sc.some(l => l.includes("Kick: BLUE (王小明)")), "a name inside a translated label");
+  assert(sc.some(l => l.includes("removes BLUE (王小明) from")), "a name inside a translated label");
   const box = sc.filter(l => l.includes("│"));
   const colOf = (l, i) => U.rawCols(l.slice(0, i));
   const right = box.map(l => colOf(l, l.lastIndexOf("│")) - colOf(l, l.indexOf("│")));

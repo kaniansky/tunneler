@@ -183,9 +183,17 @@ function loadPage(page, search, stored) {
     const shown = screenText(env.win, snap);
     assert(shown.includes("Bob: Привет, Σοφία!") && shown.includes("hi"), "chat in the Unicode plane: " + shown);
     assert(snap.uni && snap.uni.some(u => u === "П".codePointAt(0)), "Cyrillic through the plane");
-    // the host's kick item: Down to it (right after Say), Enter twice (confirm)
-    press(env, "ArrowDown");
+    // the host's "Kick a player..." (right after Say) opens the list of whom it may remove; Enter on
+    // one asks once more, a second Enter kicks; Esc in the list goes back without kicking
+    press(env, "ArrowDown"); press(env, "Enter");
+    const ui = env.win.tunnelerLobbyUI();
+    assert.strictEqual(ui.spec.items[ui.sel].key, "s0", "kick list, first: Bob's slot - " + ui.spec.items.map(it => it.key).join(","));
+    press(env, "Escape");
+    assert.strictEqual(ui.spec.items[ui.sel].key, "kick", "Esc: back on the kick item");
+    assert(!ws.sent.some(m => m.t === "kick"), "nothing kicked yet");
     press(env, "Enter"); press(env, "Enter");
+    assert(!ws.sent.some(m => m.t === "kick"), "the first Enter only asks");
+    press(env, "Enter");
     assert(ws.sent.some(m => m.t === "kick" && m.slot === 0), "kick sent: " + JSON.stringify(ws.sent.filter(m => m.t === "kick")));
     ws.recv({ t: "pong", c: performance.now() - 20 });
     assert(ws.sent.some(m => m.t === "rtt" && m.ms >= 0), "rtt reported");

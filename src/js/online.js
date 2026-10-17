@@ -272,7 +272,7 @@
   let myView = VISIBLE.includes(store.get("tunneler.view")) ? store.get("tunneler.view") : "self";
   const viewChoices = () => VISIBLE.slice(0, VISIBLE.indexOf(cfg.visible) + 1);
   const viewChoice = () => viewChoices().includes(myView) ? myView : viewChoices()[viewChoices().length - 1];
-  let sentName = null, sentAt = 0, kickSel = 0, kickArm = null, kickArmTimer = null, statsShown = 0;
+  let sentName = null, sentAt = 0, kickArm = null, kickArmTimer = null, statsShown = 0;
   const lobbyUI = new DosUI(canvas, { display, active: () => !!lobby && !msgSnap && !mapPending,
     present: snap => { menuSnap = snap; presentOverlay(); } });
   window.tunnelerLobbyUI = () => lobbyUI;                  // tests / debugging
@@ -310,10 +310,10 @@
     const out = [];
     sl.forEach((s, i) => {
       if (s.kind === "human" && s.connected && i !== me && !s.host)
-        out.push({ id: "s" + i, slot: i, label: s.name || NAME(colorKey(i)) });
+        out.push({ id: "s" + i, slot: i, label: s.name || NAME(colorKey(i)), color: TEXT_COLORS[s.color] });
     });
     (status.specs || []).forEach((x, k) => {
-      if (x.k !== myK && !x.host) out.push({ id: "k" + x.k, k: x.k, label: Lang.raw("pg.spectator").replace("{n}", k + 1) });
+      if (x.k !== myK && !x.host) out.push({ id: "k" + x.k, k: x.k, label: Lang.raw("pg.spectator").replace("{n}", k + 1), color: 7 });
     });
     return out;
   }
@@ -379,19 +379,8 @@
       items.push({ key: "now", label: T("pg.now"), info: [T("pg.now.i1"), T("pg.now.i2")], go: () => send({ t: "start" }) });
     items.push({ key: "say", label: T("pg.say"), input: chatForm, align: "left", info: [T("pg.say.i")], go: sendChat });
     if (engine && engine.menuShift !== 0) items.push({ key: "stats", label: T("pg.stats"), info: [...hint, T("pg.stats.i")], go: showStats });
-    const targets = kickTargets(sl);
-    if (targets.length) {
-      kickSel = Math.max(0, Math.min(kickSel, targets.length - 1));
-      const tg = targets[kickSel], armed = kickArm === tg.id;
-      items.push({ key: "kick", label: T("pg.kick", { name: tg.label }),
-        info: armed ? [{ text: T("pg.kick.sure", { name: tg.label }), color: 12 }] : [T("pg.kick.i1"), T("pg.kick.i2")],
-        change: d => { kickSel = (kickSel + d + targets.length) % targets.length; disarm(); drawLobby(true); },
-        go: () => {
-          if (kickArm !== tg.id) { kickArm = tg.id; clearTimeout(kickArmTimer); kickArmTimer = setTimeout(() => { disarm(); if (lobby && lobby.page === "lobby") drawLobby(true); }, 4000); }
-          else { disarm(); send(tg.slot != null ? { t: "kick", slot: tg.slot } : { t: "kick", k: tg.k }); }
-          drawLobby(true);
-        } });
-    }
+    // the host: one "Kick a player..." item, which opens the list of whom it may remove (drawKick)
+    if (kickTargets(sl).length) items.push({ key: "kick", label: T("pg.kick"), info: [T("pg.kick.i1"), T("pg.kick.i2")], go: () => drawKick(false) });
     items.push({ key: "gap", label: "", disabled: true });
     items.push({ key: "back", label: T("back.lobby"), info: [T("on.leave")], go: () => leave(lobbyHref) });
     // number keys 1..8 set the own team from every row but the Name / Say inputs (they type there)
@@ -471,6 +460,34 @@
     drawLobby(true);
   }
   function disarm() { kickArm = null; clearTimeout(kickArmTimer); }
+  // The host's kick list: the other connected players (in their tank's colour) and the spectators;
+  // <ENTER> on one asks once more (4 s), a second <ENTER> removes them; <ESC> / Back: the lobby again
+  const kickKey = () => JSON.stringify([kickTargets(lobbySlots()).map(t => t.id + t.label), kickArm, Lang.code]);
+  function drawKick(keep) {
+    const targets = kickTargets(lobbySlots());
+    const back = () => { disarm(); drawLobby(false, "kick"); };
+    if (!targets.length) return back();
+    lobby.page = "kick";
+    lobby.kickKey = kickKey();
+    const items = targets.map(tg => ({ key: tg.id, label: T("pg.kick.who", { name: tg.label }), attr: tg.color,
+      info: kickArm === tg.id ? [{ text: T("pg.kick.sure", { name: tg.label }), color: 12 }] : [T("pg.kick.pick", { name: tg.label })],
+      go: () => {
+        if (kickArm !== tg.id) {
+          kickArm = tg.id; clearTimeout(kickArmTimer);
+          kickArmTimer = setTimeout(() => { disarm(); if (lobby && lobby.page === "kick") drawKick(true); }, 4000);
+          drawKick(true);
+        } else {
+          disarm();
+          send(tg.slot != null ? { t: "kick", slot: tg.slot } : { t: "kick", k: tg.k });
+          drawLobby(false, "kick");
+        }
+      } }));
+    items.push({ key: "gap", label: "", disabled: true }, { key: "back", label: T("pg.kick.back"), info: [T("pg.kick.back.i")], go: back });
+    lobbyUI.show({
+      lines: [{ row: 1, text: UniText.slice(Lang.enc(roomName || roomId), 78), color: 15 }, { row: 4, text: T("pg.kick.title"), color: 14 }],
+      box: { y: 6 }, items, infoRow: 8 + items.length + 2, back,
+    }, keep);
+  }
   function setTeam(d) {
     const sl = lobbySlots();
     if (!player || me < 0 || isReady() || !cfg.ext) return;
@@ -504,7 +521,7 @@
   }
 
   const lobbyKey = () => JSON.stringify([lobbySlots(), status.specs ? status.specs.map(x => x.k) : status.spec, isReady(), isHost,
-    Lang.code, kickSel, kickArm, engine && engine.menuShift, roomName, chatSeq, myView]);
+    Lang.code, engine && engine.menuShift, roomName, chatSeq, myView]);
   function openLobby() {
     lobby = { page: "lobby", key: "" };
     drawLobby(false);
@@ -519,6 +536,7 @@
     if (want && !lobby) openLobby();
     else if (!want && lobby) closeLobby();
     else if (lobby && lobby.page === "lobby" && lobby.key !== lobbyKey()) drawLobby(true);
+    else if (lobby && lobby.page === "kick" && lobby.kickKey !== kickKey()) drawKick(true);
     // the own name goes to the server (a few times a second at most) and is remembered in this browser
     if (player && ws && ws.readyState === 1 && nameForm.value !== sentName && performance.now() - sentAt > 300 && !isReady()) {
       sentName = nameForm.value; sentAt = performance.now();

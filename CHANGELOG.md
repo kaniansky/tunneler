@@ -14,6 +14,8 @@ every push to `main` is released (see CONTRIBUTING.md).
   more (it's on the room page).
 - Games list: no "FFA" after the player count.
 - Statistics page: the game's settings at the bottom, below the statistics.
+- Kicking: one **Kick a player...** item for the host, which opens the list of players and spectators
+  to remove (Enter twice on one kicks, Esc goes back).
 - Scrolling lists (the games list, a long pre-game lobby menu) also scroll with the mouse wheel.
 
 ## 1.2.1

@@ -461,3 +461,7 @@ the room info): the most a player may choose to see during play - display only, 
   lines when crowded); the round title keeps them at the bottom too.
 - DosUI `wheel(ev)`: the mouse wheel moves the selection through a scrolling single box (more items
   than `box.rows`), one row per notch / ~50 px, no wrap-around.
+- Kick: the host's single "Kick a player..." item opens `drawKick()` (lobby.page "kick"): the kick
+  targets (other connected players in their tank's colour, spectators gray), Enter arms (4 s, red
+  "pg.kick.sure"), a second Enter sends `{t:"kick"}` and returns to the lobby; Esc / Back returns
+  without kicking. Redrawn when the targets change.

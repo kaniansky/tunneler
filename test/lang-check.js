@@ -36,7 +36,9 @@ for (const c of Lang.codes) {
     fits(c, k, t(k), k.startsWith("lobby") ? 66 : 34);      // menu boxes size themselves to their items
   for (const n of Lang.codes) fits(c, "home.lang", t("home.lang") + Lang.name(n), 34);
   for (const v of ["muted", "original", "realistic", "cartoony"]) fits(c, "set.sound", t("set.sound") + t("sound." + v), 34);
-  for (const k of ["sound.i1", "sound.i2", "home.settings.i", "set.ping.i", "set.server.i1", "set.server.i2", "pg.now.i1", "pg.now.i2"]) fits(c, k, t(k), 78);
+  for (const k of ["sound.i1", "sound.i2", "home.settings.i", "set.ping.i", "set.server.i1", "set.server.i2", "pg.now.i1", "pg.now.i2", "pg.kick.i1", "pg.kick.i2", "pg.kick.back.i"]) fits(c, k, t(k), 78);
+  fits(c, "pg.kick.pick", t("pg.kick.pick", { name: "W".repeat(12) }), 78);
+  fits(c, "pg.kick.sure", t("pg.kick.sure", { name: "W".repeat(12) }), 78);
   for (const v of ["set.ping.on", "set.ping.off"]) fits(c, "set.ping", t("set.ping") + t(v), 34);
   for (const l of ["easy", "normal", "hard", "expert"]) fits(c, "cpu.level", t("cpu.level") + t("level." + l), 34);
   fits(c, "cpu.view", t("cpu.view") + t("cpu.view.own"), 34); fits(c, "cpu.view", t("cpu.view") + t("cpu.view.both"), 34);
