@@ -328,6 +328,7 @@ async function main() {
   await extended(srv, port);
   await lobby(srv, port);
   await chat(srv, port);
+  await hostStart(srv, port);
   await limits();
 
   srv.close();
@@ -797,3 +798,35 @@ async function limits() {
 }
 
 main().catch(e => { console.error(e); process.exit(1); });
+
+// ---------------------------------------------------------------- the host's "Start now"
+// A room with more than two tanks: the host starts without waiting for a player who hasn't joined (or a
+// connected one who isn't ready); that tank stands still, and its player can still join the running game.
+async function hostStart(srv, port) {
+  console.log("host start");
+  const res = await http(port, "POST", "/api/rooms", { name: "Now", slots: [S("human", 1), S("human", 2), S("normal", 2)] });
+  const id = res.json.id, room = srv.rooms.get(id), key = res.json.hostKey;
+  const blue = await new FakeClient(port, id, "blue", "now-blue", { cid: "nowblue1", host: key }).connect();
+  await sleep(150);
+  check("waiting: the clock doesn't run before every human joined", () => assert(!room.running && !room.match));
+  const cls = await http(port, "POST", "/api/rooms", { name: "Now classic", slots: [S("human", 1), S("human", 2)] });
+  const cb = await new FakeClient(port, cls.json.id, "blue", "now-cb", { cid: "nowcb1", host: cls.json.hostKey }).connect();
+  cb.send({ t: "start" });
+  const green = await new FakeClient(port, id, "green", "now-green", { cid: "nowgreen1" }).connect();
+  green.send({ t: "start" });                                // (not the host: ignored)
+  await sleep(150);
+  check("start: not from a non-host, not in a classic room", () => {
+    assert(!room.match); assert(!srv.rooms.get(cls.json.id).running && !srv.rooms.get(cls.json.id).match);
+  });
+  await green.close();
+  await sleep(100);
+  blue.send({ t: "start" });
+  await until(() => room.match && blue.engine && blue.engine.screen === "play", "host start: the game runs");
+  check("the host starts alone: clock running, match on, the game playing", () => {
+    assert(room.running && room.match && blue.engine.screen === "play");
+  });
+  const late = await new FakeClient(port, id, "green", "now-green2", { cid: "nowgreen1" }).connect();
+  await until(() => late.frames >= blue.frames - 2, "late join catches up");
+  check("a missing player joins the running game later", () => assert(late.frames > 0 && !late.err));
+  await late.close(); await blue.close(); await cb.close();
+}

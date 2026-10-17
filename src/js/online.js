@@ -273,7 +273,6 @@
   const viewChoices = () => VISIBLE.slice(0, VISIBLE.indexOf(cfg.visible) + 1);
   const viewChoice = () => viewChoices().includes(myView) ? myView : viewChoices()[viewChoices().length - 1];
   let sentName = null, sentAt = 0, kickSel = 0, kickArm = null, kickArmTimer = null, statsShown = 0;
-  let copied = false, copiedTimer = null;
   const lobbyUI = new DosUI(canvas, { display, active: () => !!lobby && !msgSnap && !mapPending,
     present: snap => { menuSnap = snap; presentOverlay(); } });
   window.tunnelerLobbyUI = () => lobbyUI;                  // tests / debugging
@@ -320,7 +319,6 @@
   }
 
   function drawLobby(keep, selKey) {
-    Lang.setRematch(!!engine && engine.menuShift !== 0);    // between matches "Start game" is "Rematch"
     if (!lobby) return;
     lobby.page = "lobby";
     const sl = lobbySlots(), nSpec = status.specs ? status.specs.length : status.spec || 0, ready = isReady();
@@ -375,13 +373,12 @@
       items.push({ key: "start", label: ready ? T("pg.cancel") : T("pg.start"), disabled: !ready && !enough,
         info: ready ? [T("pg.ready.i")] : [T("pg.start.i")], go: () => send({ t: "ready", v: ready ? 0 : 1 }) });
     }
+    // the host, once ready (rooms with more than two tanks): start now, without the players who haven't
+    // joined or aren't ready yet (their tanks stand still until they join)
+    if (isHost && ready && cfg.ext && enough && humanSlots().some(i => i !== me && !(sl[i].connected && status.ready && status.ready[i])))
+      items.push({ key: "now", label: T("pg.now"), info: [T("pg.now.i1"), T("pg.now.i2")], go: () => send({ t: "start" }) });
     items.push({ key: "say", label: T("pg.say"), input: chatForm, align: "left", info: [T("pg.say.i")], go: sendChat });
     if (engine && engine.menuShift !== 0) items.push({ key: "stats", label: T("pg.stats"), info: [...hint, T("pg.stats.i")], go: showStats });
-    const share = Endpoint.web("/lobby.html?room=" + encodeURIComponent(roomId));
-    const copy = () => copyLink(share);
-    items.push({ key: "gap", label: "", disabled: true });
-    items.push({ key: "copy", label: T(copied ? "room.copied" : "room.copy"),
-      info: [T("room.copy.in"), { text: Lang.enc(share), color: 11, onClick: copy }], go: copy });
     const targets = kickTargets(sl);
     if (targets.length) {
       kickSel = Math.max(0, Math.min(kickSel, targets.length - 1));
@@ -395,6 +392,7 @@
           drawLobby(true);
         } });
     }
+    items.push({ key: "gap", label: "", disabled: true });
     items.push({ key: "back", label: T("back.lobby"), info: [T("on.leave")], go: () => leave(lobbyHref) });
     // number keys 1..8 set the own team from every row but the Name / Say inputs (they type there)
     if (player && me >= 0 && cfg.ext && !ready)
@@ -481,14 +479,6 @@
     send({ t: "me", team: t });
     drawLobby(true);
   }
-  function copyLink(url) {
-    const refresh = () => { if (lobby && lobby.page === "lobby") drawLobby(true); };
-    (navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject()).then(() => {
-      copied = true; refresh();
-      clearTimeout(copiedTimer);
-      copiedTimer = setTimeout(() => { copied = false; refresh(); }, 3000);   // "Link copied" for 3 s
-    }, () => {});
-  }
 
   // the last match's statistics: drawn by a private engine (the DOS menu screen's code, with this match's
   // numbers, teams and names copied in) - the title and a notice box on the left, the statistics right
@@ -514,7 +504,7 @@
   }
 
   const lobbyKey = () => JSON.stringify([lobbySlots(), status.specs ? status.specs.map(x => x.k) : status.spec, isReady(), isHost,
-    Lang.code, kickSel, kickArm, copied, engine && engine.menuShift, roomName, chatSeq, myView]);
+    Lang.code, kickSel, kickArm, engine && engine.menuShift, roomName, chatSeq, myView]);
   function openLobby() {
     lobby = { page: "lobby", key: "" };
     drawLobby(false);

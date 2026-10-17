@@ -8,6 +8,11 @@ every push to `main` is released (see CONTRIBUTING.md).
 - **Desktop app** for Windows, Linux and macOS (Tauri: the system's own web view, a few MB), attached
   to every GitHub release. Online play goes to the public server or one set on the Settings screen.
 - The server's `/api` answers any origin (CORS), so the desktop app can use it.
+- Pre-game lobby: **I am ready!** / **Not ready yet!** instead of "Start game"; once ready, the host
+  can **Start now** (rooms with more than two tanks): the game starts without waiting for players who
+  haven't joined or aren't ready; their tanks stand still until they join. No copy-link item there any
+  more (it's on the room page).
+- Games list: no "FFA" after the player count.
 
 ## 1.2.1
 

@@ -11,7 +11,8 @@
 // these differences: frames carry one bits value per slot ([[b0..bN-1], count, keys?], see netproto.js;
 // computer slots are always 0 - every client runs the computer players itself), the clock starts once
 // every human slot has joined and then never pauses (a missing player's tank just stands still), and the
-// game starts when every connected human is ready.
+// game starts when every connected human is ready - or when the host says so ({t:"start"}, rooms with
+// more than two tanks: missing players' tanks stand still until they join).
 //
 // Pre-game lobby (docs/DESIGN-8P.md 18, 19, 21): every slot has a display name and a team the player may
 // change ({t:"me"}) while not ready; the room's current names / teams go into the frame stream as a
@@ -59,6 +60,8 @@
 //                     {t:"ready", v}  "Start game" (v 1) / Esc (v 0). The game is started (an F1 keystroke
 //                     + config frame) once every connected player is ready, no match is on and (extended)
 //                     there are 2+ teams.
+//                     {t:"start"}  host only, rooms with more than two tanks: start now - the clock runs and
+//                     the game starts without waiting for players who haven't joined or aren't ready
 //                     {t:"me", name?, team?}  own slot's name (cleaned, max 12) / team 1..8 (extended rooms,
 //                     not during a match), not while ready; a spectator's name (shown with their chat)
 //                     {t:"chat", text}  lobby chat (cleaned, max 60 characters, CHAT_MAX per CHAT_WINDOW_MS)
@@ -304,10 +307,13 @@ function createServer(opts = {}) {
   // (classic: both) and the slots make at least 2 teams. The same frame carries the config frame: the
   // current teams and names, applied by every engine right before that step.
   // (Not while a match is on: ready players then wait for its end - see matchReport.)
-  function checkStart(room) {
+  // force: the host's "Start now" - not waiting for players who haven't joined or aren't ready
+  // (extended rooms only: their tanks stand still until they join)
+  function checkStart(room, force) {
+    if (force && room.ext && !room.match && nTeams(room) >= 2) startClock(room);
     if (!room.running || room.match) return false;
     const on = humanSlots(room).filter(i => room.socks[i]);
-    if (!on.length || !on.every(i => room.ready[i]) || (room.ext && nTeams(room) < 2)) return false;
+    if (!on.length || (!force && !on.every(i => room.ready[i])) || (room.ext && nTeams(room) < 2)) return false;
     room.keys.push([on[0], 0, 0x3B]);
     room.cfgFrame = { teams: room.slots.map(s => s.team), names: room.slots.map(s => s.name || null) };
     room.ready.fill(false);
@@ -583,6 +589,12 @@ function createServer(opts = {}) {
           room.chat.push({ from, text });
           if (room.chat.length > CHAT_LOG) room.chat.splice(0, room.chat.length - CHAT_LOG);
           broadcast(room, JSON.stringify({ t: "chat", from, text }));
+          break;
+        }
+        case "start": {                                    // host only: "Start now" (extended rooms)
+          if (!ws.host || !room.ext || room.match) break;
+          if (checkStart(room, true)) say("room", room.id, "started by the host");
+          sendStatus(room);
           break;
         }
         case "kick": {                                     // host only: remove a player / spectator

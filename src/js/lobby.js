@@ -69,7 +69,7 @@
   const dash = s => "-".repeat(UniText.cols(s));
   // a classic room: who plays BLUE / GREEN - their names (8 columns at most), else the colour; dashes = free
   const who = (r, i, key) => { const sl = (r.slots || [])[i]; return sl && sl.name ? UniText.slice(E(sl.name), 8) : T(key); };
-  const playersText = r => (r.ext ? r.joined + "/" + r.humans + " " + T(r.teams ? "mode.teams.s" : "mode.ffa.s")
+  const playersText = r => (r.ext ? r.joined + "/" + r.humans + (r.teams ? " " + T("mode.teams.s") : "")
     : (r.blue ? who(r, 0, "blue") : dash(T("blue"))) + " " + (r.green ? who(r, 1, "green") : dash(T("green")))) + (r.spec ? " +" + r.spec : "");
 
   // who is in the game: "Playing: Norko, GREEN, Jano" (the connected players' names, else their colour)

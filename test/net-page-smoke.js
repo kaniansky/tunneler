@@ -161,11 +161,15 @@ function loadPage(page, search, stored) {
     assert(ws.sent.some(m => m.t === "ready" && m.v === 1), "ready sent");
     ws.recv({ ...st([{}, { ready: true, team: 3 }]), ready: [false, true, false] });
     await wait(150);
+    // the host, once ready: "Start now" right after "Not ready yet!" (not waiting for the others)
+    press(env, "ArrowDown"); press(env, "Enter");
+    assert(ws.sent.some(m => m.t === "start"), "host: start now sent");
+    press(env, "ArrowUp");
     press(env, "Escape");
     assert(ws.sent.some(m => m.t === "ready" && m.v === 0), "Esc: not ready");
     ws.recv(st());
     await wait(150);
-    // chat: "Say:" right after Start game - any letters, Enter sends; received messages are drawn
+    // chat: "Say:" right after the ready item - any letters, Enter sends; received messages are drawn
     // through the Unicode plane (names and text in any letters)
     press(env, "ArrowDown");
     type(env, "Ahoj ");
@@ -179,8 +183,8 @@ function loadPage(page, search, stored) {
     const shown = screenText(env.win, snap);
     assert(shown.includes("Bob: Привет, Σοφία!") && shown.includes("hi"), "chat in the Unicode plane: " + shown);
     assert(snap.uni && snap.uni.some(u => u === "П".codePointAt(0)), "Cyrillic through the plane");
-    // the host's kick item: Down to it (after Copy invite link), Enter twice (confirm)
-    for (let i = 0; i < 2; i++) press(env, "ArrowDown");
+    // the host's kick item: Down to it (right after Say), Enter twice (confirm)
+    press(env, "ArrowDown");
     press(env, "Enter"); press(env, "Enter");
     assert(ws.sent.some(m => m.t === "kick" && m.slot === 0), "kick sent: " + JSON.stringify(ws.sent.filter(m => m.t === "kick")));
     ws.recv({ t: "pong", c: performance.now() - 20 });
@@ -191,7 +195,7 @@ function loadPage(page, search, stored) {
     assert.strictEqual(JSON.stringify(e.slots.map(s => s.team)), "[1,2,1]");
     assert.strictEqual(e.names[1], "Zed");
     ws.recv({ t: "err", msg: "You were removed from this game by the host.", code: "kicked" });
-    console.log("  ok  online.js pre-game lobby: name, team, ready / Esc, kick, rtt, config frame");
+    console.log("  ok  online.js pre-game lobby: name, team, ready / Esc, start now, kick, rtt, config frame");
   }
   {
     const env = loadPage("online.html", "?room=lob&role=spectate");
@@ -200,7 +204,7 @@ function loadPage(page, search, stored) {
     ws.recv({ t: "hello", id: "lob", name: "Lobby", role: "spectate", seed: 99, created: 1, n: 0, from: 0, f: [],
       cfg: { ext: false, players: 2, slots: [{ color: 0, team: 1 }, { color: 1, team: 2 }] }, you: { slot: -1, host: false, k: 3 } });
     await wait(200);
-    for (const c of ["ArrowDown", "Enter", "Tab"]) press(env, c);
+    for (const c of ["Enter", "Tab"]) press(env, c);              // (Enter on the empty Say: nothing)
     assert(!ws.sent.some(m => ["me", "ready", "kick", "k", "b", "chat"].includes(m.t)), "spectators are read-only");
     // ... but they chat: "Say:" is their first item
     ws.recv({ t: "hello", id: "lob", name: "Lobby", role: "spectate", seed: 99, created: 1, n: 0, from: 0, f: [], chat: [{ from: { color: 1, name: "" }, text: "old" }],

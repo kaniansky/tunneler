@@ -122,13 +122,8 @@ function raw(key) {
   return v !== undefined ? v : (L.en || {})[key];
 }
 // translated text with {placeholders}, encoded for the font
-let rematch = false;                       // after a match: "{start}" quotes the Rematch item
-function startWord() {
-  const e = cur().engine || {}, en = (L.en || {}).engine || {};
-  return rematch ? (e.rematch || en.rematch || "Rematch") : (e.menu || ["Start game"])[0];
-}
 function t(key, params) {
-  const p = Object.assign({ blue: raw("blue"), green: raw("green"), start: startWord() }, params || {});
+  const p = Object.assign({ blue: raw("blue"), green: raw("green") }, params || {});
   return enc(fmt(raw(key), p));
 }
 
@@ -160,7 +155,6 @@ root.Lang = {
   name: c => enc(L[c].name), next: () => CODES[(CODES.indexOf(code) + 1) % CODES.length],
   raw: (key, c) => (L[c || code] || {})[key] !== undefined ? L[c || code][key] : (L.en || {})[key], data: L,
   colorKeys: COLOR_KEYS,
-  setRematch: on => { rematch = !!on; },     // online lobby between matches
   // a room's settings, one short text each: map size, rounds to win, friendly fire (always: the teams
   // may still change in the pre-game lobby), view limit, after death (+ spectators when n given) - the
   // lobby's Settings box / column

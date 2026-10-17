@@ -451,3 +451,8 @@ the room info): the most a player may choose to see during play - display only, 
   OPTIONS preflight). `.github/workflows/app-build.yml` builds Windows exe, Linux tar.gz / deb / rpm and
   macOS arm64 / x64 dmg; release.yml calls it and attaches them to the release; pushes to app/**
   branches build artifacts only. Icons: `src-tauri/app-icon.png` -> `npx @tauri-apps/cli@2 icon`.
+- Pre-game lobby items: "I am ready!" (pg.start) / "Not ready yet!" (pg.cancel); no copy link (the
+  room page has it); `Lang.setRematch` / "{start}" are gone. Host "Start now" (pre-game lobby, rooms
+  with more than two tanks, shown once the host is ready while some other human isn't connected + ready): `{t:"start"}` -> server `checkStart(room, true)` starts the clock if it wasn't
+  running and the game without the ready check; missing players' tanks stand still, they can join the
+  running game later. Ignored from non-hosts, in classic rooms and during a match.
