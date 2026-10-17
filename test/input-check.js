@@ -88,6 +88,31 @@ const SC = { W: 0x11, A: 0x1E, X: 0x2D, D: 0x20, BLUEFIRE: 0x1D, GREENFIRE: 0x1C
     ok("8 directions from a vector, dead zone");
   }
 
+  // ------------------------------------------------------------ "Gamepad 1 connected" (+ its tank in split screen)
+  {
+    const env = makeEnv("");
+    env.load("js/input.js"); env.load("js/pads.js");
+    const ctl = env.win.Pads.start({ raf: false, menu: () => false, namedSets: true, gamepadSet: i => ["blue", "green"][i] || null });
+    const toast = () => env.win.document.body.children.find(c => c.className === "pad-toast");
+    ctl.poll(100);
+    assert(!toast(), "no gamepad: no message");
+    env.gamepads[0] = pad(0, [0]);
+    ctl.poll(200);
+    assert(toast() && !toast().hidden && /^Gamepad 1 connected: BLUE$/i.test(toast().textContent), "connected: " + (toast() && toast().textContent));
+    env.gamepads[1] = pad(1, [0]);
+    ctl.poll(300);
+    assert(/^Gamepad 2 connected: GREEN$/i.test(toast().textContent), "the second: " + toast().textContent);
+    env.gamepads.length = 1;
+    ctl.poll(400);
+    assert.strictEqual(toast().textContent, "Gamepad 2 disconnected");
+    const env2 = makeEnv("");                              // (vs computer / online: no tank name)
+    env2.load("js/input.js"); env2.load("js/pads.js");
+    const c2 = env2.win.Pads.start({ raf: false, menu: () => false, gamepadSet: () => "blue" });
+    env2.gamepads[0] = pad(0); c2.poll(100);
+    assert.strictEqual(env2.win.document.body.children.find(c => c.className === "pad-toast").textContent, "Gamepad 1 connected");
+    ok("a gamepad appearing / going away: \"Gamepad 1 connected (: BLUE)\" / \"... disconnected\"");
+  }
+
   // ------------------------------------------------------------ gamepads -> keyboard keys (split screen)
   {
     const env = makeEnv("");

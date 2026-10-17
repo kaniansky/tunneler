@@ -7,7 +7,7 @@ Lang.register("genz", {
   name: "Gen Z",
   "menu.info": "The lore", "menu.info.i": "The tea on this version of the game.", "menu.instr": "How to play", "menu.instr.i": "How not to get cooked.", "page.back": "<ENTER> to dip back.", "rd.you1": "You're locked in.", "rd.you2": "Waiting on {name}...", "rd.cancel": "<ESC> - nvm, not ready",
   blue: "BLUE", green: "GREEN",
-  "touch.fire": "YEET", "touch.esc": "BAIL",
+  "touch.fire": "YEET", "touch.esc": "BAIL", "pad.on": "Gamepad {n} just pulled up", "pad.off": "Gamepad {n} dipped",
   // extended mode (3-8 players): the other tank colors
   cyan: "CYAN", yellow: "YELLOW", white: "WHITE", pink: "PINK", violet: "VIOLET", teal: "TEAL",
   "ui.hint": "↑↓ and <ENTER>, or the mouse ig.", "ui.back": "<ESC> to dip.",
@@ -144,7 +144,8 @@ Lang.register("genz", {
         "Don't fumble it."],
       // everything added since 1991, one [head, text] per paragraph (wrapped to the page's width)
       sections: [
-        ["Controllers and touch screens:  ", "a gamepad drives a tank too (split screen: gamepad 1 " +
+        ["Controllers and touch screens:  ", "smash any button on a gamepad to connect it (the game says " +
+          "\"Gamepad 1 just pulled up\"); then it drives a tank too (split screen: gamepad 1 " +
           "is {9}BLUE{3}, gamepad 2 is {10}GREEN{3}; otherwise any gamepad drives yours) - the stick " +
           "or d-pad moves, any button sends it, Start is <ESC>; in the menus the d-pad and A / B work " +
           "as the arrows, <ENTER> and <ESC>.  On phones and tablets an on-screen joystick plus YEET " +

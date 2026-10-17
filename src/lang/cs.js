@@ -7,7 +7,7 @@ Lang.register("cs", {
   name: "Česky",
   "menu.info": "Informace", "menu.info.i": "O této verzi hry.", "menu.instr": "Návod", "menu.instr.i": "Jak se hraje.", "page.back": "<ENTER> - zpět.", "rd.you1": "Jsi připraven.", "rd.you2": "Čekám na {name}...", "rd.cancel": "<ESC> - přece nejsem připraven",
   blue: "MODRÝ", green: "ZELENÝ",
-  "touch.fire": "PAL", "touch.esc": "ESC",
+  "touch.fire": "PAL", "touch.esc": "ESC", "pad.on": "Gamepad {n} připojen", "pad.off": "Gamepad {n} odpojen",
   // extended mode (3-8 players): the other tank colours
   cyan: "AZUROVÝ", yellow: "ŽLUTÝ", white: "BÍLÝ", pink: "RŮŽOVÝ", violet: "FIALOVÝ", teal: "TYRKYSOVÝ",
   "ui.hint": "↑↓ a <ENTER>, nebo myš.", "ui.back": "<ESC> zpět.",
@@ -143,7 +143,8 @@ Lang.register("cs", {
         "polovičním tempem)."],
       // everything added since 1991, one [head, text] per paragraph (wrapped to the page's width)
       sections: [
-        ["Gamepady a dotykové obrazovky:  ", "tank řídí i gamepad (dělená obrazovka: gamepad 1 " +
+        ["Gamepady a dotykové obrazovky:  ", "stiskni kterékoli tlačítko gamepadu a připojí se (hra " +
+          "ukáže \"Gamepad 1 připojen\"); pak řídí tank i gamepad (dělená obrazovka: gamepad 1 " +
           "{9}MODRÝ{3}, gamepad 2 {10}ZELENÝ{3}; jinak kterýkoli gamepad řídí ten tvůj) - páčka nebo " +
           "směrový ovladač s ním pohybuje, kterékoli tlačítko střílí, Start je <ESC>; v menu fungují " +
           "směrový ovladač a A / B jako šipky, <ENTER> a <ESC>.  Na telefonech a tabletech se při " +

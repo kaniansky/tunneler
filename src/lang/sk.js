@@ -7,7 +7,7 @@ Lang.register("sk", {
   name: "Slovensky",
   "menu.info": "Informácie", "menu.info.i": "O tejto verzii hry.", "menu.instr": "Návod", "menu.instr.i": "Ako sa hrá.", "page.back": "<ENTER> - späť.", "rd.you1": "Si pripravený.", "rd.you2": "Čakám na {name}...", "rd.cancel": "<ESC> - predsa nie som pripravený",
   blue: "MODRÝ", green: "ZELENÝ",
-  "touch.fire": "PAĽBA", "touch.esc": "ESC",
+  "touch.fire": "PAĽBA", "touch.esc": "ESC", "pad.on": "Gamepad {n} pripojený", "pad.off": "Gamepad {n} odpojený",
   // extended mode (3-8 players): the other tank colours
   cyan: "AZÚROVÝ", yellow: "ŽLTÝ", white: "BIELY", pink: "RUŽOVÝ", violet: "FIALOVÝ", teal: "TYRKYSOVÝ",
   "ui.hint": "↑↓ a <ENTER>, alebo myš.", "ui.back": "<ESC> späť.",
@@ -143,7 +143,8 @@ Lang.register("sk", {
         "ale polovičnou rýchlosťou)."],
       // everything added since 1991, one [head, text] per paragraph (wrapped to the page's width)
       sections: [
-        ["Gamepady a dotykové obrazovky:  ", "tank riadi aj gamepad (delená obrazovka: gamepad 1 " +
+        ["Gamepady a dotykové obrazovky:  ", "stlač ktorékoľvek tlačidlo gamepadu a pripojí sa (hra " +
+          "ukáže \"Gamepad 1 pripojený\"); potom riadi tank aj gamepad (delená obrazovka: gamepad 1 " +
           "{9}MODRÝ{3}, gamepad 2 {10}ZELENÝ{3}; inak ktorýkoľvek gamepad riadi ten tvoj) - páčka alebo " +
           "smerový ovládač ho pohybuje, ktorékoľvek tlačidlo strieľa, Start je <ESC>; v menu fungujú " +
           "smerový ovládač a A / B ako šípky, <ENTER> a <ESC>.  Na telefónoch a tabletoch sa pri prvom " +

@@ -185,7 +185,8 @@ const STRINGS_EN = {
       "teammate's base too, at half the speed)."],
     // everything added since 1991, one [head, text] per paragraph (wrapped to the page's width)
     sections: [
-      ["Gamepads and touch screens:  ", "a gamepad drives a tank too (split screen: gamepad 1 " +
+      ["Gamepads and touch screens:  ", "press any button on a gamepad to connect it (the game shows " +
+        "\"Gamepad 1 connected\"); then it drives a tank too (split screen: gamepad 1 " +
         "{9}BLUE{3}, gamepad 2 {10}GREEN{3}; otherwise any gamepad drives yours) - the stick or the " +
         "d-pad moves, any button fires, Start is <ESC>; in the menus the d-pad and A / B work as the " +
         "arrows, <ENTER> and <ESC>.  On phones and tablets an on-screen joystick and the FIRE and ESC " +

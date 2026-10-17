@@ -164,7 +164,8 @@
   // BLUE (W A S D + Space), gamepad 2 GREEN (arrows + Enter); vs computer - any gamepad your tank;
   // the on-screen joystick + FIRE drive BLUE / your tank; menus: arrows, Enter, Esc
   if (window.Pads) Pads.start({ menu: () => !engine.kbdInstalled,
-    gamepadSet: i => mode === "hotseat" ? ["blue", "green"][i] || null : "blue", touchSet: "blue" });
+    gamepadSet: i => mode === "hotseat" ? ["blue", "green"][i] || null : "blue", touchSet: "blue",
+    namedSets: mode === "hotseat" });            // ("Gamepad 1 connected: BLUE" in split screen)
   window.tunnelerEngine = () => engine;
   window.tunnelerViews = () => views;         // tests / debugging
   window.tunnelerRunner = () => runner;

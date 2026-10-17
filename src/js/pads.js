@@ -176,16 +176,42 @@ function start(opts) {
   const T = k => root.Lang && root.Lang.raw ? root.Lang.raw(k) || "" : "";
   let touch = null, touchPad = null;
 
+  // "Gamepad 1 connected" (split screen: + its tank) / "... disconnected": a few seconds at the bottom
+  // left, DOS-style (a browser shows a gamepad to the page only after one of its buttons was pressed)
+  let toastEl = null, toastTimer = null;
+  function toast(text) {
+    if (opts.toast === false || !doc || !doc.body || typeof doc.createElement !== "function") return;
+    if (!toastEl) {
+      toastEl = doc.createElement("div");
+      toastEl.className = "pad-toast";
+      toastEl.setAttribute("role", "status");
+      Object.assign(toastEl.style, { position: "fixed", left: "12px", bottom: "12px", zIndex: "50", padding: "4px 12px",
+        background: "#000", color: "#55ffff", border: "2px solid #aa00aa", font: "16px/1.4 monospace", pointerEvents: "none" });
+      doc.body.appendChild(toastEl);
+    }
+    toastEl.textContent = text;
+    toastEl.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { toastEl.hidden = true; }, 3000);
+  }
+  function say(key, n, set) {
+    const fallback = key === "pad.on" ? "Gamepad {n} connected" : "Gamepad {n} disconnected";
+    toast((T(key) || fallback).replace("{n}", n) + (set ? ": " + (T(set) || set.toUpperCase()) : ""));
+  }
+
   function poll(now) {
     if (now === undefined) now = root.performance ? root.performance.now() : Date.now();
     const list = typeof nav.getGamepads === "function" ? Array.from(nav.getGamepads() || []).filter(g => g && g.connected !== false) : [];
     const seen = new Set();
     list.forEach((gp, i) => {
       seen.add(gp.index);
-      if (!pads.has(gp.index)) pads.set(gp.index, new VirtualPad(emit));
+      if (!pads.has(gp.index)) {
+        pads.set(gp.index, new VirtualPad(emit));
+        say("pad.on", i + 1, opts.namedSets ? gamepadSet(i) : null);
+      }
       pads.get(gp.index).update(readGamepad(gp), menu(), gamepadSet(i), now);
     });
-    for (const [k, p] of pads) if (!seen.has(k)) { p.releaseAll(); pads.delete(k); }
+    for (const [k, p] of pads) if (!seen.has(k)) { p.releaseAll(); pads.delete(k); say("pad.off", k + 1); }
     if (touchPad) touchPad.update(touch.state(), menu(), opts.touchSet, now);
   }
 
