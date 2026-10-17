@@ -413,6 +413,7 @@ class TunnelerEngine {
     this.edgeVel = [0, 0, 0]; this.edgePos = [0, 0, 0];
     this.worldReady = false; this.quitProgram = false; this.menuShift = 0;
     this.menuSel = 0;                             // highlighted main menu item
+    this.menuTop = 11;                              // the menu box's top row (showMainMenu)
     this.statsLeft = 43; this.statsFull = false;    // where the statistics go (showStatsPage: centred)
     this.menuPage = "menu";                       // "menu", "instructions" or "information"
     this.strings = STRINGS_EN;                    // all visible text (see STRINGS_EN)
@@ -2443,20 +2444,27 @@ class TunnelerEngine {
     this.window(1, 1, 80, 24);
     this.clearScreen();
     const S = this.strings;
-    this.textColor(12);
-    this.gotoXY(this.centreCol(S.title, this.menuShift), 4);
-    this.write(S.title);
-    this.textColor(4);
-    this.gotoXY(this.centreCol(S.by, this.menuShift), 6);
-    this.write(S.by);
+    // vs computer after a match (matchExtras): the rounds and awards on top of the left half, the menu box
+    // at its bottom, no title; otherwise the original layout (the box from row 11)
+    const extras = this.matchExtras && this.menuShift !== 0;
+    if (!extras) {
+      this.textColor(12);
+      this.gotoXY(this.centreCol(S.title, this.menuShift), 4);
+      this.write(S.title);
+      this.textColor(4);
+      this.gotoXY(this.centreCol(S.by, this.menuShift), 6);
+      this.write(S.by);
+    }
     // the box fits its longest line (20 wide in the original), centred
     const notice = this.menuNotice || (this.menuWaiting ? S.waiting : null);
     let items = this.menuShift !== 0 && S.rematch ? [S.rematch, ...S.menu.slice(1)] : S.menu;   // after a match
     if (this.menuScans.length < MENU_SCANS.length) items = [items[0], items[2]];
     const W = this.menuW = Math.max(16, ...(notice || items).map(t => visLen(t) + 4)) + 1 >> 1 << 1;
     const X = this.menuX = this.menuShift + 41 - ((W + 2) >> 1);
+    const nLines = notice ? notice.length + 2 : this.menuRows[this.menuRows.length - 1] + 1;
+    const top = this.menuTop = extras ? 24 - nLines - 1 : 11;   // (extras: the box's bottom border on row 24)
     this.textColor(5);
-    this.window(X, 11, Math.min(80, X + W + 5), 22);
+    this.window(X, top, Math.min(80, X + W + 5), Math.min(25, top + 11));
     this.write("\xDA", "\xC4".repeat(W)); this.writeLn("\xBF");
     const lines = notice ? ["", ...notice, ""] : new Array(this.menuRows[this.menuRows.length - 1] + 1).fill("");
     if (!notice) this.menuRows.forEach((r, i) => { lines[r] = items[i]; });
@@ -2468,7 +2476,7 @@ class TunnelerEngine {
     if (this.menuShift !== 0) {
       this.textColor(8);
       for (let i = 1; i <= 25; i++) { this.gotoXY(40, i); this.write("\xB3"); }
-      if (this.matchExtras) this.matchExtrasAt(2, 21, 18, 11 + lines.length + 3, 24);   // (vs computer: under the menu box)
+      if (extras) this.matchExtrasAt(2, 21, 18, 2, top - 2);   // (vs computer: above the menu box)
       if (this.extended) { this.statsExt(); return; }
       this.statsClassic();
     }
@@ -2477,7 +2485,7 @@ class TunnelerEngine {
   // highlight bar over the selected item (text rows 12..15, inside the box)
   drawMenuSel() {
     for (let i = 0; i < this.menuScans.length; i++) {
-      const o = (11 + this.menuRows[i]) * 160 + this.menuX * 2;
+      const o = (this.menuTop + this.menuRows[i]) * 160 + this.menuX * 2;
       for (let c = 0; c < this.menuW; c++) this.vram[o + c * 2 + 1] = i === this.menuSel ? MENU_SEL_ATTR : MENU_ATTR;
     }
     this.dirty = true;
@@ -2485,7 +2493,7 @@ class TunnelerEngine {
   // menu item under text cell (col, row), 0-based, or -1
   menuItemAt(col, row) {
     const x = col - (this.menuX - 1);
-    return x >= 0 && x <= this.menuW + 1 ? this.menuRows.indexOf(row - 11) : -1;
+    return x >= 0 && x <= this.menuW + 1 ? this.menuRows.indexOf(row - this.menuTop) : -1;
   }
   // Arrow keys / Enter on the main menu and its pages. Returns the key the menu loop should act on:
   // Up/Down only move the bar (NO_KEY), Enter becomes the selected item's scan code, Enter on a page

@@ -535,6 +535,7 @@ the room info): the most a player may choose to see during play - display only, 
 - Statistics extras (display only, not in stateHash): `engine.kills` (enemy tanks each one destroyed,
   per match) and `engine.roundLog` (`logRound(winner, player)` at every round end: winner, secs, how =
   shot / time / draw / esc). `matchExtrasAt()` draws ROUNDS + AWARDS (Sharpshooter >= 5 shots, Hunter,
-  Mole, Traveler): `showStatsPage()` (online, full screen) beside the table; `showMainMenu()` under the
-  menu box when `engine.matchExtras` (play.js: vs computer only - split screen stays the original).
+  Mole, Traveler): `showStatsPage()` (online, full screen) beside the table; `showMainMenu()` when
+  `engine.matchExtras`: rounds + awards on top of the left half, the menu box at its bottom (`menuTop`,
+  default 11 = the original), no title (play.js: vs computer only - split screen stays the original).
   online.js copies kills / roundLog into its private statistics engine (STATS).
