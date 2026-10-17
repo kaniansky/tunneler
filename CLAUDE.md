@@ -383,7 +383,7 @@ the room info): the most a player may choose to see during play - display only, 
   engine runs only for you=BLUE vs a computer GREEN.
 - Engine display options (no effect on the simulation): `youPlayer` (marker on round title and
   statistics), settings lines on the round title / statistics, `autoStart` (local games skip the
-  first menu), "Rematch" instead of "Start game" after a match (`strings.rematch`, `Lang.setRematch`).
+  first menu), "Rematch" instead of "Start game" after a match (`strings.rematch`).
 - Rules: a teammate's base repairs the shield at half speed (+20/frame) besides the +30 energy.
 - **After death** setting (internally `watchOut`, URL `watch=black|wreck|others`; old `true`/`1` =
   others; `TunnelerEngine.afterDeath` / `NetProto.afterDeath` normalize): what a player sees once their

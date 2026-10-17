@@ -29,21 +29,29 @@ All menus, the lobby and the status lines use the same DOS text screen.
 ## Modes
 
 - **Split screen** - two players on one keyboard, like the original.
-- **Vs computer** - you (BLUE) against 1 to 7 computer tanks (easy, normal, hard or expert), every tank
-  for itself or in teams. See your own screen, your team's screens or everybody's.
+- **Vs computer** - you (in any color) against 1 to 7 computer tanks (easy, normal, hard or expert),
+  every tank for itself or in teams. See your own screen, your team's screens or everybody's.
 - **Online game** - create a game in the lobby (public or private, with or without spectators), send
   the invite link, and play with 2 to 8 tanks from several computers; any slot can be a computer tank.
 
-Settings (split screen: map size and rounds to win only):
+Settings (split screen: map size, rounds to win and round time only):
 
 - **Slots and teams** - 8 slots (BLUE, GREEN, CYAN, YELLOW, WHITE, PINK, VIOLET, TEAL), each nobody,
   human or a computer tank, each with a team number 1-8: all different = free-for-all, shared numbers =
   teams of any size (4 v 4, 2 v 2 v 2 v 2, 3 v 5, ...).
 - **Map size** - small (512x256), medium (1024x512, the original) or large (2048x1024).
 - **Rounds to win** - 1 to 9 (the original: 3).
+- **Round time limit** - off, 2, 3, 5 or 10 minutes. When the time is up, the side that hit enemy tanks
+  the most wins the round (a tie: nobody); the last 30 seconds count down next to the instrument panel.
 - **Friendly fire** - on or off in team games (off: a shot at a teammate explodes like on a wall).
+- **View limit** - the most a player may see during play: their own view, their team's or everybody's.
+- **After death** - what you see once your tank is destroyed, until the round ends: a black DESTROYED
+  screen, your wreck (the original), or the tank that destroyed you (else another one still alive).
 
-Sounds of other tanks fade with their distance from your own tank.
+The homepage's **Settings** screen holds the language, the **sound** - muted, original (the PC speaker),
+realistic or cartoony (a sample plays when you change it) - and **Show ping** (your round-trip time as
+a small number on the game's border online). Sounds of other tanks fade with their distance from the
+tank you watch.
 
 | Create a game | Pre-game lobby: names, teams, ping, chat |
 |---|---|
@@ -52,14 +60,16 @@ Sounds of other tanks fade with their distance from your own tank.
 ### Online
 
 After joining a slot, every player is in the **pre-game lobby**: the list of all tanks with their
-names, teams, state (ready, not ready, computer, free, disconnected) and ping, and a chat for players and
-spectators (any alphabet). Each player sets their name and team and chooses "Start game"; the game starts
-when every player is ready and there are at least two teams. The creator of the game is its **host** and
-can remove a player or spectator (who then can't come back). Between matches everyone returns to the
-lobby, with the statistics of the last match.
+names, teams, state (ready, not ready, computer, free, disconnected) and ping, the game's settings, and
+a chat for players and spectators (any alphabet). Each player sets their name and team and chooses
+**I am ready!**; the game starts when every player is ready and there are at least two teams. The
+creator of the game is its **host**: once ready, the host can **Start now** without waiting for players
+who haven't joined or aren't ready (their tanks stand still until they join), and **Kick a player...**
+opens the list of players and spectators to remove (who then can't come back). Between matches everyone
+returns to the lobby, with the statistics of the last match.
 
 During play each player sees only their own view screen - or their team's or everybody's, as far as the
-game's "Visible" setting allows. A disconnected player's tank stands still and the game goes on;
+game's view limit allows. A disconnected player's tank stands still and the game goes on;
 reconnecting resumes where you left off. (A classic BLUE vs GREEN game pauses instead, like before.)
 
 | An 8-tank game: BLUE sees its team | Spectator: all views | Spectator: map and scores |
@@ -72,7 +82,7 @@ the whole world with a score table (wins, energy, shield per tank and team), or 
 
 ![Game list](screenshots/lobby.png)
 
-Languages: English, Slovenčina, Čeština, Українська, Русский and Gen Z (switch on the main menu). Each
+Languages: English, Slovenčina, Čeština, Українська, Русский and Gen Z (on the Settings screen). Each
 language is one file in `src/lang/`.
 
 ## Controls
@@ -83,13 +93,13 @@ language is one file in `src/lang/`.
 | Fire | Left Shift, Space | Enter, Right Shift |
 
 Online and against the computer you can use either set. Hold two direction keys to move diagonally;
-firing while moving digs faster. **Esc** ends the match (except in online
-games with more than BLUE and GREEN, where one player must not end it for everybody). Menus: arrow keys
-and Enter, or the mouse.
+firing while moving digs faster. **Esc** ends the match on one computer; online, **Esc twice** leaves the
+game (one player can't end it for everybody). Menus: arrow keys and Enter, number keys 1-8 for teams, or
+the mouse (clicks, the wheel in long lists); Esc goes back.
 
 The rules are in the game's own *Instructions* page: win the set number of rounds (three in the
 original); a round ends when only one tank (or one team) is left - tanks blow up when shot or out of
-energy; refuel at any base, repair your shield only at your own.
+energy; refuel at any base, repair your shield at your own (and, at half the speed, at a teammate's).
 
 ## Run it
 
