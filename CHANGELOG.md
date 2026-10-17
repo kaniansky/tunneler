@@ -3,7 +3,7 @@
 All notable changes to TUNNELER ONLINE. Versions follow [semantic versioning](https://semver.org/);
 every push to `main` is released (see CONTRIBUTING.md).
 
-## Unreleased
+## 1.3.0
 
 - Round title: a blank row between the players and the game's settings (the settings use the last
   screen row when the list of players is long).
