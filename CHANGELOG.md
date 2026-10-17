@@ -9,7 +9,8 @@ every push to `main` is released (see CONTRIBUTING.md).
   screen row when the list of players is long).
 - README screenshots updated (tools/readme-screenshots.js makes them).
 - After death "watch others" respects the view limit: with "team" you only watch your teammates
-  (never the opponent), with "self" you stay on your wreck.
+  (never the opponent); once there is nobody left to watch (your team is out, or "self"), the screen
+  goes black with DESTROYED.
 - Online game: while the server doesn't answer yet (e.g. waking up on a free host), the lobby says
   "Connecting to the server..." with its address instead of a black screen; Esc goes back.
 

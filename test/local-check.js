@@ -346,10 +346,13 @@ function play(search) {
   // view limit "team": only teammates are watched - not the enemy that shot you
   e.killedBy[1] = 3;                                        // CYAN (team 2) shot you
   same(alive(false, true, true, true, true).cells, [3], "team view: your teammate (YELLOW), not your killer");
-  same(alive(false, true, true, false, true).cells, [0, 3], "team view, no teammate left: the team's views (wrecks)");
+  same(alive(false, true, true, false, true).cells, [0, 3], "team view, no teammate left: the team's views...");
+  assert(v.blackedOut(0, e) && v.blackedOut(3, e), "... black (DESTROYED): nobody to watch");
+  same(v.hearAt(0, e), { mute: true }, "... and silent");
   alive(true, true, true, true, true);
   v.setScope(0, "self");
-  same(alive(false, true, true, true, true).cells, [0], "self view: nobody else, your wreck");
+  same(alive(false, true, true, true, true).cells, [0], "self view: nobody else to watch...");
+  assert(v.blackedOut(0, e), "... black (DESTROYED)");
   alive(true, true, true, true, true);
   v.setScope(0, "everyone");                                // (everyone: any tank alive)
   e.killedBy[1] = 0;

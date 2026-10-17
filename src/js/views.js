@@ -120,10 +120,11 @@ class ViewModes {
   // after death "others": the own tank is destroyed - one view: the tank that destroyed the one watched
   // (following the chain while those are destroyed too), else the first still alive (own team's first,
   // then slot order); it stays on that tank while it lives. Only tanks within the view limit: "team" -
-  // teammates only, "self" - none (the views stay on the wreck). null while the own tank is alive (or
-  // nobody allowed is left, or another setting)
+  // teammates only, "self" - none. null while the own tank is alive, or another setting, or nobody allowed
+  // is left (then ghostNone: the destroyed views go black)
   outCells() {
     const e = this.engine();
+    this.ghostNone = false;
     if (this.watchOut !== "others" || !this.scope || !e || !e.alive) { this.ghost = null; return null; }
     const n = this.nPlayers(), own = Math.min(this.scope.own, n - 1);
     if (e.alive[own + 1]) { this.ghost = null; return null; }
@@ -139,7 +140,7 @@ class ViewModes {
     if (!(e.alive[t + 1] && allowed(t))) {
       const alive = [];
       for (let i = 0; i < n; i++) if (e.alive[i + 1] && allowed(i)) alive.push(i);
-      if (!alive.length) { this.ghost = null; return null; }
+      if (!alive.length) { this.ghost = null; this.ghostNone = true; return null; }   // (nobody to watch: black)
       t = alive.filter(mate).concat(alive.filter(i => !mate(i)))[0];
     }
     this.ghost = t;
@@ -372,9 +373,10 @@ class ViewModes {
   }
 
   // after death "black" (a player's own scope): a destroyed tank's view is black with "DESTROYED" until
-  // the next round ("wreck": it stays on the wreck; "others": see outCells)
+  // the next round ("wreck": it stays on the wreck; "others": see outCells - black too once nobody it
+  // may watch is left)
   blackedOut(i, e) {
-    return !!(this.scope && this.watchOut === "black" && e && e.alive && !e.alive[i + 1]);
+    return !!(this.scope && (this.watchOut === "black" || (this.watchOut === "others" && this.ghostNone)) && e && e.alive && !e.alive[i + 1]);
   }
   // one line of font text centred in a 40-column view at pixel row y, in DOS attribute `attr`
   paintText(px, W, x, y, text, attr) {
