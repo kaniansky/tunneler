@@ -5,6 +5,10 @@ a release is made by pushing a version tag (see CONTRIBUTING.md).
 
 ## Unreleased
 
+- "Gamepad 1 connected" (split screen: "...: BLUE") appears when a gamepad is found; the Instructions say
+  to press a button on it first.
+- The online lobby's Statistics page is full screen: the statistics centred, the settings across the
+  width, "Press <ENTER> to go back." on the bottom line.
 - Computer tanks no longer spin in place for seconds after destroying a tank (or in a base's doorway,
   or next to a teammate in their way).
 
