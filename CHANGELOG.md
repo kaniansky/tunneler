@@ -18,6 +18,8 @@ every push to `main` is released (see CONTRIBUTING.md).
   choice but "my wreck", a destroyed tank's view (e.g. a teammate's next to yours) goes black too.
 - Online game: while the server doesn't answer yet (e.g. waking up on a free host), the lobby says
   "Connecting to the server..." with its address instead of a black screen; Esc goes back.
+- A base can no longer be walled in by rock at both doorways (games with more than two tanks / other
+  map sizes): computer tanks no longer go in and out of their base over and over, unable to get out.
 
 ## 1.2.2
 

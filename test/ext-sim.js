@@ -5,7 +5,9 @@
 //     teams}, {size: "medium", winScore: 3} are the same game; anything else is the extended engine
 //   - options: slots (colors, arbitrary team numbers), teams helpers, sizes, winScore, friendlyFire
 //   - world sizes small / medium / large: world generation deterministic, resumable, rock border all
-//     around, similar amount of rock; base placement over the scaled area for 2..8 players
+//     around, similar amount of rock; base placement over the scaled area for 2..8 players; every base
+//     of the extended engine has a doorway a tank (and the computer players' 4 px grid) can leave by
+//     (engine openBase turns the least rock into dirt when both open into rock)
 //   - full matches (classic and extended: free-for-all, 2 / 3 / 4 teams, uneven teams, other colors,
 //     winScore, sizes, friendly fire) driven by a simple deterministic scripted driver (not the AI): two
 //     engines fed the same inputs stay identical every frame (state, world, RandSeed, every view buffer,
@@ -252,6 +254,67 @@ function genWorld(seed, opts, keyEvery) {
       && [1, 2].every(i => e.baseX[i] >= sc(160) && e.baseX[i] < sc(864) && e.baseY[i] >= sc(160) && e.baseY[i] < sc(352)), "classic " + size + ": bases");
   }
   ok("base placement: " + n + " matches over 3 sizes, distance relaxed in " + relaxed);
+}
+
+// ------------------------------------------------------------------ 4b. a way out of every base
+// Bases are placed at random over a world full of rock blobs; a base whose two doorways both opened into
+// rock walled its tank in for the whole match (a computer tank drove in and out at its base, unable to get
+// out - the AI's 4 px grid finds no way where a tank could just squeeze through pixel by pixel). Measured
+// independently of the engine's openBase: from the middle of the base, out through one doorway (the other
+// one closed), to sc(64) px away, the tank's 7x7 box never on a wall and no rock within 3 px of it.
+// Before the fix 1 in ~150 bases on the small map (8 players) had none, a few in 1000 on medium / large.
+function doorwayOut(e, p, side) {
+  const bx = e.baseX[p], by = e.baseY[p], R = Math.trunc(64 * e.worldW / 1024), W = e.worldW, H = e.worldH;
+  const pc = e.pixelClass, S = 2 * R + 1;
+  const wall = (x, y) => {
+    const dx = Math.abs(x - bx), dy = Math.abs(y - by);
+    if (x < 0 || y < 0 || x >= W || y >= H) return true;
+    if (dx <= 16 && dy <= 16) return false;
+    if (dx === 17 && dy <= 17) return true;
+    return dy === 17 && (dx >= 4 || (y < by ? -1 : 1) !== side);
+  };
+  const rock = (x, y) => !(Math.abs(x - bx) <= 16 && Math.abs(y - by) <= 16) && !wall(x, y) && pc[e.getPixel(x, y)] === 4;
+  const free = (x, y) => {
+    for (let j = -3; j <= 3; j++) for (let i = -3; i <= 3; i++) if (wall(x + i, y + j)) return false;
+    for (let j = -6; j <= 6; j++) for (let i = -6; i <= 6; i++) if (rock(x + i, y + j)) return false;
+    return true;
+  };
+  const seen = new Uint8Array(S * S), stack = [R * S + R];
+  seen[R * S + R] = 1;
+  while (stack.length) {
+    const n = stack.pop(), i = n % S, j = (n - i) / S;
+    if (i === 0 || j === 0 || i === S - 1 || j === S - 1) return true;
+    for (let dj = -1; dj <= 1; dj++)
+      for (let di = -1; di <= 1; di++) {
+        const m = (j + dj) * S + i + di;
+        if (seen[m]) continue;
+        seen[m] = 1;
+        if (free(bx - R + i + di, by - R + j + dj)) stack.push(m);
+      }
+  }
+  return false;
+}
+{
+  let bases = 0, oneShut = 0, carvedIn = 0, carved = 0;
+  const seeds = quick ? [1, 2, 3, 4, 5, 6, 21, 33, 37, 41, 61, 139] : Array.from({ length: 80 }, (_, i) => i + 1).concat([139, 152]);
+  for (const size of ["small", "medium", "large"])
+    for (const N of [2, 3, 4, 6, 8])
+      for (const s of seeds) {
+        const opts = N === 2 ? { extended: true, size } : { players: N, size };
+        const e = genWorld(s, opts);
+        e.step({ keys: [[0, 59]] });                      // F1: newMatchExt places the bases (and opens them)
+        check(e.screen !== "menu" && e.baseX[N] > 0, size + " N=" + N + " seed " + s + ": match did not start");
+        if (e.baseCarved) { carvedIn++; carved += e.baseCarved; }
+        for (let p = 1; p <= N; p++) {
+          bases++;
+          const top = doorwayOut(e, p, -1), bottom = doorwayOut(e, p, 1);
+          if (!top || !bottom) oneShut++;
+          check(top || bottom, size + " N=" + N + " seed " + s + ": base " + p + " is walled in by rock at both doorways");
+        }
+      }
+  check(carvedIn > 0, "no world needed a base opened - the seeds no longer cover a walled-in base");
+  ok("a way out of every base: " + bases + " bases (" + oneShut + " with one doorway into rock), rock turned into dirt in " +
+    carvedIn + " matches (" + carved + " px)");
 }
 
 // ------------------------------------------------------------------ 5. matches

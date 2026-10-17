@@ -56,8 +56,8 @@ may be redesigned, but always in the original's DOS look.
     screen). Must stay green. WASM seed export maps to RandSeed with bytes swapped per 16-bit half.
   - `ext-sim.js` - engine options: classic stays identical (slots BLUE + GREEN, medium, winScore 3),
     option parsing, world sizes (deterministic / resumable generation, rock border, rock share), base
-    placement per size, bot-driven classic and extended matches (free-for-all, 2-7 teams, uneven teams,
-    other colors, winScore, sizes, friendly fire) with correct round / match winners, determinism, sound
+    placement per size, a way out of every base (openBase), bot-driven classic and extended matches
+    (free-for-all, 2-7 teams, uneven teams, other colors, winScore, sizes, friendly fire) with correct round / match winners, determinism, sound
     source positions, a staged friendly-fire duel, the world map banner, instructions' `{n}` in every
     language, extended texts fit in every language for many team setups, Esc (ignored; `escEnds`).
   - `time-sim.js` - round time limit: damage to enemies counted (classic / extended, not teammates),
@@ -72,7 +72,8 @@ may be redesigned, but always in the original's DOS look.
     4v4, uneven 3v5, 4 teams of 2 (odd team numbers), friendly fire on / off, small / large maps,
     winScore 1 / 5: matches finish, never target teammates (also after `setTeams`), no friendly damage
     or held fire without friendly fire, little with it, determinism (also bots created mid-match), time
-    budget for 7 bots on the medium and the large map.
+    budget for 7 bots on the medium and the large map, no bot hanging around its own base while not
+    retreating (team games, every level).
   - `net-sim.js` - real server (4 ms ticks) + fake websocket clients running the engine; asserts all
     clients end identical, pause/resume, ready handshake, input validation; an extended room (8 slots,
     computer slots, teams): no pause, away tank stands still, reload / late spectator identical; slot
@@ -400,6 +401,13 @@ the room info): the most a player may choose to see during play - display only, 
   reason; readable start-up errors (port < 1024, in use, invalid PORT).
 - AI: exploration waypoints only in the reachable interior (`TunnelerAI.interior`, shared 8x8 rock
   map per round), unreachable waypoints given up after 150 frames (no more pushing into the map edge).
+- Bases (extended only, `newMatchExt` -> `openBase`, no RNG draw): a base whose two doorways both open
+  into rock walled its tank in (bots drove in and out of it for whole rounds - a way a tank could only
+  squeeze through pixel by pixel is invisible to the AI's 4 px grid). A doorway counts as passable if a
+  tank gets sc(64) px out with no rock within 3 px of its box (13x13); if neither is, the least rock on
+  the cheapest way out (Dijkstra) becomes dirt. Worlds with a way out are unchanged; classic untouched
+  (it can have the same rare flaw). Tests: ext-sim "a way out of every base", ai-ext-sim "time at the
+  own base" (longest stretch there while not retreating, every level, was 462 expert / 1242 normal).
 - Release: every push to main bumps the patch version + Release + Docker image; a commit already tagged
   `vX.Y.Z` (pushed before main) is released by its tag only; CI also runs on release/** branches.
   docker-compose.yml runs the published image.

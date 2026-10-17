@@ -1502,6 +1502,117 @@ class TunnelerEngine {
       if (ok) break;
     }
     this.baseMinDist = minDist;
+    this.baseCarved = 0;
+    for (let i = 1; i <= N; i++) this.baseCarved += this.openBase(this.baseX[i], this.baseY[i]);
+  }
+
+  // Extended only (the classic placement stays the original's): a base whose two doorways both open into
+  // rock (a rock blob, the rock around the world - tanks cannot dig rock) would wall its tank in. Looked at
+  // over tank centres within R = sc(64) px of the base, for each doorway with the other one closed (base
+  // walls impassable, the inside clear - drawBases clears it): a doorway is passable if a tank gets from
+  // the middle of the base to the window's edge with no wall under its 7x7 box and no rock within 3 px of
+  // it (a 13x13 box: a way out a tank can just squeeze through pixel by pixel is no way out for the
+  // computer players, whose path finding works on a 4 px grid - TunnelerAI's Grid). If neither is, a
+  // Dijkstra (entering a position costs 1 + 64 per rock pixel under the 13x13 box) finds the path out
+  // needing the least rock gone, and that rock is turned into dirt. No RNG draw: every world that had a
+  // way out stays exactly as it was. -> number of rock pixels turned into dirt (0 = a doorway was passable)
+  openBase(bx, by) {
+    const M = 6, R = this.sc(64), S = 2 * R + 1, P = S + 2 * M, P1 = P + 1, x0 = bx - R - M, y0 = by - R - M;
+    const W = this.worldW, H = this.worldH, pc = this.pixelClass, ROCK = 64;
+    // prefix sums over the (S + 12)^2 pixel window: rock, and the walls with either doorway closed
+    const rock = new Int32Array(P1 * P1), walls = [new Int32Array(P1 * P1), new Int32Array(P1 * P1)];
+    for (let j = 0; j < P; j++)
+      for (let i = 0; i < P; i++) {
+        const x = x0 + i, y = y0 + j, dx = Math.abs(x - bx), dy = Math.abs(y - by);
+        let r = 0, w = 0, gap = 0;
+        if (x < 0 || y < 0 || x >= W || y >= H) w = 1;
+        else if (dx <= 16 && dy <= 16) r = 0;                               // inside the base
+        else if (dx === 17 && dy <= 17) w = 1;                              // side walls
+        else if (dy === 17 && dx >= 4) w = 1;                               // top / bottom walls
+        else {
+          if (dy === 17) gap = y < by ? 1 : 2;                              // in a doorway
+          if (pc[this.getPixel(x, y)] === 4) r = 1;
+        }
+        const k = (j + 1) * P1 + i + 1;
+        rock[k] = r + rock[k - 1] + rock[k - P1] - rock[k - P1 - 1];
+        for (let s = 0; s < 2; s++) {                                       // s 0: top open, 1: bottom open
+          const a = walls[s];
+          a[k] = (w || gap === 2 - s ? 1 : 0) + a[k - 1] + a[k - P1] - a[k - P1 - 1];
+        }
+      }
+    // pixels within r of tank position (i, j) (window coordinates 0..S-1, pixel i + M = its x)
+    const box = (a, i, j, r) => {
+      const i0 = i + M - r, j0 = j + M - r, i1 = i + M + r + 1, j1 = j + M + r + 1;
+      return a[j1 * P1 + i1] - a[j0 * P1 + i1] - a[j1 * P1 + i0] + a[j0 * P1 + i0];
+    };
+    const start = R * S + R, edge = (i, j) => i === 0 || j === 0 || i === S - 1 || j === S - 1;
+    // passable? depth first, the step out through the doorway tried first
+    const seen = new Uint8Array(S * S);
+    for (let s = 0; s < 2; s++) {
+      const wall = walls[s], out = s ? 1 : -1, stack = [start];
+      seen.fill(0); seen[start] = 1;
+      while (stack.length) {
+        const n = stack.pop(), i = n % S, j = (n - i) / S;
+        if (edge(i, j)) return 0;
+        for (let k = 8; k >= 0; k--) {        // k 0, 1, 2: a step outwards, pushed last = tried first
+          const di = k % 3 - 1, dj = (Math.floor(k / 3) - 1) * -out, ni = i + di, nj = j + dj, m = nj * S + ni;
+          if (seen[m] || (!di && !dj)) continue;
+          seen[m] = 1;
+          if (!box(wall, ni, nj, 3) && !box(rock, ni, nj, M)) stack.push(m);
+        }
+      }
+    }
+    // walled in: the cheapest way out through either doorway
+    let bestCost = Infinity, bestEnd = -1, bestCame = null;
+    for (let s = 0; s < 2; s++) {
+      const wall = walls[s];
+      const dist = new Int32Array(S * S).fill(0x7FFFFFFF), came = new Int32Array(S * S).fill(-1);
+      const hN = [], hK = [];
+      const push = (n, k) => {
+        let i = hN.length;
+        hN.push(n); hK.push(k);
+        while (i > 0) { const p = (i - 1) >> 1; if (hK[p] <= k) break; hN[i] = hN[p]; hK[i] = hK[p]; i = p; }
+        hN[i] = n; hK[i] = k;
+      };
+      const pop = () => {
+        const top = hN[0], ln = hN.pop(), lk = hK.pop(), n = hN.length;
+        if (n) {
+          let i = 0;
+          for (;;) {
+            let c = 2 * i + 1;
+            if (c >= n) break;
+            if (c + 1 < n && hK[c + 1] < hK[c]) c++;
+            if (hK[c] >= lk) break;
+            hN[i] = hN[c]; hK[i] = hK[c]; i = c;
+          }
+          hN[i] = ln; hK[i] = lk;
+        }
+        return top;
+      };
+      dist[start] = 0; push(start, 0);
+      while (hN.length) {
+        const k0 = hK[0], n = pop();
+        if (k0 > dist[n]) continue;
+        if (k0 >= bestCost) break;
+        const i = n % S, j = (n - i) / S;
+        if (edge(i, j)) { bestCost = k0; bestEnd = n; bestCame = came; break; }
+        for (let dj = -1; dj <= 1; dj++)
+          for (let di = -1; di <= 1; di++) {
+            const ni = i + di, nj = j + dj, m = nj * S + ni;
+            if ((!di && !dj) || box(wall, ni, nj, 3)) continue;
+            const c = k0 + 1 + ROCK * box(rock, ni, nj, M);
+            if (c < dist[m]) { dist[m] = c; came[m] = n; push(m, c); }
+          }
+      }
+    }
+    let carved = 0;
+    for (let n = bestEnd; n >= 0; n = bestCame[n]) {
+      const cx = x0 + M + n % S, cy = y0 + M + Math.floor(n / S);
+      for (let y = cy - M; y <= cy + M; y++)
+        for (let x = cx - M; x <= cx + M; x++)
+          if (pc[this.getPixel(x, y)] === 4) { this.setPixel(x, y, ((x ^ y) & 1) ? 8 : 6); carved++; }
+    }
+    return carved;
   }
 
   newRoundExt() {

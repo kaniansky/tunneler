@@ -12,6 +12,7 @@
 //   - determinism: the same game twice gives identical bits every frame, and bots created fresh at the
 //     start of a round (a late joiner) compute the same bits as bots that ran from the start
 //   - time per frame for 7 bots, on the medium and the large map
+//   - no bot hangs around its own base while it wants to be elsewhere (a base walled in by rock)
 //   node test/ai-ext-sim.js [quick]
 const path = require("path");
 const E = require(path.join(__dirname, "../src/js/engine.js"));
@@ -315,6 +316,56 @@ function borderMatch(seed, engOpts, levels, maxFrames) {
   check(inRock * 200 <= explore, "exploration waypoints in the rock around the world: " + inRock + " of " + explore + " frames");
   check(hug * 100 <= play, "bots hug the rock around the world " + (100 * hug / play).toFixed(2) + "% of the time");
   check(longest <= 150, "a bot hugged the rock around the world for " + longest + " frames in a row");
+}
+
+// ------------------------------------------------------------------ hanging around the own base
+// "an expert teammate stays at its own base for a long time, gets out a little and goes back in": its
+// base's doorways both opened into rock (the bottom one passable only pixel by pixel, which the AI's 4 px
+// grid cannot see) - the engine now opens such a base (openBase, test/ext-sim.js). Measured per bot from
+// 270 frames (~15 s) into each round: the longest stretch within 20 px of its own base while NOT
+// retreating (refuelling / repairing there is fine), and how often it left the base meanwhile.
+// Before the fix (these games): up to 462 (expert) / 1242 (normal) frames; now <= 52 for every level.
+{
+  console.log("\nTime at the own base when not retreating (team games, every level)");
+  const games = [
+    ["small 3v3, BLUE idle", { slots: slots([1, 2, 1, 2, 1, 2]), size: "small" }, [null, "expert", "expert", "hard", "expert", "normal"], [2, 3]],
+    ["small 3v3", { slots: slots([1, 2, 1, 2, 1, 2]), size: "small" }, null, [2]],
+    ["small 4v4", { players: 8, teams: true, size: "small" }, null, [2]],
+    ["medium 4v4", { players: 8, teams: true }, null, [5]],
+    ["large 2v2", { players: 4, teams: true, size: "large" }, null, [1]],
+  ];
+  const perLevel = {};
+  for (const [name, opts, fixed, seeds] of games) {
+    let longest = 0, exits = 0, who = "";
+    for (const seed of seeds) {
+      const e = startEngine(seed, opts), N = e.nPlayers;
+      const levels = fixed || Array.from({ length: N }, (_, i) => LV[(i + seed) % 4]);
+      const ais = levels.map((l, i) => (l ? new TunnelerAI(l, i + 1, { seed }) : null));
+      const run = new Array(N + 1).fill(0), inside = new Array(N + 1).fill(false);
+      let round = -1, rf = 0;
+      for (let f = 0; f < (quick ? 8000 : 16000) && e.screen !== "map"; f++) {
+        if (e.screen === "play" && e.round !== round) { round = e.round; rf = 0; run.fill(0); inside.fill(true); }
+        const bits = ais.map(ai => TunnelerAI.bitsFor(ai, e));
+        if (e.screen === "play" && e.endTimer < 0 && ++rf > 270)
+          for (let p = 1; p <= N; p++) {
+            const ai = ais[p - 1];
+            if (!ai) continue;
+            const d = Math.max(Math.abs(e.tankX[p] - e.baseX[p]), Math.abs(e.tankY[p] - e.baseY[p]));
+            const now = inside[p] ? d <= 24 : d <= 16;
+            if (inside[p] && !now && !ai.retreating) exits++;
+            inside[p] = now;
+            if (e.alive[p] && d <= 20 && !ai.retreating) {
+              if (++run[p] > longest) { longest = run[p]; who = "seed " + seed + " player " + p + " " + ai.levelName; }
+              perLevel[ai.levelName] = Math.max(perLevel[ai.levelName] || 0, run[p]);
+            } else run[p] = 0;
+          }
+        e.step({ bits });
+      }
+    }
+    console.log("  " + pad(name, 22) + "longest " + pad(longest, 5) + "exits " + pad(exits, 4) + "(" + who + ")");
+  }
+  console.log("  longest per level: " + LV.map(l => l + " " + (perLevel[l] || 0)).join(", "));
+  for (const l of LV) check((perLevel[l] || 0) <= 150, l + ": a bot stayed at its own base for " + perLevel[l] + " frames without retreating");
 }
 
 // ------------------------------------------------------------------ 7 bots + an idle BLUE: time per frame
