@@ -470,6 +470,10 @@ class TunnelerAI {
   }
 
   update(e) {
+    // which players computer tanks drive, for a game mode that must tell them from human players (survival:
+    // the players against the AI tanks' waves): e.aiDriven[p] = true. Every client runs the same AIs every
+    // frame (online too), so it is the same everywhere; nothing else reads it (extended only)
+    if (e.extended) (e.aiDriven || (e.aiDriven = []))[this.me] = true;
     if (e.screen !== "play") { this.prevKeys = false; return NONE; }
     const N = playersOf(e);
     let key = "" + e.round;
