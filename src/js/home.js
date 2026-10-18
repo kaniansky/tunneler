@@ -33,6 +33,8 @@
   // the game mode and the modifiers (docs/DESIGN-8P.md 27)
   const MODE_LIST = TunnelerEngine.MODE_LIST || ["standard"];
   let gmode = MODE_LIST.includes(load("tunneler.cpu.mode")) ? load("tunneler.cpu.mode") : "standard";
+  const KILLS = [5, 10, 15, 20, 30, 50];                  // deathmatch: kills to win (instead of rounds to win)
+  let cpuKills = KILLS.includes(parseInt(load("tunneler.cpu.kills", "10"), 10)) ? parseInt(load("tunneler.cpu.kills", "10"), 10) : 10;
   const mods = {
     noRepair: load("tunneler.cpu.noRepair", "0") === "1" };
   // after death (black / wreck / others): what you see once your tank is destroyed (views.js)
@@ -59,7 +61,7 @@
     save("tunneler.cpu.slots", JSON.stringify(slots));
     save("tunneler.cpu.size", cpuSize); save("tunneler.cpu.win", String(cpuWin)); save("tunneler.cpu.ff", ff ? "1" : "0");
     save("tunneler.cpu.view", view); save("tunneler.cpu.watch", watchOut); save("tunneler.cpu.time", String(cpuTime));
-    save("tunneler.cpu.mode", gmode);
+    save("tunneler.cpu.mode", gmode); save("tunneler.cpu.kills", String(cpuKills));
     for (const k in mods) save("tunneler.cpu." + k, mods[k] ? "1" : "0");
   };
 
@@ -202,7 +204,7 @@
       const list = S.used.map(u => u.color + ":" + u.kind + ":" + u.team).join(",");
       location.href = Links.cpu("slots=" + encodeURIComponent(list) + "&size=" + cpuSize + "&win=" + cpuWin +
         "&ff=" + (ff && S.teamGame ? 1 : 0) + "&view=" + view + "&watch=" + watchOut + timeArg(cpuTime) +
-        (gmode !== "standard" ? "&gm=" + gmode : "") + (mods.noRepair ? "&norepair=1" : ""));
+        (gmode !== "standard" ? "&gm=" + gmode : "") + (gmode === "deathmatch" ? "&kills=" + cpuKills : "") + (mods.noRepair ? "&norepair=1" : ""));
     };
     // slot rows: "you                team 1", the who column padded to the longest text in this language,
     // each row in its tank's color (which is all that tells the colors apart - no color name)
@@ -240,7 +242,10 @@
     const options = [
       { key: "mode", label: T("lc.mode") + T("gm." + gmode), info: [T("gm." + gmode + ".i"), T("lc.mode.i")], go: () => setMode(1), change: setMode },
       sizeItem(cpuSize, v => { cpuSize = v; redraw(); }),
-      winItem(cpuWin, v => { cpuWin = v; redraw(); }),
+      gmode === "deathmatch"                         // (kills to win instead of rounds to win)
+        ? { key: "kills", label: T("lc.kills") + cpuKills, info: [T("lc.kills.i")], go: () => { cpuKills = step(KILLS, cpuKills, 1); redraw(); },
+          change: d => { cpuKills = step(KILLS, cpuKills, d); redraw(); } }
+        : winItem(cpuWin, v => { cpuWin = v; redraw(); }),
       timeItem(cpuTime, v => { cpuTime = v; redraw(); }),
     ];
     // friendly fire only matters with teammates: grayed out (not selectable) while no team has 2+ tanks

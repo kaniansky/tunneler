@@ -60,7 +60,7 @@ check(!!M, "deathmatch: registered");
     "an enemy in the base: the tank comes back beside it, inside the base (" + d + " px apart)");
 }
 
-// ---- 10 kills win the round (free-for-all and teams); the scores start again every round
+// ---- 10 kills (the default Kills to win) win the round - and the match (free-for-all and teams)
 for (const [name, teams, killer, winTeam] of [["free-for-all", [1, 2, 3], 2, 1], ["2 v 2", [1, 2, 1, 2], 3, 0]]) {
   const e = startEngine(24, opts(teams, { winScore: 2 }));
   idle(e);
@@ -80,8 +80,8 @@ for (const [name, teams, killer, winTeam] of [["free-for-all", [1, 2, 3], 2, 1],
   const r0 = e.round;
   for (let f = 0; f < 400 && e.round === r0; f++) idle(e);
   check(e.round === r0 + 1 && e.roundWinnerTeam === winTeam && e.teamWins[winTeam] === 1, name + ": the round is won by team index " + winTeam);
-  for (let f = 0; f < 3000 && e.screen !== "play"; f++) idle(e);
-  check(e.modeScore.every(v => v === 0) && e.alive.slice(1, e.nPlayers + 1).every(a => a), name + ": next round - kills back to 0, every tank in");
+  // a deathmatch is one round: the first side to Kills to win takes the match (winScore 2 asked for: still 1)
+  check(e.winScore === 1 && e.matchWinnerTeam() === winTeam, name + ": the round decides the match (Kills to win replaces rounds to win)");
 }
 
 // ---- the round time: the most kills wins, a tie nobody
@@ -201,4 +201,16 @@ for (const c of cases) {
 for (const l of ["en", "sk", "cs", "uk", "ru", "genz"]) {
   const S = M.strings[l];
   check(S && S.instr && S.instr.length > 80 && S.score.includes("{n}"), "texts (" + l + "): instr + score");
+}
+
+// ---- Kills to win: the setting (killsToWin) decides
+{
+  const e = startEngine(25, opts([1, 2], { killsToWin: 5 }));
+  idle(e);
+  for (let k = 0; k < 5; k++) {
+    for (let w = 0; !e.alive[2] && w < 400; w++) idle(e);
+    if (k === 4) check(e.endTimer < 0, "Kills to win 5: 4 kills - the round goes on");
+    killBy(e, 2, 1);
+  }
+  check(e.endTimer >= 0 && e.modeWinner === 0, "Kills to win 5: the 5th kill wins");
 }

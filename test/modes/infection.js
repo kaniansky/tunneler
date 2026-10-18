@@ -143,7 +143,7 @@ const clearOf = (e, p) => [...Array(e.nPlayers).keys()].map(i => i + 1)
   check(rows.length === 1 && row(rows[0]).includes(blue) && !rows.some(r => [2, 3, 4].some(p => row(r).includes(e.playerName(p) + " "))),
     "infection: the statistics mark only " + blue + " as a winner (blinking rows: " + rows.map(r => row(r).trim()).join(" | ") + ")");
   const winLine = [...Array(25).keys()].map(row).find(l => l.includes((e.strings.stats.winner || "").trim()));
-  check(!!winLine && winLine.includes(blue) && !winLine.includes(e.playerName(2)), "infection: the winner line names " + blue + " (" + (winLine || "").trim() + ")");
+  check(!winLine, "infection: no winner line - the winner blinks (" + (winLine || "").trim() + ")");
   // the ROUNDS list: the side's name, no tank's colour
   const lines = e.matchRoundLines(19);
   check(lines.length >= 1 && lines[lines.length - 1].text.includes("infected") && lines[lines.length - 1].color === 7,

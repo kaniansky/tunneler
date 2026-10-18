@@ -87,7 +87,7 @@ Lang.register("genz", {
       ff: ["friendly fire: off", "friendly fire: on"], view: "POV: {v}", visible: "max POV: {v}",
       views: ["main character", "the squad", "everyone fr"], watch: ["after you die: black screen", "after you die: my wreck", "after you die: spectate the squad", "after you die: spectate your killer", "after you die: spectate everyone"],
       modes: {"standard": "OG", "gold": "gold rush", "infection": "zombie mode", "survival": "survive the bots", "hill": "king of the hill", "shrink": "the zone", "ctf": "steal the flag", "siege": "base raid", "deathmatch": "deathmatch"},
-      noRepair: "no repairs",
+      noRepair: "no repairs", kills: "kills to win: {n}",
       time: "round timer: {n} min", timeShort: "timer: {n} min" },
     prompt: "<ENTER> for the main menu.",
     instr: {
@@ -313,6 +313,7 @@ Lang.register("genz", {
   "gm.siege.i": "Wreck their bases: last base standing takes the round.",
   "gm.deathmatch": "deathmatch",
   "gm.deathmatch.i": "Wrecked tanks respawn at home: most kills takes the round.",
+  "lc.kills": "Kills to win: ", "lc.kills.i": "How many kills (squad total) take the match - one round, no cap.",
   "lc.mode": "Mode: ",
   "lc.mode.i": "← →: pick the vibe.",
   "mod.noRepair": "Base repairs: ",

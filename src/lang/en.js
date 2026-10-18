@@ -169,6 +169,7 @@ Lang.register("en", {
   "gm.siege.i": "Shoot the enemy bases down: the last base standing wins the round.",
   "gm.deathmatch": "deathmatch",
   "gm.deathmatch.i": "Destroyed tanks come back at their base: the most kills wins the round.",
+  "lc.kills": "Kills to win: ", "lc.kills.i": "How many kills (a team: its members' sum) win the match - one round.",
   "lc.mode": "Mode: ",
   "lc.mode.i": "← →: the game mode.",
   "mod.noRepair": "Base repairs: ",

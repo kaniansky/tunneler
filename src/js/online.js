@@ -400,7 +400,10 @@
       // the game mode first (docs/DESIGN-8P.md 27); the modifiers at the end
       row("mode", T("lc.mode") + T("gm." + mode), [T("gm." + mode + ".i"), T("lc.mode.i")], d => setSetting("mode", cycle(ML, mode, d))),
       row("size", T("os.size") + T("os.size." + s.size), [T("os.size.i1"), T("os.size.i2")], d => setSetting("size", cycle(SIZES, s.size, d))),
-      row("win", T("os.win") + s.winScore, [T("os.win.i1"), T("os.win.i2")], d => setSetting("winScore", (s.winScore - 1 + d + 9) % 9 + 1)),
+      // (deathmatch: kills to win instead of rounds to win - one round decides it)
+      mode === "deathmatch"
+        ? row("kills", T("lc.kills") + (s.kills || 10), [T("lc.kills.i")], d => setSetting("kills", cycle(NetProto.KILLS, s.kills || 10, d)))
+        : row("win", T("os.win") + s.winScore, [T("os.win.i1"), T("os.win.i2")], d => setSetting("winScore", (s.winScore - 1 + d + 9) % 9 + 1)),
       row("time", T("os.time") + (s.roundTime ? T("time.n", { n: s.roundTime }) : T("time.off")), [T("time.i1"), T("time.i2")],
         d => setSetting("roundTime", cycle(ROUND_TIMES, s.roundTime, d))),
       row("ff", T("os.ff") + T(s.friendlyFire ? "os.on" : "os.off"), [T("os.ff.i1"), T("os.ff.i2")], () => setSetting("friendlyFire", !s.friendlyFire), !teams),

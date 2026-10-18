@@ -143,7 +143,7 @@ const STRINGS_EN = {
     views: ["self", "team", "everyone"], watch: ["after death: black screen", "after death: my wreck", "after death: watch team", "after death: watch killer", "after death: watch all"],
     // game modes (the round title / statistics settings: the mode's name first) and modifiers
     modes: {"standard": "standard", "gold": "gold rush", "infection": "infection", "survival": "survival", "hill": "king of the hill", "shrink": "shrinking world", "ctf": "capture the flag", "siege": "base siege", "deathmatch": "deathmatch"},
-    noRepair: "no repairs" },
+    noRepair: "no repairs", kills: "kills to win: {n}" },
   // the world map's "PRESS ANY KEY" pixel-art banner (5 rows of '*' / ' ', all the same length); a
   // translation may replace it (see Banner below for the original)
   // banner: [...],
@@ -376,6 +376,7 @@ class TunnelerEngine {
     this.names = new Array(this.nPlayers).fill(null);  // display names (setNames), null = color name
     this.computeTeams();
     this.winScore = clampInt(o.winScore, 1, 9, 3);
+    this.killsToWin = clampInt(o.killsToWin, 1, 99, 10);   // deathmatch (src/js/modes/deathmatch.js): kills that win
     this.friendlyFire = !!o.friendlyFire;
     this.roundTime = clampInt(o.roundTime, 0, 60, 0);
     this.roundTicks = Math.round(this.roundTime * 60 * PIT_HZ / TICK);   // the limit in steps (BIOS ticks)
@@ -1200,7 +1201,8 @@ class TunnelerEngine {
     if (!o) return [];
     const S = Object.assign({}, STRINGS_EN.settings, this.strings.settings);
     const sizes = TunnelerEngine.SIZES || ["small", "medium", "large"];
-    const parts = [S.size[Math.max(0, sizes.indexOf(this.size))], S.win.replace("{n}", String(this.winScore))];
+    const parts = [S.size[Math.max(0, sizes.indexOf(this.size))], this.gameMode === "deathmatch" && S.kills
+      ? S.kills.replace("{n}", String(this.killsToWin)) : S.win.replace("{n}", String(this.winScore))];
     if (this.gameMode !== "standard") parts.unshift((S.modes || {})[this.gameMode] || this.gameMode);
     if (this.mods.noRepair && S.noRepair) parts.push(S.noRepair);
     if (this.teams) parts.push(S.ff[this.friendlyFire ? 1 : 0]);

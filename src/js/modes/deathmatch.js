@@ -1,6 +1,7 @@
 // Game mode "deathmatch" (docs/DESIGN-8P.md 27): destroyed tanks come back at their base after ~3 s; a
 // kill of an enemy scores +1 for the killer (a teammate: -1, friendly fire only). The first team to
-// KILLS_TO_WIN kills (its members' sum) wins the round; at the round time the most kills (a tie: nobody).
+// e.killsToWin kills (its members' sum; the "Kills to win" setting, default KILLS_TO_WIN) wins the round -
+// and the match: a deathmatch is one round (winScore 1); at the round time the most kills (a tie: nobody).
 // The round never ends by elimination. hud: own kills; scoreText: "kills n".
 // State: e.GS = {f: play frames this round, back: [frame a destroyed tank comes back, per player; 0 = none]},
 // e.modeScore[p] = p's kills this round (reset at every round start).
@@ -45,7 +46,7 @@ E.registerMode("deathmatch", {
   eliminationEnds: false,
   aiAlways: true,
 
-  init(e) { e.GS.f = 0; e.GS.back = new Array(e.nPlayers + 1).fill(0); e.GS.total = new Array(e.nPlayers + 1).fill(0); },
+  init(e) { e.winScore = 1; e.GS.f = 0; e.GS.back = new Array(e.nPlayers + 1).fill(0); e.GS.total = new Array(e.nPlayers + 1).fill(0); },
 
   round(e) {
     e.GS.f = 0;
@@ -59,7 +60,7 @@ E.registerMode("deathmatch", {
       e.modeScore[killer] += e.isEnemy(killer, p) ? 1 : -1;
       e.GS.total[killer] += e.isEnemy(killer, p) ? 1 : -1;   // (the whole match: the statistics)
       const t = e.team(killer);
-      if (e.isEnemy(killer, p) && teamKills(e, t) >= KILLS_TO_WIN) e.endRound(t);
+      if (e.isEnemy(killer, p) && teamKills(e, t) >= (e.killsToWin || KILLS_TO_WIN)) e.endRound(t);
     }
     e.GS.back[p] = e.GS.f + RESPAWN_FRAMES;
     return true;                           // never the end of the round by elimination
@@ -145,42 +146,42 @@ E.registerMode("deathmatch", {
     en: { stat: "kills", note: "{n} kills",
       instr: "Destroyed tanks come back at their own base after about 3 seconds - nobody is out for good. " +
         "Destroying an enemy tank scores a kill for you and your team; destroying a teammate (friendly fire) costs one. " +
-        "The first team to " + KILLS_TO_WIN + " kills wins the round; when the round time runs out, the most kills wins it. " +
+        "The first team to reach Kills to win (a setting, instead of rounds to win) wins the match; when the round time runs out, the most kills wins it. " +
         "The number beside your instrument panel shows your kills.",
       score: "kills {n}",
     },
     sk: { stat: "zost.", note: "{n} zost.",
       instr: "Zničené tanky sa asi po 3 sekundách vrátia do svojej základne - nikto nevypadne nadobro. " +
         "Zničenie nepriateľského tanku je zostrel pre teba aj tvoj tím; zničenie spoluhráča (paľba do vlastných) jeden zostrel uberie. " +
-        "Kolo vyhrá tím, ktorý prvý dosiahne " + KILLS_TO_WIN + " zostrelov; keď uplynie čas kola, vyhrá najviac zostrelov. " +
+        "Zápas vyhrá tím, ktorý prvý dosiahne nastavený počet zostrelov (Zostrely na výhru, namiesto kôl); keď uplynie čas kola, vyhrá najviac zostrelov. " +
         "Číslo vedľa prístrojového panelu ukazuje tvoje zostrely.",
       score: "zostrely {n}",
     },
     cs: { stat: "zab.", note: "{n} zab.",
       instr: "Zničené tanky se asi po 3 sekundách vrátí do své základny - nikdo nevypadne nadobro. " +
         "Zničení nepřátelského tanku je sestřel pro tebe i tvůj tým; zničení spoluhráče (palba do vlastních) jeden sestřel ubere. " +
-        "Kolo vyhraje tým, který první dosáhne " + KILLS_TO_WIN + " sestřelů; když uplyne čas kola, vyhraje nejvíc sestřelů. " +
+        "Zápas vyhraje tým, který první dosáhne nastavený počet sestřelů (Sestřely k výhře, místo kol); když uplyne čas kola, vyhraje nejvíc sestřelů. " +
         "Číslo vedle přístrojového panelu ukazuje tvoje sestřely.",
       score: "sestřely {n}",
     },
     uk: { stat: "вбив.", note: "{n} вбив.",
       instr: "Знищені танки приблизно за 3 секунди повертаються на свою базу - ніхто не вибуває назавжди. " +
         "Знищений ворожий танк зараховується як збитий тобі й твоїй команді; знищений товариш по команді (вогонь по своїх) віднімає одне очко. " +
-        "Раунд виграє команда, яка першою набере " + KILLS_TO_WIN + " збитих танків; коли час раунду вийде, перемагає та, що збила більше. " +
+        "Матч виграє команда, яка першою набере задану кількість збитих танків (Збитих для перемоги, замість раундів); коли час раунду вийде, перемагає та, що збила більше. " +
         "Число біля панелі приладів показує, скільки танків ти збив.",
       score: "збито {n}",
     },
     ru: { stat: "убий.", note: "{n} убий.",
       instr: "Уничтоженные танки примерно через 3 секунды возвращаются на свою базу - никто не выбывает насовсем. " +
         "Уничтоженный вражеский танк - это убийство для тебя и твоей команды; уничтоженный товарищ (огонь по своим) отнимает одно. " +
-        "Раунд выигрывает команда, первой набравшая " + KILLS_TO_WIN + " убийств; когда время раунда выйдет, побеждает больше убийств. " +
+        "Матч выигрывает команда, первой набравшая заданное число убийств (Убийств для победы, вместо раундов); когда время раунда выйдет, побеждает больше убийств. " +
         "Число рядом с панелью приборов показывает твои убийства.",
       score: "убийств {n}",
     },
     genz: { stat: "kills", note: "{n} kills",
       instr: "Get wrecked? No biggie, you respawn at your base in like 3 seconds. " +
         "Every enemy you delete is a kill for you and the squad; deleting your own teammate (friendly fire) is minus one, so don't be that guy. " +
-        "First squad to " + KILLS_TO_WIN + " kills takes the round; if the clock runs out, most kills wins. " +
+        "First squad to hit Kills to win (it replaces rounds to win) takes the match; if the clock runs out, most kills wins. " +
         "The number next to your dashboard is your kill count, flex it.",
       score: "kills {n}",
     },

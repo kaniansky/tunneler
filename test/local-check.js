@@ -193,6 +193,17 @@ function play(search) {
     assert(/&gm=gold&norepair=1$/.test(decodeURIComponent(en.win.location.href)), en.win.location.href);
     assert(st.get("tunneler.cpu.mode") === "gold" && st.get("tunneler.cpu.noRepair") === "1");
     ok("vs computer: Mode and the modifier go into the link and are remembered");
+    // deathmatch: "Kills to win" instead of "Rounds to win", into the link
+    const sd = new Map(), ed = makeEnv("", sd);
+    ed.page("index.html"); ed.key("ArrowDown"); ed.key("Enter");
+    const uid = ed.win.tunnelerHomeUI();
+    sd.set("x", 1);
+    pick(ed, "mode"); for (let i = 0; i < 8; i++) ed.key("ArrowRight");   // ... -> deathmatch
+    assert(uid.spec.items.some(it => it.key === "kills") && !uid.spec.items.some(it => it.key === "win"), "deathmatch: Kills to win, no Rounds to win");
+    pick(ed, "kills"); ed.key("ArrowRight");                             // 10 -> 15
+    pick(ed, "play"); ed.key("Enter");
+    assert(/&gm=deathmatch&kills=15/.test(decodeURIComponent(ed.win.location.href)), ed.win.location.href);
+    ok("skirmish deathmatch: Kills to win replaces Rounds to win, into the link");
   }
   // friendly fire: always listed, grayed out (not selectable) while no team has 2+ tanks
   {

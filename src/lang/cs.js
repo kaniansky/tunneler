@@ -90,7 +90,7 @@ Lang.register("cs", {
       ff: ["přátelská palba: vypnutá", "přátelská palba: zapnutá"], view: "pohled: {v}", visible: "limit pohledu: {v}",
       views: ["jen já", "tým", "všichni"], watch: ["po smrti: černá obrazovka", "po smrti: můj vrak", "po smrti: sledovat tým", "po smrti: sledovat vraha", "po smrti: sledovat všechny"],
       modes: {"standard": "standard", "gold": "zlatá horečka", "infection": "nákaza", "survival": "přežití", "hill": "král kopce", "shrink": "zmenšující se svět", "ctf": "ukradni vlajku", "siege": "obléhání základen", "deathmatch": "zápas na smrt"},
-      noRepair: "bez oprav",
+      noRepair: "bez oprav", kills: "sestřely k výhře: {n}",
       time: "čas kola: {n} min", timeShort: "čas: {n} min" },
     prompt: "<ENTER> - hlavní menu.",
     instr: {
@@ -317,6 +317,7 @@ Lang.register("cs", {
   "gm.siege.i": "Sestřel nepřátelské základny: kolo vyhraje poslední stojící základna.",
   "gm.deathmatch": "zápas na smrt",
   "gm.deathmatch.i": "Zničené tanky se vrátí do základny: kolo vyhraje nejvíc sestřelů.",
+  "lc.kills": "Sestřely k výhře: ", "lc.kills.i": "Kolik sestřelů (tým: součet členů) vyhraje zápas - jedno kolo.",
   "lc.mode": "Režim: ",
   "lc.mode.i": "← →: herní režim.",
   "mod.noRepair": "Opravy v základně: ",
