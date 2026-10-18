@@ -919,6 +919,10 @@ class TunnelerAI {
   doorway(e, mx, my, gx, gy) {
     for (let q = 1, N = playersOf(e); q <= N; q++) {
       if (q === this.me) continue;
+      // a game mode may say base q has no walls any more (siege: a fallen base, its walls rubble) - nothing
+      // to line up with there: steering through its "doorway" would keep turning a tank back and forth in
+      // it while the planner leads it straight over the rubble. GM.aiOpenBase(e, q) -> true: skip it
+      if (e.GM && e.GM.aiOpenBase && e.GM.aiOpenBase(e, q)) continue;
       const bx = e.baseX[q], by = e.baseY[q];
       const tankIn = Math.abs(mx - bx) <= 13 && Math.abs(my - by) <= 20;   // inside or in a doorway
       const goalIn = Math.abs(gx - bx) <= 16 && Math.abs(gy - by) <= 16;
