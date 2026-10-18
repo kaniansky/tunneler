@@ -219,11 +219,11 @@ const STRINGS_EN = {
       ["Split screen:  ", "the original game - two players on one keyboard, {9}BLUE{3} on the left " +
         "half of the screen and {10}GREEN{3} on the right.  First choose the map size, the rounds to " +
         "win and the round time."],
-      ["Skirmish:  ", "you drive {9}BLUE{3} with either set of keys against 1 to 7 computer tanks.  " +
-        "For each of the other colors choose nobody or a computer tank and its level, and every " +
-        "tank's team (1-8); then the map size, rounds to win, round time, friendly fire, view and " +
-        "after death.  <ESC> during play ends the match; <ESC> on the game's menu goes back to the " +
-        "settings."],
+      ["Skirmish:  ", "your own game against 1 to 7 computer tanks, driven with either set of keys.  Each of " +
+        "the 8 colors is you, nobody or a computer tank (easy, medium, hard), with its team (1-8) " +
+        "- you can play any color; then the mode, map size, rounds to win, round time, friendly " +
+        "fire, view, after death and base repairs.  <ESC> during play ends the match; <ESC> on " +
+        "the game's menu goes back to the settings."],
       ["Online game:  ", "2 to 8 tanks on different computers, some of them may be computer tanks.  Online play " +
         "needs a name (asked the first time, changed in Settings).  Create a game - its name, " +
         "listed publicly or private (joined with its invite link), spectators allowed or not - or " +
@@ -2043,8 +2043,7 @@ class TunnelerEngine {
     this.textColor(11);
     this.gotoXY(19 - (visLen(st.title) >> 1), 1);
     this.write(st.title);
-    const perTank = this.perTankWins(), winT = this.matchWinnerTeam();
-    const members = perTank ? Array.from({ length: N }, (_, i) => i + 1).filter(p => this.matchWinner(p)) : winT >= 0 ? this.teamMembers(winT) : [];
+    const perTank = this.perTankWins();
     const name = p => UniText.slice(this.playerName(p), 9);
     let nw = 0;
     for (let p = 1; p <= N; p++) nw = Math.max(nw, visLen(name(p)));
@@ -2072,31 +2071,7 @@ class TunnelerEngine {
       this.write(p === this.youPlayer ? "\x11" + " ".repeat(nw - visLen(n) - 1) : " ".repeat(nw - visLen(n)), this.num(fired, 5), this.num(hit, 5), this.num(pct + "%", 5),
         this.num(this.metersDug[p], 6), this.num(modeStat ? modeStat(p) : this.metersMoved[p], 6));
     }
-    if (perTank && members.length > 1) {
-      // several tanks reached winScore together: their names (as many as fit, "+n" for the rest)
-      this.gotoXY(x0, y + 2);
-      this.textColor(6);
-      this.write(st.winner);
-      let room = 37 - x0 - visLen(st.winner) - 1, i = 0;
-      for (; i < members.length; i++) {
-        const n = name(members[i]), need = (i ? 2 : 0) + visLen(n) + (i < members.length - 1 ? 3 : 0);
-        if (i && need > room) break;
-        this.textColor(6); if (i) this.write(", ");
-        this.textColor(this.playerTextColor(members[i])); this.write(n);
-        room -= (i ? 2 : 0) + visLen(n);
-      }
-      this.textColor(6);
-      this.write(i < members.length ? " +" + (members.length - i) : ".");
-    } else if (winT >= 0) {
-      this.gotoXY(x0, y + 2);
-      this.textColor(6);
-      this.write(st.winner);
-      const solo = members.length === 1 ? members[0] : 0;
-      this.textColor(solo ? this.playerTextColor(solo) : 15);
-      this.write(solo ? this.playerName(solo) : this.teamName(winT));
-      this.textColor(6);
-      this.write(".");
-    }
+    // (no "The winner is ..." line: the winners' names blink in the table)
     this.statsSettings();
   }
   // a round's end for the statistics (display only): winner (classic 1 / 2, 0 = none; extended a team

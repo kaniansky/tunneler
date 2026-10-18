@@ -232,6 +232,12 @@ function play(search) {
     assert.strictEqual(ui.spec.items[ui.sel].key, "slot3", "a click past the team selects the row");
     assert.strictEqual(st.get("tunneler.cpu.slots"), before, "... and changes nothing");
     ok("vs computer slot rows: clicks on the who / team columns cycle them (right click back), elsewhere select");
+    // a switch row (Map size): a click forward, a right click back
+    ui.click(at("size", 2));
+    assert.strictEqual(st.get("tunneler.cpu.size"), "large", "click on Map size: medium -> large");
+    assert(ui.backClick(at("size", 2)) && ui.backClick(at("size", 2)), "right click taken by the switch");
+    assert.strictEqual(st.get("tunneler.cpu.size"), "small", "right click twice: large -> medium -> small");
+    ok("switch rows: a click steps forward, a right click back");
   }
   // remembered
   env = makeEnv("", store);
@@ -368,16 +374,17 @@ function play(search) {
   e.tankX = [0, 100, 200, 300, 400, 500]; e.tankY = [0, 10, 20, 30, 40, 50];
   const alive = (...on) => { e.alive = [false, ...on]; return v.layout(); };
   same(alive(true, true, true, true, true).cells, [0, 3], "alive: the scope's views (own team)");
-  // "others" (watch all): every tank still alive, own team's first - whatever the view limit
+  // "others" (watch all): the player's own views (view team: you + YELLOW) stay - a destroyed one black with
+  // DESTROYED - plus every other tank still alive, own team's first - whatever the view limit
   e.killedBy[1] = 3;                                        // CYAN shot you
   let L = alive(false, true, true, true, true);
-  same([L.cells, !!L.labels], [[3, 1, 2, 4], true], "watch all: everyone alive, own team's first (YELLOW), labeled");
+  same([L.cells, !!L.labels], [[0, 3, 1, 2, 4], true], "watch all: your views first (you, YELLOW), then everyone alive, labeled");
   assert.strictEqual(v.listenTo(0), 2, "sounds from the tank that destroyed you (CYAN)");
   same(v.hearAt(0, e), { x: 300, y: 30 }, "heard at CYAN");
   e.killedBy[3] = 5;                                        // TEAL shot CYAN
-  same(alive(false, true, false, true, true).cells, [3, 1, 4], "CYAN destroyed too: the rest");
+  same(alive(false, true, false, true, true).cells, [0, 3, 1, 4], "CYAN destroyed too: your views and the rest");
   assert.strictEqual(v.listenTo(0), 4, "sounds from CYAN's killer (TEAL)");
-  same(alive(false, false, false, false, false).cells, [0], "nobody left: only your own view...");
+  same(alive(false, false, false, false, false).cells, [0, 3], "nobody left: your own views...");
   assert(v.blackedOut(0, e), "... black (DESTROYED)");
   same(alive(true, false, false, false, false).cells, [0, 3], "next round (own tank alive): back to normal");
   assert.strictEqual(v.listenTo(0), 0, "own tank alive: sounds fade from it again");
@@ -388,15 +395,15 @@ function play(search) {
     vk.snap = { screen: "play", mode: "lores", views: ek.views || [] };
     ek.killedBy = [0, 0, 0, 0, 0, 0];
     const al = (...on) => { ek.alive = [false, ...on]; return vk.layout(); };
-    same(al(false, true, true, true, true).cells, [3], "watch killer, no killer (energy): the first alive, own team's first");
+    same(al(false, true, true, true, true).cells, [0, 3], "watch killer, no killer (energy): your views (the first alive, YELLOW, is one)");
     al(true, true, true, true, true);
     ek.killedBy[1] = 3;
     const K = al(false, true, true, true, true);
-    same([K.cells, K.cols, !!K.labels], [[2], 1, true], "watch killer: the tank that destroyed you (CYAN), labeled");
+    same([K.cells, !!K.labels], [[0, 3, 2], true], "watch killer: your views + the tank that destroyed you (CYAN), labeled");
     ek.killedBy[3] = 5;
-    same(al(false, true, false, true, true).cells, [4], "CYAN destroyed: its killer (TEAL)");
+    same(al(false, true, false, true, true).cells, [0, 3, 4], "CYAN destroyed: its killer (TEAL)");
     ek.killedBy[4] = 2;
-    same(al(false, true, false, true, true).cells, [4], "stays on the watched tank while it lives");
+    same(al(false, true, false, true, true).cells, [0, 3, 4], "stays on the watched tank while it lives");
     assert.strictEqual(vk.listenTo(0), 4, "sounds from the watched tank");
   }
   // "team" (watch team): all teammates still alive, black once none is left
@@ -404,7 +411,7 @@ function play(search) {
   vt.snap = { screen: "play", mode: "lores", views: et.views || [] };
   et.killedBy = [0, 3, 0, 0, 0, 0]; et.tankX = e.tankX; et.tankY = e.tankY;
   et.alive = [false, false, true, true, true, true];
-  same(vt.layout().cells, [3], "watch team: your teammate (YELLOW) - not your killer, whatever the view limit");
+  same(vt.layout().cells, [0, 3], "watch team: your view (DESTROYED) + your teammate (YELLOW) - not your killer, whatever the view limit");
   {   // while you live: a destroyed teammate's view is black (every setting but "wreck")
     const tv = play(link + "&watch=team&view=team"), tvv = tv.tunnelerViews(), tve = tv.tunnelerEngine();
     tvv.snap = { screen: "play", mode: "lores", views: tve.views || [] };
@@ -436,17 +443,17 @@ function play(search) {
   same(vo.hearAt(0, eo), { x: 100, y: 10 }, "wreck: heard at the wreck, not at the killer");
   assert(!v.blackedOut(0, e), "others: never black");
   // classic (you BLUE against GREEN): out -> GREEN's half, labeled
-  {   // (watch all ignores the view limit: own view only, still GREEN's half once you're out)
+  {   // (watch all ignores the view limit: your own half stays, GREEN's half is added once you're out)
     const cs = play("?mode=cpu&slots=0:you:1,1:normal:2&watch=1"), csv = cs.tunnelerViews(), cse = cs.tunnelerEngine();
     csv.snap = { screen: "play", mode: "lores" }; cse.alive = [false, false, true];
-    same([csv.layout().kind, csv.layout().cells], ["grid", [1]], "classic out, view self, watch all: GREEN's half");
+    same([csv.layout().kind, csv.layout().cells], ["grid", [0, 1]], "classic out, view self, watch all: your half (DESTROYED) + GREEN's");
   }
   const c = play("?mode=cpu&slots=0:you:1,1:normal:2&watch=1&view=everyone"), cv = c.tunnelerViews(), ce = c.tunnelerEngine();
   cv.snap = { screen: "play", mode: "lores" };
   ce.alive = [false, true, true];
   same(cv.layout().cells, [0, 1], "classic alive, everyone: both halves");
   ce.alive = [false, false, true];
-  same([cv.layout().kind, cv.layout().cells, !!cv.layout().labels], ["grid", [1], true], "classic out: GREEN's half");
+  same([cv.layout().kind, cv.layout().cells, !!cv.layout().labels], ["grid", [0, 1], true], "classic out, view everyone: still both halves (yours DESTROYED)");
   // you in another color: the marker follows "you"
   assert.strictEqual(play("?mode=cpu&slots=" + encodeURIComponent("0:hard:1,4:you:2")).tunnelerEngine().youPlayer, 2, "you = WHITE (player 2)");
   // split screen: two humans - no marker, no watching; the settings (size / rounds) still listed

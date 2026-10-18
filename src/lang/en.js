@@ -29,7 +29,7 @@ Lang.register("en", {
   "cpu.view.i1": "Show only your own view screen, or the", "cpu.view.i2": "computer's too (like the split-screen original).",
   "level.normal": "easy", "level.hard": "medium", "level.expert": "hard",
   // vs computers with 1-7 opponents / teams, spectator view modes (views.js)
-  "home.cpu.i1n": "Play {blue} against 1 to 7 computer-driven tanks.",
+  "home.cpu.i1n": "Your own game against 1 to 7 AI tanks: pick your color, teams and mode.",
   "cpu.start.n": "Start a game against {n} computer tanks ({level}).", "cpu.start.t": "Start a team game against {n} computer tanks ({level}).",
   "cpu.all": "You see every tank's view screen.", "cpu.view.all": "all", "cpu.view.i3": "computer tanks' too, side by side.",
   "cpu.opp": "Opponents: ", "cpu.opp.i1": "How many computer tanks you fight.", "cpu.opp.i2": "1 is the original two-player game.",

@@ -256,8 +256,10 @@ class ViewModes {
     const labels = this.opts.labels !== false && play && !!this.engine();
     if (play && this.scope) {
       const out = this.outCells();                   // watching the others after the own tank is out
-      // (nobody left to watch: only the own view, black)
-      const cells = out || (this.ghostNone ? [Math.min(this.scope.own, this.nPlayers() - 1)] : this.scopeCells());
+      // after death the views the player chose stay (the own one first, a destroyed one black with
+      // DESTROYED), plus the ones the after-death setting adds; nobody left to watch: those views, black
+      const scope = this.scopeCells();
+      const cells = out ? scope.concat(out.filter(c => !scope.includes(c))) : scope;
       if (!s.views && !(labels && (cells.length > 1 || out))) return { kind: "display", crop: cells.length > 1 ? null : cells[0] === 1 ? "green" : "blue" };
       const c = cells.length, cols = c <= 4 ? c : Math.ceil(c / 2);
       return { kind: "grid", cells, cols, rows: Math.ceil(c / cols), labels: labels && (c > 1 || !!out) };

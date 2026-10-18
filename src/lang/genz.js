@@ -28,7 +28,7 @@ Lang.register("genz", {
   "cpu.view.i1": "Only your own screen, or peek at the", "cpu.view.i2": "bot's too (like the split-screen OG).",
   "level.normal": "chill", "level.hard": "mid", "level.expert": "goated",
   // vs computers with 1-7 opponents / teams, spectator view modes (views.js)
-  "home.cpu.i1n": "Play {blue} vs 1 to 7 bot tanks.",
+  "home.cpu.i1n": "Your own game vs 1 to 7 bots: pick your color, squads and mode.",
   "cpu.start.n": "Run it vs {n} bot tanks ({level}).", "cpu.start.t": "Team up vs {n} bot tanks ({level}).",
   "cpu.all": "You see every tank's screen. Big brain.", "cpu.view.all": "all", "cpu.view.i3": "bots' screens too, side by side.",
   "cpu.opp": "Opps: ", "cpu.opp.i1": "How many bot tanks you're up against.", "cpu.opp.i2": "1 is the OG two-player game.",
@@ -156,10 +156,11 @@ Lang.register("genz", {
         ["Split screen:  ", "the OG game - two besties on one keyboard, {9}BLUE{3} on the left half " +
           "of the screen and {10}GREEN{3} on the right.  Pick the map size, W's to win and round timer " +
           "first."],
-        ["Skirmish fr:  ", "you drive {9}BLUE{3} with either set of keys against 1 to 7 bots.  For " +
-          "every other color pick nobody or a bot and its level, plus every tank's squad (1-8); then " +
-          "map size, W's to win, round timer, friendly fire, POV and after you die.  <ESC> while " +
-          "playing ends the match; <ESC> on the game's menu takes you back to the settings."],
+        ["Skirmish fr:  ", "your own game vs 1 to 7 bots, either set of keys.  Each of the 8 colors is you, nobody " +
+          "or a bot (easy, medium, hard) with its squad (1-8) - play whatever color you vibe with; " +
+          "then the mode, map size, W's to win, round timer, friendly fire, POV, after you die and " +
+          "base repairs.  <ESC> while playing ends the match; <ESC> on the game's menu takes you " +
+          "back to the settings."],
         ["Online game:  ", "2 to 8 tanks on different computers, bots allowed.  Online needs a name (asked the first " +
           "time, rebrand in Settings).  Make a game - its name, public or private (people join with " +
           "the invite link), spectators or not - or join one from the list.  You drive your tank " +

@@ -27,7 +27,8 @@
 //                width}}]   input.value: raw Unicode, any printable characters may be typed / pasted;
 //                input.max / input.width: display columns (the end of a value wider than width is shown)
 //                {separator: true} draws a horizontal line across the box
-//                change(dir): a switch - Left / Right step its value back (-1) / forward (+1)
+//                change(dir): a switch - Left / Right step its value back (-1) / forward (+1); with
+//                the mouse a click goes forward (go), a right click back
 //                digit(n): number keys 1..8 on this row (e.g. a slot's team)
 //                zones: [{from, to, click(dir)}] - parts of the label (display columns from..to-1 of the
 //                label text) a mouse click acts on: left button dir +1, right button -1 (no browser menu
@@ -68,7 +69,7 @@ class DosUI {
     window.addEventListener("paste", e => { if (this.active()) this.paste(e); });
     canvas.addEventListener("mousemove", e => { if (this.active()) this.hover(e); });
     canvas.addEventListener("click", e => { if (this.active()) this.click(e); });
-    canvas.addEventListener("contextmenu", e => { if (this.active() && this.zoneClick(e, -1)) e.preventDefault(); });
+    canvas.addEventListener("contextmenu", e => { if (this.active() && (this.zoneClick(e, -1) || this.backClick(e))) e.preventDefault(); });
     canvas.addEventListener("wheel", e => { if (this.active() && this.wheel(e)) e.preventDefault(); }, { passive: false });
     // touch screens: dragging a page scrolls it (a tap still goes back)
     canvas.addEventListener("touchstart", e => {
@@ -437,6 +438,17 @@ class DosUI {
     const labelW = U.cols(it.label);
     const x0 = it.align === "left" ? 1 : this.centreStart(i, b, labelW);
     return x - x0;
+  }
+  // a right click on a switch (an item with change(dir)): its value one step back (a left click goes
+  // forward) - true when it took the click
+  backClick(ev) {
+    if (!this.spec || this.spec.page) return false;
+    const i = this.itemAt(ev), it = i >= 0 ? this.spec.items[i] : null;
+    if (!it || !it.change || it.disabled || it.static || it.zones) return false;
+    this.sel = i;
+    it.change(-1);
+    if (this.spec.items[this.sel] === it) this.draw();
+    return true;
   }
   // a click (dir +1) / right click (dir -1) on one of an item's zones: true when a zone took it
   zoneClick(ev, dir) {

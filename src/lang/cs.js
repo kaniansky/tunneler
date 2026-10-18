@@ -27,7 +27,7 @@ Lang.register("cs", {
   "cpu.view.i1": "Ukaž jen svou obrazovku, nebo i obrazovku", "cpu.view.i2": "počítače (jako v původní dělené obrazovce).",
   "level.normal": "lehká", "level.hard": "střední", "level.expert": "těžká",
   // vs computers with 1-7 opponents / teams, spectator view modes (views.js)
-  "home.cpu.i1n": "Hraj za {blue} proti 1 až 7 tankům počítače.",
+  "home.cpu.i1n": "Vlastní hra proti 1 až 7 AI tankům: barvu, týmy i režim si zvolíš.",
   "cpu.start.n": "Začni hru proti {n} tankům počítače ({level}).", "cpu.start.t": "Začni týmovou hru proti {n} tankům počítače ({level}).",
   "cpu.all": "Vidíš obrazovky všech tanků.", "cpu.view.all": "všechny", "cpu.view.i3": "tanků počítače, vedle sebe.",
   "cpu.opp": "Soupeři: ", "cpu.opp.i1": "Proti kolika tankům počítače hraješ.", "cpu.opp.i2": "1 je původní hra dvou hráčů.",
@@ -160,11 +160,11 @@ Lang.register("cs", {
         ["Dělená obrazovka:  ", "původní hra - dva hráči na jedné klávesnici, {9}MODRÝ{3} na levé " +
           "polovině obrazovky a {10}ZELENÝ{3} na pravé.  Nejdřív si zvol velikost mapy, počet kol k " +
           "výhře a čas kola."],
-        ["Potyčka:  ", "řídíš {9}MODRÝ{3} tank kteroukoli sadou kláves proti 1 až 7 " +
-          "počítačovým tankům.  Pro každou další barvu zvol nikoho nebo počítač a jeho úroveň, pro " +
-          "každý tank jeho tým (1-8); pak velikost mapy, kola k výhře, čas kola, přátelskou palbu, " +
-          "pohled a co po smrti.  <ESC> během hry ukončí zápas; <ESC> v menu hry tě vrátí k " +
-          "nastavení."],
+        ["Potyčka:  ", "vlastní hra proti 1 až 7 počítačovým tankům, řídíš kteroukoli sadou kláves.  Každá z 8 " +
+          "barev jsi ty, nikdo nebo počítačový tank (lehký, střední, těžký) s týmem (1-8) - hrát " +
+          "můžeš za jakoukoli barvu; pak režim, velikost mapy, kola k výhře, čas kola, přátelská " +
+          "palba, pohled, co po smrti a opravy v základně.  <ESC> během hry ukončí zápas; <ESC> v " +
+          "menu hry tě vrátí k nastavení."],
         ["Hra online:  ", "2 až 8 tanků na různých počítačích, některé z nich mohou být počítačové.  Hra online " +
           "potřebuje jméno (zeptá se na něj poprvé, změníš ho v Nastavení).  Vytvoř hru - její " +
           "jméno, veřejná nebo soukromá (připojuje se odkazem s pozvánkou), diváci povoleni nebo ne " +

@@ -406,7 +406,8 @@ function match(seed, opts, label) {
     if (sawMap && a.screen === "text" && !a.kbdInstalled && a.menuShift === -20) {
       const txt = screenText(a.vram);
       for (let p = 1; p <= N; p++) if (!txt.includes(a.playerName(p).slice(0, 9))) { fail(label + ": statistics miss " + a.colorName(p) + "\n" + txt); return res; }
-      check(txt.includes(a.strings.stats.winner.trim()), label + ": statistics without winner line\n" + txt);
+      // (the classic screen keeps the original's winner line; extended: the winners blink, no line)
+      check(txt.includes(a.strings.stats.winner.trim()) === !a.extended, label + ": statistics winner line only on the classic screen\n" + txt);
       sawStats = true;
       res.text = txt;
       break;
@@ -667,7 +668,7 @@ for (const c of Lang.codes) {
       if (rows.length || badGoto) fail(what + ": statistics wrap at row(s) " + rows.join(",") + "\n" + stats);
       for (let p = 1; p <= N; p++) check(stats.includes(e.playerName(p).slice(0, 9)), what + ": statistics miss player " + p);
       const winner = e.teamMembers(e.nTeams - 1).length === 1 ? e.playerName(e.teamMembers(e.nTeams - 1)[0]) : e.teamName(e.nTeams - 1);
-      check(stats.includes(S.stats.winner + winner + "."), what + ": statistics winner line\n" + stats);
+      check(!stats.includes(S.stats.winner) || !winner, what + ": no winner line in the statistics (the winners blink)\n" + stats);
       // round title: everything inside the screen, no wrapping, every player and team
       rows.length = 0; badGoto = 0;
       e.window(1, 1, 80, 25); e.clearScreen(); e.round = 3;
