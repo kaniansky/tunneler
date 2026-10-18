@@ -164,6 +164,13 @@ for (const goal of [10, 80]) {
   check(timed.rounds.length >= 1 && timed.rounds[0].winnerTeam === 1, "round time 2 min: GREEN, with more base left, wins at the time (" + JSON.stringify(timed.rounds[0]) + ")");
   const tie = runMatch({ mode: "siege", slots: slots([1, 2]), levels: [null, null], seed: 5, size: "small", roundTime: 2, maxFrames: 3000 });
   check(tie.rounds.length >= 1 && tie.rounds[0].winnerTeam === -1, "round time: both bases whole - nobody wins the round");
+  // a drawn round doesn't end the match: it is played again (the instructions say so in every language)
+  check(!tie.finished && tie.engine.matchActive !== false && tie.engine.GS.hp[1] === 30 && tie.engine.GS.hp[2] === 30,
+    "round time: a drawn round is played again, the match goes on with the bases whole");
+  const tie2 = runMatch({ mode: "siege", slots: slots([1, 2]), levels: [null, null], seed: 5, size: "small", roundTime: 2, maxFrames: 5200 });
+  check(!tie2.finished && tie2.rounds.length === 2 && tie2.rounds.every(r => r.winnerTeam === -1), "round time: a second draw - still no winner, the match goes on (" + JSON.stringify(tie2.rounds.map(r => r.winnerTeam)) + ")");
+  for (const [l, w] of [["en", "played again"], ["sk", "hrá znova"], ["cs", "hraje znovu"], ["uk", "грається знову"], ["ru", "переигрывается"], ["genz", "run it back"]])
+    check(GM.strings[l].instr.includes(w), "siege: the " + l + " instructions say a drawn round is played again");
   const none = runMatch({ mode: "siege", slots: slots([1, 2]), levels: [null, null], seed: 5, size: "small", maxFrames: 4000 });
   check(none.rounds.length === 0, "no round time: idle tanks don't end the round in 4000 frames");
   // no round time set: the mode's own 10 minutes (a stalemate can't run for ever); a set one is kept
