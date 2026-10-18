@@ -336,10 +336,10 @@
     const tw = Math.max(...[1, 8].map(n => W(T("pg.teamn", { n }))));
     return { nw, tw };
   }
-  // (infection / survival make their own teams: the seats' teams mean nothing - no team column)
+  // (infection / survival make their own teams: the seats' teams mean nothing - the team column gray)
   const ownTeams = () => !!(st && st.settings && TunnelerEngine.OWN_TEAMS.includes(st.settings.mode));
   function seatText(s, i, c) {
-    let name, team = ownTeams() ? "" : T("pg.teamn", { n: s.team }), ping = "";
+    let name, team = T("pg.teamn", { n: s.team }), ping = "";
     if (s.k) {
       name = Lang.enc(s.name);
       ping = s.ping != null ? s.ping + " ms" : "";
@@ -359,7 +359,8 @@
     const c = seatColumns(), locked = !!st.match, mine = mySeat();
     const teamZone = click => ({ from: 3 + c.nw, to: 3 + c.nw + c.tw, click });
     return st.seats.map((s, i) => {
-      const it = { key: "seat" + i, align: "left", label: seatText(s, i, c), attr: s.kind === "closed" && !s.k ? 8 : TEXT_COLORS[i] };
+      const it = { key: "seat" + i, align: "left", label: seatText(s, i, c), attr: s.kind === "closed" && !s.k ? 8 : TEXT_COLORS[i],
+        dim: ownTeams() ? [3 + c.nw, 3 + c.nw + c.tw] : null };
       if (locked) return Object.assign(it, { static: true });
       const host = isHost() && !s.k;                       // the host: a seat nobody sits on
       const kind = d => seatSet(i, { kind: cycle(SEAT_KINDS, s.kind, d) }), team = d => seatSet(i, { team: (s.team - 1 + d + 8) % 8 + 1 });

@@ -219,14 +219,15 @@
         s.kind = step(KINDS.filter(k => k !== "you" || free || s.kind === "you"), s.kind, d);
         redraw();
       };
-      // (infection / survival make their own teams: no team column, nothing to set - the mode's description instead)
+      // (infection / survival make their own teams: the team column gray, nothing to set - the mode's description instead)
       const own = (TunnelerEngine.OWN_TEAMS || []).includes(gmode);
-      const teamText = own ? "" : T("lc.team", { n: s.team });
+      const teamText = T("lc.team", { n: s.team });   // (shown gray when it doesn't apply: the row stays put)
       return {
         key: "slot" + i, align: "left", attr: TEXT_COLORS[i] & 0x0F,
         // (like the online lobby's seats: "►" in front of your own tank)
         label: (s.kind === "you" ? "\x10" : " ") + " " + who(s.kind).padEnd(whoW) + teamText,
         // mouse: a click on the who column / the team cycles it (right click: back), elsewhere selects
+        dim: own ? [2 + whoW, 2 + whoW + teamText.length] : null,
         zones: own ? [{ from: 2, to: 2 + whoW - 1, click: setKind }]
           : [{ from: 2, to: 2 + whoW - 1, click: setKind }, { from: 2 + whoW, to: 2 + whoW + teamText.length, click: setTeam }],
         info: own ? [s.kind === "you" ? T("lc.you.i1") : T("lc.slot.i1", { levels: levelsText() }), T("gm." + gmode + ".i")]
@@ -237,6 +238,8 @@
       };
     });
     const startInfo = S.error ? [{ text: T(S.error), color: 12 }]
+      // (infection / survival make their own sides: the mode's description, not the slots' teams)
+      : (TunnelerEngine.OWN_TEAMS || []).includes(gmode) ? [T("gm." + gmode + ".i"), T(view === "everyone" ? "cpu.all" : view === "team" ? "cpu.team" : "cpu.own")]
       : [S.classic ? T("lc.go.1", { level: Lang.raw("level." + S.used[1].kind) })
         : S.teamGame ? T("lc.go.t", { t: S.nTeams, n: S.nCpu, m: S.mates }) : T("lc.go.n", { n: S.nCpu }),
       T(view === "everyone" ? (S.classic ? "cpu.both" : "cpu.all") : view === "team" && S.mates > 0 ? "cpu.team" : "cpu.own")];

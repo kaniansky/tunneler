@@ -539,7 +539,8 @@ only `ai.rng()`.
   are in it, that team gets a point; the first to 1000 points (~55 s) wins the round; at the round time the
   most points. Destroyed tanks come back at their base after ~3 s (owner: otherwise fights ended the rounds
   before the zone mattered). hud: own team's points as 0..99 %.
-- **shrink** (shrinking world): a safe circle around the middle shrinks from covering the map to sc(40)
+- **shrink** (shrinking world): a safe area around the middle - an ellipse with the map's 2:1
+  proportions (owner: not a circle; half-axes r and r / 2) - shrinks from covering the map to sc(56) x sc(28)
   over 3 minutes; outside it a tank loses shield (~2 % of MaxPower per second, more later) and bases
   outside don't help. Its edge is marked (dots, red). Last team standing wins (usual elimination). hud:
   seconds until the next shrink step, or nothing.
@@ -558,3 +559,7 @@ only `ai.rng()`.
   `eliminationEnds: false`. hud: own kills / scoreText kills.
 Every mode's AI plays it (goes for gold / flags / the zone / bases, keeps inside the safe area...) well
 enough that AI-only matches finish.
+- Infection / survival: the seats' teams don't apply - the team column stays (gray, DosUI `dim`) so the
+  screens don't jump, and nothing there can be changed (owner).
+- Deathmatch: "Kills to win" (5, 10, 15, 20, 30, 50; NetProto KILLS, engine killsToWin) replaces "Rounds to
+  win"; one round decides the match (owner).

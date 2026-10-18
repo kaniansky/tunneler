@@ -172,7 +172,8 @@ function loadPage(page, search, stored, version) {
     // survival / infection make their own teams: no team column, no team to change
     ws.recv(mkSt({ settings: Object.assign({}, SETTINGS, { mode: "survival" }) }));
     await wait(150);
-    assert(!/team \d/.test(shown()) && lui.spec.items.find(it => it.key === "seat1").static, "survival: no team column, your seat read-only: " + shown());
+    assert(/team \d/.test(shown()) && lui.spec.items.find(it => it.key === "seat1").static && lui.spec.items.find(it => it.key === "seat1").dim,
+      "survival: the team column stays (gray), your seat read-only: " + shown());
     ws.recv(mkSt());
     await wait(150);
     // settings (host): Left / Right

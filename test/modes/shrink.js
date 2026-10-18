@@ -12,7 +12,8 @@ const idle = e => ({ bits: new Array(e.nPlayers).fill(0), keys: [] });
 const start = (seed, o) => startEngine(seed, Object.assign({ mode: "shrink", size: "medium", winScore: 3, slots: slots([1, 2]) }, o));
 // fast-forward the round's clock: t engine steps into the round
 const at = (e, t) => { e.roundStart = e.tick - t; };
-const d2 = (e, x, y) => (x - e.GS.cx) * (x - e.GS.cx) + (y - e.GS.cy) * (y - e.GS.cy);
+// the safe area is an ellipse (the map's 2:1): distances measured with y stretched by ax
+const d2 = (e, x, y) => (x - e.GS.cx) * (x - e.GS.cx) + (e.GS.ax * (y - e.GS.cy)) * (e.GS.ax * (y - e.GS.cy));
 const outside = (e, p, r) => d2(e, e.tankX[p], e.tankY[p]) > r * r;
 // step until the round is over (the round number changes); returns the frames stepped
 function toRoundEnd(e, max) {
@@ -28,9 +29,9 @@ check(!!M, "shrink: registered");
 for (const size of ["small", "medium", "large"]) {
   const e = start(1, { size });
   const G = e.GS, rs = G.rs;
-  check(rs.length === M.STEPS + 1 && rs[0] * rs[0] >= G.cx * G.cx + G.cy * G.cy && rs[M.STEPS] === e.sc(40) &&
+  check(rs.length === M.STEPS + 1 && rs[0] * rs[0] >= G.cx * G.cx + (G.ax * G.cy) * (G.ax * G.cy) && rs[M.STEPS] === e.sc(56) && G.ax === 2 &&
     rs.every((r, k) => !k || r < rs[k - 1]),
-    size + ": the circle shrinks in " + M.STEPS + " steps from covering the map (" + rs[0] + ") to sc(40) = " + rs[M.STEPS]);
+    size + ": the ellipse shrinks in " + M.STEPS + " steps from covering the map (" + rs[0] + ") to sc(56) = " + rs[M.STEPS]);
   const T = M.STEP_T, C = M.CLOSE_T;
   const mid = M.radius(e, T - (C >> 1));
   check(M.radius(e, 0) === rs[0] && M.radius(e, T - C - 1) === rs[0] && mid < rs[0] && mid > rs[1] &&
@@ -128,7 +129,7 @@ for (const size of ["small", "medium", "large"]) {
     const dd = Math.sqrt(d2(e, x, y));
     if (Math.abs(dd - r) > 1.5) far++;
   }
-  check(red > 20 && far === 0, "draw: red dots on the circle's edge in the view (" + red + " dots)");
+  check(red > 20 && far === 0, "draw: red dots on the ellipse's edge in the view (" + red + " dots)");
   e.objRestore();
   let same = true;
   for (let i = 0; i < before.length; i++) if (before[i] !== e.world[i]) { same = false; break; }

@@ -35,6 +35,7 @@
 //                then); a click elsewhere on a row with zones only selects it
 //                info lines may be {text, color, onClick} - clickable (e.g. the invite link)
 //                static: a read-only text row (never selected; attr, default light gray)
+//                dim: [from, to] - label columns from..to-1 drawn gray (a part that doesn't apply now)
 //
 // ui.showPage(kind, uiMode, back[, engineOpts]) shows the game's own Instructions / Information page full screen
 // (drawn by an engine instance, like in the game); Enter, Esc or a click calls back(). A page longer
@@ -220,6 +221,9 @@ class DosUI {
     const attr = it.static ? it.attr || 0x07 : i === this.sel ? SEL : it.disabled ? DISABLED : it.attr || ATTR;
     for (let c = 0; c < b.w; c++) t.vram[o + c * 2 + 1] = attr;
     const x0 = (it.align === "left" ? 1 : this.centreStart(i, b, labelW + valueW)) + labelW;
+    // it.dim = [from, to]: label columns shown gray (disabled), e.g. a column that doesn't apply now
+    if (it.dim && i !== this.sel)
+      for (let c = x0 - labelW + it.dim[0]; c < Math.min(b.w, x0 - labelW + it.dim[1]); c++) t.vram[o + c * 2 + 1] = DISABLED;
     if (it.input && !it.input.value && value)
       for (let c = x0; c < Math.min(b.w, x0 + valueW); c++) t.vram[o + c * 2 + 1] = i === this.sel ? 0x57 : DISABLED;
     if (it.input && i === this.sel) {                     // blinking cursor after the text

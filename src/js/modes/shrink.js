@@ -1,6 +1,6 @@
 // Game mode "shrink" - shrinking world (docs/DESIGN-8P.md 27).
 //
-// A safe circle around the middle of the map shrinks, in STEPS steps over 3 minutes of each round, from
+// A safe area (an ellipse) around the middle of the map shrinks, in STEPS steps over 3 minutes of each round, from
 // covering the whole map to a radius of sc(40). Each step closes over CLOSE seconds (the radius goes down
 // a pixel at a time), then holds until the next one. A tank outside the circle loses shield every frame
 // (about 2 % of the maximum a second, more with every step) and a base outside the circle gives nothing.
@@ -42,7 +42,9 @@ function level(G, t) {
   for (let k = 1; k <= STEPS; k++) if (t >= k * G.stepT - G.closeT) n++;
   return n;
 }
-const inside = (G, x, y, r) => r > 0 && (x - G.cx) * (x - G.cx) + (y - G.cy) * (y - G.cy) <= r * r;
+// the safe area is an ellipse with the map's proportions (2:1): r = its horizontal half-axis, r / ax the
+// vertical one (ax = worldW / worldH) - owner: not a circle
+const inside = (G, x, y, r) => r > 0 && (x - G.cx) * (x - G.cx) + (G.ax * (y - G.cy)) * (G.ax * (y - G.cy)) <= r * r;
 const cheb = (ax, ay, bx, by) => Math.max(Math.abs(ax - bx), Math.abs(ay - by));
 
 // AI: the radius it aims to stay within (the circle 8 s from now, minus a margin), and the margin
@@ -57,7 +59,7 @@ function zoneWaypoint(ai, e, mx, my, rT) {
   let w = ai.shrinkWp;
   if (!w || w.key !== ai.roundKey || w.t > ai.t || ai.t - w.t > 300 || cheb(mx, my, w.x, w.y) < 8 || !inside(G, w.x, w.y, rT)) {
     const a = Math.floor(ai.rng() * 16), d = Math.floor(ai.rng() * rT * 0.8);
-    const x = G.cx + Math.trunc(SIN16[(a + 4) & 15] * d / 1000), y = G.cy + Math.trunc(SIN16[a] * d / 1000);
+    const x = G.cx + Math.trunc(SIN16[(a + 4) & 15] * d / 1000), y = G.cy + Math.trunc(SIN16[a] * d / 1000 / G.ax);
     const p = ai.intoInterior(e, x, y, G.cx, G.cy);
     w = ai.shrinkWp = { x: p.x, y: p.y, t: ai.t, key: ai.roundKey };
   }
@@ -71,24 +73,25 @@ E.registerMode("shrink", {
   STEPS, STEP_T, CLOSE_T, stepT: e => e.GS.stepT, closeT: e => e.GS.closeT,
   drain: (e, t) => DRAIN + DRAIN_STEP * level(e.GS, t),
   strings: {
-    en: { instr: "A safe circle around the middle of the map shrinks every 30 seconds, until after 3 minutes only a small spot is left. Outside it your shield drains away - faster with every step - and bases outside it give you nothing. The red dots mark its edge, and the number beside your instrument panel counts down to the next step. The last team standing wins the round." },
-    sk: { instr: "Bezpečný kruh okolo stredu mapy sa každých 30 sekúnd zmenší, až po 3 minútach ostane len malé miesto. Mimo neho ti ubúda štít - s každým krokom rýchlejšie - a základne mimo neho ti nedajú nič. Jeho okraj označujú červené bodky a číslo pri prístrojovom paneli odpočítava čas do ďalšieho kroku. Kolo vyhráva tím, ktorý zostane posledný." },
-    cs: { instr: "Bezpečný kruh kolem středu mapy se každých 30 sekund zmenší, až po 3 minutách zbude jen malé místo. Mimo něj ti ubývá štít - s každým krokem rychleji - a základny mimo něj ti nedají nic. Jeho okraj označují červené tečky a číslo u přístrojového panelu odpočítává čas do dalšího kroku. Kolo vyhrává tým, který zůstane poslední." },
-    uk: { instr: "Безпечне коло навколо центру мапи стискається кожні 30 секунд, аж поки через 3 хвилини не лишиться маленька ділянка. Поза ним твій щит тане - з кожним кроком швидше - а бази поза ним нічого не дають. Червоні точки позначають його край, а число біля панелі приладів відлічує час до наступного кроку. Раунд виграє команда, що залишиться останньою." },
-    ru: { instr: "Безопасный круг вокруг центра карты сжимается каждые 30 секунд, пока через 3 минуты не останется маленький участок. Вне его твой щит тает - с каждым шагом быстрее - а базы вне его ничего не дают. Красные точки отмечают его край, а число у панели приборов отсчитывает время до следующего шага. Раунд выигрывает команда, оставшаяся последней." },
+    en: { instr: "A safe area (an ellipse) around the middle of the map shrinks every 30 seconds, until after 3 minutes only a small spot is left. Outside it your shield drains away - faster with every step - and bases outside it give you nothing. The red dots mark its edge, and the number beside your instrument panel counts down to the next step. The last team standing wins the round." },
+    sk: { instr: "Bezpečná oblasť (elipsa) okolo stredu mapy sa každých 30 sekúnd zmenší, až po 3 minútach ostane len malé miesto. Mimo nej ti ubúda štít - s každým krokom rýchlejšie - a základne mimo nej ti nedajú nič. Jej okraj označujú červené bodky a číslo pri prístrojovom paneli odpočítava čas do ďalšieho kroku. Kolo vyhráva tím, ktorý zostane posledný." },
+    cs: { instr: "Bezpečná oblast (elipsa) kolem středu mapy se každých 30 sekund zmenší, až po 3 minutách zbude jen malé místo. Mimo ni ti ubývá štít - s každým krokem rychleji - a základny mimo ni ti nedají nic. Její okraj označují červené tečky a číslo u přístrojového panelu odpočítává čas do dalšího kroku. Kolo vyhrává tým, který zůstane poslední." },
+    uk: { instr: "Безпечна зона (еліпс) навколо центру мапи стискається кожні 30 секунд, аж поки через 3 хвилини не лишиться маленька ділянка. Поза нею твій щит тане - з кожним кроком швидше - а бази поза нею нічого не дають. Червоні точки позначають її край, а число біля панелі приладів відлічує час до наступного кроку. Раунд виграє команда, що залишиться останньою." },
+    ru: { instr: "Безопасная зона (эллипс) вокруг центра карты сжимается каждые 30 секунд, пока через 3 минуты не останется маленький участок. Вне её твой щит тает - с каждым шагом быстрее - а базы вне её ничего не дают. Красные точки отмечают её край, а число у панели приборов отсчитывает время до следующего шага. Раунд выигрывает команда, оставшаяся последней." },
     genz: { instr: "The zone around the middle of the map closes in every 30 seconds, and after 3 minutes it's basically a tiny dot. Outside it your shield just melts - faster every step, no cap - and bases out there are straight up useless. Red dots = the edge, and the number by your dashboard counts down to the next squeeze. Last team alive takes the W." },
   },
 
   // match start: the middle, the radius after every step; the final circle's rock becomes dirt
   init(e) {
     const G = e.GS;
-    G.cx = e.worldW >> 1; G.cy = e.worldH >> 1;
+    G.cx = e.worldW >> 1; G.cy = e.worldH >> 1; G.ax = Math.max(1, Math.round(e.worldW / e.worldH));
     G.stepT = STEP_T; G.closeT = CLOSE_T;
-    const r0 = Math.ceil(Math.sqrt(G.cx * G.cx + G.cy * G.cy)) + 1, rMin = e.sc(40);
+    // (from covering the whole map - its corners - to a final ellipse about as big as a circle of sc(40))
+    const r0 = Math.ceil(Math.sqrt(G.cx * G.cx + (G.ax * G.cy) * (G.ax * G.cy))) + 1, rMin = e.sc(56);
     G.rs = [];
     for (let k = 0; k <= STEPS; k++) G.rs.push(r0 + Math.trunc((rMin - r0) * k / STEPS));
     const R = rMin + Math.max(4, e.sc(8)), pc = E.PixelClassExt;
-    for (let y = G.cy - R; y <= G.cy + R; y++)
+    for (let y = G.cy - Math.ceil(R / G.ax); y <= G.cy + Math.ceil(R / G.ax); y++)
       for (let x = G.cx - R; x <= G.cx + R; x++)
         if (inside(G, x, y, R) && pc[e.getPixel(x, y)] === 4) e.setPixel(x, y, ((x ^ y) & 1) ? 8 : 6);
     G.dotsR = -1; G.dots = null;                  // (draw's cache: the edge's dots for one radius)
@@ -117,7 +120,7 @@ E.registerMode("shrink", {
       const n = Math.max(16, Math.round(2 * Math.PI * r / 4)), pts = new Int32Array(n * 2);
       for (let i = 0; i < n; i++) {
         const a = 2 * Math.PI * i / n;
-        pts[i * 2] = G.cx + Math.round(Math.cos(a) * r); pts[i * 2 + 1] = G.cy + Math.round(Math.sin(a) * r);
+        pts[i * 2] = G.cx + Math.round(Math.cos(a) * r); pts[i * 2 + 1] = G.cy + Math.round(Math.sin(a) * r / G.ax);
       }
       G.dotsR = r; G.dots = pts;
     }
