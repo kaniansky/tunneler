@@ -1,9 +1,10 @@
 "use strict";
 // Game mode "siege" (base siege, docs/DESIGN-8P.md 27): the rules in scripted situations (shots on base
 // walls, no damage from the own team, a fallen base turns to rubble and gives nothing, respawns while the
-// base stands, the last team in wins, the round time), the hud / score / drawing, and AI matches (the AI
-// shoots the bases down; 2 and 8 tanks, teams and free-for-all, small and large maps, round time, modifiers,
-// determinism). Run by test/modes-check.js.
+// base stands, the last team in wins the round and the match - one round, the round time), the goal (Base
+// strength: the hits a base takes, e.goal, default 30), the hud / score / drawing, and AI matches (the AI
+// shoots the bases down; 2 and 8 tanks, teams and free-for-all, small, medium and large maps, base strength
+// 10 and 80, round time, modifiers, determinism). Run by test/modes-check.js.
 const H = require("../modes-harness.js");
 const { E, check, slots, runMatch, startEngine } = H;
 const GM = E.MODES.siege;
@@ -29,6 +30,8 @@ for (const l of ["en", "sk", "cs", "uk", "ru", "genz"])
 {
   const e = startEngine(21, { mode: "siege", slots: slots([1, 2]), size: "small" });
   idle(e);
+  check(e.goal === 30 && E.GOALS.siege.def === 30, "goal: the default base strength is 30");
+  check(e.winScore === 1, "one round decides the match (winScore " + e.winScore + ")");
   check(e.GS.hp[1] === 30 && e.GS.hp[2] === 30, "every base starts with 30 hit points");
   check(e.GS.spots.slice(1).every(s => s.length > 0), "firing spots found at every base (" + e.GS.spots.slice(1).map(s => s.length).join(", ") + ")");
   const bx = e.baseX[1], by = e.baseY[1];
@@ -55,6 +58,8 @@ for (const l of ["en", "sk", "cs", "uk", "ru", "genz"])
   check(e.endTimer >= 0 && e.modeWinner === e.team(2), "no base and no tank left: the team is out, the other wins");
   for (let f = 0; f < 200 && e.screen === "play"; f++) idle(e);
   check(e.roundWinnerTeam === e.team(2) && e.wins[2] === 1, "the round goes to GREEN");
+  for (let f = 0; f < 400 && e.screen !== "map"; f++) idle(e);
+  check(e.screen === "map" && e.wins[2] === 1, "and the match: after the one round the end-of-match world map");
 }
 
 // ---- no damage from the own team (2 v 2, no friendly fire), nor from inside
@@ -100,15 +105,48 @@ for (const l of ["en", "sk", "cs", "uk", "ru", "genz"])
   e.killTankExt(2, e.tankX[2], e.tankY[2]);
   e.GS.hp[2] = 1;
   GM.shotHit(e, 1, e.baseX[2] + 17, e.baseY[2], e.playerColor(2));
-  const round = e.round;
   run(e, 5);
   check(!e.alive[2] && e.GS.back[2] === 0, "its base fell meanwhile: it stays out");
   check(e.endTimer >= 0 && e.modeWinner === e.team(1), "and BLUE's team wins the round");
-  for (let f = 0; f < 400 && e.round === round; f++) idle(e);
-  check(e.round === round + 1 && e.roundWinnerTeam === e.team(1) && e.wins[1] === 1 && e.wins[2] === 0, "BLUE's win counted, the next round starts");
-  for (let f = 0; f < 400 && e.screen !== "play"; f++) idle(e);
+  for (let f = 0; f < 400 && e.screen !== "map"; f++) idle(e);
+  check(e.roundWinnerTeam === e.team(1) && e.wins[1] === 1 && e.wins[2] === 0 && e.screen === "map",
+    "BLUE's win counted, no next round: the match is over");
+  // a rematch on the same engine: every base whole again, every tank back
+  for (let f = 0; f < 3000 && e.screen !== "play"; f++)
+    e.step({ bits: [0, 0], keys: e.screen === "map" ? [[32, 0x39]] : e.screen === "text" && f % 20 === 0 ? [[13, 0x1C]] : [] });
   idle(e);
-  check(e.GS.hp[1] === 30 && e.GS.hp[2] === 30 && wallClass(e, 2) === 3 && e.alive[2], "a new round: every base whole again, every tank back");
+  check(e.screen === "play" && e.GS.hp[1] === 30 && e.GS.hp[2] === 30 && wallClass(e, 2) === 3 && e.alive[2] && e.wins[1] === 0,
+    "a rematch: every base whole again, every tank back, no wins");
+}
+
+// ---- the goal (Base strength): every base takes e.goal hits; a fallen base ends the round and the match
+for (const goal of [10, 80]) {
+  const e = startEngine(31, { mode: "siege", slots: slots([1, 2]), size: "small", goal });
+  idle(e);
+  check(e.goal === goal && e.winScore === 1 && e.GS.hp[1] === goal && e.GS.hp[2] === goal, "goal " + goal + ": every base starts with " + goal + " hit points, one round");
+  check(GM.hud(e, 1).value === goal && GM.hud(e, 1).color === 14 && GM.scoreText(e, 1) === "base " + goal, "goal " + goal + ": hud / score text show it");
+  const bx = e.baseX[1], by = e.baseY[1], c = e.playerColor(1);
+  for (let i = 0; i < goal - 1; i++) GM.shotHit(e, 2, bx - 10, by - 17, c);
+  run(e, 3);
+  check(e.GS.hp[1] === 1 && GM.hud(e, 1).color === 12 && e.endTimer < 0, "goal " + goal + ": " + (goal - 1) + " hits - 1 left (red), the base stands");
+  // the draw: half the strength lost = half the top and bottom walls red
+  e.GS.hp[1] = goal / 2; e.objs = []; GM.draw(e);
+  const n = e.objs.length / 3; e.objRestore(); e.GS.hp[1] = 1;
+  check(n === 28, "goal " + goal + ": draw - half lost, half the walls red (" + n + " px)");
+  e.killTankExt(1, e.tankX[1], e.tankY[1]);
+  GM.shotHit(e, 2, bx - 10, by - 17, c);
+  check(e.GS.hp[1] === 0 && e.modeScore[2] === goal, "goal " + goal + ": the " + goal + "th hit - the base falls");
+  run(e, 3);
+  check(e.endTimer >= 0 && e.modeWinner === e.team(2), "goal " + goal + ": no base, no tank - GREEN wins the round");
+  for (let f = 0; f < 600 && e.screen !== "map"; f++) idle(e);
+  check(e.screen === "map" && e.wins[2] === 1, "goal " + goal + ": the match ends after that one round");
+}
+{
+  const e = startEngine(32, { mode: "siege", slots: slots([1, 2]), size: "small", goal: 25, winScore: 5 });
+  idle(e);
+  check(e.goal === 30 && e.GS.hp[1] === 30 && e.winScore === 1, "goal: not a choice (25) - the default 30; rounds to win ignored (winScore " + e.winScore + ")");
+  const e2 = startEngine(32, { mode: "siege", slots: slots([1, 2]), size: "small" });
+  check(e2.goal === 30, "goal: none given - the default 30");
 }
 
 // ---- the round time: the most base hit points left wins, a tie nobody; no limit = no end
@@ -159,6 +197,13 @@ for (const l of ["en", "sk", "cs", "uk", "ru", "genz"])
 
 // ---- AI matches: finish, bases do fall, deterministic
 const setups = [
+  { name: "2 tanks, small, strength 10", teams: [1, 2], levels: ["normal", "expert"], size: "small", goal: 10 },
+  { name: "2 tanks, small, strength 80", teams: [1, 2], levels: ["normal", "expert"], size: "small", goal: 80 },
+  { name: "2 v 2, small, strength 80", teams: [1, 2, 1, 2], levels: ["hard", "expert", "normal", "hard"], size: "small", goal: 80 },
+  { name: "2 tanks, medium, strength 10", teams: [1, 2], levels: ["hard", "expert"], size: "medium", goal: 10 },
+  { name: "2 tanks, medium, strength 80", teams: [1, 2], levels: ["hard", "expert"], size: "medium", goal: 80 },
+  { name: "4 free-for-all, medium, strength 80", teams: [1, 2, 3, 4], levels: ["hard", "normal", "expert", "hard"], size: "medium", goal: 80 },
+  { name: "2 v 2, medium, strength 10", teams: [1, 2, 1, 2], levels: ["hard", "expert", "normal", "hard"], size: "medium", goal: 10 },
   { name: "2 tanks, small", teams: [1, 2], levels: ["normal", "expert"], size: "small" },
   { name: "8 tanks free-for-all, small", teams: [1, 2, 3, 4, 5, 6, 7, 8], levels: ["normal", "hard", "expert", "normal", "hard", "expert", "normal", "hard"], size: "small" },
   { name: "4 v 4, medium, friendly fire", teams: [1, 2, 1, 2, 1, 2, 1, 2], levels: ["hard", "expert", "normal", "hard", "expert", "normal", "hard", "hard"], size: "medium", friendlyFire: true },
@@ -169,12 +214,16 @@ const setups = [
 ];
 for (const s of setups) {
   const o = { mode: "siege", slots: slots(s.teams), levels: s.levels, seed: 13, size: s.size, winScore: 1, maxFrames: s.maxFrames || 40000,
-    friendlyFire: s.friendlyFire, roundTime: s.roundTime, mods: s.mods };
+    friendlyFire: s.friendlyFire, roundTime: s.roundTime, mods: Object.assign({ goal: s.goal }, s.mods) };
+  const goal = s.goal || 30;
   let fallen = 0;
   const a = runMatch(Object.assign({ onFrame: e => { if (e.GS.hp) { const n = e.GS.hp.filter((h, i) => i && h === 0).length; if (n > fallen) fallen = n; } } }, o));
-  check(a.finished && a.rounds.length >= 1, "siege / " + s.name + ": the match finishes (" + a.frames + " frames, rounds " + JSON.stringify(a.rounds.map(r => r.winnerTeam)) + ")");
-  check(fallen >= 1 && a.engine.modeScore.reduce((x, y) => x + y, 0) >= 30, "siege / " + s.name + ": the bots shoot bases down (" + fallen + " fallen at most)");
-  if (s.size === "small") {
+  check(a.finished && a.rounds.filter(r => r.winnerTeam >= 0).length === 1 && a.rounds[a.rounds.length - 1].winnerTeam >= 0 && a.engine.goal === goal, "siege / " + s.name + ": the match finishes with its first decided round (" + a.frames + " frames, rounds " + JSON.stringify(a.rounds.map(r => r.winnerTeam)) + ")");
+  check(fallen >= 1 && a.engine.modeScore.reduce((x, y) => x + y, 0) >= goal, "siege / " + s.name + ": the bots shoot bases down (" + fallen + " fallen at most)");
+  // (the mode's own 10 minute limit is the safety net: a match never runs much longer, whatever the strength)
+  if (s.goal) check(a.frames < Math.round(10 * 60 * 1193182 / 65536) + 1500, "siege / " + s.name + ": within the 10 minute safety net (" + a.frames + " frames)");
+  if (s.goal && s.teams.length === 2) check(!a.engine.timedOut && a.frames < 12000, "siege / " + s.name + ": decided by the bases, in reasonable time (" + a.frames + " frames)");
+  if (s.size !== "large") {
     const b = runMatch(o);
     check(a.bitsHash === b.bitsHash && a.stateHash === b.stateHash && a.frames === b.frames, "siege / " + s.name + ": deterministic");
   }

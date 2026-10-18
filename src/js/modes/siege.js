@@ -1,13 +1,15 @@
-// Game mode "siege" (base siege, docs/DESIGN-8P.md 27): every base has BASE_HP hit points; a shot exploding
+// Game mode "siege" (base siege, docs/DESIGN-8P.md 27): every base has e.goal hit points (the "Base strength"
+// setting, TunnelerEngine.GOALS.siege, default BASE_HP); a shot exploding
 // on a base's walls takes one (not from the base's own team). A base at 0 falls: its walls turn to dirt
 // (rubble) and it gives nothing any more (baseUsable). A destroyed tank comes back at its own base after
 // ~3 s while that base stands - not after it fell. A team with no base and no tank left is out; the last
-// team in wins the round. At the round time (no round time set: 10 minutes, OWN_TIME) the team with the
+// team in wins the round - and the match: a siege is one round (the engine sets winScore 1). At the round time (no round time set: 10 minutes, OWN_TIME) the team with the
 // most hit points left in its bases wins, then the most hits on enemy bases this round, then the most damage
 // to enemy tanks; still a tie = nobody.
 //
 // All state lives in e.GS (reset by the engine at every match start, filled in round()):
 //   hp[q]     hit points of player q's base (0 = fallen)     fall[]  bases fallen, walls not yet rubble
+//   max       the hit points every base starts with (e.goal)
 //   back[p]   frame counter value when destroyed tank p comes back (0 = not waiting)
 //   f         play frames this round                          spots[q] firing spots against base q (AI)
 //   hits[p]   hits player p landed on enemy bases this round (timeUp)
@@ -17,11 +19,11 @@
 (function (root) {
 const E = root.TunnelerEngine || require("../engine.js");
 
-const BASE_HP = 30;            // hits a base takes
-const BACK_FRAMES = 55;
+const BASE_HP = 30;            // hits a base takes (the default; e.goal = the Base strength setting)
+const BACK_FRAMES = 55;        // ~3 s (18.2 frames a second) before a destroyed tank comes back
 const OWN_TIME = Math.round(10 * 60 * 1193182 / 65536);   // 10 minutes in engine steps (no round time set)
 const FIGHT = 0.3;             // AI: chance to stop and fight an enemy met away from the bases (fightNow)
-const FINISH = 10;             // AI: a besieged base this low is finished off, no retreat (aiRetreat)        // ~3 s (18.2 frames a second) before a destroyed tank comes back
+const FINISH = 10;             // AI: a besieged base this low is finished off, no retreat (aiRetreat)
 const WALL = 17;               // the walls are at +-17 px from the base's middle, doorway gaps |dx| <= 3
 const DX = [0, 1, 1, 1, 0, -1, -1, -1];
 const DY = [-1, -1, 0, 1, 1, 1, 0, -1];
@@ -41,6 +43,7 @@ function eachWall(e, q, cb) {
   for (let y = by - WALL + 1; y <= by + WALL - 1; y++) { cb(bx - WALL, y); cb(bx + WALL, y); }
 }
 const standing = (e, q) => e.GS.hp && e.GS.hp[q] > 0;
+const maxHp = e => e.GS.max || e.goal || BASE_HP;
 const G0 = (e, s) => e.GS.spots[s.q] && e.GS.spots[s.q][s.si];   // the AI's spot exists (this world)
 const isRock = (e, x, y) => e.pixelClass[e.getPixel(x, y)] === 4;
 
@@ -152,27 +155,27 @@ function fightNow(ai, e, mx, my, ctx, s) {
 
 const LANG = {
   en: { stat: "hits",
-    instr: "Every base can take 30 hits; enemy shots exploding on its walls wear it down (yours never hurt your own team's bases). A base at 0 falls to rubble and no longer refuels or repairs. A destroyed tank comes back at its base after about 3 seconds - unless the base has fallen. The last team with a base or a tank left wins the round; when the round time (10 minutes if none is set) runs out, the team with the most base hits left wins.",
+    instr: "Every base can take as many hits as Base strength says (a setting, instead of rounds to win; 30 by default); enemy shots exploding on its walls wear it down (yours never hurt your own team's bases). A base at 0 falls to rubble and no longer refuels or repairs. A destroyed tank comes back at its base after about 3 seconds - unless the base has fallen. One round decides the match: the last team with a base or a tank left wins it; when the round time (10 minutes if none is set) runs out, the team with the most base hits left wins. The number beside your instrument panel shows your base's hits left.",
     score: "base {n}", fallen: "base down",
   },
   sk: { stat: "zás.",
-    instr: "Každá základňa vydrží 30 zásahov; nepriateľské strely vybuchujúce na jej stenách ju ničia (tvoje nikdy nepoškodia základne tvojho tímu). Základňa na nule sa rozpadne na trosky a už nedopĺňa energiu ani neopravuje. Zničený tank sa po asi 3 sekundách vráti na svoju základňu - ak ešte stojí. Kolo vyhrá posledný tím, ktorému zostala základňa alebo tank; keď vyprší čas kola (bez nastaveného času 10 minút), tím s najviac zásahmi, ktoré jeho základne ešte vydržia.",
+    instr: "Každá základňa vydrží toľko zásahov, koľko určuje Odolnosť základne (nastavenie namiesto kôl na výhru; predvolene 30); nepriateľské strely vybuchujúce na jej stenách ju ničia (tvoje nikdy nepoškodia základne tvojho tímu). Základňa na nule sa rozpadne na trosky a už nedopĺňa energiu ani neopravuje. Zničený tank sa po asi 3 sekundách vráti na svoju základňu - ak ešte stojí. Zápas rozhodne jedno kolo: vyhrá ho posledný tím, ktorému zostala základňa alebo tank; keď vyprší čas kola (bez nastaveného času 10 minút), tím s najviac zásahmi, ktoré jeho základne ešte vydržia. Číslo vedľa prístrojového panelu ukazuje, koľko zásahov tvoja základňa ešte vydrží.",
     score: "základňa {n}", fallen: "bez základne",
   },
   cs: { stat: "zás.",
-    instr: "Každá základna vydrží 30 zásahů; nepřátelské střely vybuchující na jejích zdech ji ničí (tvoje nikdy nepoškodí základny tvého týmu). Základna na nule se rozpadne na trosky a už nedoplňuje energii ani neopravuje. Zničený tank se asi po 3 sekundách vrátí na svou základnu - pokud ještě stojí. Kolo vyhraje poslední tým, kterému zbyla základna nebo tank; když vyprší čas kola (bez nastaveného času 10 minut), tým s nejvíce zásahy, které jeho základny ještě vydrží.",
+    instr: "Každá základna vydrží tolik zásahů, kolik určuje Odolnost základny (nastavení místo kol k výhře; výchozí 30); nepřátelské střely vybuchující na jejích zdech ji ničí (tvoje nikdy nepoškodí základny tvého týmu). Základna na nule se rozpadne na trosky a už nedoplňuje energii ani neopravuje. Zničený tank se asi po 3 sekundách vrátí na svou základnu - pokud ještě stojí. Zápas rozhodne jedno kolo: vyhraje ho poslední tým, kterému zbyla základna nebo tank; když vyprší čas kola (bez nastaveného času 10 minut), tým s nejvíce zásahy, které jeho základny ještě vydrží. Číslo vedle přístrojového panelu ukazuje, kolik zásahů tvoje základna ještě vydrží.",
     score: "základna {n}", fallen: "bez základny",
   },
   uk: { stat: "влуч.",
-    instr: "Кожна база витримує 30 влучань; ворожі постріли, що вибухають на її стінах, руйнують її (твої ніколи не шкодять базам твоєї команди). База на нулі розсипається на уламки й більше не заправляє і не ремонтує. Знищений танк повертається на свою базу приблизно за 3 секунди - якщо вона ще стоїть. Раунд виграє остання команда, в якої лишилася база або танк; коли час раунду спливає (без заданого часу - 10 хвилин), команда, чиї бази витримають найбільше влучань.",
+    instr: "Кожна база витримує стільки влучань, скільки задає Міцність бази (налаштування замість раундів для перемоги; типово 30); ворожі постріли, що вибухають на її стінах, руйнують її (твої ніколи не шкодять базам твоєї команди). База на нулі розсипається на уламки й більше не заправляє і не ремонтує. Знищений танк повертається на свою базу приблизно за 3 секунди - якщо вона ще стоїть. Матч вирішує один раунд: його виграє остання команда, в якої лишилася база або танк; коли час раунду спливає (без заданого часу - 10 хвилин), команда, чиї бази витримають найбільше влучань. Число біля панелі приладів показує, скільки влучань ще витримає твоя база.",
     score: "база {n}", fallen: "без бази",
   },
   ru: { stat: "попад",
-    instr: "Каждая база выдерживает 30 попаданий; вражеские выстрелы, взрывающиеся на её стенах, разрушают её (твои никогда не вредят базам твоей команды). База на нуле рассыпается в обломки и больше не заправляет и не чинит. Уничтоженный танк возвращается на свою базу примерно через 3 секунды - если она ещё стоит. Раунд выигрывает последняя команда, у которой осталась база или танк; когда время раунда истекает (без заданного времени - 10 минут), команда, чьи базы выдержат больше всего попаданий.",
+    instr: "Каждая база выдерживает столько попаданий, сколько задаёт Прочность базы (настройка вместо раундов для победы; по умолчанию 30); вражеские выстрелы, взрывающиеся на её стенах, разрушают её (твои никогда не вредят базам твоей команды). База на нуле рассыпается в обломки и больше не заправляет и не чинит. Уничтоженный танк возвращается на свою базу примерно через 3 секунды - если она ещё стоит. Матч решает один раунд: его выигрывает последняя команда, у которой осталась база или танк; когда время раунда истекает (без заданного времени - 10 минут), команда, чьи базы выдержат больше всего попаданий. Число рядом с панелью приборов показывает, сколько попаданий ещё выдержит твоя база.",
     score: "база {n}", fallen: "без базы",
   },
   genz: { stat: "hits",
-    instr: "Every base tanks 30 hits; enemy shots popping on its walls chip it down (your own shots never touch your squad's bases, no cap). Base hits 0? It's rubble, no more refuels or repairs, it's giving nothing. Get wrecked and you respawn at your base in like 3 seconds - unless it already fell, then you're cooked. Last squad with a base or a tank still up takes the round; if the round timer runs out (10 minutes when nobody set one), the squad whose bases have the most hits left wins.",
+    instr: "Every base tanks as many hits as Base HP says (a setting, it replaces rounds to win; 30 by default); enemy shots popping on its walls chip it down (your own shots never touch your squad's bases, no cap). Base hits 0? It's rubble, no more refuels or repairs, it's giving nothing. Get wrecked and you respawn at your base in like 3 seconds - unless it already fell, then you're cooked. One round decides the whole match: last squad with a base or a tank still up takes it; if the round timer runs out (10 minutes when nobody set one), the squad whose bases have the most hits left wins. The number next to your dashboard is your base's HP, protect it fr.",
     score: "base {n}", fallen: "base gone",
   },
 };
@@ -184,7 +187,11 @@ E.registerMode("siege", {
   eliminationEnds: false,
   aiAlways: true,               // an enemy base still standing is something to do, even with no enemy alive
 
+  BASE_HP,
+
   init(e) {
+    e.winScore = 1;              // one round decides the match (the engine sets it for every goal mode too)
+    e.GS.max = e.goal || BASE_HP;
     e.GS.hp = new Array(e.nPlayers + 1).fill(0);
     // no round time set: the mode's own limit, so that a stalemate (equal tanks keeping each other off the
     // bases) can't run a round for ever (timeUp decides it)
@@ -192,7 +199,8 @@ E.registerMode("siege", {
   },
   round(e) {
     const G = e.GS, N = e.nPlayers;
-    G.hp = new Array(N + 1).fill(BASE_HP); G.hp[0] = 0;
+    G.max = e.goal || BASE_HP;
+    G.hp = new Array(N + 1).fill(G.max); G.hp[0] = 0;
     G.back = new Array(N + 1).fill(0);
     G.fall = [];
     G.hits = new Array(N + 1).fill(0);
@@ -262,14 +270,14 @@ E.registerMode("siege", {
     return true;
   },
 
-  // the damage on the top and bottom walls: red from the corners in (lost hit points / BASE_HP of each wall)
+  // the damage on the top and bottom walls: red from the corners in (lost hit points / the base strength)
   draw(e) {
-    const G = e.GS;
+    const G = e.GS, M = maxHp(e);
     for (let q = 1; q <= e.nPlayers; q++) {
       const hp = G.hp[q];
-      if (hp <= 0 || hp >= BASE_HP) continue;
+      if (hp <= 0 || hp >= M) continue;
       const bx = e.baseX[q], by = e.baseY[q], c = e.playerColor(q);
-      const lost = Math.round((BASE_HP - hp) * 28 / BASE_HP);
+      const lost = Math.round((M - hp) * 28 / M);
       for (let i = 0; i < lost; i++) {
         const x = (i & 1) ? bx + WALL - (i >> 1) : bx - WALL + (i >> 1);
         for (const y of [by - WALL, by + WALL]) if (e.getPixel(x, y) === c) e.objPut(x, y, 12);
@@ -278,11 +286,11 @@ E.registerMode("siege", {
   },
 
   hud(e, p) {
-    const hp = e.GS.hp ? e.GS.hp[p] : BASE_HP;
-    return { value: hp, color: hp > 10 ? 14 : 12 };
+    const M = maxHp(e), hp = e.GS.hp ? e.GS.hp[p] : M;
+    return { value: Math.min(99, hp), color: hp * 3 > M ? 14 : 12 };     // red from a third left
   },
   scoreText(e, p) {
-    const hp = e.GS.hp ? e.GS.hp[p] : BASE_HP;
+    const hp = e.GS.hp ? e.GS.hp[p] : maxHp(e);
     const t = hp > 0 ? e.mt("score", { n: hp }) : e.mt("fallen");
     return root.Lang && root.Lang.enc ? root.Lang.enc(t) : t;     // (font text; display only)
   },
