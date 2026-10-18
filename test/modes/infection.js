@@ -81,11 +81,91 @@ check(!!M && M.eliminationEnds === false && M.aiAlways === true, "infection: reg
   // another tank sitting in the base: waits until it leaves
   e.killTankExt(1, e.tankX[1], e.tankY[1]);
   e.tankX[2] = e.baseX[1]; e.tankY[2] = e.baseY[1];
-  for (let i = 0; i < 80; i++) e.step(idle(e));
+  for (let i = 0; i < 60; i++) e.step(idle(e));
   const waited = !e.alive[1];
   e.tankX[2] = e.baseX[2]; e.tankY[2] = e.baseY[2];
   e.step(idle(e));
-  check(waited && e.alive[1], "infection: not put back while another tank is in its base; at once when it has left");
+  check(waited && e.alive[1] && e.tankX[1] === e.baseX[1] && e.tankY[1] === e.baseY[1],
+    "infection: not put back while another tank is in its base; at once when it has left");
+}
+
+// ---- a tank parked in a destroyed tank's base can't keep it out
+const clearOf = (e, p) => [...Array(e.nPlayers).keys()].map(i => i + 1)
+  .every(q => q === p || !e.alive[q] || e.distance(Math.abs(e.tankX[p] - e.tankX[q]), Math.abs(e.tankY[p] - e.tankY[q])) >= 8);
+{
+  // an infected tank: back after ~3 s + a short wait, beside the parked one (here: in its base)
+  const e = start(3);
+  M.setInfected(e, [1]);
+  e.step(idle(e));
+  e.killTankExt(1, e.tankX[1], e.tankY[1]);
+  let back = -1;
+  for (let i = 0; i < 200 && back < 0; i++) {
+    e.tankX[2] = e.baseX[1]; e.tankY[2] = e.baseY[1];   // (a healthy tank parked right in the middle)
+    e.step(idle(e));
+    if (e.alive[1]) back = i;
+  }
+  check(back >= 55 && back <= 75 && clearOf(e, 1) && Math.abs(e.tankX[1] - e.baseX[1]) <= 21 && Math.abs(e.tankY[1] - e.baseY[1]) <= 21,
+    "infection: a tank parked in a destroyed infected tank's base delays it only a little (back after " + back + " frames, " +
+    (e.tankX[1] - e.baseX[1]) + "," + (e.tankY[1] - e.baseY[1]) + " from the middle, clear of the other)");
+  // a tank just infected: back at once, even with its base taken (and its whole base: elsewhere)
+  const f = start(3);
+  M.setInfected(f, [1]);
+  f.step(idle(f));
+  f.tankX[1] = f.baseX[3]; f.tankY[1] = f.baseY[3];
+  f.killedBy[3] = 1; f.killTankExt(3, f.tankX[3], f.tankY[3]);
+  f.step(idle(f));
+  check(f.alive[3] && f.GS.inf[3] && clearOf(f, 3), "infection: a tank just infected comes back at once, its base taken or not (" +
+    (f.tankX[3] - f.baseX[3]) + "," + (f.tankY[3] - f.baseY[3]) + " from the middle)");
+}
+
+// ---- the end-of-match screens: each tank's own wins, the tanks with winScore wins are the winners
+{
+  const e = start(4, { winScore: 3 });
+  M.setInfected(e, [1, 2]);
+  e.wins = [0, 2, 1, 1, 1];
+  check(e.perTankWins() && e.teamName(0) === "infected" && e.teamName(1) === "healthy", "infection: the sides are named infected / healthy");
+  // the infected (1, 2) win the deciding round: tank 1 reaches 3 wins, tank 2 (2 wins) does not
+  e.killedBy[4] = 2;
+  M.setInfected(e, [1, 2, 3]);
+  e.killTankExt(4, e.tankX[4], e.tankY[4]);
+  let i = 0;
+  for (; i < 3000 && e.screen === "play"; i++) e.step(idle(e));
+  check(e.matchOver && e.wins.slice(1).join() === "3,2,2,1", "infection: the match ends when one tank has 3 wins (" + e.wins.slice(1) + ")");
+  check([1, 2, 3, 4].every(p => e.matchWinner(p) === (p === 1)), "infection: only that tank is the match winner (not its side's others)");
+  // the statistics: only BLUE's name blinks (attribute bit 7) - find the rows with the names
+  for (let k = 0; k < 3000 && e.screen !== "text"; k++) e.step({ bits: [0, 0, 0, 0], keys: e.screen === "map" ? [[32, 0x39]] : [] });
+  for (let k = 0; k < 50; k++) e.step(idle(e));
+  const v = e.vram, row = r => Array.from({ length: 80 }, (_, c) => String.fromCharCode(v[(r * 80 + c) * 2])).join("");
+  const blink = [];
+  for (let r = 0; r < 25; r++) for (let c = 0; c < 80; c++) if (v[(r * 80 + c) * 2 + 1] & 128 && v[(r * 80 + c) * 2] !== 32) blink.push(r);
+  const rows = [...new Set(blink)];
+  const blue = e.playerName(1);
+  check(rows.length === 1 && row(rows[0]).includes(blue) && !rows.some(r => [2, 3, 4].some(p => row(r).includes(e.playerName(p) + " "))),
+    "infection: the statistics mark only " + blue + " as a winner (blinking rows: " + rows.map(r => row(r).trim()).join(" | ") + ")");
+  const winLine = [...Array(25).keys()].map(row).find(l => l.includes((e.strings.stats.winner || "").trim()));
+  check(!!winLine && winLine.includes(blue) && !winLine.includes(e.playerName(2)), "infection: the winner line names " + blue + " (" + (winLine || "").trim() + ")");
+  // the ROUNDS list: the side's name, no tank's colour
+  const lines = e.matchRoundLines(19);
+  check(lines.length >= 1 && lines[lines.length - 1].text.includes("infected") && lines[lines.length - 1].color === 7,
+    "infection: the rounds list names the winning side in gray (" + lines.map(l => l.text.trim()).join(" | ") + ")");
+}
+{
+  // the round title: every tank with its own wins (the free-for-all layout), not "TEAM n"
+  const e = start(4, { winScore: 3 });
+  M.setInfected(e, [1, 2]);
+  e.killedBy[3] = 1; e.killedBy[4] = 2;
+  M.setInfected(e, [1, 2, 3]);
+  e.killTankExt(4, e.tankX[4], e.tankY[4]);
+  let txt = "";
+  for (let i = 0; i < 3000 && !txt; i++) {
+    e.step(idle(e));
+    if (e.screen === "text") {
+      const t = Array.from({ length: 2000 }, (_, k) => String.fromCharCode(e.vram[k * 2])).join("");
+      if (/ROUND/.test(t) && t.includes(e.playerName(4))) txt = t;
+    }
+  }
+  check(!!txt && !/TEAM/.test(txt) && !txt.includes("infected") && [1, 2, 3, 4].every(p => txt.includes(e.playerName(p))),
+    "infection: the round title lists every tank with its own wins, no teams");
 }
 
 // ---- the last healthy tank destroyed: the infected win the round
@@ -152,16 +232,31 @@ const setups = [
   { n: 8, teams: [1, 2, 3, 4, 1, 2, 3, 4], size: "large", rt: 0 },
   { n: 4, teams: [1, 2, 1, 2], size: "medium", rt: 2, mods: { dark: true, hardRock: true, noRepair: true } },
   { n: 5, teams: [1, 2, 3, 4, 5], size: "small", rt: 0, mods: { noRepair: true }, win: 3 },
+  // (the review's cases: a retreating infected tank kept a teammate out of its base for ~500 frames)
+  { n: 4, teams: [1, 2, 3, 4], size: "small", rt: 0, win: 3, seed: 3 },
+  { n: 8, teams: [1, 2, 3, 4, 5, 6, 7, 8], size: "medium", rt: 0, win: 3, seed: 3 },
+  { n: 3, teams: [1, 2, 3], size: "small", rt: 0, win: 3, seed: 1 },
 ];
 for (const s of setups) {
   const name = s.n + " tanks " + (new Set(s.teams).size === s.n ? "free-for-all" : "teams") + ", " + s.size +
     (s.rt ? ", " + s.rt + " min" : ", no round time") + (s.ff ? ", friendly fire" : "") + (s.mods ? ", " + Object.keys(s.mods).join(" + ") : "") + ", " + (s.win || 1) + " to win";
-  const opts = { mode: "infection", slots: slots(s.teams), levels: s.teams.map((_, i) => LV[i % 3]), seed: 21, size: s.size, winScore: s.win || 1,
+  const opts = { mode: "infection", slots: slots(s.teams), levels: s.teams.map((_, i) => LV[i % 3]), seed: s.seed || 21, size: s.size, winScore: s.win || 1,
     roundTime: s.rt, friendlyFire: !!s.ff, mods: s.mods, maxFrames: 60000 };
-  let bad = 0, maxRoundFrames = 0, cur = 0;
+  let bad = 0, maxRoundFrames = 0, cur = 0, maxConv = 0, maxInf = 0;
+  const outSince = [], conv = [];
   const limit = s.rt ? Math.round(s.rt * 60 * 1193182 / 65536) : OWN_TIME;
   const a = runMatch(Object.assign({}, opts, { onFrame: e => {
     if (e.screen === "play") { cur++; maxRoundFrames = Math.max(maxRoundFrames, cur); } else cur = 0;
+    // how long a destroyed tank stays out (outside the round's end window): just infected / infected
+    if (e.screen !== "play" || !e.GS.inf || e.endTimer >= 0) outSince.length = 0;
+    else for (let p = 1; p <= e.nPlayers; p++) {
+      if (!e.alive[p] && outSince[p] === undefined) { outSince[p] = cur; conv[p] = e.GS.now[p]; }
+      else if (e.alive[p] && outSince[p] !== undefined) {
+        const d = cur - outSince[p];
+        if (conv[p]) maxConv = Math.max(maxConv, d); else maxInf = Math.max(maxInf, d);
+        outSince[p] = undefined;
+      }
+    }
     // always exactly two sides while a round runs: infected (team 1) and healthy (team 2)
     if (e.screen === "play" && e.GS.inf && (e.nTeams !== 2 || e.slots.some((x, i) => x.team !== (e.GS.inf[i + 1] ? 1 : 2)))) bad++;
   } }));
@@ -169,7 +264,9 @@ for (const s of setups) {
   const e = a.engine, w = e.wins.slice(1), ws = s.win || 1;
   check(a.finished, "infection " + name + ": finishes (" + a.frames + " frames, rounds won by " + a.rounds.map(r => r.winnerTeam ? "healthy" : "infected").join(" ") + ")");
   check(a.bitsHash === b.bitsHash && a.stateHash === b.stateHash && a.frames === b.frames, "infection " + name + ": deterministic");
+  check(maxConv <= 2 && maxInf <= 75, "infection " + name + ": destroyed tanks come back in time (just infected: " + maxConv + " frames, infected: " + maxInf + ")");
   check(!bad && maxRoundFrames <= limit + 30, "infection " + name + ": two sides all along, no round past the clock (longest " + maxRoundFrames + " of " + limit + ")");
   check(Math.max(...w) === ws && a.rounds.every(r => r.winnerTeam === 0 || r.winnerTeam === 1) &&
-    e.teamMembers(e.matchWinnerTeam()).some(p => e.wins[p] === ws), "infection " + name + ": the match goes to the first tank with " + ws + " round wins (" + w + ")");
+    e.teamMembers(e.matchWinnerTeam()).some(p => e.wins[p] === ws) &&
+    w.every((x, i) => e.matchWinner(i + 1) === (x >= ws)), "infection " + name + ": the match goes to the first tank with " + ws + " round wins (" + w + ")");
 }

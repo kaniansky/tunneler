@@ -1573,7 +1573,11 @@ class TunnelerEngine {
   // classic screens have room for 9 columns of a display name (the color name is shown as it is)
   classicName(p) { return this.names[p - 1] ? UniText.slice(this.playerName(p), 9) : this.playerName(p); }
   // label of team index t: "TEAM n" with its number
-  teamName(t) { return (this.strings.team || STRINGS_EN.team).replace("{n}", String(this.teamIds[t])); }
+  // (a game mode may name its sides itself: GM.teamName(e, t) -> font text, e.g. e.mt("infected"); falsy = "TEAM n")
+  teamName(t) {
+    const m = this.GM && this.GM.teamName ? this.GM.teamName(this, t) : "";
+    return m || (this.strings.team || STRINGS_EN.team).replace("{n}", String(this.teamIds[t]));
+  }
   // players (1..N) of team index t
   teamMembers(t) { const r = []; for (let p = 1; p <= this.nPlayers; p++) if (this.team(p) === t) r.push(p); return r; }
   // number of teams still having a tank alive
@@ -1978,8 +1982,8 @@ class TunnelerEngine {
   // "ROUND n" title: every player's color name (or display name) and wins; with shared teams the teams
   // ("TEAM n", their wins and members) side by side (up to 4 teams), or one line per team (5 or more)
   roundTitleExt() {
-    const N = this.nPlayers, T = this.nTeams;
-    if (this.teams && T <= 4) {
+    const N = this.nPlayers, T = this.nTeams, teams = this.teams && !this.perTankWins();
+    if (teams && T <= 4) {
       const cols = T === 2 ? [28, 53] : Array.from({ length: T }, (_, k) => Math.round(80 * (2 * k + 1) / (2 * T)) + 1);
       const cw = Math.trunc(80 / T) - 1;
       cols.forEach((c, t) => {
@@ -1997,7 +2001,7 @@ class TunnelerEngine {
       });
       return;
     }
-    if (this.teams) {
+    if (teams) {
       let lw = 0, mw = 0;
       for (let t = 0; t < T; t++) {
         lw = Math.max(lw, visLen(this.teamName(t)));
@@ -2029,6 +2033,17 @@ class TunnelerEngine {
     }
   }
 
+  // a game mode whose sides change during the match (GM.perTankWins: infection) decides it by each tank's
+  // own round wins: the screens then list the tanks' wins (free-for-all layout) and mark as match winners
+  // the tanks with winScore wins, not the team that won the last round. (Display only: the mode keeps
+  // teamWins such that the match still ends through matchWinnerTeam.)
+  perTankWins() { return !!(this.GM && this.GM.perTankWins); }
+  // did player p win the match (its team reached winScore; perTankWins: p itself)
+  matchWinner(p) {
+    if (this.perTankWins()) return this.wins[p] >= this.winScore;
+    const t = this.matchWinnerTeam();
+    return t >= 0 && this.team(p) === t;
+  }
   // the team index that has won the match (winScore round wins), or -1
   matchWinnerTeam() {
     for (let t = 0; t < this.nTeams; t++) if (this.teamWins[t] >= this.winScore) return t;
@@ -2045,7 +2060,8 @@ class TunnelerEngine {
     this.textColor(11);
     this.gotoXY(19 - (visLen(st.title) >> 1), 1);
     this.write(st.title);
-    const winT = this.matchWinnerTeam(), members = winT >= 0 ? this.teamMembers(winT) : [];
+    const perTank = this.perTankWins(), winT = this.matchWinnerTeam();
+    const members = perTank ? Array.from({ length: N }, (_, i) => i + 1).filter(p => this.matchWinner(p)) : winT >= 0 ? this.teamMembers(winT) : [];
     const name = p => UniText.slice(this.playerName(p), 9);
     let nw = 0;
     for (let p = 1; p <= N; p++) nw = Math.max(nw, visLen(name(p)));
@@ -2057,14 +2073,14 @@ class TunnelerEngine {
     this.write(" ".repeat(nw));
     head.forEach((h, i) => this.write(h.slice(0, widths[i] - 1).padStart(widths[i])));
     const order = [];
-    if (this.teams) for (let t = 0; t < this.nTeams; t++) { if (t) order.push(0); order.push(...this.teamMembers(t)); }
+    if (this.teams && !perTank) for (let t = 0; t < this.nTeams; t++) { if (t) order.push(0); order.push(...this.teamMembers(t)); }
     else for (let p = 1; p <= N; p++) order.push(p);
     for (const p of order) {
       y++;
       if (!p) continue;
       const c = this.playerTextColor(p), n = name(p);
       this.gotoXY(x0, y);
-      this.textColor(c + (this.team(p) === winT ? 128 : 0));
+      this.textColor(c + (this.matchWinner(p) ? 128 : 0));
       this.write(n);
       this.textColor(c);
       const fired = this.shotsFired[p], hit = this.shotsHit[p];
@@ -2073,7 +2089,22 @@ class TunnelerEngine {
       this.write(p === this.youPlayer ? "\x11" + " ".repeat(nw - visLen(n) - 1) : " ".repeat(nw - visLen(n)), this.num(fired, 5), this.num(hit, 5), this.num(pct + "%", 5),
         this.num(this.metersDug[p], 6), this.num(this.metersMoved[p], 6));
     }
-    if (winT >= 0) {
+    if (perTank && members.length > 1) {
+      // several tanks reached winScore together: their names (as many as fit, "+n" for the rest)
+      this.gotoXY(x0, y + 2);
+      this.textColor(6);
+      this.write(st.winner);
+      let room = 37 - x0 - visLen(st.winner) - 1, i = 0;
+      for (; i < members.length; i++) {
+        const n = name(members[i]), need = (i ? 2 : 0) + visLen(n) + (i < members.length - 1 ? 3 : 0);
+        if (i && need > room) break;
+        this.textColor(6); if (i) this.write(", ");
+        this.textColor(this.playerTextColor(members[i])); this.write(n);
+        room -= (i ? 2 : 0) + visLen(n);
+      }
+      this.textColor(6);
+      this.write(i < members.length ? " +" + (members.length - i) : ".");
+    } else if (winT >= 0) {
       this.gotoXY(x0, y + 2);
       this.textColor(6);
       this.write(st.winner);
@@ -2102,6 +2133,7 @@ class TunnelerEngine {
       if (r.winner < 0) name = r.how === "esc" ? S.ended : S.draw;
       else if (!this.extended) { name = this.classicName(r.winner); color = r.winner + 8; }   // (the lighter BLUE / GREEN, as in the table there)
       else if (r.player) { name = this.playerName(r.player); color = this.playerTextColor(r.player); }
+      else if (this.perTankWins()) name = this.teamName(r.winner);   // (the sides change: no tank's colour)
       else { name = this.teamName(r.winner); color = this.playerTextColor(this.teamMembers(r.winner)[0]); }
       const num = String(i + 1).padStart(2) + " ", time = " " + mmss(r.secs);
       const n = UniText.slice(name, Math.max(1, w - num.length - time.length));
