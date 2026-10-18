@@ -3,6 +3,21 @@
 All notable changes to Tunneler Online. Versions follow [semantic versioning](https://semver.org/);
 a release is made by pushing a version tag (see CONTRIBUTING.md).
 
+## 3.1.0
+
+**New versions** - the desktop app updates itself, and a server says when a newer release is out.
+
+- **Desktop app**: when a newer release is out, the main menu shows **Update to version X** - the
+  installed Windows app (the new `-windows-x64-setup.exe`), the new **AppImage** for Linux and the macOS
+  app download it, install it and restart. The portable exe, `.deb`, `.rpm` and `.tar.gz` show
+  **New version X**, which opens the download page. Updates are signed; every release has a
+  `latest.json` for them. Apps older than 3.1 have no updater: install 3.1 by hand once.
+- **Server**: checks GitHub for a newer release when it starts and once a day and logs it with how to
+  update (`UPDATE_CHECK=0` turns it off; nothing is downloaded).
+- README and homepage: Skirmish, the game modes, the installer / AppImage, and the privacy note (the app
+  asks GitHub for new versions).
+- As always, only the same version plays together: update the server and the apps to 3.1.
+
 ## 3.0.0
 
 **Game modes** - a new "Mode" setting (skirmish and online) besides the standard game, and a different
