@@ -3,6 +3,10 @@
 All notable changes to Tunneler Online. Versions follow [semantic versioning](https://semver.org/);
 a release is made by pushing a version tag (see CONTRIBUTING.md).
 
+## 3.1.1
+
+- Online game lobby: the **View** item in the Game box is centered like the other items.
+
 ## 3.1.0
 
 **New versions** - the desktop app updates itself, and a server says when a newer release is out.

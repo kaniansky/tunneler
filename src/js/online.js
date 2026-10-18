@@ -439,7 +439,7 @@
     if (isHost() && !locked) items.push({ key: "kick", label: T("pg.kick"), disabled: !kickTargets().length,
       info: [T("pg.kick.i1"), T("pg.kick.i2")], go: () => drawKick(false) });
     // what this player sees during play, up to the room's maximum (display only)
-    if (viewChoices().length > 1) items.push({ key: "view", label: T("pg.view") + T("view." + viewChoice()), align: "left",
+    if (viewChoices().length > 1) items.push({ key: "view", label: T("pg.view") + T("view." + viewChoice()),
       info: [T("pg.view.i1"), T("pg.view.i2", { max: Lang.raw("view." + visibleNow()) })], go: () => setView(1), change: setView });
     // the invite link (the server's own page: also from the desktop app); "Link copied" for 3 s
     const invite = Endpoint.web(Links.invite(roomId)), copy = () => copyLink(invite);
