@@ -61,7 +61,16 @@ jobs:
     uses: ./.github/workflows/app-build.yml
     with:
       tag: v${{ needs.release.outputs.version }}
-    secrets: inherit           # TAURI_SIGNING_PRIVATE_KEY: signed updates + latest.json
+    secrets: inherit           # TAURI_SIGNING_PRIVATE_KEY: signed update packages
+    permissions:
+      contents: write
+
+  # latest.json for the desktop apps' updater, from the signed packages app attached
+  updater:
+    needs: [release, app]
+    uses: ./.github/workflows/updater-manifest.yml
+    with:
+      tag: v${{ needs.release.outputs.version }}
     permissions:
       contents: write
 

@@ -10,8 +10,8 @@ name: Desktop app
 #   macOS    tunneler-online-<v>-macos-arm64.dmg / -macos-x64.dmg  (unsigned: right click -> Open)
 # Updates (src-tauri/src/main.rs): with the repository secret TAURI_SIGNING_PRIVATE_KEY (the key whose
 # public half is in tauri.conf.json; TAURI_SIGNING_PRIVATE_KEY_PASSWORD if it has one) the setup.exe,
-# the AppImage and the macOS app (.app.tar.gz) are signed (.sig) and the release gets latest.json
-# (tools/updater-manifest.js), which the apps of older versions read to update themselves. Without the
+# the AppImage and the macOS app (.app.tar.gz) are signed (.sig); release.yml then adds latest.json
+# (updater-manifest.yml), which the apps of older versions read to update themselves. Without the
 # secret everything else is built the same, just without those.
 # release.yml calls it for every release and the files are attached to that GitHub release; a push to
 # an app/** branch (or a manual run) builds them as workflow artifacts only, to try a change.
@@ -131,34 +131,3 @@ jobs:
           tag_name: ${{ inputs.tag }}
           files: dist/*
 
-  # latest.json for the apps' updater: every signed update package of this release
-  updater:
-    needs: build
-    if: inputs.tag != ''
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ inputs.tag }}
-
-      - uses: actions/download-artifact@v7
-        with:
-          path: dist
-          merge-multiple: true
-
-      - name: latest.json
-        id: manifest
-        run: |
-          if node tools/updater-manifest.js dist "${{ inputs.tag }}" "${{ github.repository }}" > latest.json; then
-            cat latest.json
-            echo "made=1" >> "$GITHUB_OUTPUT"
-          else
-            echo "no signed update packages (no TAURI_SIGNING_PRIVATE_KEY secret): no latest.json"
-          fi
-
-      - name: Attach to the release
-        if: steps.manifest.outputs.made == '1'
-        uses: softprops/action-gh-release@v3
-        with:
-          tag_name: ${{ inputs.tag }}
-          files: latest.json

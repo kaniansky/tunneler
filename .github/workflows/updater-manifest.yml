@@ -1,0 +1,51 @@
+name: Updater manifest
+
+# latest.json for the desktop app's updater (src-tauri/src/main.rs; the apps read it from the newest
+# release): one entry per signed update package of a release (tools/updater-manifest.js). release.yml
+# runs it after the desktop app is attached; run it by hand (Actions -> Updater manifest -> Run workflow)
+# to make or remake a release's latest.json. It reads only the release's file list and its small .sig
+# files, so it never downloads the packages themselves.
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: "release tag (e.g. v3.1.0)"
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "release tag (e.g. v3.1.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  manifest:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ inputs.tag }}
+      REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: latest.json
+        id: manifest
+        run: |
+          mkdir sigs
+          gh release download "$TAG" -R "$REPO" -D sigs -p '*.sig' || true
+          gh release view "$TAG" -R "$REPO" --json assets -q '.assets[].name' > assets.txt
+          if node tools/updater-manifest.js sigs "$TAG" "$REPO" assets.txt > latest.json; then
+            cat latest.json
+            echo "made=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "no signed update packages in $TAG (no TAURI_SIGNING_PRIVATE_KEY secret?): no latest.json"
+          fi
+
+      - name: Attach to the release
+        if: steps.manifest.outputs.made == '1'
+        run: gh release upload "$TAG" latest.json -R "$REPO" --clobber

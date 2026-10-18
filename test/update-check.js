@@ -42,6 +42,11 @@ const ok = msg => { n++; console.log("  ok  " + msg); };
   assert.deepStrictEqual(Object.keys(m.platforms).sort(), ["darwin-aarch64", "linux-x86_64", "windows-x86_64"]);
   assert.deepStrictEqual(m.platforms["windows-x86_64"],
     { signature: "SIGW", url: "https://github.com/o/r/releases/download/v2.1.0/tunneler-online-2.1.0-windows-x64-setup.exe" });
+  // (updater-manifest.yml: only the .sig files here, the packages named by the release's file list)
+  fs.rmSync(path.join(dir, "tunneler-online-2.1.0-linux-x64.AppImage"));
+  assert(!manifest(dir, "v2.1.0", "o/r").platforms["linux-x86_64"], "no package, no list: left out");
+  const listed = manifest(dir, "v2.1.0", "o/r", new Date(), ["tunneler-online-2.1.0-linux-x64.AppImage"]);
+  assert.strictEqual(listed.platforms["linux-x86_64"].signature, "SIGL", "listed in the release: in");
   fs.rmSync(dir, { recursive: true });
   ok("updater manifest: one entry per signed package, release URLs, no entry without the package");
 
