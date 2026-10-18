@@ -235,7 +235,7 @@ const STRINGS_EN = {
         "or a click), choose your team (<\x1B> <\x1A>, <1>-<8> or a click on it), chat (Say:) and " +
         "choose \"I am ready!\"; \"Watch instead\" leaves the seat.  The host - who created the game, " +
         "or the next player when the host leaves - sets every free seat open, closed or AI (easy, " +
-        "medium, hard) and its team, the settings above, can \"Kick a player...\" and starts the " +
+        "medium, hard) and its team, the settings above, can \"Kick a player\" and starts the " +
         "game once everybody seated is ready.  An open seat nobody took gets no tank.  During a " +
         "match only its players play; whoever joins then watches.  After a match the lobby shows " +
         "its Statistics.  Press <ESC> twice to leave an online game."],

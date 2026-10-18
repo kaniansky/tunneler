@@ -247,7 +247,7 @@ project dependency; install playwright-core in a scratch dir when needed).
   2+ seats that aren't closed), "Watching: names" below, bottom left "Game"
   (host: Start game - red reason from `st.cant` while it can't; a seated player: I am ready! / Not ready
   yet!; Watch instead; View when the room allows more than self; Say (chat input); Copy invite link;
-  Statistics after a match; Kick a player... (host); Back to the lobby = the games list), bottom right
+  Statistics after a match; Kick a player (host); Back to the lobby = the games list), bottom right
   the chat panel. Seat rows: own seat - Left / Right / 1-8 / Enter / a click on the team = team;
   a free open seat - Enter / a left click sits there (everyone, the host too); the host on any seat
   nobody sits on - Left / Right or a right click anywhere on the row cycle open -> closed -> AI easy ->
@@ -514,7 +514,7 @@ none, i.e. a page from before 2.0 - is refused (POST 409 `{code:
   lines when crowded); the round title keeps them at the bottom too.
 - DosUI `wheel(ev)`: the mouse wheel moves the selection through a scrolling single box (more items
   than `box.rows`), one row per notch / ~50 px, no wrap-around.
-- Kick: the host's single "Kick a player..." item opens `drawKick()` (lobby.page "kick"): the kick
+- Kick: the host's single "Kick a player" item opens `drawKick()` (lobby.page "kick"): the kick
   targets (other players in their tank's colour, spectators gray; by connection number `k`), Enter arms
   (4 s, red "pg.kick.sure"), a second Enter sends `{t:"kick", k}` and returns to the lobby; Esc / Back
   returns without kicking. Redrawn when the targets change. Not during a match.

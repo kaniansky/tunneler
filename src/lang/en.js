@@ -101,7 +101,7 @@ Lang.register("en", {
   "pg.start": "I am ready!", "pg.start.i": "You are ready; the game starts when everybody is.",
   "pg.cancel": "Not ready yet!", "pg.ready.i": "You are ready. <ENTER> or <ESC>: not ready yet.",
   "pg.stats": "Statistics", "pg.stats.i": "The last match's statistics.",
-  "pg.kick": "Kick a player...", "pg.kick.i1": "You created this game: choose a player or a spectator",
+  "pg.kick": "Kick a player", "pg.kick.i1": "You created this game: choose a player or a spectator",
   "pg.kick.i2": "and remove them from it.", "pg.kick.title": "KICK A PLAYER", "pg.kick.who": "{name}", "pg.kick.pick": "<ENTER> removes {name} from this game.", "pg.kick.back": "Back to the game lobby", "pg.kick.back.i": "Nobody is removed.",
   "pg.kick.sure": "Press <ENTER> again to kick {name}.",
   "pg.kicked": "You were removed from this game by the host.",

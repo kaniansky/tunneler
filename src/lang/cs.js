@@ -176,7 +176,7 @@ Lang.register("cs", {
           "(Řekni:) a zvol \"Jsem připraven!\"; \"Raději sledovat\" uvolní místo.  Hostitel - ten, kdo " +
           "hru vytvořil, nebo další hráč, když hostitel odejde - nastaví každé neobsazené místo na " +
           "volné, zavřené nebo AI (lehký, střední, těžký) i s týmem, nastavení výše, může \"Vyhodit " +
-          "hráče...\" a spustí hru, když jsou všichni, kdo sedí, připraveni.  Volné místo, které " +
+          "hráče\" a spustí hru, když jsou všichni, kdo sedí, připraveni.  Volné místo, které " +
           "nikdo nezabral, nemá tank.  Během zápasu hrají jen jeho hráči; kdo se tehdy připojí, " +
           "sleduje.  Po zápase lobby ukáže jeho statistiku.  Hru online opustíš dvojím stiskem " +
           "<ESC>."],
@@ -251,7 +251,7 @@ Lang.register("cs", {
   "pg.start": "Jsem připraven!", "pg.start.i": "Jsi připraven; hra začne, až budou všichni.",
   "pg.cancel": "Ještě nejsem připraven!", "pg.ready.i": "Jsi připraven. <ENTER> nebo <ESC>: přece ne.",
   "pg.stats": "Statistika", "pg.stats.i": "Statistika posledního zápasu.",
-  "pg.kick": "Vyhodit hráče...", "pg.kick.i1": "Tuto hru jsi vytvořil ty: vyber hráče nebo diváka",
+  "pg.kick": "Vyhodit hráče", "pg.kick.i1": "Tuto hru jsi vytvořil ty: vyber hráče nebo diváka",
   "pg.kick.i2": "a odstraň ho z ní.", "pg.kick.title": "VYHODIT HRÁČE", "pg.kick.who": "{name}", "pg.kick.pick": "<ENTER> odstraní {name} z této hry.", "pg.kick.back": "Zpět do lobby hry", "pg.kick.back.i": "Nikdo nebude odstraněn.",
   "pg.kick.sure": "Stiskni <ENTER> ještě jednou a {name} letí ven.",
   "pg.kicked": "Hostitel tě z této hry vyhodil.",

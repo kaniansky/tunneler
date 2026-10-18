@@ -171,7 +171,7 @@ Lang.register("genz", {
           "or a click), pick your squad (<←> <→>, <1>-<8> or a click on it), yap in the chat (Yap:) " +
           "and hit \"I'm locked in!\"; \"Just watch\" leaves the seat.  The host - whoever made the " +
           "game, or the next player if the host dips - sets every free seat open, closed or a bot " +
-          "(easy, medium, hard) with its squad, the settings above, can \"Yeet a player...\" and " +
+          "(easy, medium, hard) with its squad, the settings above, can \"Yeet a player\" and " +
           "sends it once everyone seated is locked in.  An open seat nobody took gets no tank.  " +
           "During a match only its players play; whoever pulls up then just watches.  After a match " +
           "the lobby shows the receipts.  Hit <ESC> twice to dip from an online game."],
@@ -247,7 +247,7 @@ Lang.register("genz", {
   "pg.start": "I'm locked in!", "pg.start.i": "You're locked in; it starts when everyone is.",
   "pg.cancel": "Nah, not yet!", "pg.ready.i": "You're locked in. <ENTER> or <ESC>: nvm.",
   "pg.stats": "The receipts", "pg.stats.i": "The last match's receipts.",
-  "pg.kick": "Yeet a player...", "pg.kick.i1": "Your game, your rules: pick a player or a spectator",
+  "pg.kick": "Yeet a player", "pg.kick.i1": "Your game, your rules: pick a player or a spectator",
   "pg.kick.i2": "and yeet them out.", "pg.kick.title": "YEET A PLAYER", "pg.kick.who": "{name}", "pg.kick.pick": "<ENTER> yeets {name} out of this game.", "pg.kick.back": "Back to the lobby", "pg.kick.back.i": "Nobody gets yeeted.",
   "pg.kick.sure": "Hit <ENTER> again to yeet {name}.",
   "pg.kicked": "The host yeeted you from this game. L.",

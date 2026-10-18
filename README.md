@@ -88,7 +88,7 @@ a free open seat (else you watch); sit on another open seat to play that color, 
 Left / Right, 1-8 or a click, chat with players and spectators (any alphabet), choose **I am ready!**
 or **Watch instead**. The creator of the game is its **host** (when the host leaves, the next player
 takes over): they set every free seat open, closed or AI (Left / Right or a right click) and its team, change
-the game's settings, **Kick a player...** (who then can't come back) and **Start game** once everybody
+the game's settings, **Kick a player** (who then can't come back) and **Start game** once everybody
 seated is ready. Open seats nobody took get no tank. During a match only its players play - whoever
 joins then watches; afterwards everyone is back in the lobby, with the statistics of the last match.
 Games you host are marked "you host" at the top of the list (your private ones too).
