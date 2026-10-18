@@ -22,21 +22,21 @@ The screen is the original's undocumented "low-res" text mode (160x100 pixels in
 80x100 text cells) on an emulated VGA with the IBM ROM font, and the sound is a simulated PC speaker.
 All menus, the lobby and the status lines use the same DOS text screen.
 
-| Split screen | Vs computer: the slot editor |
+| Split screen | Skirmish: the slot editor |
 |---|---|
-| ![Split screen](screenshots/split-screen.png) | ![Vs computer](screenshots/vs-computer.png) |
+| ![Split screen](screenshots/split-screen.png) | ![Skirmish](screenshots/vs-computer.png) |
 
 ## Modes
 
 - **Split screen** - two players on one keyboard, like the original.
-- **Vs computer** - you (in any color) against 1 to 7 computer tanks (easy, medium or hard),
+- **Skirmish** - you (in any color) against 1 to 7 computer tanks (easy, medium or hard),
   every tank for itself or in teams. See your own screen, your team's screens or everybody's.
 - **Online game** - create a game (public or private, with or without spectators), send the invite
   link (`/game/<name>`), and play with 2 to 8 tanks from several computers; any seat can be an AI tank.
   Addresses: `/games` (the list), `/game/<name>` (the game's lobby), `/game/<name>/watch` (spectating),
-  `/split`, `/vs-computer`.
+  `/split`, `/skirmish`.
 
-Game modes (vs computer and online; every mode's AI plays it too):
+Game modes (skirmish and online; every mode's AI plays it too):
 
 - **Standard** - the last tank (or team) still standing wins the round, as in the original.
 - **Gold rush** - gold nuggets lie in the dirt: dig them up and bring them to your base; a hit makes you
@@ -91,7 +91,8 @@ takes over): they set every free seat open, closed or AI (Left / Right or a righ
 the game's settings, **Kick a player** (who then can't come back) and **Start game** once everybody
 seated is ready. Open seats nobody took get no tank. During a match only its players play - whoever
 joins then watches; afterwards everyone is back in the lobby, with the statistics of the last match.
-Games you host are marked "you host" at the top of the list (your private ones too).
+The list of games shows each game's mode, players, AI tanks, spectators and state; Enter joins, Right or
+a right click watches. Games you host come first (your private ones too).
 A private game is joined with its invite link: open it, or paste it into **Join by link** on the
 list of games (the desktop app then also switches to that link's server). Only the same version of the
 game plays together: a page or desktop app of another version than the
@@ -165,7 +166,7 @@ When a newer release is out, the app's main menu shows **Update to version X**: 
 app, the AppImage and the macOS app download it, install it and restart; the portable exe, `.deb`,
 `.rpm` and `.tar.gz` show **New version X**, which opens the download page.
 
-Split screen and vs computer work offline. Online play goes to the public server; to play on your own,
+Split screen and skirmish work offline. Online play goes to the public server; to play on your own,
 set **Server** on the homepage's Settings screen (e.g. `example.com:8050`, empty = the public one). The
 app is built by `.github/workflows/app-build.yml` from `src-tauri/` ([Tauri](https://tauri.app)); to
 build it yourself: install Rust and the [Tauri prerequisites](https://tauri.app/start/prerequisites/),

@@ -126,9 +126,9 @@
   <p data-i18n="about.p">TUNNELER 2.0 was written by Geoffrey Silverton in 1991 in Turbo Pascal. Tunneler Online is a routine-by-routine rewrite of the decompiled original in JavaScript: tanks, digging, shots, energy, shields, the sounds and the world generator behave exactly like the DOS game - an automated test runs the original next to the port and compares every frame. It even keeps the original's low-res text mode and VGA font.</p>
   <div class="grid3" style="margin-top:28px">
     <div class="card"><h3 data-i18n="c1.h">Split screen</h3><p data-i18n="c1.p">Two players on one keyboard, like in 1991. <span class="blue">BLUE</span> on the left, <span class="green">GREEN</span> on the right.</p></div>
-    <div class="card"><h3 data-i18n="c2.h">Vs computer</h3><p data-i18n="c2.p">You against 1 to 7 computer tanks - easy, medium or hard - alone or in teams.</p></div>
+    <div class="card"><h3 data-i18n="c2.h">Skirmish</h3><p data-i18n="c2.p">You against 1 to 7 computer tanks - easy, medium or hard - alone or in teams.</p></div>
     <div class="card"><h3 data-i18n="c3.h">Online</h3><p data-i18n="c3.p">Create a game, send the invite link, play with up to 8 tanks from different computers. Friends can watch as spectators.</p></div>
-    <div class="card"><h3 data-i18n="c4.h">Teams &amp; settings</h3><p data-i18n="c4.p">Any team setup, three map sizes, rounds to win, friendly fire, a round time limit, and what you see after your tank is destroyed.</p></div>
+    <div class="card"><h3 data-i18n="c4.h">Modes &amp; settings</h3><p data-i18n="c4.p">Gold rush, infection, survival, king of the hill, shrinking world, capture the flag, base siege, deathmatch - or the original game. Any team setup, three map sizes, friendly fire, a round time limit.</p></div>
     <div class="card"><h3 data-i18n="c5.h">Sounds</h3><p data-i18n="c5.p">The original PC speaker - or realistic and cartoony sound effects. Sounds fade with distance.</p></div>
     <div class="card"><h3 data-i18n="c6.h">Six languages</h3><p data-i18n="c6.p">English, Slovenčina, Čeština, Українська, Русский and Gen Z. Names and chat in any script.</p></div>
   </div>
@@ -138,7 +138,7 @@
   <h2 data-i18n="screens.h">Screens</h2>
   <div class="gallery">
     <figure><img src="img/home.png" alt="Main menu" loading="lazy"><figcaption data-i18n="s1">The main menu</figcaption></figure>
-    <figure><img src="img/vs-computer.png" alt="Vs computer setup" loading="lazy"><figcaption data-i18n="s2">Setting up a game against the computer</figcaption></figure>
+    <figure><img src="img/vs-computer.png" alt="Skirmish setup" loading="lazy"><figcaption data-i18n="s2">Setting up a skirmish against computer tanks</figcaption></figure>
     <figure><img src="img/online-lobby.png" alt="The game's lobby" loading="lazy"><figcaption data-i18n="s3">The game's lobby: seats, teams, settings, chat</figcaption></figure>
     <figure><img src="img/online-team.png" alt="Team view" loading="lazy"><figcaption data-i18n="s4">An online team game: your team's views</figcaption></figure>
     <figure><img src="img/spectator-grid.png" alt="Spectator grid" loading="lazy"><figcaption data-i18n="s5">Spectating: every tank at once</figcaption></figure>
@@ -159,15 +159,15 @@
 
 <section id="download"><div class="wrap">
   <h2 data-i18n="dl.h">Download</h2>
-  <p data-i18n="dl.p">A small desktop app - the game in its own window, using the web view your system already has (a few MB). Split screen and vs computer work offline; online play uses the public server or your own.</p>
+  <p data-i18n="dl.p">A small desktop app - the game in its own window, using the web view your system already has (a few MB). Split screen and skirmish work offline; online play uses the public server or your own. It tells you when a new version is out.</p>
   <p class="note"><span data-i18n="dl.latest">Latest release:</span> <span id="relinfo"><a href="https://github.com/kaniansky/tunneler-online/releases/latest">GitHub releases</a></span></p>
   <div class="dl">
-    <div class="card"><h3>Windows</h3><div id="dl-win"><a class="file" href="https://github.com/kaniansky/tunneler-online/releases/latest">tunneler-online-…-windows-x64.exe</a></div>
-      <p class="size" data-i18n="dl.win">Windows 10 / 11. Just run it.</p></div>
-    <div class="card"><h3>Linux</h3><div id="dl-linux"><a class="file" href="https://github.com/kaniansky/tunneler-online/releases/latest">.deb / .rpm / .tar.gz</a></div>
-      <p class="size" data-i18n="dl.linux">Needs WebKitGTK 4.1 (most desktops have it).</p></div>
+    <div class="card"><h3>Windows</h3><div id="dl-win"><a class="file" href="https://github.com/kaniansky/tunneler-online/releases/latest">tunneler-online-…-windows-x64-setup.exe / .exe</a></div>
+      <p class="size" data-i18n="dl.win">Windows 10 / 11. The setup installs it and keeps it up to date; the plain .exe just runs.</p></div>
+    <div class="card"><h3>Linux</h3><div id="dl-linux"><a class="file" href="https://github.com/kaniansky/tunneler-online/releases/latest">.AppImage / .deb / .rpm / .tar.gz</a></div>
+      <p class="size" data-i18n="dl.linux">Needs WebKitGTK 4.1 (most desktops have it). The AppImage keeps itself up to date.</p></div>
     <div class="card"><h3>macOS</h3><div id="dl-mac"><a class="file" href="https://github.com/kaniansky/tunneler-online/releases/latest">.dmg (Apple silicon / Intel)</a></div>
-      <p class="size" data-i18n="dl.mac">Not signed yet: right click &rarr; Open the first time.</p></div>
+      <p class="size" data-i18n="dl.mac">Not signed yet: right click &rarr; Open the first time. Updates itself.</p></div>
   </div>
   <p class="note"><span data-i18n="dl.docker">Prefer to host it yourself? The server is one Node.js file or a Docker image:</span>
     <code>docker run -p 8050:8050 ghcr.io/kaniansky/tunneler-online</code></p>
@@ -182,7 +182,7 @@
     <li data-i18n="cr4">Source code: <a href="https://github.com/kaniansky/tunneler-online">github.com/kaniansky/tunneler-online</a> (public domain, Unlicense).</li>
   </ul>
   <h3 id="privacy" data-i18n="privacy.h">Privacy</h3>
-  <p data-i18n="privacy.p">The game and the desktop app collect no personal data. Online, the server keeps game rooms (names, chat, moves) in memory only while a game exists; nothing is stored or shared. The desktop app connects to no server unless you choose online play.</p>
+  <p data-i18n="privacy.p">The game and the desktop app collect no personal data. Online, the server keeps game rooms (names, chat, moves) in memory only while a game exists; nothing is stored or shared. The desktop app only asks GitHub whether a new version is out; it connects to a game server only when you choose online play.</p>
 </div></section>
 
 <footer><div class="wrap">Tunneler Online &middot; <a href="https://tunneler-online.onrender.com/" data-play="https://tunneler-online.onrender.com/" data-i18n="foot.play">play</a> &middot;
