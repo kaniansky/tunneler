@@ -43,8 +43,12 @@ may be redesigned, but always in the original's DOS look.
 - `docs/DESIGN-8P.md` - the design of everything beyond the original (extended mode, slots / teams,
   online lobby, views, sound, map sizes, languages...), in the owner's numbered requests; later sections
   win over earlier ones.
-- `test/` - `npm test` runs all (no browser needed; `npm run test:engine | test:ext | test:ai | test:net |
-  test:lang | test:local` run parts):
+- `test/` - `npm test` runs all (no browser needed) through `test/run.js`: every test its own node process,
+  as many at a time as there are CPU cores (~65 s on 16 cores instead of ~300 s), each one's time, the
+  failures' output; `npm run test:serial` = one after another, `node test/run.js net modes` = only the
+  tests whose command contains a word. modes-check is split per mode there (`modes-check.js quick
+  only=<mode>` / `only=core`; without `only=` it still runs everything). New test file = add it to
+  `TESTS` in run.js. `npm run test:engine | test:ext | test:ai | test:net | test:lang | test:local` run parts:
   - `unicode-check.js` - names / room names / chat in any letters (Slovak, Cyrillic, Greek, CJK, emoji)
     through the Unicode plane: widths, glyph lookup order and lazy blocks, Display.paint of wide glyphs,
     Lang.enc pass-through, engine round title / statistics (classic 9 columns), DosUI, status line, the
