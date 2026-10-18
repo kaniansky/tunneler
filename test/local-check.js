@@ -46,6 +46,35 @@ function makeEnv(search, store) {
   return { win, page, key, storage };
 }
 
+// ---------------------------------------------------------------- smooth scrolling (display only)
+{
+  // the same game with and without smoothScroll: identical simulation; the views differ only on frames
+  // where the tank is on an odd x, then by exactly one pixel (screen byte = right pixel of one world byte +
+  // left pixel of the next)
+  const E = require(path.join(SRC, "js", "engine.js"));
+  const a = new E(5, { autoStart: true, smoothScroll: true }), b = new E(5, { autoStart: true });
+  let odd = 0, even = 0;
+  for (let i = 0; i < 2600; i++) {
+    const kd = new Uint8Array(128);
+    if (i > 200) { kd[E.KEYS.KeyFire[1]] = 1; kd[(i >> 6) & 1 ? E.KEYS.KeyLeft[1] : E.KEYS.KeyRight[1]] = 1; }
+    a.step({ keyDown: kd.slice(), keys: [] }); b.step({ keyDown: kd.slice(), keys: [] });
+    assert.strictEqual(a.randSeed, b.randSeed, "same RNG at " + i);
+    if (a.screen !== "play") continue;
+    assert(a.tankX[1] === b.tankX[1] && a.tankY[1] === b.tankY[1] && a.energy[1] === b.energy[1], "same tank at " + i);
+    const o = 0x143;                           // BLUE's view in the classic split screen (row 0 of it; blitView's scrOfs)
+    if (b.tankX[1] & 1) {
+      for (let c = 0; c < 37; c++) {
+        const p = b.vram[o + c * 2], q = b.vram[o + c * 2 + 2];
+        assert.strictEqual(a.vram[o + c * 2], (p >> 4) | (q & 0x0F) << 4, "shifted byte " + c + " at " + i);
+      }
+      odd++;
+    } else { for (let c = 0; c < 38; c++) assert.strictEqual(a.vram[o + c * 2], b.vram[o + c * 2]); even++; }
+  }
+  same(Array.from(a.world), Array.from(b.world));
+  assert(odd > 50 && even > 50, "tested odd and even x (" + odd + " / " + even + ")");
+  ok("smooth scrolling: the same game, views shifted one pixel on odd x only (" + odd + " / " + even + " frames)");
+}
+
 // ---------------------------------------------------------------- sound attenuation
 {
   const Speaker = require(path.join(SRC, "js", "speaker.js"));
@@ -299,9 +328,11 @@ function play(search) {
   assert.strictEqual(store.get("tunneler.sound"), "realistic", "sound style remembered");
   env.key("ArrowLeft"); env.key("ArrowLeft");              // -> muted
   assert.strictEqual(store.get("tunneler.sound"), "muted");
+  env.key("ArrowDown"); env.key("Enter");                  // Smooth scrolling: off -> on
+  assert.strictEqual(store.get("tunneler.smooth"), "1", "smooth scrolling remembered");
   env.key("ArrowDown"); env.key("Enter");                  // Show ping: off -> on
   assert.strictEqual(store.get("tunneler.ping"), "1", "show ping remembered");
-  env.key("ArrowUp");
+  env.key("ArrowUp"); env.key("ArrowUp");
   env.key("ArrowUp"); env.key("ArrowRight");               // Language: the next one
   assert.notStrictEqual(store.get("tunneler.lang") || "en", "en", "language switched");
   env.key("ArrowLeft");

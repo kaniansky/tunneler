@@ -71,7 +71,10 @@ Settings (split screen: map size, rounds to win and round time only):
   destroyed teammate's view goes black too.
 
 The homepage's **Settings** screen holds your name for online games, the language, the **sound** - muted, original (the PC speaker),
-realistic or cartoony (a sample plays when you change it) - and **Show ping** (your round-trip time as
+realistic or cartoony (a sample plays when you change it) - **Smooth scrolling** (off by default: the original
+moves the view sideways 2 pixels at a time - its screen mode holds two pixels per byte - so it stutters a
+little when you drive left or right; on, the view follows 1 pixel at a time; only the picture changes, not
+the game) - and **Show ping** (your round-trip time as
 a small number on the game's border online). Sounds of other tanks fade with their distance from the
 tank you watch and come from their side, in stereo (split screen: left near BLUE, right near GREEN).
 

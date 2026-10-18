@@ -291,6 +291,7 @@ class TunnelerEngine {
     this.youPlayer = null;                        // player 1..N marked "► you ◄" on the round title / statistics
     this.showSettings = null;                     // {view, visible, watchOut}: list the game's settings on the
                                                   // round title / statistics (null = not at all, as the original)
+    this.smoothScroll = !!o.smoothScroll;         // views scroll sideways 1 pixel at a time (blitView; the original: 2)
 
     // PlayGame locals
     this.obstacle = 0; this.static = false; this.soundOn = true; this.roundOver = false; this.matchOver = false;
@@ -572,15 +573,20 @@ class TunnelerEngine {
   putCell(x, y, ch, attr) { this.vram[y * 160 + x * 2] = ch; this.vram[y * 160 + x * 2 + 1] = attr & 0xFF; this.dirty = true; }
 
   // 76 x 71 pixel window of the world (71 rows x 38 bytes) into the attribute bytes at ScrOfs
-  blitView(col, row, scrOfs, noise) {
+  // x: the followed tank's pixel x - with smoothScroll (display only, not in the original) a view whose
+  // tank is on an odd x is copied one pixel further right: each screen byte = the right pixel of one world
+  // byte + the left pixel of the next, so it scrolls sideways 1 pixel a frame like it does up and down
+  blitView(col, row, scrOfs, noise, x) {
     let src, mem, skip;
     if (noise) { src = this.random(30000); mem = LOW_MEMORY; skip = 474; }
     else { src = row * this.ws + col; mem = this.world; skip = this.ws - 38; }
+    const half = !noise && this.smoothScroll && (x & 1) === 1;
     let dst = scrOfs;
     for (let r = 0; r < 71; r++) {
       for (let c = 0; c < 38; c++) {
         const s = noise ? (src & 0xFFFF) : src;
-        this.vram[dst] = s >= 0 && s < mem.length ? mem[s] : 0;
+        const v = s >= 0 && s < mem.length ? mem[s] : 0;
+        this.vram[dst] = !half ? v : (v >> 4) | ((s + 1 < mem.length ? mem[s + 1] : 0) & 0x0F) << 4;
         src++; dst += 2;
       }
       src += skip; dst += 84;
@@ -1290,7 +1296,7 @@ class TunnelerEngine {
           }
           this.static = this.staticTimer[I] > 0;
           if (this.static) this.staticTimer[I]--;
-          this.blitView(shr(this.tankX[I], 1) - 19, this.tankY[I] - 38, ViewOfs[I], this.static);
+          this.blitView(shr(this.tankX[I], 1) - 19, this.tankY[I] - 38, ViewOfs[I], this.static, this.tankX[I]);
           this.cpu += CPU_BLIT;
         }
         for (let I = 1; I <= 2; I++) {
@@ -1321,8 +1327,8 @@ class TunnelerEngine {
       }
       for (let I = 1; I <= 20; I++) {
         this.I = I;
-        this.blitView(shr(this.tankX[1], 1) - 19, this.tankY[1] - 38, 0x143, !this.alive[1]);
-        this.blitView(shr(this.tankX[2], 1) - 19, this.tankY[2] - 38, 0x193, !this.alive[2]);
+        this.blitView(shr(this.tankX[1], 1) - 19, this.tankY[1] - 38, 0x143, !this.alive[1], this.tankX[1]);
+        this.blitView(shr(this.tankX[2], 1) - 19, this.tankY[2] - 38, 0x193, !this.alive[2], this.tankX[2]);
         yield END_BLIT_DELAY;
       }
       this.doneLores();
@@ -2233,7 +2239,7 @@ class TunnelerEngine {
           }
           this.static = this.alive[I] && this.staticTimer[I] > 0;
           if (this.static) this.staticTimer[I]--;
-          this.inView(I, () => this.blitView(shr(this.tankX[I], 1) - 19, this.tankY[I] - 38, ViewOfs[1], this.static));
+          this.inView(I, () => this.blitView(shr(this.tankX[I], 1) - 19, this.tankY[I] - 38, ViewOfs[1], this.static, this.tankX[I]));
           if (I <= 2) this.cpu += CPU_BLIT;       // sound timing within the frame as the original's 2 blits
         }
         this.objRestore();
@@ -2252,7 +2258,7 @@ class TunnelerEngine {
       for (let I = 1; I <= 20; I++) {
         this.I = I;
         for (let p = 1; p <= N; p++)
-          this.inView(p, () => this.blitView(shr(this.tankX[p], 1) - 19, this.tankY[p] - 38, ViewOfs[1], !this.alive[p]));
+          this.inView(p, () => this.blitView(shr(this.tankX[p], 1) - 19, this.tankY[p] - 38, ViewOfs[1], !this.alive[p], this.tankX[p]));
         yield END_BLIT_DELAY;
       }
       this.doneLores();

@@ -3,6 +3,15 @@
 All notable changes to Tunneler Online. Versions follow [semantic versioning](https://semver.org/);
 a release is made by pushing a version tag (see CONTRIBUTING.md).
 
+## 3.2.0
+
+- **Smooth scrolling** (homepage Settings, below Sound; off by default): the original moves the view
+  sideways in steps of 2 pixels (its screen mode holds two pixels in each byte), so driving left or right -
+  most of all digging fast while firing - looks jerkier than up or down. With it on, the view follows the
+  tank 1 pixel at a time. Only the picture changes: the game, online play and the comparison with the
+  original stay the same, and each player chooses for themselves.
+- The Settings screen is two rows higher.
+
 ## 3.1.4
 
 - Every text input shows a gray placeholder while it's empty: your name, the game's name, Join by link,
