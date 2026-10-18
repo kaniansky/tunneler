@@ -63,7 +63,7 @@ jobs:
           umask 077
           printf 'user = "%s:%s"\n' "$FTP_USER" "$FTP_PASSWORD" > "$RUNNER_TEMP/ftp.cfg"
           url="ftp://$FTP_HOST/web/tunneler"
-          put() { curl -sS --ssl-reqd --ftp-create-dirs -K "$RUNNER_TEMP/ftp.cfg" -T "out/$1" "$url/$1"; echo "uploaded $1"; }
+          put() { curl -sS --ssl-reqd --ftp-create-dirs -K "$RUNNER_TEMP/ftp.cfg" -T "$1" "$url/$1"; echo "uploaded $1"; }
           # the packages first, then the indexes that list them, then the old files nobody lists any more
           cd out
           for f in apt/*.deb rpm/*.rpm; do put "$f"; done
