@@ -2,20 +2,26 @@
 // on a base's walls takes one (not from the base's own team). A base at 0 falls: its walls turn to dirt
 // (rubble) and it gives nothing any more (baseUsable). A destroyed tank comes back at its own base after
 // ~3 s while that base stands - not after it fell. A team with no base and no tank left is out; the last
-// team in wins the round (at the round time: the most hit points left in the team's bases, a tie = nobody).
+// team in wins the round. At the round time (no round time set: 10 minutes, OWN_TIME) the team with the
+// most hit points left in its bases wins, then the most hits on enemy bases this round, then the most damage
+// to enemy tanks; still a tie = nobody.
 //
 // All state lives in e.GS (reset by the engine at every match start, filled in round()):
 //   hp[q]     hit points of player q's base (0 = fallen)     fall[]  bases fallen, walls not yet rubble
 //   back[p]   frame counter value when destroyed tank p comes back (0 = not waiting)
 //   f         play frames this round                          spots[q] firing spots against base q (AI)
+//   hits[p]   hits player p landed on enemy bases this round (timeUp)
 // e.modeScore[p]: hits player p landed on enemy bases this match (kept, not shown).
 // Deterministic: only engine state and plain arrays; the AI keeps its own per-round notes on the AI object
-// (rebuilt identically by every client from the same history) and uses no randomness.
+// (ai.siege, rebuilt identically by every client from the same history) and uses only ai.rng().
 (function (root) {
 const E = root.TunnelerEngine || require("../engine.js");
 
 const BASE_HP = 30;            // hits a base takes
-const BACK_FRAMES = 55;        // ~3 s (18.2 frames a second) before a destroyed tank comes back
+const BACK_FRAMES = 55;
+const OWN_TIME = Math.round(10 * 60 * 1193182 / 65536);   // 10 minutes in engine steps (no round time set)
+const FIGHT = 0.3;             // AI: chance to stop and fight an enemy met away from the bases (fightNow)
+const FINISH = 10;             // AI: a besieged base this low is finished off, no retreat (aiRetreat)        // ~3 s (18.2 frames a second) before a destroyed tank comes back
 const WALL = 17;               // the walls are at +-17 px from the base's middle, doorway gaps |dx| <= 3
 const DX = [0, 1, 1, 1, 0, -1, -1, -1];
 const DY = [-1, -1, 0, 1, 1, 1, 0, -1];
@@ -35,6 +41,7 @@ function eachWall(e, q, cb) {
   for (let y = by - WALL + 1; y <= by + WALL - 1; y++) { cb(bx - WALL, y); cb(bx + WALL, y); }
 }
 const standing = (e, q) => e.GS.hp && e.GS.hp[q] > 0;
+const G0 = (e, s) => e.GS.spots[s.q] && e.GS.spots[s.q][s.si];   // the AI's spot exists (this world)
 const isRock = (e, x, y) => e.pixelClass[e.getPixel(x, y)] === 4;
 
 // Firing spots against base q (computed once a round): in front of each wall, facing it, with no rock in
@@ -79,11 +86,15 @@ function baseHitAt(e, shooter, x, y, c) {
   return 0;
 }
 
-// ---- the AI: shoot the enemy bases down (fights as usual when an enemy is near or it must refuel)
+// ---- the AI: shoot the enemy bases down (fights an enemy at its base, in its face or at its spot - others
+// only now and then, fightNow; refuels when low on energy)
 function aiState(ai, e) {
   let s = ai.siege;
-  if (!s || s.round !== e.round || s.eng !== e)
-    s = ai.siege = { round: e.round, eng: e, q: 0, si: -1, best: 1e9, bestT: 0, lastT: 0, bad: new Set(), badT: 0, refuel: false, wasRet: false, push: false };
+  // a new round for this AI (ai.roundKey: the round and every base; ai.t restarts at 0 in its resetRound -
+  // a rematch with 1 round to win has the same e.round as the last match, but ai.t starts again)
+  if (!s || s.key !== ai.roundKey || s.eng !== e || ai.t < s.lastT)
+    s = ai.siege = { key: ai.roundKey, eng: e, q: 0, si: -1, best: 1e9, bestT: 0, lastT: 0, bad: new Set(), badT: 0,
+      refuel: false, wasRet: false, push: false, meetQ: 0, meetT: -9999, fight: true };
   return s;
 }
 // the enemy base to besiege and the spot to shoot from: the nearest standing enemy base (sticky), its spot
@@ -117,35 +128,51 @@ function siegeTarget(ai, e, mx, my) {
     if (s.si < 0) { s.q = 0; return null; }
     s.best = 1e9; s.bestT = ai.t;
   }
+  if (!G.spots[s.q] || !G.spots[s.q][s.si]) { s.q = 0; s.si = -1; return null; }   // (never: state of another world)
   const sp = G.spots[s.q][s.si], d = cheb(mx, my, sp.x, sp.y);
   if (d < s.best) { s.best = d; s.bestT = ai.t; }
   if (d <= 2) s.bestT = ai.t;                   // there: not stuck
   return sp;
 }
 
+// an enemy in reach on the way to a base: fight it (return true: the usual engage) or slip past it to the
+// firing spot. Two equal tanks that always stopped to fight met halfway, the fresh one (just back at its
+// base) won, drove on with a damaged shield, met the other one fresh from its base, and so on - for whole
+// rounds, nobody ever reaching a base. So it fights when the enemy is at its own base (defending), right in
+// its face, or at the spot it shoots from; else a coin (ai.rng, once per meeting) says whether to fight it.
+function fightNow(ai, e, mx, my, ctx, s) {
+  const E = ctx.E, me = ai.me;
+  if (ctx.dE <= 16) return true;
+  if (cheb(E.x, E.y, e.baseX[me], e.baseY[me]) < e.sc(100)) return true;
+  if (s.q && s.si >= 0 && G0(e, s) && cheb(mx, my, e.GS.spots[s.q][s.si].x, e.GS.spots[s.q][s.si].y) < 20) return true;
+  if (s.meetQ !== ai.focus || ai.t - s.meetT > 200) { s.meetQ = ai.focus; s.fight = ai.rng() < FIGHT; }
+  s.meetT = ai.t;
+  return s.fight;
+}
+
 const LANG = {
   en: {
-    instr: "Every base can take 30 hits; enemy shots exploding on its walls wear it down (yours never hurt your own team's bases). A base at 0 falls to rubble and no longer refuels or repairs. A destroyed tank comes back at its base after about 3 seconds - unless the base has fallen. The last team with a base or a tank left wins the round; when the round time runs out, the team with the most base hits left.",
+    instr: "Every base can take 30 hits; enemy shots exploding on its walls wear it down (yours never hurt your own team's bases). A base at 0 falls to rubble and no longer refuels or repairs. A destroyed tank comes back at its base after about 3 seconds - unless the base has fallen. The last team with a base or a tank left wins the round; when the round time (10 minutes if none is set) runs out, the team with the most base hits left wins.",
     score: "base {n}", fallen: "base down",
   },
   sk: {
-    instr: "Každá základňa vydrží 30 zásahov; nepriateľské strely vybuchujúce na jej stenách ju ničia (tvoje nikdy nepoškodia základne tvojho tímu). Základňa na nule sa rozpadne na trosky a už nedopĺňa energiu ani neopravuje. Zničený tank sa po asi 3 sekundách vráti na svoju základňu - ak ešte stojí. Kolo vyhrá posledný tím, ktorému zostala základňa alebo tank; keď vyprší čas kola, tím s najviac zásahmi, ktoré jeho základne ešte vydržia.",
+    instr: "Každá základňa vydrží 30 zásahov; nepriateľské strely vybuchujúce na jej stenách ju ničia (tvoje nikdy nepoškodia základne tvojho tímu). Základňa na nule sa rozpadne na trosky a už nedopĺňa energiu ani neopravuje. Zničený tank sa po asi 3 sekundách vráti na svoju základňu - ak ešte stojí. Kolo vyhrá posledný tím, ktorému zostala základňa alebo tank; keď vyprší čas kola (bez nastaveného času 10 minút), tím s najviac zásahmi, ktoré jeho základne ešte vydržia.",
     score: "základňa {n}", fallen: "bez základne",
   },
   cs: {
-    instr: "Každá základna vydrží 30 zásahů; nepřátelské střely vybuchující na jejích zdech ji ničí (tvoje nikdy nepoškodí základny tvého týmu). Základna na nule se rozpadne na trosky a už nedoplňuje energii ani neopravuje. Zničený tank se asi po 3 sekundách vrátí na svou základnu - pokud ještě stojí. Kolo vyhraje poslední tým, kterému zbyla základna nebo tank; když vyprší čas kola, tým s nejvíce zásahy, které jeho základny ještě vydrží.",
+    instr: "Každá základna vydrží 30 zásahů; nepřátelské střely vybuchující na jejích zdech ji ničí (tvoje nikdy nepoškodí základny tvého týmu). Základna na nule se rozpadne na trosky a už nedoplňuje energii ani neopravuje. Zničený tank se asi po 3 sekundách vrátí na svou základnu - pokud ještě stojí. Kolo vyhraje poslední tým, kterému zbyla základna nebo tank; když vyprší čas kola (bez nastaveného času 10 minut), tým s nejvíce zásahy, které jeho základny ještě vydrží.",
     score: "základna {n}", fallen: "bez základny",
   },
   uk: {
-    instr: "Кожна база витримує 30 влучань; ворожі постріли, що вибухають на її стінах, руйнують її (твої ніколи не шкодять базам твоєї команди). База на нулі розсипається на уламки й більше не заправляє і не ремонтує. Знищений танк повертається на свою базу приблизно за 3 секунди - якщо вона ще стоїть. Раунд виграє остання команда, в якої лишилася база або танк; коли час раунду спливає - команда, чиї бази витримають найбільше влучань.",
+    instr: "Кожна база витримує 30 влучань; ворожі постріли, що вибухають на її стінах, руйнують її (твої ніколи не шкодять базам твоєї команди). База на нулі розсипається на уламки й більше не заправляє і не ремонтує. Знищений танк повертається на свою базу приблизно за 3 секунди - якщо вона ще стоїть. Раунд виграє остання команда, в якої лишилася база або танк; коли час раунду спливає (без заданого часу - 10 хвилин), команда, чиї бази витримають найбільше влучань.",
     score: "база {n}", fallen: "без бази",
   },
   ru: {
-    instr: "Каждая база выдерживает 30 попаданий; вражеские выстрелы, взрывающиеся на её стенах, разрушают её (твои никогда не вредят базам твоей команды). База на нуле рассыпается в обломки и больше не заправляет и не чинит. Уничтоженный танк возвращается на свою базу примерно через 3 секунды - если она ещё стоит. Раунд выигрывает последняя команда, у которой осталась база или танк; когда время раунда истекает - команда, чьи базы выдержат больше всего попаданий.",
+    instr: "Каждая база выдерживает 30 попаданий; вражеские выстрелы, взрывающиеся на её стенах, разрушают её (твои никогда не вредят базам твоей команды). База на нуле рассыпается в обломки и больше не заправляет и не чинит. Уничтоженный танк возвращается на свою базу примерно через 3 секунды - если она ещё стоит. Раунд выигрывает последняя команда, у которой осталась база или танк; когда время раунда истекает (без заданного времени - 10 минут), команда, чьи базы выдержат больше всего попаданий.",
     score: "база {n}", fallen: "без базы",
   },
   genz: {
-    instr: "Every base tanks 30 hits; enemy shots popping on its walls chip it down (your own shots never touch your squad's bases, no cap). Base hits 0? It's rubble, no more refuels or repairs, it's giving nothing. Get wrecked and you respawn at your base in like 3 seconds - unless it already fell, then you're cooked. Last squad with a base or a tank still up takes the round; if the round timer runs out, the squad whose bases have the most hits left wins.",
+    instr: "Every base tanks 30 hits; enemy shots popping on its walls chip it down (your own shots never touch your squad's bases, no cap). Base hits 0? It's rubble, no more refuels or repairs, it's giving nothing. Get wrecked and you respawn at your base in like 3 seconds - unless it already fell, then you're cooked. Last squad with a base or a tank still up takes the round; if the round timer runs out (10 minutes when nobody set one), the squad whose bases have the most hits left wins.",
     score: "base {n}", fallen: "base gone",
   },
 };
@@ -157,12 +184,16 @@ E.registerMode("siege", {
 
   init(e) {
     e.GS.hp = new Array(e.nPlayers + 1).fill(0);
+    // no round time set: the mode's own limit, so that a stalemate (equal tanks keeping each other off the
+    // bases) can't run a round for ever (timeUp decides it)
+    if (!e.roundTicks) e.roundTicks = OWN_TIME;
   },
   round(e) {
     const G = e.GS, N = e.nPlayers;
     G.hp = new Array(N + 1).fill(BASE_HP); G.hp[0] = 0;
     G.back = new Array(N + 1).fill(0);
     G.fall = [];
+    G.hits = new Array(N + 1).fill(0);
     G.f = 0;
     G.spots = [null];
     for (let q = 1; q <= N; q++) G.spots.push(spotsFor(e, q));
@@ -174,6 +205,7 @@ E.registerMode("siege", {
     const G = e.GS;
     G.hp[q]--;
     e.modeScore[shooter]++;
+    G.hits[shooter]++;
     if (G.hp[q] <= 0) { G.hp[q] = 0; G.fall.push(q); G.back[q] = 0; }
   },
 
@@ -211,12 +243,18 @@ E.registerMode("siege", {
   baseUsable(e, base) { return standing(e, base); },
 
   timeUp(e) {
-    // the most hit points left in the team's standing bases (among the teams still in); a tie: nobody
-    const inT = teamsIn(e), hp = new Array(e.nTeams).fill(0);
-    for (let q = 1; q <= e.nPlayers; q++) hp[e.team(q)] += e.GS.hp[q];
-    let best = -1, top = [];
-    for (const t of inT) {
-      if (hp[t] > best) { best = hp[t]; top = [t]; } else if (hp[t] === best) top.push(t);
+    // among the teams still in: the most hit points left in the team's standing bases, then the most hits
+    // the team landed on enemy bases this round, then the most damage done to enemy tanks; else nobody
+    const inT = teamsIn(e), G = e.GS, keys = [];
+    for (let t = 0; t < e.nTeams; t++) keys.push([0, 0, 0]);
+    for (let q = 1; q <= e.nPlayers; q++) {
+      const k = keys[e.team(q)];
+      k[0] += G.hp[q]; k[1] += G.hits ? G.hits[q] : 0; k[2] += e.roundDamage[q] || 0;
+    }
+    let top = inT.slice();
+    for (let i = 0; i < 3 && top.length > 1; i++) {
+      const best = Math.max(...top.map(t => keys[t][i]));
+      top = top.filter(t => keys[t][i] === best);
     }
     e.endRound(top.length === 1 ? top[0] : -1);
     return true;
@@ -247,14 +285,26 @@ E.registerMode("siege", {
     return root.Lang && root.Lang.enc ? root.Lang.enc(t) : t;     // (font text; display only)
   },
 
+  // AI retreats (ai.js GM.aiRetreat): its base fallen - home is rubble, no retreat (aiOverride finds a
+  // teammate's base to refuel at); its base standing - a destroyed tank is back there in ~3 s, so a low
+  // shield is no reason to drive home (retreating for it, two equal bots met halfway, traded hits, both
+  // went home to repair and met there again for hours); no repairs - a shield never mends at a base. Only
+  // low energy sends it home then. Once the base it besieges is almost down, it pushes on while the energy
+  // lasts to get there and finish it.
+  aiRetreat(ai, e) {
+    const me = ai.me, s = aiState(ai, e), G = e.GS;
+    if (!standing(e, me)) return false;
+    if (s.q && s.si >= 0 && standing(e, s.q) && G.hp[s.q] <= FINISH && G.spots[s.q] && G.spots[s.q][s.si]) {
+      const sp = G.spots[s.q][s.si];
+      if (e.energy[me] > 600 + cheb(e.tankX[me], e.tankY[me], sp.x, sp.y) * 7 + G.hp[s.q] * 130) return false;
+    }
+    return "energy";
+  },
   // AI: when no enemy is near (and it needn't refuel), go to a firing spot at an enemy base and shoot
   aiOverride(ai, e, mx, my, ctx) {
     const me = ai.me, s = aiState(ai, e), fix = !e.mods.noRepair;
-    // modifier noRepair: no base mends a shield - waiting for it would be waiting forever; only energy counts
-    if (!fix && ai.retreating && e.energy[me] >= ai.cfg.leaveAt - 1000) { ai.retreating = false; ai.path = null; }
     if (!standing(e, me)) {
-      // own base fallen: retreating home is pointless - a teammate's standing base refuels and repairs
-      if (ai.retreating) { ai.retreating = false; ai.path = null; }
+      // own base fallen (no retreats, see aiRetreat): a teammate's standing base refuels (and repairs)
       const low = e.energy[me] < ai.cfg.retreatE + 1000 || (fix && e.shield[me] < ai.cfg.retreatS);
       if (low) s.refuel = true;
       else if (e.energy[me] >= ai.cfg.leaveAt - 1000 && (!fix || e.shield[me] >= ai.cfg.leaveAt - 1000)) s.refuel = false;
@@ -269,22 +319,22 @@ E.registerMode("siege", {
         s.refuel = false;
       }
     } else if (ai.retreating) {
-      // low on energy / shield on the way to a besieged base: a destroyed tank comes back at its standing
-      // base anyway, so it pushes on while the energy lasts to get there and shoot the base down (~7 a pixel
-      // digging, ~130 a hit point) - unless home is nearer and the shield is low (on a large map the way
-      // home took most of the energy: tanks turned back before ever getting there)
+      // low on energy on the way to a besieged base: a destroyed tank comes back at its standing base
+      // anyway, so it pushes on while the energy lasts to get there and shoot the base down (~7 a pixel
+      // digging, ~130 a hit point) (on a large map the way home took most of the energy: tanks turned back
+      // before ever getting there)
       // (decided once, when the retreat starts - deciding every frame, it went back and forth at the own
       // base's doorway, the refuelling there tipping the balance each time)
       if (!s.wasRet) {
-        const sp = s.q && s.si >= 0 && standing(e, s.q) ? e.GS.spots[s.q][s.si] : null;
+        const sp = s.q && s.si >= 0 && standing(e, s.q) && G0(e, s) ? e.GS.spots[s.q][s.si] : null;
         const dS = sp ? cheb(mx, my, sp.x, sp.y) : 0, dH = cheb(mx, my, e.baseX[me], e.baseY[me]);
-        s.push = !!sp && dH > 40 && e.energy[me] > 800 + dS * 7 + e.GS.hp[s.q] * 130 && (e.shield[me] >= ai.cfg.retreatS || dH > dS);
+        s.push = !!sp && dH > 40 && e.energy[me] > 800 + dS * 7 + e.GS.hp[s.q] * 130;
       }
       s.wasRet = true;
       if (!s.push || !s.q || !standing(e, s.q)) return null;
     }
     if (!ai.retreating) s.wasRet = false;
-    if (ctx.recent && ctx.dE <= ai.cfg.engage) return null;
+    if (ctx.recent && ctx.dE <= ai.cfg.engage && fightNow(ai, e, mx, my, ctx, s)) return null;
     const sp = siegeTarget(ai, e, mx, my);
     if (!sp) return null;
     if (cheb(mx, my, sp.x, sp.y) <= 2) return { dir: e.tankDir[me] === sp.dir ? -1 : sp.dir, mode: "siege" };

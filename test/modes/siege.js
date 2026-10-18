@@ -127,7 +127,25 @@ for (const l of ["en", "sk", "cs", "uk", "ru", "genz"])
   const tie = runMatch({ mode: "siege", slots: slots([1, 2]), levels: [null, null], seed: 5, size: "small", roundTime: 2, maxFrames: 3000 });
   check(tie.rounds.length >= 1 && tie.rounds[0].winnerTeam === -1, "round time: both bases whole - nobody wins the round");
   const none = runMatch({ mode: "siege", slots: slots([1, 2]), levels: [null, null], seed: 5, size: "small", maxFrames: 4000 });
-  check(none.rounds.length === 0, "no round time: idle tanks never end the round");
+  check(none.rounds.length === 0, "no round time: idle tanks don't end the round in 4000 frames");
+  // no round time set: the mode's own 10 minutes (a stalemate can't run for ever); a set one is kept
+  const own = Math.round(10 * 60 * 1193182 / 65536);
+  check(none.engine.roundTicks === own, "no round time: the mode's own limit, 10 minutes (" + none.engine.roundTicks + " steps)");
+  check(timed.engine.roundTicks === Math.round(2 * 60 * 1193182 / 65536), "a round time set is kept (" + timed.engine.roundTicks + ")");
+  const idleEnd = runMatch({ mode: "siege", slots: slots([1, 2]), levels: [null, null], seed: 5, size: "small", maxFrames: own + 400 });
+  check(idleEnd.rounds.length >= 1 && idleEnd.rounds[0].winnerTeam === -1 && idleEnd.frames > own,
+    "no round time: idle tanks - the round ends after 10 minutes, nobody wins (" + JSON.stringify(idleEnd.rounds[0]) + ")");
+  // the tie breaks: base hit points left, then hits on enemy bases this round, then damage to enemy tanks
+  const e2 = startEngine(25, { mode: "siege", slots: slots([1, 2, 3]), size: "small" });
+  idle(e2);
+  const again = () => { e2.endTimer = -1; e2.modeWinner = undefined; GM.timeUp(e2); return e2.modeWinner; };
+  e2.GS.hp[1] = 20; e2.GS.hp[2] = 20; e2.GS.hp[3] = 10;
+  e2.GS.hits[1] = 3; e2.GS.hits[2] = 5; e2.GS.hits[3] = 9;
+  check(again() === e2.team(2), "timeUp: equal base hit points - the most base hits this round wins");
+  e2.GS.hits[2] = 3; e2.roundDamage[1] = 0x700; e2.roundDamage[2] = 0xE00; e2.roundDamage[3] = 0x7000;
+  check(again() === e2.team(2), "timeUp: equal base hits too - the most damage to enemy tanks wins");
+  e2.roundDamage[1] = 0xE00;
+  check(again() === -1, "timeUp: equal in all three - nobody");
 }
 
 // ---- the AI goes for the bases
@@ -160,4 +178,74 @@ for (const s of setups) {
     const b = runMatch(o);
     check(a.bitsHash === b.bitsHash && a.stateHash === b.stateHash && a.frames === b.frames, "siege / " + s.name + ": deterministic");
   }
+}
+
+// ---- AI retreats (GM.aiRetreat): only for energy while the own base stands; never once it has fallen
+{
+  const e = startEngine(26, { mode: "siege", slots: slots([1, 2]), size: "small" });
+  const ai = new H.TunnelerAI("expert", 1, { seed: 26 });
+  H.TunnelerAI.bitsFor(ai, e);
+  check(GM.aiRetreat(ai, e) === "energy", "AI: its base standing - a low shield is no reason to go home");
+  e.GS.hp[1] = 0;
+  check(GM.aiRetreat(ai, e) === false, "AI: its base fallen - no retreat home");
+  e.GS.hp[1] = 30;
+  e.shield[1] = 2000; e.energy[1] = 11000;            // shield below expert's retreatS, energy plenty
+  for (let f = 0; f < 30; f++) e.step({ bits: [H.TunnelerAI.bitsFor(ai, e), 0], keys: [] });
+  check(!ai.retreating, "AI: a low shield, its base standing - it does not retreat");
+}
+
+// ---- several matches with the same AI objects (as play.js / online clients keep them): with 1 round to win
+// every match has the same e.round, the AI's siege notes must still start afresh (they held spot indexes of
+// the last world: a crash reading a spot list of the new world)
+{
+  const e = startEngine(2, { mode: "siege", slots: slots([1, 2, 3, 4]), size: "small", winScore: 1, extended: true });
+  const ais = [1, 2, 3, 4].map(p => new H.TunnelerAI("hard", p, { seed: 2 }));
+  let matches = 0, prev = e.screen, err = null, stale = 0, f = 0;
+  try {
+    for (; f < 100000 && matches < 3; f++) {
+      const bits = ais.map(a => H.TunnelerAI.bitsFor(a, e));
+      for (const a of ais) if (a.siege && e.screen === "play" && (a.siege.key !== a.roundKey || a.siege.lastT > a.t)) stale++;
+      const keys = e.screen === "map" ? [[32, 0x39]] : e.screen === "text" && f % 20 === 0 ? [[13, 0x1C]] : [];
+      e.step({ bits, keys });
+      if (prev !== "map" && e.screen === "map") matches++;
+      prev = e.screen;
+    }
+  } catch (x) { err = x; }
+  check(!err && matches === 3, "3 matches in a row with 1 round to win, the same AIs: no error (" + (err ? err.message : matches + " matches, " + f + " frames") + ")");
+  check(stale === 0, "the AI's siege notes always belong to the current round (" + stale + " stale frames)");
+}
+
+// ---- 8 tanks free-for-all, no round time, medium and large: no endless stalemate (the round time of the
+// mode, 10 minutes, is the safety net; most rounds end before it)
+{
+  const L = ["normal", "hard", "expert"];
+  let early = 0, all = 0;
+  for (const size of ["medium", "large"])
+    for (let seed = 1; seed <= 6; seed++) {
+      const levels = [0, 1, 2, 3, 4, 5, 6, 7].map(i => L[(i + seed) % 3]);
+      const r = runMatch({ mode: "siege", slots: slots([1, 2, 3, 4, 5, 6, 7, 8]), levels, seed, size, winScore: 1, maxFrames: 13000 });
+      all++; if (!r.engine.timedOut) early++;
+      check(r.finished && r.rounds.length >= 1 && r.rounds[0].winnerTeam >= 0,
+        "8 tanks free-for-all, " + size + ", seed " + seed + ": finishes with a winner (" + r.frames + " frames" + (r.engine.timedOut ? ", at the time" : "") + ")");
+    }
+  check(early * 4 >= all * 3, "8 tanks free-for-all: most rounds end before the time limit (" + early + " of " + all + ")");
+}
+
+// ---- large, 8 expert tanks, every modifier: deterministic, and no tank sits at its own base for good (no
+// repairs: it once waited there for a shield that never mends)
+{
+  const o = { mode: "siege", slots: slots([1, 2, 3, 4, 5, 6, 7, 8]), levels: new Array(8).fill("expert"), seed: 9, size: "large", winScore: 1,
+    maxFrames: 13000, mods: { dark: true, hardRock: true, noRepair: true } };
+  const run = new Array(9).fill(0), longest = new Array(9).fill(0);
+  const a = runMatch(Object.assign({ onFrame: e => {
+    if (e.screen !== "play") return;
+    for (let p = 1; p <= 8; p++) {
+      const at = e.alive[p] && Math.max(Math.abs(e.tankX[p] - e.baseX[p]), Math.abs(e.tankY[p] - e.baseY[p])) < 20;
+      run[p] = at ? run[p] + 1 : 0; if (run[p] > longest[p]) longest[p] = run[p];
+    }
+  } }, o));
+  const b = runMatch(o);
+  check(a.finished, "large, 8 experts, every modifier: finishes (" + a.frames + " frames)");
+  check(Math.max(...longest) < 400, "no repairs: no tank stays at its own base for long (longest " + Math.max(...longest) + " frames)");
+  check(a.bitsHash === b.bitsHash && a.stateHash === b.stateHash && a.frames === b.frames, "large, 8 experts, every modifier: deterministic");
 }

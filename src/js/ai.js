@@ -632,7 +632,20 @@ class TunnelerAI {
     // --- retreat to own base when low on energy or shield
     const homeDist = cheb(mx, my, bx, by);
     const atHome = e.distance(Math.abs(mx - bx), Math.abs(my - by)) < 15;
-    if (!this.retreating) {
+    // a game mode may change what a retreat is for: GM.aiRetreat(ai, e) -> undefined / null (the usual),
+    // "energy" (only low energy sends it home and holds it there - e.g. no base repairs shields, or a
+    // destroyed tank comes back at once anyway), false (no retreat now; one under way ends). The mode keeps
+    // its answer steady (a retreat started / ended every other frame would replan the path every frame).
+    const rp = e.GM && e.GM.aiRetreat ? e.GM.aiRetreat(this, e) : null;
+    if (rp === false) {
+      if (this.retreating) { this.retreating = false; this.path = null; this.waypoint = null; }
+    } else if (rp === "energy") {
+      if (!this.retreating) {
+        if (e.energy[me] < cfg.retreatE + homeDist * 4) { this.retreating = true; this.path = null; }
+      } else if (atHome && e.energy[me] >= cfg.leaveAt) {
+        this.retreating = false; this.path = null; this.waypoint = null;
+      }
+    } else if (!this.retreating) {
       let low = e.energy[me] < cfg.retreatE + homeDist * 4 || e.shield[me] < cfg.retreatS;
       // the best levels finish a fight they are winning
       if (low && this.levelName === "expert" && T && e.energy[me] > 1500 &&
