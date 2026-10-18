@@ -308,7 +308,7 @@ Lang.register("sk", {
   "gm.infection": "nákaza",
   "gm.infection.i": "Tanky zničené nakazenými sa k nim pridajú; vyhrá posledný zdravý tank.",
   "gm.survival": "prežitie",
-  "gm.survival.i": "Všetci hráči spolu proti vlnám AI tankov: prežite čo najdlhšie.",
+  "gm.survival.i": "Všetci hráči spolu proti vlnám AI tankov: zničte nastavený počet a vyhráte.",
   "gm.hill": "kráľ kopca",
   "gm.hill.i": "Drž zónu v strede mapy: kto prvý naplní jej skóre, vyhrá.",
   "gm.shrink": "zmenšujúci sa svet",

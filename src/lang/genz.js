@@ -303,7 +303,7 @@ Lang.register("genz", {
   "gm.infection": "zombie mode",
   "gm.infection.i": "Get wrecked by a zombie, become a zombie; last clean tank wins.",
   "gm.survival": "survive the bots",
-  "gm.survival.i": "Everyone vs waves of bots. Survive as long as you can, no cap.",
+  "gm.survival.i": "Everyone vs waves of bots. Clear the set number of waves to take the W.",
   "gm.hill": "king of the hill",
   "gm.hill.i": "Camp the zone in the middle: first to fill the bar takes the W.",
   "gm.shrink": "the zone",

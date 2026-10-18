@@ -106,6 +106,7 @@ const waveTankBases = e => e.GS.waveTanks.filter(p => e.alive[p]).map(p => { for
   check(e.roundWinnerTeam === pTeam && e.teamWins[pTeam] === 1 && e.wins[1] === 1 && e.wins[3] === 0, "... won by the players' team");
   for (let f = 0; f < 40 && e.screen === "play"; f++) g.step(1, still);
   check(e.matchOver && e.screen === "map" && e.roundLog.length === 1, "... and the match is over after that one round (screen " + e.screen + ")");
+  check(e.roundLog[0].note === "5/5" && M.stat(e, 1) === 5, "the rounds list: waves cleared of the goal, as the statistics (" + e.roundLog[0].note + ")");
 }
 
 // ---- the goal: "Waves to win"
@@ -243,6 +244,10 @@ for (const goal of [GMIN, 7, GMAX]) {
   const bTeam = G.bTeam;
   for (let f = 0; f < 40 && e.round === 1; f++) g.step(1, still);
   check(e.roundWinnerTeam === bTeam && e.wins[3] === 1 && e.wins[1] === 0 && e.matchOver && e.roundLog.length === 1, "... won by the AI - and the match with it (one round)");
+  // one number everywhere after the round: the statistics, the score table and the rounds list count waves
+  // cleared (1 of 5), only the hud is the wave fought (2)
+  check(G.cleared === 1 && G.wave === 2 && M.stat(e, 2) === 1 && M.scoreText(e, 2) === "waves 1/5" && e.roundLog[0].note === "1/5" && M.hud(e, 2).value === 2,
+    "AI wins in wave 2: stat " + M.stat(e, 2) + ", score \"" + M.scoreText(e, 2) + "\", rounds list \"" + e.roundLog[0].note + "\" = waves cleared; hud " + M.hud(e, 2).value + " = the wave");
 }
 {
   // round time: players alive -> the players win (they survived); hook decides
