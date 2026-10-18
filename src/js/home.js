@@ -102,9 +102,40 @@
     settings(true);
   }
 
+  // desktop app: a newer release (src-tauri/src/main.rs). update = {version, install, busy, error}:
+  // install = the app can replace itself (download, install, restart), else the item opens the
+  // download page in the browser
+  let update = null;
+  const tauri = () => window.__TAURI__ && window.__TAURI__.core;
+  const onMain = () => ui.spec && ui.spec.home;
+  if (window.Endpoint && Endpoint.isApp && tauri()) {
+    tauri().invoke("update_check").then(u => {
+      if (!u || !u.version) return;
+      update = { version: String(u.version), install: !!u.install };
+      if (onMain()) main(0, true);
+    }).catch(() => { /* offline, no release yet */ });
+  }
+  function runUpdate() {
+    if (!update || update.busy) return;
+    if (!update.install) { tauri().invoke("update_page").catch(() => {}); return; }
+    update.busy = true; update.error = null;
+    if (onMain()) main(0, true);
+    tauri().invoke("update_install").catch(e => {      // (on success the app restarts)
+      update.busy = false; update.error = String(e || "?").slice(0, 70);
+      if (onMain()) main(0, true);
+    });
+  }
+  const updateItems = () => !update ? [] : [
+    { key: "gap2", label: "", disabled: true },
+    { key: "update", label: T(update.busy ? "home.update.busy" : update.install ? "home.update" : "home.update.new", { v: update.version }),
+      attr: 0x0E, go: runUpdate,
+      info: update.error ? [{ text: Lang.enc(update.error), color: 12 }]
+        : [T(update.install ? "home.update.i" : "home.update.new.i", { v: update.version })] },
+  ];
+
   function main(sel, keep) {
     ui.show({
-      lines: title(), box: { y: 11 }, sel, infoRow: 20, footer: Lang.version(),
+      lines: title(), box: { y: 11 }, sel, infoRow: update ? 22 : 20, footer: Lang.version(), home: true,
       items: [
         { key: "split", label: T("home.split"), info: [T("home.split.i1"), T("home.split.i2")], go: () => split() },
         { key: "cpu", label: T("home.cpu"), info: [T("home.cpu.i1n"), T("home.cpu.i2")], go: () => cpu() },
@@ -114,6 +145,7 @@
         { key: "instr", label: T("menu.instr"), info: [T("menu.instr.i")], go: () => ui.showPage("instructions", "hotseat", () => main(4)) },
         { key: "info", label: T("menu.info"), info: [T("menu.info.i")], go: () => ui.showPage("information", "hotseat", () => main(5)) },
         { key: "settings", label: T("home.settings"), info: [T("home.settings.i")], go: () => settings() },
+        ...updateItems(),
       ],
     }, keep);
   }

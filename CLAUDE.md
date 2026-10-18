@@ -563,3 +563,15 @@ none, i.e. a page from before 2.0 - is refused (POST 409 `{code:
 - Statistics centred vertically (vs computer's right half, the online page): drawn with `statsCentred`
   (settings held back), then `centreStats(c0, c1, r0, r1, width, mid)` finds the used rows, moves them
   (`shiftRows`, text + Unicode plane) to the middle and writes the settings one blank row below.
+- **New versions**: server.js `watchReleases` (only when started as the program; `UPDATE_CHECK=0` = off)
+  asks GitHub's latest release at start and daily and logs a newer one (`newerVersion`, `latestRelease`).
+  Desktop app: tauri-plugin-updater + opener (src-tauri/src/main.rs commands `update_check` ->
+  {version, install} | null, `update_install` (download, install, restart), `update_page` (opens
+  kaniansky.com/tunneler)); `install` = the app can replace itself (Windows NSIS install: uninstall.exe
+  beside the exe; Linux: `$APPIMAGE`; macOS). home.js (app only, `window.__TAURI__.core`,
+  `withGlobalTauri`) adds a yellow "Update to version X" / "New version X" item below Settings
+  (`home.update*` texts). Updates are signed: public key in tauri.conf.json `plugins.updater`, private
+  key = repo secret TAURI_SIGNING_PRIVATE_KEY (the owner's copy: ~/.tauri/tunneler-online.key); with it
+  app-build.yml builds the setup.exe / AppImage / .app.tar.gz + .sig and `tools/updater-manifest.js`
+  makes the release's latest.json (the endpoint: releases/latest/download/latest.json); without it no
+  latest.json (the apps then find no update). test/update-check.js.

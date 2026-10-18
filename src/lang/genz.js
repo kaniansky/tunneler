@@ -19,7 +19,7 @@ Lang.register("genz", {
   "home.online.i2": "or just spectate and vibe.",
   "home.lang": "Lingo: ", "home.lang.i1": "The lingo of the menus and the game.",
   "home.lang.i2": "← →, <ENTER> or a click switches it up.",
-  "home.settings": "Settings", "home.settings.i": "Language and sound, bestie.", "set.title": "SETTINGS", "set.sound": "Sound: ", "set.ping": "Show ping: ", "set.ping.on": "yep", "set.ping.off": "nah", "set.ping.i": "Online games: your lag in ms, top left on the border. stay humble.",
+  "home.settings": "Settings", "home.settings.i": "Language and sound, bestie.", "home.update": "Glow up to version {v}", "home.update.busy": "Glowing up to {v}, hold on...", "home.update.new": "New drop: version {v}", "home.update.i": "Downloads, installs, restarts. zero effort, big W.", "home.update.new.i": "Opens the download page in your browser. go get it.", "set.title": "SETTINGS", "set.sound": "Sound: ", "set.ping": "Show ping: ", "set.ping.on": "yep", "set.ping.off": "nah", "set.ping.i": "Online games: your lag in ms, top left on the border. stay humble.",
   "set.server": "Server: ", "set.server.i1": "Online games: where the server lives, e.g. example.com:8050.", "set.server.i2": "Empty = the public one. <ENTER> locks it in.", "sound.muted": "muted", "sound.original": "OG (PC speaker)", "sound.realistic": "realistic", "sound.cartoony": "cartoony", "sound.i1": "OG: the 1991 PC speaker beeps. Realistic: actual tank noises.", "sound.i2": "Cartoony: boings and pops. ← → switches it and plays a sample.",
   "cpu.title": "SKIRMISH FR", "cpu.start": "Lock in", "cpu.start.i1": "Start a game vs the bot ({level}).",
   "cpu.own": "You only see your own screen.", "cpu.both": "You see both screens (kinda sus).",

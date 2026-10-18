@@ -817,7 +817,44 @@ function createServer(opts = {}) {
   };
 }
 
-module.exports = { createServer, slugify, cleanName, langBundle, modesBundle };
+// New releases: the started server asks GitHub for the latest release now and once a day and logs it
+// when it is newer than this server (UPDATE_CHECK=0 turns that off). Nothing is downloaded or changed.
+const RELEASES = "https://api.github.com/repos/kaniansky/tunneler-online/releases/latest";
+const DAY_MS = 24 * 3600 * 1000;
+// true when version a (e.g. "2.1.0", "v2.1.0") is newer than b; pre-releases ("2.1.0-rc1") count as
+// older than their release
+function newerVersion(a, b) {
+  const parse = v => { const m = /^v?(\d+)\.(\d+)\.(\d+)(-.*)?$/.exec(String(v || "").trim()); return m ? [+m[1], +m[2], +m[3], m[4] ? 0 : 1] : null; };
+  const x = parse(a), y = parse(b);
+  if (!x || !y) return false;
+  for (let i = 0; i < 4; i++) if (x[i] !== y[i]) return x[i] > y[i];
+  return false;
+}
+// -> {version, url} of a newer release, or null (none, no answer, not a version); fetchFn for tests
+async function latestRelease(current, fetchFn = globalThis.fetch) {
+  if (!fetchFn || !current) return null;
+  try {
+    const res = await fetchFn(RELEASES, { headers: { accept: "application/vnd.github+json", "user-agent": "tunneler-online/" + current },
+      signal: AbortSignal.timeout(10000) });
+    if (!res.ok) return null;
+    const rel = await res.json();
+    const version = String(rel.tag_name || "").replace(/^v/, "");
+    return newerVersion(version, current) ? { version, url: rel.html_url || "https://github.com/kaniansky/tunneler-online/releases/latest" } : null;
+  } catch (e) { return null; }
+}
+function watchReleases(current, say = log) {
+  let told = null;
+  const check = () => latestRelease(current).then(rel => {
+    if (!rel || rel.version === told) return;
+    told = rel.version;
+    say(`A new version of TUNNELER is out: ${rel.version} (this server runs ${current}). ${rel.url}`);
+    say("  Update: docker compose pull && docker compose up -d   (from source: git pull && npm ci && npm run build, then restart)");
+  });
+  check();
+  setInterval(check, DAY_MS).unref();
+}
+
+module.exports = { createServer, slugify, cleanName, langBundle, modesBundle, newerVersion, latestRelease };
 
 // Readable start-up errors instead of a Node stack trace (exit code 1).
 function startupError(port, err) {
@@ -843,5 +880,8 @@ if (require.main === module) {
   }
   const srv = createServer();
   srv.server.on("error", err => startupError(port, err));
-  srv.listen(port, p => log("TUNNELER server on http://localhost:" + p));
+  srv.listen(port, p => {
+    log("TUNNELER server " + (VERSION || "") + " on http://localhost:" + p);
+    if (VERSION && !/^(0|false|no|off)$/i.test(process.env.UPDATE_CHECK || "")) watchReleases(VERSION);
+  });
 }

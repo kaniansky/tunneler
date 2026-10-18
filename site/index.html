@@ -208,7 +208,7 @@
     const pick = re => rel.assets.filter(a => re.test(a.name)).map(link).join("");
     const put = (id, html) => { if (html) document.getElementById(id).innerHTML = html; };
     put("dl-win", pick(/windows.*\.exe$/));
-    put("dl-linux", pick(/(\.deb|\.rpm|linux.*\.tar\.gz)$/));
+    put("dl-linux", pick(/(\.deb|\.rpm|\.AppImage|linux.*\.tar\.gz)$/));
     put("dl-mac", pick(/macos.*\.dmg$/));
     document.getElementById("relinfo").innerHTML = '<a href="' + rel.html_url + '">' + rel.tag_name + "</a>";
   }).catch(() => {});

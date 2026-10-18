@@ -61,6 +61,7 @@ jobs:
     uses: ./.github/workflows/app-build.yml
     with:
       tag: v${{ needs.release.outputs.version }}
+    secrets: inherit           # TAURI_SIGNING_PRIVATE_KEY: signed updates + latest.json
     permissions:
       contents: write
 

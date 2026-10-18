@@ -21,13 +21,16 @@
     ],
     "security": {
       "csp": null
-    }
+    },
+    "withGlobalTauri": true
   },
   "bundle": {
     "active": true,
     "targets": [
+      "nsis",
       "deb",
       "rpm",
+      "appimage",
       "dmg",
       "app"
     ],
@@ -48,6 +51,17 @@
           "libwebkit2gtk-4.1-0",
           "libgtk-3-0"
         ]
+      }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEQwNzY3OTI5REY2OUFCM0IKUldRN3EybmZLWGwyMEFnc3YvbFc4WUJ4ZkRCMWVkRVhnb0RKRUE4aU8wY0VORHl5THdNUjU4blcK",
+      "endpoints": [
+        "https://github.com/kaniansky/tunneler-online/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
       }
     }
   }

@@ -157,9 +157,13 @@ in its own window, using the web view the system already has (a few MB, no brows
 
 | System | File | Needs |
 |---|---|---|
-| Windows 10 / 11 | `tunneler-online-<version>-windows-x64.exe` (just run it) | WebView2 (built in) |
-| Linux | `.deb`, `.rpm`, or the bare binary in `-linux-x64.tar.gz` | `libwebkit2gtk-4.1` |
+| Windows 10 / 11 | `-windows-x64-setup.exe` (installer) or `tunneler-online-<version>-windows-x64.exe` (just run it) | WebView2 (built in) |
+| Linux | `-linux-x64.AppImage`, `.deb`, `.rpm`, or the bare binary in `-linux-x64.tar.gz` | `libwebkit2gtk-4.1` |
 | macOS | `-macos-arm64.dmg` (Apple silicon) / `-macos-x64.dmg` (Intel) | not signed: right click -> Open the first time |
+
+When a newer release is out, the app's main menu shows **Update to version X**: the installed Windows
+app, the AppImage and the macOS app download it, install it and restart; the portable exe, `.deb`,
+`.rpm` and `.tar.gz` show **New version X**, which opens the download page.
 
 Split screen and vs computer work offline. Online play goes to the public server; to play on your own,
 set **Server** on the homepage's Settings screen (e.g. `example.com:8050`, empty = the public one). The
@@ -194,6 +198,9 @@ docker build -t tunneler-online . && docker run -d -p 8050:8050 tunneler-online 
 
 Games live in the server's memory (a restart ends running games); a game nobody plays in for 10 minutes
 is closed automatically.
+
+The server checks GitHub for a newer release when it starts and once a day, and logs a line when one is
+out (`UPDATE_CHECK=0` turns that off; nothing is downloaded).
 
 Every release (a pushed version tag) publishes the Docker image to `ghcr.io/kaniansky/tunneler-online`
 (`latest` and the version; see `.github/workflows/release.yml`).

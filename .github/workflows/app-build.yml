@@ -3,9 +3,16 @@ name: Desktop app
 # The desktop app (src-tauri/: the game's pages in the OS's own web view, online play on a server set
 # in the app) for Windows, Linux and macOS, built as small as possible:
 #   Windows  tunneler-online-<v>-windows-x64.exe    portable, needs WebView2 (built into Windows 10/11)
+#            ...-windows-x64-setup.exe               installer (the installed app updates itself)
 #   Linux    tunneler-online-<v>-linux-x64.tar.gz   the binary, needs libwebkit2gtk-4.1
 #            ..._amd64.deb / ....x86_64.rpm          packages that pull that in
+#            ...-linux-x64.AppImage                  runs anywhere, updates itself
 #   macOS    tunneler-online-<v>-macos-arm64.dmg / -macos-x64.dmg  (unsigned: right click -> Open)
+# Updates (src-tauri/src/main.rs): with the repository secret TAURI_SIGNING_PRIVATE_KEY (the key whose
+# public half is in tauri.conf.json; TAURI_SIGNING_PRIVATE_KEY_PASSWORD if it has one) the setup.exe,
+# the AppImage and the macOS app (.app.tar.gz) are signed (.sig) and the release gets latest.json
+# (tools/updater-manifest.js), which the apps of older versions read to update themselves. Without the
+# secret everything else is built the same, just without those.
 # release.yml calls it for every release and the files are attached to that GitHub release; a push to
 # an app/** branch (or a manual run) builds them as workflow artifacts only, to try a change.
 
@@ -31,18 +38,18 @@ jobs:
         include:
           - os: windows-latest
             name: windows-x64
-            args: --no-bundle
+            args: --bundles nsis
           - os: ubuntu-22.04
             name: linux-x64
-            args: --bundles deb,rpm
+            args: --bundles deb,rpm,appimage
           - os: macos-latest
             name: macos-arm64
             target: aarch64-apple-darwin
-            args: --target aarch64-apple-darwin --bundles dmg
+            args: --target aarch64-apple-darwin --bundles app,dmg
           - os: macos-latest
             name: macos-x64
             target: x86_64-apple-darwin
-            args: --target x86_64-apple-darwin --bundles dmg
+            args: --target x86_64-apple-darwin --bundles app,dmg
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
@@ -63,7 +70,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential libssl-dev libxdo-dev librsvg2-dev rpm
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential libssl-dev libxdo-dev librsvg2-dev rpm patchelf libfuse2
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -75,7 +82,17 @@ jobs:
           key: ${{ matrix.name }}
 
       - name: Build the app
-        run: npx --yes @tauri-apps/cli@2 build ${{ matrix.args }}
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          extra=()
+          if [ -n "$TAURI_SIGNING_PRIVATE_KEY" ]; then
+            echo '{"bundle":{"createUpdaterArtifacts":true}}' > "$RUNNER_TEMP/updater.json"
+            extra=(--config "$RUNNER_TEMP/updater.json")
+          fi
+          npx --yes @tauri-apps/cli@2 build ${{ matrix.args }} "${extra[@]}"
 
       - name: Collect the files
         shell: bash
@@ -85,13 +102,20 @@ jobs:
           rel=src-tauri/target/${{ matrix.target }}/release
           [ -d "$rel" ] || rel=src-tauri/target/release
           mkdir dist
+          # an update package and its signature (only built with the signing key)
+          upd() { for f in $1; do [ -f "$f" ] && cp "$f" "dist/$2"; [ -f "$f.sig" ] && cp "$f.sig" "dist/$2.sig"; done; return 0; }
           case "${{ matrix.name }}" in
-            windows-*) cp "$rel/tunneler-online.exe" "dist/$out.exe" ;;
+            windows-*)
+              cp "$rel/tunneler-online.exe" "dist/$out.exe"
+              upd "$rel/bundle/nsis/*-setup.exe" "$out-setup.exe" ;;
             linux-*)
               tar -czf "dist/$out.tar.gz" -C "$rel" tunneler-online
               cp "$rel"/bundle/deb/*.deb "dist/tunneler-online-${v}_amd64.deb"
-              cp "$rel"/bundle/rpm/*.rpm "dist/tunneler-online-$v.x86_64.rpm" ;;
-            macos-*) cp "$rel"/bundle/dmg/*.dmg "dist/$out.dmg" ;;
+              cp "$rel"/bundle/rpm/*.rpm "dist/tunneler-online-$v.x86_64.rpm"
+              upd "$rel/bundle/appimage/*.AppImage" "$out.AppImage" ;;
+            macos-*)
+              cp "$rel"/bundle/dmg/*.dmg "dist/$out.dmg"
+              upd "$rel/bundle/macos/*.app.tar.gz" "$out.app.tar.gz" ;;
           esac
           ls -la dist
 
@@ -106,3 +130,35 @@ jobs:
         with:
           tag_name: ${{ inputs.tag }}
           files: dist/*
+
+  # latest.json for the apps' updater: every signed update package of this release
+  updater:
+    needs: build
+    if: inputs.tag != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag }}
+
+      - uses: actions/download-artifact@v7
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: latest.json
+        id: manifest
+        run: |
+          if node tools/updater-manifest.js dist "${{ inputs.tag }}" "${{ github.repository }}" > latest.json; then
+            cat latest.json
+            echo "made=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "no signed update packages (no TAURI_SIGNING_PRIVATE_KEY secret): no latest.json"
+          fi
+
+      - name: Attach to the release
+        if: steps.manifest.outputs.made == '1'
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ inputs.tag }}
+          files: latest.json
