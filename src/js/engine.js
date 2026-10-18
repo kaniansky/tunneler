@@ -316,6 +316,8 @@ class Explosion {
   }
 }
 
+// a game mode's raw Unicode text -> font text (as Lang.t gives every other text; node without Lang: as is)
+const modeEnc = s => (root.Lang && root.Lang.enc ? root.Lang.enc(s) : s);
 const HARD_ROCK_DELAY = 4;                       // modifier hardRock: frames a tank waits after each dig (1 normally)
 const DARK_R = 26;                                // modifier dark: how far a tank sees (pixels across)
 let DARK_MASK = null;                             // (darkView, built on first use)
@@ -1583,9 +1585,11 @@ class TunnelerEngine {
 
   // ---- game mode helpers (docs/DESIGN-8P.md 27; src/js/modes/*.js)
   // A game mode's text in this engine's language: GM.strings[lang][key], else English; {name} params
+  // (font text like every engine string: the modes' texts are raw Unicode - Lang.enc puts the language's
+  // letters into the font, anything else through the Unicode plane; without Lang (node) as they are)
   mt(key, params) {
     const S = this.GM && this.GM.strings || {}, t = (S[this.lang] && S[this.lang][key]) || (S.en && S.en[key]) || key;
-    return params ? t.replace(/\{(\w+)\}/g, (m, k) => params[k] !== undefined ? String(params[k]) : m) : t;
+    return modeEnc(params ? t.replace(/\{(\w+)\}/g, (m, k) => params[k] !== undefined ? String(params[k]) : m) : t);
   }
   // end the round now (the usual 25 frames later) with team index t winning (-1 = nobody)
   endRound(t) {
@@ -2756,7 +2760,7 @@ class TunnelerEngine {
       const M = TunnelerEngine.MODES[m], S = M && M.strings;
       if (!S || !S.en || !S.en.instr) continue;
       const name = ((this.strings.settings || {}).modes || STRINGS_EN.settings.modes)[m] || m;
-      add(""); para(name.charAt(0).toUpperCase() + name.slice(1) + ":  ", (S[this.lang] && S[this.lang].instr) || S.en.instr);
+      add(""); para(name.charAt(0).toUpperCase() + name.slice(1) + ":  ", modeEnc((S[this.lang] && S[this.lang].instr) || S.en.instr));
     }
     return rows;
   }
