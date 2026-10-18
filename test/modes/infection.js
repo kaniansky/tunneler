@@ -172,7 +172,7 @@ const toStats = e => {
   check([1, 2, 3, 4].every(p => e.matchWinner(p) === (p !== 4)), "infection: the match winners = the infected side");
   check(e.modeScore[1] === 1 && e.modeScore[2] === 1 && M.stat(e, 1) === 1, "infection: infections counted for the statistics");
   const lines = e.matchRoundLines(19);
-  check(lines.length === 1 && lines[0].text.includes("infected"), "infection: the rounds list - one round, won by the infected (" + lines.map(l => l.text.trim()).join(" | ") + ")");
+  check(lines.length === 1 && lines[0].text.includes("infected") && /\d:\d\d$/.test(lines[0].text), "infection: the rounds list - one round, won by the infected, its length (" + lines.map(l => l.text.trim()).join(" | ") + ")");
   toStats(e);
   const b = blinkRows(e);
   check(b.length === 3 && [1, 2, 3].every(p => b.some(l => l.includes(e.playerName(p)))) && !b.some(l => l.includes(e.playerName(4) + " ")),
@@ -192,6 +192,9 @@ for (const [goal, n] of [[1, 3], [2, 4]]) {
   check(frames > want && frames < want + 200, "infection: ... at the goal's time (" + frames + " frames, goal " + want + ", the 10 min round time ignored)");
   check(e.wins[2] === 0 && [1, 3].every(p => e.wins[p] === 1) && [1, 2, 3].every(p => e.matchWinner(p) === (p !== 2)),
     "infection: ... the healthy tanks are the winners, the infected one isn't (" + e.wins.slice(1) + ")");
+  const lines = e.matchRoundLines(19).map(l => l.text);
+  check(lines.length === 1 && lines[0].includes("healthy") && lines[0].endsWith(" " + (n - 1) + " left") && !/\d:\d\d/.test(lines[0]),
+    "infection: ... the rounds list shows the tanks still healthy, not the round's length (" + lines.join(" | ") + ")");
 }
 {
   // a tank turned during the round is on the losing side
