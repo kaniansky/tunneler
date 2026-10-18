@@ -6,14 +6,16 @@
 // up by touching it (within 5 px of its middle), at most MAX_CARRY at a time; brought into its own or a
 // teammate's base they count for its team. A hit while carrying drops one nugget where the tank is (it
 // can't pick that one up again for a moment), a destroyed tank drops all it carries.
-// The round ends when a team has more than half of all the gold home, when all of it is home (the most
-// wins, a tie: nobody), by elimination as usual, or at the round time (the most gold home wins, a tie:
+// The round ends when a team has more than half of all the gold home, when the leader can't be caught
+// any more (3+ teams), when all of it is home (the most wins, a tie: nobody), by elimination as usual, or at the round time (the most gold home wins, a tie:
 // nobody).
 //
 // State (e.GS, reset at every match start; everything a function of the engine's history):
 //   reach, cw, ch  the 8 px cells a tank can get to (rock never changes: built once per match)
 //   gx, gy         the nuggets lying in the world (their middles)
 //   noP, noT       ... a nugget a tank just dropped: that tank can't pick it up before frame noT
+//   kn             ... the tanks that know where it is (bit p): seen within SEE px, or heard dropped
+//                  within HEAR px (what a computer tank may go for, see pickNugget)
 //   carry[p]       nuggets tank p carries
 //   home[t]        nuggets team t brought home this round
 //   total          all the gold of the round (lying + carried + home)
@@ -28,6 +30,11 @@ const PICK = 5;                 // pick-up distance (tank middle - nugget middle
 const HOME = 15;                // a tank this close to a base's middle is in it (as refuelling)
 const NO_PICK = 50;             // frames a tank can't pick up the nugget it dropped
 const HIT = 0x700;              // the shield a hit takes
+const SEE = 40, SEE_DARK = 13;  // a tank sees a nugget this close (Chebyshev; the view is 76 x 71, dark ~26)
+const HEAR = 150;               // ... and knows where one was dropped (a hit / a destroyed tank) this close
+// what a computer tank knows of the gold besides what it has seen / heard: any nugget within this many px
+// of it (0: nothing more; Infinity: the whole map)
+const AI_KNOW = { easy: 0, normal: 0, hard: 100, expert: Infinity };
 const DX = [0, 1, 1, 1, 0, -1, -1, -1], DY = [-1, -1, 0, 1, 1, 1, 0, -1];
 const cheb = (ax, ay, bx, by) => Math.max(Math.abs(ax - bx), Math.abs(ay - by));
 
@@ -98,7 +105,7 @@ function scatter(e) {
         if (strict ? c !== 1 : (c === 4 || c === 3)) ok = false;
       }
     for (let n = 0; n < S.gx.length && ok; n++) if (cheb(x, y, S.gx[n], S.gy[n]) < 8) ok = false;
-    if (ok) { S.gx.push(x); S.gy.push(y); S.noP.push(0); S.noT.push(0); }
+    if (ok) { S.gx.push(x); S.gy.push(y); S.noP.push(0); S.noT.push(0); S.kn.push(0); }
   }
   S.total = S.gx.length;
 }
@@ -109,10 +116,17 @@ function drop(e, x, y, x0, y0, p) {
   const bad = (px, py) => { const c = PC[e.getPixel(px, py)]; return c === 4 || px < 2 || py < 2 || px >= e.worldW - 2 || py >= e.worldH - 2; };
   for (let k = 0; k < 6 && bad(x, y); k++) { x += Math.sign(x0 - x); y += Math.sign(y0 - y); }
   if (bad(x, y)) { x = x0; y = y0; }
-  S.gx.push(x); S.gy.push(y); S.noP.push(p); S.noT.push(S.f + NO_PICK);
+  // (the tanks that hear it fall know where it lies - the dropping one too)
+  let kn = 0;
+  for (let q = 1; q <= e.nPlayers; q++)
+    if (q === p || (e.alive[q] && cheb(x, y, e.tankX[q], e.tankY[q]) <= HEAR)) kn |= 1 << q;
+  S.gx.push(x); S.gy.push(y); S.noP.push(p); S.noT.push(S.f + NO_PICK); S.kn.push(kn);
 }
 
-// the round's end by gold: a team with more than half of it home, or all of it home (the most wins)
+// the round's end by gold: a team with more than half of it home, all of it home (the most wins), or a
+// leader nobody can catch any more (more home than any other team could have with all the gold still
+// lying around and carried by other teams' tanks - the same winner as "all home", just earlier; with 2
+// teams "more than half" always comes first)
 function checkEnd(e) {
   const S = e.GS;
   if (e.endTimer >= 0 || !S.total) return;
@@ -121,7 +135,13 @@ function checkEnd(e) {
     sum += S.home[t];
     if (S.home[t] * 2 > S.total) { e.endRound(t); return; }
   }
-  if (sum >= S.total) e.endRound(mostGold(e));
+  if (sum >= S.total) { e.endRound(mostGold(e)); return; }
+  const t = mostGold(e);
+  if (t < 0) return;
+  let open = S.gx.length;
+  for (let p = 1; p <= e.nPlayers; p++) if (e.team(p) !== t) open += S.carry[p];
+  for (let u = 0; u < e.nTeams; u++) if (u !== t && S.home[t] <= S.home[u] + open) return;
+  e.endRound(t);
 }
 // the team with the most gold home (-1: a tie at the top)
 function mostGold(e) {
@@ -140,16 +160,19 @@ function atHomeBase(e, p) {
 }
 
 // ---------------------------------------------------------------- AI
-// the nugget a computer tank goes for: the nearest one (a little sticky, so two at about the same distance
-// don't make it dither), not one a teammate is clearly nearer to, not one it just dropped -> index or -1
+// the nugget a computer tank goes for: the nearest one it knows of (seen, heard dropped, or within its
+// level's AI_KNOW; a little sticky, so two at about the same distance don't make it dither), not one a
+// teammate is clearly nearer to, not one it just dropped -> index or -1 (none known: it explores as usual)
 function pickNugget(ai, e, mx, my) {
-  const S = e.GS, me = ai.me;
+  const S = e.GS, me = ai.me, bit = 1 << me;
+  const know = AI_KNOW[ai.levelName] !== undefined ? AI_KNOW[ai.levelName] : 0;
   if (ai.goldRound !== e.round) { ai.goldRound = e.round; ai.goldX = -1; ai.goldY = -1; }
   let best = -1, bestC = Infinity;
   for (let n = 0; n < S.gx.length; n++) {
     if (S.noP[n] === me && S.f < S.noT[n]) continue;
     const x = S.gx[n], y = S.gy[n];
     let c = cheb(mx, my, x, y);
+    if (!(S.kn[n] & bit) && c > know) continue;
     if (x === ai.goldX && y === ai.goldY) c -= 15;
     for (const q of ai.mates)
       if (e.alive[q] && S.carry[q] < MAX_CARRY && cheb(e.tankX[q], e.tankY[q], x, y) + 20 < c) { c += 40; break; }
@@ -176,6 +199,40 @@ function goldGoal(ai, e, mx, my) {
   }
   if (n >= 0) return { x: S.gx[n], y: S.gy[n], mode: "gold", dig: true };
   return null;
+}
+
+// no gold known and no enemy to hunt: search for gold like a player would - sweep the parts of the map
+// this tank hasn't been to yet (its own record: SWEEP x SWEEP px cells it has had in view this round).
+// The goal: the nearest of a few random unvisited cells a tank can get to (picked with ai.rng, kept until
+// that cell is seen or after PROSPECT_T frames); null: an enemy seen lately or a clue to follow (hunt as
+// usual), or nothing left to search
+const SWEEP = 64, PROSPECT_T = 400;
+function prospect(ai, e, mx, my) {
+  const S = e.GS;
+  if (!S.reach) return null;
+  if (ai.enemy && ai.t - ai.cfg.delay - ai.enemy.t <= ai.cfg.memory) return null;
+  if (ai.clue && ai.t - ai.clue.t < 150) return null;
+  const cw = Math.ceil(e.worldW / SWEEP), ch = Math.ceil(e.worldH / SWEEP);
+  if (ai.prosR !== e.round || !ai.prosV) { ai.prosR = e.round; ai.prosV = new Uint8Array(cw * ch); ai.prosC = -1; ai.prosT = 0; }
+  const V = ai.prosV;
+  // what it has in view now (the view reaches ~38 px from the tank)
+  for (let j = Math.max(0, (my - 32) >> 6); j <= Math.min(ch - 1, (my + 32) >> 6); j++)
+    for (let i = Math.max(0, (mx - 32) >> 6); i <= Math.min(cw - 1, (mx + 32) >> 6); i++) V[j * cw + i] = 1;
+  if (ai.prosC < 0 || V[ai.prosC] || S.f >= ai.prosT) {
+    ai.prosC = -1; ai.prosT = S.f + PROSPECT_T;
+    let best = Infinity;
+    for (let k = 0; k < 24; k++) {
+      const c = Math.floor(ai.rng() * cw * ch);
+      if (V[c]) continue;
+      const x = (c % cw) * SWEEP + (SWEEP >> 1), y = Math.floor(c / cw) * SWEEP + (SWEEP >> 1);
+      if (!reachable(e, x, y)) { V[c] = 1; continue; }     // (rock: nothing to find there)
+      const d = cheb(mx, my, x, y);
+      if (d < best) { best = d; ai.prosC = c; }
+    }
+  }
+  if (ai.prosC < 0) return null;
+  const c = ai.prosC;
+  return { x: (c % cw) * SWEEP + (SWEEP >> 1), y: Math.floor(c / cw) * SWEEP + (SWEEP >> 1), mode: "gold-search", dig: false };
 }
 
 // ---------------------------------------------------------------- the mode
@@ -228,7 +285,7 @@ E.registerMode("gold", {
 
   round(e) {
     const S = e.GS, N = e.nPlayers;
-    S.gx = []; S.gy = []; S.noP = []; S.noT = [];
+    S.gx = []; S.gy = []; S.noP = []; S.noT = []; S.kn = [];
     S.carry = new Array(N + 1).fill(0);
     S.home = new Array(e.nTeams).fill(0);
     S.sh = e.shield.slice();
@@ -237,11 +294,14 @@ E.registerMode("gold", {
   },
 
   frame(e) {
-    const S = e.GS, N = e.nPlayers;
+    const S = e.GS, N = e.nPlayers, see = e.mods && e.mods.dark ? SEE_DARK : SEE;
     S.f++;
     for (let p = 1; p <= N; p++) {
       if (!e.alive[p]) continue;
-      const x = e.tankX[p], y = e.tankY[p];
+      const x = e.tankX[p], y = e.tankY[p], bit = 1 << p;
+      // the nuggets it sees now
+      for (let n = 0; n < S.gx.length; n++)
+        if (!(S.kn[n] & bit) && cheb(S.gx[n], S.gy[n], x, y) <= see) S.kn[n] |= bit;
       // hit since the last frame (the shield only ever drops by hits): one nugget per hit drops behind it
       if (e.shield[p] < S.sh[p] && S.carry[p] > 0) {
         let hits = Math.max(1, Math.round((S.sh[p] - e.shield[p]) / HIT));
@@ -257,7 +317,7 @@ E.registerMode("gold", {
         if (Math.abs(S.gx[n] - x) > PICK || Math.abs(S.gy[n] - y) > PICK) continue;
         if (e.distance(Math.abs(S.gx[n] - x), Math.abs(S.gy[n] - y)) > PICK) continue;
         S.carry[p]++;
-        S.gx.splice(n, 1); S.gy.splice(n, 1); S.noP.splice(n, 1); S.noT.splice(n, 1);
+        S.gx.splice(n, 1); S.gy.splice(n, 1); S.noP.splice(n, 1); S.noT.splice(n, 1); S.kn.splice(n, 1);
         n--;
       }
       // home: what it carries counts for its team
@@ -289,12 +349,14 @@ E.registerMode("gold", {
     return true;
   },
 
+  // (under the tanks and shots: a pixel of theirs - or of a base wall - stays as it is)
   draw(e) {
-    const S = e.GS;
+    const S = e.GS, PC = E.PixelClassExt;
     if (!S.gx) return;
     for (let n = 0; n < S.gx.length; n++) {
       const x = S.gx[n], y = S.gy[n];
-      for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) e.objPut(x + i, y + j, 14);
+      for (let j = -1; j <= 1; j++)
+        for (let i = -1; i <= 1; i++) if (PC[e.getPixel(x + i, y + j)] !== 3) e.objPut(x + i, y + j, 14);
     }
   },
 
@@ -319,12 +381,14 @@ E.registerMode("gold", {
     return goldGoal(ai, e, mx, my);
   },
   aiGoal(ai, e, mx, my) {
-    return goldGoal(ai, e, mx, my);
+    return goldGoal(ai, e, mx, my) || prospect(ai, e, mx, my);
   },
 
   // (for tests)
   _nuggetCount: nuggetCount,
   _checkEnd: checkEnd,
+  _pickNugget: pickNugget,
+  SEE, HEAR, AI_KNOW,
   MAX_CARRY,
 });
 })(typeof window !== "undefined" ? window : globalThis);

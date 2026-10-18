@@ -25,7 +25,7 @@ function placeTank(e, p, x, y) {
   for (let j = -6; j <= 6; j++) for (let i = -6; i <= 6; i++) e.setPixel(x + i, y + j, 0);
   e.tankX[p] = x; e.tankY[p] = y;
 }
-function addNugget(e, x, y) { e.GS.gx.push(x); e.GS.gy.push(y); e.GS.noP.push(0); e.GS.noT.push(0); e.GS.total++; }
+function addNugget(e, x, y) { e.GS.gx.push(x); e.GS.gy.push(y); e.GS.noP.push(0); e.GS.noT.push(0); e.GS.kn.push(0); e.GS.total++; }
 
 // ---- the nuggets
 for (const [size, teams, seed] of [["small", [1, 2], 3], ["small", [1, 2, 3, 4, 5, 6, 7, 8], 4], ["medium", [1, 2, 1, 2], 5], ["large", [1, 2], 6]]) {
@@ -95,7 +95,7 @@ for (const [size, teams, seed] of [["small", [1, 2], 3], ["small", [1, 2, 3, 4, 
 {
   // a teammate's base counts too; an enemy's doesn't
   const e = start(22, { slots: slots([1, 2, 1]) }), S = e.GS;
-  S.carry[1] = 2; for (let m = 0; m < 2; m++) S.gx.pop(), S.gy.pop(), S.noP.pop(), S.noT.pop();
+  S.carry[1] = 2; for (let m = 0; m < 2; m++) S.gx.pop(), S.gy.pop(), S.noP.pop(), S.noT.pop(), S.kn.pop();
   e.tankX[1] = e.baseX[2]; e.tankY[1] = e.baseY[2];
   idle(e);
   check(S.carry[1] === 2 && S.home[e.team(1)] === 0, "an enemy's base: the gold stays on the tank");
@@ -106,7 +106,7 @@ for (const [size, teams, seed] of [["small", [1, 2], 3], ["small", [1, 2, 3, 4, 
 {
   // a destroyed tank drops all it carries; elimination ends the round as usual
   const e = start(23), S = e.GS;
-  S.carry[2] = 3; for (let m = 0; m < 3; m++) S.gx.pop(), S.gy.pop(), S.noP.pop(), S.noT.pop();
+  S.carry[2] = 3; for (let m = 0; m < 3; m++) S.gx.pop(), S.gy.pop(), S.noP.pop(), S.noT.pop(), S.kn.pop();
   const lying = S.gx.length, x = e.tankX[2], y = e.tankY[2];
   e.killTankExt(2, x, y);
   check(S.carry[2] === 0 && S.gx.length === lying + 3 && S.gx.slice(-3).every((gx, k) => cheb(gx, S.gy[lying + k], x, y) <= 6),
@@ -119,16 +119,79 @@ for (const [size, teams, seed] of [["small", [1, 2], 3], ["small", [1, 2, 3, 4, 
 {
   // all the gold home: the most wins, a tie at the top: nobody
   const e = start(24, { slots: slots([1, 2, 3]) }), S = e.GS;
-  const set = home => { S.gx = []; S.gy = []; S.noP = []; S.noT = []; S.carry.fill(0); S.home = home; S.total = home.reduce((a, b) => a + b, 0); e.endTimer = -1; e.modeWinner = undefined; G._checkEnd(e); };
+  const set = home => { S.gx = []; S.gy = []; S.noP = []; S.noT = []; S.kn = []; S.carry.fill(0); S.home = home; S.total = home.reduce((a, b) => a + b, 0); e.endTimer = -1; e.modeWinner = undefined; G._checkEnd(e); };
   set([2, 2, 1]);
   check(e.endTimer >= 0 && e.modeWinner === -1, "all the gold home, a tie at the top: the round ends, nobody wins it");
   set([3, 1, 1]);
   check(e.endTimer >= 0 && e.modeWinner === 0, "more than half home: that team wins");
   set([2, 1, 1]);
   check(e.endTimer >= 0 && e.modeWinner === 0, "all the gold home: the most wins (2 : 1 : 1)");
-  S.gx = [10]; S.gy = [10]; S.noP = [0]; S.noT = [0]; S.total = 5; S.home = [2, 1, 1]; e.endTimer = -1; e.modeWinner = undefined;
+  S.gx = [10]; S.gy = [10]; S.noP = [0]; S.noT = [0]; S.kn = [0]; S.total = 5; S.home = [2, 1, 1]; e.endTimer = -1; e.modeWinner = undefined;
   G._checkEnd(e);
   check(e.endTimer < 0, "gold still lying around and nobody past half: the round goes on");
+}
+
+{
+  // a leader nobody can catch any more ends the round (3 teams: more than half may never happen)
+  const e = start(25, { slots: slots([1, 2, 3]) }), S = e.GS;
+  const set = (home, lying, carry) => {
+    S.gx = []; S.gy = []; S.noP = []; S.noT = []; S.kn = [];
+    for (let k = 0; k < lying; k++) { S.gx.push(40 + 10 * k); S.gy.push(40); S.noP.push(0); S.noT.push(0); S.kn.push(0); }
+    S.carry.fill(0); for (const p in carry) S.carry[p] = carry[p];
+    S.home = home; S.total = home.reduce((a, b) => a + b, 0) + lying + S.carry.reduce((a, b) => a + b, 0);
+    e.endTimer = -1; e.modeWinner = undefined; G._checkEnd(e);
+  };
+  const t2 = e.team(2);
+  set([10, 4, 3], 2, { 2: 1 });
+  check(e.endTimer >= 0 && e.modeWinner === 0, "10 : 4 : 3 home, 2 lying, 1 carried: nobody can catch team 1 - its round");
+  set([7, 4, 3], 2, { 2: 1 });
+  check(e.endTimer < 0, "7 : 4 : 3 home, 2 lying, 1 carried by team " + (t2 + 1) + ": it can still draw level - the round goes on");
+  set([8, 4, 3], 2, { 1: 3 });
+  check(e.endTimer >= 0 && e.modeWinner === 0, "8 : 4 : 3 home, 2 lying, 3 carried by the leader itself: nobody can catch it");
+  set([5, 5, 1], 2, {});
+  check(e.endTimer < 0, "a tie at the top: the round goes on");
+}
+
+// ---- what a tank knows of the gold
+{
+  const e = start(26), S = e.GS;
+  const x = e.tankX[1], y = e.tankY[1];
+  // nuggets: one in sight, one well out of it (but within hard's 100 px), one far away
+  const far = cheb(x, y, 20, 20) > 150 ? [20, 20] : [e.worldW - 20, e.worldH - 20];
+  S.gx = [x + 30, x + 80, far[0]]; S.gy = [y, y, far[1]]; S.noP = [0, 0, 0]; S.noT = [0, 0, 0]; S.kn = [0, 0, 0];
+  idle(e);
+  const bit = 1 << 1;
+  check((S.kn[0] & bit) && !(S.kn[1] & bit) && !(S.kn[2] & bit), "a tank sees the nuggets within " + G.SEE + " px only (" + S.kn.join(",") + ")");
+  const ai = level => ({ me: 1, levelName: level, mates: [] });
+  const pick = level => { const n = G._pickNugget(ai(level), e, e.tankX[1], e.tankY[1]); return n; };
+  check(pick("normal") === 0, "normal AI: goes for the nugget it has seen");
+  S.kn[0] = 0;
+  check(pick("normal") === -1, "normal AI: no nugget seen - none to go for (it explores)");
+  check(pick("hard") === 0, "hard AI: knows the nuggets nearby without seeing them");
+  S.gx[0] = far[0]; S.gy[0] = far[1] - 10;
+  check(pick("hard") === 1 && pick("normal") === -1, "hard AI: knows the nuggets within " + G.AI_KNOW.hard + " px");
+  S.gx[1] = far[0]; S.gy[1] = far[1] + 10;
+  check(pick("hard") === -1 && pick("expert") >= 0, "expert AI: knows the whole map, hard does not");
+  // a drop is heard by the tanks near it
+  const e2 = start(27, { slots: slots([1, 2, 3]) }), S2 = e2.GS;
+  placeTank(e2, 1, 100, 60); placeTank(e2, 2, 150, 60); placeTank(e2, 3, 100 + G.HEAR + 40, 60);
+  S2.carry[1] = 1; S2.gx.pop(); S2.gy.pop(); S2.noP.pop(); S2.noT.pop(); S2.kn.pop();
+  e2.shield[1] -= 0x700;
+  idle(e2);
+  const k = S2.gx.length - 1;
+  check(S2.noP[k] === 1 && (S2.kn[k] & 2) && (S2.kn[k] & 4) && !(S2.kn[k] & 8), "a dropped nugget: known to the tanks within " + G.HEAR + " px (" + S2.kn[k].toString(2) + ")");
+  check(S2.kn.length === S2.gx.length, "... the knowledge stays in step with the nuggets");
+}
+
+// ---- drawn under the tanks
+{
+  const e = start(28), S = e.GS;
+  const x = S.gx[0], y = S.gy[0];
+  e.setPixel(x, y, 1); e.setPixel(x - 1, y, 13);    // (a tank's pixels)
+  e.objs = [];
+  G.draw(e);
+  check(e.getPixel(x, y) === 1 && e.getPixel(x - 1, y) === 13 && e.getPixel(x + 1, y) === 14, "a nugget under a tank: the tank's pixels stay on top");
+  e.objRestore();
 }
 
 // ---- the round time
@@ -170,17 +233,16 @@ for (const [size, teams, seed] of [["small", [1, 2], 3], ["small", [1, 2, 3, 4, 
   // against a tank that never moves: it digs the gold up and brings it home - the round is won by gold
   for (const level of ["normal", "hard", "expert"]) {
     let firstPick = -1, firstHome = -1, decided;
-    const r = runMatch({ mode: "gold", slots: slots([1, 2]), levels: [level, null], seed: 41, size: "small", winScore: 1, maxFrames: 20000,
+    const r = runMatch({ mode: "gold", slots: slots([1, 2]), levels: [level, null], seed: 43, size: "small", winScore: 1, maxFrames: 20000,
       onFrame: e => {
         if (e.screen !== "play") return;
         if (firstPick < 0 && (e.GS.carry[1] > 0 || e.GS.home[0] > 0)) firstPick = e.GS.f;
         if (firstHome < 0 && e.GS.home[0] > 0) firstHome = e.GS.f;
         if (e.endTimer === 24) decided = { mw: e.modeWinner, home: e.GS.home.slice(), total: e.GS.total };
       } });
-    // (it may also just blow the sitting tank up when it comes across it - a win all the same)
-    check(r.finished && ((firstPick > 0 && firstPick < 800) || (decided && decided.mw === undefined && r.playFrames < 800)),
-      level + " AI: digs for the gold (first nugget after " + firstPick + " frames" + (firstPick < 0 ? ", the sitting tank destroyed first" : "") + ")");
-    check(decided && (decided.mw === 0 || r.rounds[0].winnerTeam === 0) && (firstHome > 0 || decided.mw === undefined),
+    // (seed 43: no level comes across the sitting tank first - it would just blow it up)
+    check(r.finished && firstPick > 0 && firstPick < 800, level + " AI: digs for the gold (first nugget after " + firstPick + " frames)");
+    check(decided && decided.mw === 0 && firstHome > 0,
       level + " AI: brings it home (first after " + firstHome + " frames) and wins the round (" + JSON.stringify(decided) + ")");
   }
 }
