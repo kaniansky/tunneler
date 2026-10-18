@@ -36,8 +36,8 @@ Lang.register("sk", {
   "vw.grid": "Všetky obrazovky", "vw.map": "Mapa a skóre", "vw.follow": "Sledujem: {name}", "vw.hint": "Tab alebo 1 2 3: pohľad", "vw.destroyed": "ZNIČENÝ", "vw.hint2": "← →: tank",
   "vw.tank": "Tank", "vw.wins": "Výhry", "vw.energy": "Energia", "vw.shield": "Štít", "vw.alive": "žije", "vw.dead": "zničený",
   "back.main": "Do hlavného menu", "back.main.i": "Späť do hlavného menu.",
-  "lobby.title": "HRY ONLINE", "room.title": "HRA ONLINE", "lobby.name": "NÁZOV", "lobby.players": "HRÁČI", "lobby.state": "STAV",
-  "state.waiting": "Čaká", "state.menu": "V menu", "state.paused": "Pozastavená", "state.round": "Kolo {n}",
+  "lobby.title": "HRY ONLINE", "room.title": "HRA ONLINE", "lobby.name": "NÁZOV", "lobby.players": "HRÁČI", "lobby.ai": "AI", "lobby.spec": "DIVÁCI", "lobby.state": "STAV",
+  "state.paused": "Pozastavená", "state.round": "Kolo {n}",
   "lobby.who": "Hrajú: {names}", "lobby.join": "<ENTER> - pripojiť sa k hre", "lobby.none": "Momentálne žiadne verejné hry",
   "lobby.create": "Vytvoriť novú hru", "lobby.create.i": "Založ hru a pozvi do nej niekoho.", "lobby.connecting": "Pripájam sa k serveru...", "lobby.wake": "Server, ktorý spal, sa môže prebúdzať až minútu.",
   "create.title": "NOVÁ HRA", "create.hint": "↑↓ ← → <ENTER>, <TAB> druhý box, alebo myš.  <ESC> späť.",
@@ -46,42 +46,27 @@ Lang.register("sk", {
   "create.public.i2": "k súkromným sa pripája cez pozývací odkaz.",
   "create.spect": "Povoliť divákov: ", "create.spect.i1": "Diváci vidia celú obrazovku,", "create.spect.i2": "ale nemôžu hrať.",
   yes: "áno", no: "nie",
-  "create.go": "Vytvoriť hru", "create.go.i": "Vytvor hru a vyber si tank.",
+  "create.go": "Vytvoriť hru",
   "back.lobby": "Späť na zoznam hier", "back.lobby.i": "Späť na zoznam hier.",
   "create.err.name": "Najprv napíš názov.", "create.err": "Hru sa nepodarilo vytvoriť: {msg}",
-  "room.notfound": "HRA SA NENAŠLA", "room.expired": "Možno už vypršala.", "room.private": "(súkromná)",
-  "room.connected": "pripojený", "room.free": "voľný", "room.watching": "divákov: {n}",
-  "room.taken": "{name} je obsadený", "room.play": "Hrať za {name}", "room.play.i1": "Pripoj sa ako {name} tank.",
-  "room.play.i2": "Hra sa začne, keď budú obaja hráči pripravení.",
-  "room.watch": "Sledovať", "room.watch.i": "Sleduj obe obrazovky ako divák.",
-  "room.copy": "Kopírovať odkaz", "room.copied": "Odkaz skopírovaný", "room.copy.i": "Pošli tento odkaz súperovi:",
+  "room.copy": "Kopírovať odkaz", "room.copied": "Odkaz skopírovaný", "room.copy.in": "Pošli tento odkaz ostatným hráčom:",
+  "room.notfound": "HRA SA NENAŠLA", "room.private": "(súkromná)",
+
   "on.connecting": "Pripájam sa...", "on.catching": "Dobieham hru...",
-  "on.waitjoin": "Čakám, kým sa pripojí {name}...", "on.waitplayers": "Čakám, kým sa pripoja hráči...",
   "on.paused": "Hra je pozastavená.", "on.waitre": "Čakám, kým sa znova pripojí {names}...", "on.and": " a ",
-  "on.players": "hráči", "on.youplay": "hráš za {name}", "on.spectator": "divák", "on.leave": "Opusti túto hru.",
+  "on.players": "hráči", "on.youplay": "hráš za {name}",
 
- 
-
- 
   "st.youare": "Si {name}", "on.escagain": "Ešte raz <ESC>: odchod z hry.",
 
   "conn.connecting": "pripájam", "conn.reconnecting": "znova pripájam", "conn.retry": "odpojený, ďalší pokus o {s} s",
   "conn.closed": "zatvorené", "conn.connected": "pripojený",
   // online rooms with 2-8 slots, teams, computer tanks (lobby.js create / game screens, online.js)
-  "create.players": "Hráči: ", "create.players.i1": "Koľko tankov hrá (2-8), vrátane tankov počítača.",
-  "create.players.i2": "Dvaja hráči bez počítača sú pôvodná hra.", "create.mode": "Režim: ", "mode.ffa": "každý sám",
-  "mode.teams": "tímy", "mode.teams.s": "tímy",
-  "create.mode.i1": "Každý sám: každý tank za seba.  Tímy (od 3 hráčov):", "create.mode.i2": "{a} proti {b}.",
-  "create.cpu": "Tanky počítača: ", "create.cpu.i1": "Koľko tankov riadi počítač;",
-  "create.cpu.i2": "dostanú posledné farby.", "create.level": "Úroveň počítača: ",
-  "room.cpu": "{name}: počítač ({level})", "room.desc": "hráči: {n}, {mode}",
-  "room.desc.cpu": ", tanky počítača: {n} ({level})",
-  "room.play.i2n": "Hra sa začne, keď budú všetci hráči pripravení.", "room.watch.in": "Sleduj hru ako divák.",
-  "room.copy.in": "Pošli tento odkaz ostatným hráčom:", "lobby.best": "najviac {n}",
+  "mode.ffa": "každý sám",
+  "mode.teams": "tímy",
+
+  "lobby.best": "najviac {n}",
   "rd.others": "Čakám na ostatných...",
 
- 
-  "on.waitothers": "Čakám, kým sa pripoja ostatní hráči:",
   engine: {
     by: "napísal Norko Kaniansky",
     // world-map "PRESS ANY KEY" banner: 5 rows of lores pixels ('*'), at most 72 wide (6: a row of
@@ -97,7 +82,7 @@ Lang.register("sk", {
     waiting: ["Čaká sa, kým hráči", "začnú hru"],
     creating: "(vytváram svet)", ready: "(svet je hotový)", round: "KOLO",
     stats: { title: "Štatistika", fired: "výstrely", hit: "zásahy", percent: "úspešnosť", dug: "vykopané metre",
-      moved: "prejdené metre", winner: "Víťaz je ", rounds: "Kolá", awards: "Ocenenia", draw: "remíza", ended: "koniec", sharp: "Ostrostrelec", hunter: "Lovec", mole: "Krtko", traveler: "Cestovateľ",
+      moved: "prejdené metre", winner: "Víťaz je ", rounds: "Kolá", draw: "remíza", ended: "koniec",
       head: ["str.", "zás.", "%", "kop.", "jazda"] },
     teams: ["MODRÝ TÍM", "ZELENÝ TÍM"],
     team: "TÍM {n}",
@@ -179,17 +164,19 @@ Lang.register("sk", {
           "každý tank jeho tím (1-8); potom veľkosť mapy, kolá na výhru, čas kola, priateľskú paľbu, " +
           "pohľad a čo po smrti.  <ESC> počas hry ukončí zápas; <ESC> v menu hry ťa vráti k " +
           "nastaveniam."],
-        ["Hra online:  ", "2 až 8 tankov na rôznych počítačoch, niektoré z nich môžu byť " +
-          "počítačové.  Vytvor hru - jej meno, verejná alebo súkromná (pripája sa odkazom s " +
-          "pozvánkou), diváci povolení alebo nie, každé miesto človek, počítač alebo nikto aj s tímom, " +
-          "a nastavenia vyššie - alebo sa pripoj k hre zo zoznamu.  Svoj tank riadiš ktoroukoľvek " +
-          "sadou kláves.  Všetky počítače počítajú tú istú hru krok za krokom; sieťou idú iba " +
-          "stlačené klávesy."],
-        ["Lobby hry:  ", "pred každým zápasom si zvoľ meno a tím, píš ostatným (Povedz:) a zvoľ " +
-          "\"Som pripravený!\" - zápas sa začne, keď sú pripravení všetci hráči (počítačové tanky sú " +
-          "vždy).  Hostiteľ - ten, kto hru vytvoril, alebo ďalší hráč, keď hostiteľ odíde - môže aj " +
-          "\"Spustiť hneď\" (tanky chýbajúcich hráčov stoja, kým sa nepripoja) a \"Vyhodiť " +
-          "hráča...\".  Po zápase lobby ukáže jeho štatistiku.  Hru online opustíš dvoma " +
+        ["Hra online:  ", "2 až 8 tankov na rôznych počítačoch, niektoré z nich môžu byť počítačové.  Hra online " +
+          "potrebuje meno (spýta sa naň prvýkrát, zmeníš ho v Nastaveniach).  Vytvor hru - jej " +
+          "meno, verejná alebo súkromná (pripája sa odkazom s pozvánkou), diváci povolení alebo nie " +
+          "- alebo sa pripoj k hre zo zoznamu.  Svoj tank riadiš ktoroukoľvek sadou kláves.  Všetky " +
+          "počítače počítajú tú istú hru krok za krokom; sieťou idú iba stlačené klávesy."],
+        ["Lobby hry:  ", "každá hra má 8 miest, jedno pre každú farbu.  Sadni si na voľné miesto a hráš za tú " +
+          "farbu (<ENTER> alebo klik), zvoľ si tím (<←> <→>, <1>-<8> alebo klik naň), píš ostatným " +
+          "(Povedz:) a zvoľ \"Som pripravený!\"; \"Radšej pozerať\" uvoľní miesto.  Hostiteľ - ten, kto " +
+          "hru vytvoril, alebo ďalší hráč, keď hostiteľ odíde - nastaví každé neobsadené miesto na " +
+          "voľné, zatvorené alebo AI (ľahký, stredný, ťažký) aj s tímom, nastavenia vyššie, môže " +
+          "\"Vyhodiť hráča...\" a spustí hru, keď sú všetci, čo sedia, pripravení.  Voľné miesto, " +
+          "ktoré nikto nezobral, nemá tank.  Počas zápasu hrajú iba jeho hráči; kto sa vtedy " +
+          "pripojí, pozerá.  Po zápase lobby ukáže jeho štatistiku.  Hru online opustíš dvoma " +
           "stlačeniami <ESC>."],
         ["Diváci:  ", "sledujú hru online bez hrania.  <TAB> alebo <1> <2> <3> prepína medzi " +
           "všetkými obrazovkami, mapou so skóre a sledovaním jedného tanku (<←> <→> vyberú ktorého)."],
@@ -214,7 +201,7 @@ Lang.register("sk", {
         ["Sledovať", "hru online: všetky obrazovky, živá mapa či jeden tank"]],
       p2: ["Až 8 tankov bojuje každý za seba alebo v tímoch (priateľská paľba podľa voľby)",
         "na malej, strednej či veľkej mape, do 1 až 9 vyhraných kôl.  Online si hráči",
-        "v lobby zvolia mená a tímy, četujú a začnú, keď sú všetci pripravení.  Všetky",
+        "v lobby vyberú miesta (farby) a tímy, četujú a hostiteľ spustí hru.  Všetky",
         "počítače hrajú tú istú hru synchrónne; po sieti idú len stlačené klávesy."],
       sections: [
         ["Desktopová aplikácia:  ", "Tunneler Online je aj malý program pre Windows, Linux a macOS " +
@@ -253,24 +240,18 @@ Lang.register("sk", {
   "os.win": "Kôl na víťazstvo: ", "os.win.i1": "Koľko kôl musí tank alebo tím vyhrať, aby vyhral zápas", "os.win.i2": "(3 je pôvodná hra).",
   "os.ff": "Streľba do vlastných: ", "os.on": "zapnutá", "os.off": "vypnutá",
   "os.ff.i1": "Zapnutá: strely zraňujú aj spoluhráčov.", "os.ff.i2": "Vypnutá: strela na spoluhráčovi vybuchne ako na stene.",
-  "os.who.none": "nikto", "os.who.human": "človek", "os.who.cpu": "počítač, {level}",
-  "os.slot.i1": "← →: nikto, hráč alebo tank počítača.", "os.slot.i2": "1-8, <ENTER> alebo klik: tím 1-8 (rovnaké číslo = spoluhráči).",
-  "os.err.slots": "Použi aspoň 2 miesta.", "os.err.teams": "Treba aspoň 2 rôzne tímy.",
-  "os.err.human": "Aspoň na jednom mieste musí hrať človek.", "os.players": "tankov: {n}",
-  "pg.h.tank": "TANK", "pg.h.name": "MENO", "pg.h.team": "TÍM", "pg.h.state": "STAV", "pg.h.ping": "PING",
+
+  "os.players": "tankov: {n}",
   "pg.teamn": "tím {n}",
-  "pg.computer": "počítač ({level})", "pg.ready": "pripravený", "pg.notready": "nepripravený", "pg.free": "voľný", "pg.disconnected": "odpojený",
   "pg.size.small": "veľkosť mapy: malá", "pg.size.medium": "veľkosť mapy: stredná", "pg.size.large": "veľkosť mapy: veľká",
   "pg.win": "kôl na víťazstvo: {n}", "pg.ff.on": "priateľská paľba: zapnutá", "pg.ff.off": "priateľská paľba: vypnutá", "pg.specs": "divákov: {n}",
-  "pg.name": "Meno: ", "pg.name.i": "Tvoje meno v tejto hre (najviac 12 znakov).",
-  "pg.team": "Tím: ", "pg.team.i": "← → / 1-8: tvoj tím. Rovnaké číslo znamená spoluhráčov.",
-  "pg.start": "Som pripravený!", "pg.start.i": "Si pripravený; hra začne, keď budú všetci.", "pg.now": "Spustiť hneď", "pg.now.i1": "Spustí hru všetkým bez čakania na ostatných:", "pg.now.i2": "tanky chýbajúcich hráčov stoja, kým sa nepripoja.",
+
+  "pg.start": "Som pripravený!", "pg.start.i": "Si pripravený; hra začne, keď budú všetci.",
   "pg.cancel": "Ešte nie som pripravený!", "pg.ready.i": "Si pripravený. <ENTER> alebo <ESC>: predsa nie.",
-  "pg.need2": "Na začatie treba aspoň 2 tímy.",
   "pg.stats": "Štatistika", "pg.stats.i": "Štatistika posledného zápasu.",
   "pg.kick": "Vyhodiť hráča...", "pg.kick.i1": "Túto hru si vytvoril ty: vyber hráča alebo diváka",
   "pg.kick.i2": "a odstráň ho z nej.", "pg.kick.title": "VYHODIŤ HRÁČA", "pg.kick.who": "{name}", "pg.kick.pick": "<ENTER> odstráni {name} z tejto hry.", "pg.kick.back": "Späť do lobby hry", "pg.kick.back.i": "Nikto nebude odstránený.",
-  "pg.kick.sure": "Stlač <ENTER> ešte raz a {name} letí von.", "pg.spectator": "divák {n}",
+  "pg.kick.sure": "Stlač <ENTER> ešte raz a {name} letí von.",
   "pg.kicked": "Hostiteľ ťa z tejto hry vyhodil.",
   "on.idle": "Hra bola zatvorená, lebo 10 minút nikto nehral.",
   // chat v predsieni (online.js, docs/DESIGN-8P.md 22) a čo hráč počas hry vidí (časť 23)
@@ -289,10 +270,33 @@ Lang.register("sk", {
   "watch.i2": "svoj vrak, svoj tím, jeden tank (najprv toho, kto ťa zničil) či všetkých.",
   "pg.watch.black": "po smrti: čierna obrazovka", "pg.watch.wreck": "po smrti: môj vrak", "pg.watch.team": "po smrti: sledovať tím", "pg.watch.killer": "po smrti: sledovať vraha", "pg.watch.others": "po smrti: sledovať všetkých",
   // the titles of the two boxes on the vs computer / create-a-game screens
-  "box.game": "Hra", "box.players": "Hráči", "box.settings": "Nastavenia", "pg.h.settings": "NASTAVENIA",
+  "box.game": "Hra", "box.players": "Hráči", "box.settings": "Nastavenia",
   // round time limit (home.js vs computer + split screen, lobby.js create screen, the pre-game lobby's settings)
   "lc.time": "Čas kola: ", "os.time": "Čas kola: ", "time.off": "bez limitu", "time.n": "{n} min",
   "time.i1": "Keď čas vyprší, kolo vyhrá strana, ktorá nepriateľom spôsobila najviac",
   "time.i2": "škody (ostatné tanky vybuchnú); pri remíze nevyhrá nikto.",
   "pg.time": "čas kola: {n} min", "pg.time.off": "čas kola: bez limitu",
+  "create.go.i1": "Vytvor hru: si jej hostiteľ, v jej lobby vyberieš miesta", "create.go.i2": "a nastavenia a potom ju spustíš.",
+  "name.title": "TVOJE MENO", "name.label": "Meno: ", "name.i1": "Online hry potrebujú meno:",
+  "name.i2": "ostatní hráči ťa podľa neho spoznajú.", "name.i3": "Najviac 12 znakov; zmeniť ho môžeš kedykoľvek v Nastaveniach.",
+  "name.go": "Pokračovať", "name.err": "Najprv napíš meno.",
+  "set.name": "Meno: ", "set.name.i1": "Tvoje meno v online hrách.", "set.name.i2": "Napíš ho a stlač <ENTER>.",
+ 
+  "lobby.join2": "<ENTER> - pripojiť sa k hre, → - pozerať ju", "lobby.watch": "<ENTER> - pozerať túto hru",
+  "lobby.closed": "V tejto hre nie je voľné miesto a diváci nie sú povolení.", "state.lobby": "Lobby",
+  "seat.cpu": "AI ({level})", "seat.open": "voľné", "seat.closed": "zatvorené",
+  "seat.kind.i": "← →, klik alebo pravý klik: voľné, zatvorené alebo AI (ľahký, stredný, ťažký).", "seat.open.i": "← → alebo pravý klik: zatvoriť miesto alebo ho dať AI.",
+  "seat.team.i": "1-8 alebo <ENTER>: jeho tím (rovnaké číslo = spoluhráči).",
+  "seat.mine.i1": "Tvoje miesto: hráš za túto farbu.", "seat.mine.i2": "← → alebo 1-8: tvoj tím (rovnaké číslo = spoluhráči).",
+  "seat.sit.i": "<ENTER> alebo klik: sadni si sem a hraj za {name}.", "seat.sit.i2": "Voľné miesto, ktoré nikto nezoberie, nemá v hre tank.",
+  "pg.busy": "Práve sa hrá", "pg.go": "Spustiť hru", "pg.go.i": "Spustí hru pre všetkých, čo sedia.",
+  "pg.cant.tanks": "Treba aspoň 2 tanky: hráčov a počítačové tanky.", "pg.cant.human": "Niekto si musí sadnúť a hrať.",
+  "pg.cant.teams": "Treba aspoň 2 rôzne tímy.", "pg.cant.ready": "Čaká sa, kým budú všetci hráči pripravení.",
+  "pg.cant.match": "Práve sa hrá.",
+  "pg.watch": "Radšej pozerať", "pg.watch.i": "Uvoľni svoje miesto a pozeraj hru ako divák.",
+  "pg.specs.who": "Pozerajú: ",
+  "lobby.link": "Pripojiť sa odkazom", "lobby.link.i1": "Vlož odkaz s pozvánkou, ktorý ti poslal iný hráč,", "lobby.link.i2": "a pripoj sa k tej hre.", "link.title": "PRIPOJIŤ SA ODKAZOM", "link.label": "Odkaz: ", "link.i1": "Vlož odkaz s pozvánkou (Ctrl+V), napríklad:", "link.i2": "<ENTER> ťa pripojí k hre (funguje aj odkaz na iný server).", "link.go": "Pripojiť sa", "link.err": "Toto nie je odkaz na hru.",
+  "lobby.host": "hostiteľ", "lobby.host.i": "Si hostiteľom tejto hry (vytvoril si ju alebo ti ju odovzdali).",
+  "ver.server": "Tento server má verziu {server}; tvoja hra má verziu {you}.", "ver.update": "Aktualizuj hru (alebo v Nastaveniach vyber iný server), ak tu chceš hrať.",
+  "on.full": "V tejto hre nie je voľné miesto.", "on.busy": "Práve sa hrá a táto hra nepovoľuje divákov.",
 });

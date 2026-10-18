@@ -56,7 +56,7 @@ ok("desktop app (tauri://localhost, tauri.localhost): the public server by defau
     web.split("size=small"), web.cpu("slots=0:you:1")],
     ["/games", "/game/friday-night", "/game/friday-night/blue", "/game/a%20b/watch", "/split?size=small", "/vs-computer?slots=0:you:1"]);
   assert.deepStrictEqual([app.games(), app.room("x"), app.game("x", "green"), app.split("win=2"), app.cpu(""), app.invite("x")],
-    ["/lobby.html", "/lobby.html?room=x", "/online.html?room=x&role=green", "/play.html?mode=hotseat&win=2", "/play.html?mode=cpu", "/game/x"]);
+    ["/lobby.html", "/online.html?room=x", "/online.html?room=x&role=green", "/play.html?mode=hotseat&win=2", "/play.html?mode=cpu", "/game/x"]);
   const here = href => JSON.parse(JSON.stringify(load(href).L.here()));   // (out of the vm context)
   assert.deepStrictEqual(here("https://x.example/game/friday-night/blue"), { room: "friday-night", role: "blue" });
   assert.deepStrictEqual(here("https://x.example/game/friday-night/watch"), { room: "friday-night", role: "spectate" });
@@ -64,5 +64,20 @@ ok("desktop app (tauri://localhost, tauri.localhost): the public server by defau
   assert.deepStrictEqual(here("https://x.example/online.html?room=r1&role=green"), { room: "r1", role: "green" });
   assert.deepStrictEqual(here("https://x.example/games"), { room: null, role: null });
   ok("Links: /games, /game/<id>[/<color|watch>], /split, /vs-computer (app: the .html files); read back from either");
+}
+{
+  // a pasted invite link (lobby.js "Join by link..."): the server, the game, the role
+  const L = load("https://x.example/").L, parse = t => JSON.parse(JSON.stringify(L.parse(t)));
+  assert.deepStrictEqual(parse("https://tunneler-online.onrender.com/game/friday-night"),
+    { origin: "https://tunneler-online.onrender.com", room: "friday-night", role: null });
+  assert.deepStrictEqual(parse("  tunneler-online.onrender.com/game/Friday-Night/watch "),
+    { origin: "https://tunneler-online.onrender.com", room: "friday-night", role: "spectate" });
+  assert.deepStrictEqual(parse("localhost:8050/game/a-1/cyan"), { origin: "http://localhost:8050", room: "a-1", role: "cyan" });
+  assert.deepStrictEqual(parse("http://192.168.1.5:8050/online.html?room=r1&role=watch"), { origin: "http://192.168.1.5:8050", room: "r1", role: "spectate" });
+  assert.deepStrictEqual(parse("https://x.example/lobby.html?room=old"), { origin: "https://x.example", room: "old", role: null });
+  assert.deepStrictEqual(parse("friday-night"), { origin: "", room: "friday-night", role: null });
+  for (const bad of ["", "https://x.example/games", "javascript:alert(1)", "ftp://x/game/a", "https://x.example/game/a%20b", "hello world"])
+    assert.strictEqual(L.parse(bad), null, bad);
+  ok("Links.parse: invite links (with or without https://, the .html forms, a bare id), anything else null");
 }
 console.log("all " + n + " passed");

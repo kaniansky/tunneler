@@ -6,21 +6,16 @@
 // An entry with count > 1 is a run of identical frames without keystrokes (run-length encoding).
 // Every client turns each frame into the same engine input, so every engine computes the same game.
 //
-// Extended rooms (3-8 slots, teams or computer tanks - docs/DESIGN-8P.md section 4) use
-// [[b0, ..., bN-1], count] or [[b0, ..., bN-1], 1, [[who, ascii, scan], ...]] instead; computer slots
-// are always 0 in the stream: every client fills them in from its own (deterministic) computer players.
+// Every match of a room is its own game (docs/DESIGN-8P.md 26): its own seed, its own frame log from 0 and
+// a cfg fixed at its start - the tanks ({color, bot, level, team}: matchSlots of the room's seats), their
+// names and the settings. Extended matches (anything but the classic game: 3-8 tanks, teams, computer
+// tanks) use [[b0, ..., bN-1], count] or [[b0, ..., bN-1], 1, [[who, ascii, scan], ...]] instead; computer
+// tanks are always 0 in the stream: every client fills them in from its own (deterministic) computer
+// players. The classic match = exactly BLUE + GREEN, both players, different teams: the original
+// two-player protocol and engine.
 //
-// Room settings (docs/DESIGN-8P.md 15) come from the create screen's slot editor: 8 slots (one per tank
-// colour), each nobody / human / computer (level) with a team 1..8, plus size / winScore / friendlyFire.
-// roomSettings() validates them (server) and engineOptions() turns them into TunnelerEngine options
-// (every client the same). Classic room = exactly BLUE + GREEN, both human, different teams: the
-// original two-player protocol and engine.
-//
-// Config frames (section 18): when a game starts the server puts the room's current teams and player
-// names into the frame that carries the start keystroke: classic [b, g, 1, keys, cfg], extended
-// [[b0..bN-1], 1, keys, cfg] with cfg = {teams: [1..8 per player], names: [string|null per player]}.
-// Every client applies it (applyFrameCfg) right BEFORE stepping that frame, so every engine (and a late
-// joiner replaying the log) switches teams at the same step. Names are display only.
+// roomSettings() reads a new room's settings (seats + game settings), SETTINGS checks the host's changes
+// and engineOptions() turns a match's cfg into TunnelerEngine options (every client the same).
 (function (root) {
 
 // display columns of user text (CJK / emoji take 2) - names are limited by columns, not characters
@@ -42,7 +37,6 @@ const MAX_SLOTS = ROLES.length;
 // (an old "easy" becomes "normal")
 const LEVELS = ["normal", "hard", "expert"];
 const level = v => v === "easy" ? "normal" : v;
-const KINDS = ["none", "human", ...LEVELS];               // who plays a slot (slot editor)
 const SIZES = ["small", "medium", "large"];              // world sizes (engine option size)
 const MAX_PLAYER_NAME = 12;                              // player names (pre-game lobby), display columns
 const MAX_CHAT = 60;                                     // characters per lobby chat message
@@ -79,66 +73,87 @@ function cleanRoomName(s, n) {
 const AFTER_DEATH = ["black", "wreck", "team", "killer", "others"];
 const afterDeath = v => v === true || v === "1" ? "others" : AFTER_DEATH.includes(v) ? v : "wreck";
 
-// Room settings from the create screen -> {slots: [{color, bot, level, team}] (the used slots in colour
-// order), size, winScore, friendlyFire, visible, watchOut, ext} or {error}. visible: the most a player may see
-// during play - "self" (default), "team" or "everyone" (docs/DESIGN-8P.md 23; display only). watchOut:
-// after death - what a player whose tank is destroyed sees until the round ends: "black" (a black
-// DESTROYED screen), "wreck" (default: the view stays on the wreck) or "killer" (the tank that destroyed
-// it, else another one still alive), "team" (all teammates still alive), "others" (all tanks alive); docs/DESIGN-8P.md 25, display only. Old rooms' true = "others". roundTime:
-// the round time limit in minutes, one of ROUND_TIMES (0 = none, also for old rooms / anything else; changes the
-// simulation - engineOptions passes it to every engine). o.slots: up to 8 entries {kind: KINDS, team}
-// (index = colour). The older {players, teams, bots, level} form (bots = the last slots) still works.
-function roomSettings(o) {
-  o = o || {};
-  let raw;
-  if (Array.isArray(o.slots)) {
-    raw = o.slots.slice(0, MAX_SLOTS).map((s, i) => ({ kind: KINDS.includes(s && level(s.kind)) ? level(s.kind) : "none",
-      team: clampInt(s && s.team, 1, 8, i + 1) }));
-  } else {
-    const n = clampInt(o.players, 2, MAX_SLOTS, 2), bots = clampInt(o.bots, 0, n - 1, 0);
-    const lvl = LEVELS.includes(level(o.level)) ? level(o.level) : "normal", teams = o.teams === true && n >= 3;
-    raw = [];
-    for (let i = 0; i < n; i++) raw.push({ kind: i >= n - bots ? lvl : "human", team: teams ? i % 2 + 1 : i + 1 });
-  }
-  const used = raw.map((s, i) => ({ color: i, kind: s.kind, team: s.team })).filter(s => s.kind !== "none");
-  if (used.length < 2) return { error: "At least 2 slots must be used." };
-  if (!used.some(s => s.kind === "human")) return { error: "At least one slot must be human." };
-  if (new Set(used.map(s => s.team)).size < 2) return { error: "At least 2 different teams are needed." };
-  const slots = used.map(s => ({ color: s.color, bot: s.kind !== "human", level: s.kind === "human" ? null : s.kind, team: s.team }));
-  const ext = !(slots.length === 2 && slots[0].color === 0 && slots[1].color === 1 && !slots[0].bot && !slots[1].bot);
-  return { slots, ext, size: SIZES.includes(o.size) ? o.size : "medium", winScore: clampInt(o.winScore, 1, 9, 3),
-    friendlyFire: o.friendlyFire === true, roundTime: roundTime(o.roundTime), visible: VISIBLE.includes(o.visible) ? o.visible : "self", watchOut: afterDeath(o.watchOut) };
-}
-
 // a round time limit setting: one of ROUND_TIMES, else 0 (no limit)
 const roundTime = v => ROUND_TIMES.includes(Number(v)) ? Number(v) : 0;
 
-// TunnelerEngine options for a room's cfg (from "hello": {ext, slots: [{color, team}], size, winScore,
-// friendlyFire, roundTime}). The teams are the room's initial ones; config frames change them later.
+// A room's seats (docs/DESIGN-8P.md 26): one per tank colour (index = colour), each "open" (anybody may
+// sit there, nobody has to), "closed" (nobody may) or a computer level, with a team 1..8.
+const SEAT_KINDS = ["open", "closed", ...LEVELS];
+const defaultSeats = () => ROLES.map((r, i) => ({ kind: i < 2 ? "open" : "closed", team: i + 1 }));
+// one seat from a request: kinds of the older slot editor too (human = open, none = closed, easy = normal)
+function seatOf(s, i) {
+  let kind = s && level(s.kind);
+  if (kind === "human") kind = "open";
+  else if (kind === "none") kind = "closed";
+  return { kind: SEAT_KINDS.includes(kind) ? kind : i < 2 ? "open" : "closed", team: clampInt(s && s.team, 1, 8, i + 1) };
+}
+
+// The game settings the host chooses in the room lobby. One setting checked: the value, or undefined
+// when it isn't one. visible: the most a player may see during play - "self" (default), "team" or
+// "everyone" (docs/DESIGN-8P.md 23; display only). watchOut: after death (display only). roundTime:
+// the round time limit in minutes (changes the simulation).
+const SETTINGS = {
+  size: v => SIZES.includes(v) ? v : undefined,
+  winScore: v => Number.isInteger(v) && v >= 1 && v <= 9 ? v : undefined,
+  roundTime: v => ROUND_TIMES.includes(v) ? v : undefined,
+  friendlyFire: v => typeof v === "boolean" ? v : undefined,
+  visible: v => VISIBLE.includes(v) ? v : undefined,
+  watchOut: v => AFTER_DEATH.includes(v) ? v : undefined,
+};
+// A new room's settings from POST /api/rooms -> {seats: [8 x {kind, team}], size, winScore, friendlyFire,
+// roundTime, visible, watchOut}; anything missing or wrong gets its default. o.seats (or the older
+// o.slots: {kind: none|human|level}) up to 8, index = colour.
+function roomSettings(o) {
+  o = o || {};
+  const list = Array.isArray(o.seats) ? o.seats : Array.isArray(o.slots) ? o.slots : null;
+  const seats = list ? ROLES.map((r, i) => i < list.length ? seatOf(list[i], i) : { kind: "closed", team: i + 1 }) : defaultSeats();
+  return { seats, size: SIZES.includes(o.size) ? o.size : "medium", winScore: clampInt(o.winScore, 1, 9, 3),
+    friendlyFire: o.friendlyFire === true, roundTime: roundTime(o.roundTime),
+    visible: VISIBLE.includes(o.visible) ? o.visible : "self", watchOut: afterDeath(o.watchOut) };
+}
+
+// The tanks of a match: the seats with a player (human) or a computer tank, in colour order ->
+// [{color, bot, level, team}]. occupied(i): is seat i taken by a player? Open seats nobody took and
+// closed ones get no tank.
+function matchSlots(seats, occupied) {
+  const out = [];
+  seats.forEach((s, i) => {
+    if (LEVELS.includes(s.kind)) out.push({ color: i, bot: true, level: s.kind, team: s.team });
+    else if (s.kind === "open" && occupied(i)) out.push({ color: i, bot: false, level: null, team: s.team });
+  });
+  return out;
+}
+// Why a match can't start, or null: "tanks" (fewer than 2), "human" (no player), "teams" (fewer than 2)
+function startProblem(slots) {
+  if (slots.length < 2) return "tanks";
+  if (!slots.some(s => !s.bot)) return "human";
+  if (new Set(slots.map(s => s.team)).size < 2) return "teams";
+  return null;
+}
+// the classic game: exactly BLUE + GREEN, both players, in different teams - the original protocol and engine
+const isClassic = slots => slots.length === 2 && slots[0].color === 0 && slots[1].color === 1 && !slots[0].bot && !slots[1].bot &&
+  slots[0].team !== slots[1].team;
+
+// TunnelerEngine options for a match's cfg ({ext, slots: [{color, team}], size, winScore, friendlyFire,
+// roundTime}): every client the same. autoStart: no menu before the first round (the lobby was it).
 function engineOptions(cfg) {
   const o = { slots: cfg.slots.map(s => ({ color: s.color, team: s.team })), size: cfg.size || "medium",
-    winScore: cfg.winScore || 3, friendlyFire: !!cfg.friendlyFire };
+    winScore: cfg.winScore || 3, friendlyFire: !!cfg.friendlyFire, autoStart: true };
   if (roundTime(cfg.roundTime)) o.roundTime = roundTime(cfg.roundTime);
   if (cfg.ext) o.extended = true;
   return o;
 }
-
-// A config frame's cfg (see the top) -> the engine, before the frame is stepped. Names stay raw Unicode
-// (engine.setNames; name(s) may still transform them); names are display only. Only at the menu: a
-// config frame that arrives during a match (PlayGame's keyboard handler installed, or the world map at its
-// end) is ignored - teams never change mid-match. (The engine's state decides, so every client agrees.)
-function applyFrameCfg(engine, c, name) {
-  if (!c || engine.kbdInstalled || engine.screen === "map") return;
-  if (Array.isArray(c.teams) && engine.setTeams) engine.setTeams(c.teams);
-  if (Array.isArray(c.names) && engine.setNames) engine.setNames(c.names.map(n => n ? (name ? name(n) : n) : null));
-}
-// a received cfg, checked: {teams, names} or null
-function checkCfg(c) {
-  if (!c || typeof c !== "object") return null;
-  const out = {};
-  if (Array.isArray(c.teams)) out.teams = c.teams.slice(0, MAX_SLOTS).map(t => clampInt(t, 1, 8, 1));
-  if (Array.isArray(c.names)) out.names = c.names.slice(0, MAX_SLOTS).map(n => typeof n === "string" && n ? cleanPlayerName(n) || null : null);
-  return out;
+// a received match cfg, checked (null = unusable)
+function readCfg(c) {
+  if (!c || typeof c !== "object" || !Array.isArray(c.slots)) return null;
+  const slots = c.slots.slice(0, MAX_SLOTS).map((s, i) => ({ color: clampInt(s && s.color, 0, MAX_SLOTS - 1, i),
+    bot: !!(s && s.bot), level: s && LEVELS.includes(level(s.level)) ? level(s.level) : null, team: clampInt(s && s.team, 1, 8, i + 1) }));
+  if (slots.length < 2) return null;
+  const names = Array.isArray(c.names) ? slots.map((s, i) => typeof c.names[i] === "string" ? cleanPlayerName(c.names[i]) || null : null)
+    : slots.map(() => null);
+  return { ext: !!c.ext, players: slots.length, slots, names, size: SIZES.includes(c.size) ? c.size : "medium",
+    winScore: clampInt(c.winScore, 1, 9, 3), friendlyFire: !!c.friendlyFire, roundTime: roundTime(c.roundTime),
+    visible: VISIBLE.includes(c.visible) ? c.visible : "self", watchOut: afterDeath(c.watchOut) };
 }
 
 // One frame -> engine input ({keyDown, keys}); identical on every client.
@@ -166,17 +181,14 @@ function frameToInputExt(f, bot) {
 const isExt = e => Array.isArray(e[0]);
 const sameBits = (a, b) => a.length === b.length && a.every((v, i) => v === b[i]);
 
-// Run-length encoded frame log (server side and test reference). Classic rooms push(b, g, keys, cfg),
-// extended rooms pushN([b0..bN-1], keys, cfg) (cfg: a config frame, see the top; usually none).
+// Run-length encoded frame log (server side and test reference). Classic matches push(b, g, keys),
+// extended ones pushN([b0..bN-1], keys).
 class FrameLog {
   constructor() { this.entries = []; this.length = 0; }
-  pushN(bits, k, cfg) {
+  pushN(bits, k) {
     const last = this.entries[this.entries.length - 1];
     let e;
-    if (cfg) {
-      e = [bits.slice(), 1, k ? k.slice() : [], cfg];
-      this.entries.push(e);
-    } else if (!k || !k.length) {
+    if (!k || !k.length) {
       if (last && last.length === 2 && isExt(last) && sameBits(last[0], bits)) last[1]++;
       else this.entries.push([bits.slice(), 1]);
       e = [bits.slice(), 1];
@@ -187,13 +199,10 @@ class FrameLog {
     this.length++;
     return e;
   }
-  push(b, g, k, cfg) {
+  push(b, g, k) {
     const last = this.entries[this.entries.length - 1];
     let e;
-    if (cfg) {
-      e = [b, g, 1, k ? k.slice() : [], cfg];
-      this.entries.push(e);
-    } else if (!k || !k.length) {
+    if (!k || !k.length) {
       if (last && last.length === 3 && last[0] === b && last[1] === g) last[2]++;
       else this.entries.push([b, g, 1]);
       e = [b, g, 1];
@@ -230,28 +239,28 @@ class FrameQueue {
   pushEntries(entries) {
     for (const e of entries) {
       if (!Array.isArray(e)) return false;
-      if (isExt(e)) {                                       // extended: [[b0..bN-1], count, keys?, cfg?]
+      if (isExt(e)) {                                       // extended: [[b0..bN-1], count, keys?]
         if (e.length < 2 || e[0].length > MAX_SLOTS) return false;
         const n = e[1] | 0;
         if (n < 1) return false;
-        this.q.push([null, null, n, Array.isArray(e[2]) && e[2].length ? e[2] : null, e[0].map(v => v & EXT_BITS), checkCfg(e[3])]);
+        this.q.push([null, null, n, Array.isArray(e[2]) && e[2].length ? e[2] : null, e[0].map(v => v & EXT_BITS)]);
         this.length += n;
         continue;
       }
       if (e.length < 3) return false;
       const n = e[2] | 0;
       if (n < 1) return false;
-      this.q.push([e[0] & ALL_BITS, e[1] & ALL_BITS, n, Array.isArray(e[3]) && e[3].length ? e[3] : null, null, checkCfg(e[4])]);
+      this.q.push([e[0] & ALL_BITS, e[1] & ALL_BITS, n, Array.isArray(e[3]) && e[3].length ? e[3] : null, null]);
       this.length += n;
     }
     return true;
   }
-  // -> classic [b, g, keys|null, cfg|null], extended [[b0..bN-1], keys|null, cfg|null], or null
-  // (a run of count > 1 never has keys or a cfg)
+  // -> classic [b, g, keys|null], extended [[b0..bN-1], keys|null], or null
+  // (a run of count > 1 never has keys)
   shift() {
     if (!this.length) return null;
     const e = this.q[this.head];
-    const f = e[4] ? [e[4].slice(), e[3], e[5]] : [e[0], e[1], e[3], e[5]];
+    const f = e[4] ? [e[4].slice(), e[3]] : [e[0], e[1], e[3]];
     if (--e[2] === 0) {
       this.q[this.head++] = null;
       if (this.head > 1024 && this.head * 2 > this.q.length) { this.q = this.q.slice(this.head); this.head = 0; }
@@ -282,8 +291,9 @@ function stateHash(e) {
 }
 
 const NetProto = { TICK_MS, UP, DOWN, LEFT, RIGHT, FIRE, ESC, ALL_BITS, EXT_BITS, BLUE_SCAN, GREEN_SCAN, F10,
-  AFTER_DEATH, afterDeath, ROLES, MAX_SLOTS, LEVELS, KINDS, SIZES, MAX_PLAYER_NAME, MAX_CHAT, VISIBLE, ROUND_TIMES, roundTime, cleanPlayerName, cleanChat, cleanRoomName, roomSettings, engineOptions, applyFrameCfg,
-  checkCfg, frameToInput, frameToInputExt, FrameLog, FrameQueue, HASH_EVERY, stateHash };
+  AFTER_DEATH, afterDeath, ROLES, MAX_SLOTS, LEVELS, SEAT_KINDS, SIZES, MAX_PLAYER_NAME, MAX_CHAT, VISIBLE, ROUND_TIMES, roundTime,
+  cleanPlayerName, cleanChat, cleanRoomName, SETTINGS, defaultSeats, roomSettings, matchSlots, startProblem, isClassic, engineOptions, readCfg,
+  frameToInput, frameToInputExt, FrameLog, FrameQueue, HASH_EVERY, stateHash };
 root.NetProto = NetProto;
 if (typeof module !== "undefined") module.exports = NetProto;
 })(typeof window !== "undefined" ? window : globalThis);

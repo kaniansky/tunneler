@@ -125,9 +125,8 @@ const STRINGS_EN = {
   round: "ROUND", blue: "BLUE", green: "GREEN",
   stats: { title: "Statistics", fired: "shots fired", hit: "shots hit", percent: "percent hit", dug: "meters dug",
     moved: "meters traveled", winner: "The winner is ",
-    // the rounds / awards next to the statistics (vs computer, online)
-    rounds: "Rounds", awards: "Awards", draw: "draw", ended: "ended", sharp: "Sharpshooter", hunter: "Hunter",
-    mole: "Mole", traveler: "Traveler",
+    // the rounds next to the statistics (vs computer, online)
+    rounds: "Rounds", draw: "draw", ended: "ended",
     // extended mode: column headings of the one-row-per-player table (max 4, 4, 4, 5, 5 characters)
     head: ["shot", "hit", "hit%", "dug", "moved"] },
   // extended mode: tank color names (slot color 0..7); "team" labels a team ("{n}" = its number 1..8;
@@ -222,17 +221,19 @@ const STRINGS_EN = {
         "tank's team (1-8); then the map size, rounds to win, round time, friendly fire, view and " +
         "after death.  <ESC> during play ends the match; <ESC> on the game's menu goes back to the " +
         "settings."],
-      ["Online game:  ", "2 to 8 tanks on different computers, some of them may be computer tanks.  " +
-        "Create a game - its name, listed publicly or private (joined with its invite link), " +
-        "spectators allowed or not, every slot human, computer or nobody with its team, and the " +
-        "settings above - or join one from the list of games.  You drive your tank with either set " +
-        "of keys.  Every computer runs the same game in lockstep; only key presses go over the network."],
-      ["The game lobby:  ", "before every match choose your name and team, chat with the others " +
-        "(Say:) and choose \"I am ready!\" - the match starts when every player is ready (computer " +
-        "tanks always are).  The host - who created the game, or the next player when the host " +
-        "leaves - can also \"Start now\" (the tanks of missing players stand still until they " +
-        "join) and \"Kick a player...\".  After a match the lobby shows its Statistics.  Press " +
-        "<ESC> twice to leave an online game."],
+      ["Online game:  ", "2 to 8 tanks on different computers, some of them may be computer tanks.  Online play " +
+        "needs a name (asked the first time, changed in Settings).  Create a game - its name, " +
+        "listed publicly or private (joined with its invite link), spectators allowed or not - or " +
+        "join one from the list of games.  You drive your tank with either set of keys.  Every " +
+        "computer runs the same game in lockstep; only key presses go over the network."],
+      ["The game lobby:  ", "every game has 8 seats, one per color.  Sit on an open seat to play that color (<ENTER> " +
+        "or a click), choose your team (<\x1B> <\x1A>, <1>-<8> or a click on it), chat (Say:) and " +
+        "choose \"I am ready!\"; \"Watch instead\" leaves the seat.  The host - who created the game, " +
+        "or the next player when the host leaves - sets every free seat open, closed or AI (easy, " +
+        "medium, hard) and its team, the settings above, can \"Kick a player...\" and starts the " +
+        "game once everybody seated is ready.  An open seat nobody took gets no tank.  During a " +
+        "match only its players play; whoever joins then watches.  After a match the lobby shows " +
+        "its Statistics.  Press <ESC> twice to leave an online game."],
       ["Spectators:  ", "watch an online game without playing.  <TAB> or <1> <2> <3> switch between " +
         "all the view screens, the map with the scores, and following one tank (<\x1B> <\x1A> choose " +
         "which one)."],
@@ -256,8 +257,8 @@ const STRINGS_EN = {
       ["online game", "2 to 8 tanks on other computers, any of them computer tanks"],
       ["spectate", "watch an online game: all views, the live map, or one tank"]],
     p2: ["Up to 8 tanks fight free-for-all or in teams (friendly fire on or off) on",
-      "a small, medium or large map, to win 1 to 9 rounds.  Online, players pick their",
-      "names and teams in the lobby, chat, and start when everyone is ready.  Every",
+      "a small, medium or large map, to win 1 to 9 rounds.  Online, players take seats",
+      "(= colors) and teams in the lobby, chat, and the host starts the game.  Every",
       "computer runs the same game in lockstep; only key presses go over the network."],
     // more paragraphs, one [head, text] each (wrapped to the page's width)
     sections: [
@@ -399,11 +400,10 @@ class TunnelerEngine {
     this.wins = arr(0); this.shotsFired = arr(0); this.shotsHit = arr(0);
     this.metersDug = arr(0); this.metersMoved = arr(0); this.alive = arr(false);
     this.killedBy = arr(0);                       // extended, display only (views' "after death: others"): who shot it, 0 = none
-    // display only (the statistics' rounds and awards), not part of the game state: tanks each one destroyed
-    // this match, and every round's {winner (classic: 1 / 2, extended: a team index), player (one tank's win
-    // or 0), secs, how: "shot" | "time" | "draw" | "esc"}
-    this.kills = arr(0); this.roundLog = [];
-    this.matchExtras = false;                     // the menu after a match shows the rounds and awards (vs computer)
+    // display only (the statistics' rounds), not part of the game state: every round's {winner (classic:
+    // 1 / 2, extended: a team index), player (one tank's win or 0), secs, how: "shot" | "time" | "draw" | "esc"}
+    this.roundLog = [];
+    this.matchExtras = false;                     // the menu after a match shows the rounds (vs computer)
     // round time limit (option roundTime): shield damage each tank dealt to enemy tanks this round (0x700
     // per hit; teammates never count), the step the round's play began, the countdown digits shown (-1 =
     // none), whether the last round ended by the time limit (until the next round's play begins)
@@ -969,7 +969,6 @@ class TunnelerEngine {
                     this.addExplosion(x - DX, y - DY, 7, 20);
                     this.queueSound(2, x - DX, y - DY);
                   } else {
-                    if (this.alive[3 - p]) this.kills[p]++;       // (display only)
                     this.killTank(3 - p, x + DX + DX, y + DX + DX);   // original: DX, not DY
                   }
                 } else {
@@ -1129,7 +1128,7 @@ class TunnelerEngine {
 
   newMatch() {
     this.round = 1;
-    this.kills.fill(0); this.roundLog = [];
+    this.roundLog = [];
     for (let i = 1; i <= 2; i++) {
       this.shotsFired[i] = 0; this.shotsHit[i] = 0; this.metersDug[i] = 0; this.metersMoved[i] = 0; this.wins[i] = 0;
     }
@@ -1566,7 +1565,7 @@ class TunnelerEngine {
   newMatchExt() {
     const N = this.nPlayers;
     this.round = 1;
-    this.kills.fill(0); this.roundLog = [];
+    this.roundLog = [];
     for (let i = 1; i <= N; i++) {
       this.shotsFired[i] = 0; this.shotsHit[i] = 0; this.metersDug[i] = 0; this.metersMoved[i] = 0; this.wins[i] = 0;
     }
@@ -1770,7 +1769,7 @@ class TunnelerEngine {
                     this.addExplosion(x - DX, y - DY, 7, 20);
                     this.queueSound(2, x - DX, y - DY);
                   } else {
-                    if (this.alive[q]) { this.killedBy[q] = p; if (this.isEnemy(p, q)) this.kills[p]++; }
+                    if (this.alive[q]) this.killedBy[q] = p;
                     this.killTankExt(q, x + DX + DX, y + DX + DX);   // original: DX, not DY
                   }
                 } else {
@@ -1970,7 +1969,7 @@ class TunnelerEngine {
     this.roundLog.push({ winner: won ? winner : -1, player, how,
       secs: Math.round((this.tick - this.roundStart) * TICK * 1000 / PIT_HZ / 1000) });
   }
-  // the rounds (number, winner, length) and the awards as lines of at most w columns: [{text, color}]
+  // the rounds (number, winner, length) as lines of at most w columns: [{text, color}]
   matchRoundLines(w) {
     const S = Object.assign({}, STRINGS_EN.stats, this.strings.stats), out = [];
     const mmss = t => Math.floor(t / 60) + ":" + String(t % 60).padStart(2, "0");
@@ -1986,33 +1985,8 @@ class TunnelerEngine {
     });
     return out;
   }
-  matchAwardLines(w) {
-    const S = Object.assign({}, STRINGS_EN.stats, this.strings.stats), N = this.extended ? this.nPlayers : 2;
-    const name = p => this.extended ? this.playerName(p) : this.classicName(p);
-    const color = p => this.extended ? this.playerTextColor(p) : p + 8;   // (classic: the lighter BLUE / GREEN)
-    const best = (score, ok) => {
-      let b = 0;
-      for (let p = 1; p <= N; p++) if (ok(p) && (!b || score(p) > score(b))) b = p;
-      return b;
-    };
-    const pct = p => Math.trunc(this.shotsHit[p] * 100 / Math.max(1, this.shotsFired[p]));
-    const awards = [
-      [S.sharp, best(pct, p => this.shotsFired[p] >= 5 && this.shotsHit[p] > 0), p => pct(p) + "%"],
-      [S.hunter, best(p => this.kills[p], p => this.kills[p] > 0), p => String(this.kills[p])],
-      [S.mole, best(p => this.metersDug[p], p => this.metersDug[p] > 0), p => String(this.metersDug[p])],
-      [S.traveler, best(p => this.metersMoved[p], p => this.metersMoved[p] > 0), p => String(this.metersMoved[p])],
-    ];
-    const out = [];
-    for (const [title, p, value] of awards) {
-      if (!p) continue;
-      const v = " " + value(p), n = UniText.slice(name(p), Math.max(1, w - 1 - v.length));
-      out.push({ text: UniText.slice(title, w), color: 6 });
-      out.push({ text: " " + n + " ".repeat(Math.max(0, w - 1 - visLen(n) - v.length)) + v, color: color(p) });
-    }
-    return out;
-  }
-  // a block of lines at column x, rows y..y2 (1-based): a heading, then as many lines as fit (the
-  // rounds: the latest ones, "..." in front when some don't fit)
+  // a block of lines at column x, rows y..y2 (1-based): a heading, then as many lines as fit (latest:
+  // the last ones, "..." in front when some don't fit)
   writeBlock(x, y, y2, w, head, lines, latest) {
     if (!lines.length || y2 - y < 1) return;
     const room = y2 - y;
@@ -2021,18 +1995,17 @@ class TunnelerEngine {
     this.textColor(14); this.gotoXY(x, y); this.write(UniText.slice(head, w));
     show.forEach((l, i) => { this.textColor(l.color); this.gotoXY(x, y + 1 + i); this.write(UniText.slice(l.text, w)); });
   }
-  // rows the rounds / awards take (a heading + the longer list), at most max
+  // rows the rounds take (a heading + the list), at most max
   matchExtrasHeight(w, max) {
-    const n = Math.max(this.matchRoundLines(w).length, this.matchAwardLines(w).length);
+    const n = this.matchRoundLines(w).length;
     return n ? Math.min(max, n + 1) : 0;
   }
-  // the rounds and awards in two columns: x1 (rounds) and x2 (awards), w wide, rows y..y2
-  matchExtrasAt(x1, x2, w, y, y2) {
+  // the rounds at column x, w wide, rows y..y2
+  matchExtrasAt(x, w, y, y2) {
     const S = Object.assign({}, STRINGS_EN.stats, this.strings.stats);
     const keep = [this.wx1, this.wy1, this.wx2, this.wy2, this.cx, this.cy, this.textAttr];
     this.window(1, 1, 80, 25);
-    this.writeBlock(x1, y, y2, w, S.rounds, this.matchRoundLines(w), true);
-    this.writeBlock(x2, y, y2, w, S.awards, this.matchAwardLines(w), false);
+    this.writeBlock(x, y, y2, w, S.rounds, this.matchRoundLines(w), true);
     [this.wx1, this.wy1, this.wx2, this.wy2, this.cx, this.cy, this.textAttr] = keep;
   }
 
@@ -2102,7 +2075,7 @@ class TunnelerEngine {
     this.statsLeft = 22; this.statsFull = true; this.statsCentred = true;
     if (this.extended) this.statsExt(); else this.statsClassic();
     this.statsLeft = 43; this.statsFull = false; this.statsCentred = false;
-    this.matchExtrasAt(2, 61, 19, 5, 20);                     // (rounds left of the table, awards right of it)
+    this.matchExtrasAt(2, 19, 5, 20);                         // (the rounds left of the table)
     this.centreStats(1, 80, 1, 23, 76, 41);                   // (all of it in the middle, above the bottom line)
     this.window(1, 1, 80, 25);
     if (prompt) this.strings = Object.assign({}, this.strings, { prompt });
@@ -2494,7 +2467,7 @@ class TunnelerEngine {
     this.window(1, 1, 80, 24);
     this.clearScreen();
     const S = this.strings;
-    // vs computer after a match (matchExtras): the rounds and awards on top of the left half, the menu box
+    // vs computer after a match (matchExtras): the rounds on top of the left half, the menu box
     // at its bottom, no title; otherwise the original layout (the box from row 11)
     const extras = this.matchExtras && this.menuShift !== 0;
     if (!extras) {
@@ -2512,7 +2485,7 @@ class TunnelerEngine {
     const W = this.menuW = Math.max(16, ...(notice || items).map(t => visLen(t) + 4)) + 1 >> 1 << 1;
     const X = this.menuX = this.menuShift + 41 - ((W + 2) >> 1);
     const nLines = notice ? notice.length + 2 : this.menuRows[this.menuRows.length - 1] + 1;
-    // (extras: the rounds / awards above the box, both together centred in rows 1..24; else row 11)
+    // (extras: the rounds above the box, both together centred in rows 1..24; else row 11)
     const extraH = extras ? this.matchExtrasHeight(18, 24 - (nLines + 2) - 1) : 0;
     const top = this.menuTop = extras ? 1 + ((24 - (extraH + (extraH ? 1 : 0) + nLines + 2)) >> 1) + extraH + (extraH ? 1 : 0) : 11;
     this.textColor(5);
@@ -2528,7 +2501,7 @@ class TunnelerEngine {
     if (this.menuShift !== 0) {
       this.textColor(8);
       for (let i = 1; i <= 25; i++) { this.gotoXY(40, i); this.write("\xB3"); }
-      if (extras) this.matchExtrasAt(2, 21, 18, top - 1 - extraH, top - 2);   // (vs computer: above the menu box)
+      if (extras) this.matchExtrasAt(11, 18, top - 1 - extraH, top - 2);   // (vs computer: above the menu box)
       this.statsCentred = extras;                     // (vs computer: the statistics + settings in the middle)
       if (this.extended) this.statsExt(); else this.statsClassic();
       this.statsCentred = false;

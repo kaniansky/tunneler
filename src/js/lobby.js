@@ -1,288 +1,230 @@
 "use strict";
-// Online lobby in the look of TUNNELER's own menus (see dosui.js): the list of public games, the
-// "create a game" screen (name, public, spectators, map size, rounds to win, friendly fire, visible and the slot
-// editor: 8 slots, each nobody / human / computer with a team - docs/DESIGN-8P.md 15) and one game's
-// screen (join one of its human slots / spectate, invite link).
-// /lobby.html?room=<id> opens one game directly (also private ones - that is how they are shared).
-// Creating a game stores its secret host key in localStorage (tunneler.host.<id>); online.js presents
-// it, which makes this browser the game's host (it may remove players - section 19).
+// Online games in the look of TUNNELER's own menus (see dosui.js): the list of public games and the
+// "create a game" screen (name, public, spectators - everything else is set in the game's own lobby,
+// online.js; docs/DESIGN-8P.md 26). Online play needs a player name: asked first when this browser has
+// none (DosUI.askName, "tunneler.name").
+// Joining a game (Enter) opens its lobby (online.html), taking a free seat if there is one; Right
+// watches it. Creating a game stores its secret host key in localStorage (tunneler.host.<id>); online.js
+// presents it, which makes this browser the game's host.
+// /lobby.html?room=<id> (old links) goes straight to that game's lobby.
 (function () {
   const ui = new DosUI(document.getElementById("screen"));
   window.tunnelerLobbyUI = () => ui;                   // tests / debugging
-  const gameUrl = (id, role) => Links.game(id, role);
-  const roomUrl = id => Endpoint.web(Links.invite(id));   // (the server's page: also from the app)
   const T = Lang.t, E = Lang.enc;
-  const ROOM_TITLE = () => [{ row: 2, text: T("room.title"), color: 12 }];  // one game ("ONLINE GAME")
-  const ROLES = Lang.colorKeys, TEXT_COLORS = TunnelerEngine.PLAYER_TEXT_COLORS, MAX = ROLES.length;
-  const { KINDS, SIZES, VISIBLE, ROUND_TIMES, roomSettings } = NetProto;
   const store = {
     get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
     set(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* private mode */ } },
   };
+  const home = () => { location.href = "/"; };
+  const old = new URLSearchParams(location.search).get("room");
+  if (old) { location.replace(Links.game(old)); return; }
 
-  let view = null;                                   // "list" | "create" | "room" | "page"
-  let rooms = [], room = null, roomId = Links.here().room;
-  // the create screen; default: BLUE and GREEN, both human, in teams 1 and 2 (= the original game)
-  // visible: the most a player may see during play (docs/DESIGN-8P.md 23) - self / team / everyone
-  const form = { value: "", max: 26, width: 18, public: true, spectators: true, error: "", size: "medium", winScore: 3, friendlyFire: false, visible: "self",
-    roundTime: 0,                                    // round time limit, minutes (0 = none)
-    watchOut: "wreck",                               // after death: black / wreck / others (docs/DESIGN-8P.md 25)
-    slots: ROLES.map((r, i) => ({ kind: i < 2 ? "human" : "none", team: i + 1 })) };
-  // the game settings are remembered (this browser only)
-  try {
-    const st = JSON.parse(store.get("tunneler.online") || "{}");
-    if (SIZES.includes(st.size)) form.size = st.size;
-    if (st.winScore >= 1 && st.winScore <= 9) form.winScore = st.winScore | 0;
-    form.friendlyFire = !!st.friendlyFire;
-    form.roundTime = NetProto.roundTime(st.roundTime);
-    if (VISIBLE.includes(st.visible)) form.visible = st.visible;
-    form.watchOut = NetProto.afterDeath(st.watchOut);
-    if (Array.isArray(st.slots) && st.slots.length === MAX)
-      st.slots.forEach((s, i) => {
-        if (s && KINDS.includes(s.kind === "easy" ? "normal" : s.kind)) form.slots[i].kind = s.kind === "easy" ? "normal" : s.kind;
-        if (s && s.team >= 1 && s.team <= 8) form.slots[i].team = s.team | 0;
-      });
-  } catch (e) { /* private mode / bad data */ }
-  const saveForm = () => store.set("tunneler.online", JSON.stringify({ size: form.size, winScore: form.winScore,
-    roundTime: form.roundTime, friendlyFire: form.friendlyFire, visible: form.visible, watchOut: form.watchOut, slots: form.slots }));
-  let copied = false;
+  let view = null;                                   // "name" | "list" | "create"
+  let rooms = [];
+  const form = { value: "", max: 26, width: 18, public: true, spectators: true, error: "" };
 
-  function setUrl(id) {
-    try { history.replaceState(null, "", id ? Links.room(id) : Links.games()); } catch (e) { /* ignore */ }
+  // "4 tanks, teams, map size: medium, rounds to win: 3" - in the lobby: the seats that aren't closed
+  // (players, free open seats, AI); during a match: its tanks
+  function roomDesc(r) {
+    const seats = (r.seats || []).filter(s => s.kind !== "closed"), teamOf = {};
+    for (const s of seats) teamOf[s.team] = (teamOf[s.team] || 0) + 1;
+    const lobby = r.state === "lobby", n = lobby ? seats.length : r.tanks, teams = lobby ? Object.values(teamOf).some(k => k > 1) : r.teams;
+    return [T("os.players", { n }), T(teams ? "mode.teams" : "mode.ffa"), T("pg.size." + (r.size || "medium")), T("pg.win", { n: r.winScore || 3 })].join(", ");
   }
-
-  // "4 tanks, teams, map size: medium, rounds to win: 3"
-  const roomDesc = r => [T("os.players", { n: r.players }), T(r.teams ? "mode.teams" : "mode.ffa"),
-    T("pg.size." + (r.size || "medium")), T("pg.win", { n: r.winScore || 3 })].join(", ");
   function scoreText(r) {
-    if (!r.ext) return r.wins[0] + ":" + r.wins[1];
+    if (!r.ext) return (r.wins[0] || 0) + ":" + (r.wins[1] || 0);
     if (r.teams) return (r.teamWins && r.teamWins.length ? r.teamWins : [0, 0]).join(":");
-    return r.wins.length <= 4 ? r.wins.join(":") : T("lobby.best", { n: Math.max(...r.wins) });
+    return r.wins.length <= 4 ? r.wins.join(":") : T("lobby.best", { n: Math.max(0, ...r.wins) });
   }
   function stateText(r) {
+    if (r.state === "lobby") return T("state.lobby");
     const score = r.round ? "  " + scoreText(r) : "";
-    if (r.state === "playing") return T("state.round", { n: r.round }) + score;
-    if (r.state === "menu") return T("state.menu") + score;
-    if (r.state === "paused") return T("state.paused");
-    return T("state.waiting");
+    return (r.state === "paused" ? T("state.paused") : T("state.round", { n: r.round || 1 })) + score;
   }
-  const dash = s => "-".repeat(UniText.cols(s));
-  // a classic room: who plays BLUE / GREEN - their names (8 columns at most), else the colour; dashes = free
-  const who = (r, i, key) => { const sl = (r.slots || [])[i]; return sl && sl.name ? UniText.slice(E(sl.name), 8) : T(key); };
-  const playersText = r => (r.ext ? r.joined + "/" + r.humans + (r.teams ? " " + T("mode.teams.s") : "")
-    : (r.blue ? who(r, 0, "blue") : dash(T("blue"))) + " " + (r.green ? who(r, 1, "green") : dash(T("green")))) + (r.spec ? " +" + r.spec : "");
+  // the list's columns after the name: PLAYERS ("2/4": seated / seats they can take - during a match:
+  // connected / its players), AI (computer tanks), WATCHING (spectators); 0 = blank
+  const COLS = [29, 9, 5, 10];                       // (name, players, AI, watching; the state takes the rest)
+  const places = r => r.places != null ? r.places : r.players + (r.open || 0);
+  function rowText(r, state) {
+    const P = UniText.padEnd;
+    return P(UniText.slice(E(r.name), COLS[0] - 1), COLS[0]) + P(r.players + "/" + places(r), COLS[1]) +
+      P(r.bots ? String(r.bots) : "", COLS[2]) + P(r.spec ? String(r.spec) : "", COLS[3]) + state;
+  }
 
-  // who is in the game: "Playing: Norko, GREEN, Jano" (the connected players' names, else their colour)
+  // who is in the game: "Playing: Norko, Jano" (the seated players' names)
   function namesLine(r) {
-    const on = (r.slots || []).filter(s => !s.bot && s.connected).map(s => s.name || Lang.raw(s.role));
+    const on = (r.seats || []).filter(s => s.taken).map(s => s.name);
     return on.length ? { text: UniText.slice(T("lobby.who", { names: on.join(", ") }), 79), color: 7 } : null;
   }
+  const join = (id, watch) => { location.href = Links.game(id, watch ? "watch" : null); };
+  // this page's version (build.js's version.js; null on a development page: not checked) - the server
+  // refuses games of another version, so they can't be joined or created here
+  const myVersion = window.TUNNELER_VERSION || null;
+  const otherVersion = r => !!(myVersion && r && r.version && r.version !== myVersion);
+  let serverVersion = null;                          // the server's, when it isn't ours (from the list / a refused POST)
+  const versionInfo = () => [{ text: T("ver.server", { server: serverVersion, you: myVersion }), color: 12 }, T("ver.update")];
 
-  // ------------------------------------------------------------ the list of public games
-  // The games scroll; the separator, "Create a new game" and "Back to main menu" always stay below.
+  // The games this browser hosts: it has their host key (it created them, or hosting was handed to it -
+  // online.js stores the key then). They are marked in the list, and the private ones are listed too.
+  function hostIds() {
+    const out = [];
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith("tunneler.host.") && /^[a-z0-9-]{1,60}$/.test(k.slice(14))) out.push(k.slice(14));
+      }
+    } catch (e) { /* private mode */ }
+    return out;
+  }
+  const hosting = r => r.mine || !!store.get("tunneler.host." + r.id);
+
+  // ------------------------------------------------------------ the list of games
+  // Public games and the private ones this browser hosts (those first); "you host" in the state column of
+  // every game it hosts. The games scroll; the separator, "Create a new game", "Join by link", a blank row
+  // and "Back to main menu" always stay below.
   function list(keep) {
-    view = "list"; setUrl(null);
-    const items = rooms.map(r => ({
-      label: UniText.padEnd(UniText.slice(E(r.name), 27), 28) + UniText.padEnd(playersText(r), 18) + stateText(r), align: "left", key: "room:" + r.id,
-      info: [E(r.name), roomDesc(r) + "   " + stateText(r), namesLine(r), T("lobby.join")].filter(Boolean),
-      go: () => openRoom(r.id),
+    view = "list";
+    const items = rooms.map(r => otherVersion(r) ? {
+      label: rowText(r, "v" + r.version), align: "left", key: "room:" + r.id,
+      info: [E(r.name), ...versionInfo()], go: () => {},
+    } : ({
+      label: rowText(r, stateText(r) + (hosting(r) ? "  " + T("lobby.host") : "")), align: "left", key: "room:" + r.id,
+      info: [E(r.name) + (r.public ? "" : " " + T("room.private")), roomDesc(r) + "   " + stateText(r), namesLine(r),
+        hosting(r) ? { text: T("lobby.host.i"), color: 14 } : null,
+        T(r.spectators ? (r.state === "lobby" && r.open ? "lobby.join2" : "lobby.watch") : r.state === "lobby" && r.open ? "lobby.join" : "lobby.closed")].filter(Boolean),
+      disabled: !r.spectators && !(r.state === "lobby" && r.open),
+      go: () => join(r.id, !(r.state === "lobby" && r.open)),
+      change: d => { if (d > 0 && r.spectators) join(r.id, true); },
     }));
     if (!rooms.length) items.push({ key: "none", label: T("lobby.none"), disabled: true });
     items.push({ key: "sep", separator: true });
-    items.push({ key: "create", label: T("lobby.create"), info: [T("lobby.create.i")], go: () => create() });
-    items.push({ key: "back", label: T("back.main"), info: [T("back.main.i")], go: () => { location.href = "/"; } });
+    items.push({ key: "create", label: T("lobby.create"), info: serverVersion ? versionInfo() : [T("lobby.create.i")],
+      go: () => { if (!serverVersion) create(); } });
+    items.push({ key: "link", label: T("lobby.link"), info: [T("lobby.link.i1"), T("lobby.link.i2")], go: () => joinLink() });
+    items.push({ key: "gap", label: "", disabled: true });
+    items.push({ key: "back", label: T("back.main"), info: [T("back.main.i")], go: home });
     ui.show({
-      lines: [{ row: 2, text: T("lobby.title"), color: 12 }],
-      box: { x: 6, y: 4, w: 68, rows: 8 }, fixed: 3,
-      header: (" " + T("lobby.name")).padEnd(29) + T("lobby.players").padEnd(18) + T("lobby.state"),
-      items, infoRow: 20, back: () => { location.href = "/"; },
+      lines: [{ row: 2, text: T("lobby.title"), color: 12 },
+        ...(serverVersion ? [{ row: 3, text: T("ver.server", { server: serverVersion, you: myVersion }), color: 12 }] : [])],
+      box: { x: 2, y: 4, w: 76, rows: 7 }, fixed: 5,
+      header: UniText.padEnd(" " + T("lobby.name"), COLS[0] + 1) + [T("lobby.players"), T("lobby.ai"), T("lobby.spec")].map((h, i) => UniText.padEnd(h, COLS[i + 1])).join("") +
+        T("lobby.state"),
+      items, infoRow: 20, back: home,
     }, keep);
   }
 
-  // ------------------------------------------------------------ create a game: settings + slot editor
-  const cycle = (v, d, lo, hi) => lo + ((v - lo + d) % (hi - lo + 1) + (hi - lo + 1)) % (hi - lo + 1);
-  const used = () => form.slots.filter(s => s.kind !== "none");
-  const whoText = k => k === "none" ? T("os.who.none") : k === "human" ? T("os.who.human") : T("os.who.cpu", { level: Lang.raw("level." + k) });
-  const changed = () => { form.error = ""; saveForm(); create(true); };
-
+  // ------------------------------------------------------------ create a game
   function create(keep) {
     view = "create";
     const yn = v => T(v ? "yes" : "no");
-    // slot rows: "BLUE      human            team 1", in the tank's colour
-    const cw = Math.max(...ROLES.map(r => T(r).length)) + 2, ww = Math.max(...KINDS.map(whoText).map(s => s.length)) + 2;
-    const flip = k => () => { form[k] = !form[k]; changed(); };
+    const flip = k => () => { form[k] = !form[k]; form.error = ""; create(true); };
     const items = [
-      { key: "name", label: T("create.name"), input: form, align: "left",
-        info: [T("create.name.i")], go: () => ui.move(1) },
+      { key: "name", label: T("create.name"), input: form, align: "left", info: [T("create.name.i")], go: () => ui.move(1) },
       { key: "public", label: T("create.public") + yn(form.public), align: "left",
         info: [T("create.public.i1"), T("create.public.i2")], go: flip("public"), change: flip("public") },
       { key: "spectators", label: T("create.spect") + yn(form.spectators), align: "left",
         info: [T("create.spect.i1"), T("create.spect.i2")], go: flip("spectators"), change: flip("spectators") },
-      { key: "size", label: T("os.size") + T("os.size." + form.size), align: "left", info: [T("os.size.i1"), T("os.size.i2")],
-        go: () => setSize(1), change: setSize },
-      { key: "win", label: T("os.win") + form.winScore, align: "left", info: [T("os.win.i1"), T("os.win.i2")],
-        go: () => setWin(1), change: setWin },
-      { key: "time", label: T("os.time") + (form.roundTime ? T("time.n", { n: form.roundTime }) : T("time.off")), align: "left",
-        info: [T("time.i1"), T("time.i2")], go: () => setTime(1), change: setTime },
+      { key: "gap", label: "", disabled: true },
+      { key: "go", label: T("create.go"), info: form.error ? [{ text: form.error, color: 12 }] : [T("create.go.i1"), T("create.go.i2")], go: submit },
+      { key: "back", label: T("back.lobby"), info: [T("back.lobby.i")], go: () => list() },
     ];
-    // (always: the players may still change teams in the pre-game lobby)
-    items.push({ key: "ff", label: T("os.ff") + T(form.friendlyFire ? "os.on" : "os.off"), align: "left",
-      info: [T("os.ff.i1"), T("os.ff.i2")], go: flip("friendlyFire"), change: flip("friendlyFire") });
-    items.push({ key: "visible", label: T("os.visible") + T("view." + form.visible), align: "left",
-      info: [T("os.visible.i1"), T("os.visible.i2")], go: () => setVisible(1), change: setVisible });
-    const setWatch = d => { const A = NetProto.AFTER_DEATH; form.watchOut = A[(A.indexOf(form.watchOut) + d + A.length) % A.length]; changed(); };
-    items.push({ key: "watch", label: T("os.watch") + T("watch." + form.watchOut), align: "left",
-      info: [T("watch.i1"), T("watch.i2")], go: () => setWatch(1), change: setWatch });
-    items.push({ key: "gap", label: "", disabled: true });
-    items.push({ key: "go", label: T("create.go"), info: form.error ? [{ text: form.error, color: 12 }] : [T("create.go.i")], go: submit });
-    items.push({ key: "back", label: T("back.lobby"), info: [T("back.lobby.i")], go: () => list() });
-    // the 8 slot rows: "BLUE      human            team 1", in the tank's colour
-    const slotItems = form.slots.map((s, i) => {
-      const setKind = d => { s.kind = KINDS[cycle(KINDS.indexOf(s.kind), d, 0, KINDS.length - 1)]; changed(); };
-      const setTeam = d => { s.team = cycle(s.team, d, 1, 8); changed(); };
-      const teamText = T("pg.teamn", { n: s.team });
-      return { key: "slot" + i, align: "left", attr: TEXT_COLORS[i],
-        label: T(ROLES[i]).padEnd(cw) + whoText(s.kind).padEnd(ww) + teamText,
-        // mouse: a click on the who column / the team cycles it (right click: back), elsewhere selects
-        zones: [{ from: cw, to: cw + ww - 1, click: setKind }, { from: cw + ww, to: cw + ww + teamText.length, click: setTeam }],
-        info: [T("os.slot.i1"), T("os.slot.i2")],
-        change: setKind,
-        digit: n => { s.team = n; changed(); },                // 1..8: this slot's team
-        go: () => setTeam(1) };
-    });
-    // two boxes (docs/DESIGN-8P.md 25): "Game" (the settings, Create, Back) and "Players" (the slots);
-    // the selected item's info centred below them
-    const y = 3;
-    ui.show({
-      lines: [{ row: 1, text: T("create.title"), color: 11 }],
-      boxes: [{ y, title: T("box.game"), items }, { y, title: T("box.players"), items: slotItems }],
-      infoRow: y + Math.max(items.length, slotItems.length) + 3, back: () => list(),
-      hint: T("create.hint"),
-    }, keep);
+    ui.show({ lines: [{ row: 2, text: T("create.title"), color: 12 }], box: { y: 7 }, items, infoRow: 17, back: () => list() }, keep);
   }
-  function setSize(d) { form.size = SIZES[cycle(SIZES.indexOf(form.size), d, 0, SIZES.length - 1)]; changed(); }
-  function setWin(d) { form.winScore = cycle(form.winScore, d, 1, 9); changed(); }
-  function setTime(d) { const R = ROUND_TIMES; form.roundTime = R[cycle(R.indexOf(form.roundTime), d, 0, R.length - 1)]; changed(); }
-  function setVisible(d) { form.visible = VISIBLE[cycle(VISIBLE.indexOf(form.visible), d, 0, VISIBLE.length - 1)]; changed(); }
 
   async function submit() {
     form.error = "";
-    const u = used();
     if (!form.value.trim()) { form.error = T("create.err.name"); ui.sel = 0; return create(true); }
-    if (u.length < 2) form.error = T("os.err.slots");
-    else if (!u.some(s => s.kind === "human")) form.error = T("os.err.human");
-    else if (new Set(u.map(s => s.team)).size < 2) form.error = T("os.err.teams");
-    const body = { name: form.value.trim(), public: form.public, spectators: form.spectators, size: form.size,
-      winScore: form.winScore, roundTime: form.roundTime, friendlyFire: form.friendlyFire, visible: form.visible, watchOut: form.watchOut, slots: form.slots };
-    if (!form.error && roomSettings(body).error) form.error = E(roomSettings(body).error);   // (the server's own check)
-    if (form.error) return create(true);
+    // the game settings the host chose last time (online.js keeps them): the new game's defaults
+    let last = {};
+    try { last = JSON.parse(store.get("tunneler.online") || "{}") || {}; } catch (e) { /* bad data */ }
+    const body = Object.assign({}, last, { name: form.value.trim(), public: form.public, spectators: form.spectators });
+    body.version = myVersion || "dev";                 // (another version is refused; dev: not built)
     try {
       const res = await fetch(Endpoint.api("/api/rooms"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const r = await res.json();
+      if (res.status === 409 && r.code === "version") { serverVersion = r.version; return list(); }   // (another version: see the list)
       if (!res.ok) throw new Error(r.error || "failed");
       if (r.hostKey) store.set("tunneler.host." + r.id, r.hostKey);   // this browser is the game's host
-      form.value = "";                                   // a fresh name for the next game
-      openRoom(r.id);
+      location.href = Links.game(r.id);
     } catch (err) { form.error = T("create.err", { msg: err.message }); create(true); }
   }
 
-  // ------------------------------------------------------------ one game
-  function openRoom(id) { roomId = id; room = null; copied = false; view = "room"; setUrl(id); refreshRoom(false); }
-
-  // copy the invite link; "Link copied" for 3 seconds
-  let copiedTimer = null;
-  function copyLink(url) {
-    (navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject()).then(() => {
-      copied = true;
-      if (view === "room") roomScreen(true);
-      clearTimeout(copiedTimer);
-      copiedTimer = setTimeout(() => { copied = false; if (view === "room") roomScreen(true); }, 3000);
-    }, () => {});
-  }
-
-  // One game: an item per human slot to join, in its colour ("Play as CYAN", or taken: with the player's
-  // name), computer slots as disabled lines, the settings and the state above the box.
-  function roomScreen(keep, selKey) {
-    view = "room";
-    if (!room) {
-      return ui.show({ lines: [...ROOM_TITLE(), { row: 9, text: T("room.notfound"), color: 12 }, { row: 11, text: T("room.expired"), color: 3 }],
-        box: { y: 14 }, back: () => list(),
-        items: [{ key: "back", label: T("back.lobby"), go: () => list() }] }, keep);
-    }
-    const r = room, items = [];
-    const slots = r.slots || [];
-    slots.forEach((s, i) => {
-      const color = Lang.raw(s.role), team = r.teams ? "  " + T("pg.teamn", { n: s.team }) : "";
-      if (s.bot) items.push({ key: s.role, label: T("room.cpu", { name: color, level: Lang.raw("level." + (s.level || "normal")) }) + team, disabled: true });
-      else items.push({ key: s.role, attr: TEXT_COLORS[s.color != null ? s.color : i], disabled: s.connected,
-        label: (s.connected ? T("room.taken", { name: s.name || color }) : T("room.play", { name: color })) + team,
-        info: [T("room.play.i1", { name: color }), T(slots.length === 2 && !r.ext ? "room.play.i2" : "room.play.i2n")],
-        go: () => { location.href = gameUrl(r.id, s.role); } });
-    });
-    items.push({ key: "gap1", label: "", disabled: true });
-    if (r.spectators) items.push({ key: "watch", label: T("room.watch"), info: [T("room.watch.in")], go: () => { location.href = gameUrl(r.id, "spectate"); } });
-    const copy = () => copyLink(roomUrl(r.id));
-    items.push({ key: "copy", label: T(copied ? "room.copied" : "room.copy"),
-      info: [T("room.copy.in"), { text: E(roomUrl(r.id)), color: 11, onClick: copy }], go: copy });
-    if (slots.length <= 7) items.push({ key: "gap2", label: "", disabled: true });
-    items.push({ key: "back", label: T("back.lobby"), info: [T("back.lobby.i")], go: () => list() });
-    // the players (and the buttons) on the left, every setting of the room in a box on the right
-    const settings = Lang.roomSettings(r, r.spec).map((text, k) => ({ key: "set" + k, label: text, align: "left", static: true }));
-    const lines = [...ROOM_TITLE(), { row: 4, text: E(r.name) + (r.public ? "" : "  " + T("room.private")), color: 15 }];
+  // ------------------------------------------------------------ join by link
+  // An invite link pasted (or just a game's id): this server's game -> its lobby; another server's -> in a
+  // browser that site's page, in the desktop app that server becomes the one it plays on (Settings: Server)
+  const linkForm = { value: "", max: 300, width: 56, error: false };
+  function joinLink(keep) {
+    view = "link";
+    const go = () => {
+      const l = Links.parse(linkForm.value);
+      if (!l) { linkForm.error = true; ui.sel = 0; return joinLink(true); }
+      const here = (Endpoint.base() || location.origin).replace(/\/+$/, "");
+      linkForm.value = ""; linkForm.error = false;
+      if (!l.origin || l.origin === here) location.href = Links.game(l.room, l.role);
+      else if (Endpoint.isApp) { Endpoint.set(l.origin); location.href = Links.game(l.room, l.role); }
+      else location.href = l.origin + Links.invite(l.room) + (l.role ? "/" + (l.role === "spectate" ? "watch" : l.role) : "");
+    };
+    const back = () => { linkForm.error = false; list(); };
     ui.show({
-      lines, boxes: [{ y: 6, title: T("box.players"), items }, { y: 6, title: T("box.settings"), items: settings }],
-      infoRow: 22, back: () => list(),
-      sel: selKey ? Math.max(0, items.findIndex(it => it.key === selKey)) : 0,
+      lines: [{ row: 2, text: T("link.title"), color: 12 }, { row: 6, text: T("link.i1"), color: 3 },
+        { row: 7, text: E(Endpoint.web(Links.invite("friday-night"))), color: 7 }],
+      box: { y: 10 }, infoRow: 17, back,
+      items: [{ key: "link", label: T("link.label"), input: linkForm, align: "left",
+        info: linkForm.error ? [{ text: T("link.err"), color: 12 }] : [T("link.i2")], go },
+      { key: "go", label: T("link.go"), info: [T("link.i2")], go },
+      { key: "gap", label: "", disabled: true },
+      { key: "back", label: T("back.lobby"), info: [T("back.lobby.i")], go: back }],
     }, keep);
   }
+
+  // the player's name (online play needs one)
+  function askName(then) { view = "name"; ui.askName(then, () => (DosUI.playerName() ? list() : home())); }
 
   // ------------------------------------------------------------ polling
   // Until the server first answers (a server that was asleep - e.g. on a free host - can take up to a
   // minute to wake up): "Connecting to <server>...", <ESC> / Back to the main menu. One request at a time.
   let reached = false, busy = false, failed = false;
   function connecting() {
+    if (view === "name") return;
     const host = (Endpoint.base() || location.origin).replace(/^https?:\/\//, "");
-    const home = () => { location.href = "/"; };
     ui.show({
       lines: [{ row: 2, text: T("lobby.title"), color: 12 }, { row: 9, text: T("lobby.connecting"), color: 14 }, { row: 11, text: E(host), color: 7 },
         ...(failed ? [{ row: 13, text: T("lobby.wake"), color: 3 }] : [])],
       box: { y: 16 }, back: home, items: [{ key: "back", label: T("back.main"), info: [T("back.main.i")], go: home }],
     }, true);
   }
-  async function poll(url) {
-    if (busy) return undefined;
+  async function refreshList(keep) {
+    if (busy) return;
     busy = true;
     try {
-      const res = await fetch(Endpoint.api(url), { cache: "no-store" });
-      reached = true;
-      return res.ok ? await res.json() : null;
-    } catch (e) {
-      failed = true;
-      if (!reached) connecting();
-      return undefined;
+      let r;
+      try {
+        const res = await fetch(Endpoint.api("/api/rooms"), { cache: "no-store" });
+        reached = true;
+        r = res.ok ? await res.json() : null;
+      } catch (e) {
+        failed = true;
+        if (!reached) connecting();
+        return;
+      }
+      let list0 = Array.isArray(r) ? r : [];
+      // the private games this browser hosts (a few at most); a key whose game is gone is dropped
+      const mine = hostIds().filter(id => !list0.some(x => x.id === id)).slice(0, 8);
+      const drop = id => { try { localStorage.removeItem("tunneler.host." + id); } catch (e) { /* private mode */ } };
+      const got = await Promise.all(mine.map(id => fetch(Endpoint.api("/api/rooms/" + encodeURIComponent(id)), { cache: "no-store" })
+        .then(res => res.status === 404 ? (drop(id), null) : res.ok ? res.json() : null).catch(() => null)));
+      const own = got.filter(x => x && x.id).map(x => Object.assign(x, { mine: true }));
+      rooms = [...own, ...list0.filter(hosting), ...list0.filter(x => !hosting(x))];
     } finally { busy = false; }
+    const other = rooms.find(otherVersion);
+    if (other) serverVersion = other.version;
+    if (view === "list" || (view === null && DosUI.playerName())) list(keep && view === "list");
   }
-  async function refreshList(keep) {
-    const r = await poll("/api/rooms");
-    if (r === undefined) return;
-    rooms = Array.isArray(r) ? r : [];
-    if (!keep && view === "list") return list(false);
-    if (view === "list") list(keep);
-  }
-  async function refreshRoom(keep) {
-    const wasReached = reached;
-    const r = await poll("/api/rooms/" + encodeURIComponent(roomId));
-    if (r === undefined) return;
-    room = r;
-    if (view === "room") roomScreen(keep && wasReached);
-  }
-  setInterval(() => {
-    if (view === "list") refreshList(true);
-    else if (view === "room") refreshRoom(true);
-  }, 2000);
+
+  setInterval(() => { if (view === "list" || (view === null && DosUI.playerName())) refreshList(true); }, 2000);
 
   setTimeout(() => { if (!reached) connecting(); }, 300);   // (until the server answers; no flash when it's quick)
   setTimeout(() => { if (!reached) { failed = true; connecting(); } }, 3000);   // (still waiting: the wake-up hint)
-  if (roomId) openRoom(roomId);
-  else { view = "list"; refreshList(false); }
+  if (!DosUI.playerName()) askName(() => { view = null; if (reached) list(); else connecting(); refreshList(false); });
+  refreshList(false);
 })();

@@ -3,19 +3,49 @@
 All notable changes to Tunneler Online. Versions follow [semantic versioning](https://semver.org/);
 a release is made by pushing a version tag (see CONTRIBUTING.md).
 
-## Unreleased
+## 2.0.0
 
+**Online play is reworked** - a 2.0 server and older pages or desktop apps can't play together (each
+side now checks the other's version and says when they differ).
+
+- **A name first**: online play asks for your name once (change it any time in Settings, new **Name**
+  row); a name already taken in a game gets a number ("Norko 2").
+- **Creating a game** asks only for its name, whether it is listed publicly and whether spectators are
+  allowed; you land straight in its lobby as the host, with the settings you used last time.
+- **Every game is a lobby with 8 seats**, one per color, each row in its color: a player's name (a √ in
+  front once ready, ► in front of your own seat), **open**, **closed** or **AI** (easy, medium, hard), the
+  team and the ping. Sit on an open seat to play that color (Enter or a click), change your team (← →,
+  1-8 or a click on it), chat, choose **I am ready!** or **Watch instead**. Open seats nobody takes get
+  no tank.
+- **The host** sets every free seat open / closed / AI and its team (← →, or a right click that steps
+  through open, closed and the AI levels), changes every setting in the lobby (map size, rounds to win,
+  round time, friendly fire, view limit, after death, public, spectators - any change makes everybody
+  unready), kicks players and spectators, and starts with **Start game** once everybody seated is ready
+  (at least 2 tanks in 2 teams). "Start now" is gone.
+- **During a match** only its players play (a reload or reconnect gets your tank back); whoever joins
+  then watches. Afterwards everybody is back in the lobby; each viewer sees the match's statistics as
+  soon as they close the world map.
+- **The list of games**: columns PLAYERS (seated / seats left; during a match: connected / its players),
+  AI, WATCHING and STATE; the games you host come first, marked "you host" (your private ones are listed
+  too); **Join by link** takes a pasted invite link (also one for another server - the desktop app
+  switches to it). `/game/<name>` is now the game's lobby (`/watch` to spectate).
+- Vs computer uses the same layout (without the chat): the slots without color names and the settings
+  side by side, Start / Back below; **Friendly fire** is always listed, grayed out while no team has 2+
+  tanks (online too).
+- Centred menu items line up: one column shorter starts in the same column.
+- Every match is its own game (a new seed, the lobby's tanks, names and settings); a late spectator only
+  replays the current match.
 - Stereo sound: sounds come from the left or right by where they happen - against the computer and
   online by their offset from your tank (the edge of your view screen = far left / right), on the split
   screen by which tank they are nearer (BLUE left, GREEN right); menus stay centred. Every sound style.
 - "Gamepad 1 connected" (split screen: "...: BLUE") appears when a gamepad is found; the Instructions say
   to press a button on it first.
-- The online lobby's Statistics page is full screen: the statistics centred, the settings across the
-  width, "Press <ENTER> to go back." on the bottom line.
-- Statistics with **rounds** (each round's winner and length, draws, time-ups) and **awards**
-  (Sharpshooter, Hunter, Mole, Traveler): on the online page beside the table, and against the computer
-  in the left half (rounds and awards on top, the Rematch menu at the bottom, no title). Both halves are centred
-  vertically (vs computer, the online page); classic BLUE / GREEN use the table's colours there too. Split screen keeps the original screen.
+- The online Statistics page is full screen: the statistics centred, the settings across the width,
+  "Press <ENTER> to go back." on the bottom line.
+- Statistics list the **rounds** (each round's winner and length, draws, time-ups): on the online page
+  beside the table, and against the computer in the left half (the rounds on top, the Rematch menu at the
+  bottom, no title). Both halves are centred vertically (vs computer, the online page); classic BLUE /
+  GREEN use the table's colours there too. Split screen keeps the original screen.
 - Computer tanks no longer spin in place for seconds after destroying a tank (or in a base's doorway,
   or next to a teammate in their way).
 

@@ -37,8 +37,8 @@ Lang.register("genz", {
   "vw.grid": "All screens", "vw.map": "Map and scores", "vw.follow": "Watching {name}", "vw.hint": "Tab or 1 2 3: view", "vw.destroyed": "COOKED", "vw.hint2": "← →: tank",
   "vw.tank": "Tank", "vw.wins": "W's", "vw.energy": "Energy", "vw.shield": "Shield", "vw.alive": "alive", "vw.dead": "cooked",
   "back.main": "Dip to main menu", "back.main.i": "Back to the main menu.",
-  "lobby.title": "ONLINE GAMES", "room.title": "ONLINE GAME", "lobby.name": "NAME", "lobby.players": "SQUAD", "lobby.state": "VIBE",
-  "state.waiting": "Waiting", "state.menu": "In menu", "state.paused": "AFK", "state.round": "Round {n}",
+  "lobby.title": "ONLINE GAMES", "room.title": "ONLINE GAME", "lobby.name": "NAME", "lobby.players": "SQUAD", "lobby.ai": "BOTS", "lobby.spec": "LURKERS", "lobby.state": "VIBE",
+  "state.paused": "AFK", "state.round": "Round {n}",
   "lobby.who": "Squad rn: {names}", "lobby.join": "<ENTER> to pull up", "lobby.none": "No public games rn, dead lobby",
   "lobby.create": "Start a new game", "lobby.create.i": "Start a game and invite the squad.", "lobby.connecting": "Connecting to the server...", "lobby.wake": "The server was sleeping, it can take a minute to wake up. be patient.",
   "create.title": "NEW GAME", "create.hint": "↑↓ ← → <ENTER>, <TAB> other box, or mouse.  <ESC> dip.",
@@ -47,43 +47,24 @@ Lang.register("genz", {
   "create.public.i2": "private ones need the invite link.",
   "create.spect": "Let people watch: ", "create.spect.i1": "Spectators see the whole screen", "create.spect.i2": "but can't play. Touch grass, ig.",
   yes: "bet", no: "nah",
-  "create.go": "Make it happen", "create.go.i": "Create the game and pick your tank.",
+  "create.go": "Make it happen",
   "back.lobby": "Back to the lobby", "back.lobby.i": "Back to the list of games.",
   "create.err.name": "Type a name first, bestie.", "create.err": "Couldn't create the game: {msg}",
-  "room.notfound": "GAME NOT FOUND", "room.expired": "It's giving expired.", "room.private": "(private)",
-  "room.connected": "here", "room.free": "free", "room.watching": "watching: {n}",
-  "room.taken": "{name} is taken", "room.play": "Play as {name}", "room.play.i1": "Join the game as the {name} tank.",
-  "room.play.i2": "It starts when both players are locked in.",
-  "room.watch": "Lurk", "room.watch.i": "Lurk on both screens as a spectator.",
-  "room.copy": "Copy invite link", "room.copied": "Link copied, slay", "room.copy.i": "Send this link to your opp:",
+  "room.copy": "Copy invite link", "room.copied": "Link copied, slay", "room.copy.in": "Send this link to the squad:",
+  "room.notfound": "GAME NOT FOUND", "room.private": "(private)",
+
   "on.connecting": "Connecting...", "on.catching": "Catching up, hold up...",
-  "on.waitjoin": "Waiting for {name} to pull up...", "on.waitplayers": "Waiting for the squad to pull up...",
   "on.paused": "Game paused, someone's AFK.", "on.waitre": "Waiting for {names} to reconnect...", "on.and": " and ",
-  "on.players": "the players", "on.youplay": "you play {name}", "on.spectator": "spectator", "on.leave": "Leave this game.",
+  "on.players": "the players", "on.youplay": "you play {name}",
 
- 
-
- 
   "st.youare": "You are {name}", "on.escagain": "Hit <ESC> again to dip.",
 
   "conn.connecting": "connecting", "conn.reconnecting": "reconnecting", "conn.retry": "disconnected, retrying in {s} s",
   "conn.closed": "closed", "conn.connected": "connected",
-  // online rooms with 2-8 slots, teams, computer tanks (lobby.js create / game screens, online.js)
-  "create.players": "Players: ", "create.players.i1": "How many tanks play (2-8), bots included.",
-  "create.players.i2": "Two players and no bots is the OG game.", "create.mode": "Mode: ",
-  "mode.ffa": "free-for-all", "mode.teams": "teams", "mode.teams.s": "teams",
-  "create.mode.i1": "Free-for-all: every tank for itself.  Teams (3+ players):", "create.mode.i2": "{a} vs {b}.",
-  "create.cpu": "Bot tanks: ", "create.cpu.i1": "How many of the tanks the bots drive;",
-  "create.cpu.i2": "they get the last colors.", "create.level": "Bot level: ",
-  "room.cpu": "{name}: bot ({level})", "room.desc": "{n} players, {mode}",
-  "room.desc.cpu": ", bot tanks: {n} ({level})",
-  "room.play.i2n": "It starts when everyone's locked in.",
-  "room.watch.in": "Lurk on the game as a spectator.", "room.copy.in": "Send this link to the squad:",
+  "mode.ffa": "free-for-all", "mode.teams": "teams",
+
   "lobby.best": "best {n}", "rd.others": "Waiting on the others...",
 
- 
-
-  "on.waitothers": "Waiting for the rest of the squad to pull up:",
   engine: {
     by: "by Norko Kaniansky",
     // world-map "PRESS ANY KEY" banner: 5 rows of lores pixels ('*'), at most 72 wide
@@ -97,7 +78,7 @@ Lang.register("genz", {
     waiting: ["Waiting for the", "squad to lock in"],
     creating: "(cooking the world)", ready: "(world is ready fr)", round: "ROUND",
     stats: { title: "The receipts", fired: "shots fired", hit: "shots hit", percent: "hit rate", dug: "meters dug",
-      moved: "meters traveled", winner: "The W goes to ", rounds: "Rounds", awards: "Awards", draw: "draw", ended: "ended", sharp: "Aimbot", hunter: "Hunter", mole: "Mole", traveler: "Touring",
+      moved: "meters traveled", winner: "The W goes to ", rounds: "Rounds", draw: "draw", ended: "ended",
       head: ["shot", "hit", "hit%", "dug", "moved"] },
     teams: ["BLUE SQUAD", "GREEN SQUAD"],
     team: "SQUAD {n}",
@@ -177,17 +158,19 @@ Lang.register("genz", {
           "every other color pick nobody or a bot and its level, plus every tank's squad (1-8); then " +
           "map size, W's to win, round timer, friendly fire, POV and after you die.  <ESC> while " +
           "playing ends the match; <ESC> on the game's menu takes you back to the settings."],
-        ["Online game:  ", "2 to 8 tanks on different computers, bots allowed.  Make a game - its " +
-          "name, public or private (people join with the invite link), spectators or not, every slot " +
-          "human, bot or nobody with its squad, and all the settings above - or join one from the " +
-          "list.  You drive your tank with either set of keys.  Every computer runs the same game in " +
-          "lockstep; only key presses go over the net, so no lag excuses."],
-        ["The lobby:  ", "before every match pick your name and squad, yap in the chat (Yap:) and " +
-          "hit \"I'm locked in!\" - the match starts when everyone is locked in (bots always are).  " +
-          "The host - whoever made the game, or the next player if the host dips - can also \"Start " +
-          "now fr\" (missing players' tanks just stand there until they show up) and \"Yeet a " +
-          "player...\".  After a match the lobby shows the receipts.  Hit <ESC> twice to dip from an " +
-          "online game."],
+        ["Online game:  ", "2 to 8 tanks on different computers, bots allowed.  Online needs a name (asked the first " +
+          "time, rebrand in Settings).  Make a game - its name, public or private (people join with " +
+          "the invite link), spectators or not - or join one from the list.  You drive your tank " +
+          "with either set of keys.  Every computer runs the same game in lockstep; only key " +
+          "presses go over the net, so no lag excuses."],
+        ["The lobby:  ", "every game has 8 seats, one per color.  Sit on an open seat to play that color (<ENTER> " +
+          "or a click), pick your squad (<←> <→>, <1>-<8> or a click on it), yap in the chat (Yap:) " +
+          "and hit \"I'm locked in!\"; \"Just watch\" leaves the seat.  The host - whoever made the " +
+          "game, or the next player if the host dips - sets every free seat open, closed or a bot " +
+          "(easy, medium, hard) with its squad, the settings above, can \"Yeet a player...\" and " +
+          "sends it once everyone seated is locked in.  An open seat nobody took gets no tank.  " +
+          "During a match only its players play; whoever pulls up then just watches.  After a match " +
+          "the lobby shows the receipts.  Hit <ESC> twice to dip from an online game."],
         ["Lurkers:  ", "watch an online game without playing.  <TAB> or <1> <2> <3> switch between " +
           "all screens, the map with the scores, and following one tank (<←> <→> pick which)."],
         ["Sound:  ", "Pick the vibe in Settings: OG (the PC speaker " +
@@ -210,8 +193,8 @@ Lang.register("genz", {
         ["online game", "2 to 8 tanks on other computers, bots welcome"],
         ["lurk", "watch an online game: all screens, the live map, or one tank"]],
       p2: ["Up to 8 tanks go free-for-all or in squads (friendly fire on or off), on",
-        "a small, medium or large map, first to 1-9 rounds.  Online, everyone picks",
-        "a name and squad in the lobby, yaps in chat, and locks in when ready.  Every",
+        "a small, medium or large map, first to 1-9 rounds.  Online, everyone grabs",
+        "a seat and squad in the lobby, yaps in chat, and the host sends it.  Every",
         "computer runs the same game in lockstep; only key presses go over the net."],
       sections: [
         ["The desktop app:  ", "Tunneler Online also comes as a lil program for Windows, Linux and " +
@@ -251,24 +234,18 @@ Lang.register("genz", {
   "os.win": "W's to win: ", "os.win.i1": "How many rounds a tank or squad needs to take the match", "os.win.i2": "(3 is the OG).",
   "os.ff": "Friendly fire: ", "os.on": "on", "os.off": "off",
   "os.ff.i1": "On: shots hit your besties too.", "os.ff.i2": "Off: a shot on a bestie just pops like on a wall.",
-  "os.who.none": "nobody", "os.who.human": "human", "os.who.cpu": "bot, {level}",
-  "os.slot.i1": "← →: nobody, a human or a bot tank.", "os.slot.i2": "1-8, <ENTER> or a click: squad 1-8 (same number = besties).",
-  "os.err.slots": "Use at least 2 slots, bestie.", "os.err.teams": "Need at least 2 different squads.",
-  "os.err.human": "At least one slot has to be a human.", "os.players": "{n} tanks",
-  "pg.h.tank": "TANK", "pg.h.name": "NAME", "pg.h.team": "SQUAD", "pg.h.state": "VIBE", "pg.h.ping": "PING",
+
+  "os.players": "{n} tanks",
   "pg.teamn": "squad {n}",
-  "pg.computer": "bot ({level})", "pg.ready": "locked in", "pg.notready": "not locked in", "pg.free": "free", "pg.disconnected": "AFK",
   "pg.size.small": "map size: smol", "pg.size.medium": "map size: mid", "pg.size.large": "map size: huge",
   "pg.win": "W's to win: {n}", "pg.ff.on": "friendly fire: on", "pg.ff.off": "friendly fire: off", "pg.specs": "lurkers: {n}",
-  "pg.name": "Name: ", "pg.name.i": "Your name in this game (12 characters max, no cap).",
-  "pg.team": "Squad: ", "pg.team.i": "← → / 1-8: your squad. Same number = besties.",
-  "pg.start": "I'm locked in!", "pg.start.i": "You're locked in; it starts when everyone is.", "pg.now": "Start now fr", "pg.now.i1": "Starts the game for everyone, no waiting around:", "pg.now.i2": "missing players' tanks just stand there till they pull up.",
+
+  "pg.start": "I'm locked in!", "pg.start.i": "You're locked in; it starts when everyone is.",
   "pg.cancel": "Nah, not yet!", "pg.ready.i": "You're locked in. <ENTER> or <ESC>: nvm.",
-  "pg.need2": "Need at least 2 squads to start, bestie.",
   "pg.stats": "The receipts", "pg.stats.i": "The last match's receipts.",
   "pg.kick": "Yeet a player...", "pg.kick.i1": "Your game, your rules: pick a player or a spectator",
   "pg.kick.i2": "and yeet them out.", "pg.kick.title": "YEET A PLAYER", "pg.kick.who": "{name}", "pg.kick.pick": "<ENTER> yeets {name} out of this game.", "pg.kick.back": "Back to the lobby", "pg.kick.back.i": "Nobody gets yeeted.",
-  "pg.kick.sure": "Hit <ENTER> again to yeet {name}.", "pg.spectator": "lurker {n}",
+  "pg.kick.sure": "Hit <ENTER> again to yeet {name}.",
   "pg.kicked": "The host yeeted you from this game. L.",
   "on.idle": "Game got shut down, nobody played for 10 min. Dead lobby fr.",
   // lobby chat (online.js, docs/DESIGN-8P.md 22) and what a player sees during play (section 23)
@@ -282,15 +259,38 @@ Lang.register("genz", {
   "os.visible": "Max POV: ", "os.visible.i1": "The most a player may peep during play: their own",
   "os.visible.i2": "screen, their squad's or everyone's.",
   // ghost mode (home.js vs computer, lobby.js create screen, online.js pre-game lobby; docs/DESIGN-8P.md 25)
-  "lc.watch": "After you die: ", "os.watch": "After you die: ", "watch.black": "black screen", "watch.wreck": "my wreck", "watch.team": "spectate the squad", "watch.killer": "spectate your killer", "watch.others": "spectate everyone",
+  "lc.watch": "After you die: ", "os.watch": "Dead: ", "watch.black": "black screen", "watch.wreck": "my wreck", "watch.team": "spectate the squad", "watch.killer": "spectate your killer", "watch.others": "spectate everyone",
   "watch.i1": "What you see after getting wrecked, till the round ends: black screen,",
   "watch.i2": "your wreck, your squad, one tank (your killer first), or everyone.",
   "pg.watch.black": "after you die: black screen", "pg.watch.wreck": "after you die: my wreck", "pg.watch.team": "after you die: spectate the squad", "pg.watch.killer": "after you die: spectate your killer", "pg.watch.others": "after you die: spectate everyone",
   // the titles of the two boxes on the vs computer / create-a-game screens
-  "box.game": "The game", "box.players": "The squad", "box.settings": "The rules", "pg.h.settings": "THE RULES",
+  "box.game": "The game", "box.players": "The squad", "box.settings": "The rules",
   // round time limit (home.js vs computer + split screen, lobby.js create screen, the pre-game lobby's settings)
   "lc.time": "Round timer: ", "os.time": "Round timer: ", "time.off": "unlimited", "time.n": "{n} min",
   "time.i1": "Timer runs out? The side that did the most damage to the enemies takes",
   "time.i2": "the W (everyone else goes boom). A tie? Nobody gets the W.",
   "pg.time": "round timer: {n} min", "pg.time.off": "round timer: unlimited",
+  "create.go.i1": "Make the game: you're the host, you pick the seats", "create.go.i2": "and the settings in its lobby, then send it.",
+  "name.title": "YOUR NAME", "name.label": "Name: ", "name.i1": "Online needs a name, no cap:",
+  "name.i2": "that's how the squad knows it's you.", "name.i3": "Up to 12 characters; switch it up any time in Settings.",
+  "name.go": "Let's go", "name.err": "Type a name first, bestie.",
+  "set.name": "Name: ", "set.name.i1": "Your online name, your whole brand.", "set.name.i2": "Type it, then <ENTER>.",
+ 
+  "lobby.join2": "<ENTER> to pull up, → to just watch", "lobby.watch": "<ENTER> to watch this one",
+  "lobby.closed": "No free seat and no spectators here, it's gatekept.", "state.lobby": "Lobby",
+  "seat.cpu": "bot ({level})", "seat.open": "open", "seat.closed": "closed",
+  "seat.kind.i": "← →, a click or a right click: open, closed or a bot (easy, medium, hard).", "seat.open.i": "← → or a right click: close this seat or hand it to a bot.",
+  "seat.team.i": "1-8 or <ENTER>: its team (same number = same squad).",
+  "seat.mine.i1": "Your seat: this color is your whole vibe.", "seat.mine.i2": "← → or 1-8: your team (same number = same squad).",
+  "seat.sit.i": "<ENTER> or a click: sit here and play {name}.", "seat.sit.i2": "An open seat nobody takes gets no tank. Simple.",
+  "pg.busy": "Game's going rn", "pg.go": "Send it", "pg.go.i": "Starts the game for everyone seated.",
+  "pg.cant.tanks": "Need at least 2 tanks: players and bots.", "pg.cant.human": "Somebody has to sit down and play.",
+  "pg.cant.teams": "Need at least 2 different teams.", "pg.cant.ready": "Waiting for everyone to lock in.",
+  "pg.cant.match": "Game's going rn.",
+  "pg.watch": "Just watch", "pg.watch.i": "Leave your seat and spectate, lowkey.",
+  "pg.specs.who": "Watching: ",
+  "lobby.link": "Join by link", "lobby.link.i1": "Paste the invite link your bestie sent", "lobby.link.i2": "and pull up to that game.", "link.title": "JOIN BY LINK", "link.label": "Link: ", "link.i1": "Paste the invite link (Ctrl+V), like:", "link.i2": "<ENTER> to pull up (links to other servers work too).", "link.go": "Pull up", "link.err": "That's not a game link, bestie.",
+  "lobby.host": "your game", "lobby.host.i": "You run this game (you made it, or the crown got passed to you).",
+  "ver.server": "This server is on version {server}, your game is on {you}. Awkward.", "ver.update": "Update your game (or pick another server in Settings) to play here.",
+  "on.full": "No free seat in this game, it's packed.", "on.busy": "Game's going rn and this room says no spectators.",
 });

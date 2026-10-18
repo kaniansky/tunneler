@@ -12,10 +12,11 @@
 // Endpoint.get() / set(text)     the stored server ("" = default); set() normalizes and stores it
 // Endpoint.DEFAULT               the public server
 //
-// Links: the pages' addresses - short ones on a server (/games, /game/<id>, /game/<id>/<color|watch>,
+// Links: the pages' addresses - short ones on a server (/games, /game/<id> = its lobby, /game/<id>/watch,
 // /split, /vs-computer; server.js maps them to the pages), the plain files in the desktop app (no
-// server behind its pages: /lobby.html?room=..., /online.html?room=...&role=..., /play.html?mode=...).
-// Links.room / game / here() read either form. Invite links (Endpoint.web) always use the short form.
+// server behind its pages: /lobby.html, /online.html?room=...[&role=watch], /play.html?mode=...).
+// Links.room / game / here() read either form, Links.parse a pasted invite link. Invite links
+// (Endpoint.web) always use the short form.
 (function (root) {
 
 const DEFAULT = "https://tunneler-online.onrender.com";
@@ -53,11 +54,30 @@ const enc = encodeURIComponent;
 const watchRole = r => r === "spectate" ? "watch" : r;
 const Links = {
   games: () => isApp ? "/lobby.html" : "/games",
-  room: id => isApp ? "/lobby.html?room=" + enc(id) : "/game/" + enc(id),
-  game: (id, role) => isApp ? "/online.html?room=" + enc(id) + "&role=" + role : "/game/" + enc(id) + "/" + watchRole(role),
+  // one game: its room lobby (role: "spectate" / "watch" = as a spectator, a colour = that seat)
+  game: (id, role) => isApp ? "/online.html?room=" + enc(id) + (role ? "&role=" + role : "") : "/game/" + enc(id) + (role ? "/" + watchRole(role) : ""),
+  room: id => Links.game(id),
   split: query => (isApp ? "/play.html?mode=hotseat" + (query ? "&" + query : "") : "/split" + (query ? "?" + query : "")),
   cpu: query => (isApp ? "/play.html?mode=cpu" + (query ? "&" + query : "") : "/vs-computer" + (query ? "?" + query : "")),
   invite: id => "/game/" + enc(id),              // (for Endpoint.web: always on a server)
+  // A pasted invite link -> {origin, room, role} or null: https://host/game/<id>[/<color|watch>], the
+  // .html forms (?room=&role=), "host/game/<id>" without https://, or just a game's id (origin "" = this
+  // server; role null = any free seat, "spectate" = watch)
+  parse(text) {
+    const t = String(text == null ? "" : text).trim();
+    if (/^[a-z0-9-]{1,60}$/i.test(t)) return { origin: "", room: t.toLowerCase(), role: null };
+    let u;
+    const local = /^(localhost|127\.|\[::1\]|192\.168\.|10\.)/i;   // (no scheme: https, but http for local addresses)
+    try { u = new URL(/^[a-z]+:\/\//i.test(t) ? t : (local.test(t) ? "http://" : "https://") + t); } catch (e) { return null; }
+    if (u.protocol !== "http:" && u.protocol !== "https:") return null;
+    const m = /^\/game\/([^/]+)(?:\/([a-z]+))?\/?$/.exec(u.pathname);
+    let room = null, role = null;
+    if (m) { try { room = decodeURIComponent(m[1]); } catch (e) { return null; } role = m[2] || null; }
+    else if (/^\/(online|lobby)\.html$/.test(u.pathname)) { room = u.searchParams.get("room"); role = u.searchParams.get("role"); }
+    if (!room || !/^[a-z0-9-]{1,60}$/i.test(room)) return null;
+    role = role === "watch" || role === "spectate" ? "spectate" : /^[a-z]+$/.test(role || "") ? role : null;
+    return { origin: u.origin, room: room.toLowerCase(), role };
+  },
   // this page's room id and role, from /game/<id>[/<role>] or ?room=&role= ("watch" = "spectate")
   here() {
     const q = new URLSearchParams(loc.search || ""), m = /^\/game\/([^/]+)(?:\/([a-z]+))?\/?$/.exec(loc.pathname || "");

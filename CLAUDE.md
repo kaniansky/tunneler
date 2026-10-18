@@ -7,11 +7,12 @@ Guidance for Claude Code (and humans) working in this repo. Read it before non-t
 **Tunneler Online**: TUNNELER 2.0 (1991 DOS game by Geoffrey Silverton, Turbo Pascal 4.0, public domain)
 rewritten in JavaScript from its **decompiled** source, playable in the browser in three modes:
 split screen (hotseat), vs computer (1-7 computer tanks, free-for-all or teams, 4 difficulties, seeing
-your own screen, your team's or everyone's) and online (lobby, 2-8 slots, any of them computer tanks,
-teams, a pre-game lobby with names / teams / ping / chat / host kick, spectators with three views). All
+your own screen, your team's or everyone's) and online (a list of games; every game a lobby with 8
+seats - open / closed / AI, teams, ping, chat, the host's settings, seats, kick and start -, spectators
+with three views). All
 modes have map sizes (small / medium / large), rounds to win (1-9) and friendly fire (team games).
 Anything but BLUE vs GREEN runs the engine's **extended mode** (`docs/DESIGN-8P.md` is its design,
-sections 0-24 all implemented; the classic 2-player game - medium map, 3 rounds to win - stays
+sections 0-26 all implemented; the classic 2-player game - medium map, 3 rounds to win - stays
 byte-for-byte the original). Author of this version: Norko Kaniansky, 2026,
 public domain (Unlicense).
 
@@ -75,21 +76,23 @@ may be redesigned, but always in the original's DOS look.
     or held fire without friendly fire, little with it, determinism (also bots created mid-match), time
     budget for 7 bots on the medium and the large map, no bot hanging around its own base while not
     retreating (team games, every level).
-  - `net-sim.js` - real server (4 ms ticks) + fake websocket clients running the engine; asserts all
-    clients end identical, pause/resume, ready handshake, input validation; an extended room (8 slots,
-    computer slots, teams): no pause, away tank stands still, reload / late spectator identical; slot
-    editor rooms (used slots keep their colors, size / winScore / friendly fire, validation, classic =
-    BLUE + GREEN humans); pre-game lobby: names cleaned, teams 1..8, ready refused with one team, no
-    edits while ready, config frame with the start (teams + names) and every client / reload / late
-    spectator identical to a reference replay, host by key (also after reconnect), kick + ban by client
-    id (players and spectators, host only), ping per slot; lobby chat (relayed to players and spectators,
-    cleaned, max 60, rate limit, kicked / banned clients can't send, the last 50 in `hello` for joiners,
-    never in the frame stream) and the room's `visible` setting.
+  - `net-sim.js` - real server (4 ms ticks) + fake websocket clients running the engine: the list API
+    (seats / settings from the request, checked), joining (first open seat, a taken name gets a number,
+    watch, no seat -> spectator / turned away without spectators), the room lobby (only the host sets
+    seats / settings / starts; sitting on open seats only, standing up, own team 1..8, no team change while
+    ready, settings unready everybody), a classic match (names, its own seed, autoStart, keys relayed as
+    "any key" only, seats / settings / kicks locked, newcomers watch, pause while GREEN is away, GREEN's
+    tank waits for its client id, reload from 0, late spectator in parts; every client identical to a
+    reference replay, no desync, run-length log; the end by the players' reports), an extended match
+    (only taken + AI seats get tanks, bits per tank, AI 0, no ESC, no pause, away = 0 bits, resume,
+    identical; the end when no player is left), kick + ban, host handover, chat (relay, cleaning, rate
+    limit, the last 50 for joiners), limits per address.
   - `input-check.js` - gamepads / touch controls (pads.js) -> the keyboard's keys, held bits online.
   - `net-page-smoke.js` - loads each page's scripts (parsed from the html) in a vm with a stub DOM; drives
-    online.js's pre-game lobby (name, team, ready / Esc, kick, rtt, config frame), a read-only spectator,
-    and lobby.js's slot editor (POST body, host key stored); the chat (Unicode input, `{t:"chat"}`, messages
-    in the Unicode plane, spectators chat too, history from `hello`).
+    online.js's room lobby as host (seats: team, sit, open / closed / AI, settings, start, chat in the
+    Unicode plane, kick, rtt; a match: its engine, held bits, hash, report; its end), as a spectator
+    (sits down, chats, read-only otherwise, watches a match), the name prompt; lobby.js (connecting,
+    the wheel, create -> its lobby, name prompt, join / watch).
 - `tools/make-unifont.py` - regenerates `src/fonts/unifont/*.bin` + `src/js/unidata.js` from GNU Unifont's
   `unifont_all-<ver>.hex.gz` (`python3 -I tools/make-unifont.py <hex.gz>`; BMP + U+1F000..1FAFF, without
   what CP437 / glyphs.js draw; ~1.8 MB in 233 block files; OFL-1.1, see `src/fonts/unifont/LICENSE`).
@@ -183,12 +186,13 @@ project dependency; install playwright-core in a scratch dir when needed).
 - `index.html` + `home.js` - main menu (Split screen, Vs computer, Online game, Information, Language:
   ...). Split screen (`/#split`): Start a new game / Map size / Rounds to win / Instructions / Back
   (localStorage `tunneler.split.size`, `tunneler.split.win`; default medium, 3 = the original). Vs
-  computer (`/#cpu`, DESIGN-8P 20): the 8-slot editor - one row per color in its text color ("BLUE  you
-  team 1"; BLUE is always you, the others nobody / computer easy..expert: Left / Right change who, Enter
-  or click cycles the team 1..8; BLUE's Left / Right change your team), then Map size, Rounds to win,
-  Friendly fire (only when a team has 2+ tanks), View (self / team / everyone), Start a new game (red hint
-  instead when there is no computer tank or only one team), Instructions (for exactly these settings),
-  Back. Default GREEN computer normal team 2, the rest nobody = the classic game. Remembered in
+  computer (`/#cpu`, DESIGN-8P 20, 26): like the online game lobby without the chat, centred - the 8
+  slot rows ("VS COMPUTER" in the border; one row per color in its text color, no color name: "► you
+  team 1" / "computer (easy)" / "nobody"; Left / Right or a click on the who column change who - "you"
+  can move to another color once your own slot is something else -, Enter, 1-8 or a click on the team
+  cycles the team) and 3 columns to their right "Settings" (Map size, Rounds to win, Round time, Friendly fire - grayed out
+  while no team has 2+ tanks -, View, After death), centred below them "Game" (Start a new game - red hint when there is
+  no computer tank or only one team -, Back), the info at the bottom. Default GREEN computer normal team 2, the rest nobody = the classic game. Remembered in
   `tunneler.cpu.slots` (JSON [{kind, team}] x 8), `tunneler.cpu.size`, `tunneler.cpu.win`,
   `tunneler.cpu.ff`, `tunneler.cpu.view` (old `tunneler.hide` 1 / 0 = self / everyone). Texts: `lc.*` keys
   (in each `src/lang/<code>.js`).
@@ -220,46 +224,51 @@ project dependency; install playwright-core in a scratch dir when needed).
   table lists every team (`teamLines`, wrapped to fit). `setScope(own, "self"|"team"|"everyone")` (a
   player, DESIGN-8P 23): the grid of their own view first, then teammates' / everybody else's in slot
   order (classic: own half / the full split screen); `setScope(null)` = the modes above.
-- `lobby.html` + `lobby.js` - list of public games (games scroll, separator + "Create a new game" + "Back
-  to main menu" fixed below), create screen = slot editor (DESIGN-8P 15; no title, "CREATE A GAME" on
-  row 1: Name (max 26), List publicly, Allow spectators, Map size, Rounds to win, Friendly fire (only when
-  some team has 2+), Visible (self / team / everyone: the most a player may see during play), then 8 slot rows in their colors "BLUE  human  team 1": Left / Right = nobody /
-  human / computer easy..expert, Enter / click cycles the team 1..8; Create the game (needs 2+ used
-  slots, a human, 2+ teams; else a red message), Back; remembered in localStorage `tunneler.online`).
-  The POST response's `hostKey` is stored as `tunneler.host.<id>`. One game's screen: one item per human
-  slot in its color ("Play as CYAN" / "CYAN (name) is taken", "team n" in team games), computer slots as
-  disabled lines, Instructions (this room's options), Spectate, Copy invite link, Back; settings + state
-  line above. `/lobby.html?room=<id>` opens a game directly (private games are shared this way).
-- `online.html` + `online.js` - online play. Between matches (and before the first) every viewer sees
-  the **pre-game lobby** (DESIGN-8P 18), drawn locally by a `DosUI` over the shared game
-  (`runner.setOverlay`): room name, settings line, a table of the used slots (name - else the color name -,
-  team, "host", ready / not ready / computer (level) / free / disconnected, ping; each row in its color,
-  which identifies the slot; "►" = you),
-  and a box: Name (input, max 12, sent as `{t:"me", name}` a few times a second at most and remembered
-  in `tunneler.name`), Team (Left / Right, `{t:"me", team}`), Start game (`{t:"ready"}`; while ready the
-  row is locked, the item reads "Not ready after all", Esc cancels; disabled with a hint when there are
-  fewer than 2 teams), Instructions, Statistics (after a match; shown once automatically when the
-  lobby opens after a match: a private engine draws the menu screen with this match's numbers, teams
-  and names), Copy invite link, Kick (host only: Left / Right choose a player or spectator, Enter twice
-  removes), Back to the lobby; View (self / team / everyone up to the room's `visible`, only when that
-  is more than self; remembered in `tunneler.view`; `views.setScope(me, view)`) after Team, Say (chat
-  input, any letters, Enter sends `{t:"chat", text}`) after Start game. Spectators get the same table
-  read-only (Say / Instructions / Statistics / Copy / Back; their stored name goes as `{t:"me", name}`).
-  **Chat** (DESIGN-8P 22): the box sits on the left, the chat panel (magenta frame, "Chat") on its right
-  with the last messages that fit, "NAME: text" wrapped, the name in the tank's color (spectators dark
-  gray); player names and all chat text go through the Unicode plane, so every language shows at once. Hidden during play (the lobby is). The settings line
-  drops its last parts when it would not fit. Lobby keys are never relayed and send no held bits. A config frame's teams / names are
-  applied right before its step (`applyFrameCfg`; classic: names replace BLUE / GREEN, max 9 letters).
-  A player hears sounds fading with distance from their own tank, panned by their x offset (`runner.listener`); spectators at
-  full volume. Client id `tunneler.client` (random) and the host key go with the websocket URL; the
-  round-trip time is reported (`{t:"rtt"}`) every other ping.
-  The end-of-match world map ("PRESS ANY KEY") is per viewer: it stays on each screen until that
-  player/spectator presses a key or clicks (`mapPending`, `mapSnap`); a player's key also moves the
-  shared game on. Auto-repeated keys (`keys[i][2]`) never count, so a key held from the game can't skip
-  it. `window.tunnelerEngine()` (also `tunnelerRunner / tunnelerViews / tunnelerLobbyUI`) for tests/debugging. Connecting / paused (a
-  classic game during play) / catching up / errors (also "You were removed from this game by the host",
-  `err` code `kicked`) are DOS screens too (`DosUI` with `present` override).
-- `dosui.js` - shared DOS menu screen (`showPage("instructions"|"information", uiMode, back)` shows the
+- `lobby.html` + `lobby.js` - the list of public games (columns NAME, PLAYERS "2/4" = seated / seated +
+  free open seats - during a match: connected / its human tanks (roomInfo `players` / `places`) -, AI
+  (`bots`), WATCHING (`spec`; 0 = blank), STATE (`COLS`); games scroll; separator + "Create a new game" +
+  "Join by link" + a blank row + "Back to main menu" fixed below; Join by link: one input for a
+  pasted invite link / a game's id (`Links.parse` in endpoint.js -> {origin, room, role}): this server's
+  game -> its page, another server's -> that site (the desktop app: `Endpoint.set(origin)` first);
+  the games this browser hosts (`tunneler.host.<id>` keys, `hostIds()`) come first with "you host" in
+  the state column (`lobby.host`, info `lobby.host.i`), its private ones fetched one by one
+  (`/api/rooms/<id>`, at most 8; a 404 drops the key); Enter joins - a free seat if there is one, else
+  watching -, Right watches), the create screen (Name max 26, List publicly, Allow spectators, Create the
+  game, Back: POST with the host's last settings from `tunneler.online`, then straight to the game's
+  lobby; the POST response's `hostKey` is stored as `tunneler.host.<id>`). Online play needs a name:
+  `DosUI.prototype.askName` ("YOUR NAME", `DosUI.playerName()` / `setPlayerName`, localStorage
+  `tunneler.name`, max 12) before the list when there is none (also online.js before connecting, and
+  the homepage Settings' Name row). `/lobby.html?room=<id>` (old links) goes to that game's lobby.
+- `online.html` + `online.js` - one game (DESIGN-8P 26): its **room lobby** whenever no match runs for
+  this page, drawn by a `DosUI` (`spec.boxes`, one selection): top left the seats box (the game's name
+  in its top border; 8 rows in their tank colors: "√" = ready, else "►" = you; a player's name / "open" /
+  "closed" (dark gray) / "AI (level)", the team, the ping; no host marker), top right "Settings"
+  (host: switches that send `{t:"set"}`; others read-only; Friendly fire grayed out while no team has
+  2+ seats that aren't closed), "Watching: names" below, bottom left "Game"
+  (host: Start game - red reason from `st.cant` while it can't; a seated player: I am ready! / Not ready
+  yet!; Watch instead; View when the room allows more than self; Say (chat input); Copy invite link;
+  Statistics after a match; Kick a player... (host); Back to the lobby = the games list), bottom right
+  the chat panel. Seat rows: own seat - Left / Right / 1-8 / Enter / a click on the team = team;
+  a free open seat - Enter / a left click sits there (everyone, the host too); the host on any seat
+  nobody sits on - Left / Right or a right click anywhere on the row cycle open -> closed -> AI easy ->
+  medium -> hard -> open (a left click on a closed / AI seat too, except on its team) (`NetProto.SEAT_KINDS`), 1-8 / a click on
+  the team its team (DosUI `zones`). The host's choices are remembered in `tunneler.online`. Esc: unready,
+  else leave. Every match is its own engine (`newMatch`: `engineOptions(cfg)` with autoStart,
+  `setNames(cfg.names)`, AIs, new `ViewModes` - a player's or a spectator's); the lobby shows again
+  once the engine is at its menu after the match (`menuShift`), the world map was closed here, or the
+  server ended the match and every frame got run (`dropMatch`; the finished engine stays as
+  `lastMatch` for Statistics, shown once automatically). Lobby keys are never relayed and send no held
+  bits. A player hears sounds fading with distance from their own tank (`runner.listener`); spectators
+  at full volume. Client id `tunneler.client` (random), the name and the host key go with the websocket
+  URL (`&role=watch` / a color from `/game/<id>/<role>`); the round-trip time is reported (`{t:"rtt"}`)
+  every other ping. The end-of-match world map ("PRESS ANY KEY") is per viewer (`mapPending`,
+  `mapSnap`); a player's key also moves the shared game on (auto-repeats never count).
+  `window.tunnelerEngine()` (also `tunnelerRunner / tunnelerViews / tunnelerLobbyUI`) for tests.
+  Connecting / paused (a classic match while one player is away) / catching up / errors (`kicked`,
+  `full`, `busy`, `noroom`, `idle`) are DOS screens too (`DosUI` with `present` override).
+- `dosui.js` - centred items line up as a block (`centreStart`: the widest centred item of a box is
+  centred, a narrower one starts half the difference later, rounded down - one column narrower = the same
+  start). Shared DOS menu screen (`showPage("instructions"|"information", uiMode, back)` shows the
   game's own page full screen, scrolled with Up / Down, PgUp / PgDn, Home / End, the wheel (3 rows a
   notch) and a touch drag via `engine.pageScroll`; Enter / Esc / Space / a click go back; info lines can be clickable links): title lines, magenta box, white-on-magenta highlight, items with
   `info` lines, `separator`, disabled gaps (`label: ""`), text `input`, switches (`change(dir)` for
@@ -314,50 +323,47 @@ style; sk / cs have a 6th row on top for the diacritics of Č / Á over full-siz
 
 ## Online protocol (server.js / netproto.js)
 
-Server-clocked deterministic lockstep, no prediction/rollback. Rooms are created via `POST /api/rooms`
-(random 32-bit seed per room). When BLUE and GREEN are both connected the server ticks at
-1193182/65536 Hz (drift-free) and broadcasts frames `[blueBits, greenBits, count | keystrokes]`
-(bits: 1 up, 2 down, 4 left, 8 right, 16 fire, 32 esc; held bits latched between ticks; run-length
-encoded). Paused while a player is away. Full frame log kept; joiners/reconnectors fast-forward
-(`hello` with `from`). Clients send `b` (held bits), `k` (keystrokes; F1 is never relayed, only via
-`ready`), `ready`, `ping`, `h` (state hash every 64 frames -> server detects desync), `r` (cosmetic state
-for the lobby list). Limits: 1 KB messages, 120 msg/s, names cleaned, 500 rooms, empty rooms removed
-after 10 minutes. During play a player sees their own view, or their team's / everyone's when the room's
-`visible` setting allows it (`ViewModes.setScope`); spectators see everything.
-
-Room settings (`POST /api/rooms`, validated by `NetProto.roomSettings`): `{name, public, spectators,
-slots: [{kind: none|human|easy|normal|hard|expert, team: 1..8}] x 8 (index = color), size, winScore,
-friendlyFire}` (400 `{error}` without 2 used slots, a human and 2 teams; the old `{players, teams, bots,
-level}` still works); 30 creates / minute / address. The room keeps the used slots in color order:
-player i = `slots[i]` (`color`, `bot`, `level`, `team`, `team0` = as created, `name`); role = color name
-(a color the room doesn't use is refused). **Classic room** = exactly BLUE + GREEN, both human (any
-size / winScore): the original protocol above. Anything else is an **extended room**: frames
-`[[b0..bN-1], count (, keys)]`, computer slots always 0 - every client runs the same `TunnelerAI`s
-before each step (bots are deterministic functions of the engine history). The clock starts once every
-human slot has joined, then never pauses (an absent player's bits are 0: the tank stands still).
-`NetProto.engineOptions(cfg)` builds the engine (`slots`, `size`, `winScore`, `friendlyFire`, `extended`
-for extended rooms). `hello` carries `cfg` (`{ext, players, slots: [{color, bot, level, team}], size,
-winScore, friendlyFire}` with the teams **as created**) and `you` (`{slot, host, k}`); `st` has per-slot
-`conn` / `ready` and `slots: [{color, kind, level, name, team, ready, connected, joined, ping, host}]`,
-`specs: [{k, host, ping}]`; `stateHash` covers all tanks, team wins and team membership.
-Pre-game lobby (DESIGN-8P 18, 19, 21): `{t:"me", name, team}` (own slot, not while ready; names cleaned
-by `cleanPlayerName`, max 12; team an integer 1..8; 10/s). `ready` is refused while the slots make
-fewer than 2 teams and may come before the clock runs. The game starts (both room kinds) when the clock
-runs and every connected human is ready: the start keystroke's frame also carries a **config frame**
-`cfg: {teams, names}` (classic `[b, g, 1, keys, cfg]`, extended `[[bits], 1, keys, cfg]`, never merged
-into a run); every client applies it right before stepping that frame (`applyFrameCfg`: `setTeams` /
-`setNames`), late joiners replay it from the log. Host: the POST returns a secret `hostKey` (never sent
-again); the connection with `&host=<key>` is the host (`you.host`, `slots[i].host`); `{t:"kick", slot |
-k}` from the host closes that player / spectator with `err` code `kicked`, bans its `&cid=` client id
-from the room and resets a player slot's name / team. Ping: clients send `{t:"rtt", ms}` (0..9999),
-broadcast in `st` at most once a second. Spectators switch views (grid / map / follow).
-Lobby chat (DESIGN-8P 22): `{t:"chat", text}` from players and spectators (`NetProto.cleanChat`: control /
-bidi / zero-width removed, max `MAX_CHAT` 60 characters; at most 5 per connection in 5 s; kicked / banned
-clients can't), broadcast `{t:"chat", from: {color, name} | {spectator: true, name}, text}` (name "" = the
-color name / unnamed spectator); the room keeps the last 50 (`room.chat`, also in `hello` as `chat`). Not
-in the frame stream. A spectator's `{t:"me", name}` sets the name shown with their chat (`specs[i].name`).
-Room setting `visible` ("self" | "team" | "everyone", `NetProto.VISIBLE`; default self; in `hello`'s cfg and
-the room info): the most a player may choose to see during play - display only, the server enforces nothing.
+Server-clocked deterministic lockstep, no prediction/rollback; the full message list is in server.js's
+header. A **room** (`POST /api/rooms {name, public, spectators, seats?: [{kind, team}] x 8, size,
+winScore, roundTime, friendlyFire, visible, watchOut}`, `NetProto.roomSettings`: defaults for anything
+missing - BLUE + GREEN open, the rest closed; the old `slots` form still works; 30 creates / minute /
+address) is a lobby: `seats[i]` (index = color) `{kind: open|closed|normal|hard|expert, team, occ:
+socket, last: client id}`, the settings, the chat, `hostKey` (returned once; `&host=<key>` = host;
+`ensureHost` hands it over with `{t:"host", key}`), banned client ids. Connecting
+(`/ws?room&cid&name[&role=<color>|watch][&host][&match&have]`): the name is cleaned and made unique
+("Norko 2"); the seat = this browser's last one if free, else the color asked for, else the first open
+one, else watching (refused with `full` / `busy` when the room allows no spectators). Lobby messages
+(refused during a match): `seat {i}` (-1 = stand up), `me {name, team}`, `ready {v}`, host: `seatSet {i,
+kind, team}` (seats nobody sits on), `set {...}` (`NetProto.SETTINGS` checks each; both unready
+everybody), `start` (when `cantStart` is null: 2+ tanks, a human, 2+ teams, every seated player but the
+host ready), `kick {k}` (ban by client id). `st` = `{name, public, spectators, settings, seats: [{kind,
+team, k, name, ready, host, ping}], specs, cant, match}`.
+A **match** (`startMatch`): new random seed, `slots` = `NetProto.matchSlots` (taken open seats + AI
+seats in color order; open seats nobody took and closed ones get no tank) with the players' client ids
+and names, `cfg = {ext, players, slots, names, size, ...}`, its own `FrameLog` from 0; `{t:"match", no,
+seed, cfg, you, n, from, f}` to everyone (`hello.match` for joiners, resumable with `&match=<no>&have=`).
+Classic match (`isClassic`: BLUE + GREEN players in different teams) = frames `[blueBits, greenBits,
+count | keystrokes]` (bits: 1 up, 2 down, 4 left, 8 right, 16 fire, 32 esc), runs only while both are
+connected; extended = `[[b0..bN-1], count (, keys)]`, AI tanks always 0 (every client runs the same
+`TunnelerAI`s), never pauses (a missing player's bits are 0). The clock ticks at 1193182/65536 Hz
+(drift-free); held bits latched between ticks; run-length encoded; frames `{t:"f", m, n, f}`. During a
+match only its players play (`player` by client id - a reconnect gets the tank back); everybody else
+watches; lobby changes wait. Players send `b`, `k` (relayed as "any key" only), `h {m, n, h}` (hash
+every 64 frames -> desync), `r` (cosmetic: the list's score; `playing` false = left the world map). The
+match ends (`endMatch`, `{t:"end", no}`) when most of its connected players report `playing: false`, or
+`matchAloneMs` (60 s) after its last player left. Limits: 1 KB messages, 120 msg/s, 500 rooms, empty
+rooms removed after 10 minutes, idle rooms closed after 10 minutes.
+Lobby chat (DESIGN-8P 22): `{t:"chat", text}` from anybody (`NetProto.cleanChat`: max 60 characters; 5
+per connection in 5 s; kicked / banned clients can't), broadcast `{t:"chat", from: {color, name} |
+{spectator: true, name}, text}`; the room keeps the last 50 (also in `hello`). Not in any frame stream.
+`visible` (self / team / everyone): the most a player may choose to see during play - display only.
+Versions: the server's is package.json's (`VERSION`, `createServer({version})` for tests); pages send
+theirs (`window.TUNNELER_VERSION` from build.js's version.js; "dev" when served from src/ = never
+refused) with the POST (`version`) and the websocket (`&v=`; tests send "dev" too). Another version - or
+none, i.e. a page from before 2.0 - is refused (POST 409 `{code:
+"version", version}`, websocket `err` code "version" with the server's `version`); roomInfo carries
+`version`. lobby.js then shows "This server runs version X; your game is version Y" (`ver.server`,
+`ver.update`) and lets nobody join / create; online.js shows the same as its error screen.
 
 ## Owner's preferences (keep following these)
 
@@ -372,8 +378,8 @@ the room info): the most a player may choose to see during play - display only, 
 - Sound hint shows the current state ("M: sound on" / "M: sound off").
 - **Never `git push` until the owner explicitly says so** (the repo auto-deploys to
   https://tunneler-online.onrender.com/). Leave changes local for review.
-- Online: every human player must choose "Start game" in the pre-game lobby (computer slots are always
-  ready); spectators get the same lobby read-only, never the engine's menu.
+- Online: every game is a lobby with 8 seats (open / closed / AI, DESIGN-8P 26); the host starts the
+  match once every seated player is ready; nobody ever sees the engine's own menu online.
 - Instructions / Information pages (`strings.instr` / `strings.info` in `STRINGS_EN` + every
   `src/lang/*.js`) explain the whole current game - keep them up to date when features change, in all 6
   languages. They are row lists (`instructionRows()` / `informationRows()`: the original paragraphs, then
@@ -447,12 +453,10 @@ the room info): the most a player may choose to see during play - display only, 
 - Instructions: only on the homepage main menu (classic hotseat text). The engine's own menu in
   play.html has no Instructions item (`noInstructions` option: "Start game"/"Rematch" + "Back");
   the split / vs computer / lobby / pre-game screens have none either.
-- Lobby settings: `Lang.roomSettings(cfg, specs)` = map size, rounds to win, friendly fire (always -
-  also settable on the create form whatever the teams, since they may change in the pre-game lobby),
-  view limit, after death (+ spectators), "key: value" form. lobby.html's room
-  screen shows them in a right-hand "Settings" box (DosUI `static: true` read-only rows); the joined
-  pre-game lobby shows them as a SETTINGS column right of the player table (NAME TEAM STATE PING - no
-  host marker). The engine's own settings strings stay shorter where the 37x4 statistics area needs it.
+- Lobby settings: `Lang.roomSettings(cfg, specs)` = map size, rounds to win, friendly fire, view limit,
+  after death (+ spectators), "key: value" form (no longer shown by the room lobby, whose Settings box
+  has the host's switches). The engine's own settings strings stay shorter where the 37x4 statistics
+  area needs it.
 - Status bar under the game: none in play.html; online.html only for a spectator's view keys, a lost
   connection or a desync (hidden otherwise).
 - Esc goes back everywhere: online pre-game lobby (unready first, then the room page), the connection
@@ -502,30 +506,29 @@ the room info): the most a player may choose to see during play - display only, 
   OPTIONS preflight). `.github/workflows/app-build.yml` builds Windows exe, Linux tar.gz / deb / rpm and
   macOS arm64 / x64 dmg; release.yml calls it and attaches them to the release; pushes to app/**
   branches build artifacts only. Icons: `src-tauri/app-icon.png` -> `npx @tauri-apps/cli@2 icon`.
-- Pre-game lobby items: "I am ready!" (pg.start) / "Not ready yet!" (pg.cancel); no copy link (the
-  room page has it); `Lang.setRematch` / "{start}" are gone. Host "Start now" (pre-game lobby, rooms
-  with more than two tanks, shown once the host is ready while some other human isn't connected + ready): `{t:"start"}` -> server `checkStart(room, true)` starts the clock if it wasn't
-  running and the game without the ready check; missing players' tanks stand still, they can join the
-  running game later. Ignored from non-hosts, in classic rooms and during a match.
+- Room lobby items (DESIGN-8P 26): "I am ready!" (pg.start) / "Not ready yet!" (pg.cancel) for seated
+  players, "Start game" (pg.go) for the host (no more "Start now": the host starts once everybody seated
+  is ready; open seats nobody took get no tank), "Watch instead", "Copy invite link".
 - Statistics page: `statsSettings()` writes the settings bottom-aligned in the right half (last line
   on row 24, a blank row above when there is room, else right below the statistics, fewer / shorter
   lines when crowded); the round title keeps them at the bottom too.
 - DosUI `wheel(ev)`: the mouse wheel moves the selection through a scrolling single box (more items
   than `box.rows`), one row per notch / ~50 px, no wrap-around.
 - Kick: the host's single "Kick a player..." item opens `drawKick()` (lobby.page "kick"): the kick
-  targets (other connected players in their tank's colour, spectators gray), Enter arms (4 s, red
-  "pg.kick.sure"), a second Enter sends `{t:"kick"}` and returns to the lobby; Esc / Back returns
-  without kicking. Redrawn when the targets change.
+  targets (other players in their tank's colour, spectators gray; by connection number `k`), Enter arms
+  (4 s, red "pg.kick.sure"), a second Enter sends `{t:"kick", k}` and returns to the lobby; Esc / Back
+  returns without kicking. Redrawn when the targets change. Not during a match.
 - lobby.html: until the server first answers, `connecting()` shows "Connecting to the server..." + the
   server's address (after 300 ms; the wake-up hint after 3 s or a failed request), Esc / Back to the
   main menu; one request at a time (`poll()`), the 2 s polling keeps retrying.
 - README screenshots: `tools/readme-screenshots.js <port> screenshots` against a fresh local server
   (scripted session: menus, split screen, a 4-tank online game with chat, spectator views; GPU off).
-- Short addresses: server.js `PRETTY` maps `/games`, `/game/<id>` -> lobby.html, `/game/<id>/<role|watch>`
-  -> online.html, `/split`, `/vs-computer` -> play.html (the pages read room / role / mode from the path:
-  `Links.here()` in endpoint.js, play.js checks the path). `Links` builds them (games, room, game, split,
-  cpu, invite); in the desktop app (no server behind the pages) it builds the `.html?...` forms instead.
-  The old `.html` addresses keep working everywhere.
+- Short addresses: server.js `PRETTY` maps `/games` -> lobby.html, `/game/<id>[/<color|watch>]` ->
+  online.html (the game's lobby; watch = as a spectator, a color = that seat if free), `/split`,
+  `/vs-computer` -> play.html (the pages read room / role / mode from the path: `Links.here()` in
+  endpoint.js, play.js checks the path). `Links` builds them (games, room = game, game, split, cpu,
+  invite); in the desktop app (no server behind the pages) it builds the `.html?...` forms instead.
+  The old `.html` addresses keep working everywhere (`/lobby.html?room=` goes to the game).
 - Titles: the main menu (and the engine's own menu, via `Lang.apply`) shows "TUNNELER" (`Lang.title()`);
   the main menu's bottom-left corner shows `Lang.version()` = "v" + package.json's version without a
   trailing ".0" (DosUI `spec.footer`; build.js writes public/js/version.js, src/js/version.js has null =
@@ -535,16 +538,16 @@ the room info): the most a player may choose to see during play - display only, 
   easy / medium / hard (`level.*` strings); ai.js still knows "easy", but an old "easy" (links, stored
   settings, room requests) is turned into "normal" everywhere.
 - Host handover: `ensureHost(room)` (server.js, after every connect / disconnect) - when no connected
-  socket is a host, the first connected player (else a spectator) becomes one and gets
-  `{t:"host", key}`; online.js stores the key (`tunneler.host.<id>`, read again at every connect) and
-  turns its host items on. The creator's key keeps working.
-- Statistics extras (display only, not in stateHash): `engine.kills` (enemy tanks each one destroyed,
-  per match) and `engine.roundLog` (`logRound(winner, player)` at every round end: winner, secs, how =
-  shot / time / draw / esc). `matchExtrasAt()` draws ROUNDS + AWARDS (Sharpshooter >= 5 shots, Hunter,
-  Mole, Traveler): `showStatsPage()` (online, full screen) beside the table; `showMainMenu()` when
-  `engine.matchExtras`: rounds + awards on top of the left half, the menu box at its bottom (`menuTop`,
-  default 11 = the original), no title (play.js: vs computer only - split screen stays the original).
-  online.js copies kills / roundLog into its private statistics engine (STATS).
+  socket is a host, the first seated player (else a spectator) becomes one and gets `{t:"host", key}`;
+  online.js stores the key (`tunneler.host.<id>`, read again at every connect) and turns its host items
+  on. The creator's key keeps working.
+- Statistics extras (display only, not in stateHash): `engine.roundLog` (`logRound(winner, player)` at
+  every round end: winner, secs, how = shot / time / draw / esc). `matchExtrasAt(x, w, y, y2)` draws the
+  ROUNDS list (no awards any more): `showStatsPage()` (online, full screen) left of the table;
+  `showMainMenu()` when `engine.matchExtras`: on top of the left half, the menu box at its bottom
+  (`menuTop`, default 11 = the original), no title (play.js: vs computer only - split screen stays the
+  original). online.js shows a match's statistics (a private engine with `STATS` copied from the
+  finished one, `lastMatch`) once, as soon as that viewer closed the world map; Back = the lobby.
 - Statistics centred vertically (vs computer's right half, the online page): drawn with `statsCentred`
   (settings held back), then `centreStats(c0, c1, r0, r1, width, mid)` finds the used rows, moves them
   (`shiftRows`, text + Unicode plane) to the middle and writes the settings one blank row below.

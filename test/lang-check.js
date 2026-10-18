@@ -32,12 +32,36 @@ for (const c of Lang.codes) {
   walk(D, c);
   // menus (box widths)
   const t = (k, p) => Lang.t(k, p);
-  for (const k of ["home.split", "home.cpu", "home.online", "cpu.start", "back.main", "room.watch", "room.copy", "room.copied", "back.lobby", "create.go", "lobby.create"])
+  for (const k of ["home.split", "home.cpu", "home.online", "cpu.start", "back.main", "room.copy", "room.copied", "pg.watch", "pg.go", "pg.busy", "back.lobby", "create.go", "lobby.create"])
     fits(c, k, t(k), k.startsWith("lobby") ? 66 : 34);      // menu boxes size themselves to their items
   for (const n of Lang.codes) fits(c, "home.lang", t("home.lang") + Lang.name(n), 34);
   for (const v of ["muted", "original", "realistic", "cartoony"]) fits(c, "set.sound", t("set.sound") + t("sound." + v), 34);
-  for (const k of ["sound.i1", "sound.i2", "home.settings.i", "set.ping.i", "set.server.i1", "set.server.i2", "pg.now.i1", "pg.now.i2", "pg.kick.i1", "pg.kick.i2", "pg.kick.back.i", "lobby.connecting", "lobby.wake"]) fits(c, k, t(k), 78);
+  for (const k of ["sound.i1", "sound.i2", "home.settings.i", "set.ping.i", "set.server.i1", "set.server.i2", "room.copy.in", "pg.kick.i1", "pg.kick.i2", "pg.kick.back.i", "lobby.connecting", "lobby.wake"]) fits(c, k, t(k), 78);
   fits(c, "pg.kick.pick", t("pg.kick.pick", { name: "W".repeat(12) }), 78);
+  // the room lobby (online.js): the seats box (who - name, open, closed, AI level -, team, ping) and the
+  // settings box side by side on the top half; the info lines below
+  {
+    const levels = ["normal", "hard", "expert"].map(l => vis(t("seat.cpu", { level: Lang.raw("level." + l) })));
+    const nw = Math.max(14, vis(t("seat.open")), vis(t("seat.closed")), ...levels), tw = Math.max(vis(t("pg.teamn", { n: 8 })));
+    const box = len => { const w = Math.max(14, len + 4); return w + w % 2 + 2; };   // (DosUI.boxWidth + the borders)
+    const seatsW = box(2 + nw + 1 + tw + 8);
+    const setsW = box(Math.max(...["small", "medium", "large"].map(v => vis(t("os.size") + t("os.size." + v))), vis(t("os.win") + "9"),
+      ...[t("time.off"), t("time.n", { n: 10 })].map(v => vis(t("os.time") + v)), vis(t("os.ff") + t("os.off")), vis(t("os.ff") + t("os.on")),
+      ...["self", "team", "everyone"].map(v => vis(t("os.visible") + t("view." + v))),
+      ...["black", "wreck", "team", "killer", "others"].map(v => vis(t("os.watch") + t("watch." + v))),
+      ...["yes", "no"].map(v => vis(t("create.public") + t(v))), ...["yes", "no"].map(v => vis(t("create.spect") + t(v)))));
+    if (seatsW + 1 + setsW > 80) fail(c, "room lobby: seats (" + seatsW + ") + settings (" + setsW + ") wider than 80 columns");
+    for (const k of ["seat.kind.i", "seat.open.i", "seat.team.i", "seat.mine.i1", "seat.mine.i2", "seat.sit.i2", "pg.go.i", "pg.cant.tanks", "pg.cant.human",
+      "pg.cant.teams", "pg.cant.ready", "pg.cant.match", "pg.watch.i", "name.i1", "name.i2", "name.i3", "set.name.i1", "set.name.i2",
+      "lobby.join2", "lobby.watch", "lobby.closed", "create.go.i1", "create.go.i2", "on.full", "on.busy", "ver.update", "lobby.link.i1", "lobby.link.i2", "link.i1", "link.i2", "link.err", "lobby.host.i"]) fits(c, k, t(k), 78);
+    fits(c, "seat.sit.i", t("seat.sit.i", { name: Lang.raw("yellow") }), 78);
+    fits(c, "lobby.link", t("lobby.link"), 66);
+    // the list of games' columns (lobby.js COLS: players 9, AI 5, watching 10 - one blank column each)
+    fits(c, "lobby.players", t("lobby.players"), 8); fits(c, "lobby.ai", t("lobby.ai"), 4); fits(c, "lobby.spec", t("lobby.spec"), 9);
+    fits(c, "lobby.host", t("state.round", { n: 9 }) + "  " + t("lobby.host"), 20);
+    fits(c, "link.label", t("link.label") + "x".repeat(57), 78);
+    fits(c, "ver.server", t("ver.server", { server: "10.10.10", you: "10.10.10" }), 78);
+  }
   fits(c, "pg.kick.sure", t("pg.kick.sure", { name: "W".repeat(12) }), 78);
   for (const v of ["set.ping.on", "set.ping.off"]) fits(c, "set.ping", t("set.ping") + t(v), 34);
   for (const l of ["normal", "hard", "expert"]) fits(c, "cpu.level", t("cpu.level") + t("level." + l), 34);
@@ -69,12 +93,8 @@ for (const c of Lang.codes) {
     const cpuL = [...["small", "medium", "large"].map(z => t("lc.size") + t("lc.size." + z)), t("lc.win") + "9", t("lc.time") + t("time.off"), t("lc.time") + t("time.n", { n: 10 }), t("lc.ff") + t("lc.on"), t("lc.ff") + t("lc.off"),
       ...["self", "team", "everyone"].map(v => t("cpu.view") + t("view." + v)), ...["black", "wreck", "team", "killer", "others"].map(v => t("lc.watch") + t("watch." + v)),
       t("cpu.start"), t("menu.instr"), t("back.main")];
-    const cpuR = mx(names) + 2 + mx([t("lc.you"), t("lc.none"), ...lv.map(l => t("lc.cpu", { level: Lang.raw("level." + l) }))]) + 2 + vis(t("lc.team", { n: 8 }));
-    const onL = [vis(t("create.name")) + 18 + 1, ...["yes", "no"].map(y => t("create.public") + t(y)), ...["yes", "no"].map(y => t("create.spect") + t(y)),
-      ...["small", "medium", "large"].map(z => t("os.size") + t("os.size." + z)), t("os.win") + "9", t("os.time") + t("time.off"), t("os.time") + t("time.n", { n: 10 }), ...["self", "team", "everyone"].map(v => t("os.visible") + t("view." + v)),
-      t("os.ff") + t("os.off"), t("os.ff") + t("os.on"), ...["black", "wreck", "team", "killer", "others"].map(v => t("os.watch") + t("watch." + v)), t("create.go"), t("back.lobby")];
-    const onR = mx(names) + 2 + mx([t("os.who.none"), t("os.who.human"), ...lv.map(l => t("os.who.cpu", { level: Lang.raw("level." + l) }))]) + 2 + vis(t("pg.teamn", { n: 8 }));
-    for (const [what, l, r] of [["vs computer", mx(cpuL), cpuR], ["create a game", mx(onL), onR]]) {
+    const cpuR = 2 + mx([t("lc.you"), t("lc.none"), ...lv.map(l => t("lc.cpu", { level: Lang.raw("level." + l) }))]) + 2 + vis(t("lc.team", { n: 8 }));
+    for (const [what, l, r] of [["vs computer", mx(cpuL), cpuR]]) {
       const total = bw(l) + 2 + 1 + bw(r) + 2;
       if (total > 80) fail(c, what + ": the two boxes are " + total + " columns wide (> 80)");
     }
@@ -82,7 +102,6 @@ for (const c of Lang.codes) {
   }
   for (const k of ["time.i1", "time.i2"]) fits(c, k, t(k), 78);
   fits(c, "pg.say", t("pg.say") + "x".repeat(17), 34); fits(c, "pg.chat", " " + t("pg.chat") + " ", 20);
-  for (const r of ["blue", "green"]) { fits(c, "room.play", t("room.play", { name: Lang.raw(r) }), 34); fits(c, "room.taken", t("room.taken", { name: Lang.raw(r) }), 34); }
   fits(c, "create.name", t("create.name") + "x".repeat(26), 38);
   for (const k of ["create.public", "create.spect"]) for (const y of ["yes", "no"]) fits(c, k, t(k) + t(y), 39);
   // single lines on the 80-column screen

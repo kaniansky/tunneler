@@ -212,13 +212,13 @@ class DosUI {
     }
     const labelW = U.cols(it.label), valueW = U.cols(value);
     let text = it.label + value;
-    text = it.align === "left" ? U.padEnd(" " + text, b.w) : this.centre(text, b.w);
+    text = it.align === "left" ? U.padEnd(" " + text, b.w) : U.padEnd(" ".repeat(this.centreStart(i, b, U.cols(text))) + text, b.w);
     text = U.padEnd(U.slice(text, b.w), b.w);
     t.gotoXY(b.x, row); t.write("\xB3" + text + "\xB3");
     const o = (row - 1) * 160 + b.x * 2;
     const attr = it.static ? it.attr || 0x07 : i === this.sel ? SEL : it.disabled ? DISABLED : it.attr || ATTR;
     for (let c = 0; c < b.w; c++) t.vram[o + c * 2 + 1] = attr;
-    const x0 = (it.align === "left" ? 1 : (b.w - (labelW + valueW)) >> 1) + labelW;
+    const x0 = (it.align === "left" ? 1 : this.centreStart(i, b, labelW + valueW)) + labelW;
     if (it.input && !it.input.value && value)
       for (let c = x0; c < Math.min(b.w, x0 + valueW); c++) t.vram[o + c * 2 + 1] = i === this.sel ? 0x57 : DISABLED;
     if (it.input && i === this.sel) {                     // blinking cursor after the text
@@ -325,7 +325,19 @@ class DosUI {
     this.present(snap);
   }
 
-  centre(s, w) { const l = Math.max(0, (w - U.cols(s)) >> 1); return U.padEnd(" ".repeat(l) + s, w); }
+  // Where centred item i (w columns wide) starts in box b (0-based interior column): the box's widest
+  // centred item is centred, a narrower one starts half the difference later, rounded down - so one
+  // column narrower starts in the same column, two or three narrower one column later (centred items
+  // line up as a block instead of each one jumping half a column)
+  centreStart(i, b, w) {
+    const items = this.spec.items, from = b.start != null ? b.start : 0, to = b.end != null ? b.end : items.length;
+    let M = w;
+    for (let k = from; k < to; k++) {
+      const it = items[k];
+      if (it && !it.separator && it.align !== "left" && it.label) M = Math.max(M, U.cols(it.label));
+    }
+    return Math.max(0, ((b.w - M) >> 1) + ((M - w) >> 1));
+  }
 
   key(e) {
     const s = this.spec;
@@ -423,7 +435,7 @@ class DosUI {
     if (!c) return -1;
     const x = c[0] + 1 - b.x - 1;                          // interior column, 0-based
     const labelW = U.cols(it.label);
-    const x0 = it.align === "left" ? 1 : (b.w - labelW) >> 1;
+    const x0 = it.align === "left" ? 1 : this.centreStart(i, b, labelW);
     return x - x0;
   }
   // a click (dir +1) / right click (dir -1) on one of an item's zones: true when a zone took it
@@ -446,6 +458,41 @@ DosUI.boxWidth = items => {
   const len = Math.max(0, ...items.map(it => it.separator ? 0 : U.cols(it.label) + (it.input ? (it.input.width || it.input.max) + 1 : 0)));
   const w = Math.max(14, len + 4);
   return w + w % 2;
+};
+
+// The player's name for online games (docs/DESIGN-8P.md 26): localStorage "tunneler.name", at most
+// NAME_MAX display columns ("" = none yet: online play asks for one first - askName).
+DosUI.NAME_MAX = 12;
+DosUI.playerName = () => {
+  let v = "";
+  try { v = root.localStorage.getItem("tunneler.name") || ""; } catch (e) { /* private mode */ }
+  return U.truncRaw(v.replace(/\s+/g, " ").trim(), DosUI.NAME_MAX).trim();
+};
+DosUI.setPlayerName = v => {
+  v = U.truncRaw(String(v || "").replace(/\s+/g, " ").trim(), DosUI.NAME_MAX).trim();
+  try { root.localStorage.setItem("tunneler.name", v); } catch (e) { /* private mode */ }
+  return v;
+};
+// "YOUR NAME": one input; done(name) once it isn't empty (stored), back() on <ESC> / "Back to main menu"
+DosUI.prototype.askName = function (done, back) {
+  const T = k => root.Lang.t(k);
+  const form = { value: DosUI.playerName(), max: DosUI.NAME_MAX, width: DosUI.NAME_MAX };
+  let err = false;
+  const ok = () => {
+    const v = DosUI.setPlayerName(form.value);
+    if (!v) { err = true; this.sel = 0; return draw(); }
+    done(v);
+  };
+  const draw = () => this.show({
+    lines: [{ row: 2, text: T("name.title"), color: 12 }, { row: 6, text: T("name.i1"), color: 3 }, { row: 7, text: T("name.i2"), color: 3 }],
+    box: { y: 10 }, infoRow: 17, back,
+    items: [{ key: "name", label: T("name.label"), input: form, align: "left",
+      info: err ? [{ text: T("name.err"), color: 12 }] : [T("name.i3")], go: ok },
+    { key: "gap", label: "", disabled: true },
+    { key: "go", label: T("name.go"), info: [T("name.i3")], go: ok },
+    { key: "back", label: T("back.main"), info: [T("back.main.i")], go: back }],
+  }, true);
+  draw();
 };
 
 root.DosUI = DosUI;

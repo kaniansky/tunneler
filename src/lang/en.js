@@ -38,8 +38,8 @@ Lang.register("en", {
   "vw.grid": "All views", "vw.map": "Map and scores", "vw.follow": "Following {name}", "vw.hint": "Tab or 1 2 3: view", "vw.destroyed": "DESTROYED", "vw.hint2": "← →: tank",
   "vw.tank": "Tank", "vw.wins": "Wins", "vw.energy": "Energy", "vw.shield": "Shield", "vw.alive": "alive", "vw.dead": "destroyed",
   "back.main": "Back to main menu", "back.main.i": "Back to the main menu.",
-  "lobby.title": "ONLINE GAMES", "room.title": "ONLINE GAME", "lobby.name": "NAME", "lobby.players": "PLAYERS", "lobby.state": "STATE",
-  "state.waiting": "Waiting", "state.menu": "In menu", "state.paused": "Paused", "state.round": "Round {n}",
+  "lobby.title": "ONLINE GAMES", "room.title": "ONLINE GAME", "lobby.name": "NAME", "lobby.players": "PLAYERS", "lobby.ai": "AI", "lobby.spec": "WATCHING", "lobby.state": "STATE",
+  "state.paused": "Paused", "state.round": "Round {n}",
   "lobby.who": "Playing: {names}", "lobby.join": "<ENTER> to join this game", "lobby.none": "No public games right now",
   "lobby.create": "Create a new game", "lobby.create.i": "Start a game and invite someone to it.", "lobby.connecting": "Connecting to the server...", "lobby.wake": "A server that was asleep can take up to a minute to wake up.",
   "create.title": "CREATE A GAME", "create.hint": "↑↓ ← → <ENTER>, <TAB> other box, or mouse.  <ESC> back.",
@@ -48,43 +48,25 @@ Lang.register("en", {
   "create.public.i2": "private ones are joined with the invite link.",
   "create.spect": "Allow spectators: ", "create.spect.i1": "Spectators watch the whole screen", "create.spect.i2": "but cannot play.",
   yes: "yes", no: "no",
-  "create.go": "Create the game", "create.go.i": "Create the game and choose your tank.",
+  "create.go": "Create the game", "create.go.i1": "Create the game: you are its host and choose the seats",
+  "create.go.i2": "and the settings in its lobby, then start it.",
   "back.lobby": "Back to the lobby", "back.lobby.i": "Back to the list of games.",
   "create.err.name": "Please type a name first.", "create.err": "Could not create the game: {msg}",
-  "room.notfound": "GAME NOT FOUND", "room.expired": "It may have expired.", "room.private": "(private)",
-  "room.connected": "connected", "room.free": "free", "room.watching": "watching: {n}",
-  "room.taken": "{name} is taken", "room.play": "Play as {name}", "room.play.i1": "Join the game as the {name} tank.",
-  "room.play.i2": "The game starts when both players are ready.",
-  "room.watch": "Spectate", "room.watch.i": "Watch both screens as a spectator.",
-  "room.copy": "Copy invite link", "room.copied": "Link copied", "room.copy.i": "Send this link to your opponent:",
+  "room.copy": "Copy invite link", "room.copied": "Link copied", "room.copy.in": "Send this link to the other players:",
+  "room.notfound": "GAME NOT FOUND", "room.private": "(private)",
+
   "on.connecting": "Connecting...", "on.catching": "Catching up with the game...",
-  "on.waitjoin": "Waiting for {name} to join...", "on.waitplayers": "Waiting for the players to join...",
   "on.paused": "Game paused.", "on.waitre": "Waiting for {names} to reconnect...", "on.and": " and ",
-  "on.players": "the players", "on.youplay": "you play {name}", "on.spectator": "spectator", "on.leave": "Leave this game.",
+  "on.players": "the players", "on.youplay": "you play {name}",
 
- 
-
- 
   "st.youare": "You are {name}", "on.escagain": "Press <ESC> again to leave the game.",
 
   "conn.connecting": "connecting", "conn.reconnecting": "reconnecting", "conn.retry": "disconnected, retrying in {s} s",
   "conn.closed": "closed", "conn.connected": "connected",
-  // online rooms with 2-8 slots, teams, computer tanks (lobby.js create / game screens, online.js)
-  "create.players": "Players: ", "create.players.i1": "How many tanks play (2-8), computer tanks included.",
-  "create.players.i2": "Two players and no computer is the original game.", "create.mode": "Mode: ",
-  "mode.ffa": "free-for-all", "mode.teams": "teams", "mode.teams.s": "teams",
-  "create.mode.i1": "Free-for-all: every tank for itself.  Teams (3+ players):", "create.mode.i2": "{a} against {b}.",
-  "create.cpu": "Computer tanks: ", "create.cpu.i1": "How many of the tanks the computer drives;",
-  "create.cpu.i2": "they take the last colors.", "create.level": "Computer level: ",
-  "room.cpu": "{name}: computer ({level})", "room.desc": "{n} players, {mode}",
-  "room.desc.cpu": ", computer tanks: {n} ({level})",
-  "room.play.i2n": "The game starts when all players are ready.",
-  "room.watch.in": "Watch the game as a spectator.", "room.copy.in": "Send this link to the other players:",
+  "mode.ffa": "free-for-all", "mode.teams": "teams",
+
   "lobby.best": "best {n}", "rd.others": "Waiting for the others...",
 
- 
-
-  "on.waitothers": "Waiting for the other players to join:",
   engine: null,                     // the engine's own English text
 
   // local games' settings screens (home.js: the vs computer slot editor and the split-screen settings;
@@ -110,24 +92,18 @@ Lang.register("en", {
   "os.win": "Rounds to win: ", "os.win.i1": "How many rounds a tank or team must win to take the match", "os.win.i2": "(3 is the original).",
   "os.ff": "Friendly fire: ", "os.on": "on", "os.off": "off",
   "os.ff.i1": "On: shots hurt teammates too.", "os.ff.i2": "Off: a shot explodes on a teammate like on a wall.",
-  "os.who.none": "nobody", "os.who.human": "human", "os.who.cpu": "computer, {level}",
-  "os.slot.i1": "← →: nobody, a human player or a computer tank.", "os.slot.i2": "1-8, <ENTER> or a click: team 1-8 (same number = teammates).",
-  "os.err.slots": "Use at least 2 slots.", "os.err.teams": "At least 2 different teams are needed.",
-  "os.err.human": "At least one slot must be human.", "os.players": "{n} tanks",
-  "pg.h.tank": "TANK", "pg.h.name": "NAME", "pg.h.team": "TEAM", "pg.h.state": "STATE", "pg.h.ping": "PING",
+
+  "os.players": "{n} tanks",
   "pg.teamn": "team {n}",
-  "pg.computer": "computer ({level})", "pg.ready": "ready", "pg.notready": "not ready", "pg.free": "free", "pg.disconnected": "disconnected",
   "pg.size.small": "map size: small", "pg.size.medium": "map size: medium", "pg.size.large": "map size: large",
   "pg.win": "rounds to win: {n}", "pg.ff.on": "friendly fire: on", "pg.ff.off": "friendly fire: off", "pg.specs": "spectators: {n}",
-  "pg.name": "Name: ", "pg.name.i": "Your name in this game (up to 12 characters).",
-  "pg.team": "Team: ", "pg.team.i": "← → / 1-8: your team. The same number means teammates.",
-  "pg.start": "I am ready!", "pg.start.i": "You are ready; the game starts when everybody is.", "pg.now": "Start now", "pg.now.i1": "Starts the game for everyone without waiting for the others:", "pg.now.i2": "the tanks of players who are missing stand still until they join.",
+
+  "pg.start": "I am ready!", "pg.start.i": "You are ready; the game starts when everybody is.",
   "pg.cancel": "Not ready yet!", "pg.ready.i": "You are ready. <ENTER> or <ESC>: not ready yet.",
-  "pg.need2": "At least 2 teams are needed to start.",
   "pg.stats": "Statistics", "pg.stats.i": "The last match's statistics.",
   "pg.kick": "Kick a player...", "pg.kick.i1": "You created this game: choose a player or a spectator",
   "pg.kick.i2": "and remove them from it.", "pg.kick.title": "KICK A PLAYER", "pg.kick.who": "{name}", "pg.kick.pick": "<ENTER> removes {name} from this game.", "pg.kick.back": "Back to the game lobby", "pg.kick.back.i": "Nobody is removed.",
-  "pg.kick.sure": "Press <ENTER> again to kick {name}.", "pg.spectator": "spectator {n}",
+  "pg.kick.sure": "Press <ENTER> again to kick {name}.",
   "pg.kicked": "You were removed from this game by the host.",
   "on.idle": "This game was closed because nobody played for 10 minutes.",
   // lobby chat (online.js, docs/DESIGN-8P.md 22) and what a player sees during play (section 23)
@@ -146,10 +122,34 @@ Lang.register("en", {
   "watch.i2": "screen, your wreck, your teammates, one tank (your killer first) or all.",
   "pg.watch.black": "after death: black screen", "pg.watch.wreck": "after death: my wreck", "pg.watch.team": "after death: watch team", "pg.watch.killer": "after death: watch killer", "pg.watch.others": "after death: watch all",
   // the titles of the two boxes on the vs computer / create-a-game screens
-  "box.game": "Game", "box.players": "Players", "box.settings": "Settings", "pg.h.settings": "SETTINGS",
+  "box.game": "Game", "box.players": "Players", "box.settings": "Settings",
   // round time limit (home.js vs computer + split screen, lobby.js create screen, the pre-game lobby's settings)
   "lc.time": "Round time: ", "os.time": "Round time: ", "time.off": "no limit", "time.n": "{n} min",
   "time.i1": "When the time is up, the side that did the most damage to enemy tanks",
   "time.i2": "wins the round (the other tanks blow up); a tie: nobody wins.",
   "pg.time": "round time: {n} min", "pg.time.off": "round time: no limit",
+  // the player's name for online play (dosui.js askName, the Settings screen) and the room lobby with
+  // its seats (online.js, docs/DESIGN-8P.md 26)
+  "name.title": "YOUR NAME", "name.label": "Name: ", "name.i1": "Online games need a name:",
+  "name.i2": "the other players see you by it.", "name.i3": "Up to 12 characters; change it any time in Settings.",
+  "name.go": "Continue", "name.err": "Please type a name first.",
+  "set.name": "Name: ", "set.name.i1": "Your name in online games.", "set.name.i2": "Type it, then <ENTER>.",
+ 
+  "lobby.join2": "<ENTER> to join this game, → to watch it", "lobby.watch": "<ENTER> to watch this game",
+  "lobby.closed": "No free seat and no spectators in this game.", "state.lobby": "Lobby",
+  "seat.cpu": "AI ({level})", "seat.open": "open", "seat.closed": "closed",
+  "seat.kind.i": "← →, a click or a right click: open, closed or AI (easy, medium, hard).", "seat.open.i": "← → or a right click: close this seat or give it to an AI.",
+  "seat.team.i": "1-8 or <ENTER>: its team (the same number means teammates).",
+  "seat.mine.i1": "Your seat: you play this color.", "seat.mine.i2": "← → or 1-8: your team (the same number means teammates).",
+  "seat.sit.i": "<ENTER> or a click: sit here and play {name}.", "seat.sit.i2": "An open seat nobody takes has no tank in the game.",
+  "pg.busy": "A game is being played", "pg.go": "Start game", "pg.go.i": "Starts the game for everybody seated.",
+  "pg.cant.tanks": "At least 2 tanks are needed: players and computer tanks.", "pg.cant.human": "Somebody has to sit down to play.",
+  "pg.cant.teams": "At least 2 different teams are needed.", "pg.cant.ready": "Waiting until every player is ready.",
+  "pg.cant.match": "A game is being played.",
+  "pg.watch": "Watch instead", "pg.watch.i": "Leave your seat and watch the game as a spectator.",
+  "pg.specs.who": "Watching: ",
+  "lobby.link": "Join by link", "lobby.link.i1": "Paste an invite link you got from another player", "lobby.link.i2": "and join that game.", "link.title": "JOIN BY LINK", "link.label": "Link: ", "link.i1": "Paste the invite link (Ctrl+V), for example:", "link.i2": "<ENTER> joins the game (a link to another server works too).", "link.go": "Join", "link.err": "That is not a game link.",
+  "lobby.host": "you host", "lobby.host.i": "You are this game's host (you created it, or hosting was handed to you).",
+  "ver.server": "This server runs version {server}; your game is version {you}.", "ver.update": "Update your game (or choose another server in Settings) to play here.",
+  "on.full": "There is no free seat in this game.", "on.busy": "A game is being played and this room allows no spectators.",
 });

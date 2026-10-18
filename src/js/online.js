@@ -1,57 +1,41 @@
 "use strict";
-// Online game page: /online.html?room=<id>&role=blue|green|cyan|...|spectate
-// Server-clocked lockstep (see server.js / netproto.js): this page sends its held-key bits and
-// keystrokes, receives the authoritative frame stream and runs every frame through its own engine.
-// Frames are presented through a small jitter buffer on the local clock.
-// The room's settings come with "hello" as cfg (the used slots with their colours, computer levels and
-// teams as created, map size, rounds to win, round time, friendly fire); NetProto.engineOptions turns them into the
-// engine's options. Extended rooms (anything but BLUE + GREEN, both human): every client drives the
-// computer slots itself with its own (deterministic) TunnelerAI instances, and a player sees only their
-// own view buffer. Config frames (the teams / names chosen in the pre-game lobby) are applied right
-// before the frame that carries them.
-// What is shown of the play screen is decided by ViewModes (views.js): a player always follows their
-// own tank (classic: their half of the split screen); a spectator switches between all views in a grid,
-// the live map + scores and following one player (Tab / 1 2 3, Left / Right choose the player).
-// Between matches every player / spectator sees the pre-game lobby (docs/DESIGN-8P.md 18): the slots
-// with names, teams, state and ping; a player edits their own name / team / view and chooses "Start game";
-// players and spectators chat there (section 22: names and messages go through the Unicode plane
-// (unitext.js), so every language shows at once). During play a player sees their own view, their team's or
-// everyone's (section 23: their choice, up to the room's "visible" setting; ViewModes.setScope).
+// Online game page: /game/<id>[/watch | /<colour>] or /online.html?room=<id>[&role=watch|<colour>]
+// A room is a lobby with 8 seats (docs/DESIGN-8P.md 26, server.js): this page shows it - the seats
+// (players, open / closed seats, computer tanks, teams, ready, ping), the game settings, the chat - and
+// lets the player sit on an open seat (= pick a colour), pick a team, get ready or watch; the host sets
+// the seats and the settings, removes people and starts the match.
+// Every match is its own game: "match" brings its seed and cfg (tanks, names, settings), this page
+// builds a new engine for it (autoStart: straight to the world) and runs the authoritative frame
+// stream through it (server-clocked lockstep, see netproto.js), presented through a small jitter
+// buffer on the local clock. A match player sends their held-key bits and keystrokes; every client
+// drives the computer tanks itself with its own (deterministic) TunnelerAI instances. Everybody else
+// in the room - and every player who comes back to the lobby before the match is over - watches.
+// What is shown of the play screen is decided by ViewModes (views.js): a player sees their own view,
+// their team's or everyone's (section 23: their choice, up to the room's "visible" setting); a
+// spectator switches between all views in a grid, the live map + scores and following one player
+// (Tab / 1 2 3, Left / Right choose the player).
+// Online play needs a player name (DosUI.askName, "tunneler.name"): asked before connecting when this
+// browser has none. Names and chat go through the Unicode plane (unitext.js), so every language shows.
 (function () {
-  const { TICK_MS, UP, DOWN, LEFT, RIGHT, FIRE, ESC, ROLES, MAX_PLAYER_NAME, MAX_CHAT, VISIBLE, frameToInput, frameToInputExt, FrameQueue,
-    HASH_EVERY, stateHash, engineOptions, applyFrameCfg } = NetProto;
-  const here = Links.here();                           // /game/<id>/<color|watch> or ?room=&role=
+  const { TICK_MS, UP, DOWN, LEFT, RIGHT, FIRE, ESC, ROLES, MAX_CHAT, VISIBLE, SIZES, ROUND_TIMES, AFTER_DEATH, SEAT_KINDS,
+    frameToInput, frameToInputExt, FrameQueue, HASH_EVERY, stateHash, engineOptions, readCfg } = NetProto;
+  const here = Links.here();                           // /game/<id>[/<colour|watch>] or ?room=&role=
   const roomId = (here.room || "").toLowerCase();
-  const role = ROLES.includes(here.role) ? here.role : "spectate";
-  const player = role !== "spectate";
-  const myColor = ROLES.indexOf(role);                 // tank colour 0..7, -1 for a spectator
+  const wantRole = here.role || "";                    // "spectate" (watch), a colour (that seat) or ""
   const T = Lang.t, NAME = r => Lang.raw(r);          // translated text / raw tank name for {name}
   const TEXT_COLORS = TunnelerEngine.PLAYER_TEXT_COLORS;   // by tank colour
-  // from "hello"; until then the classic room
-  let cfg = { ext: false, players: 2, size: "medium", winScore: 3, friendlyFire: false, roundTime: 0, visible: "self", watchOut: "wreck",
-    slots: [{ color: 0, bot: false, level: null, team: 1 }, { color: 1, bot: false, level: null, team: 2 }] };
-  let me = -1, isHost = false, myK = 0;                // own slot index (player number - 1), host?, connection number
-  const humanSlots = () => cfg.slots.map((s, i) => s.bot ? -1 : i).filter(i => i >= 0);
-  const colorOf = i => cfg.slots[i] ? cfg.slots[i].color : i;
-  const colorKey = i => ROLES[colorOf(i)] || "blue";
 
   const $ = id => document.getElementById(id);
   const canvas = $("screen");
   const display = new Display(canvas);
   const speaker = new Speaker();
-  // Runner draws through `views` (it passes every screen but the play screen on to the Display and sizes
-  // the canvas). A player: locked on their own view, no view keys. A spectator: grid / map / follow,
-  // remembered in localStorage (tunneler.spec.mode / .follow).
-  const views = new ViewModes(canvas, display, () => engine, player
-    ? { mode: "follow", follow: 0, lockFollow: true, keys: false }
-    : { mode: "grid", follow: 0, storageKey: "tunneler.spec", onChange: () => renderBar() });
-
-  const lobbyHref = roomId ? Links.room(roomId) : Links.games();
+  const gamesHref = Links.games();
   const store = {
     get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
     set(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* private mode */ } },
   };
-  // this browser's random id (the host bans by it) and, for the room's creator, its host key (lobby.js)
+  // this browser's random id (the host bans by it; a player's seat and tank go by it) and, for the
+  // room's creator, its host key (lobby.js)
   function randomId() {
     const a = new Uint8Array(12);
     if (window.crypto && crypto.getRandomValues) crypto.getRandomValues(a);
@@ -66,32 +50,48 @@
   window.addEventListener("pointerdown", unlock);
   window.addEventListener("touchend", unlock);           // (a touch unlocks audio on its end, not its start)
 
-  // ------------------------------------------------------------ simulation state
-  let engine = null, runner = null, seed = null, created = null, roomName = "";
-  let bots = null;                   // extended: TunnelerAI per computer slot (null for human slots)
+  // ------------------------------------------------------------ room state
+  let me = { k: 0, host: false, name: "" };            // this connection: number, host?, name (as the server made it)
+  let st = null;                                       // the room's last status ("st"; see server.js)
+  let roomName = "";
+  const isHost = () => !!me.host;
+  const mySeat = () => st ? st.seats.findIndex(s => s.k === me.k && me.k) : -1;
+  const isReady = () => mySeat() >= 0 && !!st.seats[mySeat()].ready;
+
+  // ------------------------------------------------------------ the match (one engine per match)
+  let engine = null, runner = null, cfg = null, bots = null;
+  let matchNo = 0;                   // the match this page runs (0 = none)
+  let player = -1;                   // this page's tank in it (0-based), -1 = watching
+  let ended = false;                 // the server said the match is over (the frames left still run)
   let frames = 0;                    // frames run through the engine
   const queue = new FrameQueue();    // frames received, not yet run
   let catching = false, nextAt = 0;
-  let status = { blue: false, green: false, spec: 0, running: false, n: 0 };
-  let fatal = null, desyncAt = -1, lastReport = "";
-  let matchNo = 0;                   // matches finished (world map reached): the lobby shows each one's statistics once
+  let fatal = null, fatal2 = null, desyncAt = -1, lastReport = "";
+  let lastMatch = null;              // {engine, cfg, player} of the last match played to its end (statistics)
+  let statsShown = 0;
+  const isPlayer = () => !!engine && player >= 0 && !ended;
+  // the views: a player follows their own tank, a spectator chooses (remembered: tunneler.spec.mode / .follow)
+  const makeViews = asPlayer => new ViewModes(canvas, display, () => engine, asPlayer
+    ? { mode: "follow", follow: 0, lockFollow: true, keys: false }
+    : { mode: "grid", follow: 0, storageKey: "tunneler.spec", onChange: () => renderBar() });
+  let views = makeViews(false);
 
   // screens shown over the game: a status message (msgSnap) wins over the lobby (menuSnap)
   let msgSnap = null, menuSnap = null;
   // The end-of-match world map ("PRESS ANY KEY") is per viewer: it stays on this screen until this
-  // player / spectator presses a key or clicks, even when the other player already went on to the menu.
+  // player / spectator presses a key or clicks, even when the others already went on to the lobby.
   let mapSnap = null, mapPending = false;
   function presentOverlay() {
-    const snap = msgSnap || (mapPending && engine && engine.screen !== "map" ? mapSnap : null) || menuSnap;
+    const snap = msgSnap || (mapPending && (!engine || engine.screen !== "map" || ended) ? mapSnap : null) || menuSnap;
     if (runner) runner.setOverlay(snap);
     else if (snap) display.setSnapshot(snap);
   }
+  let asking = false;                                  // the name screen (before connecting)
   const dos = new DosUI(canvas, { display, active: () => !!msgSnap, present: snap => { msgSnap = snap; presentOverlay(); } });
-  const idle = now => { if (!runner) display.draw(now); requestAnimationFrame(idle); };   // until a game exists
+  const idle = now => { if (!runner) display.draw(now); requestAnimationFrame(idle); };   // between matches
   requestAnimationFrame(idle);
 
-  // Leaving: close the socket first so the server frees this slot at once (the lobby shows it as free
-  // right away, instead of after the browser gets round to closing it).
+  // Leaving: close the socket first so the server frees this seat at once
   let leaving = false;
   function leave(url) {
     leaving = true;
@@ -106,32 +106,43 @@
   window.tunnelerRunner = () => runner;
   window.tunnelerViews = () => views;
 
-  function newGame(s, c) {
+  // a new match ({no, seed, cfg, you} from "match" / "hello")
+  function newMatch(m) {
     if (runner) runner.stop();
-    seed = s; created = c;
-    engine = new TunnelerEngine(s, engineOptions(cfg));
+    const c = readCfg(m.cfg);
+    if (!c) { fatal = "Bad game settings."; updateOverlay(); return false; }
+    cfg = c; matchNo = m.no; player = Number.isInteger(m.you) ? m.you : -1; ended = false;
+    engine = new TunnelerEngine(m.seed >>> 0, engineOptions(cfg));
     Lang.apply(engine);                                    // texts only: the simulation is the same
+    engine.uiMode = "online";
+    engine.setNames(cfg.names);                            // display only (raw Unicode)
     bots = cfg.ext ? cfg.slots.map((sl, i) => sl.bot ? new TunnelerAI(sl.level || "normal", i + 1) : null) : null;
+    views = makeViews(player >= 0);
     runner = new Runner(engine, views, speaker);
     // a player hears the other tanks quieter the farther they are from their own (docs/DESIGN-8P.md 8);
     // spectators hear everything at full volume
-    // (after death: "others" - from the tank watched, "wreck" - from the wreck, "black" - nothing)
-    runner.listener = e => player && me >= 0 && e.screen === "play" ? views.hearAt(me, e) : null;
-    if (player && me >= 0) views.setScope(me, viewChoice());
-    else if (views.follow >= engine.nPlayers) views.setFollow(views.follow);   // (remembered from a bigger room: wraps)
-    views.setWatchOut(player && me >= 0 ? cfg.watchOut : "wreck");   // (spectators see everything anyway)
-    markEngine(engine);
+    runner.listener = e => player >= 0 && e.screen === "play" ? views.hearAt(player, e) : null;
+    if (player >= 0) views.setScope(player, viewChoice());
+    else if (views.follow >= engine.nPlayers) views.setFollow(views.follow);   // (remembered from a bigger game: wraps)
+    views.setWatchOut(player >= 0 ? cfg.watchOut : "wreck");   // (spectators see everything anyway)
+    if (showPing) views.setPing(rtt == null ? null : Math.round(rtt));
+    markEngine(engine, player);
+    frames = 0; queue.clear(); lastReport = ""; desyncAt = -1; mapPending = false; mapSnap = null;
+    if (lobby) closeLobby();
     presentOverlay();
     renderBar();
-    frames = 0; queue.clear(); lastReport = ""; matchNo = 0;
+    return true;
   }
-
-  // A config frame (the pre-game lobby's teams and names, see netproto.js): into the engine right before
-  // its frame is stepped. Names (raw Unicode, any letters - the Unicode plane draws them) are display
-  // only: the extended engine shows them on the round title / statistics; the classic one (whose screens
-  // have room for 9 columns) instead of BLUE / GREEN.
-  function applyCfg(c) {
-    applyFrameCfg(engine, c);
+  // the server ended the match: once this page has run what it got, back to the lobby (see the loop below)
+  function dropMatch() {
+    if (!engine) return;
+    if (engine.menuShift !== 0 && (!lastMatch || lastMatch.no !== matchNo)) lastMatch = { engine, cfg, player, no: matchNo };
+    if (runner) runner.stop();
+    runner = null; engine = null; bots = null; matchNo = 0; player = -1; ended = false;
+    queue.clear(); catching = false;
+    views = makeViews(false);
+    renderBar();
+    presentOverlay();
   }
 
   // a computer player's bits for this frame (from the engine state before the step, like a human's)
@@ -143,25 +154,24 @@
 
   function stepFrame(at, quiet) {
     const f = queue.shift();
-    const ext = Array.isArray(f[0]), c = ext ? f[2] : f[3];
-    if (c) applyCfg(c);
+    const ext = Array.isArray(f[0]);
     const input = ext ? frameToInputExt(f, bots && bots.map(ai => ai ? botBits(ai) : null)) : frameToInput(f[0], f[1], f[2]);
-    const wasMap = engine.screen === "map";
     runner.runStep(input, at, quiet);
     frames++;
-    if (engine.screen === "map" && !wasMap) matchNo++;
+    if (engine.screen === "map" && (!lastMatch || lastMatch.no !== matchNo))   // the match is over: its statistics are final
+      lastMatch = { engine, cfg, player, no: matchNo };
     if (engine.screen === "map" && engine.snapshots.length) {
       mapSnap = engine.snapshots[engine.snapshots.length - 1];
       if (!quiet && !mapPending) { mapPending = true; presentOverlay(); }
     }
     if (frames % HASH_EVERY === 0 && queue.length < HASH_EVERY * 32)   // (not for long-past frames)
-      send({ t: "h", n: frames, h: stateHash(engine) });
-    if (player && !quiet) report();
+      send({ t: "h", m: matchNo, n: frames, h: stateHash(engine) });
+    if (isPlayer() && !quiet) report();
   }
 
-  // cosmetic state for the lobby list
+  // cosmetic state for the list of games (and the match's end: "playing" false = left the world map)
   function report() {
-    const r = { t: "r", screen: engine.screen, playing: engine.kbdInstalled || engine.screen === "map",
+    const r = { t: "r", screen: engine.screen, playing: engine.kbdInstalled || engine.screen === "map" || engine.menuShift === 0,
       round: engine.round, wins: engine.wins.slice(1) };
     if (cfg.ext) r.teamWins = engine.teamWins.slice();
     const s = JSON.stringify(r);
@@ -182,11 +192,11 @@
     if (queue.length && nextAt < now - 250) nextAt = now;      // stream stalled and resumed: resync
     while (queue.length && now >= nextAt) { stepFrame(nextAt, false); nextAt += TICK_MS; }
     while (queue.length > 3) { stepFrame(now, false); nextAt = Math.max(nextAt, now + TICK_MS); }
-    if (player && keyboard) sendKeys();
+    if (isPlayer()) sendKeys();
   }
   setInterval(pump, 4);
 
-  // ------------------------------------------------------------ input (players only)
+  // ------------------------------------------------------------ input
   const CODES = {
     [UP]: ["KeyW", "ArrowUp", "Numpad8"],
     [DOWN]: ["KeyS", "ArrowDown", "Numpad2"],
@@ -195,13 +205,13 @@
     [FIRE]: ["ShiftLeft", "ShiftRight", "Space", "Enter", "NumpadEnter"],   // no Ctrl: Ctrl+W closes the tab
     [ESC]: ["Escape"],
   };
-  let keyboard = null, bits = 0;
-  // Esc twice (within 3 s) leaves the game for the room page - the first one only says so, across the
-  // game (no accidental exits); not in the lobby, on a status screen or on the end-of-match map
+  let bits = 0;
+  // Esc twice (within 3 s) leaves the game for the list of games - the first one only says so, across
+  // the game (no accidental exits); not in the lobby, on a status screen or on the end-of-match map
   let escArm = 0;
   function escToLeave() {
     if (lobby || msgSnap || !engine || engine.screen === "map") return false;
-    if (Date.now() < escArm) { leave(lobbyHref); return true; }
+    if (Date.now() < escArm) { leave(gamesHref); return true; }
     escArm = Date.now() + 3000;
     views.setNotice(T("on.escagain"));                   // (across the game)
     setTimeout(() => { if (Date.now() >= escArm) views.setNotice(null); }, 3050);
@@ -209,31 +219,29 @@
   }
   const inPlay = () => engine && engine.screen === "play";
 
-  if (player) {
-    keyboard = new Keyboard(window, { aliases: false });
-    keyboard.onKey = code => code === "Escape" && escToLeave();
-    const update = () => {
-      let b = 0;
-      if (!lobby) for (const bit in CODES) if (CODES[bit].some(c => keyboard.isDown(c))) b |= +bit;   // (not while in the lobby)
-      if (b !== bits) { bits = b; send({ t: "b", v: b }); }
-    };
-    // registered after Keyboard's own listeners, so its state is already updated
-    window.addEventListener("keydown", update);
-    window.addEventListener("keyup", update);
-    window.addEventListener("blur", () => setTimeout(update, 0));
-  } else {
-    window.addEventListener("keydown", e => {
-      if (msgSnap || e.ctrlKey || e.altKey || e.metaKey) return;   // (a status screen handles its own keys)
-      if (mapPending) { if (!e.repeat) { mapPending = false; presentOverlay(); } }   // spectator closes the map (here only)
-      else if (lobby) { /* the lobby screen (DosUI) handles its keys */ }
-      else if (e.code === "Escape" && escToLeave()) e.preventDefault();
-      else if (views.handleKey(e.code)) { e.preventDefault(); renderBar(); }            // view mode / followed tank
-      if (e.code === "Tab") e.preventDefault();                                          // (never move the focus)
-    });
+  const keyboard = new Keyboard(window, { aliases: false });
+  keyboard.onKey = code => isPlayer() && code === "Escape" && escToLeave();
+  function updateBits() {
+    let b = 0;
+    if (isPlayer() && !lobby) for (const bit in CODES) if (CODES[bit].some(c => keyboard.isDown(c))) b |= +bit;   // (not in the lobby)
+    if (b !== bits) { bits = b; send({ t: "b", v: b }); }
   }
+  // registered after Keyboard's own listeners, so its state is already updated
+  window.addEventListener("keydown", updateBits);
+  window.addEventListener("keyup", updateBits);
+  window.addEventListener("blur", () => setTimeout(updateBits, 0));
+  // watching: the view keys
+  window.addEventListener("keydown", e => {
+    if (isPlayer() || msgSnap || e.ctrlKey || e.altKey || e.metaKey) return;   // (a status screen handles its own keys)
+    if (mapPending) { if (!e.repeat) { mapPending = false; presentOverlay(); } }   // a spectator closes the map (here only)
+    else if (lobby || !engine) { /* the lobby screen (DosUI) handles its keys */ }
+    else if (e.code === "Escape" && escToLeave()) e.preventDefault();
+    else if (views.handleKey(e.code)) { e.preventDefault(); renderBar(); }            // view mode / followed tank
+    if (e.code === "Tab" && !lobby) e.preventDefault();                               // (never move the focus)
+  });
   // gamepads / touch controls (pads.js): turned into the same keys as the keyboard - a player's tank
   // during play (any gamepad, the on-screen joystick + FIRE), arrows / Enter / Esc everywhere else
-  if (window.Pads) Pads.start({ menu: () => !player || !inPlay(), gamepadSet: () => "blue", touchSet: player ? "blue" : null });
+  if (window.Pads) Pads.start({ menu: () => !isPlayer() || !inPlay() || !!lobby, gamepadSet: () => "blue", touchSet: "blue" });
 
   function sendKeys() {
     const keys = keyboard.takeKeys();
@@ -242,168 +250,226 @@
       if (mapPending) {                                    // the world map: this key closes it here only
         if (k[2]) continue;                                // (not a key still held from the game)
         mapPending = false;
-        if (engine.screen === "map") send({ t: "k", a: k[0], s: k[1] });   // go on to the menu
+        if (engine.screen === "map") send({ t: "k", a: k[0], s: k[1] });   // go on
         presentOverlay();
-      } else if (lobby) continue;                          // the lobby screen (DosUI) handles its keys
-      else if (!k[2]) send({ t: "k", a: k[0], s: k[1] });
+      }
     }
   }
+  setInterval(() => { if (!isPlayer()) keyboard.takeKeys(); }, 200);   // (nobody reads them then)
 
   // mouse: a click on the world map goes on (the lobby's own DosUI handles its clicks)
   canvas.addEventListener("click", () => {
-    if (!engine || msgSnap || !mapPending) return;
+    if (msgSnap || !mapPending) return;
     mapPending = false;
-    if (player && engine.screen === "map") send({ t: "k", a: 13, s: 0x1C });
+    if (isPlayer() && engine.screen === "map") send({ t: "k", a: 13, s: 0x1C });
     presentOverlay();
   });
   canvas.addEventListener("mousemove", () => { if (mapPending && !msgSnap) canvas.style.cursor = "pointer"; });
 
-  // ------------------------------------------------------------ pre-game lobby
-  // In DOS one screen and keyboard served both players. Online, while the shared game idles in its menu
-  // loop (before the first match and between matches), every viewer sees this lobby instead, drawn
-  // locally: all used slots (colour, name, team, state, ping) and the room's settings, and in a box the
-  // player's own Name / Team, "Start game" (ready: the own row is locked, Esc cancels), Instructions,
-  // Statistics (after a match), Copy invite link, Remove (host only) and Back to the lobby. A spectator
-  // gets the same list read-only. The server starts the game once every connected player is ready and
-  // there are at least 2 teams; the teams / names enter the frame stream as a config frame then.
-  let lobby = null;                                        // {page: "lobby" | "page", key}
-  const nameForm = { value: UniText.truncRaw(store.get("tunneler.name") || "", MAX_PLAYER_NAME), max: MAX_PLAYER_NAME };
+  // ------------------------------------------------------------ the room lobby
+  // Three boxes: the seats (titled with the game's name; each row in its tank's colour: "► Norko  team 1
+  // ready  23 ms", an open seat, a closed one, a computer tank), the actions below on the left and the
+  // game settings on the right; the chat to the right of the seats, the spectators below them. Seats and
+  // settings are locked while a match is on (the server refuses changes then).
+  let lobby = null;                                        // {page: "lobby" | "kick" | "page", key}
   // chat (docs/DESIGN-8P.md 22): the room's messages [{from: {color, name} | {spectator, name}, text}]
   const chatForm = { value: "", max: MAX_CHAT, width: 16 };
   let chat = [], chatSeq = 0;
   // what this player sees during play: self / team / everyone, at most the room's "visible" (section 23)
   let myView = VISIBLE.includes(store.get("tunneler.view")) ? store.get("tunneler.view") : "self";
-  const viewChoices = () => VISIBLE.slice(0, VISIBLE.indexOf(cfg.visible) + 1);
+  const visibleNow = () => (cfg && engine ? cfg.visible : st && st.settings.visible) || "self";
+  const viewChoices = () => VISIBLE.slice(0, VISIBLE.indexOf(visibleNow()) + 1);
   const viewChoice = () => viewChoices().includes(myView) ? myView : viewChoices()[viewChoices().length - 1];
-  let sentName = null, sentAt = 0, kickArm = null, kickArmTimer = null, statsShown = 0;
+  let kickArm = null, kickArmTimer = null;
   const lobbyUI = new DosUI(canvas, { display, active: () => !!lobby && !msgSnap && !mapPending,
     present: snap => { menuSnap = snap; presentOverlay(); } });
   window.tunnelerLobbyUI = () => lobbyUI;                  // tests / debugging
-  // at the DOS menu - or still on the shared world map after this viewer already closed it
-  const atMenu = () => engine && !engine.kbdInstalled && (engine.screen === "text" || (engine.screen === "map" && !mapPending));
-  const STATS = ["menuShift", "wins", "teamWins", "alive", "shotsFired", "shotsHit", "metersDug", "metersMoved", "kills", "roundLog"];
-  const isReady = () => player && me >= 0 && !!(status.ready && status.ready[me]);
+  const STATS = ["menuShift", "wins", "teamWins", "alive", "shotsFired", "shotsHit", "metersDug", "metersMoved", "roundLog"];
+  const cycle = (list, v, d) => list[(list.indexOf(v) + d + list.length) % list.length];
+  const W = UniText.cols;
 
-  // the slots as the server last reported them (before the first status: from the room's settings)
-  function lobbySlots() {
-    if (Array.isArray(status.slots) && status.slots.length === cfg.slots.length) return status.slots;
-    return cfg.slots.map(s => ({ color: s.color, kind: s.bot ? "computer" : "human", level: s.level, name: "", team: s.team,
-      ready: false, connected: false, joined: false, ping: null, host: false }));
-  }
-  const teamCount = sl => new Set(sl.map(s => s.team)).size;
-  // a player's name (default: the tank's colour); computer tanks have none
-  // (font text; the slot's text colour identifies the tank)
-  const slotName = (s, i) => s.name ? Lang.enc(s.name) : T(colorKey(i));
-  // player i's name for {name} parameters (raw): the lobby name, else the tank's colour name
-  function rawName(i) { const sl = Array.isArray(status.slots) ? status.slots[i] : null; return (sl && sl.name) || NAME(colorKey(i)); }
-  function stateOf(s) {
-    if (s.kind === "computer") return { text: T("pg.computer", { level: Lang.raw("level." + (s.level || "normal")) }), color: 7 };
-    if (!s.connected) return s.joined ? { text: T("pg.disconnected"), color: 12 } : { text: T("pg.free"), color: 8 };
-    return s.ready ? { text: T("pg.ready"), color: 10 } : { text: T("pg.notready"), color: 14 };
-  }
-  // display only: this player's own tank marked on the round title / statistics, the room's settings
-  // listed there (an engine built for this room: the game's or the statistics' private copy)
-  function markEngine(e) {
-    e.youPlayer = player && me >= 0 ? me + 1 : null;
+  // display only: this player's own tank marked on the round title / statistics, the game's settings
+  // listed there
+  function markEngine(e, p) {
+    e.youPlayer = p >= 0 ? p + 1 : null;
     e.showSettings = { view: cfg.visible, visible: true, watchOut: cfg.watchOut };
   }
-  // whom the host may remove: the other connected players and the spectators (labels raw, for T's {name})
-  function kickTargets(sl) {
-    if (!isHost) return [];
-    const out = [];
-    sl.forEach((s, i) => {
-      if (s.kind === "human" && s.connected && i !== me && !s.host)
-        out.push({ id: "s" + i, slot: i, label: s.name || NAME(colorKey(i)), color: TEXT_COLORS[s.color] });
+  // the settings the host chose, remembered for the next game this browser creates (lobby.js)
+  function rememberSettings() {
+    if (!st) return;
+    store.set("tunneler.online", JSON.stringify(Object.assign({}, st.settings,
+      { seats: st.seats.map(s => ({ kind: s.kind, team: s.team })) })));
+  }
+  function setSetting(k, v) {
+    if (!st || !isHost() || st.match) return;
+    st.settings[k] = v;                                    // (shown at once; the server's status confirms it)
+    send({ t: "set", [k]: v });
+    rememberSettings();
+    drawLobby(true);
+  }
+  function setRoomFlag(k, v) {
+    if (!st || !isHost() || st.match) return;
+    st[k] = v;
+    send({ t: "set", [k]: v });
+    drawLobby(true);
+  }
+  function seatSet(i, change) {
+    if (!st || !isHost() || st.match) return;
+    Object.assign(st.seats[i], change);
+    send(Object.assign({ t: "seatSet", i }, change));
+    rememberSettings();
+    drawLobby(true);
+  }
+  function setTeam(d, abs) {
+    const i = mySeat();
+    if (i < 0 || isReady() || st.match) return;
+    const s = st.seats[i];
+    s.team = abs || ((s.team - 1 + d) % 8 + 8) % 8 + 1;
+    send({ t: "me", team: s.team });
+    drawLobby(true);
+  }
+  function sitOn(i) {
+    if (!st || st.match) return;
+    send({ t: "seat", i });
+  }
+
+  // A seat's row (font text), drawn in its tank's colour: "√" when its player is ready, else "►" for the
+  // own seat; who sits there - a player's name, "open", "closed" or the AI level -, the team, the ping.
+  function seatColumns() {
+    const levels = NetProto.LEVELS.map(l => T("seat.cpu", { level: Lang.raw("level." + l) }));
+    const nw = Math.max(NetProto.MAX_PLAYER_NAME, W(T("seat.open")), W(T("seat.closed")), ...levels.map(W));
+    const tw = Math.max(...[1, 8].map(n => W(T("pg.teamn", { n }))));
+    return { nw, tw };
+  }
+  function seatText(s, i, c) {
+    let name, team = T("pg.teamn", { n: s.team }), ping = "";
+    if (s.k) {
+      name = Lang.enc(s.name);
+      ping = s.ping != null ? s.ping + " ms" : "";
+    } else if (s.kind === "open") name = T("seat.open");
+    else if (s.kind === "closed") { name = T("seat.closed"); team = ""; }
+    else name = T("seat.cpu", { level: Lang.raw("level." + s.kind) });
+    const P = (t, w) => UniText.padEnd(UniText.slice(t, w), w);
+    const mark = s.k && s.ready && !st.match ? "\xFB" : s.k && s.k === me.k ? "\x10" : " ";
+    return mark + " " + P(name, c.nw) + " " + P(team, c.tw) + " " + UniText.padStart(ping, 7);
+  }
+
+  // Seat rows: Enter or a (left) click on a free open seat sits there. The host on a seat nobody sits on:
+  // Left / Right or a right click change it (open / closed / AI levels; a left click on a closed / AI seat
+  // too), 1-8 or a click on the team its team (Enter too on closed / AI seats). Own seat: Left / Right,
+  // Enter, 1-8 or a click on the team = team.
+  function seatItems() {
+    const c = seatColumns(), locked = !!st.match, mine = mySeat();
+    const teamZone = click => ({ from: 3 + c.nw, to: 3 + c.nw + c.tw, click });
+    return st.seats.map((s, i) => {
+      const it = { key: "seat" + i, align: "left", label: seatText(s, i, c), attr: s.kind === "closed" && !s.k ? 8 : TEXT_COLORS[i] };
+      if (locked) return Object.assign(it, { static: true });
+      const host = isHost() && !s.k;                       // the host: a seat nobody sits on
+      const kind = d => seatSet(i, { kind: cycle(SEAT_KINDS, s.kind, d) }), team = d => seatSet(i, { team: (s.team - 1 + d + 8) % 8 + 1 });
+      if (i === mine) {
+        return Object.assign(it, { info: [T("seat.mine.i1"), T("seat.mine.i2")], change: d => setTeam(d), go: () => setTeam(1),
+          digit: n => setTeam(0, n), zones: [teamZone(d => setTeam(d))] });
+      }
+      // The host on a seat nobody sits on: a right click anywhere on the row = the next kind (open ->
+      // closed -> AI easy -> medium -> hard -> open); a left click on the team = the next team; any other left
+      // click: on an open seat sits there, on a closed / AI seat = the next kind as well
+      const other = d => d < 0 || s.kind !== "open" ? kind(1) : sitOn(i);
+      const hostZones = [{ from: 0, to: 3 + c.nw, click: other },
+        { from: 3 + c.nw, to: 3 + c.nw + c.tw, click: d => d > 0 && s.kind !== "closed" ? team(1) : kind(1) },
+        { from: 3 + c.nw + c.tw, to: 99, click: other }];
+      if (!s.k && s.kind === "open") {
+        return Object.assign(it, { info: [T("seat.sit.i", { name: NAME(ROLES[i]) }), host ? T("seat.open.i") : T("seat.sit.i2")], go: () => sitOn(i),
+          change: host ? kind : undefined, digit: host ? n => seatSet(i, { team: n }) : undefined, zones: host ? hostZones : undefined });
+      }
+      if (host) {                                           // closed / AI: the host changes it
+        return Object.assign(it, { info: [T("seat.kind.i"), T("seat.team.i")], change: kind, go: () => team(1),
+          digit: n => seatSet(i, { team: n }), zones: hostZones });
+      }
+      return Object.assign(it, { static: true });          // somebody else's seat / nothing to do
     });
-    (status.specs || []).forEach((x, k) => {
-      if (x.k !== myK && !x.host) out.push({ id: "k" + x.k, k: x.k, label: Lang.raw("pg.spectator").replace("{n}", k + 1), color: 7 });
-    });
-    return out;
+  }
+
+  function settingItems() {
+    const s = st.settings, host = isHost() && !st.match, yn = v => T(v ? "yes" : "no");
+    // friendly fire only matters with teammates: grayed out while no team has 2+ seats that aren't closed
+    const teamOf = {};
+    for (const x of st.seats) if (x.kind !== "closed") teamOf[x.team] = (teamOf[x.team] || 0) + 1;
+    const teams = Object.values(teamOf).some(n => n > 1);
+    const row = (key, label, info, step, off) => off
+      ? { key, label, align: "left", static: true, attr: 8 }
+      : host ? { key, label, align: "left", info, go: () => step(1), change: step }
+      : { key, label, align: "left", static: true, attr: 7 };
+    return [
+      row("size", T("os.size") + T("os.size." + s.size), [T("os.size.i1"), T("os.size.i2")], d => setSetting("size", cycle(SIZES, s.size, d))),
+      row("win", T("os.win") + s.winScore, [T("os.win.i1"), T("os.win.i2")], d => setSetting("winScore", (s.winScore - 1 + d + 9) % 9 + 1)),
+      row("time", T("os.time") + (s.roundTime ? T("time.n", { n: s.roundTime }) : T("time.off")), [T("time.i1"), T("time.i2")],
+        d => setSetting("roundTime", cycle(ROUND_TIMES, s.roundTime, d))),
+      row("ff", T("os.ff") + T(s.friendlyFire ? "os.on" : "os.off"), [T("os.ff.i1"), T("os.ff.i2")], () => setSetting("friendlyFire", !s.friendlyFire), !teams),
+      row("visible", T("os.visible") + T("view." + s.visible), [T("os.visible.i1"), T("os.visible.i2")], d => setSetting("visible", cycle(VISIBLE, s.visible, d))),
+      row("watch", T("os.watch") + T("watch." + s.watchOut), [T("watch.i1"), T("watch.i2")], d => setSetting("watchOut", cycle(AFTER_DEATH, s.watchOut, d))),
+      row("public", T("create.public") + yn(st.public), [T("create.public.i1"), T("create.public.i2")], () => setRoomFlag("public", !st.public)),
+      row("spectators", T("create.spect") + yn(st.spectators), [T("create.spect.i1"), T("create.spect.i2")], () => setRoomFlag("spectators", !st.spectators)),
+    ];
+  }
+
+  function actionItems() {
+    const items = [], seat = mySeat(), ready = isReady(), locked = !!st.match;
+    if (locked) items.push({ key: "busy", label: T("pg.busy"), disabled: true });
+    else if (isHost()) {
+      const why = st.cant;
+      items.push({ key: "start", label: T("pg.go"), info: why ? [{ text: T("pg.cant." + why), color: 14 }] : [T("pg.go.i")],
+        go: () => { if (!st.cant) send({ t: "start" }); } });
+    } else if (seat >= 0) {
+      items.push({ key: "ready", label: ready ? T("pg.cancel") : T("pg.start"), info: ready ? [T("pg.ready.i")] : [T("pg.start.i")],
+        go: () => send({ t: "ready", v: ready ? 0 : 1 }) });
+    }
+    if (!locked && seat >= 0 && st.spectators)
+      items.push({ key: "spec", label: T("pg.watch"), info: [T("pg.watch.i")], go: () => sitOn(-1) });
+    // what this player sees during play, up to the room's maximum (display only)
+    if (viewChoices().length > 1) items.push({ key: "view", label: T("pg.view") + T("view." + viewChoice()), align: "left",
+      info: [T("pg.view.i1"), T("pg.view.i2", { max: Lang.raw("view." + visibleNow()) })], go: () => setView(1), change: setView });
+    items.push({ key: "say", label: T("pg.say"), input: chatForm, align: "left", info: [T("pg.say.i")], go: sendChat });
+    // the invite link (the server's own page: also from the desktop app); "Link copied" for 3 s
+    const invite = Endpoint.web(Links.invite(roomId)), copy = () => copyLink(invite);
+    items.push({ key: "copy", label: T(copied ? "room.copied" : "room.copy"), go: copy,
+      info: [T("room.copy.in"), { text: Lang.enc(UniText.truncRaw(invite, 78)), color: 11, onClick: copy }] });
+    if (lastMatch) items.push({ key: "stats", label: T("pg.stats"), info: [T("pg.stats.i")], go: showStats });
+    if (isHost() && !locked && kickTargets().length) items.push({ key: "kick", label: T("pg.kick"), info: [T("pg.kick.i1"), T("pg.kick.i2")], go: () => drawKick(false) });
+    items.push({ key: "back", label: T("back.lobby"), info: [T("back.lobby.i")], go: () => leave(gamesHref) });
+    // a blank row below "Say:" - unless the box would then reach the info lines (rows 22-23)
+    if (items.length < 9) items.splice(items.findIndex(it => it.key === "say") + 1, 0, { key: "gap", label: "", disabled: true });
+    return items;
   }
 
   function drawLobby(keep, selKey) {
-    if (!lobby) return;
+    if (!lobby || !st) return;
     lobby.page = "lobby";
-    const sl = lobbySlots(), nSpec = status.specs ? status.specs.length : status.spec || 0, ready = isReady();
-    const lines = [{ row: 1, text: UniText.slice(Lang.enc(roomName || roomId), 78), color: 15 }];
-    const text = [];                                       // raw Unicode (the Unicode plane): names, chat
-    // the table: NAME  TEAM  STATE  PING (no host marker), each row in the tank's colour (which identifies the
-    // slot: the name, else the colour name); "►" = you
-    const W = UniText.cols;
-    const cw = Math.max(MAX_PLAYER_NAME, W(T("pg.h.name")), ...ROLES.map(r => W(T(r))));
-    const tw = Math.max(W(T("pg.h.team")), ...[1, 8].map(n => W(T("pg.teamn", { n }))));
-    const sw = Math.max(W(T("pg.h.state")), ...["pg.ready", "pg.notready", "pg.free", "pg.disconnected"].map(k => W(T(k))),
-      ...["normal", "hard", "expert"].map(l => W(T("pg.computer", { level: Lang.raw("level." + l) }))));
-    // (a classic room - BLUE against GREEN - has no teams: no TEAM column, width -1 = not even its gap)
-    const cols = [1, cw, cfg.ext ? tw + 1 : -1, sw, 7];   // (TEAM: one more column before STATE)
-    const width = cols.reduce((a, b) => a + b + 1, -1);
-    // every setting of the room in a column to the right of the table, one per row (a SETTINGS header)
-    const sets = Lang.roomSettings(cfg, nSpec), setW = Math.max(W(T("pg.h.settings")), ...sets.map(W));
-    const gap = width + 3 + setW <= 80 ? 3 : 2, total = width + gap + setW;   // (centred, never past column 80)
-    const x0 = Math.max(1, Math.min(41 - (total >> 1), 81 - total)), setX = x0 + width + gap;
-    const at = k => x0 + cols.slice(0, k).reduce((a, b) => a + b + 1, 0);
-    lines.push({ row: 3, col: setX, text: UniText.slice(T("pg.h.settings"), 81 - setX), color: 14 });
-    sets.forEach((t, k) => lines.push({ row: 4 + k, col: setX, text: UniText.slice(t, 81 - setX), color: 7 }));
-    lines.push({ row: 3, col: at(1), text: T("pg.h.name"), color: 14 }, { row: 3, col: at(3), text: T("pg.h.state"), color: 14 },
-      { row: 3, col: at(4), text: T("pg.h.ping"), color: 14 });
-    if (cfg.ext) lines.push({ row: 3, col: at(2), text: T("pg.h.team"), color: 14 });
-    sl.forEach((s, i) => {
-      const row = 4 + i, c = TEXT_COLORS[s.color], st = stateOf(s);
-      if (i === me) lines.push({ row, col: at(0), text: "\x10", color: 15 });
-      // the player's name in any letters (Unicode plane), else the colour name - in the tank's colour
-      lines.push({ row, col: at(1), text: slotName(s, i), color: c });
-      if (cfg.ext) lines.push({ row, col: at(2), text: T("pg.teamn", { n: s.team }), color: c });
-      lines.push({ row, col: at(3), text: st.text, color: st.color });
-      if (s.kind === "human") lines.push({ row, col: at(4), text: s.connected && s.ping != null ? s.ping + " ms" : "-", color: 8 });
-    });
-    const items = [];
-    const enough = !cfg.ext || teamCount(sl) >= 2;          // (classic: BLUE against GREEN, always)
-    const hint = enough ? [] : [{ text: T("pg.need2"), color: 14 }];
-    if (player && me >= 0) {
-      const mine = sl[me];
-      nameForm.placeholder = T(colorKey(me));                // (empty = the tank's colour name, as everybody sees it)
-      items.push({ key: "name", label: T("pg.name"), input: nameForm, align: "left", disabled: ready,
-        info: [...hint, T("pg.name.i")], go: () => lobbyUI.move(1) });
-      // the team: extended rooms only (a classic room is the original BLUE against GREEN)
-      if (cfg.ext) items.push({ key: "team", label: T("pg.team") + mine.team, align: "left", disabled: ready,
-        info: [...hint, T("pg.team.i")], go: () => setTeam(1), change: setTeam,
-        // a click on the number: next team (right click: the one before)
-        zones: [{ from: UniText.cols(T("pg.team")), to: UniText.cols(T("pg.team")) + 1, click: setTeam }],
-        digit: n => setTeam(n - mine.team) });                // 1..8: straight to that team
-      // what this player sees during play, up to the room's maximum (display only: also while ready)
-      if (viewChoices().length > 1) items.push({ key: "view", label: T("pg.view") + T("view." + viewChoice()), align: "left",
-        info: [T("pg.view.i1"), T("pg.view.i2", { max: Lang.raw("view." + cfg.visible) })], go: () => setView(1), change: setView });
-      items.push({ key: "start", label: ready ? T("pg.cancel") : T("pg.start"), disabled: !ready && !enough,
-        info: ready ? [T("pg.ready.i")] : [T("pg.start.i")], go: () => send({ t: "ready", v: ready ? 0 : 1 }) });
+    const seats = seatItems(), sets = settingItems(), acts = actionItems();
+    const lines = [], text = [];
+    // the seats (the game's name in the top border) and the settings on top, the actions and the chat
+    // below them (the chat input fills the actions' width), the spectators in between
+    const seatW = DosUI.boxWidth(seats), setW = DosUI.boxWidth(sets);
+    const title = UniText.slice(Lang.enc(roomName || roomId) + (st.public ? "" : " " + T("room.private")), seatW - 4);
+    const specs = (st.specs || []).map(x => x.name).filter(Boolean);
+    if (specs.length) {
+      lines.push({ row: 11, col: 2, text: T("pg.specs.who"), color: 8 });
+      text.push({ row: 11, col: 2 + W(T("pg.specs.who")), text: UniText.truncRaw(specs.join(", "), 77 - W(T("pg.specs.who"))), color: 7 });
     }
-    // the host, once ready (rooms with more than two tanks): start now, without the players who haven't
-    // joined or aren't ready yet (their tanks stand still until they join)
-    if (isHost && ready && cfg.ext && enough && humanSlots().some(i => i !== me && !(sl[i].connected && status.ready && status.ready[i])))
-      items.push({ key: "now", label: T("pg.now"), info: [T("pg.now.i1"), T("pg.now.i2")], go: () => send({ t: "start" }) });
-    items.push({ key: "say", label: T("pg.say"), input: chatForm, align: "left", info: [T("pg.say.i")], go: sendChat });
-    if (engine && engine.menuShift !== 0) items.push({ key: "stats", label: T("pg.stats"), info: [...hint, T("pg.stats.i")], go: showStats });
-    // the host: one "Kick a player..." item, which opens the list of whom it may remove (drawKick)
-    if (kickTargets(sl).length) items.push({ key: "kick", label: T("pg.kick"), info: [T("pg.kick.i1"), T("pg.kick.i2")], go: () => drawKick(false) });
-    items.push({ key: "gap", label: "", disabled: true });
-    items.push({ key: "back", label: T("back.lobby"), info: [T("on.leave")], go: () => leave(lobbyHref) });
-    // number keys 1..8 set the own team from every row but the Name / Say inputs (they type there)
-    if (player && me >= 0 && cfg.ext && !ready)
-      for (const it of items) if (!it.input && !it.digit) it.digit = n => setTeam(n - sl[me].team);
-    // the selection starts on "Start game" (else the Team row), never in the Name input
-    const firstKey = selKey || (items.some(it => it.key === "start" && !it.disabled) ? "start" : items.some(it => it.key === "team" && !it.disabled) ? "team" : null);
-    // the box on the left (it scrolls when the screen is short of rows), the chat to its right, the
-    // selected item's info below both (row 24 is the bottom rule)
-    const tableRows = Math.max(sl.length, sets.length);
-    const boxY = 4 + tableRows + (tableRows < 8 ? 1 : 0);
-    const rows = Math.max(3, Math.min(items.length, 21 - boxY));
-    chatForm.width = 1;                                    // (the box fits the other items first)
-    const boxW = DosUI.boxWidth(items), boxX = 2;
-    chatForm.width = Math.max(8, boxW - 1 - UniText.cols(T("pg.say")));   // the chat input fills its row (+ cursor)
-    const bottom = Math.min(22, Math.max(boxY + rows + 1, 20));   // (info on rows 22-23 below)
-    chatPanel(lines, text, boxX + boxW + 3, boxY, 79, bottom);
-    const spec = { lines, text, box: { x: boxX, y: boxY, rows, w: boxW }, items, infoRow: Math.min(bottom + 2, 23),
-      back: () => { if (isReady()) send({ t: "ready", v: 0 }); else leave(lobbyHref); } };   // Esc: unready, else out
-    if (firstKey) spec.sel = Math.max(0, items.findIndex(it => it.key === firstKey));
+    chatForm.width = 1;
+    const actW = Math.max(seatW, DosUI.boxWidth(acts));
+    chatForm.width = Math.max(8, actW - 3 - W(T("pg.say")));
+    chatPanel(lines, text, actW + 4, 12, 80, 21);
+    const boxes = [{ x: 1, y: 1, w: seatW, title, items: seats },
+      { x: 79 - setW, y: 1, w: setW, title: T("box.settings"), items: sets },
+      { x: 1, y: 12, w: actW, title: T("box.game"), items: acts }];
+    const all = [].concat(seats, sets, acts), enabled = it => !it.static && !it.disabled;
+    // the selection: given, else (the first time) Start / Ready, else the first open seat, else Say
+    let first = selKey;
+    if (!first) first = ["start", "ready"].find(k => all.some(it => it.key === k)) ||
+      (all.find(it => /^seat/.test(it.key) && enabled(it)) || { key: "say" }).key;
+    const spec = { lines, text, boxes, infoRow: 22, hint: T("create.hint"),
+      back: () => { if (isReady()) send({ t: "ready", v: 0 }); else leave(gamesHref); } };   // Esc: unready, else out
+    spec.sel = Math.max(0, all.findIndex(it => it.key === first));
     lobbyUI.show(spec, keep && !selKey);
     lobby.key = lobbyKey();
   }
@@ -450,6 +516,15 @@
     if (!out.length) out.push([]);
     return out;
   }
+  let copied = false, copiedTimer = null;
+  function copyLink(url) {
+    (navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject()).then(() => {
+      copied = true;
+      if (lobby && lobby.page === "lobby") drawLobby(true);
+      clearTimeout(copiedTimer);
+      copiedTimer = setTimeout(() => { copied = false; if (lobby && lobby.page === "lobby") drawLobby(true); }, 3000);
+    }, () => {});
+  }
   function sendChat() {
     if (chatForm.value.trim()) send({ t: "chat", text: chatForm.value });
     chatForm.value = "";
@@ -459,17 +534,24 @@
     const list = viewChoices();
     myView = list[(list.indexOf(viewChoice()) + d + list.length) % list.length];
     store.set("tunneler.view", myView);
-    if (me >= 0) views.setScope(me, viewChoice());
     drawLobby(true);
   }
   function disarm() { kickArm = null; clearTimeout(kickArmTimer); }
-  // The host's kick list: the other connected players (in their tank's colour) and the spectators;
-  // <ENTER> on one asks once more (4 s), a second <ENTER> removes them; <ESC> / Back: the lobby again
-  const kickKey = () => JSON.stringify([kickTargets(lobbySlots()).map(t => t.id + t.label), kickArm, Lang.code]);
+  // whom the host may remove: everybody else in the room (labels raw, for T's {name})
+  function kickTargets() {
+    if (!isHost() || !st) return [];
+    const out = [];
+    st.seats.forEach((s, i) => { if (s.k && s.k !== me.k && !s.host) out.push({ id: "k" + s.k, k: s.k, label: s.name, color: TEXT_COLORS[i] }); });
+    (st.specs || []).forEach(x => { if (x.k !== me.k && !x.host) out.push({ id: "k" + x.k, k: x.k, label: x.name || Lang.raw("pg.chat.spec"), color: 7 }); });
+    return out;
+  }
+  // The host's kick list: <ENTER> on one asks once more (4 s), a second <ENTER> removes them; <ESC> /
+  // Back: the lobby again
+  const kickKey = () => JSON.stringify([kickTargets().map(t => t.id + t.label), kickArm, Lang.code]);
   function drawKick(keep) {
-    const targets = kickTargets(lobbySlots());
+    const targets = kickTargets();
     const back = () => { disarm(); drawLobby(false, "kick"); };
-    if (!targets.length) return back();
+    if (!targets.length || (st && st.match)) return back();
     lobby.page = "kick";
     lobby.kickKey = kickKey();
     const items = targets.map(tg => ({ key: tg.id, label: T("pg.kick.who", { name: tg.label }), attr: tg.color,
@@ -481,7 +563,7 @@
           drawKick(true);
         } else {
           disarm();
-          send(tg.slot != null ? { t: "kick", slot: tg.slot } : { t: "kick", k: tg.k });
+          send({ t: "kick", k: tg.k });
           drawLobby(false, "kick");
         }
       } }));
@@ -491,27 +573,20 @@
       box: { y: 6 }, items, infoRow: 8 + items.length + 2, back,
     }, keep);
   }
-  function setTeam(d) {
-    const sl = lobbySlots();
-    if (!player || me < 0 || isReady() || !cfg.ext) return;
-    const t = ((sl[me].team - 1 + d) % 8 + 8) % 8 + 1;
-    sl[me].team = t;                                       // (shown at once; the server's status confirms it)
-    send({ t: "me", team: t });
-    drawLobby(true);
-  }
 
-  // the last match's statistics: drawn by a private engine (the DOS menu screen's code, with this match's
-  // numbers, teams and names copied in) - the title and a notice box on the left, the statistics right
+  // the last match's statistics: drawn by a private engine (the DOS menu screen's code, with that match's
+  // numbers, teams and names copied in), full screen
   function showStats() {
-    if (!lobby || !engine) return;
-    const opts = engineOptions(cfg);
-    opts.slots = engine.slots.map(s => ({ color: s.color, team: s.team }));
+    if (!lobby || !lastMatch) return;
+    const e = lastMatch.engine, opts = engineOptions(lastMatch.cfg);
+    opts.slots = e.slots.map(s => ({ color: s.color, team: s.team }));
+    delete opts.autoStart;
     const o = new TunnelerEngine(0, opts);
     Lang.apply(o);
-    o.setNames(engine.names);
-    markEngine(o);
+    o.setNames(e.names);
+    const keepCfg = cfg; cfg = lastMatch.cfg; markEngine(o, lastMatch.player); cfg = keepCfg;
     o.uiMode = "online";
-    for (const f of STATS) o[f] = Array.isArray(engine[f]) ? engine[f].slice() : engine[f];
+    for (const f of STATS) o[f] = Array.isArray(e[f]) ? e[f].slice() : e[f];
     if (!o.menuShift) o.menuShift = -20;
     o.textBackground(0);
     o.showStatsPage(T("page.back"));                  // (full screen, the prompt on the bottom line)
@@ -522,30 +597,32 @@
     lobbyUI.present(snap);
   }
 
-  const lobbyKey = () => JSON.stringify([lobbySlots(), status.specs ? status.specs.map(x => x.k) : status.spec, isReady(), isHost,
-    Lang.code, engine && engine.menuShift, roomName, chatSeq, myView]);
+  const lobbyKey = () => JSON.stringify([st, me, Lang.code, roomName, chatSeq, myView, !!lastMatch]);
   function openLobby() {
     lobby = { page: "lobby", key: "" };
     drawLobby(false);
-    if (engine && engine.menuShift !== 0 && statsShown !== matchNo) { statsShown = matchNo; showStats(); }   // after a match
   }
   function closeLobby() { lobby = null; menuSnap = null; disarm(); presentOverlay(); }
 
-  let lastScreen = "";
+  // the lobby shows between matches - and once the match is over for this page (its engine is back at
+  // the menu, or the server ended it and this page has run every frame it got)
+  // (the engine's menu after the match - menuShift set -, or the world map this viewer already closed)
+  const matchOver = () => !engine || (ended && !queue.length) ||
+    (!engine.kbdInstalled && ((engine.screen === "text" && engine.menuShift !== 0) || (engine.screen === "map" && !mapPending)));
   setInterval(() => {
-    if (engine && engine.screen !== lastScreen) { lastScreen = engine.screen; presentOverlay(); }   // e.g. left the map
-    const want = runner && atMenu() && !catching;
+    if (ended && !queue.length && engine) dropMatch();
+    const want = !!st && !catching && !asking && matchOver();
     if (want && !lobby) openLobby();
     else if (!want && lobby) closeLobby();
     else if (lobby && lobby.page === "lobby" && lobby.key !== lobbyKey()) drawLobby(true);
     else if (lobby && lobby.page === "kick" && lobby.kickKey !== kickKey()) drawKick(true);
-    // the own name goes to the server (a few times a second at most) and is remembered in this browser
-    if (player && ws && ws.readyState === 1 && nameForm.value !== sentName && performance.now() - sentAt > 300 && !isReady()) {
-      sentName = nameForm.value; sentAt = performance.now();
-      send({ t: "me", name: sentName });
-      store.set("tunneler.name", sentName);
-    }
+    // the statistics of a match that just ended: once, full screen, as soon as this viewer is past its
+    // world map (Back: the lobby)
+    if (lobby && lobby.page === "lobby" && lastMatch && statsShown !== lastMatch.no) { statsShown = lastMatch.no; showStats(); }
+    if (engine && engine.screen !== lastScreen) { lastScreen = engine.screen; presentOverlay(); }   // e.g. left the map
+    if (isPlayer() && runner && matchOver()) report();
   }, 100);
+  let lastScreen = "";
 
   // ------------------------------------------------------------ connection
   let ws = null, retry = 0, pingTimer = null, rtt = null, rttSent = -9, pongs = 0;
@@ -554,20 +631,20 @@
 
   function connect() {
     if (!roomId) { fatal = "No room given."; updateOverlay(); return; }
-    const have = seed === null ? 0 : frames + queue.length;
-    let url = Endpoint.ws("/ws?room=" + encodeURIComponent(roomId)) + "&role=" + role +
-      "&cid=" + encodeURIComponent(clientId);
-    const hostKey = roomId ? store.get("tunneler.host." + roomId) : null;   // (read now: it may have been handed over)
+    let url = Endpoint.ws("/ws?room=" + encodeURIComponent(roomId)) + "&cid=" + encodeURIComponent(clientId) +
+      "&name=" + encodeURIComponent(DosUI.playerName());
+    url += "&v=" + encodeURIComponent(window.TUNNELER_VERSION || "dev");   // (another version is refused; dev: not built)
+    if (wantRole === "spectate") url += "&role=watch";
+    else if (ROLES.includes(wantRole)) url += "&role=" + wantRole;
+    const hostKey = store.get("tunneler.host." + roomId);   // (read now: it may have been handed over)
     if (hostKey) url += "&host=" + encodeURIComponent(hostKey);
-    if (seed !== null) url += "&seed=" + seed + "&have=" + have;
+    if (engine && !ended) url += "&match=" + matchNo + "&have=" + (frames + queue.length);
     setConn(retry ? "conn.reconnecting" : "conn.connecting");
     ws = new WebSocket(url);
     ws.onopen = () => {
       retry = 0;
       setConn("conn.connected");
-      if (player) send({ t: "b", v: bits });
-      sentName = null;                                     // this browser's name (maybe none) goes to the server at once
-      if (!player && store.get("tunneler.name")) send({ t: "me", name: store.get("tunneler.name") });   // (a spectator's: shown with their chat)
+      bits = 0;
       rttSent = -9;
       ping();
     };
@@ -579,7 +656,6 @@
     ws.onclose = () => {
       ws = null;
       clearTimeout(pingTimer);
-      status.running = false;
       if (leaving) return;
       if (fatal) { setConn("conn.closed"); updateOverlay(); return; }
       const delay = Math.min(10000, 1000 * Math.pow(1.6, retry++));
@@ -594,16 +670,16 @@
     pingTimer = setTimeout(ping, 2000);
   }
 
-  // the room's settings from "hello" (checked)
-  function readCfg(c) {
-    c = c || {};
-    const slots = (Array.isArray(c.slots) ? c.slots : []).slice(0, ROLES.length).map((s, i) => ({
-      color: Math.max(0, Math.min(7, (s && s.color) | 0)), bot: !!(s && s.bot), level: s && s.level || null,
-      team: Math.max(1, Math.min(8, (s && s.team) | 0 || i + 1)) }));
-    if (slots.length < 2) return cfg;
-    return { ext: !!c.ext, players: slots.length, slots, size: c.size || "medium", winScore: c.winScore || 3, friendlyFire: !!c.friendlyFire,
-      roundTime: NetProto.roundTime(c.roundTime),
-      visible: VISIBLE.includes(c.visible) ? c.visible : "self", watchOut: NetProto.afterDeath(c.watchOut) };
+  // a match from "hello" / "match": resumed when it is the one this page runs and the frames fit
+  function takeMatch(m) {
+    if (!m || !Number.isInteger(m.no)) return;
+    if (!(engine && m.no === matchNo && m.from === frames + queue.length && m.from > 0)) {
+      if (engine && m.no !== matchNo) dropMatch();
+      if (m.from !== 0 || !newMatch(m)) { if (ws) ws.close(); return; }
+    } else player = Number.isInteger(m.you) ? m.you : player;
+    queue.pushEntries(m.f || []);
+    if (queue.length > 3) catching = true;
+    else nextAt = performance.now();
   }
 
   function handle(m) {
@@ -611,23 +687,21 @@
       case "hello": {
         roomName = m.name;
         document.title = "Tunneler - " + m.name;
-        const you = m.you || {};
-        isHost = !!you.host; myK = you.k | 0;
-        const received = seed === null ? 0 : frames + queue.length;
-        if (seed !== m.seed || created !== m.created || m.from !== received || m.from === 0) {
-          cfg = readCfg(m.cfg);
-          me = player ? (you.slot >= 0 ? you.slot | 0 : cfg.slots.findIndex(s => s.color === myColor)) : -1;
-          status = { blue: false, green: false, spec: 0, running: false, n: 0 };
-          newGame(m.seed, m.created);
-        }
-        queue.pushEntries(m.f);
-        if (queue.length > 3) catching = true;
-        else nextAt = performance.now();
-        status.n = m.n;
+        me = { k: m.you ? m.you.k | 0 : 0, host: !!(m.you && m.you.host), name: m.you && m.you.name || "" };
         if (Array.isArray(m.chat)) { chat = m.chat.slice(-50); chatSeq++; }
+        if (m.match) takeMatch(m.match);
+        else if (engine && !ended) ended = true;           // (the match ended while this page was away)
         updateOverlay();
         break;
       }
+      case "match":                                        // a match starts
+        lastReport = "";
+        takeMatch(m);
+        updateOverlay();
+        break;
+      case "end":
+        if (engine && m.no === matchNo) ended = true;
+        break;
       case "chat":                                         // a lobby chat message (not part of the game)
         if (typeof m.text !== "string" || !m.from) break;
         chat.push({ from: m.from, text: m.text });
@@ -635,17 +709,20 @@
         chatSeq++;
         break;
       case "f":
+        if (!engine || m.m !== matchNo) break;
         if (m.n !== frames + queue.length) { if (ws) ws.close(); return; }   // gap: reconnect resumes
         queue.pushEntries(m.f);
         break;
       case "st":
-        status = m;
+        st = m;
+        roomName = m.name || roomName;
+        if (isHost() && !m.match) rememberSettings();
         renderBar();
         updateOverlay();
         break;
-      case "host":                                   // the host left: this page hosts the room now
+      case "host":                                         // the host left: this page hosts the room now
         if (typeof m.key === "string" && roomId) store.set("tunneler.host." + roomId, m.key);
-        isHost = true;
+        me.host = true;
         if (lobby && lobby.page === "lobby") drawLobby(true);
         break;
       case "pong":
@@ -662,7 +739,10 @@
         }
         break;
       case "err":
-        fatal = m.code === "kicked" ? T("pg.kicked") : m.code === "idle" ? T("on.idle") : Lang.enc(String(m.msg));
+        fatal = m.code === "kicked" ? T("pg.kicked") : m.code === "idle" ? T("on.idle") : m.code === "full" ? T("on.full")
+          : m.code === "busy" ? T("on.busy") : m.code === "noroom" ? T("room.notfound")
+          : m.code === "version" ? T("ver.server", { server: String(m.version), you: window.TUNNELER_VERSION || "?" }) : Lang.enc(String(m.msg));
+        if (m.code === "version") fatal2 = T("ver.update");
         updateOverlay();
         break;
     }
@@ -681,7 +761,7 @@
   const statusLine = new StatusLine($("status"), canvas, statusColumns);
   let lastLayout = "";
   setInterval(() => {                                      // the canvas changed shape: redraw the bar
-    const k = statusColumns() + (player ? "" : views.mode + views.follow);
+    const k = statusColumns() + (isPlayer() ? "" : views.mode + views.follow);
     if (k !== lastLayout) { lastLayout = k; renderBar(); }
   }, 100);
   // only what the screen doesn't show already: a spectator's view and the keys that switch it, a lost
@@ -693,12 +773,12 @@
   function renderBar() {
     if (!statusLine) return;
     const rows = [];
-    if (!player) {
+    if (engine && player < 0) {
       // spectator: the view shown and the keys that switch it. One view is only 40 columns wide: then
       // just the followed tank's name, and the hints drop out from the right when they don't fit.
       const follow = views.mode === "follow", narrow = statusColumns() < 80;
       const label = { text: follow && narrow ? views.playerName(views.follow) : views.label(),
-        attr: follow ? TEXT_COLORS[colorOf(views.follow)] : 0x0F, prio: 0 };
+        attr: follow ? TEXT_COLORS[cfg.slots[views.follow] ? cfg.slots[views.follow].color : 0] : 0x0F, prio: 0 };
       rows.push([label, follow ? { text: T("vw.hint2"), attr: 0x08, prio: 1 } : null,
         { text: T("vw.hint"), attr: 0x08, prio: 2 }]);
     }
@@ -709,42 +789,43 @@
     if (rows.length) statusLine.set(rows);
   }
   // no status line on the end-of-match world map ("PRESS ANY KEY"); a spectator gets it only during
-  // play - not on the lobby / waiting screens between matches (docs/DESIGN-8P.md 9)
+  // play - not on the lobby / waiting screens (docs/DESIGN-8P.md 9)
   setInterval(() => {
     const screen = views.snap ? views.snap.screen : "";
-    const shown = barRows > 0 && (player ? screen !== "map" : screen === "play" && !msgSnap && !lobby);
+    const shown = barRows > 0 && !lobby && !msgSnap && (isPlayer() ? screen !== "map" : screen === "play");
     $("status").style.display = shown ? "" : "none";       // (style.css's display: block beats [hidden])
   }, 100);
 
   // Connecting / paused / catching up / errors: a DOS screen in the game's menu style (dosui.js) shown
-  // over the game, with "Back to the lobby". (Waiting for players at the menu is the lobby itself.)
+  // over the game, with "Back to the list of games".
   function updateOverlay() {
+    if (asking) return;
     let msg = null;
-    if (fatal) msg = [{ text: fatal, color: 12 }];
-    else if (!ws || ws.readyState !== 1) msg = [T("on.connecting")];
+    if (fatal) msg = [{ text: fatal, color: 12 }, ...(fatal2 ? [{ text: fatal2, color: 3 }] : [])];
+    else if (!ws || ws.readyState !== 1 || !st) msg = [T("on.connecting")];
     else if (catching) msg = [T("on.catching"), frames + " / " + (frames + queue.length)];
-    else if (!status.running && !atMenu()) {
-      if (cfg.ext) {                                       // (the clock never pauses once it ran)
-        const missing = humanSlots().filter(i => !(status.conn && status.conn[i])).map(rawName);
-        msg = [T("on.waitothers"), { text: Lang.enc(missing.join(", ")), color: 7 }];
-      } else {
-        const missing = [0, 1].filter(i => !status[ROLES[i]]).map(rawName);
-        msg = [T("on.paused"), T("on.waitre", { names: missing.join(Lang.raw("on.and")) || Lang.raw("on.players") })];
-      }
+    else if (engine && !ended && st.match && !st.match.running && !matchOver()) {   // (a classic match: one player is away)
+      const missing = cfg.slots.map((s, i) => st.match.conn[i] ? null : cfg.names[i] || NAME(ROLES[s.color])).filter(Boolean);
+      msg = [T("on.paused"), T("on.waitre", { names: missing.join(Lang.raw("on.and")) || Lang.raw("on.players") })];
     }
     if (!msg) {
       if (msgSnap) { msgSnap = null; presentOverlay(); }
       return;
     }
-    const items = [{ key: "lobby", label: T("back.lobby"), info: [T("on.leave")], go: () => leave(lobbyHref) }];
-    const you = player ? { text: T("on.youplay", { name: me >= 0 ? rawName(me) : NAME(role) }), color: TEXT_COLORS[myColor] } : { text: T("on.spectator"), color: 7 };
+    const items = [{ key: "lobby", label: T("back.lobby"), info: [T("back.lobby.i")], go: () => leave(gamesHref) }];
+    const you = isPlayer() ? { text: T("on.youplay", { name: me.name || DosUI.playerName() }), color: TEXT_COLORS[cfg.slots[player].color] }
+      : { text: Lang.enc(me.name || DosUI.playerName()), color: 7 };
     dos.show({
       lines: [{ row: 2, text: T("room.title"), color: 12 }, { row: 4, text: Lang.enc(roomName || roomId), color: 15 }, { row: 5, ...you },
         ...msg.map((m, k) => ({ row: 9 + k, ...(typeof m === "string" ? { text: m, color: 14 } : m) }))],
-      box: { y: 13 }, infoRow: 19, items, back: () => leave(lobbyHref),
+      box: { y: 13 }, infoRow: 19, items, back: () => leave(gamesHref),
     }, !!msgSnap);
   }
 
-
-  connect();
+  // a name first (online play needs one)
+  if (DosUI.playerName()) connect();
+  else {
+    asking = true;
+    dos.askName(() => { asking = false; msgSnap = null; presentOverlay(); updateOverlay(); connect(); }, () => leave("/"));
+  }
 })();

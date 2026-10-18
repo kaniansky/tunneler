@@ -187,6 +187,17 @@ function play(search) {
     }
     ok("number keys and the numeric keypad (2/4/6/8 too) set a slot's team");
   }
+  // friendly fire: always listed, grayed out (not selectable) while no team has 2+ tanks
+  {
+    const st = new Map(), en = makeEnv("", st);
+    en.page("index.html"); en.key("ArrowDown"); en.key("Enter");
+    const ui = en.win.tunnelerHomeUI(), ff = () => ui.spec.items.find(it => it.key === "ff");
+    assert(ff() && ff().disabled, "the classic game: Friendly fire shown, grayed out");
+    ui.sel = ui.spec.items.findIndex(it => it.key === "slot2"); ui.draw();
+    en.key("ArrowRight"); en.key("Digit1");                  // CYAN: a computer tank in team 1 (with you)
+    assert(ff() && !ff().disabled, "a team of 2: Friendly fire selectable");
+    ok("vs computer: Friendly fire always listed, grayed out without a team of 2+");
+  }
   // mouse on the slot rows (DosUI zones): a click on the who column / the team cycles it forward, a
   // right click backward, a click elsewhere on the row only selects it
   {
@@ -210,8 +221,8 @@ function play(search) {
     ui.click(at("slot2", zone("slot2", 0)));
     assert.strictEqual(saved()[2].kind, "normal", "CYAN: nobody -> normal (shown as easy; not \"you\": BLUE is yours)");
     const before = st.get("tunneler.cpu.slots");
-    ui.click(at("slot3", 1));                               // the color name: selects only
-    assert.strictEqual(ui.spec.items[ui.sel].key, "slot3", "a click on the name selects the row");
+    ui.click(at("slot3", ui.spec.items.find(it => it.key === "slot3").zones[1].to + 1));   // past the team: selects only
+    assert.strictEqual(ui.spec.items[ui.sel].key, "slot3", "a click past the team selects the row");
     assert.strictEqual(st.get("tunneler.cpu.slots"), before, "... and changes nothing");
     ok("vs computer slot rows: clicks on the who / team columns cycle them (right click back), elsewhere select");
   }

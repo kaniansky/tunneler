@@ -15,9 +15,9 @@ const check = (name, f) => { f(); console.log("  ok  " + name); };
   await new Promise(r => srv.server.listen(0, r));
   const port = srv.server.address().port;
   const post = async name => (await (await fetch(`http://127.0.0.1:${port}/api/rooms`, { method: "POST",
-    headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name }) })).json()).id;
+    headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, version: "dev" }) })).json()).id;
   const open = (id, role) => new Promise(res => {
-    const ws = new WebSocket(`ws://127.0.0.1:${port}/ws?room=${id}&role=${role}&cid=c${Math.random().toString(36).slice(2)}`);
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/ws?room=${id}&role=${role}&cid=c${Math.random().toString(36).slice(2)}&v=dev`);
     ws.msgs = []; ws.on("message", d => ws.msgs.push(JSON.parse(d)));
     ws.on("open", () => res(ws));
   });

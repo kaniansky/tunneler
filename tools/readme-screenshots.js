@@ -12,9 +12,9 @@ const CHROME = process.env.CHROME || (() => {
 })();
 const PORT = process.argv[2], OUT = process.argv[3], B = 'http://localhost:' + PORT;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-const api = async (body) => (await fetch(B + '/api/rooms', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })).json();
+const api = async (body) => (await fetch(B + '/api/rooms', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.assign({ version: require('../package.json').version }, body)) })).json();
 const S = (kind, team) => ({ kind, team });
-const fill = a => { while (a.length < 8) a.push(S('none', a.length + 1)); return a; };
+const fill = a => { while (a.length < 8) a.push(S('closed', a.length + 1)); return a; };
 (async () => {
   const b = await chromium.launch({ args: ['--disable-gpu', '--use-angle=swiftshader', '--use-gl=angle', '--disable-gpu-compositing'], executablePath: CHROME });
   const errs = [];
@@ -41,30 +41,30 @@ const fill = a => { while (a.length < 8) a.push(S('none', a.length + 1)); return
     await sleep(300); await shot(p, 'split-screen.png'); await p.close();
     // public games for the list
     const main = await api({ name: 'Friday night', public: true, spectators: true, size: 'medium', winScore: 3, roundTime: 3, friendlyFire: false,
-      visible: 'team', watchOut: 'others', slots: fill([S('human', 1), S('human', 2), S('human', 1), S('hard', 2)]) });
-    await api({ name: 'Duel at dawn', public: true, spectators: true, slots: fill([S('human', 1), S('human', 2)]) });
-    await api({ name: 'Team rumble', public: true, spectators: true, size: 'large', winScore: 5, slots: fill([S('human', 1), S('expert', 2), S('human', 1), S('expert', 2), S('human', 1), S('expert', 2), S('human', 1), S('expert', 2)]) });
-    await api({ name: 'Żółw vs 王小明', public: true, spectators: false, size: 'small', slots: fill([S('human', 1), S('human', 2), S('easy', 3)]) });
-    p = await page({ 'tunneler.online': JSON.stringify({ size: 'medium', winScore: 3, roundTime: 3, friendlyFire: false, visible: 'team', watchOut: 'others',
-      slots: fill([S('human', 1), S('human', 2), S('human', 1), S('hard', 2)]) }) }, '/lobby.html'); await sleep(1200); await shot(p, 'lobby.png');
+      visible: 'team', watchOut: 'others', seats: fill([S('open', 1), S('open', 2), S('open', 1), S('hard', 2)]) });
+    await api({ name: 'Duel at dawn', public: true, spectators: true, seats: fill([S('open', 1), S('open', 2)]) });
+    await api({ name: 'Team rumble', public: true, spectators: true, size: 'large', winScore: 5, seats: fill([S('open', 1), S('expert', 2), S('open', 1), S('expert', 2), S('open', 1), S('expert', 2), S('open', 1), S('expert', 2)]) });
+    await api({ name: 'Żółw vs 王小明', public: true, spectators: false, size: 'small', seats: fill([S('open', 1), S('open', 2), S('normal', 3)]) });
+    p = await page({ 'tunneler.name': 'Norko' }, '/games'); await sleep(1200); await shot(p, 'lobby.png');
     // the create screen
     await p.evaluate(() => { const u = tunnelerLobbyUI(); u.sel = u.spec.items.findIndex(i => /create/i.test(i.key || '') || /Create/.test(i.label || '')); u.draw(); });
     await p.keyboard.press('Enter'); await sleep(300);
     await p.keyboard.type('Friday night'); await sleep(200);
-    await p.evaluate(() => { const u = tunnelerLobbyUI(); u.sel = u.spec.items.findIndex(i => i.key === 'slot3'); u.draw(); });
     await shot(p, 'create.png'); await p.close();
     // the online game: Norko (BLUE, host) + Petr (CYAN) against Zuzka (GREEN) + a hard computer tank (YELLOW)
-    const id = main.id, url = r => '/online.html?room=' + id + '&role=' + r;
+    const id = main.id, url = r => '/game/' + id + '/' + r;
     const blue = await page({ ['tunneler.host.' + id]: main.hostKey, 'tunneler.name': 'Norko', 'tunneler.view': 'team', 'tunneler.ping': '1' }, url('blue'));
+    await sleep(500);
     const green = await page({ 'tunneler.name': 'Zuzka' }, url('green'));
+    await sleep(500);
     const cyan = await page({ 'tunneler.name': 'Petr' }, url('cyan'));
-    const spec = await page({ 'tunneler.name': 'Kiko' }, url('spectate'));
+    const spec = await page({ 'tunneler.name': 'Kiko' }, url('watch'));
     await sleep(2500);
     for (const [pg, msg] of [[green, 'gl hf!'], [cyan, 'Привет! 👋 ready when you are']]) {
       await pg.evaluate(() => { const u = tunnelerLobbyUI(); u.sel = u.spec.items.findIndex(i => i.key === 'say'); u.draw(); });
       await pg.evaluate(m => { for (const ch of m) window.dispatchEvent(new KeyboardEvent('keydown', { key: ch, code: 'KeyQ', bubbles: true })); }, msg);
       await pg.keyboard.press('Enter'); await sleep(300);
-      await pg.evaluate(() => { const u = tunnelerLobbyUI(); u.sel = u.spec.items.findIndex(i => i.key === 'start'); u.draw(); });
+      await pg.evaluate(() => { const u = tunnelerLobbyUI(); u.sel = u.spec.items.findIndex(i => i.key === 'ready'); u.draw(); });
       await pg.keyboard.press('Enter'); await sleep(500);
     }
     await blue.evaluate(() => { const u = tunnelerLobbyUI(); u.sel = u.spec.items.findIndex(i => i.key === 'start'); u.draw(); });

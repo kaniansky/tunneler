@@ -381,3 +381,64 @@ generated list) so no page or script tag has to change. Node tests load every fi
   columns in every language.
 - Pre-game lobby: the selection starts on "Start game" (not in the Name input); number keys 1..8 set the
   own team from any row but the Name / Say inputs; classic rooms (BLUE against GREEN) show no TEAM column.
+
+## 26. Room lobby with seats (owner, 2026-10-18) - implemented; supersedes 15 (online part), 18, 19 (start / kick details)
+
+The online lobby is reworked: a room is a lobby with 8 **seats** (one per tank color), and every match is
+started from it by the host.
+1. **A name first**: online play needs a player name - asked once before the list of games (or on an
+   invite link) and changeable on the homepage Settings screen ("Name"); localStorage `tunneler.name`.
+   It goes with the websocket URL (`&name=`); the server cleans it (max 12 columns) and makes it unique
+   in the room ("Norko 2"). No Name input in the room lobby any more.
+2. **Creating** a game asks only for its name, "List publicly" and "Allow spectators"; the creator lands
+   straight in the room lobby as its host. Everything else is set there. Defaults: the host's last
+   settings (`tunneler.online`), else BLUE + GREEN open, the rest closed, team = seat number.
+3. **Seats** (= colors, BLUE..TEAL): `open` (anybody may sit there, nobody has to), `closed` (nobody may),
+   or a computer tank (easy / medium / hard). An occupied seat is an open one with a player on it. A
+   player picks their color by moving to another open seat, picks their team (Left / Right, 1-8), and may
+   stand up and spectate (if the room allows spectators). Joining a room (link or list) takes the seat
+   this browser had before if it is still free, else the first open one, else spectates; "Watch" in the
+   list / `/game/<id>/watch` spectates.
+4. **During a match** the seats are locked: only the match's players (by client id) play - a reload or
+   reconnect gets their tank back; everybody else can only spectate (or is turned away when the room
+   allows no spectators). Afterwards everybody is back in the lobby.
+5. **The host** (the creator, handed over when they leave) changes the settings in the lobby: map size,
+   rounds to win, round time, friendly fire, view limit, after death, public, spectators. Any change of
+   the settings or of a seat makes every player unready.
+6. The host sets each seat: open / closed / computer easy / medium / hard (Left / Right on its row; not
+   an occupied one), its team (1-8 on a computer / free seat), and kicks players or spectators (kick =
+   ban by client id, as before).
+7. **Start**: the host's "Start game" - needs every seated player (but the host) ready, at least 2 tanks
+   (players + computer tanks) and 2 teams. **Open seats nobody took get no tank**; closed ones neither.
+   The others choose "I am ready!" / "Not ready yet!".
+
+Protocol: every match is its own game - new seed, its own frame log from 0, an engine built from the
+match's config (`autoStart`: no menu, straight to the world) with teams and names fixed at its start (no
+config frames any more). Classic match (BLUE + GREEN, both human, different teams) = the classic frame
+format and engine, paused while one of them is away; any other = extended (never pauses). The match ends
+when most of its connected players report they left the world map (or when none of them has been
+connected for a minute).
+
+Refinements (owner, 2026-10-18):
+- Seat rows have three columns in the seat's color: who (a player's name / "open" / "closed" / "AI (easy
+  | medium | hard)"), the team, the ping; "√" in front of a ready player (else "►" in front of your own
+  seat); no host marker, no state column. A left click on a free open seat sits there (the host too); the
+  host changes a seat nobody sits on with a right click anywhere on its row (open -> closed -> AI easy ->
+  medium -> hard -> open; a left click on a closed / AI seat too), a click on the team the team.
+- Layout: seats top left, settings top right, the actions bottom left, the chat bottom right.
+- After a match each viewer gets its statistics as soon as they close the world map (Back: the lobby);
+  they don't pop up again when the match ends for everybody.
+- No awards on any statistics screen (the list of rounds stays).
+- Games of another version can't be joined or created (owner): the server knows its version, the page
+  sends its own; a mismatch is refused and the page names both versions (update the game or choose
+  another server in Settings).
+- "Join by link" on the list of games (owner): paste an invite link (or a game's id) to join that
+  game - also one on another server (the desktop app switches to it).
+- The list of games marks the games this browser hosts ("you host", first) and lists its private ones
+  too (owner).
+- The list of games has the columns NAME, PLAYERS (seated / seats they can take; during a match:
+  connected / its players), AI, WATCHING, STATE (owner).
+- Vs computer uses the online lobby's boxes without the chat, centred: slots (no color names, "►" in
+  front of yours) and settings side by side, Start / Back centred below them (owner).
+- Friendly fire is always listed (vs computer, the online lobby), grayed out while no team can have 2+
+  tanks (owner).

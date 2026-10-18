@@ -31,16 +31,16 @@ All menus, the lobby and the status lines use the same DOS text screen.
 - **Split screen** - two players on one keyboard, like the original.
 - **Vs computer** - you (in any color) against 1 to 7 computer tanks (easy, medium or hard),
   every tank for itself or in teams. See your own screen, your team's screens or everybody's.
-- **Online game** - create a game in the lobby (public or private, with or without spectators), send
-  the invite link (`/game/<name>`), and play with 2 to 8 tanks from several computers; any slot can be
-  a computer tank. Addresses: `/games` (the list), `/game/<name>/<color>` (playing), `/game/<name>/watch`
-  (spectating), `/split`, `/vs-computer`.
+- **Online game** - create a game (public or private, with or without spectators), send the invite
+  link (`/game/<name>`), and play with 2 to 8 tanks from several computers; any seat can be an AI tank.
+  Addresses: `/games` (the list), `/game/<name>` (the game's lobby), `/game/<name>/watch` (spectating),
+  `/split`, `/vs-computer`.
 
 Settings (split screen: map size, rounds to win and round time only):
 
 - **Slots and teams** - 8 slots (BLUE, GREEN, CYAN, YELLOW, WHITE, PINK, VIOLET, TEAL), each nobody,
-  human or a computer tank, each with a team number 1-8: all different = free-for-all, shared numbers =
-  teams of any size (4 v 4, 2 v 2 v 2 v 2, 3 v 5, ...).
+  human or a computer tank (online: open, closed or AI), each with a team number 1-8: all different =
+  free-for-all, shared numbers = teams of any size (4 v 4, 2 v 2 v 2 v 2, 3 v 5, ...).
 - **Map size** - small (512x256), medium (1024x512, the original) or large (2048x1024).
 - **Rounds to win** - 1 to 9 (the original: 3).
 - **Round time limit** - off, 2, 3, 5 or 10 minutes. When the time is up, the side that hit enemy tanks
@@ -52,25 +52,32 @@ Settings (split screen: map size, rounds to win and round time only):
   its killer, ...) or every tank still alive; nobody left to watch - black. Except with "my wreck", a
   destroyed teammate's view goes black too.
 
-The homepage's **Settings** screen holds the language, the **sound** - muted, original (the PC speaker),
+The homepage's **Settings** screen holds your name for online games, the language, the **sound** - muted, original (the PC speaker),
 realistic or cartoony (a sample plays when you change it) - and **Show ping** (your round-trip time as
 a small number on the game's border online). Sounds of other tanks fade with their distance from the
 tank you watch and come from their side, in stereo (split screen: left near BLUE, right near GREEN).
 
-| Create a game | Pre-game lobby: names, teams, ping, chat |
+| Create a game | The game's lobby: seats, teams, settings, chat |
 |---|---|
 | ![Create a game](screenshots/create.png) | ![Pre-game lobby](screenshots/online-lobby.png) |
 
 ### Online
 
-After joining a slot, every player is in the **pre-game lobby**: the list of all tanks with their
-names, teams, state (ready, not ready, computer, free, disconnected) and ping, the game's settings, and
-a chat for players and spectators (any alphabet). Each player sets their name and team and chooses
-**I am ready!**; the game starts when every player is ready and there are at least two teams. The
-creator of the game is its **host** (when the host leaves, the next player takes over): once ready, the host can **Start now** without waiting for players
-who haven't joined or aren't ready (their tanks stand still until they join), and **Kick a player...**
-opens the list of players and spectators to remove (who then can't come back). Between matches everyone
-returns to the lobby, with the statistics of the last match.
+Online play needs a name - asked the first time, changed any time on the Settings screen. Every game
+has a **lobby** with 8 seats, one per color, each row in its color: a player's name (a √ in front once
+ready), **open**, **closed** or **AI** (easy, medium, hard), the team and the ping. Joining a game takes
+a free open seat (else you watch); sit on another open seat to play that color, change your team with
+Left / Right, 1-8 or a click, chat with players and spectators (any alphabet), choose **I am ready!**
+or **Watch instead**. The creator of the game is its **host** (when the host leaves, the next player
+takes over): they set every free seat open, closed or AI (Left / Right or a right click) and its team, change
+the game's settings, **Kick a player...** (who then can't come back) and **Start game** once everybody
+seated is ready. Open seats nobody took get no tank. During a match only its players play - whoever
+joins then watches; afterwards everyone is back in the lobby, with the statistics of the last match.
+Games you host are marked "you host" at the top of the list (your private ones too).
+A private game is joined with its invite link: open it, or paste it into **Join by link** on the
+list of games (the desktop app then also switches to that link's server). Only the same version of the
+game plays together: a page or desktop app of another version than the
+server's can't join or create games there (it says which versions differ).
 
 During play each player sees only their own view screen - or their team's or everybody's, as far as the
 game's view limit allows. A disconnected player's tank stands still and the game goes on;
@@ -192,9 +199,9 @@ automatically when the page is served over HTTPS.
   unused font slots, and names and chat in the lobby are drawn in any alphabet.
 - `src/js/ai.js` - the computer tanks: deterministic, so every browser runs the same ones.
 - `server.js`, `src/js/netproto.js`, `src/js/online.js` - online play: the server runs the game clock and
-  broadcasts every player's keys each tick (plus the names and teams from the lobby when a match
-  starts); every browser runs the same engine and computer tanks (lockstep), so only key presses travel
-  over the network.
+  broadcasts every player's keys each tick; every match is its own game (new seed, the lobby's tanks,
+  names and settings); every browser runs the same engine and computer tanks (lockstep), so only key
+  presses travel over the network.
 
 More detail for contributors in [CONTRIBUTING.md](CONTRIBUTING.md) and [CLAUDE.md](CLAUDE.md).
 

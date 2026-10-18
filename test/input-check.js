@@ -36,7 +36,7 @@ function mkEl(tag) {
 }
 // a window with the page scripts' globals, gamepads = what navigator.getGamepads() returns
 function makeEnv(search, opts = {}) {
-  const listeners = {}, elements = {}, ls = new Map();
+  const listeners = {}, elements = {}, ls = new Map([["tunneler.name", "Pad"]]);   // (online play needs a name)
   const gamepads = [];
   const body = mkEl("body");
   const document = { title: "", body, getElementById: id => elements[id] || (elements[id] = mkEl("canvas")), createElement: mkEl,
@@ -246,12 +246,16 @@ const SC = { W: 0x11, A: 0x1E, X: 0x2D, D: 0x20, BLUEFIRE: 0x1D, GREENFIRE: 0x1C
 
   // ------------------------------------------------------------ online.html: a gamepad -> held bits, lobby keys
   {
-    const env = makeEnv("?room=test&role=blue", { raf: true, timers: true });
+    const env = makeEnv("?room=test", { raf: true, timers: true });
     env.page("online.html");
     await wait(20);
     const ws = env.sockets[0];
-    ws.recv({ t: "hello", id: "test", name: "Test", role: "blue", seed: 1234, created: 1, n: 500, from: 0, f: [[0, 0, 5], [0, 0, 1, [[0, 0, 0x3B]]], [0, 0, 494]] });
-    ws.recv({ t: "st", blue: true, green: true, spec: 0, running: true, n: 500 });
+    ws.recv({ t: "hello", id: "test", name: "Test", created: 1, you: { k: 1, host: false, name: "Pad" }, chat: [],
+      match: { no: 1, seed: 1234, cfg: { ext: false, players: 2, slots: [{ color: 0, team: 1 }, { color: 1, team: 2 }], names: ["Pad", "B"] },
+        you: 0, n: 500, from: 0, f: [[0, 0, 500]] } });
+    ws.recv({ t: "st", name: "Test", public: true, spectators: true, settings: { size: "medium", winScore: 3, friendlyFire: false, roundTime: 0, visible: "self", watchOut: "wreck" },
+      seats: [0, 1, 2, 3, 4, 5, 6, 7].map(i => ({ kind: i < 2 ? "open" : "closed", team: i + 1, k: i < 2 ? i + 1 : null, name: i ? "B" : "Pad", ready: false, host: !i, ping: null })),
+      specs: [], cant: "match", match: { no: 1, running: true, conn: [true, true], names: ["Pad", "B"] } });
     await wait(400);
     assert.strictEqual(env.win.tunnelerEngine().screen, "play", "in play");
     env.gamepads[0] = pad(0, [7], [0.9, -0.9, 0, 0]);             // up-right + right trigger
@@ -269,31 +273,30 @@ const SC = { W: 0x11, A: 0x1E, X: 0x2D, D: 0x20, BLUEFIRE: 0x1D, GREENFIRE: 0x1C
   }
   {
     // the pre-game lobby (DosUI): d-pad moves the selection
-    const env = makeEnv("?room=lob&role=cyan", { raf: true, timers: true });
+    const env = makeEnv("?room=lob", { raf: true, timers: true });
     env.page("online.html");
     await wait(20);
     const ws = env.sockets[0];
-    const slots = [{ color: 0, bot: false, level: null, team: 1 }, { color: 2, bot: false, level: null, team: 2 }];
-    ws.recv({ t: "hello", id: "lob", name: "Lobby", role: "cyan", seed: 99, created: 1, n: 3, from: 0, f: [[[0, 0], 3]],
-      cfg: { ext: true, players: 2, slots, size: "small", winScore: 2, friendlyFire: false }, you: { slot: 1, host: false, k: 2 } });
-    ws.recv({ t: "st", running: true, n: 3, spec: 0, conn: [true, true], ready: [false, false],
-      slots: slots.map((s, i) => ({ color: s.color, kind: "human", level: null, name: "", team: s.team, ready: false, connected: true, joined: true, ping: 20, host: false })), specs: [] });
+    ws.recv({ t: "hello", id: "lob", name: "Lobby", created: 1, you: { k: 2, host: false, name: "Pad" }, chat: [], match: null });
+    ws.recv({ t: "st", name: "Lobby", public: true, spectators: true, settings: { size: "small", winScore: 2, friendlyFire: false, roundTime: 0, visible: "self", watchOut: "wreck" },
+      seats: [0, 1, 2, 3, 4, 5, 6, 7].map(i => ({ kind: i < 2 ? "open" : "closed", team: i + 1, k: i < 2 ? i + 1 : null, name: i ? "Pad" : "A",
+        ready: false, host: i === 0, ping: i < 2 ? 20 : null })), specs: [], cant: "ready", match: null });
     await wait(300);
     const lui = env.win.tunnelerLobbyUI();
     const key = () => lui.spec.items[lui.sel].key;
-    assert.strictEqual(key(), "start");
+    assert.strictEqual(key(), "ready");
     env.gamepads[0] = pad(0, [12]); await wait(60);                 // d-pad up
     env.gamepads[0] = pad(0); await wait(200);
     assert.notStrictEqual(key(), "start", "d-pad up moved the selection: " + key());
     env.gamepads[0] = pad(0, [13]); await wait(60);
     env.gamepads[0] = pad(0); await wait(200);
-    assert.strictEqual(key(), "start");
+    assert.strictEqual(key(), "ready");
     env.gamepads[0] = pad(0, [0]); await wait(60);                  // A = Enter: ready
     env.gamepads[0] = pad(0); await wait(200);
     assert(ws.sent.some(m => m.t === "ready" && m.v === 1), "A = Enter: ready sent");
     assert(!ws.sent.some(m => m.t === "b" && m.v), "no held bits in the lobby");
     env.gamepads.length = 0;
-    ok("online pre-game lobby (DosUI): d-pad moves, A selects, no held bits");
+    ok("online room lobby (DosUI): d-pad moves, A selects, no held bits");
   }
 
   console.log(n + " input checks passed");

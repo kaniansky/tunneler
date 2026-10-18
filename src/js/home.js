@@ -112,12 +112,18 @@
   const serverForm = { value: window.Endpoint ? Endpoint.get() : "", max: 120, width: 36,
     placeholder: window.Endpoint ? Endpoint.DEFAULT.replace(/^https:\/\//, "") : "" };
   const saveServer = () => { serverForm.value = Endpoint.set(serverForm.value); };
+  // the player's name for online games (DosUI.playerName, "tunneler.name"), stored on Enter and when leaving
+  const nameForm = { value: DosUI.playerName(), max: DosUI.NAME_MAX, width: DosUI.NAME_MAX };
+  const saveName = () => { nameForm.value = DosUI.setPlayerName(nameForm.value); };
   function settings(keep) {
-    const leave = () => { if (window.Endpoint && Endpoint.isApp) saveServer(); main(6); };
+    const leave = () => { saveName(); if (window.Endpoint && Endpoint.isApp) saveServer(); main(6); };
     ui.show({
-      lines: screenTitle("set.title"), box: { y: 11 }, sel: 0, infoRow: 20,
+      lines: screenTitle("set.title"), box: { y: 10 }, sel: 1, infoRow: 20,
       back: leave,
       items: [
+        { key: "name", label: T("set.name"), input: nameForm, align: "left", info: [T("set.name.i1"), T("set.name.i2")],
+          go: () => { saveName(); settings(true); } },
+        { key: "gap0", label: "", disabled: true },
         { key: "lang", label: T("home.lang") + Lang.name(Lang.code), info: [T("home.lang.i1"), T("home.lang.i2")],
           go: () => setLang(1), change: setLang },
         { key: "sound", label: T("set.sound") + T("sound." + soundStyle()), info: [T("sound.i1"), T("sound.i2")],
@@ -188,11 +194,9 @@
       location.href = Links.cpu("slots=" + encodeURIComponent(list) + "&size=" + cpuSize + "&win=" + cpuWin +
         "&ff=" + (ff && S.teamGame ? 1 : 0) + "&view=" + view + "&watch=" + watchOut + timeArg(cpuTime));
     };
-    // slot rows: "BLUE      you                team 1", the name and who columns padded to the longest
-    // text in this language, each row in its tank's color
-    const names = COLORS.map(c => Lang.enc(Lang.raw(c)));
+    // slot rows: "you                team 1", the who column padded to the longest text in this language,
+    // each row in its tank's color (which is all that tells the colors apart - no color name)
     const who = k => k === "you" ? T("lc.you") : k === "none" ? T("lc.none") : T("lc.cpu", { level: Lang.raw("level." + k) });
-    const nameW = Math.max(...names.map(n => n.length)) + 2;
     const whoW = Math.max(...["you"].concat(KINDS).map(k => who(k).length)) + 2;
     const slotItems = slots.map((s, i) => {
       const setTeam = d => { s.team = (s.team - 1 + d + 8) % 8 + 1; redraw(); };
@@ -206,10 +210,10 @@
       const teamText = T("lc.team", { n: s.team });
       return {
         key: "slot" + i, align: "left", attr: TEXT_COLORS[i] & 0x0F,
-        label: names[i].padEnd(nameW) + who(s.kind).padEnd(whoW) + teamText,
+        // (like the online lobby's seats: "►" in front of your own tank)
+        label: (s.kind === "you" ? "\x10" : " ") + " " + who(s.kind).padEnd(whoW) + teamText,
         // mouse: a click on the who column / the team cycles it (right click: back), elsewhere selects
-        zones: [{ from: nameW, to: nameW + whoW - 1, click: setKind },
-          { from: nameW + whoW, to: nameW + whoW + teamText.length, click: setTeam }],
+        zones: [{ from: 2, to: 2 + whoW - 1, click: setKind }, { from: 2 + whoW, to: 2 + whoW + teamText.length, click: setTeam }],
         info: s.kind === "you" ? [T("lc.you.i1"), T("lc.you.i2")] : [T("lc.slot.i1", { levels: levelsText() }), T("lc.slot.i2")],
         go: () => setTeam(1),
         digit: n => { s.team = n; redraw(); },               // 1..8: this slot's team
@@ -226,29 +230,35 @@
       winItem(cpuWin, v => { cpuWin = v; redraw(); }),
       timeItem(cpuTime, v => { cpuTime = v; redraw(); }),
     ];
-    if (S.teamGame) {                                  // friendly fire only matters with teammates
-      const toggleFF = () => { ff = !ff; redraw(); };
-      options.push({ key: "ff", label: T("lc.ff") + T(ff ? "lc.on" : "lc.off"), info: [T("lc.ff.i1"), T("lc.ff.i2")], go: toggleFF, change: toggleFF });
-    }
+    // friendly fire only matters with teammates: grayed out (not selectable) while no team has 2+ tanks
+    const toggleFF = () => { ff = !ff; redraw(); };
+    options.push({ key: "ff", label: T("lc.ff") + T(ff ? "lc.on" : "lc.off"), info: [T("lc.ff.i1"), T("lc.ff.i2")], go: toggleFF, change: toggleFF,
+      disabled: !S.teamGame });
     options.push({ key: "view", label: T("cpu.view") + T("view." + view),
       info: [T("view.i1"), T("view.i2")], go: () => setView(1), change: setView });
     const setWatch = d => { watchOut = step(TunnelerEngine.AFTER_DEATH, watchOut, d); redraw(); };
     options.push({ key: "watch", label: T("lc.watch") + T("watch." + watchOut),
       info: [T("watch.i1"), T("watch.i2")], go: () => setWatch(1), change: setWatch });
-    // two boxes (docs/DESIGN-8P.md 25): "Game" on the left (the options, then Start /
-    // Back), "Players" on the right (the 8 slot rows); the selected item's info below both
-    const left = options.concat([
-      { key: "gap2", label: "", disabled: true },
+    // like the online game lobby (online.js), without the chat: the 8 slot rows (the screen's title in the
+    // box's border) and the settings on top, Start / Back below them, the selected item's info under it
+    const sets = options.map(o => Object.assign(o, { align: "left" }));
+    const acts = [
       { key: "play", label: T("cpu.start"), info: startInfo, go: start },
+      { key: "gap2", label: "", disabled: true },
       { key: "back", label: T("back.main"), info: [T("back.main.i")], go: () => main(1) },
-    ]);
-    const items = left.concat(slotItems);
+    ];
+    const items = slotItems.concat(sets, acts);
     const selKey = typeof sel === "string" ? sel : "play";
+    // (the slots and the settings side by side, 3 columns apart, centred together; the Game box centred
+    // below them, the info under it)
+    const seatW = DosUI.boxWidth(slotItems), setW = DosUI.boxWidth(sets), actW = DosUI.boxWidth(acts);
+    const x0 = Math.max(1, 1 + ((80 - (seatW + 2 + 3 + setW + 2)) >> 1));
     ui.show({
-      lines: [{ row: 1, text: T("cpu.title"), color: 12 }],
-      boxes: [{ y: 3, title: T("box.game"), items: left }, { y: 3, title: T("box.players"), items: slotItems }],
+      boxes: [{ x: x0, y: 1, w: seatW, title: T("cpu.title"), items: slotItems },
+        { x: x0 + seatW + 5, y: 1, w: setW, title: T("box.settings"), items: sets },
+        { x: 41 - ((actW + 2) >> 1), y: 12, w: actW, title: T("box.game"), items: acts }],
       hint: T("create.hint"),
-      sel: Math.max(0, items.findIndex(it => it.key === selKey)), infoRow: 3 + Math.max(left.length, slotItems.length) + 3,
+      sel: Math.max(0, items.findIndex(it => it.key === selKey)), infoRow: 18,
       back: () => main(1),
     }, keep);
   }

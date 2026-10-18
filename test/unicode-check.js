@@ -215,7 +215,7 @@ function stats(e) { e.textMode(); e.menuShift = -20; e.showMainMenu(); return sc
     lines: [{ row: 1, text: W.Lang.enc(ROOM), color: 15 }],
     text: [{ row: 3, col: 5, text: "Дмитро: 你好 👋", color: 7 }],
     box: { y: 5 },
-    items: [{ key: "name", label: W.Lang.t("pg.name"), input: name, align: "left", go() {} },
+    items: [{ key: "name", label: W.Lang.t("name.label"), input: name, align: "left", go() {} },
       { key: "kick", label: W.Lang.t("pg.kick.pick", { name: "BLUE (王小明)" }), go() {} },
       { key: "back", label: "Back", go() {} }],
   });
