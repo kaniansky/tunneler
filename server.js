@@ -565,7 +565,9 @@ function createServer(opts = {}) {
     ws.on("pong", () => { ws.alive = true; });
     ws.cid = cid; ws.serial = ++room.serial; ws.rtt = null; ws.seat = -1; ws.ready = false; ws.player = -1; ws.playing = null;
     ws.name = uniqueName(room, q.get("name") || "", ws);
-    ws.host = sameKey(q.get("host"), room.hostKey);
+    // the host key makes this connection the host - unless another one already is (a second tab of the
+    // same browser has the same key: it joins as a player; it hosts if the host leaves - ensureHost)
+    ws.host = sameKey(q.get("host"), room.hostKey) && ![...room.sockets].some(o => o.host && o.readyState === 1);
     room.sockets.add(ws);
     clearTimeout(room.cleanupTimer);
     room.lastActive = Date.now();

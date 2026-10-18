@@ -518,7 +518,15 @@ async function main() {
 
   // ---------------------------------------------------------------- kick, host handover, no spectators
   console.log("host");
+  await spec1.close();                                     // (the spectator who hosts leaves: the creator comes back as host)
+  await sleep(50);
   const a = await new FakeClient(port, id, { name: "A", host: hostKey }).connect();
+  const a2 = await new FakeClient(port, id, { name: "A2", host: hostKey, role: "watch" }).connect();
+  check("one host at a time: a second connection with the host key (another tab) is no host", () => assert(a.hello.you.host && !a2.hello.you.host));
+  a2.send({ t: "set", size: "large" });
+  await sleep(60);
+  check("... and can't change the settings", () => assert.notStrictEqual(a.status && a.status.settings.size, "large"));
+  await a2.close();
   const b = await new FakeClient(port, id, { name: "B" }).connect();
   const w = await new FakeClient(port, id, { name: "W", role: "watch" }).connect();
   await until(() => a.status && a.status.seats.filter(s => s.k).length === 2, "seated");
@@ -538,7 +546,7 @@ async function main() {
   a.send({ t: "set", spectators: false, public: false });
   await sleep(60);
   check("public / spectators can't be changed in the lobby (only when the game is created)", () => assert(a.status.spectators && a.status.public));
-  await a.close(); await spec1.close();
+  await a.close();
   // a game created without spectators: no free seat -> turned away; no standing up
   const ns = (await http(port, "POST", "/api/rooms", { name: "No spectators", spectators: false })).json;
   const o1 = await new FakeClient(port, ns.id, { name: "O1", host: ns.hostKey }).connect();

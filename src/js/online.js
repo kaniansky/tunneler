@@ -435,7 +435,9 @@
     if (!locked && seat >= 0 && st.spectators)
       items.push({ key: "spec", label: T("pg.watch"), info: [T("pg.watch.i")], go: () => sitOn(-1) });
     // the host: "Kick a player" (opens the list of whom it may remove), right below
-    if (isHost() && !locked && kickTargets().length) items.push({ key: "kick", label: T("pg.kick"), info: [T("pg.kick.i1"), T("pg.kick.i2")], go: () => drawKick(false) });
+    // (grayed while there is nobody to remove - the box doesn't jump)
+    if (isHost() && !locked) items.push({ key: "kick", label: T("pg.kick"), disabled: !kickTargets().length,
+      info: [T("pg.kick.i1"), T("pg.kick.i2")], go: () => drawKick(false) });
     // what this player sees during play, up to the room's maximum (display only)
     if (viewChoices().length > 1) items.push({ key: "view", label: T("pg.view") + T("view." + viewChoice()), align: "left",
       info: [T("pg.view.i1"), T("pg.view.i2", { max: Lang.raw("view." + visibleNow()) })], go: () => setView(1), change: setView });

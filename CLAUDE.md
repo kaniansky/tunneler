@@ -540,7 +540,8 @@ none, i.e. a page from before 2.0 - is refused (POST 409 `{code:
 - Host handover: `ensureHost(room)` (server.js, after every connect / disconnect) - when no connected
   socket is a host, the first seated player (else a spectator) becomes one and gets `{t:"host", key}`;
   online.js stores the key (`tunneler.host.<id>`, read again at every connect) and turns its host items
-  on. The creator's key keeps working.
+  on. One host at a time: the key makes a connection the host only while no other connection hosts (a
+  second tab of the same browser, or the creator coming back after a handover, joins as a player).
 - Statistics extras (display only, not in stateHash): `engine.roundLog` (`logRound(winner, player)` at
   every round end: winner, secs, how = shot / time / draw / esc). `matchExtrasAt(x, w, y, y2)` draws the
   ROUNDS list (no awards any more): `showStatsPage()` (online, full screen) left of the table;
