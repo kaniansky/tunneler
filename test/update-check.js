@@ -82,7 +82,7 @@ const ok = msg => { n++; console.log("  ok  " + msg); };
   {
     const { ui, calls } = await home("tauri:", { version: "9.0.0", install: true });
     const it = item(ui);
-    assert(it && ui.spec.home && ui.spec.infoRow === 22, "the item below Settings, the info lower");
+    assert(it && ui.spec.home && ui.spec.infoRow === 21, "the item below Settings, the info lower");
     assert(/9\.0\.0/.test(it.label));
     it.go();
     assert.deepStrictEqual(calls, ["update_check", "update_install"]);

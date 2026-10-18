@@ -37,11 +37,19 @@
   // the list's columns after the name: PLAYERS ("2/4": seated / seats they can take - during a match:
   // connected / its players), AI (computer tanks), WATCHING (spectators); 0 = blank
   const COLS = [22, 17, 8, 4, 9];                    // (name, mode, players, AI, watching; the state takes the rest)
+  const ROWS = 9;                                    // game rows shown at most (the box then ends on row 20, the info on rows 22-23)
   const places = r => r.places != null ? r.places : r.players + (r.open || 0);
   function rowText(r, state) {
     const P = UniText.padEnd;
     return P(UniText.slice(E(r.name), COLS[0] - 1), COLS[0]) + P(UniText.slice(T("gm." + (r.mode || "standard")), COLS[1] - 1), COLS[1]) +
       P(r.players + "/" + places(r), COLS[2]) + P(r.bots ? String(r.bots) : "", COLS[3]) + P(r.spec ? String(r.spec) : "", COLS[4]) + state;
+  }
+  // its columns' colors (DosUI spans): the name white, the mode light cyan, the players light green, AI /
+  // watching gray, the state yellow in the lobby (joinable), light magenta during a match
+  function rowSpans(r) {
+    const at = [0]; for (const w of COLS) at.push(at[at.length - 1] + w);
+    const colors = [0x0F, 0x0B, 0x0A, 0x07, 0x07, r.state === "lobby" ? 0x0E : 0x0D];
+    return colors.map((a, i) => [at[i], i < COLS.length ? at[i + 1] : 200, a]);
   }
 
 
@@ -74,10 +82,10 @@
   function list(keep) {
     view = "list";
     const items = rooms.map(r => otherVersion(r) ? {
-      label: rowText(r, "v" + r.version), align: "left", key: "room:" + r.id,
-      info: [E(r.name), ...versionInfo()], go: () => {},
+      label: rowText(r, "v" + r.version), align: "left", key: "room:" + r.id, attr: 8,   // (another version: gray)
+      info: versionInfo(), go: () => {},
     } : ({
-      label: rowText(r, stateText(r)), align: "left", key: "room:" + r.id,   // (the games you host: first, no mark)
+      label: rowText(r, stateText(r)), align: "left", key: "room:" + r.id, spans: rowSpans(r),   // (the games you host: first, no mark)
       // (the table says the rest: only whether you host it and the keys)
       info: [hosting(r) ? { text: T("lobby.host.i"), color: 14 } : null,
         T(r.spectators ? (r.state === "lobby" && r.open ? "lobby.join2" : "lobby.watch") : r.state === "lobby" && r.open ? "lobby.join" : "lobby.closed")].filter(Boolean),
@@ -93,13 +101,15 @@
     items.push({ key: "link", label: T("lobby.link"), info: [T("lobby.link.i1"), T("lobby.link.i2")], go: () => joinLink() });
     items.push({ key: "gap", label: "", disabled: true });
     items.push({ key: "back", label: T("back.main"), info: [T("back.main.i")], go: home });
+    // as many games as fit (up to ROWS, then they scroll); the box ends below them and the info follows it
+    const shown = Math.max(1, Math.min(items.length - 5, ROWS)), bottom = 3 + 3 + shown + 5;
     ui.show({
       lines: [{ row: 2, text: T("lobby.title"), color: 12 },
-        ...(serverVersion ? [{ row: 3, text: T("ver.server", { server: serverVersion, you: myVersion }), color: 12 }] : [])],
-      box: { x: 2, y: 4, w: 76, rows: 7 }, fixed: 5,
+        ...(serverVersion ? [{ row: 1, text: T("ver.server", { server: serverVersion, you: myVersion }), color: 12 }] : [])],
+      box: { x: 2, y: 3, w: 76, rows: shown }, fixed: 5,
       header: UniText.padEnd(" " + T("lobby.name"), COLS[0] + 1) + [T("lobby.mode"), T("lobby.players"), T("lobby.ai"), T("lobby.spec")].map((h, i) => UniText.padEnd(h, COLS[i + 1])).join("") +
         T("lobby.state"),
-      items, infoRow: 20, back: home,
+      items, infoRow: bottom + 2, back: home,
     }, keep);
   }
 

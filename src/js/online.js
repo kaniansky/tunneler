@@ -398,7 +398,7 @@
     const row = (key, label, info, step, off) => off
       ? { key, label, align: "left", static: true, attr: 8 }
       : host ? { key, label, align: "left", info, go: () => step(1), change: step }
-      : { key, label, align: "left", static: true, attr: 7 };
+      : { key, label, align: "left", static: true, attr: 5, valueAttr: 7 };   // (read-only: magenta label, gray value)
     const ML = TunnelerEngine.MODE_LIST, mode = ML.includes(s.mode) ? s.mode : "standard";
     const goalText = (m, n) => m === "infection" ? T("time.n", { n }) : String(n);
     const onOff = v => T(v ? "os.on" : "os.off");

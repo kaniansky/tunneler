@@ -36,6 +36,9 @@
 //                info lines may be {text, color, onClick} - clickable (e.g. the invite link)
 //                static: a read-only text row (never selected; attr, default light gray)
 //                dim: [from, to] - label columns from..to-1 drawn gray (a part that doesn't apply now)
+//                Colors: labels magenta, a switch's value (after its first ": ") white, valueAttr = a
+//                read-only value's color (light gray), typed input text white, disabled dark gray;
+//                spans: [[from, to, attr], ...] label columns in their own colors (e.g. a table row)
 //
 // ui.showPage(kind, uiMode, back[, engineOpts]) shows the game's own Instructions / Information page full screen
 // (drawn by an engine instance, like in the game); Enter, Esc or a click calls back(). A page longer
@@ -221,6 +224,19 @@ class DosUI {
     const attr = it.static ? it.attr || 0x07 : i === this.sel ? SEL : it.disabled ? DISABLED : it.attr || ATTR;
     for (let c = 0; c < b.w; c++) t.vram[o + c * 2 + 1] = attr;
     const x0 = (it.align === "left" ? 1 : this.centreStart(i, b, labelW + valueW)) + labelW;
+    // values in their own colors (not on the highlight bar, not when disabled): it.spans = [[from, to,
+    // attr], ...] label columns; a switch's value (the label after its first ": ") white, a read-only
+    // one (valueAttr, e.g. 7) light gray; an input's typed text white
+    if (i !== this.sel && !it.disabled) {
+      const L = x0 - labelW;
+      const paint = (from, to, a) => { for (let c = Math.max(0, L + from); c < Math.min(b.w, L + to); c++) t.vram[o + c * 2 + 1] = a; };
+      if (it.spans) for (const [from, to, a] of it.spans) paint(from, to, a);
+      else if (it.valueAttr || (it.change && !it.attr)) {
+        const k = it.label.indexOf(": ");
+        if (k >= 0) paint(U.cols(it.label.slice(0, k + 2)), labelW, it.valueAttr || 0x0F);
+      }
+      if (inp && inp.value) paint(labelW, labelW + valueW, 0x0F);
+    }
     // it.dim = [from, to]: label columns shown gray (disabled), e.g. a column that doesn't apply now
     if (it.dim && i !== this.sel)
       for (let c = x0 - labelW + it.dim[0]; c < Math.min(b.w, x0 - labelW + it.dim[1]); c++) t.vram[o + c * 2 + 1] = DISABLED;

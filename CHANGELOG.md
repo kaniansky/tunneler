@@ -14,6 +14,10 @@ a release is made by pushing a version tag (see CONTRIBUTING.md).
   `latest.json` for them. Apps older than 3.1 have no updater: install 3.1 by hand once.
 - **Server**: checks GitHub for a newer release when it starts and once a day and logs it with how to
   update (`UPDATE_CHECK=0` turns it off; nothing is downloaded).
+- **Menu colors**: a switch's value is white (read-only, e.g. the settings for everybody but the host:
+  light gray), typed text white, disabled items dark gray; the list of games in colors per column (name,
+  mode, players, state - yellow in the lobby) and up to 9 games before it scrolls, its description
+  right below; the main menu two rows higher.
 - README and homepage: Skirmish, the game modes, the installer / AppImage, and the privacy note (the app
   asks GitHub for new versions).
 - As always, only the same version plays together: update the server and the apps to 3.1.

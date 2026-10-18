@@ -135,7 +135,7 @@
 
   function main(sel, keep) {
     ui.show({
-      lines: title(), box: { y: 11 }, sel, infoRow: update ? 22 : 20, footer: Lang.version(), home: true,
+      lines: title(), box: { y: 9 }, sel, infoRow: update ? 21 : 20, footer: Lang.version(), home: true,
       items: [
         { key: "split", label: T("home.split"), info: [T("home.split.i1"), T("home.split.i2")], go: () => split() },
         { key: "cpu", label: T("home.cpu"), info: [T("home.cpu.i1n"), T("home.cpu.i2")], go: () => cpu() },

@@ -575,3 +575,9 @@ none, i.e. a page from before 2.0 - is refused (POST 409 `{code:
   app-build.yml builds the setup.exe / AppImage / .app.tar.gz + .sig and `tools/updater-manifest.js`
   makes the release's latest.json (the endpoint: releases/latest/download/latest.json); without it no
   latest.json (the apps then find no update). test/update-check.js.
+- Menu colors (DosUI.drawItem): labels magenta, a switch's value (label text after its first ": ", items
+  with `change` and no `attr`) white, `valueAttr` = a read-only value's color (online.js non-host
+  settings: attr 5 + valueAttr 7), typed input text white, disabled 8; `spans: [[from, to, attr]]` =
+  label columns in their own colors (lobby.js `rowSpans`: name 15, mode 11, players 10, AI / watching 7,
+  state 14 lobby / 13 match; another version's row attr 8). The games list box (y 3) shows up to `ROWS`
+  = 9 games, its info right below (`bottom + 2`). Main menu box y 9.
