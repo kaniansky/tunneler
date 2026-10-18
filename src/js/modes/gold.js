@@ -1,14 +1,16 @@
 "use strict";
 // Game mode "gold" - gold rush (docs/DESIGN-8P.md 27).
 //
-// At each round start gold nuggets (3x3 px, colour 14) are scattered in the dirt: about 5 per tank, scaled
-// to the map (never in rock, a base or a base's doorway, only where a tank can get to). A tank picks one
+// The match is ONE round (winScore 1): the first team to bring e.goal nuggets home ("Gold to win", default
+// 10) wins it. At the round start gold nuggets (3x3 px, colour 14) are scattered in the dirt: enough for
+// the goal (at least 2 x goal + 1 with 2 teams, half a goal more for every further team), at least about 5
+// per tank scaled to the map (never in rock, a base or a base's doorway, only where a tank can get to). A tank picks one
 // up by touching it (within 5 px of its middle), at most MAX_CARRY at a time; brought into its own or a
 // teammate's base they count for its team. A hit while carrying drops one nugget where the tank is (it
 // can't pick that one up again for a moment), a destroyed tank drops all it carries.
-// The round ends when a team has more than half of all the gold home, when the leader can't be caught
-// any more (3+ teams), when all of it is home (the most wins, a tie: nobody), by elimination as usual, or at the round time (the most gold home wins, a tie:
-// nobody).
+// The round ends when a team has the goal home, when the leader can't be caught any more (no other team
+// could even draw level with all the gold left), when all of it is home (the most wins, a tie: nobody), by
+// elimination as usual, or at the round time (the most gold home wins, a tie: nobody).
 //
 // State (e.GS, reset at every match start; everything a function of the engine's history):
 //   reach, cw, ch  the 8 px cells a tank can get to (rock never changes: built once per match)
@@ -25,6 +27,7 @@
 (function (root) {
 const E = root.TunnelerEngine || require("../engine.js");
 
+const GOAL = 10;                // gold to win (the default of TunnelerEngine.GOALS.gold)
 const MAX_CARRY = 5;
 const PICK = 5;                 // pick-up distance (tank middle - nugget middle)
 const HOME = 15;                // a tank this close to a base's middle is in it (as refuelling)
@@ -86,11 +89,15 @@ function nearBase(e, x, y) {
   return false;
 }
 
-// how many nuggets a round has: about 5 per tank, scaled to the map; odd (a 2-team split is never even)
-const nuggetCount = e => (Math.max(3, e.sc(5 * e.nPlayers)) | 1);
+// how many nuggets a round has: enough for the goal to be reachable (2 x goal + 1 with 2 teams, half a
+// goal more for every further team), at least about 5 per tank scaled to the map; odd (a 2-team split is
+// never even)
+const goalOf = e => e.goal || GOAL;
+const nuggetCount = e => (Math.max(3, e.sc(5 * e.nPlayers), Math.ceil(goalOf(e) * (e.nTeams + 2) / 2) + 1) | 1);
 
 // scatter the round's nuggets: in dirt first (all 9 pixels), later attempts take any spot that isn't
-// rock; never in / near a base, never next to another nugget, only where a tank can get to
+// rock; never in / near a base, never next to another nugget, only where a tank can get to. Still short
+// (a crowded small map): the middles of the cells a tank can get to, in order (no random draw)
 function scatter(e) {
   const S = e.GS, PC = E.PixelClassExt, W = e.worldW, H = e.worldH, want = nuggetCount(e);
   const tries = want * 80;
@@ -107,6 +114,16 @@ function scatter(e) {
     for (let n = 0; n < S.gx.length && ok; n++) if (cheb(x, y, S.gx[n], S.gy[n]) < 8) ok = false;
     if (ok) { S.gx.push(x); S.gy.push(y); S.noP.push(0); S.noT.push(0); S.kn.push(0); }
   }
+  for (let j = 0; j < S.ch && S.gx.length < want; j++)
+    for (let i = 0; i < S.cw && S.gx.length < want; i++) {
+      const x = i * 8 + 4, y = j * 8 + 4;
+      if (!S.reach[j * S.cw + i] || nearBase(e, x, y)) continue;
+      let ok = true;
+      for (let jj = -1; jj <= 1 && ok; jj++)
+        for (let ii = -1; ii <= 1 && ok; ii++) { const c = PC[e.getPixel(x + ii, y + jj)]; if (c === 4 || c === 3) ok = false; }
+      for (let n = 0; n < S.gx.length && ok; n++) if (cheb(x, y, S.gx[n], S.gy[n]) < 8) ok = false;
+      if (ok) { S.gx.push(x); S.gy.push(y); S.noP.push(0); S.noT.push(0); S.kn.push(0); }
+    }
   S.total = S.gx.length;
 }
 
@@ -123,18 +140,20 @@ function drop(e, x, y, x0, y0, p) {
   S.gx.push(x); S.gy.push(y); S.noP.push(p); S.noT.push(S.f + NO_PICK); S.kn.push(kn);
 }
 
-// the round's end by gold: a team with more than half of it home, all of it home (the most wins), or a
-// leader nobody can catch any more (more home than any other team could have with all the gold still
-// lying around and carried by other teams' tanks - the same winner as "all home", just earlier; with 2
-// teams "more than half" always comes first)
+// the round's end by gold: a team with the goal home (the first; two in the same frame: the most), all
+// of it home (the most wins), or a leader nobody can catch any more (more home than any other team could
+// have with all the gold still lying around and carried by other teams' tanks - the same winner as "all
+// home", just earlier)
 function checkEnd(e) {
   const S = e.GS;
   if (e.endTimer >= 0 || !S.total) return;
-  let sum = 0;
+  const goal = goalOf(e);
+  let sum = 0, reached = false;
   for (let t = 0; t < e.nTeams; t++) {
     sum += S.home[t];
-    if (S.home[t] * 2 > S.total) { e.endRound(t); return; }
+    if (S.home[t] >= goal) reached = true;
   }
+  if (reached) { e.endRound(mostGold(e)); return; }
   if (sum >= S.total) { e.endRound(mostGold(e)); return; }
   const t = mostGold(e);
   if (t < 0) return;
@@ -193,7 +212,7 @@ function goldGoal(ai, e, mx, my) {
   if (c > 0) {
     const dn = n >= 0 ? cheb(mx, my, S.gx[n], S.gy[n]) : Infinity, dh = cheb(mx, my, bx, by);
     // home: full, nothing more to pick up, enough to win, or the next nugget is far off and home near
-    if (c >= MAX_CARRY || n < 0 || (S.home[t] + c) * 2 > S.total || (c >= 2 && dn > 50 && dn > dh / 2) ||
+    if (c >= MAX_CARRY || n < 0 || S.home[t] + c >= goalOf(e) || (c >= 2 && dn > 50 && dn > dh / 2) ||
         e.energy[me] < 4000)
       return { x: bx, y: by, mode: "gold-home", dig: false };
   }
@@ -244,41 +263,51 @@ E.registerMode("gold", {
     en: { stat: "gold", note: "{n} gold",
       instr: "Gold nuggets lie hidden in the dirt. Drive over one to pick it up (5 at most) and bring them into " +
         "your base or a teammate's: they count for your team. A hit makes you drop a nugget, a destroyed tank " +
-        "drops them all. More than half of the gold home wins the round; at the round time the most gold home wins.",
-      score: "gold {n}", scoreCarry: "gold {n} +{c}",
+        "drops them all. One round decides the match: the first team to bring Gold to win home (a setting, " +
+        "instead of rounds to win) wins it; the last team left wins too, and when the round time runs out the " +
+        "most gold home wins. The number beside your instrument panel is the gold you carry.",
+      score: "gold {n}/{g}", scoreCarry: "gold {n}/{g} +{c}",
     },
     sk: { stat: "zlato", note: "{n} zlata",
       instr: "V hline sú ukryté zlaté nugety. Prejdi cez nugetu a zober ju (najviac 5) a dovez ich do svojej " +
         "základne alebo spoluhráčovej: rátajú sa tvojmu tímu. Zásah ťa pripraví o jednu nugetu, zničený tank " +
-        "stratí všetky. Kto má doma viac ako polovicu zlata, vyhral kolo; po čase kola vyhráva najviac zlata doma.",
-      score: "zlato {n}", scoreCarry: "zlato {n} +{c}",
+        "stratí všetky. Zápas rozhodne jedno kolo: vyhrá ho tím, ktorý prvý dovezie domov nastavené zlato " +
+        "(Zlato na výhru, namiesto kôl); vyhrá aj posledný tím, ktorý zostane, a keď uplynie čas kola, vyhrá " +
+        "najviac zlata doma. Číslo vedľa prístrojového panelu je zlato, ktoré vezieš.",
+      score: "zlato {n}/{g}", scoreCarry: "zlato {n}/{g} +{c}",
     },
     cs: { stat: "zlato", note: "{n} zlata",
       instr: "V hlíně jsou ukryté zlaté nugety. Přejeď přes nugetu a seber ji (nejvýš 5) a dovez je do své " +
         "základny nebo spoluhráčovy: počítají se tvému týmu. Zásah tě připraví o jednu nugetu, zničený tank " +
-        "ztratí všechny. Kdo má doma víc než polovinu zlata, vyhrál kolo; po čase kola vyhrává nejvíc zlata doma.",
-      score: "zlato {n}", scoreCarry: "zlato {n} +{c}",
+        "ztratí všechny. Zápas rozhodne jedno kolo: vyhraje ho tým, který první doveze domů nastavené zlato " +
+        "(Zlato k výhře, místo kol); vyhraje i poslední tým, který zůstane, a když uplyne čas kola, vyhraje " +
+        "nejvíc zlata doma. Číslo vedle přístrojového panelu je zlato, které vezeš.",
+      score: "zlato {n}/{g}", scoreCarry: "zlato {n}/{g} +{c}",
     },
     uk: { stat: "злото", note: "{n} злота",
       instr: "У ґрунті сховані золоті самородки. Наїдь на самородок, щоб підібрати його (не більше 5), і привези " +
         "їх на свою базу або базу товариша: вони зараховуються твоїй команді. Влучання вибиває один самородок, " +
-        "знищений танк губить усі. Більше половини золота вдома - перемога в раунді; коли час раунду минає, " +
-        "перемагає той, у кого вдома найбільше золота.",
-      score: "золото {n}", scoreCarry: "золото {n} +{c}",
+        "знищений танк губить усі. Матч вирішує один раунд: перемагає команда, яка першою привезе додому задану " +
+        "кількість золота (Золота для перемоги, замість раундів); перемагає й остання команда, що лишилася, а " +
+        "коли час раунду минає - та, у кого вдома найбільше золота. Число біля панелі приладів - золото, яке ти везеш.",
+      score: "золото {n}/{g}", scoreCarry: "золото {n}/{g} +{c}",
     },
     ru: { stat: "злото", note: "{n} злота",
       instr: "В земле спрятаны золотые самородки. Наедь на самородок, чтобы подобрать его (не больше 5), и " +
         "привези их на свою базу или базу союзника: они засчитываются твоей команде. Попадание выбивает один " +
-        "самородок, уничтоженный танк теряет все. Больше половины золота дома - победа в раунде; когда время " +
-        "раунда выходит, побеждает тот, у кого дома больше всего золота.",
-      score: "золото {n}", scoreCarry: "золото {n} +{c}",
+        "самородок, уничтоженный танк теряет все. Матч решает один раунд: побеждает команда, первой привезшая " +
+        "домой заданное количество золота (Золота для победы, вместо раундов); побеждает и последняя оставшаяся " +
+        "команда, а когда время раунда выходит - та, у кого дома больше всего золота. Число рядом с панелью " +
+        "приборов - золото, которое ты везешь.",
+      score: "золото {n}/{g}", scoreCarry: "золото {n}/{g} +{c}",
     },
     genz: { stat: "bling", note: "{n} bling",
       instr: "There's gold hiding in the dirt, no cap. Roll over a nugget to yoink it (5 max, don't be greedy) and " +
         "drop it at your base or your bestie's: it counts for the squad. Get hit and you leak a nugget, get " +
-        "wrecked and you lose the whole stash. Over half the gold at home = W; when the timer hits zero, " +
-        "most bling at home wins.",
-      score: "bling {n}", scoreCarry: "bling {n} +{c}",
+        "wrecked and you lose the whole stash. One round, winner takes all: first squad to stack Bling to win " +
+        "at home (it replaces rounds to win) gets the W; last squad standing wins too, and when the timer hits " +
+        "zero, most bling at home wins. The number next to your dashboard is the bling you're hauling.",
+      score: "bling {n}/{g}", scoreCarry: "bling {n}/{g} +{c}",
     },
   },
 
@@ -372,7 +401,8 @@ E.registerMode("gold", {
     const S = e.GS;
     if (!S.home) return "";
     const n = S.home[e.team(p)], c = S.carry[p];
-    return c ? e.mt("scoreCarry", { n, c }) : e.mt("score", { n });
+    const g = goalOf(e);
+    return c ? e.mt("scoreCarry", { n, g, c }) : e.mt("score", { n, g });
   },
 
   // AI: the gold first - except in a close fight (a fresh target near), or when it carries nothing and
@@ -389,6 +419,7 @@ E.registerMode("gold", {
 
   // (for tests)
   _nuggetCount: nuggetCount,
+  GOAL,
   _checkEnd: checkEnd,
   _pickNugget: pickNugget,
   SEE, HEAR, AI_KNOW,
