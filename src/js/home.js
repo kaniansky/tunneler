@@ -30,6 +30,11 @@
   let cpuWin = clampInt(load("tunneler.cpu.win"), 1, 9, 3);
   let ff = load("tunneler.cpu.ff", "0") === "1";
   let cpuTime = loadTime("tunneler.cpu.time");
+  // the game mode and the modifiers (docs/DESIGN-8P.md 27)
+  const MODE_LIST = TunnelerEngine.MODE_LIST || ["standard"];
+  let gmode = MODE_LIST.includes(load("tunneler.cpu.mode")) ? load("tunneler.cpu.mode") : "standard";
+  const mods = { dark: load("tunneler.cpu.dark", "0") === "1", hardRock: load("tunneler.cpu.hardRock", "0") === "1",
+    noRepair: load("tunneler.cpu.noRepair", "0") === "1" };
   // after death (black / wreck / others): what you see once your tank is destroyed (views.js)
   let watchOut = TunnelerEngine.afterDeath(load("tunneler.cpu.watch", "wreck"));
   const slots = COLORS.map((c, i) => ({ kind: i ? "none" : "you", team: i + 1 }));
@@ -54,6 +59,8 @@
     save("tunneler.cpu.slots", JSON.stringify(slots));
     save("tunneler.cpu.size", cpuSize); save("tunneler.cpu.win", String(cpuWin)); save("tunneler.cpu.ff", ff ? "1" : "0");
     save("tunneler.cpu.view", view); save("tunneler.cpu.watch", watchOut); save("tunneler.cpu.time", String(cpuTime));
+    save("tunneler.cpu.mode", gmode);
+    for (const k in mods) save("tunneler.cpu." + k, mods[k] ? "1" : "0");
   };
 
   // ---- split-screen settings
@@ -174,14 +181,16 @@
     for (const u of used) perTeam.set(u.team, (perTeam.get(u.team) || 0) + 1);
     const me = slots.findIndex(s => s.kind === "you");
     const nCpu = used.length - (me >= 0 ? 1 : 0);
+    const ownTeams = (TunnelerEngine.OWN_TEAMS || []).includes(gmode);   // (infection, survival: the mode makes the teams)
     return {
       used, nCpu, me,
       // the original engine: you as BLUE against one computer GREEN, in different teams
-      classic: used.length === 2 && used[0].color === 0 && used[0].kind === "you" && used[1].color === 1 && used[0].team !== used[1].team,
+      classic: used.length === 2 && used[0].color === 0 && used[0].kind === "you" && used[1].color === 1 && used[0].team !== used[1].team &&
+        gmode === "standard" && !mods.dark && !mods.hardRock && !mods.noRepair,
       nTeams: perTeam.size,
-      teamGame: [...perTeam.values()].some(n => n > 1),
+      teamGame: [...perTeam.values()].some(n => n > 1) || ownTeams,
       mates: me >= 0 ? perTeam.get(slots[me].team) - 1 : 0,   // computer tanks on your team
-      error: me < 0 ? "lc.err.you" : nCpu < 1 ? "lc.err.cpu" : perTeam.size < 2 ? "lc.err.team" : null,
+      error: me < 0 ? "lc.err.you" : nCpu < 1 ? "lc.err.cpu" : perTeam.size < 2 && !ownTeams ? "lc.err.team" : null,
     };
   }
 
@@ -192,7 +201,8 @@
       if (S.error) return;
       const list = S.used.map(u => u.color + ":" + u.kind + ":" + u.team).join(",");
       location.href = Links.cpu("slots=" + encodeURIComponent(list) + "&size=" + cpuSize + "&win=" + cpuWin +
-        "&ff=" + (ff && S.teamGame ? 1 : 0) + "&view=" + view + "&watch=" + watchOut + timeArg(cpuTime));
+        "&ff=" + (ff && S.teamGame ? 1 : 0) + "&view=" + view + "&watch=" + watchOut + timeArg(cpuTime) +
+        (gmode !== "standard" ? "&gm=" + gmode : "") + (mods.dark ? "&dark=1" : "") + (mods.hardRock ? "&hard=1" : "") + (mods.noRepair ? "&norepair=1" : ""));
     };
     // slot rows: "you                team 1", the who column padded to the longest text in this language,
     // each row in its tank's color (which is all that tells the colors apart - no color name)
@@ -225,7 +235,10 @@
         : S.teamGame ? T("lc.go.t", { t: S.nTeams, n: S.nCpu, m: S.mates }) : T("lc.go.n", { n: S.nCpu }),
       T(view === "everyone" ? (S.classic ? "cpu.both" : "cpu.all") : view === "team" && S.mates > 0 ? "cpu.team" : "cpu.own")];
     const setView = d => { view = step(VIEWS, view, d); redraw(); };
+    const setMode = d => { gmode = step(MODE_LIST, gmode, d); redraw(); };
+    const onOff = v => T(v ? "lc.on" : "lc.off"), flip = k => () => { mods[k] = !mods[k]; redraw(); };
     const options = [
+      { key: "mode", label: T("lc.mode") + T("gm." + gmode), info: [T("gm." + gmode + ".i"), T("lc.mode.i")], go: () => setMode(1), change: setMode },
       sizeItem(cpuSize, v => { cpuSize = v; redraw(); }),
       winItem(cpuWin, v => { cpuWin = v; redraw(); }),
       timeItem(cpuTime, v => { cpuTime = v; redraw(); }),
@@ -239,6 +252,9 @@
     const setWatch = d => { watchOut = step(TunnelerEngine.AFTER_DEATH, watchOut, d); redraw(); };
     options.push({ key: "watch", label: T("lc.watch") + T("watch." + watchOut),
       info: [T("watch.i1"), T("watch.i2")], go: () => setWatch(1), change: setWatch });
+    options.push({ key: "dark", label: T("mod.dark") + onOff(mods.dark), info: [T("mod.dark.i")], go: flip("dark"), change: flip("dark") });
+    options.push({ key: "hardRock", label: T("mod.hardRock") + onOff(mods.hardRock), info: [T("mod.hardRock.i")], go: flip("hardRock"), change: flip("hardRock") });
+    options.push({ key: "noRepair", label: T("mod.noRepair") + onOff(!mods.noRepair), info: [T("mod.noRepair.i")], go: flip("noRepair"), change: flip("noRepair") });
     // like the online game lobby (online.js), without the chat: the 8 slot rows (the screen's title in the
     // box's border) and the settings on top, Start / Back below them, the selected item's info under it
     const sets = options.map(o => Object.assign(o, { align: "left" }));

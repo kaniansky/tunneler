@@ -475,7 +475,8 @@ class TunnelerAI {
     let key = "" + e.round;
     for (let p = 1; p <= N; p++) key += ":" + e.baseX[p] + ":" + e.baseY[p] + ":" + teamOf(e, p);
     if (key !== this.roundKey || e !== this.eng) { this.roundKey = key; this.eng = e; this.resetRound(e); }
-    if (!e.alive[this.me] || e.endTimer >= 0 || !this.enemies.some(q => e.alive[q])) {
+    // (a game mode with objectives - GM.aiAlways - keeps playing while no enemy is alive)
+    if (!e.alive[this.me] || e.endTimer >= 0 || (!this.enemies.some(q => e.alive[q]) && !(e.GM && e.GM.aiAlways))) {
       this.prevKeys = false; return NONE;
     }
     this.t++;
@@ -690,7 +691,14 @@ class TunnelerAI {
       const E = this.enemy;
       const recent = E && (this.t - this.cfg.delay - E.t) <= cfg.memory;
       const dE = E ? cheb(mx, my, E.x, E.y) : 1e9;
-      if (this.retreating) {
+      // a game mode's objective first (bringing gold or a flag home, holding a zone...): GM.aiOverride ->
+      // null (the usual behaviour) or {x, y, dig, mode} to go to, or {dir} (-1 = stand); it sees the AI's
+      // state (this.retreating, this.enemy, recent / dE...) and may use its methods (goTo, engage...)
+      const ov = e.GM && e.GM.aiOverride ? e.GM.aiOverride(this, e, mx, my, { E, recent, dE, T, atHome }) : null;
+      if (ov) {
+        this.mode = ov.mode || "objective";
+        dir = ov.dir !== undefined ? ov.dir : this.goTo(e, mx, my, ov.x, ov.y, !!ov.dig);
+      } else if (this.retreating) {
         this.mode = "retreat";
         // (extended: not right after a standoff on the line - energy runs out standing there)
         if (T && dE < 45 && !(e.extended && this.t < this.noDefendUntil) && this.spotFor(e, mx, my, T, true))
@@ -709,6 +717,8 @@ class TunnelerAI {
 
     // --- trigger: any enemy it perceives well enough would be hit, and no teammate is in the way
     if (this.wouldHitAny(e, mx, my, e.tankDir[me]) && this.rng() < cfg.fireProb) fire = true;
+    // a game mode's own targets (a base to shoot at...): GM.aiFire -> true = fire now
+    else if (e.GM && e.GM.aiFire && e.GM.aiFire(this, e, mx, my, dir)) fire = true;
     // extended: on a firing line with only dirt in the way - shoot it away (see engage)
     else if (this.clearShot && !(this.ff && this.mateInLine(e, mx, my, e.tankDir[me], 24))) fire = true;
     // fast digging: shots blow away the dirt ahead
@@ -725,6 +735,9 @@ class TunnelerAI {
   // where to go when no enemy is in reach
   huntGoal(e, mx, my) {
     const cfg = this.cfg;
+    // a game mode's goal when no enemy is in reach (gold to dig for, a zone, a flag...): GM.aiGoal ->
+    // {x, y, mode, dig} or null (explore / hunt as usual)
+    if (e.GM && e.GM.aiGoal) { const g = e.GM.aiGoal(this, e, mx, my); if (g) return g; }
     // fast digging burns ~4x the energy per pixel: only worth it on the last stretch to a known enemy
     const close = (x, y) => cheb(mx, my, x, y) < 100;
     if (cfg.intel === "exact") {

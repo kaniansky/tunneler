@@ -140,7 +140,10 @@ const STRINGS_EN = {
     // the round time limit, only when there is one (option roundTime); the statistics' 37 x 4 area takes
     // timeShort when time does not fit there, and leaves it out when neither does
     time: "round time: {n} min", timeShort: "time: {n} min",
-    views: ["self", "team", "everyone"], watch: ["after death: black screen", "after death: my wreck", "after death: watch team", "after death: watch killer", "after death: watch all"] },
+    views: ["self", "team", "everyone"], watch: ["after death: black screen", "after death: my wreck", "after death: watch team", "after death: watch killer", "after death: watch all"],
+    // game modes (the round title / statistics settings: the mode's name first) and modifiers
+    modes: {"standard": "standard", "gold": "gold rush", "infection": "infection", "survival": "survival", "hill": "king of the hill", "shrink": "shrinking world", "ctf": "capture the flag", "siege": "base siege", "deathmatch": "deathmatch"},
+    dark: "darkness", hardRock: "hard rock", noRepair: "no repairs" },
   // the world map's "PRESS ANY KEY" pixel-art banner (5 rows of '*' / ' ', all the same length); a
   // translation may replace it (see Banner below for the original)
   // banner: [...],
@@ -313,6 +316,10 @@ class Explosion {
   }
 }
 
+const HARD_ROCK_DELAY = 4;                       // modifier hardRock: frames a tank waits after each dig (1 normally)
+const DARK_R = 26;                                // modifier dark: how far a tank sees (pixels across)
+let DARK_MASK = null;                             // (darkView, built on first use)
+
 class TunnelerEngine {
   // seed: Turbo Pascal RandSeed (what Randomize would have put there)
   // opts (not in the original, docs/DESIGN-8P.md):
@@ -332,11 +339,19 @@ class TunnelerEngine {
   //                                           when it runs out the side that did the most shield damage to
   //                                           enemy tanks this round wins it (the others' tanks blow up); a
   //                                           tie blows up everybody (nobody wins). 0 = the original.
+  //   mode: "standard" | a game mode         extended only (docs/DESIGN-8P.md 27): TunnelerEngine.MODES[mode]
+  //                                           (src/js/modes/<mode>.js) hooks into the extended play loop;
+  //                                           "standard" (default) = last team standing, as before
+  //   dark, hardRock, noRepair: bool          modifiers (extended only): darkness, slow-to-dig dirt, no
+  //                                           shield repair at bases
   // The classic engine (the original, byte for byte with size medium and winScore 3) runs for exactly
-  // BLUE + GREEN in different teams; anything else is the extended engine (N tanks, own palette, input bits).
+  // BLUE + GREEN in different teams, the standard mode and no modifier; anything else is the extended
+  // engine (N tanks, own palette, input bits).
   constructor(seed, opts) {
     const o = opts || {};
-    let slots, forceExt = !!o.extended;
+    const gameMode = TunnelerEngine.MODES[o.mode] ? o.mode : "standard";
+    const mods = { dark: !!o.dark, hardRock: !!o.hardRock, noRepair: !!o.noRepair };
+    let slots, forceExt = !!o.extended || gameMode !== "standard" || mods.dark || mods.hardRock || mods.noRepair;
     if (Array.isArray(o.slots) && o.slots.length)
       slots = o.slots.slice(0, EXT_MAX_PLAYERS).map((s, i) =>
         ({ color: clampInt(s && s.color, 0, 7, i), team: clampInt(s && s.team, 1, 8, i + 1) }));
@@ -353,6 +368,13 @@ class TunnelerEngine {
     this.extended = !classic;
     this.nPlayers = this.extended ? slots.length : 2;
     this.slots = slots;
+    // game mode (extended only): its name, its hooks (null = standard), its own state (GS: anything the
+    // mode keeps - part of the simulation, so only changed by the mode's hooks), the modifiers
+    this.gameMode = this.extended ? gameMode : "standard";
+    this.GM = this.gameMode !== "standard" ? TunnelerEngine.MODES[this.gameMode] : null;
+    this.GS = {};
+    this.mods = this.extended ? mods : { dark: false, hardRock: false, noRepair: false };
+    this.lang = "en";                              // the language of the texts (Lang.apply sets it; display only)
     this.names = new Array(this.nPlayers).fill(null);  // display names (setNames), null = color name
     this.computeTeams();
     this.winScore = clampInt(o.winScore, 1, 9, 3);
@@ -707,6 +729,23 @@ class TunnelerEngine {
   putCell(x, y, ch, attr) { this.vram[y * 160 + x * 2] = ch; this.vram[y * 160 + x * 2 + 1] = attr & 0xFF; this.dirty = true; }
 
   // 76 x 71 pixel window of the world (71 rows x 38 bytes) into the attribute bytes at ScrOfs
+  // modifier dark (extended): a view screen black beyond DARK_R pixels from its middle (the tank) - display
+  // only. DARK_MASK[r * 38 + c]: which of the byte's two pixels stay (0xFF both, 0x0F / 0xF0 one, 0 none)
+  darkView(scrOfs) {
+    if (!DARK_MASK) {
+      DARK_MASK = new Uint8Array(71 * 38);
+      for (let r = 0; r < 71; r++)
+        for (let c = 0; c < 38; c++) {
+          const lit = x => (x - 38) * (x - 38) + (r - 38) * (r - 38) * 4 <= DARK_R * DARK_R;   // (pixels are twice as tall)
+          DARK_MASK[r * 38 + c] = (lit(c * 2) ? 0x0F : 0) | (lit(c * 2 + 1) ? 0xF0 : 0);
+        }
+    }
+    let dst = scrOfs;
+    for (let r = 0; r < 71; r++) {
+      for (let c = 0; c < 38; c++) { this.vram[dst] &= DARK_MASK[r * 38 + c]; dst += 2; }
+      dst += 84;
+    }
+  }
   blitView(col, row, scrOfs, noise) {
     let src, mem, skip;
     if (noise) { src = this.random(30000); mem = LOW_MEMORY; skip = 474; }
@@ -1089,6 +1128,8 @@ class TunnelerEngine {
   // up the normal way (explosion, round end, scoring). A tie at the top: every tank alive blows up, so
   // nobody wins the round.
   timeUp() {
+    // a game mode may decide the end of the time itself (e.g. the most gold) - true: it did
+    if (this.GM && this.GM.timeUp && this.GM.timeUp(this)) { this.timedOut = true; return; }
     const N = this.nPlayers, dmg = new Map(), sides = [];
     for (let p = 1; p <= N; p++) {
       const t = this.team(p);
@@ -1179,6 +1220,8 @@ class TunnelerEngine {
     const S = Object.assign({}, STRINGS_EN.settings, this.strings.settings);
     const sizes = TunnelerEngine.SIZES || ["small", "medium", "large"];
     const parts = [S.size[Math.max(0, sizes.indexOf(this.size))], S.win.replace("{n}", String(this.winScore))];
+    if (this.gameMode !== "standard") parts.unshift((S.modes || {})[this.gameMode] || this.gameMode);
+    for (const k of ["dark", "hardRock", "noRepair"]) if (this.mods[k] && S[k]) parts.push(S[k]);
     if (this.teams) parts.push(S.ff[this.friendlyFire ? 1 : 0]);
     const vi = ["self", "team", "everyone"].indexOf(o.view);
     if (vi >= 0) parts.push((o.visible ? S.visible : S.view).replace("{v}", S.views[vi]));
@@ -1538,6 +1581,70 @@ class TunnelerEngine {
     return seen.size;
   }
 
+  // ---- game mode helpers (docs/DESIGN-8P.md 27; src/js/modes/*.js)
+  // A game mode's text in this engine's language: GM.strings[lang][key], else English; {name} params
+  mt(key, params) {
+    const S = this.GM && this.GM.strings || {}, t = (S[this.lang] && S[this.lang][key]) || (S.en && S.en[key]) || key;
+    return params ? t.replace(/\{(\w+)\}/g, (m, k) => params[k] !== undefined ? String(params[k]) : m) : t;
+  }
+  // end the round now (the usual 25 frames later) with team index t winning (-1 = nobody)
+  endRound(t) {
+    if (this.endTimer >= 0) return;
+    this.modeWinner = t;
+    this.endTimer = 25;
+  }
+  // (re)place a destroyed - or not yet active - tank at x, y (default: its own base) with full energy
+  // and shield, facing the middle of the world; it is drawn from this frame on
+  respawn(p, x, y) {
+    x = x == null ? this.baseX[p] : x; y = y == null ? this.baseY[p] : y;
+    this.tankX[p] = x; this.tankY[p] = y;
+    this.tankDir[p] = x < (this.worldW >> 1) ? 2 : 6;
+    this.alive[p] = true; this.killedBy[p] = 0;
+    this.energy[p] = MaxPower; this.shield[p] = MaxPower; this.shownEnergy[p] = 0; this.shownShield[p] = 0;
+    this.digDelay[p] = -1; this.staticTimer[p] = 0; this.fireDelay[p] = 0; this.moving[p] = false;
+    for (let j = 1; j <= MaxShots; j++) this.shotX[p][j] = -1;
+  }
+  // change teams in the middle of a match (infection...): new team numbers 1..8 per player (0-based array)
+  setTeamsNow(teams) {
+    if (!this.extended || !Array.isArray(teams)) return;
+    const old = this.teamWins.slice(), oldIds = this.teamIds.slice();
+    this.slots.forEach((s, i) => { if (teams[i] !== undefined) s.team = clampInt(teams[i], 1, 8, s.team); });
+    this.teamWins = null;
+    this.computeTeams();
+    this.teamIds.forEach((id, k) => { const o = oldIds.indexOf(id); this.teamWins[k] = o >= 0 ? old[o] : 0; });
+    if (this.endTimer < 0 && !(this.GM && this.GM.eliminationEnds === false) && this.sidesLeft() <= 1) this.endTimer = 25;
+  }
+  // a world pixel of a mode object for this frame's view screens (restored after the blits)
+  objPut(x, y, color) {
+    if (x < 0 || y < 0 || x >= this.worldW || y >= this.worldH) return;
+    this.objs.push(x, y, this.getPixel(x, y));
+    this.setPixel(x, y, color);
+  }
+  objRestore() {
+    const o = this.objs;
+    for (let i = o.length - 3; i >= 0; i -= 3) this.setPixel(o[i], o[i + 1], o[i + 2]);
+    this.objs = [];
+  }
+  // a game mode's number (0..99) on a black tag in the frame beside player p's instrument panel, on the
+  // right (the round clock's tag is on the left); h = {value, color} or null (no tag)
+  hudTag(p, h) {
+    const key = h ? h.value + ":" + (h.color || 14) : "";
+    if (this.hudShown[p] === key) return;
+    this.hudShown[p] = key;
+    this.inView(p, () => {
+      for (let y = 78; y <= 93; y++) for (let c = 37; c <= 39; c++) this.putCell(c, y, 221, 0);
+      if (!h) { for (let y = 78; y <= 93; y++) for (let c = 37; c <= 39; c++) this.putCell(c, y, 176, this.playerColor(p)); return; }
+      const v = Math.max(0, Math.min(99, h.value | 0)), ds = v >= 10 ? [Math.trunc(v / 10), v % 10] : [v];
+      ds.forEach((d, k) => {
+        const y0 = ds.length === 2 ? 80 + k * 7 : 83;
+        for (let r = 0; r < 5; r++)
+          for (let c = 0; c < 3; c++) if (CLOCK_DIGITS[d][r] & (4 >> c)) this.plotLores(75 + c, y0 + r, h.color || 14);
+      });
+    });
+  }
+  // the mode's score of player p for the map's table, the round title, the statistics ("" = none)
+  modeScoreText(p) { return this.GM && this.GM.scoreText ? this.GM.scoreText(this, p) || "" : ""; }
+
   // coloured tank sprites: the original's shapes, treads 13, body = player colour, gun 14
   initTablesExt() {
     const S = this.tankSprites;
@@ -1593,6 +1700,9 @@ class TunnelerEngine {
     this.baseMinDist = minDist;
     this.baseCarved = 0;
     for (let i = 1; i <= N; i++) this.baseCarved += this.openBase(this.baseX[i], this.baseY[i]);
+    this.modeScore = new Array(N + 1).fill(0);      // the game mode's score per player (gold, points, kills...)
+    this.GS = {};
+    if (this.GM && this.GM.init) this.GM.init(this);
   }
 
   // Extended only (the classic placement stays the original's): a base whose two doorways both open into
@@ -1719,6 +1829,10 @@ class TunnelerEngine {
       this.roundDamage[i] = 0;
     }
     this.endTimer = -1;
+    this.modeWinner = undefined;                    // a game mode's round winner (team index, -1 = nobody)
+    this.objs = [];                                 // world pixels covered by mode objects this frame (objPut)
+    this.hudShown = new Array(this.nPlayers + 1).fill(null);
+    if (this.GM && this.GM.round) this.GM.round(this);
   }
 
   // every tank that runs out of energy / shield dies; the round ends 25 frames after at most one
@@ -1732,6 +1846,10 @@ class TunnelerEngine {
     this.addExplosion(x, y, 16, 40);
     this.addExplosion(x, y, 12, 40);
     this.alive[p] = false;
+    // a game mode may handle what a destroyed tank means (respawn, switching teams...) - true: it did, the
+    // round doesn't end by elimination
+    if (this.GM && this.GM.onKill && this.GM.onKill(this, p, this.killedBy[p] || 0, x, y)) return;
+    if (this.GM && this.GM.eliminationEnds === false) return;
     if (this.endTimer < 0 && this.sidesLeft() <= 1) this.endTimer = 25;
   }
 
@@ -1775,6 +1893,8 @@ class TunnelerEngine {
                 } else {
                   this.addExplosion(x - DX, y - DY, 3, 7);
                   this.queueSound(0, x - DX, y - DY);
+                  // (a game mode: a shot exploding on something that isn't a tank - c: the pixel's colour)
+                  if (this.GM && this.GM.shotHit) this.GM.shotHit(this, p, x, y, c);
                 }
                 x = -1;
               }
@@ -2201,7 +2321,7 @@ class TunnelerEngine {
                       this.digTunnel(kb);
                       this.energy[P] -= 2;
                       this.metersDug[P] = i16(this.metersDug[P] + 1);
-                      this.digDelay[P] = 1;
+                      this.digDelay[P] = this.mods.hardRock ? HARD_ROCK_DELAY : 1;   // (modifier hardRock: slower)
                     } else if (this.digDelay[P] > 0) this.digDelay[P]--;
                     else {
                       if (fire) {
@@ -2219,18 +2339,21 @@ class TunnelerEngine {
                 this.moving[P] = true;
               } else this.moving[P] = false;
               // own base: refuel and repair; a teammate's base: refuel slower, repair at half speed;
-              // an enemy base: refuel only, slower
+              // an enemy base: refuel only, slower (modifier noRepair: no repair at all; a game mode may
+              // switch a base off - GM.baseUsable)
               for (let q = 1; q <= N; q++)
-                if (this.distance(Math.abs(this.tankX[P] - this.baseX[q]), Math.abs(this.tankY[P] - this.baseY[q])) < 15) {
+                if (this.distance(Math.abs(this.tankX[P] - this.baseX[q]), Math.abs(this.tankY[P] - this.baseY[q])) < 15 &&
+                    !(this.GM && this.GM.baseUsable && !this.GM.baseUsable(this, q, P))) {
+                  const repair = !this.mods.noRepair;
                   if (q === P) {
                     this.energy[P] += 80;
                     if (this.energy[P] > MaxPower) this.energy[P] = MaxPower;
-                    this.shield[P] += 40;
+                    if (repair) this.shield[P] += 40;
                     if (this.shield[P] > MaxPower) this.shield[P] = MaxPower;
                   } else {
                     this.energy[P] += 30;
                     if (this.energy[P] > MaxPower) this.energy[P] = MaxPower;
-                    if (this.team(q) === this.team(P)) {
+                    if (repair && this.team(q) === this.team(P)) {
                       this.shield[P] += 20;
                       if (this.shield[P] > MaxPower) this.shield[P] = MaxPower;
                     }
@@ -2241,6 +2364,9 @@ class TunnelerEngine {
           if (P === 1) this.soundTick();          // one shared speaker queue: 3 ticks a frame as the original
         }
         this.cpu += CPU_PLAYERS;
+        // a game mode's own rules, once per frame after the tanks moved (pickups, zones, scores, respawns,
+        // its end of the round: modeWinner + endTimer)
+        if (this.GM && this.GM.frame) this.GM.frame(this);
 
         for (let I = 1; I <= N; I++) {
           this.I = I;
@@ -2250,6 +2376,10 @@ class TunnelerEngine {
         }
         this.moveShotsExt();
         this.drawShots();
+        // a game mode's objects (gold, flags, zone marks...): drawn into the world for the view screens only
+        // (objPut remembers each pixel; restored after the blits - tanks and shots never collide with them)
+        if (this.GM && this.GM.draw) this.GM.draw(this);
+        if (this.GM && this.GM.hud) for (let p = 1; p <= N; p++) this.hudTag(p, this.GM.hud(this, p));
         for (let I = 1; I <= N; I++) {
           this.I = I;
           if (I <= 2) this.soundTick();
@@ -2262,8 +2392,10 @@ class TunnelerEngine {
           this.static = this.alive[I] && this.staticTimer[I] > 0;
           if (this.static) this.staticTimer[I]--;
           this.inView(I, () => this.blitView(shr(this.tankX[I], 1) - 19, this.tankY[I] - 38, ViewOfs[1], this.static));
+          if (this.mods.dark) this.inView(I, () => this.darkView(ViewOfs[1]));   // (display only)
           if (I <= 2) this.cpu += CPU_BLIT;       // sound timing within the frame as the original's 2 blits
         }
+        this.objRestore();
         for (let I = 1; I <= N; I++) if (this.alive[I]) this.eraseTankExt(I);
         this.eraseShots();
         if (this.endTimer > 0) this.endTimer--;
@@ -2294,8 +2426,10 @@ class TunnelerEngine {
       const left = [];
       for (let p = 1; p <= N; p++) if (this.alive[p]) left.push(p);
       this.roundWinner = 0; this.roundWinnerTeam = -1;
-      if (left.length && left.every(p => this.team(p) === this.team(left[0]))) {
-        const t = this.team(left[0]), members = this.teamMembers(t);
+      // (a game mode that decided the round: its winner - a team index, -1 = nobody)
+      const decided = this.modeWinner !== undefined, mt = this.modeWinner;
+      if (decided ? mt >= 0 && mt < this.nTeams : left.length && left.every(p => this.team(p) === this.team(left[0]))) {
+        const t = decided ? mt : this.team(left[0]), members = this.teamMembers(t);
         this.teamWins[t]++;
         this.roundWinnerTeam = t;
         for (const p of members) this.wins[p]++;
@@ -2617,6 +2751,13 @@ class TunnelerEngine {
     add("");
     para(I.gameHead, I.game);
     for (const [head, text] of I.sections || E.sections) { add(""); para(head, text); }
+    // the game modes (docs/DESIGN-8P.md 27): each one's name and its own explanation (GM.strings.<lang>.instr)
+    for (const m of TunnelerEngine.MODE_LIST) {
+      const M = TunnelerEngine.MODES[m], S = M && M.strings;
+      if (!S || !S.en || !S.en.instr) continue;
+      const name = ((this.strings.settings || {}).modes || STRINGS_EN.settings.modes)[m] || m;
+      add(""); para(name.charAt(0).toUpperCase() + name.slice(1) + ":  ", (S[this.lang] && S[this.lang].instr) || S.en.instr);
+    }
     return rows;
   }
   showInstructions() { this.showPageRows("instructions", this.instructionRows()); }
@@ -2826,7 +2967,22 @@ TunnelerEngine.BITS = { UP: B_UP, DOWN: B_DOWN, LEFT: B_LEFT, RIGHT: B_RIGHT, FI
 TunnelerEngine.STRINGS_EN = STRINGS_EN;
 TunnelerEngine.PAGE_ROWS = PAGE_ROWS;               // Instructions / Information: text rows on screen
 TunnelerEngine.PAGE_W = PAGE_W;                     // ... and their width (column 80: the scroll bar)
+// Game modes (docs/DESIGN-8P.md 27): src/js/modes/<name>.js registers each one's hooks; the pages load them
+// all as /js/modes.js (build.js / server.js join them), node loads them below.
+TunnelerEngine.MODES = {};
+// every mode in the order the menus offer them (the same as NetProto.MODES); modifiers
+TunnelerEngine.MODE_LIST = ["standard", "gold", "infection", "survival", "hill", "shrink", "ctf", "siege", "deathmatch"];
+TunnelerEngine.OWN_TEAMS = ["infection", "survival"];      // modes that make their own teams
+TunnelerEngine.MODIFIERS = ["dark", "hardRock", "noRepair"];
+TunnelerEngine.registerMode = (name, hooks) => { TunnelerEngine.MODES[name] = Object.assign({ name }, hooks); };
 
 root.TunnelerEngine = TunnelerEngine;
 if (typeof module !== "undefined") module.exports = TunnelerEngine;
+// node (tests, tools): every game mode file in src/js/modes/, alphabetically (the pages load /js/modes.js)
+if (typeof module !== "undefined" && module.exports && typeof require === "function" && typeof __dirname === "string") {
+  try {
+    const fs = require("fs"), path = require("path"), dir = path.join(__dirname, "modes");
+    if (fs.existsSync(dir)) for (const f of fs.readdirSync(dir).filter(f => f.endsWith(".js")).sort()) require(path.join(dir, f));
+  } catch (e) { /* no file system */ }
+}
 })(typeof window !== "undefined" ? window : globalThis);

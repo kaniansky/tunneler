@@ -111,6 +111,13 @@ function cleanName(s) {
 function langFiles(names) {
   return names.filter(f => f.endsWith(".js")).sort((a, b) => (a !== "en.js") - (b !== "en.js") || (a < b ? -1 : a > b ? 1 : 0));
 }
+// /js/modes.js: every src/js/modes/<mode>.js joined (build.js writes public/js/modes.js; serving src/ this
+// joins them on every request)
+function modesBundle(dir) {
+  const names = fs.existsSync(dir) ? fs.readdirSync(dir).filter(f => f.endsWith(".js")).sort() : [];
+  return "// generated: src/js/modes/*.js joined (see server.js modesBundle / build.js)\n" +
+    names.map(f => fs.readFileSync(path.join(dir, f), "utf8")).join("\n");
+}
 function langBundle(dir) {
   return "// generated: src/lang/*.js joined (see server.js langBundle / build.js)\n" +
     langFiles(fs.readdirSync(dir)).map(f => fs.readFileSync(path.join(dir, f), "utf8")).join("\n");
@@ -162,7 +169,7 @@ function createServer(opts = {}) {
     const room = {
       id, name, public: !!isPublic, allowSpec: !!allowSpec,
       size: st.size, winScore: st.winScore, friendlyFire: st.friendlyFire, roundTime: st.roundTime,
-      visible: st.visible, watchOut: st.watchOut,
+      visible: st.visible, watchOut: st.watchOut, mode: st.mode, dark: st.dark, hardRock: st.hardRock, noRepair: st.noRepair,
       seats: st.seats.map(s => ({ kind: s.kind, team: s.team, occ: null, last: null })),
       chat: [],                                    // the last CHAT_LOG chat messages [{from, text}]
       hostKey: crypto.randomBytes(16).toString("hex"), banned: new Set(), serial: 0,
@@ -177,7 +184,7 @@ function createServer(opts = {}) {
     return room;
   }
   const settingsOf = room => ({ size: room.size, winScore: room.winScore, friendlyFire: room.friendlyFire, roundTime: room.roundTime,
-    visible: room.visible, watchOut: room.watchOut });
+    visible: room.visible, watchOut: room.watchOut, mode: room.mode, dark: room.dark, hardRock: room.hardRock, noRepair: room.noRepair });
   const seated = room => room.seats.map((s, i) => s.occ ? i : -1).filter(i => i >= 0);
   // the tanks a match would have now
   const slotsNow = room => matchSlots(room.seats, i => !!room.seats[i].occ);
@@ -213,7 +220,7 @@ function createServer(opts = {}) {
     const places = m ? m.slots.filter(s => !s.bot).length : seated(r).length + r.seats.filter(s => s.kind === "open" && !s.occ).length;
     return { id: r.id, name: r.name, public: r.public, spectators: r.allowSpec, version,
       state: m ? (m.running ? "playing" : "paused") : "lobby", round: m ? m.report.round : 0,
-      wins: m ? m.report.wins : [], teamWins: m ? m.report.teamWins : [], ext: m ? m.ext : !isClassic(slots),
+      wins: m ? m.report.wins : [], teamWins: m ? m.report.teamWins : [], ext: m ? m.ext : !isClassic(slots, r),
       created: r.created, ...settingsOf(r),
       tanks: slots.length, players, places, bots: slots.filter(s => s.bot).length,
       open: r.seats.filter(s => s.kind === "open" && !s.occ).length,
@@ -228,7 +235,7 @@ function createServer(opts = {}) {
   // connected. Extended: runs from the start until it ends (a missing player's tank stands still).
   function startMatch(room) {
     const slots = slotsNow(room);
-    const ext = !isClassic(slots);
+    const ext = !isClassic(slots, room);
     for (const s of slots) if (!s.bot) { const ws = room.seats[s.color].occ; s.cid = ws.cid; s.name = ws.name; }
     const N = slots.length;
     const m = {
@@ -358,7 +365,7 @@ function createServer(opts = {}) {
   // seated player other than the host isn't ready), "match" (one is on)
   function cantStart(room) {
     if (room.match) return "match";
-    const p = startProblem(slotsNow(room));
+    const p = startProblem(slotsNow(room), room.mode);
     if (p) return p;
     if (seated(room).some(i => { const ws = room.seats[i].occ; return !ws.host && !ws.ready; })) return "ready";
     return null;
@@ -476,6 +483,10 @@ function createServer(opts = {}) {
     if (p.endsWith("/")) p += "index.html";
     const f = path.join(PUB, path.normalize(p));
     if (!f.startsWith(PUB + path.sep) || p.includes("\0")) { res.writeHead(403); return res.end(); }
+    if (p === "/js/modes.js" && fs.existsSync(path.join(PUB, "js", "modes"))) {   // serving src/: join the game modes now
+      res.writeHead(200, { "Content-Type": TYPES[".js"], "Cache-Control": "no-cache" });
+      return res.end(req.method === "HEAD" ? undefined : modesBundle(path.join(PUB, "js", "modes")));
+    }
     if (p === "/js/langs.js" && fs.existsSync(path.join(PUB, "lang"))) {   // serving src/: join the language files now
       let js;
       try { js = langBundle(path.join(PUB, "lang")); } catch (e) { res.writeHead(500); return res.end(); }
@@ -805,7 +816,7 @@ function createServer(opts = {}) {
   };
 }
 
-module.exports = { createServer, slugify, cleanName, langBundle };
+module.exports = { createServer, slugify, cleanName, langBundle, modesBundle };
 
 // Readable start-up errors instead of a Node stack trace (exit code 1).
 function startupError(port, err) {

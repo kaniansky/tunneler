@@ -542,7 +542,11 @@ class ViewModes {
     const head = [T("vw.tank"), T("vw.wins"), T("vw.energy"), T("vw.shield"), ""];
     const BAR = 10;
     const names = players.map(i => this.playerName(i));
-    const states = [T("vw.alive"), T("vw.dead")];
+    // a game mode with scores (gold, points, kills...): its score in the last column instead of alive /
+    // destroyed (a destroyed tank's name is gray anyway) - docs/DESIGN-8P.md 27
+    const scores = e.modeScoreText ? players.map(i => e.modeScoreText(i + 1)) : [];
+    const scored = scores.some(t => t);
+    const states = scored ? scores : [T("vw.alive"), T("vw.dead")];
     const w = [
       Math.max(visLen(head[0]), ...names.map(visLen)),
       Math.max(visLen(head[1]), 2),
@@ -570,7 +574,8 @@ class ViewModes {
       put(x[1] + w[1] - wins.length, r, wins, 0x0F);
       bar(x[2], r, alive ? e.energy[p] : 0, 0x0E);
       bar(x[3], r, alive ? e.shield[p] : 0, 0x0B);
-      put(x[4], r, alive ? states[0] : states[1], alive ? 0x07 : 0x0C);
+      if (scored) put(x[4], r, scores[k], 0x0F);
+      else put(x[4], r, alive ? states[0] : states[1], alive ? 0x07 : 0x0C);
     });
   }
 }

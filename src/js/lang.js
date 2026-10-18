@@ -143,6 +143,7 @@ function engineStrings(base) {
 
 // tell an engine to use the current language
 function apply(engine) {
+  engine.lang = code;                             // (game modes' own texts: engine.mt)
   if (!engine.baseStrings) engine.baseStrings = engine.strings;
   engine.strings = engineStrings(engine.baseStrings) || engine.baseStrings;
   engine.strings = Object.assign({}, engine.strings, { title: title() });   // (the menu's title: TUNNELER)

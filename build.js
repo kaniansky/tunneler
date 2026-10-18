@@ -34,11 +34,20 @@ function langBundle() {
     names.map(f => fs.readFileSync(path.join(LANG, f), "utf8")).join("\n");
 }
 
+// src/js/modes/*.js (one file per game mode, docs/DESIGN-8P.md 27) -> public/js/modes.js, loaded by the game
+// pages after ai.js; alphabetically. server.js's modesBundle serves the same join for src/.
+const MODES = path.join(SRC, "js", "modes");
+function modesBundle() {
+  const names = fs.existsSync(MODES) ? fs.readdirSync(MODES).filter(f => f.endsWith(".js")).sort() : [];
+  return "// generated: src/js/modes/*.js joined (see build.js)\n" + names.map(f => fs.readFileSync(path.join(MODES, f), "utf8")).join("\n");
+}
+
 function build() {
   const t0 = Date.now();
   fs.rmSync(OUT, { recursive: true, force: true });
-  fs.cpSync(SRC, OUT, { recursive: true, filter: f => f !== LANG });   // the language files go into js/langs.js
+  fs.cpSync(SRC, OUT, { recursive: true, filter: f => f !== LANG && f !== MODES });   // (joined below)
   fs.writeFileSync(path.join(OUT, "js", "langs.js"), langBundle());
+  fs.writeFileSync(path.join(OUT, "js", "modes.js"), modesBundle());
   // the version shown on the main menu ("TUNNELER 1.3.0")
   const version = JSON.parse(fs.readFileSync(path.join(__dirname, "package.json"), "utf8")).version;
   fs.writeFileSync(path.join(OUT, "js", "version.js"), "window.TUNNELER_VERSION = " + JSON.stringify(version) + ";\n");

@@ -394,12 +394,16 @@
     // friendly fire only matters with teammates: grayed out while no team has 2+ seats that aren't closed
     const teamOf = {};
     for (const x of st.seats) if (x.kind !== "closed") teamOf[x.team] = (teamOf[x.team] || 0) + 1;
-    const teams = Object.values(teamOf).some(n => n > 1);
+    const teams = Object.values(teamOf).some(n => n > 1) || TunnelerEngine.OWN_TEAMS.includes(s.mode);
     const row = (key, label, info, step, off) => off
       ? { key, label, align: "left", static: true, attr: 8 }
       : host ? { key, label, align: "left", info, go: () => step(1), change: step }
       : { key, label, align: "left", static: true, attr: 7 };
+    const ML = TunnelerEngine.MODE_LIST, mode = ML.includes(s.mode) ? s.mode : "standard";
+    const onOff = v => T(v ? "os.on" : "os.off");
     return [
+      // the game mode first (docs/DESIGN-8P.md 27); the modifiers at the end
+      row("mode", T("lc.mode") + T("gm." + mode), [T("gm." + mode + ".i"), T("lc.mode.i")], d => setSetting("mode", cycle(ML, mode, d))),
       row("size", T("os.size") + T("os.size." + s.size), [T("os.size.i1"), T("os.size.i2")], d => setSetting("size", cycle(SIZES, s.size, d))),
       row("win", T("os.win") + s.winScore, [T("os.win.i1"), T("os.win.i2")], d => setSetting("winScore", (s.winScore - 1 + d + 9) % 9 + 1)),
       row("time", T("os.time") + (s.roundTime ? T("time.n", { n: s.roundTime }) : T("time.off")), [T("time.i1"), T("time.i2")],
@@ -407,6 +411,9 @@
       row("ff", T("os.ff") + T(s.friendlyFire ? "os.on" : "os.off"), [T("os.ff.i1"), T("os.ff.i2")], () => setSetting("friendlyFire", !s.friendlyFire), !teams),
       row("visible", T("os.visible") + T("view." + s.visible), [T("os.visible.i1"), T("os.visible.i2")], d => setSetting("visible", cycle(VISIBLE, s.visible, d))),
       row("watch", T("os.watch") + T("watch." + s.watchOut), [T("watch.i1"), T("watch.i2")], d => setSetting("watchOut", cycle(AFTER_DEATH, s.watchOut, d))),
+      row("dark", T("mod.dark") + onOff(s.dark), [T("mod.dark.i")], () => setSetting("dark", !s.dark)),
+      row("hardRock", T("mod.hardRock") + onOff(s.hardRock), [T("mod.hardRock.i")], () => setSetting("hardRock", !s.hardRock)),
+      row("noRepair", T("mod.noRepair") + onOff(!s.noRepair), [T("mod.noRepair.i")], () => setSetting("noRepair", !s.noRepair)),
       row("public", T("create.public") + yn(st.public), [T("create.public.i1"), T("create.public.i2")], () => setRoomFlag("public", !st.public)),
       row("spectators", T("create.spect") + yn(st.spectators), [T("create.spect.i1"), T("create.spect.i2")], () => setRoomFlag("spectators", !st.spectators)),
     ];
@@ -458,7 +465,7 @@
     chatForm.width = 1;
     const actW = Math.max(seatW, DosUI.boxWidth(acts));
     chatForm.width = Math.max(8, actW - 3 - W(T("pg.say")));
-    chatPanel(lines, text, actW + 4, 12, 80, 21);
+    chatPanel(lines, text, actW + 4, Math.max(12, sets.length + 3), 80, 21);   // (below the settings box)
     const boxes = [{ x: 1, y: 1, w: seatW, title, items: seats },
       { x: 79 - setW, y: 1, w: setW, title: T("box.settings"), items: sets },
       { x: 1, y: 12, w: actW, title: T("box.game"), items: acts }];

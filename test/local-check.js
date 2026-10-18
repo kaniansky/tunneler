@@ -12,7 +12,7 @@ const assert = require("assert");
 const fs = require("fs"), path = require("path"), vm = require("vm");
 const SRC = path.join(__dirname, "..", "src");
 // /js/langs.js is generated: src/lang/*.js joined, as server.js serves it for src/
-const { langBundle } = require("../server.js");
+const { langBundle, modesBundle } = require("../server.js");
 
 let n = 0;
 const ok = msg => { n++; console.log("  ok  " + msg); };
@@ -39,7 +39,8 @@ function makeEnv(search, store) {
   const ctx = vm.createContext(win);
   const page = f => {
     for (const [, src] of fs.readFileSync(path.join(SRC, f), "utf8").matchAll(/<script src="\/([^"]+)"/g))
-      vm.runInContext(src === "js/langs.js" ? langBundle(path.join(SRC, "lang")) : fs.readFileSync(path.join(SRC, src), "utf8"), ctx, { filename: src });
+      vm.runInContext(src === "js/langs.js" ? langBundle(path.join(SRC, "lang")) : src === "js/modes.js" ? modesBundle(path.join(SRC, "js", "modes"))
+        : fs.readFileSync(path.join(SRC, src), "utf8"), ctx, { filename: src });
   };
   const key = code => { for (const f of listeners.keydown || []) f({ code, key: keyOf(code), target: {}, preventDefault() {} }); };
   return { win, page, key, storage };
@@ -153,23 +154,19 @@ function play(search) {
   env = makeEnv("", store);
   env.page("index.html");
   env.key("ArrowDown"); env.key("Enter");
-  // items (two boxes, one selection): Game = size, win, round time, view, ghost mode, gap, play, instr, back;
-  // Players = slot0..7 (play selected; Up from size wraps to slot7, Down from slot7 to size)
-  for (let i = 0; i < 6; i++) env.key("ArrowUp");           // watch, view, time, win, size, slot7
-  env.key("ArrowLeft");                                    // TEAL: nobody -> expert
-  for (let i = 0; i < 5; i++) env.key("ArrowUp");           // slot2 CYAN
-  env.key("ArrowRight");                                   // nobody -> normal (shown as easy)
+  // (rows are chosen by their key - the screen's order changes with its options)
+  const pick = (en, key) => { const ui = en.win.tunnelerHomeUI(); ui.sel = ui.spec.items.findIndex(it => it.key === key); assert(ui.sel >= 0, key); ui.draw(); };
+  pick(env, "slot7"); env.key("ArrowLeft");                // TEAL: nobody -> expert
+  pick(env, "slot2"); env.key("ArrowRight");               // CYAN: nobody -> normal (shown as easy)
   for (let i = 0; i < 6; i++) env.key("Enter");             // team 3 -> 8, then wraps to 1
   env.key("Enter");                                        // team 2
-  for (let i = 0; i < 6; i++) env.key("ArrowDown");         // slot3..7, size
-  env.key("ArrowRight");                                   // large
-  env.key("ArrowDown"); env.key("ArrowRight"); env.key("ArrowRight");   // win 5
-  env.key("ArrowDown"); env.key("ArrowRight"); env.key("Enter");   // round time: no limit -> 2 -> 3 min
-  env.key("ArrowDown"); env.key("Enter");                  // friendly fire (a team has 2+): on
-  env.key("ArrowDown"); env.key("Enter"); env.key("Enter");   // view: self -> team -> everyone
-  env.key("ArrowDown"); env.key("Enter");                  // after death: wreck -> team
-  // (with friendly fire shown the gap above "Start a new game" goes: 17 rows)
-  env.key("ArrowDown"); env.key("Enter");                  // start
+  pick(env, "size"); env.key("ArrowRight");                // large
+  pick(env, "win"); env.key("ArrowRight"); env.key("ArrowRight");   // win 5
+  pick(env, "time"); env.key("ArrowRight"); env.key("Enter");       // round time: no limit -> 2 -> 3 min
+  pick(env, "ff"); env.key("Enter");                       // friendly fire (a team has 2+): on
+  pick(env, "view"); env.key("Enter"); env.key("Enter");   // view: self -> team -> everyone
+  pick(env, "watch"); env.key("Enter");                    // after death: wreck -> team
+  pick(env, "play"); env.key("Enter");                     // start
   assert.strictEqual(decodeURIComponent(env.win.location.href),
     "/vs-computer?slots=0:you:1,1:normal:2,2:normal:2,7:expert:8&size=large&win=5&ff=1&view=everyone&watch=team&time=3");
   assert.strictEqual(store.get("tunneler.cpu.watch"), "team", "after death remembered");
@@ -178,14 +175,24 @@ function play(search) {
   {
     const st = new Map(), en = makeEnv("", st);
     en.page("index.html"); en.key("ArrowDown"); en.key("Enter");
-    for (let i = 0; i < 11; i++) en.key("ArrowUp");         // watch, view, time, win, size, TEAL..CYAN (rows: see above)
-    en.key("ArrowUp");                                     // GREEN
+    pick(en, "slot1");                                     // GREEN
     for (const [code, t] of [["Numpad2", 2], ["Numpad4", 4], ["Numpad6", 6], ["Numpad8", 8], ["Digit3", 3], ["Numpad7", 7]]) {
       en.key(code);
       const saved = JSON.parse(st.get("tunneler.cpu.slots"));
       assert.strictEqual(saved[1].team, t, code + " -> team " + t);
     }
     ok("number keys and the numeric keypad (2/4/6/8 too) set a slot's team");
+  }
+  // the game mode and the modifiers: in the link, remembered (docs/DESIGN-8P.md 27)
+  {
+    const st = new Map(), en = makeEnv("", st);
+    en.page("index.html"); en.key("ArrowDown"); en.key("Enter");
+    pick(en, "mode"); en.key("ArrowRight");                 // standard -> gold
+    pick(en, "dark"); en.key("Enter"); pick(en, "noRepair"); en.key("Enter");
+    pick(en, "play"); en.key("Enter");
+    assert(/&gm=gold&dark=1&norepair=1$/.test(decodeURIComponent(en.win.location.href)), en.win.location.href);
+    assert(st.get("tunneler.cpu.mode") === "gold" && st.get("tunneler.cpu.dark") === "1" && st.get("tunneler.cpu.noRepair") === "1");
+    ok("vs computer: Mode and the modifiers go into the link and are remembered");
   }
   // friendly fire: always listed, grayed out (not selectable) while no team has 2+ tanks
   {

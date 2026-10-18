@@ -42,6 +42,12 @@ const MAX_PLAYER_NAME = 12;                              // player names (pre-ga
 const MAX_CHAT = 60;                                     // characters per lobby chat message
 const VISIBLE = ["self", "team", "everyone"];            // what a player may see during play (room setting)
 const ROUND_TIMES = [0, 2, 3, 5, 10];                    // round time limit, minutes (0 = none; room setting)
+// game modes (docs/DESIGN-8P.md 27; src/js/modes/<mode>.js - the server never loads them): standard = last
+// team standing. Infection and survival make their own teams (the seats' teams don't matter); survival
+// needs AI tanks (the waves) and players.
+const MODES = ["standard", "gold", "infection", "survival", "hill", "shrink", "ctf", "siege", "deathmatch"];
+const OWN_TEAMS = ["infection", "survival"];
+const MODIFIERS = ["dark", "hardRock", "noRepair"];      // darkness, slow-to-dig dirt, no shield repair at bases
 const clampInt = (v, lo, hi, def) => { v = Math.trunc(Number(v)); return Number.isFinite(v) ? Math.max(lo, Math.min(hi, v)) : def; };
 
 // characters never kept in names / chat: control, bidi, zero-width, variation selectors, private use
@@ -99,6 +105,10 @@ const SETTINGS = {
   friendlyFire: v => typeof v === "boolean" ? v : undefined,
   visible: v => VISIBLE.includes(v) ? v : undefined,
   watchOut: v => AFTER_DEATH.includes(v) ? v : undefined,
+  mode: v => MODES.includes(v) ? v : undefined,
+  dark: v => typeof v === "boolean" ? v : undefined,
+  hardRock: v => typeof v === "boolean" ? v : undefined,
+  noRepair: v => typeof v === "boolean" ? v : undefined,
 };
 // A new room's settings from POST /api/rooms -> {seats: [8 x {kind, team}], size, winScore, friendlyFire,
 // roundTime, visible, watchOut}; anything missing or wrong gets its default. o.seats (or the older
@@ -109,7 +119,8 @@ function roomSettings(o) {
   const seats = list ? ROLES.map((r, i) => i < list.length ? seatOf(list[i], i) : { kind: "closed", team: i + 1 }) : defaultSeats();
   return { seats, size: SIZES.includes(o.size) ? o.size : "medium", winScore: clampInt(o.winScore, 1, 9, 3),
     friendlyFire: o.friendlyFire === true, roundTime: roundTime(o.roundTime),
-    visible: VISIBLE.includes(o.visible) ? o.visible : "self", watchOut: afterDeath(o.watchOut) };
+    visible: VISIBLE.includes(o.visible) ? o.visible : "self", watchOut: afterDeath(o.watchOut),
+    mode: MODES.includes(o.mode) ? o.mode : "standard", dark: o.dark === true, hardRock: o.hardRock === true, noRepair: o.noRepair === true };
 }
 
 // The tanks of a match: the seats with a player (human) or a computer tank, in colour order ->
@@ -123,16 +134,21 @@ function matchSlots(seats, occupied) {
   });
   return out;
 }
-// Why a match can't start, or null: "tanks" (fewer than 2), "human" (no player), "teams" (fewer than 2)
-function startProblem(slots) {
+// Why a match can't start, or null: "tanks" (fewer than 2), "human" (no player), "teams" (fewer than 2 -
+// not for the modes that make their own teams), "ai" (survival without AI tanks)
+function startProblem(slots, mode) {
   if (slots.length < 2) return "tanks";
   if (!slots.some(s => !s.bot)) return "human";
-  if (new Set(slots.map(s => s.team)).size < 2) return "teams";
+  if (mode === "survival" && !slots.some(s => s.bot)) return "ai";
+  if (!OWN_TEAMS.includes(mode) && new Set(slots.map(s => s.team)).size < 2) return "teams";
   return null;
 }
-// the classic game: exactly BLUE + GREEN, both players, in different teams - the original protocol and engine
-const isClassic = slots => slots.length === 2 && slots[0].color === 0 && slots[1].color === 1 && !slots[0].bot && !slots[1].bot &&
-  slots[0].team !== slots[1].team;
+// a game mode or a modifier: always the extended engine
+const special = st => !!st && ((st.mode && st.mode !== "standard") || MODIFIERS.some(k => st[k] === true));
+// the classic game: exactly BLUE + GREEN, both players, in different teams, the standard mode, no modifier -
+// the original protocol and engine (st: the settings; none = standard)
+const isClassic = (slots, st) => slots.length === 2 && slots[0].color === 0 && slots[1].color === 1 && !slots[0].bot && !slots[1].bot &&
+  slots[0].team !== slots[1].team && !special(st);
 
 // TunnelerEngine options for a match's cfg ({ext, slots: [{color, team}], size, winScore, friendlyFire,
 // roundTime}): every client the same. autoStart: no menu before the first round (the lobby was it).
@@ -141,6 +157,8 @@ function engineOptions(cfg) {
     winScore: cfg.winScore || 3, friendlyFire: !!cfg.friendlyFire, autoStart: true };
   if (roundTime(cfg.roundTime)) o.roundTime = roundTime(cfg.roundTime);
   if (cfg.ext) o.extended = true;
+  if (MODES.includes(cfg.mode) && cfg.mode !== "standard") o.mode = cfg.mode;
+  for (const k of MODIFIERS) if (cfg[k] === true) o[k] = true;
   return o;
 }
 // a received match cfg, checked (null = unusable)
@@ -153,7 +171,8 @@ function readCfg(c) {
     : slots.map(() => null);
   return { ext: !!c.ext, players: slots.length, slots, names, size: SIZES.includes(c.size) ? c.size : "medium",
     winScore: clampInt(c.winScore, 1, 9, 3), friendlyFire: !!c.friendlyFire, roundTime: roundTime(c.roundTime),
-    visible: VISIBLE.includes(c.visible) ? c.visible : "self", watchOut: afterDeath(c.watchOut) };
+    visible: VISIBLE.includes(c.visible) ? c.visible : "self", watchOut: afterDeath(c.watchOut),
+    mode: MODES.includes(c.mode) ? c.mode : "standard", dark: c.dark === true, hardRock: c.hardRock === true, noRepair: c.noRepair === true };
 }
 
 // One frame -> engine input ({keyDown, keys}); identical on every client.
@@ -293,6 +312,7 @@ function stateHash(e) {
 const NetProto = { TICK_MS, UP, DOWN, LEFT, RIGHT, FIRE, ESC, ALL_BITS, EXT_BITS, BLUE_SCAN, GREEN_SCAN, F10,
   AFTER_DEATH, afterDeath, ROLES, MAX_SLOTS, LEVELS, SEAT_KINDS, SIZES, MAX_PLAYER_NAME, MAX_CHAT, VISIBLE, ROUND_TIMES, roundTime,
   cleanPlayerName, cleanChat, cleanRoomName, SETTINGS, defaultSeats, roomSettings, matchSlots, startProblem, isClassic, engineOptions, readCfg,
+  MODES, OWN_TEAMS, MODIFIERS,
   frameToInput, frameToInputExt, FrameLog, FrameQueue, HASH_EVERY, stateHash };
 root.NetProto = NetProto;
 if (typeof module !== "undefined") module.exports = NetProto;

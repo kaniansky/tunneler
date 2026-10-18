@@ -7,8 +7,9 @@
 const assert = require("assert");
 const fs = require("fs"), path = require("path"), vm = require("vm");
 const SRC = path.join(__dirname, "..", "src");
-const { langBundle } = require("../server.js");
-const script = f => f === "js/langs.js" ? langBundle(path.join(SRC, "lang")) : fs.readFileSync(path.join(SRC, f), "utf8");
+const { langBundle, modesBundle } = require("../server.js");
+const script = f => f === "js/langs.js" ? langBundle(path.join(SRC, "lang")) : f === "js/modes.js" ? modesBundle(path.join(SRC, "js", "modes"))
+  : fs.readFileSync(path.join(SRC, f), "utf8");
 
 let n = 0;
 const ok = msg => { n++; console.log("  ok  " + msg); };

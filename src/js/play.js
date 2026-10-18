@@ -20,6 +20,9 @@
   const winScore = int(params.get("win"), 1, 9, 3);
   // round time limit in minutes (&time=2|3|5|10; none / anything else = no limit)
   const roundTime = [2, 3, 5, 10].includes(int(params.get("time"), 0, 99, 0)) ? int(params.get("time"), 0, 99, 0) : 0;
+  // vs computer: the game mode (&gm=gold...) and the modifiers (&dark=1, &hard=1, &norepair=1) - docs/DESIGN-8P.md 27
+  const gmode = mode === "cpu" && (TunnelerEngine.MODE_LIST || []).includes(params.get("gm")) ? params.get("gm") : "standard";
+  const mods = mode === "cpu" ? { dark: params.get("dark") === "1", hardRock: params.get("hard") === "1", noRepair: params.get("norepair") === "1" } : {};
   const VIEWS = ["self", "team", "everyone"];
   const view = VIEWS.includes(params.get("view")) ? params.get("view") : params.get("hide") === "0" ? "everyone" : "self";
   // vs computer, after death (watch=black|wreck|others; old 1 = others): what you see once your tank
@@ -67,7 +70,7 @@
   // (escEnds: BLUE's Esc ends the match as in the original - the extended engine ignores Esc online)
   const engine = new TunnelerEngine(seed, slots
     ? { slots: slots.map(s => ({ color: s.color, team: s.team })), size, winScore, roundTime, friendlyFire: ff, escEnds: true, escPlayer: me, autoStart: true, noInstructions: true,
-        extended: me !== 0 }                    // the classic engine only with you as BLUE
+        extended: me !== 0, mode: gmode, ...mods }   // the classic engine only with you as BLUE (standard mode, no modifier)
     : { size, winScore, roundTime, autoStart: true, noInstructions: true });   // settings were chosen on the page: no menu before round 1
   const ext = engine.extended;
   // vs computer: BLUE's own view, its team's or everyone's (BLUE first); split screen: the full split screen

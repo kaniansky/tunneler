@@ -442,3 +442,116 @@ Refinements (owner, 2026-10-18):
   front of yours) and settings side by side, Start / Back centred below them (owner).
 - Friendly fire is always listed (vs computer, the online lobby), grayed out while no team can have 2+
   tanks (owner).
+
+## 27. Game modes and modifiers (owner, 2026-10-18)
+
+A **Mode** setting (online lobby Settings box, vs computer screen; first row) and three **modifiers**.
+"standard" = the game so far (last team standing). Every other mode and any modifier runs the extended
+engine (also for BLUE vs GREEN). Online the mode is a room setting like the others (`NetProto.MODES`,
+`SETTINGS.mode / dark / hardRock / noRepair`, `engineOptions`); vs computer it goes into the link
+(`&gm=gold&dark=1&hard=1&norepair=1`, localStorage `tunneler.cpu.mode` / `.dark` / `.hardRock` / `.noRepair`).
+Infection and survival make their own teams (`NetProto.OWN_TEAMS`: the seats' teams don't matter, no
+"2 teams" check); survival needs at least one AI tank (`startProblem` -> "ai").
+
+Modifiers (engine, done): **dark** - every view screen black beyond ~26 px of its tank (`darkView`, display
+only); **hardRock** - after each dig a tank waits HARD_ROCK_DELAY frames instead of 1; **noRepair** - bases
+refuel but never repair shields.
+
+### The framework (src/js/engine.js, src/js/ai.js, done)
+One file per mode: `src/js/modes/<mode>.js` (joined into `/js/modes.js` by build.js / server.js
+`modesBundle`; node: engine.js requires every file there). It registers its hooks:
+```js
+(function (root) {
+const E = root.TunnelerEngine || require("../engine.js");
+E.registerMode("gold", { strings: { en: {...}, sk: {...}, cs: {...}, uk: {...}, ru: {...}, genz: {...} }, ...hooks });
+})(typeof window !== "undefined" ? window : globalThis);
+```
+The engine (`e`) of a match in that mode has `e.gameMode`, `e.GM` (the hooks), `e.GS` (the mode's own
+state: `{}` at every match start - everything the mode keeps goes there or in `e.modeScore`), `e.mods`.
+Hooks (all optional; `e` = the engine; players are 1..e.nPlayers; teams are indexes 0..e.nTeams-1):
+- `init(e)` - match start, after the bases are placed (`e.modeScore` = zeros).
+- `round(e)` - round start, after every tank is reset at its base (`e.objs`, `e.hudShown` reset).
+- `frame(e)` - every play frame after the tanks moved / fired (before they are drawn and shots move).
+- `onKill(e, p, killer, x, y)` - tank p was destroyed (alive already false; killer 0 = none). Return
+  true when the mode handles it (respawn, switching teams: no elimination check).
+- `eliminationEnds: false` - the round never ends because only one team is left (the mode ends it).
+- `shotHit(e, shooter, x, y, color)` - a shot exploded on something that is not a tank (dirt, rock, a
+  base wall: `color` is the world pixel's colour, `TunnelerEngine.PixelClassExt[color]`: 1 dirt, 3
+  tank/base, 4 rock).
+- `baseUsable(e, base, p)` - false: tank p gets nothing at base `base` (a destroyed base, outside the
+  safe area...).
+- `timeUp(e)` - the round time ran out: decide the round (`e.endRound(team)`) and return true; else the
+  usual damage rule applies.
+- `draw(e)` - draw the mode's objects for this frame with `e.objPut(x, y, colour)` (world pixels, shown in
+  the view screens; restored after the blits - tanks / shots never collide with them; palette: 14 yellow
+  gold, 9 white, 12 red, 15 teal, 5 yellow, a player's own `e.playerColor(p)`).
+- `hud(e, p)` -> `{value: 0..99, color}` or null: a number on a black tag beside player p's instrument
+  panel (right side; the round clock is on the left).
+- `scoreText(e, p)` -> short text for the spectators' map table ("gold 3"; use `e.mt`).
+- AI: `aiOverride(ai, e, mx, my, ctx)` -> null (as usual) or `{x, y, dig, mode}` to go to (the AI's
+  `goTo` path finding) or `{dir}` (-1 = stand still) - checked before retreat / engage, every frame;
+  `ctx = {E, recent, dE, T, atHome}`. `aiGoal(ai, e, mx, my)` -> `{x, y, mode, dig}` instead of exploring
+  when no enemy is in reach. `aiFire(ai, e, mx, my, dir)` -> true: fire now. `aiAlways: true` - the AI
+  keeps playing while no enemy is alive. The AI reads `ai.me` (its player), `ai.retreating`, its
+  `ai.rng()` (deterministic), `ai.goTo(e, mx, my, gx, gy, dig)`, `e.isEnemy(a, b)`...
+Helpers: `e.mt(key, params)` (the mode's text in the engine's language, `strings.<lang>[key]`, else
+English), `e.endRound(team)` (end the round in 25 frames, team index or -1 = nobody), `e.respawn(p, x, y)`
+(a destroyed / inactive tank back with full energy and shield; default at its base), `e.setTeamsNow(teams)`
+(team numbers 1..8 per player, 0-based array - mid-match), `e.objPut`, `e.random(n)` (the engine's RNG:
+fine to use in hooks - every client calls the same hooks in the same order), `e.sc(n)` (a length scaled
+to the map size), `e.distance(dx, dy)`, `e.getPixel / setPixel` (world; 0 free, 6 / 8 dirt, 7 / 4 rock),
+`e.baseX/baseY[p]`, `e.tankX/tankY/alive/energy/shield[p]`, `e.team(p)`, `e.teamMembers(t)`, `e.tick`.
+The round winner: `e.endRound(t)` sets it; otherwise the last team standing as before. `e.modeScore[p]`:
+the mode's score per player (shown by `scoreText` / hud as the mode wants).
+Strings: `strings.<lang>` for en, sk, cs, uk, ru, genz with at least `instr` (2-4 sentences: how the mode
+plays - the Instructions page lists it under the mode's name) and every text the mode shows. The mode's
+name and one-line description are already in the language files (`gm.<mode>`, `gm.<mode>.i`,
+`settings.modes`). No other files change for a mode but its own test `test/modes/<mode>.js` (run by
+test/modes-check.js, which also runs every mode's AI-only matches for "finishes" + "deterministic";
+test/modes-harness.js has `runMatch`).
+Determinism (online): hooks only use the engine's state and `e.random`; no Math.random / Date; the AI hooks
+only `ai.rng()`.
+
+### The modes (rules)
+- **gold** (gold rush): at each round start nuggets (3x3 px, colour 14) are scattered in the dirt (about 5
+  per tank, scaled to the map; never in rock, bases or base doorways). A tank picks one up by touching it
+  (within ~5 px) - at most 5 carried; brought into its own or a teammate's base they count for its team
+  (`modeScore`). A hit while carrying drops one nugget where it is hit; a destroyed tank drops all.
+  The round ends when one team has more than half of all the gold, or all of it is home, or one team is
+  left (elimination as usual), or at the round time (the most gold wins; a tie: nobody). hud: gold
+  carried (yellow) / scoreText: the team's gold.
+- **infection**: at each round start one random tank is infected (team number 1); every other tank is
+  healthy (team number 2, together). A healthy tank destroyed by an infected one comes back at once at its
+  base as infected (it joins team 1); an infected tank destroyed comes back at its base after ~3 s
+  (`eliminationEnds: false`). The round ends when no healthy tank is left (the infected team wins it) or
+  when the round time is up (the healthy team wins it - with no round time set, the mode uses 3 minutes).
+  Teams change mid-round with `e.setTeamsNow`. A mode's own default time limit: set `e.roundTicks` (engine
+  steps) in `init` when it is 0 (the round clock then runs and calls `timeUp`). hud: healthy tanks left.
+- **survival**: players are team 1, AI tanks team 2. Waves: wave k brings k AI tanks (at most the number of
+  AI seats; from the AI seats' bases or random clear spots far from the players); a wave is cleared when
+  its tanks are destroyed, the next starts ~3 s later, each wave's tanks stronger (shield / level). Players
+  destroyed stay out until the next round. The players win the round by clearing 5 waves; all players
+  destroyed: the AI wins it. hud: the wave number; scoreText: waves cleared.
+- **hill** (king of the hill): a zone (circle, radius sc(24)) in the middle of the map, dug free at match
+  start, its edge marked (dots, white; the holding team's colour). Every frame only one team's tanks (alive)
+  are in it, that team gets a point; the first to 1000 points (~55 s) wins the round; at the round time the
+  most points. hud: own team's points as 0..99 %.
+- **shrink** (shrinking world): a safe circle around the middle shrinks from covering the map to sc(40)
+  over 3 minutes; outside it a tank loses shield (~2 % of MaxPower per second, more later) and bases
+  outside don't help. Its edge is marked (dots, red). Last team standing wins (usual elimination). hud:
+  seconds until the next shrink step, or nothing.
+- **ctf** (capture the flag): every team's flag stands at its first tank's base (free-for-all: every
+  tank's), drawn as a small flag in its team's colour. Touch an enemy flag to carry it (drawn above the
+  carrier); bring it to your own base while your own flag is home: a capture (+1). The carrier destroyed:
+  the flag drops there; its own team touching it returns it home, an enemy picks it up. First to 3 captures
+  wins the round; at the round time the most captures. Destroyed tanks come back at their base after ~3 s
+  (`eliminationEnds: false`). hud: captures.
+- **siege** (base siege): every base has 30 hit points (shown on the hud for the own base); a shot exploding
+  on a base's walls takes one (not its own team's). A base at 0 is destroyed (its walls turn to rubble/dirt,
+  `baseUsable` false); tanks come back at their base after ~3 s while it stands - not after it fell. A team
+  with no base and no tank left is out; the last team with a base (or tank) wins the round.
+- **deathmatch**: destroyed tanks come back at their base after ~3 s; a kill of an enemy scores +1 for the
+  killer (a teammate -1). The first team to 10 kills (team sum) wins the round; at the round time the most.
+  `eliminationEnds: false`. hud: own kills / scoreText kills.
+Every mode's AI plays it (goes for gold / flags / the zone / bases, keeps inside the safe area...) well
+enough that AI-only matches finish.
