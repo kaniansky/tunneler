@@ -2,14 +2,15 @@
 // Every team's flag stands at its first tank's base (free-for-all: every tank's). A tank touching an enemy
 // flag carries it (drawn above the carrier); brought to a base of the carrier's team while the team's own
 // flag is at home: a capture (+1). A destroyed carrier drops the flag where it was; its own team touching
-// it returns it home, an enemy picks it up. First to CAPS captures wins the round; at the round time the
-// most captures (a tie: nobody). Destroyed tanks come back at their base after ~3 s.
-// All state lives in e.GS (round state) and e.modeScore (captures per player, the whole match).
+// it returns it home, an enemy picks it up. The match is ONE round (winScore 1): the first team to e.goal
+// captures ("Captures to win", TunnelerEngine.GOALS.ctf, default CAPS) wins it; at the round time the most
+// captures (a tie: nobody). Destroyed tanks come back at their base after ~3 s.
+// All state lives in e.GS (round state) and e.modeScore (captures per player).
 (function (root) {
 "use strict";
 const E = root.TunnelerEngine || require("../engine.js");
 
-const CAPS = 3;            // captures that win a round
+const CAPS = 3;            // captures that win the match when no goal is set (the GOALS default)
 const TOUCH = 9;           // a tank this close to a flag (or a base's middle) touches it (tanks block at < 6)
 const RESPAWN = 55;        // frames until a destroyed tank comes back (~3 s at 18.2 frames a second)
 const DEFEND = 60;         // AI: an enemy this close to the own flag at home is fought (else it drives on)
@@ -20,6 +21,7 @@ const POLE = 9;            // the flag pole's colour (white); the cloth is the t
 const PC = E.PixelClassExt;
 const dist = (e, dx, dy) => e.distance(Math.abs(dx), Math.abs(dy));
 const cheb = (ax, ay, bx, by) => Math.max(Math.abs(ax - bx), Math.abs(ay - by));
+const goalOf = e => e.goal || CAPS;
 const isHome = F => F.carrier === 0 && F.x === F.hx && F.y === F.hy;
 
 // a flag drawn with its pole's foot at (px, py): pole 7 px up, a 3x3 cloth on its right at the top. Pixels
@@ -75,33 +77,37 @@ E.registerMode("ctf", {
   roundNote: (e, t) => t >= 0 && e.GS.caps ? e.mt("note", { n: e.GS.caps[t] || 0 }) : "",
   strings: {
     en: { stat: "caps", note: "{n} caps",
-      instr: "Every team has a flag at its base (free-for-all: every tank). Drive over an enemy flag to take it, then bring it to your own base while your own flag is at home: a capture. A destroyed carrier drops the flag - its own team returns it by touching it, an enemy picks it up again. The first to 3 captures wins the round (at the round time: the most captures); destroyed tanks come back at their base after 3 seconds.",
-      score: "caps {n}", carrying: "+flag",
+      instr: "Every team has a flag at its base (free-for-all: every tank). Drive over an enemy flag to take it, then bring it to your own base while your own flag is at home: a capture. A destroyed carrier drops the flag - its own team returns it by touching it, an enemy picks it up again. The match is one round: the first team to reach Captures to win (a setting, instead of rounds to win) wins it; when the round time runs out, the most captures win. Destroyed tanks come back at their base after 3 seconds. The number beside your instrument panel shows your team's captures.",
+      score: "caps {n}/{g}", carrying: "+flag",
     },
     sk: { stat: "vlaj.", note: "{n} vlaj.",
-      instr: "Každý tím má vlajku na svojej základni (každý sám za seba: každý tank). Prejdi cez nepriateľskú vlajku, zober ju a dovez na svoju základňu, kým je tvoja vlajka doma: to je bod. Zničený tank vlajku stratí na mieste - jeho tím ju dotykom vráti domov, nepriateľ ju zoberie znova. Kolo vyhrá, kto prvý získa 3 body (po uplynutí času kola najviac bodov); zničené tanky sa po 3 sekundách vrátia na svoju základňu.",
-      score: "vlajky {n}", carrying: "+vlajka",
+      instr: "Každý tím má vlajku na svojej základni (každý sám za seba: každý tank). Prejdi cez nepriateľskú vlajku, zober ju a dovez na svoju základňu, kým je tvoja vlajka doma: to je bod. Zničený tank vlajku stratí na mieste - jeho tím ju dotykom vráti domov, nepriateľ ju zoberie znova. Zápas má jedno kolo: vyhrá ho tím, ktorý prvý dosiahne nastavený počet (Vlajok na výhru, namiesto kôl); keď uplynie čas kola, vyhrá najviac bodov. Zničené tanky sa po 3 sekundách vrátia na svoju základňu. Číslo vedľa prístrojového panelu ukazuje body tvojho tímu.",
+      score: "vlajky {n}/{g}", carrying: "+vlajka",
     },
     cs: { stat: "vlaj.", note: "{n} vlaj.",
-      instr: "Každý tým má vlajku na své základně (každý sám za sebe: každý tank). Přejeď přes nepřátelskou vlajku, vezmi ji a dovez na svou základnu, dokud je tvoje vlajka doma: to je bod. Zničený tank vlajku ztratí na místě - jeho tým ji dotykem vrátí domů, nepřítel ji sebere znovu. Kolo vyhraje, kdo první získá 3 body (po uplynutí času kola nejvíc bodů); zničené tanky se po 3 sekundách vrátí na svou základnu.",
-      score: "vlajky {n}", carrying: "+vlajka",
+      instr: "Každý tým má vlajku na své základně (každý sám za sebe: každý tank). Přejeď přes nepřátelskou vlajku, vezmi ji a dovez na svou základnu, dokud je tvoje vlajka doma: to je bod. Zničený tank vlajku ztratí na místě - jeho tým ji dotykem vrátí domů, nepřítel ji sebere znovu. Zápas má jedno kolo: vyhraje ho tým, který první dosáhne nastavený počet (Vlajek k výhře, místo kol); když uplyne čas kola, vyhraje nejvíc bodů. Zničené tanky se po 3 sekundách vrátí na svou základnu. Číslo vedle přístrojového panelu ukazuje body tvého týmu.",
+      score: "vlajky {n}/{g}", carrying: "+vlajka",
     },
     uk: { stat: "прап.", note: "{n} прап.",
-      instr: "Кожна команда має прапор на своїй базі (кожен сам за себе: кожен танк). Наїдь на ворожий прапор, щоб узяти його, і привези на свою базу, поки твій прапор удома: це очко. Знищений танк губить прапор на місці - його команда дотиком повертає його додому, ворог підбирає знову. Раунд виграє той, хто першим набере 3 очки (коли час раунду вийде - найбільше очок); знищені танки повертаються на свою базу через 3 секунди.",
-      score: "прапори {n}", carrying: "+прапор",
+      instr: "Кожна команда має прапор на своїй базі (кожен сам за себе: кожен танк). Наїдь на ворожий прапор, щоб узяти його, і привези на свою базу, поки твій прапор удома: це очко. Знищений танк губить прапор на місці - його команда дотиком повертає його додому, ворог підбирає знову. Матч триває один раунд: виграє команда, яка першою набере задану кількість (Прапорів для перемоги, замість раундів); коли час раунду вийде, перемагає та, що має більше очок. Знищені танки повертаються на свою базу через 3 секунди. Число біля панелі приладів показує очки твоєї команди.",
+      score: "прапори {n}/{g}", carrying: "+прапор",
     },
     ru: { stat: "флаги", note: "{n} флаг.",
-      instr: "У каждой команды есть флаг на её базе (каждый сам за себя: у каждого танка). Наедь на вражеский флаг, чтобы взять его, и привези на свою базу, пока твой флаг дома: это очко. Уничтоженный танк роняет флаг на месте - его команда касанием возвращает его домой, враг подбирает снова. Раунд выигрывает тот, кто первым наберёт 3 очка (когда время раунда выйдет - больше всех очков); уничтоженные танки возвращаются на свою базу через 3 секунды.",
-      score: "флаги {n}", carrying: "+флаг",
+      instr: "У каждой команды есть флаг на её базе (каждый сам за себя: у каждого танка). Наедь на вражеский флаг, чтобы взять его, и привези на свою базу, пока твой флаг дома: это очко. Уничтоженный танк роняет флаг на месте - его команда касанием возвращает его домой, враг подбирает снова. Матч длится один раунд: выигрывает команда, первой набравшая заданное число (Флагов для победы, вместо раундов); когда время раунда выйдет, побеждает больше очков. Уничтоженные танки возвращаются на свою базу через 3 секунды. Число рядом с панелью приборов показывает очки твоей команды.",
+      score: "флаги {n}/{g}", carrying: "+флаг",
     },
     genz: { stat: "caps", note: "{n} caps",
-      instr: "Every squad got a flag chilling at its base (free-for-all: every tank, no cap). Roll over the opps' flag to yoink it, then bring it back to your crib while your own flag is home: that's a capture, W. Get clapped while carrying and you drop it - your squad touches it to send it home, the opps can yoink it again. First to 3 captures takes the round (round timer out: most captures); wrecked tanks respawn at their base after 3 secs, no cap.",
-      score: "caps {n}", carrying: "+flag fr",
+      instr: "Every squad got a flag chilling at its base (free-for-all: every tank, no cap). Roll over the opps' flag to yoink it, then bring it back to your crib while your own flag is home: that's a capture, W. Get clapped while carrying and you drop it - your squad touches it to send it home, the opps can yoink it again. It's one round, period: first squad to hit Caps to win (it replaces rounds to win) takes the whole match; timer runs out, most caps wins. Wrecked tanks respawn at their base after 3 secs, no cap. The number next to your dashboard is your squad's caps, flex it.",
+      score: "caps {n}/{g}", carrying: "+flag fr",
     },
   },
 
+  CAPS,
   eliminationEnds: false,
   aiAlways: true,
+
+  // one round decides the match (the engine sets winScore 1 for every goal mode; also here for safety)
+  init(e) { e.winScore = 1; },
 
   // a new round: every team's flag at home (its first tank's base), nobody carrying, no captures
   round(e) {
@@ -158,7 +164,7 @@ E.registerMode("ctf", {
       if (isHome(G.flags[t]) && atTeamBase(e, G, t, x, y)) {
         F.carrier = 0; F.x = F.hx; F.y = F.hy; G.carry[p] = -1;
         G.caps[t]++; e.modeScore[p]++;
-        if (G.caps[t] >= CAPS) { e.endRound(t); return; }
+        if (G.caps[t] >= goalOf(e)) { e.endRound(t); return; }
       }
     }
   },
@@ -203,7 +209,7 @@ E.registerMode("ctf", {
   scoreText(e, p) {
     const G = e.GS;
     if (!G.flags) return "";
-    return e.mt("score", { n: G.caps[e.team(p)] }) + (G.carry[p] >= 0 ? " " + e.mt("carrying") : "");
+    return e.mt("score", { n: G.caps[e.team(p)], g: goalOf(e) }) + (G.carry[p] >= 0 ? " " + e.mt("carrying") : "");
   },
 
   // ---- computer players: take enemy flags home, return / chase the own flag, fight what comes close

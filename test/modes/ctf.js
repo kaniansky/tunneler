@@ -3,9 +3,12 @@
 //   - the rules in scripted situations (tanks placed by hand, the mode's hooks / engine steps): flags at the
 //     first tank's base, taking an enemy flag, a capture only with the own flag at home, a destroyed carrier
 //     drops it, returning / picking up a dropped flag, respawn after ~3 s (not on top of another tank), no
-//     elimination, 3 captures win the round, the round time (most captures / a tie), hud / scoreText / draw
+//     elimination, the round time (most captures / a tie), hud / scoreText / draw
+//   - the goal ("Captures to win", e.goal): the default 3, other values, the goal reached ends the round and
+//     the match - one round (winScore 1)
 //   - computer tanks play for the flags (an idle opponent: three captures quickly), AI-only matches finish:
-//     2 and 8 tanks, free-for-all and teams, small and large maps, round time on / off, the modifiers on
+//     2 and 8 tanks, free-for-all and teams, small / medium / large maps, round time on / off, the modifiers on,
+//     the smallest and the largest goal
 //   - determinism (the same match twice: every frame's bits, the final state, the mode's state)
 const H = require("../modes-harness.js");
 const { E, check, slots, startEngine, runMatch } = H;
@@ -59,9 +62,9 @@ check(!!M, "ctf: registered");
   M.frame(e);
   check(G.caps[0] === 1 && e.modeScore[1] === 1 && G.carry[1] === -1 && G.flags[1].x === G.flags[1].hx && !G.flags[1].carrier,
     "a capture at the own base with the own flag at home: +1, the enemy flag back home");
-  check(M.scoreText(e, 1) === "caps 1" && M.hud(e, 1).value === 1 && M.hud(e, 2).value === 0, "scoreText / hud: the team's captures");
+  check(M.scoreText(e, 1) === "caps 1/3" && M.hud(e, 1).value === 1 && M.hud(e, 2).value === 0, "scoreText / hud: the team's captures");
   e.lang = "sk";
-  check(M.scoreText(e, 1) === "vlajky 1", "scoreText in the engine's language");
+  check(M.scoreText(e, 1) === "vlajky 1/3", "scoreText in the engine's language");
   e.lang = "en";
 }
 {
@@ -120,7 +123,7 @@ check(!!M, "ctf: registered");
     "no spot clear in the own base: back at a teammate's base (not onto the teammate sitting there)");
 }
 {
-  // a dropped flag taken by an enemy; three captures win the round
+  // a dropped flag taken by an enemy; three captures (the default goal) win the round and the match
   const e = fresh([1, 2, 3], {});
   const G = e.GS;
   place(e, 3, e.baseX[1], e.baseY[1] - 6); M.frame(e);           // YELLOW... CYAN (3) takes BLUE's flag
@@ -133,10 +136,46 @@ check(!!M, "ctf: registered");
     place(e, 2, e.baseX[2], e.baseY[2]); M.frame(e);
     if (c < 2) { place(e, 2, e.baseX[1], e.baseY[1] - 6); M.frame(e); }
   }
-  check(G.caps[1] === 3 && e.endTimer >= 0 && e.modeWinner === 1, "3 captures end the round for that team");
+  check(G.caps[1] === 3 && e.endTimer >= 0 && e.modeWinner === 1, "3 captures (the default goal) end the round for that team");
   let guard = 0;
-  while (e.screen === "play" && e.round === 1 && guard++ < 200) idle(e);
+  while (e.screen === "play" && guard++ < 200) idle(e);
   check(e.roundWinnerTeam === 1 && e.wins[2] === 1 && e.teamWins[1] === 1, "the capturing team wins the round");
+  check(e.screen === "map", "one round: the match is over after it - the end-of-match map (screen " + e.screen + ")");
+}
+// ---- the goal: Captures to win
+{
+  const d = fresh([1, 2]);
+  check(d.goal === 3 && E.GOALS.ctf.def === 3 && M.CAPS === 3, "the default goal: 3 captures");
+  check(d.winScore === 1, "one round decides the match (winScore 1)");
+  const w = fresh([1, 2], { winScore: 5, goal: 7 });
+  check(w.winScore === 1 && w.goal === 7, "rounds to win ignored, the goal kept (7)");
+  check(fresh([1, 2], { goal: 4 }).goal === 3 && fresh([1, 2], { goal: "x" }).goal === 3, "a goal that isn't a choice: the default");
+  check(E.GOALS.ctf.choices.join() === "1,2,3,5,7,10", "the choices: 1 2 3 5 7 10");
+  // a capture loop for team index 0 (BLUE) against an idle GREEN: n captures
+  const capture = (e, n) => {
+    for (let c = 0; c < n && e.endTimer < 0; c++) {
+      place(e, 1, e.baseX[2], e.baseY[2] - 6); M.frame(e);
+      place(e, 1, e.baseX[1], e.baseY[1]); M.frame(e);
+    }
+  };
+  for (const goal of [1, 5, 10]) {
+    const e = fresh([1, 2], { goal });
+    const G = e.GS;
+    place(e, 2, e.baseX[2] + 60, e.baseY[2]);
+    capture(e, goal - 1);
+    check(G.caps[0] === goal - 1 && e.endTimer < 0, "goal " + goal + ": " + (goal - 1) + " captures - the round goes on");
+    check(M.scoreText(e, 1) === "caps " + (goal - 1) + "/" + goal && M.hud(e, 1).value === goal - 1, "goal " + goal + ": scoreText / hud (" + M.scoreText(e, 1) + ")");
+    capture(e, 1);
+    check(G.caps[0] === goal && e.endTimer >= 0 && e.modeWinner === 0, "goal " + goal + ": reached - the round is decided");
+    let guard = 0;
+    while (e.screen === "play" && guard++ < 200) idle(e);
+    check(e.teamWins[0] === 1 && e.wins[1] === 1 && e.wins[2] === 0, "goal " + goal + ": BLUE wins the round");
+    check(e.screen === "map", "goal " + goal + ": the match is over - the end-of-match map, no second round (screen " + e.screen + ")");
+  }
+  // a whole match with a goal: one round
+  const r = runMatch({ mode: "ctf", slots: slots([1, 2]), levels: ["hard", null], seed: 2, size: "small", maxFrames: 6000, mods: { goal: 1 } });
+  check(r.finished && r.rounds.length === 1 && r.rounds[0].winnerTeam === 0 && r.engine.modeScore[1] === 1,
+    "goal 1 vs an idle tank: one capture wins the match, one round (" + r.frames + " frames)");
 }
 {
   // teams: the flag at the team's first tank's base; a capture at a teammate's base counts
@@ -237,6 +276,10 @@ check(!!M, "ctf: registered");
 
 // ---- AI-only matches: finish, deterministic; 2 and 8 tanks, teams / free-for-all, sizes, round time, modifiers
 const setups = [
+  { name: "1 v 1 small, goal 1", teams: [1, 2], levels: ["hard", "normal"], size: "small", goal: 1 },
+  { name: "1 v 1 small, goal 10", teams: [1, 2], levels: ["expert", "hard"], size: "small", goal: 10 },
+  { name: "2 v 2 medium, goal 1", teams: [1, 2, 1, 2], levels: ["hard", "expert", "normal", "hard"], size: "medium", goal: 1 },
+  { name: "1 v 1 medium, goal 10", teams: [1, 2], levels: ["expert", "hard"], size: "medium", goal: 10 },
   { name: "1 v 1 small", teams: [1, 2], levels: ["hard", "normal"], size: "small" },
   { name: "8 free-for-all small", teams: [1, 2, 3, 4, 5, 6, 7, 8], levels: ["hard", "normal", "expert", "hard", "normal", "expert", "hard", "normal"], size: "small" },
   { name: "4 v 4 small", teams: [1, 2, 1, 2, 1, 2, 1, 2], levels: ["hard", "expert", "normal", "hard", "expert", "normal", "hard", "hard"], size: "small" },
@@ -247,14 +290,17 @@ const setups = [
   { name: "4 free-for-all small, no repairs", teams: [1, 2, 3, 4], levels: ["expert", "hard", "normal", "hard"], size: "small", mods: { noRepair: true } },
   { name: "8 free-for-all large, round time 5", teams: [1, 2, 3, 4, 5, 6, 7, 8], levels: Array(8).fill("hard"), size: "large", roundTime: 5 },
 ];
-for (const s of quick ? setups.slice(0, 3) : setups) {
-  const opts = { mode: "ctf", slots: slots(s.teams), levels: s.levels, seed: 7, size: s.size, winScore: 2, maxFrames: 60000,
-    roundTime: s.roundTime || 0, friendlyFire: !!s.friendlyFire, mods: s.mods };
+for (const s of quick ? setups.slice(0, 4) : setups) {
+  // (the goal goes to the engine with the other options: the harness merges mods into them)
+  const opts = { mode: "ctf", slots: slots(s.teams), levels: s.levels, seed: 7, size: s.size, maxFrames: 60000,
+    roundTime: s.roundTime || 0, friendlyFire: !!s.friendlyFire, mods: Object.assign(s.goal ? { goal: s.goal } : {}, s.mods || {}) };
   let capturesSeen = 0;
   const a = runMatch(Object.assign({}, opts, { onFrame: (e) => { if (e.GS.caps) capturesSeen = Math.max(capturesSeen, e.GS.caps.reduce((x, y) => x + y, 0)); } }));
   const b = runMatch(opts);
   const decided = a.rounds.filter(r => r.winnerTeam >= 0).length;
-  check(a.finished, s.name + ": the match finishes (" + a.frames + " frames, " + a.rounds.length + " rounds, " + decided + " decided)");
+  check(a.finished && a.rounds.length === 1, s.name + ": the match finishes in one round (" + a.frames + " frames, " + a.rounds.length + " rounds, " + decided + " decided)");
+  const goal = s.goal || 3, caps = a.engine.GS.caps || [];
+  if (!s.roundTime) check(decided === 1 && Math.max(...caps) === goal, s.name + ": won by reaching the goal (" + caps.join(",") + " of " + goal + ")");
   check(capturesSeen > 0 && a.engine.modeScore.reduce((x, y) => x + y, 0) > 0, s.name + ": flags captured (" + a.engine.modeScore.slice(1).join(",") + ")");
   check(a.bitsHash === b.bitsHash && a.stateHash === b.stateHash && a.frames === b.frames &&
     JSON.stringify(a.engine.GS) === JSON.stringify(b.engine.GS) && a.engine.modeScore.join() === b.engine.modeScore.join(), s.name + ": deterministic");
