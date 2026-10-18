@@ -191,6 +191,10 @@ check(!!M, "ctf: registered");
   check(G.carry[4] === 1, "teams: the enemy team's flag taken");
   place(e, 4, e.baseX[4], e.baseY[4] + 4); M.frame(e);
   check(G.caps[0] === 1 && e.modeScore[4] === 1, "a capture at a teammate's base");
+  // the statistics show the team's captures, like the number beside the panel and the map table
+  check(M.stat(e, 2) === 1 && M.stat(e, 4) === 1 && M.stat(e, 1) === 0 && M.stat(e, 3) === 0 &&
+    M.stat(e, 2) === M.hud(e, 2).value && M.scoreText(e, 2).indexOf("1/") >= 0,
+    "statistics: every member shows the team's captures (" + [1, 2, 3, 4].map(p => M.stat(e, p)).join(",") + "), as in the game");
 }
 {
   // round time: the most captures win; a tie (nobody captured): nobody wins
@@ -301,6 +305,9 @@ for (const s of quick ? setups.slice(0, 4) : setups) {
   check(a.finished && a.rounds.length === 1, s.name + ": the match finishes in one round (" + a.frames + " frames, " + a.rounds.length + " rounds, " + decided + " decided)");
   const goal = s.goal || 3, caps = a.engine.GS.caps || [];
   if (!s.roundTime) check(decided === 1 && Math.max(...caps) === goal, s.name + ": won by reaching the goal (" + caps.join(",") + " of " + goal + ")");
+  const ae = a.engine, statOk = Array.from({ length: ae.nPlayers }, (_, i) => i + 1)
+    .every(p => M.stat(ae, p) === (caps[ae.team(p)] || 0) && M.stat(ae, p) === M.hud(ae, p).value);
+  check(statOk, s.name + ": the statistics' numbers are the in-game numbers (team captures)");
   check(capturesSeen > 0 && a.engine.modeScore.reduce((x, y) => x + y, 0) > 0, s.name + ": flags captured (" + a.engine.modeScore.slice(1).join(",") + ")");
   check(a.bitsHash === b.bitsHash && a.stateHash === b.stateHash && a.frames === b.frames &&
     JSON.stringify(a.engine.GS) === JSON.stringify(b.engine.GS) && a.engine.modeScore.join() === b.engine.modeScore.join(), s.name + ": deterministic");

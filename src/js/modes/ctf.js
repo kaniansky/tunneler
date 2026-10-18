@@ -72,8 +72,9 @@ function dropFlag(e, G, p) {
 }
 
 E.registerMode("ctf", {
-  // the statistics: captures; the rounds list: the winner's captures
-  stat: (e, p) => e.modeScore[p] || 0,
+  // the statistics: the team's captures (as the number beside the panel and the map table show them);
+  // the rounds list: the winner's captures
+  stat: (e, p) => e.GS.caps ? e.GS.caps[e.team(p)] || 0 : e.modeScore[p] || 0,
   roundNote: (e, t) => t >= 0 && e.GS.caps ? e.mt("note", { n: e.GS.caps[t] || 0 }) : "",
   strings: {
     en: { stat: "caps", note: "{n} caps",
@@ -81,11 +82,11 @@ E.registerMode("ctf", {
       score: "caps {n}/{g}", carrying: "+flag",
     },
     sk: { stat: "vlaj.", note: "{n} vlaj.",
-      instr: "Každý tím má vlajku na svojej základni (každý sám za seba: každý tank). Prejdi cez nepriateľskú vlajku, zober ju a dovez na svoju základňu, kým je tvoja vlajka doma: to je bod. Zničený tank vlajku stratí na mieste - jeho tím ju dotykom vráti domov, nepriateľ ju zoberie znova. Zápas má jedno kolo: vyhrá ho tím, ktorý prvý dosiahne nastavený počet (Vlajok na výhru, namiesto kôl); keď uplynie čas kola, vyhrá najviac bodov. Zničené tanky sa po 3 sekundách vrátia na svoju základňu. Číslo vedľa prístrojového panelu ukazuje body tvojho tímu.",
+      instr: "Každý tím má vlajku na svojej základni (každý sám za seba: každý tank). Prejdi cez nepriateľskú vlajku, zober ju a dovez na svoju základňu, kým je tvoja vlajka doma: to je bod. Zničený tank vlajku stratí na mieste - jeho tím ju dotykom vráti domov, nepriateľ ju zoberie znova. Zápas má jedno kolo: vyhrá ho tím, ktorý prvý dosiahne nastavený počet (Vlajok na výhru, namiesto kôl); keď uplynie čas kola, vyhrá tím s najviac bodmi. Zničené tanky sa po 3 sekundách vrátia na svoju základňu. Číslo vedľa prístrojového panelu ukazuje body tvojho tímu.",
       score: "vlajky {n}/{g}", carrying: "+vlajka",
     },
     cs: { stat: "vlaj.", note: "{n} vlaj.",
-      instr: "Každý tým má vlajku na své základně (každý sám za sebe: každý tank). Přejeď přes nepřátelskou vlajku, vezmi ji a dovez na svou základnu, dokud je tvoje vlajka doma: to je bod. Zničený tank vlajku ztratí na místě - jeho tým ji dotykem vrátí domů, nepřítel ji sebere znovu. Zápas má jedno kolo: vyhraje ho tým, který první dosáhne nastavený počet (Vlajek k výhře, místo kol); když uplyne čas kola, vyhraje nejvíc bodů. Zničené tanky se po 3 sekundách vrátí na svou základnu. Číslo vedle přístrojového panelu ukazuje body tvého týmu.",
+      instr: "Každý tým má vlajku na své základně (každý sám za sebe: každý tank). Přejeď přes nepřátelskou vlajku, vezmi ji a dovez na svou základnu, dokud je tvoje vlajka doma: to je bod. Zničený tank vlajku ztratí na místě - jeho tým ji dotykem vrátí domů, nepřítel ji sebere znovu. Zápas má jedno kolo: vyhraje ho tým, který první dosáhne nastavený počet (Vlajek k výhře, místo kol); když uplyne čas kola, vyhraje tým s nejvíc body. Zničené tanky se po 3 sekundách vrátí na svou základnu. Číslo vedle přístrojového panelu ukazuje body tvého týmu.",
       score: "vlajky {n}/{g}", carrying: "+vlajka",
     },
     uk: { stat: "прап.", note: "{n} прап.",
@@ -93,7 +94,7 @@ E.registerMode("ctf", {
       score: "прапори {n}/{g}", carrying: "+прапор",
     },
     ru: { stat: "флаги", note: "{n} флаг.",
-      instr: "У каждой команды есть флаг на её базе (каждый сам за себя: у каждого танка). Наедь на вражеский флаг, чтобы взять его, и привези на свою базу, пока твой флаг дома: это очко. Уничтоженный танк роняет флаг на месте - его команда касанием возвращает его домой, враг подбирает снова. Матч длится один раунд: выигрывает команда, первой набравшая заданное число (Флагов для победы, вместо раундов); когда время раунда выйдет, побеждает больше очков. Уничтоженные танки возвращаются на свою базу через 3 секунды. Число рядом с панелью приборов показывает очки твоей команды.",
+      instr: "У каждой команды есть флаг на её базе (каждый сам за себя: у каждого танка). Наедь на вражеский флаг, чтобы взять его, и привези на свою базу, пока твой флаг дома: это очко. Уничтоженный танк роняет флаг на месте - его команда касанием возвращает его домой, враг подбирает снова. Матч длится один раунд: выигрывает команда, первой набравшая заданное число (Флагов для победы, вместо раундов); когда время раунда выйдет, побеждает команда, у которой больше флагов. Уничтоженные танки возвращаются на свою базу через 3 секунды. Число рядом с панелью приборов показывает очки твоей команды.",
       score: "флаги {n}/{g}", carrying: "+флаг",
     },
     genz: { stat: "caps", note: "{n} caps",
