@@ -1,10 +1,12 @@
 "use strict";
 // Game mode "hill" (king of the hill, docs/DESIGN-8P.md 27): the zone (placed near the middle, clear of
 // the bases, dug free, its edge drawn with dots), the points (one team alone inside: +1 a frame; two teams:
-// nobody; dead tanks don't count), the round won at 1000 points, the round time (the most points; no single
-// leader: the usual damage rule), hud / score texts, and computer tanks that go for the zone: AI-only
-// matches with 2 and 8 tanks, free-for-all and teams, small / medium / large maps, round time on and off,
-// the modifiers on, deterministic.
+// nobody; dead tanks don't count), the goal ("Seconds to win", e.goal: the default 60, every choice) - held
+// that long ends the round AND the match (one round, winScore 1), the round time (the most points; no single
+// leader: the usual damage rule), hud / score / statistics / rounds-list numbers all the team's seconds (the hud
+// counting down what is still needed for the goals 120 / 180), and computer
+// tanks that go for the zone: AI-only matches (the smallest and the largest goal on small and medium maps, 2
+// and 8 tanks, free-for-all and teams, round time, the modifiers), deterministic.
 const H = require("../modes-harness.js");
 const { E, check, slots, startEngine, runMatch, NetProto } = H;
 
@@ -60,52 +62,109 @@ for (const [size, n] of [["small", 200], ["medium", 40], ["large", 20]]) {
   check(bad.length === 0, "hill " + size + ", 8 tanks, " + n + " seeds: no base centre within r + 32 of the zone centre (" + bad.join(" ") + ")");
 }
 
+const F = s => Math.round(s * 1193182 / 65536);          // seconds -> frames (18.2 a second)
+
+// ---- the goal: the default, every choice, invalid values, one round
+{
+  const d = startEngine(5, { slots: slots([1, 2]), size: "small", mode: "hill", extended: true, winScore: 5 });
+  check(d.goal === 60 && d.GS.target === F(60) && d.GS.target === 1092 && d.winScore === 1,
+    "hill: default goal 60 seconds = " + d.GS.target + " frames, one round (winScore " + d.winScore + ")");
+  for (const g of E.GOALS.hill.choices) {
+    const e = startEngine(5, { slots: slots([1, 2]), size: "small", mode: "hill", extended: true, goal: g });
+    check(e.goal === g && e.GS.target === F(g) && E.MODES.hill.secs(e.GS.target) === g, "hill: goal " + g + " s = " + e.GS.target + " frames (shown as " + g + ")");
+  }
+  const bad = startEngine(5, { slots: slots([1, 2]), size: "small", mode: "hill", extended: true, goal: 17 });
+  check(bad.goal === 60 && bad.GS.target === 1092, "hill: an unknown goal falls back to the default");
+}
+
 // ---- points: one team alone in the zone scores every frame; two teams: nobody; teammates together score
 {
   const e = startEngine(5, { slots: slots([1, 2, 1, 3]), size: "medium", mode: "hill", extended: true });
   idle(e);
   const G = e.GS;
   place(e, 1, G.cx, G.cy);
-  for (let i = 0; i < 50; i++) idle(e);
-  check(G.pts[0] === 50 && G.holder === 0 && e.modeScore[1] === 50 && G.pts[1] === 0, "hill: a tank alone in the zone scores a point a frame for its team (" + G.pts + ")");
-  check(e.GM.hud(e, 1).value === 5 && e.GM.hud(e, 1).color === 14 && e.GM.hud(e, 3).value === 5, "hill: hud = the team's points in percent (yellow while holding), the same for a teammate");
-  check(e.GM.hud(e, 2).value === 0 && e.GM.hud(e, 2).color === 12, "hill: hud of an enemy: its own points, red while another team holds the zone");
-  check(e.GM.scoreText(e, 3) === "hill 5%", "hill: score text (" + e.GM.scoreText(e, 3) + ")");
+  for (let i = 0; i < 91; i++) idle(e);                // 91 frames = 5.0 s
+  check(G.pts[0] === 91 && G.holder === 0 && e.modeScore[1] === 91 && G.pts[1] === 0, "hill: a tank alone in the zone scores a point a frame for its team (" + G.pts + ")");
+  check(e.GM.hud(e, 1).value === 5 && e.GM.hud(e, 1).color === 14 && e.GM.hud(e, 3).value === 5, "hill: hud = the team's seconds held (yellow while holding), the same for a teammate");
+  check(e.GM.hud(e, 2).value === 0 && e.GM.hud(e, 2).color === 12, "hill: hud of an enemy: its own seconds, red while another team holds the zone");
+  check(e.GM.scoreText(e, 3) === "hill 5/60s", "hill: score text = the team's seconds / the goal (" + e.GM.scoreText(e, 3) + ")");
+  check(e.GM.stat(e, 1) === 5 && e.GM.stat(e, 3) === 5 && e.GM.stat(e, 2) === 0 && e.GM.stat(e, 4) === 0,
+    "hill: statistics = the team's seconds for every member (a teammate outside too) - the same number as the hud");
   e.lang = "sk";
-  check(e.GM.scoreText(e, 3) === "kopec 5%", "hill: score text in the engine's language (" + e.GM.scoreText(e, 3) + ")");
+  check(e.GM.scoreText(e, 3) === "kopec 5/60 s", "hill: score text in the engine's language (" + e.GM.scoreText(e, 3) + ")");
   e.lang = "en";
   // a teammate in it too: still scoring, both counted
   place(e, 3, G.cx + 10, G.cy);
   for (let i = 0; i < 20; i++) idle(e);
-  check(G.pts[0] === 70 && e.modeScore[3] === 20 && e.modeScore[1] === 70, "hill: teammates inside together score (" + G.pts[0] + ")");
+  check(G.pts[0] === 111 && e.modeScore[3] === 20 && e.modeScore[1] === 111, "hill: teammates inside together score (" + G.pts[0] + ")");
+  check(e.GM.stat(e, 1) === 6 && e.GM.stat(e, 3) === 6 && e.GM.hud(e, 3).value === 6, "hill: two holders - the statistics still show the team's 6 s each (not added up), like the hud");
   // an enemy inside: contested, nobody scores
   place(e, 2, G.cx - 10, G.cy);
   for (let i = 0; i < 30; i++) idle(e);
-  check(G.pts[0] === 70 && G.pts[1] === 0 && G.holder === -1, "hill: two teams inside - nobody scores");
+  check(G.pts[0] === 111 && G.pts[1] === 0 && G.holder === -1, "hill: two teams inside - nobody scores");
   check(e.GM.hud(e, 1).color === 9, "hill: hud white while contested");
   // a destroyed tank inside doesn't count
   e.alive[2] = false; e.GM.frame(e); e.alive[2] = true;
-  check(G.pts[0] === 71 && G.holder === 0, "hill: a destroyed tank in the zone doesn't count");
+  check(G.pts[0] === 112 && G.holder === 0, "hill: a destroyed tank in the zone doesn't count");
   // nobody inside: no points
   place(e, 1, e.baseX[1], e.baseY[1]); place(e, 2, e.baseX[2], e.baseY[2]); place(e, 3, e.baseX[3], e.baseY[3]);
   for (let i = 0; i < 10; i++) idle(e);
-  check(G.pts.every((v, t) => v === (t === 0 ? 71 : 0)) && G.holder === -1, "hill: an empty zone - no points");
+  check(G.pts.every((v, t) => v === (t === 0 ? 112 : 0)) && G.holder === -1, "hill: an empty zone - no points");
   // the edge: just inside counts, just outside not
   place(e, 4, G.cx + G.r, G.cy); idle(e);
   const inside = G.pts[e.team(4)] === 1;
   place(e, 4, G.cx + G.r + 1, G.cy); idle(e);
   check(inside && G.pts[e.team(4)] === 1, "hill: the zone is the circle of radius r (r in, r + 1 out)");
-  // 1000 points win the round for that team
+  // the hud stops at 99 (2 digits); the score text goes on
+  G.pts[0] = F(150);
+  check(e.GM.hud(e, 1).value === 99 && e.GM.scoreText(e, 1) === "hill 150/60s", "hill: hud at most 99, the score text the full seconds");
+  G.pts[0] = 112;
+  // the goal (60 s = 1092 frames) ends the round - and the match
   place(e, 4, e.baseX[4], e.baseY[4]);
   place(e, 1, G.cx, G.cy);
-  G.pts[0] = 990;
+  G.pts[0] = 1080; G.tot[0] = 1080;
   const r0 = e.round;
   for (let i = 0; i < 400 && e.round === r0; i++) idle(e);
   check(e.round === r0 + 1 && e.roundWinnerTeam === 0 && e.teamWins[0] === 1 && e.wins[1] === 1 && e.wins[3] === 1 && e.wins[2] === 0,
-    "hill: the first team to 1000 points wins the round (" + e.roundWinnerTeam + ")");
-  check(G.lastPts[0] === 1000, "hill: no points after the round is decided (" + G.lastPts[0] + ")");
-  for (let i = 0; i < 400 && e.screen !== "play"; i++) idle(e);
-  check(e.screen === "play" && G.pts.every(v => v === 0) && G.cx > 0, "hill: points reset every round, the zone stays");
+    "hill: the first team to hold the zone 60 s (1092 frames) wins the round (" + e.roundWinnerTeam + ")");
+  check(G.pts[0] === 1092, "hill: no points after the round is decided (" + G.pts[0] + ")");
+  const log = e.roundLog[e.roundLog.length - 1];
+  check(log && log.note === "60 secs", "hill: the rounds list shows the winner's seconds (" + (log && log.note) + ")");
+  check([1, 3].every(p => e.GM.hud(e, p).value === 60 && e.GM.stat(e, p) === 60) && e.GM.stat(e, 2) === 0,
+    "hill: at the win the hud and the statistics agree: 60 for every member of the winning team");
+  for (let i = 0; i < 400 && e.screen === "play"; i++) idle(e);
+  check(e.screen === "map" && e.teamWins[0] === 1, "hill: one round decides the match - the world map, no second round (" + e.screen + ")");
+}
+
+// ---- a different goal: 30 s ends the match after 546 frames held, not before
+{
+  const e = startEngine(8, { slots: slots([1, 2]), size: "small", mode: "hill", extended: true, goal: 30 });
+  idle(e);
+  let endAt = -1;
+  for (let i = 0; i < 700 && endAt < 0; i++) { place(e, 2, e.GS.cx, e.GS.cy); idle(e); if (e.endTimer >= 0) endAt = e.GS.pts[1]; }
+  check(endAt === 546 && e.modeWinner === 1, "hill: goal 30 - the round is won at 546 frames held (" + endAt + ")");
+  for (let i = 0; i < 400 && e.screen === "play"; i++) idle(e);
+  check(e.screen === "map" && e.teamWins[1] === 1 && e.teamWins[0] === 0, "hill: goal 30 - the match is over after that round");
+  check(e.GM.stat(e, 2) === 30, "hill: statistics = 30 seconds for the holder (" + e.GM.stat(e, 2) + ")");
+  // goal 180: 1100 frames (60 s) are not enough
+  const f = startEngine(8, { slots: slots([1, 2]), size: "small", mode: "hill", extended: true, goal: 180 });
+  idle(f);
+  for (let i = 0; i < 1100; i++) { place(f, 2, f.GS.cx, f.GS.cy); idle(f); }
+  check(f.endTimer < 0 && f.screen === "play" && f.GS.pts[1] === 1100 && f.GM.hud(f, 2).value === 99, "hill: goal 180 - 60 s held don't end the round (hud " + f.GM.hud(f, 2).value + ")");
+  // goals above 99: the hud counts down the seconds still needed (2 digits) - always moving at the end, 0 at the win
+  check(f.GM.hud(f, 1).value === 99 && f.GM.scoreText(f, 2) === "hill 60/180s", "hill: goal 180 - hud capped at 99 while more than 99 s are needed");
+  f.GS.pts[1] = F(100);
+  check(f.GM.hud(f, 2).value === 80, "hill: goal 180, 100 s held - hud 80 s still needed (" + f.GM.hud(f, 2).value + ")");
+  f.GS.pts[1] = F(180) - 30; f.GS.tot[1] = f.GS.pts[1];
+  const seen = [];
+  for (let i = 0; i < 60 && f.endTimer < 0; i++) { place(f, 2, f.GS.cx, f.GS.cy); idle(f); seen.push(f.GM.hud(f, 2).value); }
+  check(f.endTimer >= 0 && f.modeWinner === 1 && seen[seen.length - 1] === 0 && seen[0] === 2 && f.GM.stat(f, 2) === 180 && f.GM.scoreText(f, 2) === "hill 180/180s",
+    "hill: goal 180 - the hud counts down to 0 at the win, the statistics show 180 (" + seen.join(",") + " / " + f.GM.stat(f, 2) + ")");
+  const g = startEngine(8, { slots: slots([1, 2]), size: "small", mode: "hill", extended: true, goal: 120 });
+  idle(g);
+  g.GS.pts[0] = F(21); const h21 = g.GM.hud(g, 1).value;
+  g.GS.pts[0] = F(50); const h50 = g.GM.hud(g, 1).value;
+  check(h21 === 99 && h50 === 70, "hill: goal 120 - hud = 120 - held (" + h21 + ", " + h50 + ")");
 }
 
 // ---- round time: the most points win; no points or a tie: the damage rule (decided by the mode)
@@ -134,14 +193,16 @@ for (const [size, n] of [["small", 200], ["medium", 40], ["large", 20]]) {
   for (let i = 0; i < 200 && t2.round === tr; i++) idle(t2);
   check(tied && t2.round === tr + 1 && t2.roundWinnerTeam === -1 && t2.teamWins.every(w => w === 0),
     "hill: time up with a tie in points and damage - nobody wins the round (third team with more damage neither)");
-  // played through: 1 minute, team 2's tank holds the zone 300 frames and goes home
+  // played through: 1 minute, team 2's tank holds the zone 300 frames and goes home - the match is won
   const g = startEngine(7, { slots: slots([1, 2, 1]), size: "small", mode: "hill", extended: true, roundTime: 1 });
   idle(g);
   for (let i = 0; i < 300; i++) { place(g, 2, g.GS.cx, g.GS.cy); idle(g); }
   place(g, 2, g.baseX[2], g.baseY[2]);
   const r0 = g.round;
   for (let i = 0; i < 2000 && g.round === r0; i++) idle(g);
-  check(g.round === r0 + 1 && g.roundWinnerTeam === 1 && g.GS.lastPts[1] === 300, "hill: round time - the team with the most points wins the round (" + g.roundWinnerTeam + ", " + g.GS.lastPts + ")");
+  check(g.round === r0 + 1 && g.roundWinnerTeam === 1 && g.GS.pts[1] === 300, "hill: round time - the team with the most points wins the round (" + g.roundWinnerTeam + ", " + g.GS.pts + ")");
+  for (let i = 0; i < 400 && g.screen === "play"; i++) idle(g);
+  check(g.screen === "map" && g.teamWins[1] === 1, "hill: round time - that round decides the match");
   // nobody scored: the damage rule (nobody did any - a tie: nobody wins)
   const h = startEngine(7, { slots: slots([1, 2]), size: "small", mode: "hill", extended: true, roundTime: 1 });
   const r1 = h.round;
@@ -151,45 +212,47 @@ for (const [size, n] of [["small", 200], ["medium", 40], ["large", 20]]) {
 
 // ---- computer tanks go for the zone
 {
-  // against a tank that does nothing: every round won on points
-  const won = [];
-  let last = 0;
-  const r = runMatch({ mode: "hill", slots: slots([1, 2]), levels: ["normal", null], seed: 3, size: "medium", winScore: 2, maxFrames: 20000,
-    onFrame: e => { if (e.round !== last) { if (last) won.push(Math.max(...e.GS.lastPts)); last = e.round; } } });
-  check(r.finished && r.rounds.every(x => x.winnerTeam === 0) && won.length === 2 && won.every(p => p >= 1000),
-    "hill AI: against an idle tank it takes the zone and wins on points (" + r.frames + " frames, " + won + ")");
+  // against a tank that does nothing: the match won on the zone, in one round
+  let pts = 0;
+  const r = runMatch({ mode: "hill", slots: slots([1, 2]), levels: ["normal", null], seed: 3, size: "medium", maxFrames: 20000,
+    onFrame: e => { if (e.GS.pts) pts = Math.max(pts, e.GS.pts[0]); } });
+  check(r.finished && r.rounds.length === 1 && r.rounds[0].winnerTeam === 0 && pts === 1092,
+    "hill AI: against an idle tank it takes the zone and wins the match in one round (" + r.frames + " frames, " + pts + " points)");
 }
 
+// AI-only matches: the smallest (30) and the largest (180) goal on small and medium maps, the default, round
+// time + modifiers (runMatch passes `mods` on to the engine options: the goal goes there too)
 const matches = [
-  { name: "1 v 1, small", teams: [1, 2], levels: ["hard", "expert"], size: "small" },
-  { name: "free-for-all 8, small", teams: [1, 2, 3, 4, 5, 6, 7, 8], levels: ["normal", "hard", "expert", "hard", "normal", "expert", "hard", "hard"], size: "small" },
-  { name: "4 v 4, medium", teams: [1, 2, 1, 2, 1, 2, 1, 2], levels: ["hard", "hard", "normal", "expert", "expert", "normal", "hard", "hard"], size: "medium" },
-  { name: "free-for-all 8, medium", teams: [1, 2, 3, 4, 5, 6, 7, 8], levels: new Array(8).fill("hard"), size: "medium", winScore: 1 },
-  { name: "2 v 2, large", teams: [1, 2, 1, 2], levels: ["expert", "hard", "hard", "expert"], size: "large" },
-  { name: "3 teams, round time 2, modifiers", teams: [1, 2, 3, 1, 2, 3], levels: ["hard", "hard", "hard", "normal", "expert", "normal"], size: "small", roundTime: 2, mods: { noRepair: true } },
+  { name: "1 v 1, small, goal 30", teams: [1, 2], levels: ["hard", "expert"], size: "small", goal: 30 },
+  { name: "1 v 1, small, goal 180", teams: [1, 2], levels: ["hard", "expert"], size: "small", goal: 180 },
+  { name: "free-for-all 8, small, goal 180", teams: [1, 2, 3, 4, 5, 6, 7, 8], levels: ["normal", "hard", "expert", "hard", "normal", "expert", "hard", "hard"], size: "small", goal: 180 },
+  { name: "4 v 4, medium, goal 30", teams: [1, 2, 1, 2, 1, 2, 1, 2], levels: ["hard", "hard", "normal", "expert", "expert", "normal", "hard", "hard"], size: "medium", goal: 30 },
+  { name: "free-for-all 8, medium, goal 180", teams: [1, 2, 3, 4, 5, 6, 7, 8], levels: new Array(8).fill("hard"), size: "medium", goal: 180 },
+  { name: "2 v 2, medium, default goal", teams: [1, 2, 1, 2], levels: ["expert", "hard", "hard", "expert"], size: "medium" },
+  { name: "3 teams, round time 2, modifiers, goal 120", teams: [1, 2, 3, 1, 2, 3], levels: ["hard", "hard", "hard", "normal", "expert", "normal"], size: "small", roundTime: 2, mods: { noRepair: true }, goal: 120 },
   { name: "1 v 1 large, round time 2, modifiers", teams: [1, 2], levels: ["expert", "expert"], size: "large", roundTime: 2, mods: { noRepair: true } },
 ];
-let totalHeld = 0, totalPlay = 0, topPts = 0, byPoints = 0;
+let byPoints = 0;
 for (const m of matches) {
-  let held = 0, best = 0, last = 0, counted = false;
-  const opts = { mode: "hill", slots: slots(m.teams), levels: m.levels, seed: 13, size: m.size, winScore: m.winScore || 2, maxFrames: 100000,
-    roundTime: m.roundTime || 0, mods: m.mods, friendlyFire: false,
+  let held = 0, best = 0;
+  const opts = { mode: "hill", slots: slots(m.teams), levels: m.levels, seed: 13, size: m.size, winScore: 3, maxFrames: 100000,
+    roundTime: m.roundTime || 0, mods: Object.assign({}, m.mods, m.goal ? { goal: m.goal } : {}), friendlyFire: false,
     onFrame: e => {
       if (e.screen === "play" && e.GS.holder >= 0) held++;
       if (e.GS.pts) best = Math.max(best, ...e.GS.pts);
-      // a round won on points (also the match's last round, after which the round number stays)
-      if (e.round !== last) { last = e.round; counted = false; }
-      if (!counted && e.GS.pts && Math.max(...e.GS.pts) >= 1000) { byPoints++; counted = true; }
     } };
   const a = runMatch(opts);
-  totalHeld += held; totalPlay += a.playFrames; topPts = Math.max(topPts, best);
-  const e = a.engine;
-  check(a.finished && Math.max(...e.teamWins) === (m.winScore || 2), "hill / " + m.name + ": the match finishes (" + a.frames + " frames, " + a.rounds.length + " rounds, zone held " + held + " of " + a.playFrames + " play frames, best " + best + " points)");
+  const e = a.engine, target = F(m.goal || 60);
+  if (best >= target) byPoints++;
+  const decided = a.rounds.filter(x => x.winnerTeam >= 0).length;
+  check(a.finished && e.winScore === 1 && Math.max(...e.teamWins) === 1 && decided === 1,
+    "hill / " + m.name + ": the match finishes, one round decides it (" + a.frames + " frames, " + a.rounds.length + " rounds, zone held " + held + " of " + a.playFrames + " play frames, best " + best + " of " + target + ")");
   check(held > a.playFrames * 0.1, "hill / " + m.name + ": computer tanks hold the zone (" + Math.round(held * 100 / a.playFrames) + "% of the play frames)");
-  if (m === matches[3] || m === matches[5]) {
+  if (!m.roundTime) check(best === target, "hill / " + m.name + ": won by holding the zone " + (m.goal || 60) + " s (" + best + " frames)");
+  if (m === matches[2] || m === matches[3] || m === matches[6]) {
     const b = runMatch(opts);
     check(a.bitsHash === b.bitsHash && a.stateHash === b.stateHash && a.frames === b.frames && NetProto.stateHash(b.engine) === a.stateHash,
       "hill / " + m.name + ": deterministic");
   }
 }
-check(byPoints > 0, "hill AI: computer tanks win rounds on points too (" + byPoints + " rounds)");
+check(byPoints > 0, "hill AI: computer tanks win matches on the zone (" + byPoints + ")");

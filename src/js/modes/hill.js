@@ -1,19 +1,30 @@
 // Game mode "hill" - king of the hill (docs/DESIGN-8P.md 27).
-// A round zone (radius sc(24)) near the middle of the map, dug free at the match start (the world stays
-// the same for the whole match). Every play frame in which the tanks alive inside it all belong to one
-// team, that team gets a point; the first team to TARGET points (1000 frames, ~55 s) wins the round. At
-// the round time the team with the most points wins (a tie: the tied team with more damage, else nobody;
-// no points at all: the usual damage rule decides).
-// Elimination still ends a round as usual. The zone's edge is marked with dots: white, or the colour of
-// the team holding it.
-// State (e.GS): cx, cy, r (the zone), dots (edge pixels, x/y pairs), pts[team] (this round), holder
-// (team index holding the zone this frame, -1 = nobody / contested), lastPts (the previous round's). e.modeScore[p]: frames p held the
-// zone (own team alone in it) during the match.
+// A round zone (radius sc(24)) near the middle of the map, dug free at the match start. Every play frame in
+// which the tanks alive inside it all belong to one team, that team gets a point (a frame held); the first
+// team to hold it e.goal seconds in all ("Seconds to win": 30..180, default 60; target = the goal in
+// frames, round(e.goal * 1193182 / 65536), 18.2 a second) wins the round - and the match: king of the
+// hill is one round (the engine forces winScore 1). At the round time the team with the most points wins
+// (a tie: the tied team with more damage, else nobody; no points at all: the usual damage rule decides).
+// Destroyed tanks come back at their base (elimination never ends the round). The zone's edge is marked
+// with dots: white, or the colour of the team holding it.
+// Every number shown is SECONDS (frames / 18.2, rounded) and always the TEAM's: the hud tag = the own team's
+// seconds held so far (goals up to 99), or - with the goals 120 / 180, which 2 digits can't show - the seconds
+// the team still needs (goal - held, at most 99, counting down to 0); the map's score text "hill 45/60s" (the
+// team's seconds / the goal), the statistics column = the tank's team's seconds held in the match (the same
+// for every member, as on the hud), the rounds list = the winner's seconds.
+// State (e.GS): cx, cy, r (the zone), dots (edge pixels, x/y pairs), target (frames to win), pts[team]
+// (frames held this round), tot[team] (frames held in the match), holder (team index holding the zone this
+// frame, -1 = nobody / contested), lastPts (the previous round's). e.modeScore[p]: frames p itself was in the
+// zone while its team held it (during the match; tests / debugging).
 (function (root) {
 "use strict";
 const E = root.TunnelerEngine || require("../engine.js");
 
-const TARGET = 1000;                 // points (frames held) to win a round
+const GOAL = 60;                      // seconds to win when no goal is given (TunnelerEngine.GOALS.hill.def)
+// seconds held -> frames (BIOS ticks: 1193182 / 65536 a second) and back (rounded: the goal shows as itself)
+const goalFrames = s => Math.round(s * 1193182 / 65536);
+const secs = f => Math.round((f || 0) * 65536 / 1193182);
+const target = e => e.GS.target || goalFrames(e.goal || GOAL);
 const RESPAWN_FRAMES = 55;           // a destroyed tank comes back at its base after ~3 s (only the zone decides)
 // where a tank may come back inside its base (the middle first): the first spot no other tank alive is near
 const SPOTS = [[0, 0], [-9, 0], [9, 0], [0, -9], [0, 9], [-9, -9], [9, -9], [-9, 9], [9, 9]];
@@ -80,9 +91,11 @@ function edgeDots(cx, cy, r) {
 }
 
 E.registerMode("hill", {
-  // the statistics: seconds each tank held the zone; the rounds list: the winner's points
-  stat: (e, p) => Math.round((e.modeScore[p] || 0) / 18.2),
-  roundNote: (e, t) => t >= 0 && e.GS.pts ? Math.min(100, Math.floor((e.GS.pts[t] || 0) * 100 / TARGET)) + "%" : "",
+  // the statistics: the seconds the tank's team held the zone in the match (the hud's number, the same for
+  // every member); the rounds list: the winning team's seconds
+  stat: (e, p) => secs(e.GS.tot && e.GS.tot[e.team(p)]),
+  roundNote: (e, t) => t >= 0 && e.GS.pts ? e.mt("note", { n: secs(e.GS.pts[t]) }) : "",
+  GOAL, goalFrames, secs,
   // destroyed tanks come back (the round is never decided by elimination - only the zone or the time)
   eliminationEnds: false,
   aiAlways: true,
@@ -92,29 +105,29 @@ E.registerMode("hill", {
     return true;
   },
   strings: {
-    en: { stat: "secs",
-      instr: "A zone near the middle of the map is dug free at the start, its edge marked with dots. Every moment only your team's tanks are inside it, your team scores a point; whoever fills the score first (about 55 seconds of holding it) wins the round. Two teams inside: nobody scores, so clear them out. The number beside your panel is your team's score in percent; at the round time the most points win. Destroyed tanks come back at their base after about 3 seconds - only the zone decides.",
-      score: "hill {n}%",
+    en: { stat: "secs", note: "{n} secs",
+      instr: "A zone near the middle of the map is dug free at the start, its edge marked with dots. Every moment only your team's tanks are inside it counts as your team holding it; the first team to hold it for Seconds to win in all (a setting, instead of rounds to win) wins the match. Two teams inside: nobody's clock runs, so clear them out. The number beside your panel is the seconds your team has held it so far (with 120 or 180 to win: the seconds your team still needs, counting down from 99), and the statistics show your team's seconds; when the round time runs out, the longest holder wins. Destroyed tanks come back at their base after about 3 seconds - only the zone decides.",
+      score: "hill {n}/{g}s",
     },
-    sk: { stat: "sek.",
-      instr: "Zóna pri strede mapy je na začiatku vykopaná, jej okraj značia bodky. Kým sú v nej len tanky tvojho tímu, tvoj tím získava body; kto prvý naplní skóre (asi 55 sekúnd držania), vyhráva kolo. Dva tímy vnútri: nikto neboduje, tak ich vyžeň. Číslo vedľa panelu je skóre tvojho tímu v percentách; po uplynutí času kola vyhráva najviac bodov. Zničené tanky sa po asi 3 sekundách vrátia do svojej základne - rozhoduje len zóna.",
-      score: "kopec {n}%",
+    sk: { stat: "sek.", note: "{n} s",
+      instr: "Zóna pri strede mapy je na začiatku vykopaná, jej okraj značia bodky. Kým sú v nej len tanky tvojho tímu, tvoj tím ju drží; kto ju prvý udrží spolu nastavený počet sekúnd (Sekúnd na výhru, namiesto kôl), vyhráva zápas. Dva tímy vnútri: nikomu čas nebeží, tak ich vyžeň. Číslo vedľa panelu sú sekundy, koľko ju tvoj tím zatiaľ držal (pri 120 či 180 na výhru: sekundy, ktoré tvojmu tímu ešte chýbajú, od 99 dolu), aj štatistika ukazuje sekundy tvojho tímu; keď uplynie čas kola, vyhráva ten, kto ju držal najdlhšie. Zničené tanky sa po asi 3 sekundách vrátia do svojej základne - rozhoduje len zóna.",
+      score: "kopec {n}/{g} s",
     },
-    cs: { stat: "sek.",
-      instr: "Zóna u středu mapy je na začátku vykopaná, její okraj značí tečky. Dokud jsou v ní jen tanky tvého týmu, tvůj tým získává body; kdo první naplní skóre (asi 55 sekund držení), vyhrává kolo. Dva týmy uvnitř: nikdo neboduje, tak je vyžeň. Číslo vedle panelu je skóre tvého týmu v procentech; po uplynutí času kola vyhrává nejvíc bodů. Zničené tanky se asi po 3 sekundách vrátí do své základny - rozhoduje jen zóna.",
-      score: "kopec {n}%",
+    cs: { stat: "sek.", note: "{n} s",
+      instr: "Zóna u středu mapy je na začátku vykopaná, její okraj značí tečky. Dokud jsou v ní jen tanky tvého týmu, tvůj tým ji drží; kdo ji první udrží celkem nastavený počet sekund (Sekund k výhře, místo kol), vyhrává zápas. Dva týmy uvnitř: nikomu čas neběží, tak je vyžeň. Číslo vedle panelu jsou sekundy, kolik ji tvůj tým zatím držel (při 120 či 180 k výhře: sekundy, které tvému týmu ještě chybí, od 99 dolů), i statistika ukazuje sekundy tvého týmu; když uplyne čas kola, vyhrává ten, kdo ji držel nejdéle. Zničené tanky se asi po 3 sekundách vrátí do své základny - rozhoduje jen zóna.",
+      score: "kopec {n}/{g} s",
     },
-    uk: { stat: "сек.",
-      instr: "Зона біля центру мапи на початку розкопана, її край позначено крапками. Поки в ній лише танки твоєї команди, твоя команда отримує очки; хто перший заповнить рахунок (приблизно 55 секунд утримання), виграє раунд. Дві команди всередині: ніхто не отримує очок, тож вижени їх. Число біля панелі - рахунок твоєї команди у відсотках; коли час раунду вийде, перемагає найбільше очок. Знищені танки повертаються на свою базу приблизно за 3 секунди - вирішує лише зона.",
-      score: "пагорб {n}%",
+    uk: { stat: "сек.", note: "{n} с",
+      instr: "Зона біля центру мапи на початку розкопана, її край позначено крапками. Поки в ній лише танки твоєї команди, твоя команда її утримує; хто першим утримає її загалом задану кількість секунд (Секунд для перемоги, замість раундів), виграє матч. Дві команди всередині: нічий час не йде, тож вижени їх. Число біля панелі - скільки секунд твоя команда вже її утримала (при 120 чи 180 для перемоги: скільки секунд команді ще бракує, від 99 донизу), і статистика показує секунди твоєї команди; коли час раунду вийде, перемагає та, що утримувала найдовше. Знищені танки повертаються на свою базу приблизно за 3 секунди - вирішує лише зона.",
+      score: "пагорб {n}/{g} с",
     },
-    ru: { stat: "сек.",
-      instr: "Зона у центра карты в начале раскопана, её край отмечен точками. Пока в ней только танки твоей команды, твоя команда получает очки; кто первым заполнит счёт (около 55 секунд удержания), выигрывает раунд. Две команды внутри: никто не получает очков, так что выгони их. Число рядом с панелью - счёт твоей команды в процентах; когда время раунда выйдет, побеждает больше очков. Уничтоженные танки возвращаются на свою базу примерно через 3 секунды - решает только зона.",
-      score: "холм {n}%",
+    ru: { stat: "сек.", note: "{n} с",
+      instr: "Зона у центра карты в начале раскопана, её край отмечен точками. Пока в ней только танки твоей команды, твоя команда её удерживает; кто первым удержит её в сумме заданное число секунд (Секунд для победы, вместо раундов), выигрывает матч. Две команды внутри: ничьё время не идёт, так что выгони их. Число рядом с панелью - сколько секунд твоя команда уже её удержала (при 120 или 180 для победы: сколько секунд команде ещё не хватает, от 99 вниз), и статистика показывает секунды твоей команды; когда время раунда выйдет, побеждает та, что удерживала дольше всех. Уничтоженные танки возвращаются на свою базу примерно через 3 секунды - решает только зона.",
+      score: "холм {n}/{g} с",
     },
-    genz: { stat: "secs",
-      instr: "There's a dotted circle in the middle of the map and it's literally the main character spot. Only your squad inside = your squad farms points; first to max out (like 55 seconds of camping) takes the round, no cap. Enemies in there too? Nobody scores, so yeet them out. The number by your panel is your squad's percent; when the round timer hits zero, most points eats. Get wrecked? You respawn at your base in like 3 seconds - only the zone matters.",
-      score: "hill {n}%",
+    genz: { stat: "secs", note: "{n} secs",
+      instr: "There's a dotted circle in the middle of the map and it's literally the main character spot. Only your squad inside = your squad's clock is ticking; first squad to camp it for Seconds to win total (it replaces rounds to win) takes the whole match, no cap. Enemies in there too? Nobody's clock moves, so yeet them out. The number by your panel is your squad's seconds so far (on 120 or 180 it's a countdown of what your squad still needs, from 99 down), and the stats show your squad's seconds too; if the round timer hits zero, longest camper eats. Get wrecked? You respawn at your base in like 3 seconds - only the zone matters.",
+      score: "hill {n}/{g}s",
     },
   },
 
@@ -128,7 +141,9 @@ E.registerMode("hill", {
       for (let x = cx - R - 2; x <= cx + R + 2; x++)
         if ((x - cx) * (x - cx) + (y - cy) * (y - cy) <= R2) e.setPixel(x, y, 0);
     G.dots = edgeDots(cx, cy, R);
+    G.target = goalFrames(e.goal || GOAL);
     G.pts = [];
+    G.tot = [];
     G.holder = -1;
   },
 
@@ -160,8 +175,9 @@ E.registerMode("hill", {
     G.holder = holder >= 0 ? holder : -1;
     if (holder < 0 || e.endTimer >= 0) return;
     G.pts[holder]++;
+    G.tot[holder] = (G.tot[holder] || 0) + 1;
     for (let p = 1; p <= N; p++) if (e.alive[p] && e.team(p) === holder && inZone(G, e.tankX[p], e.tankY[p])) e.modeScore[p]++;
-    if (G.pts[holder] >= TARGET) e.endRound(holder);
+    if (G.pts[holder] >= target(e)) e.endRound(holder);
   },
 
   // at the round time: the most points win; a tie at the top is decided among the tied teams only (their
@@ -202,14 +218,16 @@ E.registerMode("hill", {
   hud(e, p) {
     const G = e.GS;
     if (!G.pts) return null;
-    const t = e.team(p);
-    return { value: Math.min(99, Math.floor(G.pts[t] * 100 / TARGET)), color: G.holder === t ? 14 : G.holder >= 0 ? 12 : 9 };
+    const t = e.team(p), g = e.goal || GOAL, held = secs(G.pts[t]);
+    // up to 99 s to win: the seconds held; 120 / 180: the seconds still needed (2 digits), from 99 down to 0
+    const value = g > 99 ? Math.max(0, Math.min(99, g - held)) : Math.min(99, held);
+    return { value, color: G.holder === t ? 14 : G.holder >= 0 ? 12 : 9 };
   },
 
   scoreText(e, p) {
     const G = e.GS;
     if (!G.pts) return "";
-    return e.mt("score", { n: Math.min(100, Math.floor(G.pts[e.team(p)] * 100 / TARGET)) });
+    return e.mt("score", { n: secs(G.pts[e.team(p)]), g: e.goal || GOAL });
   },
 
   // ---- computer tanks: get into the zone and hold it, fight what comes close
