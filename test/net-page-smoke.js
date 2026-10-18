@@ -385,6 +385,10 @@ function loadPage(page, search, stored, version) {
     assert(/Room/.test(text()) && /1\/2/.test(text()) && /Lobby/.test(text()), "the list: " + text());
     press(env, "ArrowRight");
     assert.strictEqual(env.win.location.href, "/game/r1/watch", "Right: watch");
+    env.win.location.href = "";
+    ui.sel = ui.spec.items.findIndex(it => it.key === "room:r1");
+    ui.spec.items[ui.sel].change(-1);                       // (what a right click on the row does: DosUI backClick)
+    assert.strictEqual(env.win.location.href, "/game/r1/watch", "right click: watch");
     press(env, "Enter");
     assert.strictEqual(env.win.location.href, "/game/r1", "Enter: join");
     console.log("  ok  lobby.js asks for a name, then joins / watches games");
@@ -450,7 +454,7 @@ function loadPage(page, search, stored, version) {
     assert(/MODE +PLAYERS +AI +WATCHING +STATE/.test(text()), "the columns: " + text());
     assert(/^My secret game +standard +1\/3 +2 +4 +Lobby$/.test(row("room:priv1").trimEnd()), "a row: " + row("room:priv1"));
     assert(!/you host/.test(text()), "no mark in the rows: " + text());
-    assert(/You are this game's host/.test(text()) && /\(private\)/.test(text()), "the info: " + text());
+    assert(/You are this game's host/.test(text()) && !/\(private\)/.test(text()), "the info: only that you host it (and the keys): " + text());
     assert(!env.ls.has("tunneler.host.gone") && env.ls.has("tunneler.host.priv1"), "the stale key dropped");
     console.log("  ok  lobby.js marks the games this browser hosts, lists its private ones, drops stale keys");
   }

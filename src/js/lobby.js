@@ -23,18 +23,7 @@
   let rooms = [];
   const form = { value: "", max: 26, width: 18, public: true, spectators: true, error: "" };
 
-  // "4 tanks, teams, map size: medium, rounds to win: 3" - in the lobby: the seats that aren't closed
-  // (players, free open seats, AI); during a match: its tanks
-  function roomDesc(r) {
-    const seats = (r.seats || []).filter(s => s.kind !== "closed"), teamOf = {};
-    for (const s of seats) teamOf[s.team] = (teamOf[s.team] || 0) + 1;
-    const lobby = r.state === "lobby", n = lobby ? seats.length : r.tanks, teams = lobby ? Object.values(teamOf).some(k => k > 1) : r.teams;
-    // (the mode is in its own column; a mode with a goal: the goal instead of rounds to win)
-    const G = NetProto.GOALS[r.mode];
-    const win = G ? T("goal." + r.mode) + (r.mode === "infection" ? T("time.n", { n: NetProto.goalOf(r.mode, r.goals) }) : NetProto.goalOf(r.mode, r.goals))
-      : T("pg.win", { n: r.winScore || 3 });
-    return [T("os.players", { n }), T(teams ? "mode.teams" : "mode.ffa"), T("pg.size." + (r.size || "medium")), win].join(", ");
-  }
+
   function scoreText(r) {
     if (!r.ext) return (r.wins[0] || 0) + ":" + (r.wins[1] || 0);
     if (r.teams) return (r.teamWins && r.teamWins.length ? r.teamWins : [0, 0]).join(":");
@@ -55,11 +44,7 @@
       P(r.players + "/" + places(r), COLS[2]) + P(r.bots ? String(r.bots) : "", COLS[3]) + P(r.spec ? String(r.spec) : "", COLS[4]) + state;
   }
 
-  // who is in the game: "Playing: Norko, Jano" (the seated players' names)
-  function namesLine(r) {
-    const on = (r.seats || []).filter(s => s.taken).map(s => s.name);
-    return on.length ? { text: UniText.slice(T("lobby.who", { names: on.join(", ") }), 79), color: 7 } : null;
-  }
+
   const join = (id, watch) => { location.href = Links.game(id, watch ? "watch" : null); };
   // this page's version (build.js's version.js; null on a development page: not checked) - the server
   // refuses games of another version, so they can't be joined or created here
@@ -93,12 +78,13 @@
       info: [E(r.name), ...versionInfo()], go: () => {},
     } : ({
       label: rowText(r, stateText(r)), align: "left", key: "room:" + r.id,   // (the games you host: first, no mark)
-      info: [E(r.name) + (r.public ? "" : " " + T("room.private")), roomDesc(r) + "   " + stateText(r), namesLine(r),
-        hosting(r) ? { text: T("lobby.host.i"), color: 14 } : null,
+      // (the table says the rest: only whether you host it and the keys)
+      info: [hosting(r) ? { text: T("lobby.host.i"), color: 14 } : null,
         T(r.spectators ? (r.state === "lobby" && r.open ? "lobby.join2" : "lobby.watch") : r.state === "lobby" && r.open ? "lobby.join" : "lobby.closed")].filter(Boolean),
       disabled: !r.spectators && !(r.state === "lobby" && r.open),
       go: () => join(r.id, !(r.state === "lobby" && r.open)),
-      change: d => { if (d > 0 && r.spectators) join(r.id, true); },
+      // → or a right click (DosUI: change(-1)): watch it
+      change: d => { if (r.spectators && d !== 0) join(r.id, true); },
     }));
     if (!rooms.length) items.push({ key: "none", label: T("lobby.none"), disabled: true });
     items.push({ key: "sep", separator: true });

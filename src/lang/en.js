@@ -40,7 +40,7 @@ Lang.register("en", {
   "back.main": "Back to main menu", "back.main.i": "Back to the main menu.",
   "lobby.title": "ONLINE GAMES", "room.title": "ONLINE GAME", "lobby.name": "NAME", "lobby.players": "PLAYERS", "lobby.mode": "MODE", "lobby.ai": "AI", "lobby.spec": "WATCHING", "lobby.state": "STATE",
   "state.paused": "Paused", "state.round": "Round {n}",
-  "lobby.who": "Playing: {names}", "lobby.join": "<ENTER> to join this game", "lobby.none": "No public games right now",
+  "lobby.join": "<ENTER> to join this game", "lobby.none": "No public games right now",
   "lobby.create": "Create a new game", "lobby.create.i": "Start a game and invite someone to it.", "lobby.connecting": "Connecting to the server...", "lobby.wake": "A server that was asleep can take up to a minute to wake up.",
   "create.title": "CREATE A GAME", "create.hint": "↑↓ ← → <ENTER>, <TAB> other box, or mouse.  <ESC> back.",
   "create.name": "Name: ", "create.name.i": "Type a name for your game.",
@@ -135,7 +135,7 @@ Lang.register("en", {
   "name.go": "Continue", "name.err": "Please type a name first.",
   "set.name": "Name: ", "set.name.i1": "Your name in online games.", "set.name.i2": "Type it, then <ENTER>.",
  
-  "lobby.join2": "<ENTER> to join this game, → to watch it", "lobby.watch": "<ENTER> to watch this game",
+  "lobby.join2": "<ENTER> to join this game, → or a right click to watch it", "lobby.watch": "<ENTER> to watch this game",
   "lobby.closed": "No free seat and no spectators in this game.", "state.lobby": "Lobby",
   "seat.cpu": "AI ({level})", "seat.open": "open", "seat.closed": "closed",
   "seat.kind.i": "← →, a click or a right click: open, closed or AI (easy, medium, hard).", "seat.open.i": "← → or a right click: close this seat or give it to an AI.",

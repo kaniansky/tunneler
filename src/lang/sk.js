@@ -38,7 +38,7 @@ Lang.register("sk", {
   "back.main": "Do hlavného menu", "back.main.i": "Späť do hlavného menu.",
   "lobby.title": "HRY ONLINE", "room.title": "HRA ONLINE", "lobby.name": "NÁZOV", "lobby.players": "HRÁČI", "lobby.mode": "REŽIM", "lobby.ai": "AI", "lobby.spec": "DIVÁCI", "lobby.state": "STAV",
   "state.paused": "Pozastavená", "state.round": "Kolo {n}",
-  "lobby.who": "Hrajú: {names}", "lobby.join": "<ENTER> - pripojiť sa k hre", "lobby.none": "Momentálne žiadne verejné hry",
+  "lobby.join": "<ENTER> - pripojiť sa k hre", "lobby.none": "Momentálne žiadne verejné hry",
   "lobby.create": "Vytvoriť novú hru", "lobby.create.i": "Založ hru a pozvi do nej niekoho.", "lobby.connecting": "Pripájam sa k serveru...", "lobby.wake": "Server, ktorý spal, sa môže prebúdzať až minútu.",
   "create.title": "NOVÁ HRA", "create.hint": "↑↓ ← → <ENTER>, <TAB> druhý box, alebo myš.  <ESC> späť.",
   "create.name": "Názov: ", "create.name.i": "Napíš názov svojej hry.",
@@ -285,7 +285,7 @@ Lang.register("sk", {
   "name.go": "Pokračovať", "name.err": "Najprv napíš meno.",
   "set.name": "Meno: ", "set.name.i1": "Tvoje meno v online hrách.", "set.name.i2": "Napíš ho a stlač <ENTER>.",
  
-  "lobby.join2": "<ENTER> - pripojiť sa k hre, → - pozerať ju", "lobby.watch": "<ENTER> - pozerať túto hru",
+  "lobby.join2": "<ENTER> - pripojiť sa k hre, → alebo pravý klik - pozerať ju", "lobby.watch": "<ENTER> - pozerať túto hru",
   "lobby.closed": "V tejto hre nie je voľné miesto a diváci nie sú povolení.", "state.lobby": "Lobby",
   "seat.cpu": "AI ({level})", "seat.open": "voľné", "seat.closed": "zatvorené",
   "seat.kind.i": "← →, klik alebo pravý klik: voľné, zatvorené alebo AI (ľahký, stredný, ťažký).", "seat.open.i": "← → alebo pravý klik: zatvoriť miesto alebo ho dať AI.",

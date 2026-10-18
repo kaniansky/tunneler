@@ -38,7 +38,7 @@ Lang.register("ru", {
   "back.main": "В главное меню", "back.main.i": "Назад в главное меню.",
   "lobby.title": "ИГРЫ ОНЛАЙН", "room.title": "ИГРА ОНЛАЙН", "lobby.name": "НАЗВАНИЕ", "lobby.players": "ИГРОКИ", "lobby.mode": "РЕЖИМ", "lobby.ai": "ИИ", "lobby.spec": "ЗРИТЕЛИ", "lobby.state": "СОСТОЯНИЕ",
   "state.paused": "Пауза", "state.round": "Раунд {n}",
-  "lobby.who": "Играют: {names}", "lobby.join": "<ENTER> - присоединиться к игре", "lobby.none": "Сейчас нет открытых игр",
+  "lobby.join": "<ENTER> - присоединиться к игре", "lobby.none": "Сейчас нет открытых игр",
   "lobby.create": "Создать новую игру", "lobby.create.i": "Создай игру и пригласи кого-нибудь.", "lobby.connecting": "Подключение к серверу...", "lobby.wake": "Уснувший сервер может просыпаться до минуты.",
   "create.title": "НОВАЯ ИГРА", "create.hint": "↑↓ ← → <ENTER>, <TAB>: блок, мышь.  <ESC> назад.",
   "create.name": "Название: ", "create.name.i": "Введи название своей игры.",
@@ -284,7 +284,7 @@ Lang.register("ru", {
   "name.go": "Дальше", "name.err": "Сначала введи имя.",
   "set.name": "Имя: ", "set.name.i1": "Твоё имя в онлайн-играх.", "set.name.i2": "Введи его и нажми <ENTER>.",
  
-  "lobby.join2": "<ENTER> - присоединиться к игре, → - смотреть её", "lobby.watch": "<ENTER> - смотреть эту игру",
+  "lobby.join2": "<ENTER> - присоединиться к игре, → или правый клик - смотреть её", "lobby.watch": "<ENTER> - смотреть эту игру",
   "lobby.closed": "В этой игре нет свободного места, и зрители не допускаются.", "state.lobby": "Лобби",
   "seat.cpu": "ИИ ({level})", "seat.open": "свободно", "seat.closed": "закрыто",
   "seat.kind.i": "← → или (правый) клик: свободно, закрыто или ИИ (лёгкий, средний, тяжёлый).", "seat.open.i": "← → или правый клик: закрыть место или отдать его ИИ.",

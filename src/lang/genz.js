@@ -39,7 +39,7 @@ Lang.register("genz", {
   "back.main": "Dip to main menu", "back.main.i": "Back to the main menu.",
   "lobby.title": "ONLINE GAMES", "room.title": "ONLINE GAME", "lobby.name": "NAME", "lobby.players": "SQUAD", "lobby.mode": "MODE", "lobby.ai": "BOT", "lobby.spec": "LURKERS", "lobby.state": "VIBE",
   "state.paused": "AFK", "state.round": "Round {n}",
-  "lobby.who": "Squad rn: {names}", "lobby.join": "<ENTER> to pull up", "lobby.none": "No public games rn, dead lobby",
+  "lobby.join": "<ENTER> to pull up", "lobby.none": "No public games rn, dead lobby",
   "lobby.create": "Start a new game", "lobby.create.i": "Start a game and invite the squad.", "lobby.connecting": "Connecting to the server...", "lobby.wake": "The server was sleeping, it can take a minute to wake up. be patient.",
   "create.title": "NEW GAME", "create.hint": "↑↓ ← → <ENTER>, <TAB> other box, or mouse.  <ESC> dip.",
   "create.name": "Name: ", "create.name.i": "Give your game a name that slaps.",
@@ -280,7 +280,7 @@ Lang.register("genz", {
   "name.go": "Let's go", "name.err": "Type a name first, bestie.",
   "set.name": "Name: ", "set.name.i1": "Your online name, your whole brand.", "set.name.i2": "Type it, then <ENTER>.",
  
-  "lobby.join2": "<ENTER> to pull up, → to just watch", "lobby.watch": "<ENTER> to watch this one",
+  "lobby.join2": "<ENTER> to pull up, → or right click to just watch", "lobby.watch": "<ENTER> to watch this one",
   "lobby.closed": "No free seat and no spectators here, it's gatekept.", "state.lobby": "Lobby",
   "seat.cpu": "bot ({level})", "seat.open": "open", "seat.closed": "closed",
   "seat.kind.i": "← →, a click or a right click: open, closed or a bot (easy, medium, hard).", "seat.open.i": "← → or a right click: close this seat or hand it to a bot.",

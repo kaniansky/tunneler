@@ -38,7 +38,7 @@ Lang.register("uk", {
   "back.main": "До головного меню", "back.main.i": "Назад до головного меню.",
   "lobby.title": "ІГРИ ОНЛАЙН", "room.title": "ГРА ОНЛАЙН", "lobby.name": "НАЗВА", "lobby.players": "ГРАВЦІ", "lobby.mode": "РЕЖИМ", "lobby.ai": "ШІ", "lobby.spec": "ГЛЯДАЧІ", "lobby.state": "СТАН",
   "state.paused": "Пауза", "state.round": "Раунд {n}",
-  "lobby.who": "Грають: {names}", "lobby.join": "<ENTER> - приєднатися до гри", "lobby.none": "Зараз немає відкритих ігор",
+  "lobby.join": "<ENTER> - приєднатися до гри", "lobby.none": "Зараз немає відкритих ігор",
   "lobby.create": "Створити нову гру", "lobby.create.i": "Створи гру й запроси когось.", "lobby.connecting": "Підключення до сервера...", "lobby.wake": "Сервер, що спав, може прокидатися до хвилини.",
   "create.title": "НОВА ГРА", "create.hint": "↑↓ ← → <ENTER>, <TAB>: блок, миша.  <ESC> назад.",
   "create.name": "Назва: ", "create.name.i": "Введи назву своєї гри.",
@@ -285,7 +285,7 @@ Lang.register("uk", {
   "name.go": "Далі", "name.err": "Спершу введи ім'я.",
   "set.name": "Ім'я: ", "set.name.i1": "Твоє ім'я в онлайн-іграх.", "set.name.i2": "Введи його й натисни <ENTER>.",
  
-  "lobby.join2": "<ENTER> - приєднатися до гри, → - дивитися її", "lobby.watch": "<ENTER> - дивитися цю гру",
+  "lobby.join2": "<ENTER> - приєднатися до гри, → або правий клік - дивитися її", "lobby.watch": "<ENTER> - дивитися цю гру",
   "lobby.closed": "У цій грі немає вільного місця, і глядачі не дозволені.", "state.lobby": "Лобі",
   "seat.cpu": "ШІ ({level})", "seat.open": "вільне", "seat.closed": "закрите",
   "seat.kind.i": "← →, клік або правий клік: вільне, закрите або ШІ (легкий, середній, важкий).", "seat.open.i": "← → або правий клік: закрити місце або віддати його ШІ.",
