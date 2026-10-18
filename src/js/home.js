@@ -219,16 +219,20 @@
         s.kind = step(KINDS.filter(k => k !== "you" || free || s.kind === "you"), s.kind, d);
         redraw();
       };
-      const teamText = T("lc.team", { n: s.team });
+      // (infection / survival make their own teams: no team column, nothing to set - the mode's description instead)
+      const own = (TunnelerEngine.OWN_TEAMS || []).includes(gmode);
+      const teamText = own ? "" : T("lc.team", { n: s.team });
       return {
         key: "slot" + i, align: "left", attr: TEXT_COLORS[i] & 0x0F,
         // (like the online lobby's seats: "►" in front of your own tank)
         label: (s.kind === "you" ? "\x10" : " ") + " " + who(s.kind).padEnd(whoW) + teamText,
         // mouse: a click on the who column / the team cycles it (right click: back), elsewhere selects
-        zones: [{ from: 2, to: 2 + whoW - 1, click: setKind }, { from: 2 + whoW, to: 2 + whoW + teamText.length, click: setTeam }],
-        info: s.kind === "you" ? [T("lc.you.i1"), T("lc.you.i2")] : [T("lc.slot.i1", { levels: levelsText() }), T("lc.slot.i2")],
-        go: () => setTeam(1),
-        digit: n => { s.team = n; redraw(); },               // 1..8: this slot's team
+        zones: own ? [{ from: 2, to: 2 + whoW - 1, click: setKind }]
+          : [{ from: 2, to: 2 + whoW - 1, click: setKind }, { from: 2 + whoW, to: 2 + whoW + teamText.length, click: setTeam }],
+        info: own ? [s.kind === "you" ? T("lc.you.i1") : T("lc.slot.i1", { levels: levelsText() }), T("gm." + gmode + ".i")]
+          : s.kind === "you" ? [T("lc.you.i1"), T("lc.you.i2")] : [T("lc.slot.i1", { levels: levelsText() }), T("lc.slot.i2")],
+        go: own ? () => setKind(1) : () => setTeam(1),
+        digit: own ? undefined : n => { s.team = n; redraw(); },   // 1..8: this slot's team
         change: setKind,
       };
     });

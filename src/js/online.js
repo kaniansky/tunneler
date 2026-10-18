@@ -336,8 +336,10 @@
     const tw = Math.max(...[1, 8].map(n => W(T("pg.teamn", { n }))));
     return { nw, tw };
   }
+  // (infection / survival make their own teams: the seats' teams mean nothing - no team column)
+  const ownTeams = () => !!(st && st.settings && TunnelerEngine.OWN_TEAMS.includes(st.settings.mode));
   function seatText(s, i, c) {
-    let name, team = T("pg.teamn", { n: s.team }), ping = "";
+    let name, team = ownTeams() ? "" : T("pg.teamn", { n: s.team }), ping = "";
     if (s.k) {
       name = Lang.enc(s.name);
       ping = s.ping != null ? s.ping + " ms" : "";
@@ -361,7 +363,9 @@
       if (locked) return Object.assign(it, { static: true });
       const host = isHost() && !s.k;                       // the host: a seat nobody sits on
       const kind = d => seatSet(i, { kind: cycle(SEAT_KINDS, s.kind, d) }), team = d => seatSet(i, { team: (s.team - 1 + d + 8) % 8 + 1 });
+      const own = ownTeams();
       if (i === mine) {
+        if (own) return Object.assign(it, { static: true });   // (no team to choose)
         return Object.assign(it, { info: [T("seat.mine.i1"), T("seat.mine.i2")], change: d => setTeam(d), go: () => setTeam(1),
           digit: n => setTeam(0, n), zones: [teamZone(d => setTeam(d))] });
       }
@@ -370,15 +374,15 @@
       // click: on an open seat sits there, on a closed / AI seat = the next kind as well
       const other = d => d < 0 || s.kind !== "open" ? kind(1) : sitOn(i);
       const hostZones = [{ from: 0, to: 3 + c.nw, click: other },
-        { from: 3 + c.nw, to: 3 + c.nw + c.tw, click: d => d > 0 && s.kind !== "closed" ? team(1) : kind(1) },
+        { from: 3 + c.nw, to: 3 + c.nw + c.tw, click: d => d > 0 && s.kind !== "closed" && !own ? team(1) : kind(1) },
         { from: 3 + c.nw + c.tw, to: 99, click: other }];
       if (!s.k && s.kind === "open") {
         return Object.assign(it, { info: [T("seat.sit.i", { name: NAME(ROLES[i]) }), host ? T("seat.open.i") : T("seat.sit.i2")], go: () => sitOn(i),
-          change: host ? kind : undefined, digit: host ? n => seatSet(i, { team: n }) : undefined, zones: host ? hostZones : undefined });
+          change: host ? kind : undefined, digit: host && !own ? n => seatSet(i, { team: n }) : undefined, zones: host ? hostZones : undefined });
       }
       if (host) {                                           // closed / AI: the host changes it
-        return Object.assign(it, { info: [T("seat.kind.i"), T("seat.team.i")], change: kind, go: () => team(1),
-          digit: n => seatSet(i, { team: n }), zones: hostZones });
+        return Object.assign(it, { info: [T("seat.kind.i"), own ? T("gm." + st.settings.mode + ".i") : T("seat.team.i")], change: kind,
+          go: own ? () => kind(1) : () => team(1), digit: own ? undefined : n => seatSet(i, { team: n }), zones: hostZones });
       }
       return Object.assign(it, { static: true });          // somebody else's seat / nothing to do
     });

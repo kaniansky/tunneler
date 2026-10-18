@@ -169,6 +169,12 @@ function loadPage(page, search, stored, version) {
     assert(ffRow.static && ffRow.attr === 8, "no team of 2: friendly fire grayed out");
     ws.recv(mkSt());
     await wait(150);
+    // survival / infection make their own teams: no team column, no team to change
+    ws.recv(mkSt({ settings: Object.assign({}, SETTINGS, { mode: "survival" }) }));
+    await wait(150);
+    assert(!/team \d/.test(shown()) && lui.spec.items.find(it => it.key === "seat1").static, "survival: no team column, your seat read-only: " + shown());
+    ws.recv(mkSt());
+    await wait(150);
     // settings (host): Left / Right
     sel(lui, "size");
     press(env, "ArrowRight");
