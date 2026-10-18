@@ -3,7 +3,7 @@
 All notable changes to Tunneler Online. Versions follow [semantic versioning](https://semver.org/);
 a release is made by pushing a version tag (see CONTRIBUTING.md).
 
-## Unreleased
+## 3.1.4
 
 - Every text input shows a gray placeholder while it's empty: your name, the game's name, Join by link,
   Say.
