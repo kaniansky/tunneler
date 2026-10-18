@@ -1,21 +1,17 @@
 "use strict";
 // Game mode "infection" (docs/DESIGN-8P.md 27).
 //
-// At each round start one random tank is infected (team number 1), every other tank is healthy (team
-// number 2, together); the seats' own teams don't matter (NetProto.OWN_TEAMS). A healthy tank destroyed
-// comes back at once at its base, infected (it joins team 1); an infected tank destroyed comes back at its
-// base ~3 s later (eliminationEnds: false). The round ends when no healthy tank is left - the last healthy
-// tank destroyed stays out and the infected team wins it - or when the round time is up: the healthy team
-// wins it (no round time set: the mode's own 3 minutes).
-//
-// Round wins: the teams are reshuffled every round, so a match is won by the first TANK with winScore
-// round wins (each member of the winning side gets one). The engine ends the match when a team's
-// teamWins reaches winScore, so right before a round is decided teamWins[t] is set to the best wins[p]
-// among t's members (the engine then adds the round to both): a team reaches winScore exactly when one of
-// its tanks does.
-//
-// The screens show each tank's own wins and mark the tanks with winScore wins as the match winners
-// (perTankWins); the two sides are named "infected" / "healthy" (teamName).
+// The match is ONE round (a goal mode: winScore 1). At its start one random tank is infected (team number 1),
+// every other tank is healthy (team number 2, together); the seats' own teams don't matter
+// (NetProto.OWN_TEAMS). A healthy tank destroyed comes back at once at its base, infected (it joins team 1);
+// an infected tank destroyed comes back at its base ~3 s later (eliminationEnds: false).
+// The goal (e.goal, "Survive for", TunnelerEngine.GOALS.infection: minutes, default 3) is the round's clock -
+// any round time setting is overridden. The healthy side wins when a healthy tank is still alive when the
+// time is up: the tanks still healthy are the winners. The infected side wins as soon as no healthy tank is
+// left (the last healthy tank destroyed stays out): patient zero and every tank it turned are the winners.
+// The two sides are the match's teams at its end (team indexes 0 = infected, 1 = healthy), so the round
+// title, the statistics (grouped infected / healthy, the winners blinking) and the match winner all follow
+// from the usual team rules; the sides are named "infected" / "healthy" (teamName).
 //
 // Coming back: at the own base - unless another tank stands there (it would be stuck on top of it). A
 // tank just infected then comes back at once elsewhere, an infected one waits up to BLOCKED frames for the
@@ -24,12 +20,13 @@
 //
 // State (e.GS, reset at every match start): inf[p] (infected), back[p] (the frame counter value from which
 // a destroyed tank comes back, -1 = none), now[p] (it was just infected: back at once, wherever),
-// f (play frames this round). e.modeScore[p]: healthy tanks p infected in this match.
+// f (play frames this round). e.modeScore[p]: healthy tanks p infected in this match (the statistics).
 (function (root) {
 const E = root.TunnelerEngine || require("../engine.js");
 
 const RESPAWN = 55;                                   // frames (~3 s) before a destroyed infected tank is back
-const OWN_TIME = Math.round(3 * 60 * 1193182 / 65536); // the mode's round time without one set: 3 minutes in steps
+const MINUTES = 3;                                    // the goal's default (TunnelerEngine.GOALS.infection.def)
+const ticksFor = min => Math.round(min * 60 * 1193182 / 65536);   // minutes -> engine steps (BIOS ticks)
 const INFECTED = 1, HEALTHY = 2;                      // team numbers (team indexes 0 / 1)
 const MARK = 12;                                      // red mark above an infected tank
 // how well an infected computer tank senses the nearest healthy one: a position every `every` frames,
@@ -56,18 +53,9 @@ function healthyLeft(e, except) {
   for (let p = 1; p <= e.nPlayers; p++) if (!e.GS.inf[p] && p !== except) n++;
   return n;
 }
-// teamWins[t] = the most round wins of one of t's tanks (see the top)
-function syncWins(e) {
-  for (let t = 0; t < e.nTeams; t++) {
-    let best = 0;
-    for (const p of e.teamMembers(t)) best = Math.max(best, e.wins[p]);
-    e.teamWins[t] = best;
-  }
-}
-// end the round: team index 0 = the infected, 1 = the healthy
+// end the round (and the match): team index 0 = the infected, 1 = the healthy
 function decide(e, t) {
   if (e.endTimer >= 0) return;
-  syncWins(e);
   e.endRound(t);
 }
 // no other tank in the base (a tank put back on top of another one could never move again)
@@ -105,7 +93,6 @@ function setInfected(e, list) {
   e.GS.inf = new Array(N + 1).fill(false);
   for (const p of list) e.GS.inf[p] = true;
   applyTeams(e);
-  syncWins(e);
 }
 
 E.registerMode("infection", {
@@ -113,40 +100,42 @@ E.registerMode("infection", {
   stat: (e, p) => e.modeScore[p] || 0,
   strings: {
     en: { stat: "inf.",
-      instr: "One random tank starts the round infected (team 1), all the others are healthy (team 2). A healthy tank destroyed comes back at once at its base - infected; an infected tank destroyed returns after 3 seconds. The infected win the round when no healthy tank is left; the healthy tanks still standing when the time runs out (3 minutes without a round time) win it. Every tank counts its own round wins; infected tanks carry a red mark.",
+      instr: "One round decides the match. One random tank starts infected (team 1), all the others are healthy (team 2). A healthy tank destroyed comes back at once at its base - infected; an infected tank destroyed returns after 3 seconds. The infected win as soon as no healthy tank is left; if any healthy tank lasts until Survive for (a setting, instead of rounds to win) runs out, the tanks still healthy win. Infected tanks carry a red mark; the number beside your instrument panel shows the healthy tanks left.",
       infected: "infected", healthy: "healthy",
     },
     sk: { stat: "nak.",
-      instr: "Na začiatku kola je jeden náhodný tank nakazený (tím 1), všetky ostatné sú zdravé (tím 2). Zničený zdravý tank sa hneď vráti na svoju základňu - nakazený; zničený nakazený tank sa vráti po 3 sekundách. Nakazení vyhrajú kolo, keď nezostane žiadny zdravý tank; zdravé tanky, ktoré vydržia do konca času (bez časového limitu 3 minúty), ho vyhrajú. Každý tank má vlastné výhry kôl; nakazené tanky majú červenú značku.",
+      instr: "Zápas rozhodne jedno kolo. Jeden náhodný tank začína nakazený (tím 1), všetky ostatné sú zdravé (tím 2). Zničený zdravý tank sa hneď vráti na svoju základňu - nakazený; zničený nakazený tank sa vráti po 3 sekundách. Nakazení vyhrajú, len čo nezostane žiadny zdravý tank; ak niektorý zdravý tank vydrží celý čas z nastavenia Prežiť (namiesto kôl na výhru), vyhrajú tanky, ktoré sú ešte zdravé. Nakazené tanky majú červenú značku; číslo vedľa prístrojového panelu ukazuje, koľko zdravých tankov zostáva.",
       infected: "nakazený", healthy: "zdravý",
     },
     cs: { stat: "nak.",
-      instr: "Na začátku kola je jeden náhodný tank nakažený (tým 1), všechny ostatní jsou zdravé (tým 2). Zničený zdravý tank se hned vrátí na svou základnu - nakažený; zničený nakažený tank se vrátí po 3 sekundách. Nakažení vyhrají kolo, když nezůstane žádný zdravý tank; zdravé tanky, které vydrží do konce času (bez časového limitu 3 minuty), ho vyhrají. Každý tank má vlastní výhry kol; nakažené tanky mají červenou značku.",
+      instr: "Zápas rozhodne jedno kolo. Jeden náhodný tank začíná nakažený (tým 1), všechny ostatní jsou zdravé (tým 2). Zničený zdravý tank se hned vrátí na svou základnu - nakažený; zničený nakažený tank se vrátí po 3 sekundách. Nakažení vyhrají, jakmile nezůstane žádný zdravý tank; pokud některý zdravý tank vydrží celý čas z nastavení Přežít (místo kol k výhře), vyhrají tanky, které jsou ještě zdravé. Nakažené tanky mají červenou značku; číslo vedle přístrojového panelu ukazuje, kolik zdravých tanků zbývá.",
       infected: "nakažený", healthy: "zdravý",
     },
     uk: { stat: "інф.",
-      instr: "На початку раунду один випадковий танк заражений (команда 1), усі інші здорові (команда 2). Знищений здоровий танк одразу повертається на свою базу - вже зараженим; знищений заражений танк повертається через 3 секунди. Заражені виграють раунд, коли не лишається жодного здорового танка; здорові танки, що протрималися до кінця часу (без ліміту часу - 3 хвилини), виграють його. Кожен танк рахує власні перемоги в раундах; заражені танки мають червону позначку.",
+      instr: "Матч вирішує один раунд. Один випадковий танк починає зараженим (команда 1), усі інші здорові (команда 2). Знищений здоровий танк одразу повертається на свою базу - вже зараженим; знищений заражений танк повертається через 3 секунди. Заражені перемагають, щойно не лишається жодного здорового танка; якщо хоч один здоровий танк протримається, доки не мине час Вижити (налаштування замість раундів для перемоги), перемагають танки, що ще здорові. Заражені танки мають червону позначку; число біля панелі приладів показує, скільки здорових танків лишилося.",
       infected: "заражений", healthy: "здоровий",
     },
     ru: { stat: "зар.",
-      instr: "В начале раунда один случайный танк заражён (команда 1), все остальные здоровы (команда 2). Уничтоженный здоровый танк сразу возвращается на свою базу - уже заражённым; уничтоженный заражённый танк возвращается через 3 секунды. Заражённые выигрывают раунд, когда не остаётся ни одного здорового танка; здоровые танки, продержавшиеся до конца времени (без лимита времени - 3 минуты), выигрывают его. Каждый танк считает свои победы в раундах; у заражённых танков красная метка.",
+      instr: "Матч решает один раунд. Один случайный танк начинает заражённым (команда 1), все остальные здоровы (команда 2). Уничтоженный здоровый танк сразу возвращается на свою базу - уже заражённым; уничтоженный заражённый танк возвращается через 3 секунды. Заражённые побеждают, как только не остаётся ни одного здорового танка; если хоть один здоровый танк продержится, пока не выйдет время Выжить (настройка вместо раундов для победы), побеждают танки, которые ещё здоровы. У заражённых танков красная метка; число рядом с панелью приборов показывает, сколько здоровых танков осталось.",
       infected: "заражён", healthy: "здоров",
     },
     genz: { stat: "zomb",
-      instr: "One random tank spawns as patient zero (team 1), everyone else is clean (team 2). Get wrecked while clean and you respawn instantly at your base as a zombie, no cap; wrecked zombies are back in 3 seconds. Zombies take the round when nobody clean is left, but if the clean squad survives the clock (3 minutes when there's no round time) they win it. Everyone stacks their own round wins, and zombies wear a red drip on top.",
+      instr: "One round, winner takes all. One random tank spawns as patient zero (team 1), everyone else is clean (team 2). Get wrecked while clean and you respawn instantly at your base as a zombie, no cap; wrecked zombies are back in 3 seconds. Zombies win the second nobody clean is left, but if any clean tank survives until Survive for runs out (a setting, it replaces rounds to win), the still-clean squad takes the W. Zombies wear a red drip on top; the number next to your dashboard is how many clean tanks are left.",
       infected: "zombie", healthy: "clean",
     },
   },
 
   eliminationEnds: false,
   aiAlways: true,
-  perTankWins: true,                                  // (the match: the first tank with winScore wins)
   teamName: (e, t) => e.mt(e.teamIds[t] === INFECTED ? "infected" : "healthy"),
   setInfected,                                        // (not a hook: for tests)
 
   init(e) {
-    // the mode's own time limit when the game has none (the round clock then runs and calls timeUp)
-    if (!e.roundTicks) e.roundTicks = OWN_TIME;
+    // one round; its clock is the goal ("Survive for" minutes), whatever round time was set (the round
+    // clock then runs and calls timeUp; roundTime 0: the settings lines show the goal only)
+    e.winScore = 1;
+    e.roundTime = 0;
+    e.roundTicks = ticksFor(e.goal || MINUTES);
   },
 
   round(e) {
@@ -157,7 +146,6 @@ E.registerMode("infection", {
     e.GS.now = new Array(N + 1).fill(false);
     e.GS.f = 0;
     applyTeams(e);
-    syncWins(e);
   },
 
   frame(e) {
