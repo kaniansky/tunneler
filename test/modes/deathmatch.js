@@ -205,7 +205,7 @@ for (const l of ["en", "sk", "cs", "uk", "ru", "genz"]) {
 
 // ---- Kills to win: the setting (killsToWin) decides
 {
-  const e = startEngine(25, opts([1, 2], { killsToWin: 5 }));
+  const e = startEngine(25, opts([1, 2], { goal: 5 }));
   idle(e);
   for (let k = 0; k < 5; k++) {
     for (let w = 0; !e.alive[2] && w < 400; w++) idle(e);

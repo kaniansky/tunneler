@@ -1,6 +1,6 @@
 // Game mode "deathmatch" (docs/DESIGN-8P.md 27): destroyed tanks come back at their base after ~3 s; a
 // kill of an enemy scores +1 for the killer (a teammate: -1, friendly fire only). The first team to
-// e.killsToWin kills (its members' sum; the "Kills to win" setting, default KILLS_TO_WIN) wins the round -
+// e.goal kills (its members' sum; the "Kills to win" setting, default KILLS_TO_WIN) wins the round -
 // and the match: a deathmatch is one round (winScore 1); at the round time the most kills (a tie: nobody).
 // The round never ends by elimination. hud: own kills; scoreText: "kills n".
 // State: e.GS = {f: play frames this round, back: [frame a destroyed tank comes back, per player; 0 = none]},
@@ -60,7 +60,7 @@ E.registerMode("deathmatch", {
       e.modeScore[killer] += e.isEnemy(killer, p) ? 1 : -1;
       e.GS.total[killer] += e.isEnemy(killer, p) ? 1 : -1;   // (the whole match: the statistics)
       const t = e.team(killer);
-      if (e.isEnemy(killer, p) && teamKills(e, t) >= (e.killsToWin || KILLS_TO_WIN)) e.endRound(t);
+      if (e.isEnemy(killer, p) && teamKills(e, t) >= (e.goal || KILLS_TO_WIN)) e.endRound(t);
     }
     e.GS.back[p] = e.GS.f + RESPAWN_FRAMES;
     return true;                           // never the end of the round by elimination

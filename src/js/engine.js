@@ -143,7 +143,9 @@ const STRINGS_EN = {
     views: ["self", "team", "everyone"], watch: ["after death: black screen", "after death: my wreck", "after death: watch team", "after death: watch killer", "after death: watch all"],
     // game modes (the round title / statistics settings: the mode's name first) and modifiers
     modes: {"standard": "standard", "gold": "gold rush", "infection": "infection", "survival": "survival", "hill": "king of the hill", "shrink": "shrinking world", "ctf": "capture the flag", "siege": "base siege", "deathmatch": "deathmatch"},
-    noRepair: "no repairs", kills: "kills to win: {n}" },
+    noRepair: "no repairs",
+    goals: { gold: "gold to win: {n}", infection: "survive {n} min", survival: "waves to win: {n}", hill: "seconds to win: {n}",
+      ctf: "captures to win: {n}", siege: "base strength: {n}", deathmatch: "kills to win: {n}" } },
   // the world map's "PRESS ANY KEY" pixel-art banner (5 rows of '*' / ' ', all the same length); a
   // translation may replace it (see Banner below for the original)
   // banner: [...],
@@ -376,7 +378,11 @@ class TunnelerEngine {
     this.names = new Array(this.nPlayers).fill(null);  // display names (setNames), null = color name
     this.computeTeams();
     this.winScore = clampInt(o.winScore, 1, 9, 3);
-    this.killsToWin = clampInt(o.killsToWin, 1, 99, 10);   // deathmatch (src/js/modes/deathmatch.js): kills that win
+    // a mode's goal instead of rounds to win (TunnelerEngine.GOALS: gold, minutes to survive, waves, seconds
+    // in the zone, captures, base strength, kills): one round decides the match
+    const G = TunnelerEngine.GOALS[this.gameMode];
+    this.goal = G ? (G.choices.includes(o.goal) ? o.goal : G.def) : 0;
+    if (G) this.winScore = 1;
     this.friendlyFire = !!o.friendlyFire;
     this.roundTime = clampInt(o.roundTime, 0, 60, 0);
     this.roundTicks = Math.round(this.roundTime * 60 * PIT_HZ / TICK);   // the limit in steps (BIOS ticks)
@@ -1201,8 +1207,8 @@ class TunnelerEngine {
     if (!o) return [];
     const S = Object.assign({}, STRINGS_EN.settings, this.strings.settings);
     const sizes = TunnelerEngine.SIZES || ["small", "medium", "large"];
-    const parts = [S.size[Math.max(0, sizes.indexOf(this.size))], this.gameMode === "deathmatch" && S.kills
-      ? S.kills.replace("{n}", String(this.killsToWin)) : S.win.replace("{n}", String(this.winScore))];
+    const goalText = this.goal && (S.goals || STRINGS_EN.settings.goals)[this.gameMode];
+    const parts = [S.size[Math.max(0, sizes.indexOf(this.size))], goalText ? goalText.replace("{n}", String(this.goal)) : S.win.replace("{n}", String(this.winScore))];
     if (this.gameMode !== "standard") parts.unshift((S.modes || {})[this.gameMode] || this.gameMode);
     if (this.mods.noRepair && S.noRepair) parts.push(S.noRepair);
     if (this.teams) parts.push(S.ff[this.friendlyFire ? 1 : 0]);
@@ -2970,6 +2976,11 @@ TunnelerEngine.MODES = {};
 // every mode in the order the menus offer them (the same as NetProto.MODES); modifiers
 TunnelerEngine.MODE_LIST = ["standard", "gold", "infection", "survival", "hill", "shrink", "ctf", "siege", "deathmatch"];
 TunnelerEngine.OWN_TEAMS = ["infection", "survival"];      // modes that make their own teams
+// a mode's goal instead of rounds to win (the same as NetProto.GOALS)
+TunnelerEngine.GOALS = { gold: { choices: [5, 10, 15, 20, 30, 50], def: 10 }, infection: { choices: [1, 2, 3, 5, 10], def: 3 },
+  survival: { choices: [3, 5, 7, 10, 15, 20], def: 5 }, hill: { choices: [30, 45, 60, 90, 120, 180], def: 60 },
+  ctf: { choices: [1, 2, 3, 5, 7, 10], def: 3 }, siege: { choices: [10, 20, 30, 50, 80], def: 30 },
+  deathmatch: { choices: [5, 10, 15, 20, 30, 50], def: 10 } };
 TunnelerEngine.MODIFIERS = ["noRepair"];
 TunnelerEngine.registerMode = (name, hooks) => { TunnelerEngine.MODES[name] = Object.assign({ name }, hooks); };
 

@@ -47,7 +47,20 @@ const ROUND_TIMES = [0, 2, 3, 5, 10];                    // round time limit, mi
 // needs AI tanks (the waves) and players.
 const MODES = ["standard", "gold", "infection", "survival", "hill", "shrink", "ctf", "siege", "deathmatch"];
 const OWN_TEAMS = ["infection", "survival"];
-const KILLS = [5, 10, 15, 20, 30, 50];                   // deathmatch: kills to win (instead of rounds to win)
+// a mode's goal instead of "rounds to win" (one round decides the match): gold to win, minutes to survive
+// (infection), waves to win, seconds in the zone to win (hill), captures to win, base strength in hits
+// (siege), kills to win - choices and default; the room keeps one per mode (settings.goals {mode: n})
+const GOALS = { gold: { choices: [5, 10, 15, 20, 30, 50], def: 10 }, infection: { choices: [1, 2, 3, 5, 10], def: 3 },
+  survival: { choices: [3, 5, 7, 10, 15, 20], def: 5 }, hill: { choices: [30, 45, 60, 90, 120, 180], def: 60 },
+  ctf: { choices: [1, 2, 3, 5, 7, 10], def: 3 }, siege: { choices: [10, 20, 30, 50, 80], def: 30 },
+  deathmatch: { choices: [5, 10, 15, 20, 30, 50], def: 10 } };
+const goalsOf = v => {                                   // a goals object, checked (null: not an object)
+  if (!v || typeof v !== "object" || Array.isArray(v)) return null;
+  const out = {};
+  for (const m of Object.keys(GOALS)) if (GOALS[m].choices.includes(v[m])) out[m] = v[m];
+  return out;
+};
+const goalOf = (mode, goals) => !GOALS[mode] ? 0 : goals && GOALS[mode].choices.includes(goals[mode]) ? goals[mode] : GOALS[mode].def;
 const MODIFIERS = ["noRepair"];                          // no shield repair at bases
 const clampInt = (v, lo, hi, def) => { v = Math.trunc(Number(v)); return Number.isFinite(v) ? Math.max(lo, Math.min(hi, v)) : def; };
 
@@ -108,7 +121,7 @@ const SETTINGS = {
   watchOut: v => AFTER_DEATH.includes(v) ? v : undefined,
   mode: v => MODES.includes(v) ? v : undefined,
   noRepair: v => typeof v === "boolean" ? v : undefined,
-  kills: v => KILLS.includes(v) ? v : undefined,
+  goals: v => goalsOf(v) || undefined,
 };
 // A new room's settings from POST /api/rooms -> {seats: [8 x {kind, team}], size, winScore, friendlyFire,
 // roundTime, visible, watchOut}; anything missing or wrong gets its default. o.seats (or the older
@@ -120,7 +133,7 @@ function roomSettings(o) {
   return { seats, size: SIZES.includes(o.size) ? o.size : "medium", winScore: clampInt(o.winScore, 1, 9, 3),
     friendlyFire: o.friendlyFire === true, roundTime: roundTime(o.roundTime),
     visible: VISIBLE.includes(o.visible) ? o.visible : "self", watchOut: afterDeath(o.watchOut),
-    mode: MODES.includes(o.mode) ? o.mode : "standard", noRepair: o.noRepair === true, kills: KILLS.includes(o.kills) ? o.kills : 10 };
+    mode: MODES.includes(o.mode) ? o.mode : "standard", noRepair: o.noRepair === true, goals: goalsOf(o.goals) || {} };
 }
 
 // The tanks of a match: the seats with a player (human) or a computer tank, in colour order ->
@@ -159,7 +172,7 @@ function engineOptions(cfg) {
   if (cfg.ext) o.extended = true;
   if (MODES.includes(cfg.mode) && cfg.mode !== "standard") o.mode = cfg.mode;
   for (const k of MODIFIERS) if (cfg[k] === true) o[k] = true;
-  if (cfg.mode === "deathmatch" && KILLS.includes(cfg.kills)) o.killsToWin = cfg.kills;
+  if (GOALS[cfg.mode]) o.goal = goalOf(cfg.mode, cfg.goals);
   return o;
 }
 // a received match cfg, checked (null = unusable)
@@ -173,7 +186,7 @@ function readCfg(c) {
   return { ext: !!c.ext, players: slots.length, slots, names, size: SIZES.includes(c.size) ? c.size : "medium",
     winScore: clampInt(c.winScore, 1, 9, 3), friendlyFire: !!c.friendlyFire, roundTime: roundTime(c.roundTime),
     visible: VISIBLE.includes(c.visible) ? c.visible : "self", watchOut: afterDeath(c.watchOut),
-    mode: MODES.includes(c.mode) ? c.mode : "standard", noRepair: c.noRepair === true, kills: KILLS.includes(c.kills) ? c.kills : 10 };
+    mode: MODES.includes(c.mode) ? c.mode : "standard", noRepair: c.noRepair === true, goals: goalsOf(c.goals) || {} };
 }
 
 // One frame -> engine input ({keyDown, keys}); identical on every client.
@@ -313,7 +326,7 @@ function stateHash(e) {
 const NetProto = { TICK_MS, UP, DOWN, LEFT, RIGHT, FIRE, ESC, ALL_BITS, EXT_BITS, BLUE_SCAN, GREEN_SCAN, F10,
   AFTER_DEATH, afterDeath, ROLES, MAX_SLOTS, LEVELS, SEAT_KINDS, SIZES, MAX_PLAYER_NAME, MAX_CHAT, VISIBLE, ROUND_TIMES, roundTime,
   cleanPlayerName, cleanChat, cleanRoomName, SETTINGS, defaultSeats, roomSettings, matchSlots, startProblem, isClassic, engineOptions, readCfg,
-  MODES, OWN_TEAMS, MODIFIERS, KILLS,
+  MODES, OWN_TEAMS, MODIFIERS, GOALS, goalOf,
   frameToInput, frameToInputExt, FrameLog, FrameQueue, HASH_EVERY, stateHash };
 root.NetProto = NetProto;
 if (typeof module !== "undefined") module.exports = NetProto;
