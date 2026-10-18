@@ -13,6 +13,8 @@ const CAPS = 3;            // captures that win a round
 const TOUCH = 9;           // a tank this close to a flag (or a base's middle) touches it (tanks block at < 6)
 const RESPAWN = 55;        // frames until a destroyed tank comes back (~3 s at 18.2 frames a second)
 const DEFEND = 60;         // AI: an enemy this close to the own flag at home is fought (else it drives on)
+const FAR = 100;           // AI: farther than this from home it retreats only with CRIT_S shield / CRIT_E energy left
+const CRIT_S = 2000, CRIT_E = 1200;
 const POLE = 9;            // the flag pole's colour (white); the cloth is the team's colour
 
 const PC = E.PixelClassExt;
@@ -34,11 +36,26 @@ function atTeamBase(e, G, t, x, y) {
   return false;
 }
 
-// no tank alive close to tank p's base middle (a tank placed on another one could never move again)
-function baseClear(e, p) {
+// no tank alive within r px of (x, y) other than p (a tank placed on another one could never move again)
+function spotClear(e, p, x, y, r) {
   for (let q = 1; q <= e.nPlayers; q++)
-    if (q !== p && e.alive[q] && dist(e, e.tankX[q] - e.baseX[p], e.tankY[q] - e.baseY[p]) < 8) return false;
+    if (q !== p && e.alive[q] && dist(e, e.tankX[q] - x, e.tankY[q] - y) < r) return false;
   return true;
+}
+// where destroyed tank p comes back: its base middle when nobody is close to it; once it has waited RESPAWN
+// frames more (an enemy parked on the base - on purpose or not - must not keep it out all round), other
+// spots inside its base, then the middles / spots of its teammates' bases, in a fixed order. null = wait on.
+const SPOTS = [[0, 0], [0, -8], [0, 8], [-8, 0], [8, 0]];
+function respawnSpot(e, G, p) {
+  if (spotClear(e, p, e.baseX[p], e.baseY[p], 8)) return [e.baseX[p], e.baseY[p]];
+  if (G.f < G.respawnAt[p] + RESPAWN) return null;
+  const bases = [p].concat(e.teamMembers(e.team(p)).filter(q => q !== p));
+  for (const q of bases)
+    for (const [dx, dy] of SPOTS) {
+      const x = e.baseX[q] + dx, y = e.baseY[q] + dy;
+      if (spotClear(e, p, x, y, 7)) return [x, y];
+    }
+  return null;
 }
 
 // drop the flag tank p carries where the tank is
@@ -116,7 +133,10 @@ E.registerMode("ctf", {
     if (e.endTimer >= 0) return;                // the round is decided
     // destroyed tanks back at their base
     for (let p = 1; p <= N; p++)
-      if (!e.alive[p] && G.respawnAt[p] && G.f >= G.respawnAt[p] && baseClear(e, p)) { e.respawn(p); G.respawnAt[p] = 0; }
+      if (!e.alive[p] && G.respawnAt[p] && G.f >= G.respawnAt[p]) {
+        const at = respawnSpot(e, G, p);
+        if (at) { e.respawn(p, at[0], at[1]); G.respawnAt[p] = 0; }
+      }
     for (let p = 1; p <= N; p++) {
       if (!e.alive[p]) continue;
       const t = e.team(p), x = e.tankX[p], y = e.tankY[p];
@@ -217,11 +237,19 @@ E.registerMode("ctf", {
       if (fight) return null;
       return go(e.tankX[own.carrier], e.tankY[own.carrier], "ctf-chase");
     }
-    // retreating: as usual - out of another tank's base by its open doorway first
+    // retreating: as usual - out of another tank's base by its open doorway first; the own flag dropped close
+    // to the own base is returned on the way (a short trip ending at home). Far from home, only a tank about
+    // to be destroyed goes home: a destroyed one is back at its base with full energy and shield within ~3 s,
+    // so a long drive home to repair (the usual) mostly wastes the round - it goes on for the enemy flag
     if (ai.retreating) {
-      for (let q = 1; q <= e.nPlayers; q++)
-        if (q !== me && G.door[q] && Math.abs(mx - e.baseX[q]) <= 13 && Math.abs(my - e.baseY[q]) <= 20) return home();
-      return null;
+      if (!own.carrier && !isHome(own) && cheb(own.x, own.y, e.baseX[me], e.baseY[me]) < 40) return go(own.x, own.y, "ctf-return");
+      const onward = cheb(mx, my, e.baseX[me], e.baseY[me]) > FAR && e.shield[me] >= CRIT_S && e.energy[me] >= CRIT_E;
+      if (!onward) {
+        for (let q = 1; q <= e.nPlayers; q++)
+          if (q !== me && G.door[q] && Math.abs(mx - e.baseX[q]) <= 13 && Math.abs(my - e.baseY[q]) <= 20) return home();
+        return null;
+      }
+      // (else on with the flags below, as when not retreating)
     }
     // the own flag dropped somewhere: return it; carried away: after the carrier
     if (!own.carrier && !isHome(own)) return go(own.x, own.y, "ctf-return");

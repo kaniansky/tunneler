@@ -11,6 +11,7 @@ const H = require("../modes-harness.js");
 const { E, check, slots, startEngine, runMatch } = H;
 const quick = process.argv.includes("quick");
 const M = E.MODES.ctf;
+const isHomeF = F => !F.carrier && F.x === F.hx && F.y === F.hy;
 
 const idle = e => { e.step({ bits: new Array(e.nPlayers).fill(0), keys: [] }); };
 const place = (e, p, x, y) => { e.tankX[p] = x; e.tankY[p] = y; };
@@ -73,7 +74,7 @@ check(!!M, "ctf: registered");
   check(G.flags[0].x === 200 && G.flags[0].y === 120, "dropped at the carrier's spot");
   place(e, 1, e.baseX[2], e.baseY[2] - 5);                      // BLUE sits on GREEN's base: no respawn there
   const at = G.respawnAt[2];
-  for (let i = 0; i < 70 && e.alive[1]; i++) { idle(e); place(e, 1, e.baseX[2], e.baseY[2] - 5); }
+  for (let i = 0; i < 100 && G.f <= at + 5; i++) { idle(e); place(e, 1, e.baseX[2], e.baseY[2] - 5); }
   check(!e.alive[2] && G.f > at, "no respawn onto a tank at the base");
   place(e, 1, e.baseX[1], e.baseY[1]);
   idle(e);
@@ -84,6 +85,39 @@ check(!!M, "ctf: registered");
   let n = 0;
   while (!e2.alive[2] && n < 200) { idle(e2); n++; }
   check(n >= 50 && n <= 60, "a destroyed tank comes back after ~3 s (" + n + " frames)");
+}
+{
+  // an enemy parked on a dead tank's base middle can't keep it out: after ~2 x RESPAWN frames it comes back
+  // elsewhere in its base, at a spot it can drive away from (and not onto the parked tank)
+  for (const [ox, oy] of [[0, 0], [0, -5], [3, 6], [-6, 0]]) {
+    const e = fresh([1, 2]);
+    const G = e.GS;
+    e.killTankExt(2, e.tankX[2], e.tankY[2]);
+    let n = 0;
+    const park = () => { place(e, 1, e.baseX[2] + ox, e.baseY[2] + oy); e.energy[1] = e.shield[1] = 11000; };
+    park();
+    while (!e.alive[2] && n < 400) { idle(e); park(); n++; }
+    const x = e.tankX[2], y = e.tankY[2];
+    const DXs = [0, 1, 1, 1, 0, -1, -1, -1], DYs = [-1, -1, 0, 1, 1, 1, 0, -1], BIT = { 0: 1, 4: 2, 6: 4, 2: 8 };
+    const free = [0, 2, 4, 6].filter(d => e.tankBlocked(x + DXs[d], y + DYs[d], d) <= 2);
+    check(e.alive[2] && n <= 2 * 55 + 2 && e.distance(Math.abs(x - e.tankX[1]), Math.abs(y - e.tankY[1])) >= 7 &&
+      Math.abs(x - e.baseX[2]) <= 8 && Math.abs(y - e.baseY[2]) <= 8 && free.length > 0,
+      "parked on the base (" + ox + "," + oy + "): back after " + n + " frames at " + (x - e.baseX[2]) + "," + (y - e.baseY[2]) + ", " + free.length + " ways to move");
+    // it drives away from there
+    const x0 = e.tankX[2], y0 = e.tankY[2];
+    for (let i = 0; i < 20; i++) { e.step({ bits: [0, BIT[free[0]] || 0], keys: [] }); park(); }
+    check(e.tankX[2] !== x0 || e.tankY[2] !== y0, "parked on the base (" + ox + "," + oy + "): the respawned tank can move");
+  }
+  // every spot of the own base taken (four enemies around its middle): a teammate's base
+  const e = fresh([1, 2, 1, 2, 1, 1]);
+  const G = e.GS;
+  e.killTankExt(2, e.tankX[2], e.tankY[2]);
+  G.respawnAt[2] = G.f - 55;                                    // waited long enough
+  [[1, 0, -6], [3, 0, 6], [5, -6, 0], [6, 6, 0]].forEach(([q, dx, dy]) => place(e, q, e.baseX[2] + dx, e.baseY[2] + dy));
+  M.frame(e);
+  check(e.alive[2] && Math.abs(e.tankX[2] - e.baseX[4]) <= 8 && Math.abs(e.tankY[2] - e.baseY[4]) <= 8 &&
+    e.distance(Math.abs(e.tankX[2] - e.tankX[4]), Math.abs(e.tankY[2] - e.tankY[4])) >= 7,
+    "no spot clear in the own base: back at a teammate's base (not onto the teammate sitting there)");
 }
 {
   // a dropped flag taken by an enemy; three captures win the round
@@ -167,6 +201,38 @@ check(!!M, "ctf: registered");
     e.step({ bits: [b, 0], keys: [] });
   }
   check(seen.has("ctf-take") && seen.has("ctf-home"), "the AI goes for the enemy flag and home with it (" + [...seen].join(", ") + ")");
+}
+
+{
+  // a retreating AI returns its own flag lying dropped close to its base (it used to sit at home beside it)
+  for (const dy of [15, -15]) {
+    const e = fresh([1, 2]);
+    const G = e.GS, F = G.flags[1];
+    const ai = new H.TunnelerAI("expert", 2, { seed: 4 });
+    place(e, 2, e.baseX[2], e.baseY[2]);
+    F.x = e.baseX[2]; F.y = e.baseY[2] + dy;
+    let n = 0, retreating = false, modes = new Set();
+    for (; n < 200 && !isHomeF(F); n++) {
+      e.shield[2] = 3000;                                       // low: it retreats (and stays home to repair)
+      e.step({ bits: [0, H.TunnelerAI.bitsFor(ai, e)], keys: [] });
+      retreating = retreating || ai.retreating; modes.add(ai.mode);
+    }
+    check(retreating && isHomeF(F), "retreating at home, the own flag dropped " + dy + " px away: returned (" + n + " frames, " + [...modes].join(", ") + ")");
+  }
+}
+{
+  // far from home, a retreating AI not about to be destroyed goes on for the enemy flag (dying costs ~3 s)
+  const e = fresh([1, 2]);
+  const ai = new H.TunnelerAI("hard", 1, { seed: 4 });
+  const seen = new Set();
+  let far = 0;
+  for (let f = 0; f < 3000 && e.round === 1; f++) {
+    const d = Math.max(Math.abs(e.tankX[1] - e.baseX[1]), Math.abs(e.tankY[1] - e.baseY[1]));
+    if (d > 120) { e.shield[1] = Math.min(e.shield[1], 3000); far++; }    // low shield, but not critical
+    e.step({ bits: [H.TunnelerAI.bitsFor(ai, e), 0], keys: [] });
+    if (ai.retreating) seen.add(ai.mode);
+  }
+  check(far > 0 && seen.has("ctf-take") && e.modeScore[1] > 0, "far from home with a low shield: on for the flag (" + [...seen].join(", ") + "; caps " + e.modeScore[1] + ")");
 }
 
 // ---- AI-only matches: finish, deterministic; 2 and 8 tanks, teams / free-for-all, sizes, round time, modifiers
