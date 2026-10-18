@@ -318,4 +318,36 @@ for (const s of setups) {
   check(a.bitsHash === b.bitsHash && a.stateHash === b.stateHash && a.frames === b.frames, "survival / " + s.name + ": deterministic");
 }
 
+// ---- a wave tank whose target waits just outside its base (beyond a wall): it drives out through a
+// doorway first instead of pushing against the wall towards the target (a reported bug)
+{
+  let stuckMax = 0;
+  for (const seed of [1, 2, 3, 4, 5, 6]) for (const off of [[-30, -30], [-30, 30], [30, 30], [-25, 22], [-40, 10]]) {
+    const e = startEngine(seed, { mode: "survival", slots: slots([1, 2, 3]), size: "small", winScore: 1, extended: true });
+    const ais = [null, new TunnelerAI("hard", 2, { seed }), new TunnelerAI("expert", 3, { seed })];
+    const inside = {};
+    let placed = -1;
+    for (let f = 0; f < 2500 && e.screen === "play"; f++) {
+      const bits = [0, TunnelerAI.bitsFor(ais[1], e), TunnelerAI.bitsFor(ais[2], e)];
+      e.step({ bits, keys: [] });
+      const W = (e.GS.waveTanks || []).filter(p => e.alive[p]);
+      if (!W.length) continue;
+      if (placed !== e.GS.wave) {                  // the player waits just outside the wave tank's base
+        placed = e.GS.wave;
+        let b = 1, bd = 1e9;
+        for (let q = 1; q <= 3; q++) { const d = Math.max(Math.abs(e.tankX[W[0]] - e.baseX[q]), Math.abs(e.tankY[W[0]] - e.baseY[q])); if (d < bd) { bd = d; b = q; } }
+        e.tankX[1] = e.baseX[b] + off[0]; e.tankY[1] = e.baseY[b] + off[1];
+        for (let y = -4; y <= 4; y++) for (let x = -4; x <= 4; x++) e.setPixel(e.tankX[1] + x, e.tankY[1] + y, 0);
+      }
+      for (const p of W) {
+        let inb = 0;
+        for (let b = 1; b <= 3; b++) if (Math.abs(e.tankX[p] - e.baseX[b]) <= 13 && Math.abs(e.tankY[p] - e.baseY[b]) <= 20) inb = b;
+        inside[p] = inb ? (inside[p] || 0) + 1 : 0;
+        stuckMax = Math.max(stuckMax, inside[p]);
+      }
+    }
+  }
+  check(stuckMax < 150, "survival AI: a wave tank with its target just outside the base gets out (longest inside " + stuckMax + " frames)");
+}
+
 if (require.main === module) H.done("survival");

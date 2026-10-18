@@ -241,6 +241,16 @@ E.registerMode("survival", {
       if (nd <= 1) return { dir: -1, mode: "retreat" };
       return { x: e.baseX[nb], y: e.baseY[nb], dig: false, mode: "retreat" };
     }
+    // inside a base (any - its own too) with its target outside it: out through a doorway before fighting -
+    // engaging from in there only pushes against the base's wall towards the target
+    const inBase = Math.abs(mx - e.baseX[nb]) <= 13 && Math.abs(my - e.baseY[nb]) <= 20;
+    const tOut = ctx.E && !(Math.abs(ctx.E.x - e.baseX[nb]) <= 16 && Math.abs(ctx.E.y - e.baseY[nb]) <= 16);
+    if (inBase && tOut && !ai.wouldHitAny(e, mx, my, e.tankDir[me])) {
+      const bx = e.baseX[nb], by = e.baseY[nb];
+      if (!G.outT[me]) G.side[me] = ctx.E.y < by ? -1 : 1;
+      if (++G.outT[me] % OUT_FLIP === 0) G.side[me] = -G.side[me];
+      return { dir: mx !== bx ? (mx < bx ? 2 : 6) : (G.side[me] < 0 ? 0 : 4), mode: "out" };
+    }
     // (the AI wants to retreat - its shield, or energy for the way to its own base: fight / hunt instead)
     const fight = ai.retreating && ctx.recent && ctx.dE <= cfg.engage;
     if (fight) return { dir: ai.engage(e, mx, my, ctx.E, false), mode: "engage" };
