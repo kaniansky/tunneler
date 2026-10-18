@@ -29,7 +29,9 @@
     const seats = (r.seats || []).filter(s => s.kind !== "closed"), teamOf = {};
     for (const s of seats) teamOf[s.team] = (teamOf[s.team] || 0) + 1;
     const lobby = r.state === "lobby", n = lobby ? seats.length : r.tanks, teams = lobby ? Object.values(teamOf).some(k => k > 1) : r.teams;
-    return [T("os.players", { n }), T(teams ? "mode.teams" : "mode.ffa"), T("pg.size." + (r.size || "medium")), T("pg.win", { n: r.winScore || 3 })].join(", ");
+    // (a game mode: its name first - docs/DESIGN-8P.md 27)
+    const gm = r.mode && r.mode !== "standard" ? [T("gm." + r.mode)] : [];
+    return [...gm, T("os.players", { n }), T(teams ? "mode.teams" : "mode.ffa"), T("pg.size." + (r.size || "medium")), T("pg.win", { n: r.winScore || 3 })].join(", ");
   }
   function scoreText(r) {
     if (!r.ext) return (r.wins[0] || 0) + ":" + (r.wins[1] || 0);
