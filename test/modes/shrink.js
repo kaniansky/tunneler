@@ -48,6 +48,17 @@ for (const size of ["small", "medium", "large"]) {
   check(rock === 0, size + ": no rock left in the final circle (" + rock + " px)");
 }
 
+// ---- hard rock stretches the schedule where digging in would take too long (medium x1.5, large x2)
+for (const [size, f] of [["small", 1], ["medium", 1.5], ["large", 2]]) {
+  const e = start(8, { size, hardRock: true }), e0 = start(8, { size });
+  const T = M.stepT(e), C = M.closeT(e), G = e.GS;
+  check(M.stepT(e0) === M.STEP_T && T === Math.round(M.STEP_T * f) && C === Math.round(M.CLOSE_T * f),
+    size + " + hard rock: a step every " + Math.round(T / 18.2) + " s, closing over " + Math.round(C / 18.2) + " s (x" + f + ")");
+  check(M.radius(e, T - C - 1) === G.rs[0] && M.radius(e, T) === G.rs[1] && M.radius(e, M.STEPS * T - 1) > G.rs[M.STEPS] &&
+    M.radius(e, M.STEPS * T) === G.rs[M.STEPS] && M.hud(e, 1).value === Math.ceil((T - C) / (1193182 / 65536)),
+    size + " + hard rock: the radius and the hud follow the stretched schedule");
+}
+
 // ---- the drain outside the circle, bases outside, elimination
 {
   const e = start(2);
@@ -64,11 +75,11 @@ for (const size of ["small", "medium", "large"]) {
   check(bOut, "the final circle: BLUE's base is outside and gives nothing");
   e.energy[1] = 6000;
   e.step(idle(e));
-  check(e.shield[1] === 11400 - M.drain(final + 1) && e.shield[2] === 11400,
-    "outside: " + M.drain(final + 1) + " shield a frame (" + e.shield[1] + "), inside: none (" + e.shield[2] + ")");
+  check(e.shield[1] === 11400 - M.drain(e, final + 1) && e.shield[2] === 11400,
+    "outside: " + M.drain(e, final + 1) + " shield a frame (" + e.shield[1] + "), inside: none (" + e.shield[2] + ")");
   check(e.energy[1] < 6000, "outside the circle the own base doesn't refuel (energy " + e.energy[1] + ")");
-  check(M.drain(0) === 12 && M.drain(T) > M.drain(0) && M.drain(final) > M.drain(T),
-    "the drain: ~2 % of MaxPower a second at first (" + M.drain(0) + " a frame), more with every step (" + M.drain(final) + ")");
+  check(M.drain(e, 0) === 12 && M.drain(e, T) > M.drain(e, 0) && M.drain(e, final) > M.drain(e, T),
+    "the drain: ~2 % of MaxPower a second at first (" + M.drain(e, 0) + " a frame), more with every step (" + M.drain(e, final) + ")");
   let n = 0;
   while (e.alive[1] && n < 1000) { e.step(idle(e)); n++; }
   check(!e.alive[1] && e.alive[2] && n > 200 && n < 300, "a tank outside the final circle is destroyed by the zone (" + n + " frames)");
@@ -153,7 +164,7 @@ function aiRun(o) {
       if (o.onFrame) o.onFrame(e, f);
       if (e.screen !== "play" || e.endTimer >= 0) return;
       const t = e.tick - e.roundStart;
-      if (t < M.STEP_T) return;               // (the first step: the tanks are on their way)
+      if (t < M.stepT(e)) return;               // (the first step: the tanks are on their way)
       const R = M.radius(e, t);
       for (let p = 1; p <= e.nPlayers; p++) if (e.alive[p] && o.levels[p - 1]) { aliveF++; if (outside(e, p, R)) outF++; }
     },
@@ -193,6 +204,28 @@ for (const s of (standalone || !process.argv.includes("quick")) ? setups : setup
   check(a.finished && a.rounds.some(x => x.winnerTeam >= 0), s.name + ": the match finishes (" + a.frames + " frames, " + a.rounds.length + " rounds)");
   check(a.outF <= Math.max(5, a.aliveF * (s.outMax || 0.03)), s.name + ": the AI keeps inside the circle (" + a.outF + " of " + a.aliveF + ")");
   check(a.bitsHash === b.bitsHash && a.stateHash === b.stateHash && a.frames === b.frames, s.name + ": deterministic");
+}
+
+// ---- hard rock on the large map: the tanks can dig in before the circle closes - the zone decides few rounds
+{
+  const f0 = M.frame;
+  let zone = 0, deaths = 0, outF = 0, aliveF = 0;
+  M.frame = function (e) {
+    const a = e.alive.slice();
+    f0.call(this, e);
+    for (let p = 1; p <= e.nPlayers; p++) if (a[p] && !e.alive[p]) zone++;
+  };
+  try {
+    for (const seed of (standalone || !process.argv.includes("quick")) ? [1, 2, 3, 4, 5, 6] : [1, 2, 3]) {
+      const was = [];
+      const r = aiRun({ slots: slots([1, 2]), levels: ["hard", "expert"], size: "large", seed, winScore: 1, mods: { hardRock: true },
+        onFrame: e => { for (let p = 1; p <= e.nPlayers; p++) { if (was[p] && !e.alive[p] && e.screen === "play") deaths++; was[p] = e.alive[p]; } } });
+      check(r.finished, "large + hard rock, seed " + seed + ": the match finishes (" + r.frames + " frames)");
+      outF += r.outF; aliveF += r.aliveF;
+    }
+  } finally { M.frame = f0; }
+  check(deaths > 0 && zone <= deaths * 0.25 && outF <= aliveF * 0.03,
+    "large + hard rock, 2 tanks: the zone takes " + zone + " of " + deaths + " tanks, " + outF + " of " + aliveF + " tank frames outside");
 }
 
 if (standalone) H.done("modes/shrink");
