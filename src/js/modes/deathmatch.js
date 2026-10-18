@@ -89,6 +89,19 @@ E.registerMode("deathmatch", {
   // ---- AI: deathmatch is about kills - always hunting. When no enemy is in reach it heads for the
   // nearest enemy alive (every tank has a rough "radar" here: the better levels a closer guess, renewed
   // every ~2 s), else for the doorway of the nearest enemy base (destroyed tanks come back there).
+  // modifier noRepair: the shield never comes back at a base, so a tank retreating for its shield would
+  // sit at home until something destroys it (and dying only costs a kill here). Only low energy is a
+  // reason to go home: the retreat is called off while the energy is fine (away from home: above the
+  // AI's own energy threshold for that distance; at home: refueled to leaveAt).
+  aiOverride(ai, e, mx, my, ctx) {
+    if (!ai.retreating || !e.mods.noRepair) return null;
+    const me = ai.me, cfg = ai.cfg;
+    const enough = ctx.atHome ? e.energy[me] >= cfg.leaveAt
+      : e.energy[me] >= cfg.retreatE + cheb(mx, my, e.baseX[me], e.baseY[me]) * 4;
+    if (enough) { ai.retreating = false; ai.path = null; ai.waypoint = null; }
+    return null;
+  },
+
   aiGoal(ai, e, mx, my) {
     const me = ai.me;
     let q = 0, bestD = Infinity;
@@ -99,9 +112,11 @@ E.registerMode("deathmatch", {
     }
     const S = ai.dmGoal;
     if (q) {
-      if (!S || S.q !== q || S.round !== e.round || ai.t - S.t > 36 || !e.alive[q]) {
+      // (renewed for another round / match / engine too: ai.roundKey changes and ai.t restarts with
+      // every resetRound - a rematch on the same engine starts at round 1 again)
+      if (!S || S.q !== q || S.key !== ai.roundKey || S.eng !== e || ai.t < S.t || ai.t - S.t > 36 || !e.alive[q]) {
         const noise = { easy: 60, normal: 40, hard: 24, expert: 8 }[ai.levelName] || 40;
-        ai.dmGoal = { q, round: e.round, t: ai.t,
+        ai.dmGoal = { q, key: ai.roundKey, eng: e, t: ai.t,
           x: e.tankX[q] + Math.round((ai.rng() - 0.5) * noise), y: e.tankY[q] + Math.round((ai.rng() - 0.5) * noise) };
       }
       const G = ai.dmGoal;
@@ -146,9 +161,9 @@ E.registerMode("deathmatch", {
     },
     uk: {
       instr: "Знищені танки приблизно за 3 секунди повертаються на свою базу - ніхто не вибуває назавжди. " +
-        "Знищений ворожий танк - це збитий для тебе і твоєї команди; знищений товариш по команді (вогонь по своїх) забирає одного. " +
-        "Раунд виграє команда, яка першою набере " + KILLS_TO_WIN + " збитих; коли час раунду вийде, перемагає більше збитих. " +
-        "Число біля панелі приладів показує твоїх збитих.",
+        "Знищений ворожий танк зараховується як збитий тобі й твоїй команді; знищений товариш по команді (вогонь по своїх) віднімає одне очко. " +
+        "Раунд виграє команда, яка першою набере " + KILLS_TO_WIN + " збитих танків; коли час раунду вийде, перемагає та, що збила більше. " +
+        "Число біля панелі приладів показує, скільки танків ти збив.",
       score: "збито {n}",
     },
     ru: {
