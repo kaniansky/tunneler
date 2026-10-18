@@ -49,6 +49,13 @@ const ok = msg => { n++; console.log("  ok  " + msg); };
   assert.strictEqual(pk.platforms["linux-x86_64-deb"].url.split("/").pop(), "tunneler-online-2.1.0_amd64.deb");
   assert.strictEqual(pk.platforms["linux-x86_64-rpm"].signature, "SIGR");
   assert.strictEqual(pk.platforms["linux-x86_64"].url.split("/").pop(), "tunneler-online-2.1.0-linux-x64.AppImage", "plain linux = the AppImage");
+  // the AppImage without a version in its name (3.1.3 on): the same entries
+  const d2 = fs.mkdtempSync(path.join(os.tmpdir(), "tunneler-upd-"));
+  fs.writeFileSync(path.join(d2, "tunneler-online-linux-x64.AppImage.sig"), "SIGN");
+  const nv = manifest(d2, "v2.1.0", "o/r", new Date(), ["tunneler-online-linux-x64.AppImage"]);
+  assert.strictEqual(nv.platforms["linux-x86_64"].url, "https://github.com/o/r/releases/download/v2.1.0/tunneler-online-linux-x64.AppImage");
+  assert.strictEqual(nv.platforms["linux-x86_64-appimage"].signature, "SIGN");
+  fs.rmSync(d2, { recursive: true });
   // (updater-manifest.yml: only the .sig files here, the packages named by the release's file list)
   fs.rmSync(path.join(dir, "tunneler-online-2.1.0-linux-x64.AppImage"));
   assert(!manifest(dir, "v2.1.0", "o/r").platforms["linux-x86_64"], "no package, no list: left out");

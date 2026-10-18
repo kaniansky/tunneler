@@ -7,7 +7,8 @@ name: Desktop app
 #   Linux    tunneler-online-<v>-linux-x64.tar.gz   the binary, needs libwebkit2gtk-4.1
 #            ..._amd64.deb / ....x86_64.rpm          packages that pull that in (update with the admin
 #                                                    password, or from the apt / dnf repository: linux-repos.yml)
-#            ...-linux-x64.AppImage                  runs anywhere, updates itself
+#            tunneler-online-linux-x64.AppImage      runs anywhere, updates itself - no version in its name:
+#                                                    the update writes over the same file (shortcuts keep working)
 #   macOS    tunneler-online-<v>-macos-arm64.dmg / -macos-x64.dmg  (unsigned: right click -> Open)
 # Updates (src-tauri/src/main.rs): with the repository secret TAURI_SIGNING_PRIVATE_KEY (the key whose
 # public half is in tauri.conf.json; TAURI_SIGNING_PRIVATE_KEY_PASSWORD if it has one) the setup.exe,
@@ -113,7 +114,7 @@ jobs:
               tar -czf "dist/$out.tar.gz" -C "$rel" tunneler-online
               upd "$rel/bundle/deb/*.deb" "tunneler-online-${v}_amd64.deb"
               upd "$rel/bundle/rpm/*.rpm" "tunneler-online-$v.x86_64.rpm"
-              upd "$rel/bundle/appimage/*.AppImage" "$out.AppImage" ;;
+              upd "$rel/bundle/appimage/*.AppImage" "tunneler-online-linux-x64.AppImage" ;;   # (no version: see above)
             macos-*)
               cp "$rel"/bundle/dmg/*.dmg "dist/$out.dmg"
               upd "$rel/bundle/macos/*.app.tar.gz" "$out.app.tar.gz" ;;

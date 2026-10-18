@@ -159,14 +159,16 @@ in its own window, using the web view the system already has (a few MB, no brows
 | System | File | Needs |
 |---|---|---|
 | Windows 10 / 11 | `-windows-x64-setup.exe` (installer) or `tunneler-online-<version>-windows-x64.exe` (just run it) | WebView2 (built in) |
-| Linux | `-linux-x64.AppImage` (`chmod +x` first), `.deb`, `.rpm` (or the repositories below), or the bare binary in `-linux-x64.tar.gz` | `libwebkit2gtk-4.1` |
+| Linux | `tunneler-online-linux-x64.AppImage` (`chmod +x` first; always the newest: <https://github.com/kaniansky/tunneler-online/releases/latest/download/tunneler-online-linux-x64.AppImage>), `.deb`, `.rpm` (or the repositories below), or the bare binary in `-linux-x64.tar.gz` | `libwebkit2gtk-4.1` |
 | macOS | `-macos-arm64.dmg` (Apple silicon) / `-macos-x64.dmg` (Intel) | not signed: right click -> Open the first time |
 
 When a newer release is out, the app's main menu shows **Update to version X**: the installed Windows
 app, the AppImage and the macOS app download it, install it and restart; the `.deb` / `.rpm` do the same
 after asking for the admin password; the portable exe and the `.tar.gz` show **New version X**, which
 opens the download page. A downloaded AppImage has to be made executable once (`chmod +x
-tunneler-online-*.AppImage`, or Properties -> Allow executing as a program) - browsers never keep that.
+tunneler-online-linux-x64.AppImage`, or Properties -> Allow executing as a program) - browsers never keep
+that. Its name has no version: an update writes the new version over the same file, so shortcuts keep
+working (the main menu's bottom-left corner shows the version).
 
 On Linux the game can also come from its own **apt / dnf repository** and then updates with the rest of
 the system (signed with the key at <https://kaniansky.com/tunneler/tunneler-online.asc>):

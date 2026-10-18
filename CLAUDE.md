@@ -594,7 +594,8 @@ none, i.e. a page from before 2.0 - is refused (POST 409 `{code:
 - Linux updates (3.1.2): a deb / rpm install updates in the app too - main.rs `system_package()` (bundle
   type Deb / Rpm from `tauri::utils::platform::bundle_type()`, binary under /usr) -> `update_check`'s
   `admin` (home.js info `home.update.admin.i`); the updater runs `dpkg -i` / `rpm -U` via pkexec / sudo.
-  latest.json: `linux-x86_64-deb` / `-rpm` / `-appimage` + `linux-x86_64` (= AppImage); app-build.yml
+  latest.json: `linux-x86_64-deb` / `-rpm` / `-appimage` + `linux-x86_64` (= AppImage, named
+  `tunneler-online-linux-x64.AppImage` without a version since 3.1.3: updates write over the same file); app-build.yml
   attaches the .deb / .rpm .sig files. apt / dnf repositories: `tools/linux-repos.sh` (flat apt repo with
   signed Release / InRelease, createrepo_c + signed repomd.xml, rpmsign'd .rpm, tunneler-online.repo, the
   public key as .gpg / .asc) built and uploaded by FTPS to web/tunneler/apt, /rpm by

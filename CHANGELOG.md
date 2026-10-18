@@ -3,6 +3,13 @@
 All notable changes to Tunneler Online. Versions follow [semantic versioning](https://semver.org/);
 a release is made by pushing a version tag (see CONTRIBUTING.md).
 
+## 3.1.3
+
+- The Linux AppImage is now `tunneler-online-linux-x64.AppImage`, without a version in its name: an update
+  writes the new version over the same file, so a name like "...-3.1.0-..." no longer stays on a newer
+  version (shortcuts keep working; the main menu's bottom-left corner shows the version). The newest one
+  is always at https://github.com/kaniansky/tunneler-online/releases/latest/download/tunneler-online-linux-x64.AppImage
+
 ## 3.1.2
 
 **Linux updates**

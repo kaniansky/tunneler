@@ -1,6 +1,6 @@
 {
   "name": "tunneler-online",
-  "version": "3.1.2",
+  "version": "3.1.3",
   "description": "TUNNELER 2.0 (1991, Geoffrey Silverton) rewritten in JavaScript from the decompiled original: split screen, vs computer and online multiplayer in the browser",
   "license": "Unlicense",
   "author": "Norko Kaniansky",
