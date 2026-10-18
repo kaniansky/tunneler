@@ -50,7 +50,9 @@ Game modes (vs computer and online; every mode's AI plays it too):
 - **Base siege** - shoot the enemy bases down; the last side with a base wins.
 - **Deathmatch** - destroyed tanks come back at their base; the first side to 10 kills wins.
 
-A modifier for any mode: **no base repairs** (bases refuel but don't repair shields).
+Every mode but standard and shrinking world is a single round with its own goal instead of "rounds to
+win": gold to win, minutes to survive, waves to win, seconds in the zone, captures, base strength (hits),
+kills to win. A modifier for any mode: **no base repairs** (bases refuel but don't repair shields).
 
 Settings (split screen: map size, rounds to win and round time only):
 

@@ -38,7 +38,7 @@ Lang.register("en", {
   "vw.grid": "All views", "vw.map": "Map and scores", "vw.follow": "Following {name}", "vw.hint": "Tab or 1 2 3: view", "vw.destroyed": "DESTROYED", "vw.hint2": "← →: tank",
   "vw.tank": "Tank", "vw.wins": "Wins", "vw.energy": "Energy", "vw.shield": "Shield", "vw.alive": "alive", "vw.dead": "destroyed",
   "back.main": "Back to main menu", "back.main.i": "Back to the main menu.",
-  "lobby.title": "ONLINE GAMES", "room.title": "ONLINE GAME", "lobby.name": "NAME", "lobby.players": "PLAYERS", "lobby.ai": "AI", "lobby.spec": "WATCHING", "lobby.state": "STATE",
+  "lobby.title": "ONLINE GAMES", "room.title": "ONLINE GAME", "lobby.name": "NAME", "lobby.players": "PLAYERS", "lobby.mode": "MODE", "lobby.ai": "AI", "lobby.spec": "WATCHING", "lobby.state": "STATE",
   "state.paused": "Paused", "state.round": "Round {n}",
   "lobby.who": "Playing: {names}", "lobby.join": "<ENTER> to join this game", "lobby.none": "No public games right now",
   "lobby.create": "Create a new game", "lobby.create.i": "Start a game and invite someone to it.", "lobby.connecting": "Connecting to the server...", "lobby.wake": "A server that was asleep can take up to a minute to wake up.",
@@ -149,7 +149,7 @@ Lang.register("en", {
   "pg.watch": "Watch instead", "pg.watch.i": "Leave your seat and watch the game as a spectator.",
   "pg.specs.who": "Watching: ",
   "lobby.link": "Join by link", "lobby.link.i1": "Paste an invite link you got from another player", "lobby.link.i2": "and join that game.", "link.title": "JOIN BY LINK", "link.label": "Link: ", "link.i1": "Paste the invite link (Ctrl+V), for example:", "link.i2": "<ENTER> joins the game (a link to another server works too).", "link.go": "Join", "link.err": "That is not a game link.",
-  "lobby.host": "you host", "lobby.host.i": "You are this game's host (you created it, or hosting was handed to you).",
+  "lobby.host.i": "You are this game's host (you created it, or hosting was handed to you).",
   // game modes and modifiers (docs/DESIGN-8P.md 27)
   "gm.standard": "standard",
   "gm.standard.i": "The last tank (or team) still standing wins the round.",

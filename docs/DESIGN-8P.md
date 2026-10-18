@@ -561,5 +561,9 @@ Every mode's AI plays it (goes for gold / flags / the zone / bases, keeps inside
 enough that AI-only matches finish.
 - Infection / survival: the seats' teams don't apply - the team column stays (gray, DosUI `dim`) so the
   screens don't jump, and nothing there can be changed (owner).
-- Deathmatch: "Kills to win" (5, 10, 15, 20, 30, 50; NetProto KILLS, engine killsToWin) replaces "Rounds to
-  win"; one round decides the match (owner).
+- **A mode's goal instead of "Rounds to win"** (owner): every mode but standard / shrinking world has a goal
+  and is ONE round (engine `goal`, winScore 1; `TunnelerEngine.GOALS` = `NetProto.GOALS`: choices, default;
+  the room keeps one per mode: `settings.goals {mode: n}`; skirmish `&goal=n`, `tunneler.cpu.goals`):
+  gold to win (5-50, 10), survive N minutes (infection: 1-10, 3 - the round time is grayed out there),
+  waves to win (3-20, 5), seconds to win (hill: 30-180, 60), captures to win (1-10, 3), base strength
+  (siege: hits, 10-80, 30), kills to win (5-50, 10).

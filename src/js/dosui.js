@@ -11,7 +11,7 @@
 //                                                  interior width, max visible item rows (scrolls);
 //                                                  without w the box fits its longest item (boxWidth),
 //                                                  centred unless x is given
-//   spec.boxes:  [{x, y, w, title, items}]           instead of box / items: boxes side by side (each
+//   spec.boxes:  [{x, y, w, title, items, joinTop}]  instead of box / items: boxes side by side (each
 //                                                  sized to its items, centred together, the title in
 //                                                  the top border), one selection over all of them:
 //                                                  Up / Down continue into the next / previous box,
@@ -239,7 +239,8 @@ class DosUI {
     let bottom = 0;
     for (const b of this.boxesGeom()) {
       const line = (row, a, fill, z) => { t.textColor(5); t.gotoXY(b.x, row); t.write(a + fill.repeat(b.w) + z); };
-      line(b.y, "\xDA", "\xC4", "\xBF");
+      // (joinTop: no top border - the box continues whatever is drawn above it, e.g. a panel's last rows)
+      if (!b.joinTop) line(b.y, "\xDA", "\xC4", "\xBF");
       if (b.title) { t.gotoXY(b.x + 2, b.y); t.textColor(13); t.write(" " + U.slice(b.title, b.w - 4) + " "); }
       let row = b.y + 1;
       for (let i = b.start; i < b.end; i++, row++) {
@@ -257,7 +258,7 @@ class DosUI {
   boxesGeom() {
     let start = 0;
     const g = this.spec.boxes.map(bx => {
-      const r = { x: bx.x, y: bx.y, w: bx.w || DosUI.boxWidth(bx.items), title: bx.title, start, end: start + bx.items.length };
+      const r = { x: bx.x, y: bx.y, w: bx.w || DosUI.boxWidth(bx.items), title: bx.title, joinTop: !!bx.joinTop, start, end: start + bx.items.length };
       start = r.end;
       return r;
     });

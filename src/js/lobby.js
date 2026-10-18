@@ -29,9 +29,11 @@
     const seats = (r.seats || []).filter(s => s.kind !== "closed"), teamOf = {};
     for (const s of seats) teamOf[s.team] = (teamOf[s.team] || 0) + 1;
     const lobby = r.state === "lobby", n = lobby ? seats.length : r.tanks, teams = lobby ? Object.values(teamOf).some(k => k > 1) : r.teams;
-    // (a game mode: its name first - docs/DESIGN-8P.md 27)
-    const gm = r.mode && r.mode !== "standard" ? [T("gm." + r.mode)] : [];
-    return [...gm, T("os.players", { n }), T(teams ? "mode.teams" : "mode.ffa"), T("pg.size." + (r.size || "medium")), T("pg.win", { n: r.winScore || 3 })].join(", ");
+    // (the mode is in its own column; a mode with a goal: the goal instead of rounds to win)
+    const G = NetProto.GOALS[r.mode];
+    const win = G ? T("goal." + r.mode) + (r.mode === "infection" ? T("time.n", { n: NetProto.goalOf(r.mode, r.goals) }) : NetProto.goalOf(r.mode, r.goals))
+      : T("pg.win", { n: r.winScore || 3 });
+    return [T("os.players", { n }), T(teams ? "mode.teams" : "mode.ffa"), T("pg.size." + (r.size || "medium")), win].join(", ");
   }
   function scoreText(r) {
     if (!r.ext) return (r.wins[0] || 0) + ":" + (r.wins[1] || 0);
@@ -45,12 +47,12 @@
   }
   // the list's columns after the name: PLAYERS ("2/4": seated / seats they can take - during a match:
   // connected / its players), AI (computer tanks), WATCHING (spectators); 0 = blank
-  const COLS = [29, 9, 5, 10];                       // (name, players, AI, watching; the state takes the rest)
+  const COLS = [22, 17, 8, 4, 9];                    // (name, mode, players, AI, watching; the state takes the rest)
   const places = r => r.places != null ? r.places : r.players + (r.open || 0);
   function rowText(r, state) {
     const P = UniText.padEnd;
-    return P(UniText.slice(E(r.name), COLS[0] - 1), COLS[0]) + P(r.players + "/" + places(r), COLS[1]) +
-      P(r.bots ? String(r.bots) : "", COLS[2]) + P(r.spec ? String(r.spec) : "", COLS[3]) + state;
+    return P(UniText.slice(E(r.name), COLS[0] - 1), COLS[0]) + P(UniText.slice(T("gm." + (r.mode || "standard")), COLS[1] - 1), COLS[1]) +
+      P(r.players + "/" + places(r), COLS[2]) + P(r.bots ? String(r.bots) : "", COLS[3]) + P(r.spec ? String(r.spec) : "", COLS[4]) + state;
   }
 
   // who is in the game: "Playing: Norko, Jano" (the seated players' names)
@@ -90,7 +92,7 @@
       label: rowText(r, "v" + r.version), align: "left", key: "room:" + r.id,
       info: [E(r.name), ...versionInfo()], go: () => {},
     } : ({
-      label: rowText(r, stateText(r) + (hosting(r) ? "  " + T("lobby.host") : "")), align: "left", key: "room:" + r.id,
+      label: rowText(r, stateText(r)), align: "left", key: "room:" + r.id,   // (the games you host: first, no mark)
       info: [E(r.name) + (r.public ? "" : " " + T("room.private")), roomDesc(r) + "   " + stateText(r), namesLine(r),
         hosting(r) ? { text: T("lobby.host.i"), color: 14 } : null,
         T(r.spectators ? (r.state === "lobby" && r.open ? "lobby.join2" : "lobby.watch") : r.state === "lobby" && r.open ? "lobby.join" : "lobby.closed")].filter(Boolean),
@@ -109,7 +111,7 @@
       lines: [{ row: 2, text: T("lobby.title"), color: 12 },
         ...(serverVersion ? [{ row: 3, text: T("ver.server", { server: serverVersion, you: myVersion }), color: 12 }] : [])],
       box: { x: 2, y: 4, w: 76, rows: 7 }, fixed: 5,
-      header: UniText.padEnd(" " + T("lobby.name"), COLS[0] + 1) + [T("lobby.players"), T("lobby.ai"), T("lobby.spec")].map((h, i) => UniText.padEnd(h, COLS[i + 1])).join("") +
+      header: UniText.padEnd(" " + T("lobby.name"), COLS[0] + 1) + [T("lobby.mode"), T("lobby.players"), T("lobby.ai"), T("lobby.spec")].map((h, i) => UniText.padEnd(h, COLS[i + 1])).join("") +
         T("lobby.state"),
       items, infoRow: 20, back: home,
     }, keep);

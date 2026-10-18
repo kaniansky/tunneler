@@ -36,7 +36,7 @@ Lang.register("uk", {
   "vw.grid": "Усі екрани", "vw.map": "Мапа й рахунок", "vw.follow": "Стежу за: {name}", "vw.hint": "Tab або 1 2 3: огляд", "vw.destroyed": "ЗНИЩЕНО", "vw.hint2": "← →: танк",
   "vw.tank": "Танк", "vw.wins": "Перемоги", "vw.energy": "Енергія", "vw.shield": "Щит", "vw.alive": "живий", "vw.dead": "знищений",
   "back.main": "До головного меню", "back.main.i": "Назад до головного меню.",
-  "lobby.title": "ІГРИ ОНЛАЙН", "room.title": "ГРА ОНЛАЙН", "lobby.name": "НАЗВА", "lobby.players": "ГРАВЦІ", "lobby.ai": "ШІ", "lobby.spec": "ГЛЯДАЧІ", "lobby.state": "СТАН",
+  "lobby.title": "ІГРИ ОНЛАЙН", "room.title": "ГРА ОНЛАЙН", "lobby.name": "НАЗВА", "lobby.players": "ГРАВЦІ", "lobby.mode": "РЕЖИМ", "lobby.ai": "ШІ", "lobby.spec": "ГЛЯДАЧІ", "lobby.state": "СТАН",
   "state.paused": "Пауза", "state.round": "Раунд {n}",
   "lobby.who": "Грають: {names}", "lobby.join": "<ENTER> - приєднатися до гри", "lobby.none": "Зараз немає відкритих ігор",
   "lobby.create": "Створити нову гру", "lobby.create.i": "Створи гру й запроси когось.", "lobby.connecting": "Підключення до сервера...", "lobby.wake": "Сервер, що спав, може прокидатися до хвилини.",
@@ -299,7 +299,7 @@ Lang.register("uk", {
   "pg.watch": "Краще дивитися", "pg.watch.i": "Звільни своє місце й дивись гру як глядач.",
   "pg.specs.who": "Дивляться: ",
   "lobby.link": "Приєднатися за посиланням", "lobby.link.i1": "Встав посилання-запрошення, яке тобі надіслав інший гравець,", "lobby.link.i2": "і приєднайся до тієї гри.", "link.title": "ПРИЄДНАТИСЯ ЗА ПОСИЛАННЯМ", "link.label": "Посилання: ", "link.i1": "Встав посилання-запрошення (Ctrl+V), наприклад:", "link.i2": "<ENTER> - приєднатися до гри (посилання на інший сервер теж підходить).", "link.go": "Приєднатися", "link.err": "Це не посилання на гру.",
-  "lobby.host": "господар", "lobby.host.i": "Ти господар цієї гри (ти її створив або тобі її передали).",
+  "lobby.host.i": "Ти господар цієї гри (ти її створив або тобі її передали).",
   // game modes and modifiers (docs/DESIGN-8P.md 27)
   "gm.standard": "стандарт",
   "gm.standard.i": "Раунд виграє останній танк (або команда), що вцілів.",

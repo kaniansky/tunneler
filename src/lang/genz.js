@@ -37,7 +37,7 @@ Lang.register("genz", {
   "vw.grid": "All screens", "vw.map": "Map and scores", "vw.follow": "Watching {name}", "vw.hint": "Tab or 1 2 3: view", "vw.destroyed": "COOKED", "vw.hint2": "← →: tank",
   "vw.tank": "Tank", "vw.wins": "W's", "vw.energy": "Energy", "vw.shield": "Shield", "vw.alive": "alive", "vw.dead": "cooked",
   "back.main": "Dip to main menu", "back.main.i": "Back to the main menu.",
-  "lobby.title": "ONLINE GAMES", "room.title": "ONLINE GAME", "lobby.name": "NAME", "lobby.players": "SQUAD", "lobby.ai": "BOTS", "lobby.spec": "LURKERS", "lobby.state": "VIBE",
+  "lobby.title": "ONLINE GAMES", "room.title": "ONLINE GAME", "lobby.name": "NAME", "lobby.players": "SQUAD", "lobby.mode": "MODE", "lobby.ai": "BOT", "lobby.spec": "LURKERS", "lobby.state": "VIBE",
   "state.paused": "AFK", "state.round": "Round {n}",
   "lobby.who": "Squad rn: {names}", "lobby.join": "<ENTER> to pull up", "lobby.none": "No public games rn, dead lobby",
   "lobby.create": "Start a new game", "lobby.create.i": "Start a game and invite the squad.", "lobby.connecting": "Connecting to the server...", "lobby.wake": "The server was sleeping, it can take a minute to wake up. be patient.",
@@ -294,7 +294,7 @@ Lang.register("genz", {
   "pg.watch": "Just watch", "pg.watch.i": "Leave your seat and spectate, lowkey.",
   "pg.specs.who": "Watching: ",
   "lobby.link": "Join by link", "lobby.link.i1": "Paste the invite link your bestie sent", "lobby.link.i2": "and pull up to that game.", "link.title": "JOIN BY LINK", "link.label": "Link: ", "link.i1": "Paste the invite link (Ctrl+V), like:", "link.i2": "<ENTER> to pull up (links to other servers work too).", "link.go": "Pull up", "link.err": "That's not a game link, bestie.",
-  "lobby.host": "your game", "lobby.host.i": "You run this game (you made it, or the crown got passed to you).",
+  "lobby.host.i": "You run this game (you made it, or the crown got passed to you).",
   // game modes and modifiers (docs/DESIGN-8P.md 27)
   "gm.standard": "OG",
   "gm.standard.i": "Last tank (or squad) alive takes the W. The OG way.",

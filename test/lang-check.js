@@ -56,9 +56,8 @@ for (const c of Lang.codes) {
       "lobby.join2", "lobby.watch", "lobby.closed", "create.go.i1", "create.go.i2", "on.full", "on.busy", "ver.update", "lobby.link.i1", "lobby.link.i2", "link.i1", "link.i2", "link.err", "lobby.host.i"]) fits(c, k, t(k), 78);
     fits(c, "seat.sit.i", t("seat.sit.i", { name: Lang.raw("yellow") }), 78);
     fits(c, "lobby.link", t("lobby.link"), 66);
-    // the list of games' columns (lobby.js COLS: players 9, AI 5, watching 10 - one blank column each)
-    fits(c, "lobby.players", t("lobby.players"), 8); fits(c, "lobby.ai", t("lobby.ai"), 4); fits(c, "lobby.spec", t("lobby.spec"), 9);
-    fits(c, "lobby.host", t("state.round", { n: 9 }) + "  " + t("lobby.host"), 20);
+    // the list of games' columns (lobby.js COLS: mode 17, players 8, AI 4, watching 9 - one blank column each)
+    fits(c, "lobby.mode", t("lobby.mode"), 16); fits(c, "lobby.players", t("lobby.players"), 7); fits(c, "lobby.ai", t("lobby.ai"), 3); fits(c, "lobby.spec", t("lobby.spec"), 8);
     fits(c, "link.label", t("link.label") + "x".repeat(57), 78);
     fits(c, "ver.server", t("ver.server", { server: "10.10.10", you: "10.10.10" }), 78);
   }

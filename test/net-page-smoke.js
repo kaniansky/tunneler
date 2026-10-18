@@ -434,7 +434,7 @@ function loadPage(page, search, stored, version) {
   }
 
   {
-    // the games this browser hosts: marked "you host", its private ones listed too (first); a key whose game
+    // the games this browser hosts: first (no mark in the row), its private ones listed too; a key whose game
     // is gone is dropped
     const room = (id, name, pub) => ({ id, name, public: pub, spectators: true, state: "lobby", round: 0, wins: [], teamWins: [], ext: false,
       tanks: 2, players: 1, places: 3, bots: 2, open: 2, spec: 4, teams: false, size: "medium", winScore: 3, seats: [] });
@@ -447,9 +447,9 @@ function loadPage(page, search, stored, version) {
     const keys = ui.spec.items.filter(it => /^room:/.test(it.key)).map(it => it.key).join();
     assert.strictEqual(keys, "room:priv1,room:pub1,room:other", "own games first, the private one too: " + keys);
     const row = k => ui.spec.items.find(it => it.key === k).label;
-    assert(/PLAYERS +AI +WATCHING +STATE/.test(text()), "the columns: " + text());
-    assert(/^My secret game +1\/3 +2 +4 +Lobby  you host/.test(row("room:priv1")), "a row: " + row("room:priv1"));
-    assert(/you host/.test(row("room:priv1")) && /you host/.test(row("room:pub1")) && !/you host/.test(row("room:other")), "marked: " + text());
+    assert(/MODE +PLAYERS +AI +WATCHING +STATE/.test(text()), "the columns: " + text());
+    assert(/^My secret game +standard +1\/3 +2 +4 +Lobby$/.test(row("room:priv1").trimEnd()), "a row: " + row("room:priv1"));
+    assert(!/you host/.test(text()), "no mark in the rows: " + text());
     assert(/You are this game's host/.test(text()) && /\(private\)/.test(text()), "the info: " + text());
     assert(!env.ls.has("tunneler.host.gone") && env.ls.has("tunneler.host.priv1"), "the stale key dropped");
     console.log("  ok  lobby.js marks the games this browser hosts, lists its private ones, drops stale keys");

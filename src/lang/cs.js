@@ -36,7 +36,7 @@ Lang.register("cs", {
   "vw.grid": "Všechny obrazovky", "vw.map": "Mapa a skóre", "vw.follow": "Sleduji: {name}", "vw.hint": "Tab nebo 1 2 3: pohled", "vw.destroyed": "ZNIČEN", "vw.hint2": "← →: tank",
   "vw.tank": "Tank", "vw.wins": "Výhry", "vw.energy": "Energie", "vw.shield": "Štít", "vw.alive": "žije", "vw.dead": "zničen",
   "back.main": "Do hlavního menu", "back.main.i": "Zpět do hlavního menu.",
-  "lobby.title": "HRY ONLINE", "room.title": "HRA ONLINE", "lobby.name": "NÁZEV", "lobby.players": "HRÁČI", "lobby.ai": "AI", "lobby.spec": "DIVÁCI", "lobby.state": "STAV",
+  "lobby.title": "HRY ONLINE", "room.title": "HRA ONLINE", "lobby.name": "NÁZEV", "lobby.players": "HRÁČI", "lobby.mode": "REŽIM", "lobby.ai": "AI", "lobby.spec": "DIVÁCI", "lobby.state": "STAV",
   "state.paused": "Pozastavena", "state.round": "Kolo {n}",
   "lobby.who": "Hrají: {names}", "lobby.join": "<ENTER> - připojit se ke hře", "lobby.none": "Momentálně žádné veřejné hry",
   "lobby.create": "Vytvořit novou hru", "lobby.create.i": "Založ hru a pozvi do ní někoho.", "lobby.connecting": "Připojuji se k serveru...", "lobby.wake": "Server, který spal, se může probouzet až minutu.",
@@ -298,7 +298,7 @@ Lang.register("cs", {
   "pg.watch": "Raději sledovat", "pg.watch.i": "Uvolni své místo a sleduj hru jako divák.",
   "pg.specs.who": "Sledují: ",
   "lobby.link": "Připojit se odkazem", "lobby.link.i1": "Vlož odkaz s pozvánkou, který ti poslal jiný hráč,", "lobby.link.i2": "a připoj se k té hře.", "link.title": "PŘIPOJIT SE ODKAZEM", "link.label": "Odkaz: ", "link.i1": "Vlož odkaz s pozvánkou (Ctrl+V), například:", "link.i2": "<ENTER> tě připojí ke hře (funguje i odkaz na jiný server).", "link.go": "Připojit se", "link.err": "Tohle není odkaz na hru.",
-  "lobby.host": "hostitel", "lobby.host.i": "Jsi hostitelem této hry (vytvořil jsi ji, nebo ti ji předali).",
+  "lobby.host.i": "Jsi hostitelem této hry (vytvořil jsi ji, nebo ti ji předali).",
   // game modes and modifiers (docs/DESIGN-8P.md 27)
   "gm.standard": "standard",
   "gm.standard.i": "Kolo vyhraje poslední tank (nebo tým), který zůstane.",

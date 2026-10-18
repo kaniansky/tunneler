@@ -11,6 +11,9 @@ a release is made by pushing a version tag (see CONTRIBUTING.md).
   beside the instrument panel, its score in the spectators' map table, its own computer-player tactics,
   and an explanation on the Instructions page.
 - A **modifier** for any mode: no base repairs.
+- Each mode (but standard and shrinking world) is one round with its own goal setting instead of "Rounds
+  to win": gold to win, survive for N minutes, waves to win, seconds to win, captures to win, base
+  strength, kills to win.
 - Online, "List publicly" and "Allow spectators" are chosen only when a game is created.
 - The vs computer screen no longer overlaps when the settings box is long.
 

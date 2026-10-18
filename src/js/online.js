@@ -437,16 +437,14 @@
     // what this player sees during play, up to the room's maximum (display only)
     if (viewChoices().length > 1) items.push({ key: "view", label: T("pg.view") + T("view." + viewChoice()), align: "left",
       info: [T("pg.view.i1"), T("pg.view.i2", { max: Lang.raw("view." + visibleNow()) })], go: () => setView(1), change: setView });
-    items.push({ key: "say", label: T("pg.say"), input: chatForm, align: "left", info: [T("pg.say.i")], go: sendChat });
     // the invite link (the server's own page: also from the desktop app); "Link copied" for 3 s
     const invite = Endpoint.web(Links.invite(roomId)), copy = () => copyLink(invite);
+    items.push({ key: "gap", label: "", disabled: true });
     items.push({ key: "copy", label: T(copied ? "room.copied" : "room.copy"), go: copy,
       info: [T("room.copy.in"), { text: Lang.enc(UniText.truncRaw(invite, 78)), color: 11, onClick: copy }] });
     if (lastMatch) items.push({ key: "stats", label: T("pg.stats"), info: [T("pg.stats.i")], go: showStats });
     if (isHost() && !locked && kickTargets().length) items.push({ key: "kick", label: T("pg.kick"), info: [T("pg.kick.i1"), T("pg.kick.i2")], go: () => drawKick(false) });
     items.push({ key: "back", label: T("back.lobby"), info: [T("back.lobby.i")], go: () => leave(gamesHref) });
-    // a blank row below "Say:" - unless the box would then reach the info lines (rows 22-23)
-    if (items.length < 9) items.splice(items.findIndex(it => it.key === "say") + 1, 0, { key: "gap", label: "", disabled: true });
     return items;
   }
 
@@ -464,14 +462,17 @@
       lines.push({ row: 11, col: 2, text: T("pg.specs.who"), color: 8 });
       text.push({ row: 11, col: 2 + W(T("pg.specs.who")), text: UniText.truncRaw(specs.join(", "), 77 - W(T("pg.specs.who"))), color: 7 });
     }
-    chatForm.width = 1;
     const actW = Math.max(seatW, DosUI.boxWidth(acts));
-    chatForm.width = Math.max(8, actW - 3 - W(T("pg.say")));
-    chatPanel(lines, text, actW + 4, Math.max(12, sets.length + 3), 80, 21);   // (below the settings box)
+    // the chat below the settings box, its last row the "Say:" input (a box joined to the panel above it)
+    const chatX = actW + 4, chatTop = Math.max(12, sets.length + 3);
+    chatPanel(lines, text, chatX, chatTop, 80, 21, 1);   // (its last row: the input below)
+    chatForm.width = Math.max(8, 80 - chatX - 1 - W(T("pg.say")) - 2);
+    const say = [{ key: "say", label: T("pg.say"), input: chatForm, align: "left", info: [T("pg.say.i")], go: sendChat }];
     const boxes = [{ x: 1, y: 1, w: seatW, title, items: seats },
       { x: 79 - setW, y: 1, w: setW, title: T("box.settings"), items: sets },
-      { x: 1, y: 12, w: actW, title: T("box.game"), items: acts }];
-    const all = [].concat(seats, sets, acts), enabled = it => !it.static && !it.disabled;
+      { x: 1, y: 12, w: actW, title: T("box.game"), items: acts },
+      { x: chatX, y: 19, w: 80 - chatX - 1, items: say, joinTop: true }];   // (row 20, the panel's border below)
+    const all = [].concat(seats, sets, acts, say), enabled = it => !it.static && !it.disabled;
     // the selection: given, else (the first time) Start / Ready, else the first open seat, else Say
     let first = selKey;
     if (!first) first = ["start", "ready"].find(k => all.some(it => it.key === k)) ||
@@ -485,8 +486,9 @@
   // The chat: a box from column x0 to x1, rows y0 to y1 (1-based, borders included) with the last
   // messages that fit, "NAME: text" wrapped to its width - the name in the tank's colour (a spectator's
   // gray), all of it raw Unicode (the Unicode plane).
-  function chatPanel(lines, text, x0, y0, x1, y1) {
-    const w = x1 - x0 - 1, h = y1 - y0 - 1;
+  // (reserve: rows at its bottom kept free - the "Say:" input)
+  function chatPanel(lines, text, x0, y0, x1, y1, reserve = 0) {
+    const w = x1 - x0 - 1, h = y1 - y0 - 1 - reserve;
     if (w < 10 || h < 1) return;
     lines.push({ row: y0, col: x0, text: "\xDA" + "\xC4".repeat(w) + "\xBF", color: 5 }, { row: y1, col: x0, text: "\xC0" + "\xC4".repeat(w) + "\xD9", color: 5 });
     for (let r = y0 + 1; r < y1; r++) lines.push({ row: r, col: x0, text: "\xB3", color: 5 }, { row: r, col: x1, text: "\xB3", color: 5 });
