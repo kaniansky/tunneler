@@ -158,7 +158,7 @@ Lang.register("en", {
   "gm.infection": "infection",
   "gm.infection.i": "Tanks destroyed by the infected join them; the last healthy tank wins.",
   "gm.survival": "survival",
-  "gm.survival.i": "All players together against waves of AI tanks: survive as long as you can.",
+  "gm.survival.i": "All players together against waves of AI tanks: clear the set number to win.",
   "gm.hill": "king of the hill",
   "gm.hill.i": "Hold the zone in the middle of the map: the first to fill its score wins.",
   "gm.shrink": "shrinking world",

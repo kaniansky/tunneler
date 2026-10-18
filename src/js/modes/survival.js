@@ -6,12 +6,16 @@
 // the base farthest from the players; never on top of a tank. Where they will come from is
 // planned while the players wait for the wave (and marked there with blinking red dots).
 // A wave is cleared when all its tanks are destroyed, the next one comes WAVE_DELAY frames (~3 s) later.
-// Every wave is tougher than the one before: wave k's tanks start with 30 % + 12 % per wave of a full
-// shield (wave 5: 78 %), wave 5's also carry armor (half a hit that keeps the shield topped up),
-// and from wave 3 on they know exactly where the players are (before that only roughly - they must search).
-// A cleared wave refills every surviving player's energy and shield. Destroyed players stay out until the
-// next round. The players win the round by clearing WAVES waves (or by still being alive when the round
-// time runs out); all players destroyed: the AI wins it. hud: the wave number; scoreText: waves cleared.
+// Every wave is tougher than the one before, up to a bound: wave k's tanks start with 30 % + 12 % per wave
+// of a full shield (wave 5: 78 %, wave 7 on: full), from wave 5 on they also carry armor (k - 4 halves of a
+// hit that keep the shield topped up, at most MAX_ARMOR - 3 more hits from wave 10 on), the number of tanks
+// grows up to the number of AI seats, and from wave 3 on they know exactly where the players are (before
+// that only roughly - they must search).
+// A cleared wave refills every surviving player's energy and shield. A destroyed player stays out.
+// The match is ONE round (e.winScore 1, set by the engine for every goal mode): the players win it by
+// clearing e.goal waves (the "Waves to win" setting, default 5; or by still being alive when the round
+// time runs out); all players destroyed: the AI wins it. hud: the wave number; scoreText: waves cleared
+// (of the goal).
 //
 // Who is a player: the seats no computer drives (e.aiDriven, set by the TunnelerAIs themselves - the same
 // on every client). With no human seat (AI-only matches) or no AI seat known yet, the seats of the lowest
@@ -20,7 +24,8 @@
 (function (root) {
 const E = root.TunnelerEngine || require("../engine.js");
 
-const WAVES = 5;                 // waves to clear to win the round
+const WAVES = 5;                 // waves to clear to win (the default of e.goal, TunnelerEngine.GOALS.survival)
+const MAX_ARMOR = 6;             // wave tanks' armor at most this many halves of a hit (from wave 10 on)
 const WAVE_DELAY = 55;           // frames between a cleared wave and the next (~3 s)
 const ARMOR = 0x380;             // half a hit of shield: wave k's tanks get (k - 4) of these as armor
 const FREE_R = 16;               // a spawn spot needs no tank alive this close
@@ -31,11 +36,12 @@ const OUT_FLIP = 60;             // a wave tank leaving a base: the other doorwa
 const MAX_POWER = 11400;         // (engine.js MaxPower: full energy / shield)
 
 const cheb = (ax, ay, bx, by) => Math.max(Math.abs(ax - bx), Math.abs(ay - by));
-// wave k's tanks: their shield at the start, their armor
+// wave k's tanks: their shield at the start (full from wave 7 on), their armor (bounded)
 // (measured, medium map, AI players against AI waves: a hard player beats normal waves in about half
 // the rounds, equal levels in about a third)
 const waveShield = k => Math.min(MAX_POWER, Math.floor(MAX_POWER * (30 + 12 * (k - 1)) / 100));
-const waveArmor = k => Math.max(0, k - 4) * ARMOR;
+const waveArmor = k => Math.min(MAX_ARMOR, Math.max(0, k - 4)) * ARMOR;
+const goalOf = e => e.goal || WAVES;
 
 // the players' side and the waves' side (player numbers)
 function sides(e) {
@@ -129,24 +135,27 @@ const isPlayer = (e, p) => !!(e.GS.players && e.GS.players.includes(p));
 const waveAlive = e => (e.GS.waveTanks || []).some(p => e.alive[p]);
 
 E.registerMode("survival", {
-  // the statistics: waves cleared; the rounds list: waves cleared in the round
+  // the statistics, the score table and the rounds list all show waves CLEARED (the rounds list as
+  // "cleared/goal", at most 8 columns); only the hud shows the wave being fought
   stat: (e, p) => e.modeScore[p] || 0,
-  roundNote: e => e.mt("note", { n: e.GS.cleared || 0 }),
+  roundNote: e => e.mt("note", { n: e.GS.cleared || 0, g: goalOf(e) }),
   eliminationEnds: false,                                 // between waves no AI tank is alive
   aiAlways: true,
+  WAVES, waveShield, waveArmor,
+  init(e) { e.winScore = 1; },                             // (one round decides the match - the engine sets it too)
   strings: {
-    en: { stat: "waves", note: "wave {n}", instr: "All players play together against waves of AI tanks: wave 1 brings one, every next wave one more (as many as there are AI seats), and each wave is tougher than the one before. Clearing a wave gives every surviving player a full refill of energy and shield, and the next wave comes 3 seconds later. Clear 5 waves (or still be alive when the round time runs out) to win the round; a destroyed player is out until the next round, and when every player is destroyed the AI wins it. The number beside your instrument panel is the wave.",
-      score: "waves {n}", wave: "wave {n}" },
-    sk: { stat: "vlny", note: "vlna {n}", instr: "Všetci hráči hrajú spolu proti vlnám tankov AI: vlna 1 prinesie jeden, každá ďalšia o jeden viac (najviac toľko, koľko je miest AI) a každá je silnejšia ako predchádzajúca. Za zničenú vlnu dostane každý prežívajúci hráč plnú energiu a štít a ďalšia vlna príde o 3 sekundy. Zničte 5 vĺn (alebo prežite do konca času kola) a vyhráte kolo; zničený hráč čaká do ďalšieho kola, a keď sú zničení všetci hráči, kolo vyhráva AI. Číslo vedľa prístrojov je vlna.",
-      score: "vlny {n}", wave: "vlna {n}" },
-    cs: { stat: "vlny", note: "vlna {n}", instr: "Všichni hráči hrají spolu proti vlnám tanků AI: vlna 1 přinese jeden, každá další o jeden víc (nejvýš tolik, kolik je míst AI) a každá je silnější než ta předchozí. Za zničenou vlnu dostane každý přeživší hráč plnou energii a štít a další vlna přijde za 3 sekundy. Zničte 5 vln (nebo přežijte do konce času kola) a vyhrajete kolo; zničený hráč čeká do dalšího kola, a když jsou zničeni všichni hráči, kolo vyhrává AI. Číslo vedle přístrojů je vlna.",
-      score: "vlny {n}", wave: "vlna {n}" },
-    uk: { stat: "хвилі", note: "хвиля {n}", instr: "Усі гравці грають разом проти хвиль танків ШІ: хвиля 1 приводить один, кожна наступна на один більше (не більше, ніж місць ШІ), і кожна сильніша за попередню. За знищену хвилю кожен живий гравець отримує повну енергію та щит, а наступна хвиля приходить через 3 секунди. Знищте 5 хвиль (або доживіть до кінця часу раунду), щоб виграти раунд; знищений гравець чекає наступного раунду, а коли знищено всіх гравців, раунд виграє ШІ. Число біля приладів - номер хвилі.",
-      score: "хвилі {n}", wave: "хвиля {n}" },
-    ru: { stat: "волны", note: "волна {n}", instr: "Все игроки играют вместе против волн танков ИИ: волна 1 приводит один, каждая следующая на один больше (не больше, чем мест ИИ), и каждая сильнее предыдущей. За уничтоженную волну каждый выживший игрок получает полную энергию и щит, а следующая волна приходит через 3 секунды. Уничтожьте 5 волн (или доживите до конца времени раунда), чтобы выиграть раунд; уничтоженный игрок ждет следующего раунда, а когда уничтожены все игроки, раунд выигрывает ИИ. Число рядом с приборами - номер волны.",
-      score: "волны {n}", wave: "волна {n}" },
-    genz: { stat: "waves", note: "wave {n}", instr: "The whole squad vs waves of bots, fr: wave 1 is one bot, every next wave brings one more (as many as there are bot seats) and they get beefier each time. Clear a wave and everyone still alive gets a full refill on juice and shield, then the next wave drops 3 seconds later. Clear 5 waves (or just stay alive till the round clock runs out) and the round is yours; get wrecked and you're benched till next round, and if the whole squad gets wrecked the bots take the W. The number by your gauges is the wave.",
-      score: "waves {n}", wave: "wave {n}" },
+    en: { stat: "waves", note: "{n}/{g}", instr: "All players play together against waves of AI tanks: wave 1 brings one, every next wave one more (as many as there are AI seats), and each wave is tougher than the one before - stronger shields, later armor too - up to wave 10. Clearing a wave gives every surviving player a full refill of energy and shield, and the next wave comes 3 seconds later. The match is one round: clear Waves to win (a setting, instead of rounds to win) and the players win it - or still be alive when the round time runs out; a destroyed player is out, and when every player is destroyed the AI wins. The number beside your instrument panel is the wave.",
+      score: "waves {n}/{g}", wave: "wave {n}" },
+    sk: { stat: "vlny", note: "{n}/{g}", instr: "Všetci hráči hrajú spolu proti vlnám tankov AI: vlna 1 prinesie jeden, každá ďalšia o jeden viac (najviac toľko, koľko je miest AI) a každá je silnejšia ako predchádzajúca - silnejšie štíty, neskôr aj pancier - až po vlnu 10. Za zničenú vlnu dostane každý prežívajúci hráč plnú energiu a štít a ďalšia vlna príde o 3 sekundy. Zápas má jedno kolo: zničte nastavený počet vĺn (Vĺn na výhru, namiesto kôl) a hráči vyhrávajú - alebo prežite do konca času kola; zničený hráč vypadáva, a keď sú zničení všetci hráči, vyhráva AI. Číslo vedľa prístrojov je vlna.",
+      score: "vlny {n}/{g}", wave: "vlna {n}" },
+    cs: { stat: "vlny", note: "{n}/{g}", instr: "Všichni hráči hrají spolu proti vlnám tanků AI: vlna 1 přinese jeden, každá další o jeden víc (nejvýš tolik, kolik je míst AI) a každá je silnější než ta předchozí - silnější štíty, později i pancíř - až po vlnu 10. Za zničenou vlnu dostane každý přeživší hráč plnou energii a štít a další vlna přijde za 3 sekundy. Zápas má jedno kolo: zničte nastavený počet vln (Vln k výhře, místo kol) a hráči vyhrávají - nebo přežijte do konce času kola; zničený hráč vypadává, a když jsou zničeni všichni hráči, vyhrává AI. Číslo vedle přístrojů je vlna.",
+      score: "vlny {n}/{g}", wave: "vlna {n}" },
+    uk: { stat: "хвилі", note: "{n}/{g}", instr: "Усі гравці грають разом проти хвиль танків ШІ: хвиля 1 приводить один, кожна наступна на один більше (не більше, ніж місць ШІ), і кожна сильніша за попередню - міцніші щити, згодом і броня - аж до хвилі 10. За знищену хвилю кожен живий гравець отримує повну енергію та щит, а наступна хвиля приходить через 3 секунди. Матч - один раунд: знищте задану кількість хвиль (Хвиль для перемоги, замість раундів), і гравці перемагають - або доживіть до кінця часу раунду; знищений гравець вибуває, а коли знищено всіх гравців, перемагає ШІ. Число біля приладів - номер хвилі.",
+      score: "хвилі {n}/{g}", wave: "хвиля {n}" },
+    ru: { stat: "волны", note: "{n}/{g}", instr: "Все игроки играют вместе против волн танков ИИ: волна 1 приводит один, каждая следующая на один больше (не больше, чем мест ИИ), и каждая сильнее предыдущей - крепче щиты, позже и броня - вплоть до волны 10. За уничтоженную волну каждый выживший игрок получает полную энергию и щит, а следующая волна приходит через 3 секунды. Матч - один раунд: уничтожьте заданное число волн (Волн для победы, вместо раундов), и игроки побеждают - или доживите до конца времени раунда; уничтоженный игрок выбывает, а когда уничтожены все игроки, побеждает ИИ. Число рядом с приборами - номер волны.",
+      score: "волны {n}/{g}", wave: "волна {n}" },
+    genz: { stat: "waves", note: "{n}/{g}", instr: "The whole squad vs waves of bots, fr: wave 1 is one bot, every next wave brings one more (as many as there are bot seats) and they get beefier each time - thicc shields, then armor on top - until wave 10, then it's maxed out. Clear a wave and everyone still alive gets a full refill on juice and shield, then the next wave drops 3 seconds later. It's one round, no rematch arc: clear Waves to win (the setting that replaces rounds to win) or just stay alive till the round clock runs out and the squad takes the W; get wrecked and you're benched, and if the whole squad gets wrecked the bots win. The number by your gauges is the wave.",
+      score: "waves {n}/{g}", wave: "wave {n}" },
   },
 
   // round start (every tank at its base): the sides, teams, wave 1 (setup)
@@ -181,7 +190,7 @@ E.registerMode("survival", {
         if (e.alive[p]) { e.energy[p] = MAX_POWER; e.shield[p] = MAX_POWER; }
       }
       G.waveTanks = [];
-      if (G.cleared >= WAVES) e.endRound(G.pTeam);
+      if (G.cleared >= goalOf(e)) e.endRound(G.pTeam);
       else { G.wait = WAVE_DELAY; G.plan = planBases(e, waveMembers(G, G.wave + 1).length); }
     }
   },
@@ -216,7 +225,7 @@ E.registerMode("survival", {
   scoreText(e, p) {
     const G = e.GS;
     if (!G.players) return "";
-    return isPlayer(e, p) ? e.mt("score", { n: G.cleared }) : e.mt("wave", { n: G.wave });
+    return isPlayer(e, p) ? e.mt("score", { n: G.cleared, g: goalOf(e) }) : e.mt("wave", { n: G.wave });
   },
 
   // ---- AI
