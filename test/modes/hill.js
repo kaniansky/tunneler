@@ -36,6 +36,28 @@ for (const size of ["small", "medium", "large"]) {
   e.objRestore();
   G.holder = -1;
   check(white && col && e.getPixel(G.dots[0], G.dots[1]) === 0, "hill " + size + ": the edge is white, the holder's colour while held, restored after the frame");
+  // a tank / shot pixel on the edge stays on top of the dot; dirt gets the dot
+  const [x0, y0, x1, y1] = [G.dots[0], G.dots[1], G.dots[2], G.dots[3]];
+  e.setPixel(x0, y0, 1); e.setPixel(x1, y1, 6);
+  e.GM.draw(e);
+  const onTop = e.getPixel(x0, y0) === 1 && e.getPixel(x1, y1) === 9;
+  e.objRestore();
+  check(onTop && e.getPixel(x0, y0) === 1 && e.getPixel(x1, y1) === 6, "hill " + size + ": dots only on free ground / dirt - a tank on the edge stays on top");
+  e.setPixel(x0, y0, 0); e.setPixel(x1, y1, 0);
+}
+
+// ---- the zone never reaches a base: no tank inside it can refuel at a base (crowded small maps too)
+for (const [size, n] of [["small", 200], ["medium", 40], ["large", 20]]) {
+  const bad = [];
+  for (let s = 1; s <= n; s++) {
+    const e = startEngine(s, { slots: slots([1, 2, 3, 4, 5, 6, 7, 8]), size, mode: "hill", extended: true });
+    const G = e.GS;
+    for (let p = 1; p <= e.nPlayers; p++) {
+      const d = Math.max(Math.abs(G.cx - e.baseX[p]), Math.abs(G.cy - e.baseY[p]));
+      if (d < G.r + 17 + 15) { bad.push(s + ":" + p + ":" + d); break; }
+    }
+  }
+  check(bad.length === 0, "hill " + size + ", 8 tanks, " + n + " seeds: no base centre within r + 32 of the zone centre (" + bad.join(" ") + ")");
 }
 
 // ---- points: one team alone in the zone scores every frame; two teams: nobody; teammates together score
@@ -94,10 +116,21 @@ for (const size of ["small", "medium", "large"]) {
   check(e.GM.timeUp(e) === true && e.modeWinner === 1, "hill: time up - the team with the most points wins");
   const f = startEngine(6, { slots: slots([1, 2, 3]), size: "small", mode: "hill", extended: true });
   idle(f);
-  f.GS.pts = [30, 30, 5];
-  const tie = f.GM.timeUp(f);
   f.GS.pts = [0, 0, 0];
-  check(tie === false && f.GM.timeUp(f) === false && f.modeWinner === undefined, "hill: time up with a tie / no points - left to the damage rule");
+  check(f.GM.timeUp(f) === false && f.modeWinner === undefined, "hill: time up with no points - left to the damage rule");
+  // a tie at the top: only the tied teams count - the one with more damage wins, a third team's damage doesn't
+  f.GS.pts = [30, 30, 0];
+  f.roundDamage[1] = 0x700; f.roundDamage[2] = 0x700 * 2; f.roundDamage[3] = 0x700 * 9;
+  check(f.GM.timeUp(f) === true && f.modeWinner === 1, "hill: time up with a tie - the tied team with more damage wins, not a third team (" + f.modeWinner + ")");
+  const t2 = startEngine(6, { slots: slots([1, 2, 3]), size: "small", mode: "hill", extended: true });
+  idle(t2);
+  t2.GS.pts = [30, 30, 0];
+  t2.roundDamage[1] = 0x700; t2.roundDamage[2] = 0x700; t2.roundDamage[3] = 0x700 * 9;
+  const tr = t2.round;
+  const tied = t2.GM.timeUp(t2) === true && t2.modeWinner === -1;
+  for (let i = 0; i < 200 && t2.round === tr; i++) idle(t2);
+  check(tied && t2.round === tr + 1 && t2.roundWinnerTeam === -1 && t2.teamWins.every(w => w === 0),
+    "hill: time up with a tie in points and damage - nobody wins the round (third team with more damage neither)");
   // played through: 1 minute, team 2's tank holds the zone 300 frames and goes home
   const g = startEngine(7, { slots: slots([1, 2, 1]), size: "small", mode: "hill", extended: true, roundTime: 1 });
   idle(g);
@@ -135,13 +168,15 @@ const matches = [
 ];
 let totalHeld = 0, totalPlay = 0, topPts = 0, byPoints = 0;
 for (const m of matches) {
-  let held = 0, best = 0, last = 0;
+  let held = 0, best = 0, last = 0, counted = false;
   const opts = { mode: "hill", slots: slots(m.teams), levels: m.levels, seed: 13, size: m.size, winScore: m.winScore || 2, maxFrames: 100000,
     roundTime: m.roundTime || 0, mods: m.mods, friendlyFire: false,
     onFrame: e => {
       if (e.screen === "play" && e.GS.holder >= 0) held++;
       if (e.GS.pts) best = Math.max(best, ...e.GS.pts);
-      if (e.round !== last) { if (last && Math.max(...e.GS.lastPts) >= 1000) byPoints++; last = e.round; }
+      // a round won on points (also the match's last round, after which the round number stays)
+      if (e.round !== last) { last = e.round; counted = false; }
+      if (!counted && e.GS.pts && Math.max(...e.GS.pts) >= 1000) { byPoints++; counted = true; }
     } };
   const a = runMatch(opts);
   totalHeld += held; totalPlay += a.playFrames; topPts = Math.max(topPts, best);

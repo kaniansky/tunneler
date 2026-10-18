@@ -2,7 +2,8 @@
 // A round zone (radius sc(24)) near the middle of the map, dug free at the match start (the world stays
 // the same for the whole match). Every play frame in which the tanks alive inside it all belong to one
 // team, that team gets a point; the first team to TARGET points (1000 frames, ~55 s) wins the round. At
-// the round time the team with the most points wins (no single leader: the usual damage rule decides).
+// the round time the team with the most points wins (a tie: the tied team with more damage, else nobody;
+// no points at all: the usual damage rule decides).
 // Elimination still ends a round as usual. The zone's edge is marked with dots: white, or the colour of
 // the team holding it.
 // State (e.GS): cx, cy, r (the zone), dots (edge pixels, x/y pairs), pts[team] (this round), holder
@@ -18,24 +19,28 @@ const cheb = (ax, ay, bx, by) => Math.max(Math.abs(ax - bx), Math.abs(ay - by));
 const inZone = (G, x, y) => { const dx = x - G.cx, dy = y - G.cy; return dx * dx + dy * dy <= G.r * G.r; };
 const teamColor = (e, t) => { const m = e.teamMembers(t); return m.length ? e.playerColor(m[0]) : 9; };
 
-// the zone's centre: the middle of the world, or the nearest spot around it (a spiral of candidates)
-// clear of every base (and its doorways) with little rock around; no RNG draw, done once per match
+// the zone's centre: the middle of the world, or the nearest spot around it (a spiral of candidates, 16
+// directions) clear of every base (and its doorways: no base centre within R + 32, Chebyshev, so no tank
+// inside the zone can refuel at a base) with little rock around; no RNG draw, done once per match.
+// When no candidate is clear (crowded small maps), the one farthest from its nearest base wins (then the
+// least rock) - never a spot chosen without looking at the bases.
 function placeZone(e, R) {
   const W = e.worldW, H = e.worldH, N = e.nPlayers, pc = E.PixelClassExt;
-  const mx = W >> 1, my = H >> 1, step = Math.max(4, e.sc(16)), M = R + e.sc(16);
+  const mx = W >> 1, my = H >> 1, step = Math.max(4, e.sc(8)), M = R + e.sc(16), CLEAR = R + 32;
   const cands = [[mx, my]];
-  const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]];
-  for (let k = 1; k <= 12; k++) for (const [dx, dy] of dirs) cands.push([mx + dx * k * step, my + dy * k * step]);
-  let best = null, bestRock = Infinity;
+  const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1],
+    [2, 1], [-2, -1], [2, -1], [-2, 1], [1, 2], [-1, -2], [1, -2], [-1, 2]];
+  for (let k = 1; k <= 24; k++) for (const [dx, dy] of dirs) cands.push([mx + dx * k * step, my + dy * k * step]);
+  let best = null, bestD = -1, bestRock = Infinity;
   for (const [x, y] of cands) {
     if (x - M < 48 || y - M < 48 || x + M >= W - 48 || y + M >= H - 48) continue;
-    let ok = true;
-    for (let p = 1; p <= N && ok; p++) if (cheb(x, y, e.baseX[p], e.baseY[p]) < R + 32) ok = false;
-    if (!ok) continue;
+    let d = Infinity;
+    for (let p = 1; p <= N; p++) d = Math.min(d, cheb(x, y, e.baseX[p], e.baseY[p]));
+    d = Math.min(d, CLEAR);                          // clear of every base: all the same
     let rock = 0;
     for (let yy = y - M; yy <= y + M; yy++) for (let xx = x - M; xx <= x + M; xx++) if (pc[e.getPixel(xx, yy)] === 4) rock++;
-    if (rock * 50 <= (2 * M + 1) * (2 * M + 1)) return [x, y];
-    if (rock < bestRock) { bestRock = rock; best = [x, y]; }
+    if (d === CLEAR && rock * 50 <= (2 * M + 1) * (2 * M + 1)) return [x, y];
+    if (d > bestD || (d === bestD && rock < bestRock)) { bestD = d; bestRock = rock; best = [x, y]; }
   }
   return best || [mx, my];
 }
@@ -126,14 +131,23 @@ E.registerMode("hill", {
     if (G.pts[holder] >= TARGET) e.endRound(holder);
   },
 
+  // at the round time: the most points win; a tie at the top is decided among the tied teams only (their
+  // members' damage to enemies this round, the most wins; equal: nobody); nobody scored: the usual rule
   timeUp(e) {
     const pts = e.GS.pts || [];
-    let best = 0, top = -1, n = 0;
+    let best = 0, top = [];
     for (let t = 0; t < pts.length; t++) {
-      if (pts[t] > best) { best = pts[t]; top = t; n = 1; } else if (pts[t] === best && best > 0) n++;
+      if (pts[t] > best) { best = pts[t]; top = [t]; } else if (pts[t] === best && best > 0) top.push(t);
     }
-    if (top < 0 || n !== 1) return false;            // nobody scored / a tie: the usual damage rule
-    e.endRound(top);
+    if (!top.length) return false;                   // nobody scored: the usual damage rule
+    if (top.length === 1) { e.endRound(top[0]); return true; }
+    let bestD = -1, win = -1;
+    for (const t of top) {
+      let d = 0;
+      for (let p = 1; p <= e.nPlayers; p++) if (e.team(p) === t) d += e.roundDamage[p];
+      if (d > bestD) { bestD = d; win = t; } else if (d === bestD) win = -1;
+    }
+    e.endRound(win);
     return true;
   },
 
@@ -141,7 +155,11 @@ E.registerMode("hill", {
     const G = e.GS, d = G.dots;
     if (!d) return;
     const c = G.holder >= 0 ? teamColor(e, G.holder) : 9;
-    for (let i = 0; i < d.length; i += 2) e.objPut(d[i], d[i + 1], c);
+    // only on free ground / dirt: tanks, shots and explosions on the edge stay on top of the dots
+    for (let i = 0; i < d.length; i += 2) {
+      const c0 = e.getPixel(d[i], d[i + 1]);
+      if (c0 === 0 || E.PixelClassExt[c0] === 1) e.objPut(d[i], d[i + 1], c);
+    }
   },
 
   hud(e, p) {
