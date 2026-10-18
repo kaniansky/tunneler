@@ -183,7 +183,7 @@ project dependency; install playwright-core in a scratch dir when needed).
 
 ## Client pages
 
-- `index.html` + `home.js` - main menu (Split screen, Vs computer, Online game, Information, Language:
+- `index.html` + `home.js` - main menu (Split screen, Skirmish (was "Vs computer"; /skirmish, old /vs-computer works), Online game, Information, Language:
   ...). Split screen (`/#split`): Start a new game / Map size / Rounds to win / Instructions / Back
   (localStorage `tunneler.split.size`, `tunneler.split.win`; default medium, 3 = the original). Vs
   computer (`/#cpu`, DESIGN-8P 20, 26): like the online game lobby without the chat, centred - the 8
@@ -224,16 +224,16 @@ project dependency; install playwright-core in a scratch dir when needed).
   table lists every team (`teamLines`, wrapped to fit). `setScope(own, "self"|"team"|"everyone")` (a
   player, DESIGN-8P 23): the grid of their own view first, then teammates' / everybody else's in slot
   order (classic: own half / the full split screen); `setScope(null)` = the modes above.
-- `lobby.html` + `lobby.js` - the list of public games (columns NAME, PLAYERS "2/4" = seated / seated +
+- `lobby.html` + `lobby.js` - the list of public games (columns NAME, MODE, PLAYERS "2/4" = seated / seated +
   free open seats - during a match: connected / its human tanks (roomInfo `players` / `places`) -, AI
   (`bots`), WATCHING (`spec`; 0 = blank), STATE (`COLS`); games scroll; separator + "Create a new game" +
   "Join by link" + a blank row + "Back to main menu" fixed below; Join by link: one input for a
   pasted invite link / a game's id (`Links.parse` in endpoint.js -> {origin, room, role}): this server's
   game -> its page, another server's -> that site (the desktop app: `Endpoint.set(origin)` first);
-  the games this browser hosts (`tunneler.host.<id>` keys, `hostIds()`) come first with "you host" in
-  the state column (`lobby.host`, info `lobby.host.i`), its private ones fetched one by one
+  the games this browser hosts (`tunneler.host.<id>` keys, `hostIds()`) come first (no mark in the row;
+  the info line says so, `lobby.host.i` - the info is only that and the keys), its private ones fetched one by one
   (`/api/rooms/<id>`, at most 8; a 404 drops the key); Enter joins - a free seat if there is one, else
-  watching -, Right watches), the create screen (Name max 26, List publicly, Allow spectators, Create the
+  watching -, Right or a right click watches), the create screen (Name max 26, List publicly, Allow spectators, Create the
   game, Back: POST with the host's last settings from `tunneler.online`, then straight to the game's
   lobby; the POST response's `hostKey` is stored as `tunneler.host.<id>`). Online play needs a name:
   `DosUI.prototype.askName` ("YOUR NAME", `DosUI.playerName()` / `setPlayerName`, localStorage

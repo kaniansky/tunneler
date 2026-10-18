@@ -3,19 +3,39 @@
 All notable changes to Tunneler Online. Versions follow [semantic versioning](https://semver.org/);
 a release is made by pushing a version tag (see CONTRIBUTING.md).
 
-## Unreleased
+## 3.0.0
 
-- **Game modes** (vs computer and online, a new "Mode" setting): gold rush, infection, survival, king of
-  the hill, shrinking world, capture the flag, base siege and deathmatch - besides the standard game.
-  Each has its own rules, objects on the map (gold, flags, the zone, the safe area's edge), a score tag
-  beside the instrument panel, its score in the spectators' map table, its own computer-player tactics,
-  and an explanation on the Instructions page.
+**Game modes** - a new "Mode" setting (skirmish and online) besides the standard game, and a different
+game list / lobby; a 3.0 server and older pages or desktop apps can't play together.
+
+- **Eight game modes**, each with its own rules, objects on the map, a score tag beside the instrument
+  panel, its score in the spectators' map table and the statistics, its own computer-player tactics and an
+  explanation on the Instructions page:
+  - **Gold rush** - dig up gold and bring it to your base; a hit makes you drop one.
+  - **Infection** - tanks destroyed by the infected join them; the healthy win if one survives the time.
+  - **Survival** - all players together against waves of AI tanks, tougher with every wave.
+  - **King of the hill** - hold the zone in the middle of the map (destroyed tanks come back).
+  - **Shrinking world** - the safe area (an ellipse) closes in; outside it your shield melts.
+  - **Capture the flag** - bring the enemy's flag home while yours is at home.
+  - **Base siege** - shoot the enemy bases down; the last side with a base wins.
+  - **Deathmatch** - destroyed tanks come back at their base; kills decide.
+- Every mode but standard and shrinking world is **one round with its own goal** instead of "Rounds to
+  win": gold to win, survive for N minutes, waves to win, seconds to win, captures to win, base strength,
+  kills to win. A round nobody wins is replayed.
 - A **modifier** for any mode: no base repairs.
-- Each mode (but standard and shrinking world) is one round with its own goal setting instead of "Rounds
-  to win": gold to win, survive for N minutes, waves to win, seconds to win, captures to win, base
-  strength, kills to win.
-- Online, "List publicly" and "Allow spectators" are chosen only when a game is created.
-- The vs computer screen no longer overlaps when the settings box is long.
+- **Vs computer is now Skirmish** (`/skirmish`; `/vs-computer` still works): the online lobby's layout
+  without the chat (slots without color names and the settings side by side, Start / Back below them),
+  play any color; Friendly fire always listed, grayed out without teams.
+- The statistics show why a tank won: the mode's own total per tank (gold, captures, kills...) and each
+  round's winning score in the rounds list; no "The winner is" line in the extended game - the winners blink.
+- After death the views you chose stay (everyone: every view, yours with DESTROYED).
+- The **list of games**: a MODE column, the games you host first (your private ones too), "Join by link",
+  the info line only says whether you host it and the keys; a right click watches a game.
+- The **game lobby**: "Say:" inside the chat box, "Kick a player" right below "Watch instead" (grayed with
+  nobody to kick), "List publicly" / "Allow spectators" only when a game is created, one host at a time
+  (a second tab with the host key is a player); in infection / survival the team column is grayed.
+- Menus: a right click on a switch steps it back; centred items line up.
+- Survival: a wave tank no longer gets stuck in a base pushing toward a player outside it.
 
 ## 2.0.0
 
