@@ -1,0 +1,172 @@
+"use strict";
+// All text the game engine shows, in English (engine.js: STRINGS_EN; engine.strings). The other languages
+// translate it in their main.js (`engine: {...}`, lang.js engineStrings); "{n}" in a line switches the text
+// colour to n. Loaded before engine.js (/js/langs.js); node: engine.js requires it.
+(function (root) {
+const STRINGS_EN = {
+  title: "TUNNELER ONLINE", by: "by Norko Kaniansky",
+  menu: ["Start game", "Instructions", "Back to main menu"],
+  rematch: "Rematch",                   // replaces "Start game" after a match (same settings again)
+  waiting: ["Waiting for the", "players to start"],
+  creating: "(creating world)", ready: "(world ready)",
+  round: "ROUND", blue: "BLUE", green: "GREEN",
+  stats: { title: "Statistics", fired: "shots fired", hit: "shots hit", percent: "percent hit", dug: "meters dug",
+    moved: "meters traveled", winner: "The winner is ",
+    // the rounds next to the statistics (vs computer, online)
+    rounds: "Rounds", draw: "draw", ended: "ended",
+    // extended mode: column headings of the one-row-per-player table (max 4, 4, 4, 5, 5 characters)
+    head: ["shot", "hit", "hit%", "dug", "moved"] },
+  // extended mode: tank color names (slot color 0..7); "team" labels a team ("{n}" = its number 1..8;
+  // "teams" is no longer used - teams are numbered now)
+  colors: ["BLUE", "GREEN", "CYAN", "YELLOW", "WHITE", "PINK", "VIOLET", "TEAL"],
+  teams: ["BLUE TEAM", "GREEN TEAM"],
+  team: "TEAM {n}",
+  // the game's settings, a compact list (display only, `showSettings`): round title and statistics
+  settings: { size: ["map size: small", "map size: medium", "map size: large"], win: "rounds to win: {n}",
+    ff: ["friendly fire: off", "friendly fire: on"], view: "view: {v}", visible: "view limit: {v}",
+    // the round time limit, only when there is one (option roundTime); the statistics' 37 x 4 area takes
+    // timeShort when time does not fit there, and leaves it out when neither does
+    time: "round time: {n} min", timeShort: "time: {n} min",
+    views: ["self", "team", "everyone"], watch: ["after death: black screen", "after death: my wreck", "after death: watch team", "after death: watch killer", "after death: watch all"],
+    // game modes (the round title / statistics settings: the mode's name first) and modifiers
+    modes: {"standard": "standard", "gold": "gold rush", "infection": "infection", "survival": "survival", "hill": "king of the hill", "shrink": "shrinking world", "ctf": "capture the flag", "siege": "base siege", "deathmatch": "deathmatch"},
+    noRepair: "no repairs",
+    goals: { gold: "gold to win: {n}", infection: "survive {n} min", survival: "waves to win: {n}", hill: "seconds to win: {n}",
+      ctf: "captures to win: {n}", siege: "base strength: {n}", deathmatch: "kills to win: {n}" } },
+  // the world map's "PRESS ANY KEY" pixel-art banner (5 rows of '*' / ' ', all the same length); a
+  // translation may replace it (see Banner below for the original)
+  // banner: [...],
+  prompt: "Press <ENTER> for main menu.",
+  scroll: "\x18\x19 PgUp PgDn Home End",   // a page that scrolls: its keys, left of the prompt
+  instr: {
+    title: "INSTRUCTIONS",
+    // "{n}" = winRounds[winScore - 1]; the paragraph is re-wrapped when the result does not fit
+    intro: ["TUNNELER is a two player game.  The objective of the game is to be the first to",
+      "win {n}.  A round continues until one tank blows up (from being shot or",
+      "simply running out of energy)."],
+    // extended mode (3-8 tanks, teams, computer tanks)
+    introExt: ["Every tank fights for itself, or teams fight each other.  The objective is",
+      "to be the first to win {n}.  A round continues until only one tank (or",
+      "one team) is left; tanks blow up when shot or simply out of energy.",
+      "A teammate's base repairs your shield too, at half the speed of your own."],
+    winRounds: ["one round", "two rounds", "three rounds", "four rounds", "five rounds", "six rounds",
+      "seven rounds", "eight rounds", "nine rounds"],
+    displayHead: "The display:  ",
+    display: ["Each player has a view screen and an instrument panel with two",
+      "meters (energy and shield).  The view screen shows your surroundings from above",
+      "(about 1% of the entire \"world\")."],
+    displayOnline: "(about 1% of the entire \"world\").  Online, you see only your own view screen.",
+    controlsHead: "The controls:  ",
+    controls: {
+      hotseat: ["{9}BLUE{3} player:", "               {10}GREEN{3} player:"],
+      cpu: "you drive {9}BLUE{3} (either set of keys), the computer drives {10}GREEN{3}.",
+      online: "you drive your own tank ({9}BLUE{3} or {10}GREEN{3}) with either set of keys.",
+      cpuExt: "you drive {9}BLUE{3} (either set of keys), computers drive the rest.",
+      onlineExt: "you drive the tank of your color with either set of keys.",
+    },
+    table: [["        <W> up", "             <\x18> up"],
+      ["left <A>   <D> right", "    left <\x1B>   <\x1A> right"],
+      ["        <S> down", "            <\x19> down"],
+      ["fire <SHIFT> or <SPACE>", "   fire <ENTER> or right <SHIFT>"]],
+    hold: "Hold two direction keys at once to move diagonally.",
+    gameHead: "The game:  ",
+    game: ["Players can move in one of 8 directions.  Movement in tunnels is",
+      "three times as fast as normal digging.  Fast digging can be accomplished by",
+      "firing the tank's cannon while moving.  Various actions use up different amounts",
+      "of energy: moving costs some energy, digging costs more, and shooting costs the",
+      "most.  Shields are damaged when hit by the other player's cannon.  Players can",
+      "refuel at any base but can repair their shields only at their own bases (at a",
+      "teammate's base too, at half the speed)."],
+    // everything added since 1991, one [head, text] per paragraph (wrapped to the page's width)
+    sections: [
+      ["Gamepads and touch screens:  ", "press any button on a gamepad to connect it (the game shows " +
+        "\"Gamepad 1 connected\"); then it drives a tank too (split screen: gamepad 1 " +
+        "{9}BLUE{3}, gamepad 2 {10}GREEN{3}; otherwise any gamepad drives yours) - the stick or the " +
+        "d-pad moves, any button fires, Start is <ESC>; in the menus the d-pad and A / B work as the " +
+        "arrows, <ENTER> and <ESC>.  On phones and tablets an on-screen joystick and the FIRE and ESC " +
+        "buttons appear with the first touch; names and chat still need a keyboard."],
+      ["Winning:  ", "The first tank (or team) to win the chosen number of rounds - 1 to 9, the " +
+        "original is 3 - wins the match.  A round can also have a time limit of 2, 3, 5 or 10 minutes " +
+        "(the last 30 seconds count down beside the instrument panel).  When the time is up, the side " +
+        "that hit the enemy tanks the most wins the round and the other tanks blow up; a tie means " +
+        "nobody wins it.  After the match the statistics show everybody's shots, hits, meters dug and " +
+        "meters traveled, and \"Rematch\" plays again with the same settings."],
+      ["Teams:  ", "Besides the original duel, up to 8 tanks (BLUE, GREEN, CYAN, YELLOW, WHITE, PINK, " +
+        "VIOLET and TEAL) can play free-for-all - every tank for itself - or in teams.  Tanks with the " +
+        "same team number are teammates; a team wins the round when only its tanks are left, and all " +
+        "of them score it.  Friendly fire on: your shots hurt your teammates too.  Friendly fire off: " +
+        "a shot explodes on a teammate like on a wall."],
+      ["Computer tanks:  ", "the computer drives a tank at one of three levels: easy, medium or hard."],
+      ["Map size:  ", "small (512 x 256 pixels, a quarter of the original), medium (1024 x 512, the " +
+        "original world) or large (2048 x 1024, four times as big).  Every tank starts in its own base."],
+      ["View:  ", "what you see during play: self - only your own view screen; team - your " +
+        "teammates' view screens too; everyone - every tank's view screen, yours first.  In an online " +
+        "game its creator sets a view limit, the most any player in it may choose."],
+      ["After death:  ", "what you see once your tank is destroyed, until the round ends: a black " +
+        "screen, your wreck, your teammates, your killer (the tank that destroyed you, then the one " +
+        "that destroyed it...) or all the tanks still alive."],
+      ["Split screen:  ", "the original game - two players on one keyboard, {9}BLUE{3} on the left " +
+        "half of the screen and {10}GREEN{3} on the right.  First choose the map size, the rounds to " +
+        "win and the round time."],
+      ["Skirmish:  ", "your own game against 1 to 7 computer tanks, driven with either set of keys.  Each of " +
+        "the 8 colors is you, nobody or a computer tank (easy, medium, hard), with its team (1-8) " +
+        "- you can play any color; then the mode, map size, rounds to win, round time, friendly " +
+        "fire, view, after death and base repairs.  <ESC> during play ends the match; <ESC> on " +
+        "the game's menu goes back to the settings."],
+      ["Online game:  ", "2 to 8 tanks on different computers, some of them may be computer tanks.  Online play " +
+        "needs a name (asked the first time, changed in Settings).  Create a game - its name, " +
+        "listed publicly or private (joined with its invite link), spectators allowed or not - or " +
+        "join one from the list of games.  You drive your tank with either set of keys.  Every " +
+        "computer runs the same game in lockstep; only key presses go over the network."],
+      ["The game lobby:  ", "every game has 8 seats, one per color.  Sit on an open seat to play that color (<ENTER> " +
+        "or a click), choose your team (<\x1B> <\x1A>, <1>-<8> or a click on it), chat (Say:) and " +
+        "choose \"I am ready!\"; \"Watch instead\" leaves the seat.  The host - who created the game, " +
+        "or the next player when the host leaves - sets every free seat open, closed or AI (easy, " +
+        "medium, hard) and its team, the settings above, can \"Kick a player\" and starts the " +
+        "game once everybody seated is ready.  An open seat nobody took gets no tank.  During a " +
+        "match only its players play; whoever joins then watches.  After a match the lobby shows " +
+        "its Statistics.  Press <ESC> twice to leave an online game."],
+      ["Spectators:  ", "watch an online game without playing.  <TAB> or <1> <2> <3> switch between " +
+        "all the view screens, the map with the scores, and following one tank (<\x1B> <\x1A> choose " +
+        "which one)."],
+      ["Sound:  ", "Settings chooses its style: original (the PC " +
+        "speaker beeps of 1991), realistic (tank noises) or cartoony (boings and pops), or muted.  " +
+        "The sounds of the other tanks fade with their distance from yours and come from their side (stereo)."],
+      ["Settings:  ", "the language of the menus and the game, the sound, and \"Show ping\" (online " +
+        "games: your round-trip time in ms, top left on the game's border).  In the desktop app also " +
+        "the Server for online games (empty = the public server)."],
+    ],
+  },
+  info: {
+    title: "INFORMATION",
+    p1: ["Tunneler Online brings TUNNELER 2.0 to the web browser.  The DOS program was",
+      "decompiled and rewritten in JavaScript routine by routine, so tanks, digging,",
+      "shots, energy and the world generator behave exactly like in 1991, on the same",
+      "low-res screen (160x100 in 16 colors) with the sound of a simulated PC speaker."],
+    waysHead: "Ways to play:",
+    ways: [["split screen", "two players on one keyboard, just like the original"],
+      ["skirmish", "you against 1 to 7 computer tanks, alone or in teams"],
+      ["online game", "2 to 8 tanks on other computers, any of them computer tanks"],
+      ["spectate", "watch an online game: all views, the live map, or one tank"]],
+    p2: ["Up to 8 tanks fight free-for-all or in teams (friendly fire on or off) on",
+      "a small, medium or large map, to win 1 to 9 rounds.  Online, players take seats",
+      "(= colors) and teams in the lobby, chat, and the host starts the game.  Every",
+      "computer runs the same game in lockstep; only key presses go over the network."],
+    // more paragraphs, one [head, text] each (wrapped to the page's width)
+    sections: [
+      ["The desktop app:  ", "Tunneler Online also comes as a small program for Windows, Linux and " +
+        "macOS - download it from the releases page on GitHub " +
+        "(github.com/kaniansky/tunneler-online/releases).  It plays split screen and vs computer " +
+        "without a network, and online games on the public server or any other one (Settings, " +
+        "Server)."],
+      ["The original:  ", "TUNNELER 2.0 was written by Geoffrey Silverton in 1991 in Turbo Pascal: " +
+        "two tanks dig through an underground world on one PC, one keyboard and one split screen.  " +
+        "This version keeps all of it and adds the rest."],
+    ],
+    p3: ["This is a public-domain program; feel free to copy it for friends."],
+    credits: ["Norko Kaniansky, 2026", "original TUNNELER 2.0:", "Geoffrey Silverton, 1991"],
+  },
+};
+root.TUNNELER_STRINGS_EN = STRINGS_EN;
+if (typeof module !== "undefined" && module.exports) module.exports = STRINGS_EN;
+})(typeof window !== "undefined" ? window : globalThis);

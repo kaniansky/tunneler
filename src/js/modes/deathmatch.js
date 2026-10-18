@@ -141,50 +141,5 @@ E.registerMode("deathmatch", {
     if (cheb(mx, my, gx, gy) > 4) return { x: gx, y: gy, mode: "hunt", dig: false };
     return { x: mx, y: my, mode: "wait", dig: false };
   },
-
-  strings: {
-    en: { stat: "kills", note: "{n} kills",
-      instr: "Destroyed tanks come back at their own base after about 3 seconds - nobody is out for good. " +
-        "Destroying an enemy tank scores a kill for you and your team; destroying a teammate (friendly fire) costs one. " +
-        "The first team to reach Kills to win (a setting, instead of rounds to win) wins the match; when the round time runs out, the most kills wins it. " +
-        "The number beside your instrument panel shows your kills.",
-      score: "kills {n}",
-    },
-    sk: { stat: "zost.", note: "{n} zost.",
-      instr: "Zničené tanky sa asi po 3 sekundách vrátia do svojej základne - nikto nevypadne nadobro. " +
-        "Zničenie nepriateľského tanku je zostrel pre teba aj tvoj tím; zničenie spoluhráča (paľba do vlastných) jeden zostrel uberie. " +
-        "Zápas vyhrá tím, ktorý prvý dosiahne nastavený počet zostrelov (Zostrely na výhru, namiesto kôl); keď uplynie čas kola, vyhrá najviac zostrelov. " +
-        "Číslo vedľa prístrojového panelu ukazuje tvoje zostrely.",
-      score: "zostrely {n}",
-    },
-    cs: { stat: "zab.", note: "{n} zab.",
-      instr: "Zničené tanky se asi po 3 sekundách vrátí do své základny - nikdo nevypadne nadobro. " +
-        "Zničení nepřátelského tanku je sestřel pro tebe i tvůj tým; zničení spoluhráče (palba do vlastních) jeden sestřel ubere. " +
-        "Zápas vyhraje tým, který první dosáhne nastavený počet sestřelů (Sestřely k výhře, místo kol); když uplyne čas kola, vyhraje nejvíc sestřelů. " +
-        "Číslo vedle přístrojového panelu ukazuje tvoje sestřely.",
-      score: "sestřely {n}",
-    },
-    uk: { stat: "вбив.", note: "{n} вбив.",
-      instr: "Знищені танки приблизно за 3 секунди повертаються на свою базу - ніхто не вибуває назавжди. " +
-        "Знищений ворожий танк зараховується як збитий тобі й твоїй команді; знищений товариш по команді (вогонь по своїх) віднімає одне очко. " +
-        "Матч виграє команда, яка першою набере задану кількість збитих танків (Збитих для перемоги, замість раундів); коли час раунду вийде, перемагає та, що збила більше. " +
-        "Число біля панелі приладів показує, скільки танків ти збив.",
-      score: "збито {n}",
-    },
-    ru: { stat: "убий.", note: "{n} убий.",
-      instr: "Уничтоженные танки примерно через 3 секунды возвращаются на свою базу - никто не выбывает насовсем. " +
-        "Уничтоженный вражеский танк - это убийство для тебя и твоей команды; уничтоженный товарищ (огонь по своим) отнимает одно. " +
-        "Матч выигрывает команда, первой набравшая заданное число убийств (Убийств для победы, вместо раундов); когда время раунда выйдет, побеждает больше убийств. " +
-        "Число рядом с панелью приборов показывает твои убийства.",
-      score: "убийств {n}",
-    },
-    genz: { stat: "kills", note: "{n} kills",
-      instr: "Get wrecked? No biggie, you respawn at your base in like 3 seconds. " +
-        "Every enemy you delete is a kill for you and the squad; deleting your own teammate (friendly fire) is minus one, so don't be that guy. " +
-        "First squad to hit Kills to win (it replaces rounds to win) takes the match; if the clock runs out, most kills wins. " +
-        "The number next to your dashboard is your kill count, flex it.",
-      score: "kills {n}",
-    },
-  },
 });
 })(typeof window !== "undefined" ? window : globalThis);

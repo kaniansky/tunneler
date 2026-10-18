@@ -11,7 +11,7 @@ const keyOf = code => /^(Arrow|Enter|Escape|Tab|Backspace)/.test(code) ? code.re
 const assert = require("assert");
 const fs = require("fs"), path = require("path"), vm = require("vm");
 const SRC = path.join(__dirname, "..", "src");
-// /js/langs.js is generated: src/lang/*.js joined, as server.js serves it for src/
+// /js/langs.js is generated: src/lang/<code>/*.js joined, as server.js serves it for src/
 const { langBundle, modesBundle } = require("../server.js");
 
 let n = 0;

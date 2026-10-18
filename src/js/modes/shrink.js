@@ -72,14 +72,6 @@ E.registerMode("shrink", {
   radius: (e, t) => radiusAt(e.GS, t === undefined ? elapsed(e) : t),
   STEPS, STEP_T, CLOSE_T, stepT: e => e.GS.stepT, closeT: e => e.GS.closeT,
   drain: (e, t) => DRAIN + DRAIN_STEP * level(e.GS, t),
-  strings: {
-    en: { instr: "A safe area (an ellipse) around the middle of the map shrinks every 30 seconds, until after 3 minutes only a small spot is left. Outside it your shield drains away - faster with every step - and bases outside it give you nothing. The red dots mark its edge, and the number beside your instrument panel counts down to the next step. The last team standing wins the round." },
-    sk: { instr: "Bezpečná oblasť (elipsa) okolo stredu mapy sa každých 30 sekúnd zmenší, až po 3 minútach ostane len malé miesto. Mimo nej ti ubúda štít - s každým krokom rýchlejšie - a základne mimo nej ti nedajú nič. Jej okraj označujú červené bodky a číslo pri prístrojovom paneli odpočítava čas do ďalšieho kroku. Kolo vyhráva tím, ktorý zostane posledný." },
-    cs: { instr: "Bezpečná oblast (elipsa) kolem středu mapy se každých 30 sekund zmenší, až po 3 minutách zbude jen malé místo. Mimo ni ti ubývá štít - s každým krokem rychleji - a základny mimo ni ti nedají nic. Její okraj označují červené tečky a číslo u přístrojového panelu odpočítává čas do dalšího kroku. Kolo vyhrává tým, který zůstane poslední." },
-    uk: { instr: "Безпечна зона (еліпс) навколо центру мапи стискається кожні 30 секунд, аж поки через 3 хвилини не лишиться маленька ділянка. Поза нею твій щит тане - з кожним кроком швидше - а бази поза нею нічого не дають. Червоні точки позначають її край, а число біля панелі приладів відлічує час до наступного кроку. Раунд виграє команда, що залишиться останньою." },
-    ru: { instr: "Безопасная зона (эллипс) вокруг центра карты сжимается каждые 30 секунд, пока через 3 минуты не останется маленький участок. Вне её твой щит тает - с каждым шагом быстрее - а базы вне её ничего не дают. Красные точки отмечают её край, а число у панели приборов отсчитывает время до следующего шага. Раунд выигрывает команда, оставшаяся последней." },
-    genz: { instr: "The zone around the middle of the map closes in every 30 seconds, and after 3 minutes it's basically a tiny dot. Outside it your shield just melts - faster every step, no cap - and bases out there are straight up useless. Red dots = the edge, and the number by your dashboard counts down to the next squeeze. Last team alive takes the W." },
-  },
 
   // match start: the middle, the radius after every step; the final circle's rock becomes dirt
   init(e) {

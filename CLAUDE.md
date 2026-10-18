@@ -195,7 +195,7 @@ project dependency; install playwright-core in a scratch dir when needed).
   no computer tank or only one team -, Back), the info at the bottom. Default GREEN computer normal team 2, the rest nobody = the classic game. Remembered in
   `tunneler.cpu.slots` (JSON [{kind, team}] x 8), `tunneler.cpu.size`, `tunneler.cpu.win`,
   `tunneler.cpu.ff`, `tunneler.cpu.view` (old `tunneler.hide` 1 / 0 = self / everyone). Texts: `lc.*` keys
-  (in each `src/lang/<code>.js`).
+  (in each `src/lang/<code>/main.js`).
 - `play.html` + `play.js` - local modes `?mode=hotseat&size=&win=` and
   `?mode=cpu&slots=<color>:<you|level>:<team>,...&size=&win=&ff=0|1&view=self|team|everyone` (old `opp` / `teams` / `hide` /
   `level` links still work); `LocalClock` drives one step per tick. The engine gets `{slots, size,
@@ -301,15 +301,21 @@ project dependency; install playwright-core in a scratch dir when needed).
   Name / chat inputs still need a real keyboard. `test/input-check.js` (mock `navigator.getGamepads`,
   synthesized pointer events, online.html's held bits and lobby).
 
-## Languages (`lang.js`, `src/lang/*.js`, `glyphs.js`)
+## Languages (`lang.js`, `src/lang/<code>/`, `glyphs.js`)
 
-`src/js/lang.js` is the core (encoding, font slots, `t()`, `set()`, `apply()`); the texts are one file per
-language, `src/lang/<code>.js`, each calling `Lang.register(code, {order, name, ..., engine})` (`order`:
-place in `Lang.codes`, the Language: menu; none = last). Adding a language = just a new file there:
-`build.js` joins `src/lang/*.js` (en.js first, then alphabetically) into `public/js/langs.js` (and does
-not copy `src/lang/` itself), `server.js` serves the same join at `/js/langs.js` when it serves `src/`
-(`langBundle`, also used by the vm page tests), every page loads `/js/langs.js` right after
-`/js/lang.js`, and `require("src/js/lang.js")` in node loads every `src/lang/*.js` itself.
+`src/js/lang.js` is the core (encoding, font slots, `t()`, `set()`, `apply()`); **every text lives in
+`src/lang/<code>/`**, one folder per language: `main.js` calls `Lang.register(code, {order, name, ...,
+engine})` (`order`: place in `Lang.codes`, the Language: menu; none = last), `modes/<mode>.js` calls
+`Lang.modeTexts(mode, code, {stat, note, instr, score, ...})` (a game mode's texts, raw Unicode; the
+engine reads them as `TunnelerEngine.MODES[mode].strings[code]` - a getter on `Lang.modeData` - through
+`engine.mt`), and `en/engine.js` holds the engine's English text (`STRINGS_EN`, set as
+`TUNNELER_STRINGS_EN` before engine.js; engine.js requires it in node). No text in src/js/modes/ or
+engine.js. Adding a language = just a new folder: `build.js` joins the folders (en/ first, then
+alphabetically; in each main.js, its other files, then modes/*.js - `langFiles`, the same in server.js
+and lang.js) into `public/js/langs.js` (and does not copy `src/lang/` itself), `server.js` serves the
+same join at `/js/langs.js` when it serves `src/` (`langBundle`, also used by the vm page tests), every
+page loads `/js/langs.js` right after `/js/lang.js`, and `require("src/js/lang.js")` in node loads every
+file itself (engine.js requires lang.js in node when Lang isn't loaded yet).
 en, sk, cs, uk, ru, genz (Gen Z slang, the funny one; it replaced Pirate - a stored `pirate` falls
 back to English). `Lang.t(key, params)` returns text **encoded for the font**
 (one JS char per CP437 byte); params must be raw (unencoded) strings - use `Lang.raw(key)` for nested

@@ -23,15 +23,26 @@ function files(dir, ext) {
     .map(f => path.join(dir, f));
 }
 
-// src/lang/*.js (one file per language, docs/DESIGN-8P.md 24) -> public/js/langs.js, one script the pages
-// load after lang.js: en.js first (the fallback), then alphabetically; the language list's order comes
-// from each file's `order` (lang.js). The same join as server.js's langBundle, which serves it for src/.
+// src/lang/<code>/ (one folder per language: main.js, modes/<mode>.js, en/engine.js; docs/DESIGN-8P.md 24)
+// -> public/js/langs.js, one script the pages load after lang.js: the folder en/ first (the fallback), then
+// alphabetically; in each main.js, its other files, then modes/*.js. The language list's order comes from
+// each main.js's `order` (lang.js). The same join as server.js's langBundle (and lang.js in node).
 const LANG = path.join(SRC, "lang");
+function langFiles(dir) {
+  const byName = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+  const js = d => fs.existsSync(d) ? fs.readdirSync(d).filter(f => f.endsWith(".js")).sort(byName).map(f => path.join(d, f)) : [];
+  const out = [];
+  for (const c of fs.readdirSync(dir).filter(c => fs.statSync(path.join(dir, c)).isDirectory())
+    .sort((a, b) => (a !== "en") - (b !== "en") || byName(a, b))) {
+    const d = path.join(dir, c), main = path.join(d, "main.js");
+    if (fs.existsSync(main)) out.push(main);
+    out.push(...js(d).filter(f => f !== main), ...js(path.join(d, "modes")));
+  }
+  return out;
+}
 function langBundle() {
-  const names = fs.readdirSync(LANG).filter(f => f.endsWith(".js"))
-    .sort((a, b) => (a !== "en.js") - (b !== "en.js") || (a < b ? -1 : a > b ? 1 : 0));
-  return "// generated: src/lang/*.js joined (see build.js)\n" +
-    names.map(f => fs.readFileSync(path.join(LANG, f), "utf8")).join("\n");
+  return "// generated: src/lang/<code>/*.js joined (see build.js)\n" +
+    langFiles(LANG).map(f => fs.readFileSync(f, "utf8")).join("\n");
 }
 
 // src/js/modes/*.js (one file per game mode, docs/DESIGN-8P.md 27) -> public/js/modes.js, loaded by the game

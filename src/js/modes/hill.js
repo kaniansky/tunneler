@@ -104,32 +104,6 @@ E.registerMode("hill", {
     e.GS.back[p] = (e.GS.f || 0) + RESPAWN_FRAMES;
     return true;
   },
-  strings: {
-    en: { stat: "secs", note: "{n} secs",
-      instr: "A zone near the middle of the map is dug free at the start, its edge marked with dots. Every moment only your team's tanks are inside it counts as your team holding it; the first team to hold it for Seconds to win in all (a setting, instead of rounds to win) wins the match. Two teams inside: nobody's clock runs, so clear them out. The number beside your panel is the seconds your team has held it so far (with 120 or 180 to win: the seconds your team still needs, counting down from 99), and the statistics show your team's seconds; when the round time runs out, the longest holder wins. Destroyed tanks come back at their base after about 3 seconds - only the zone decides.",
-      score: "hill {n}/{g}s",
-    },
-    sk: { stat: "sek.", note: "{n} s",
-      instr: "Zóna pri strede mapy je na začiatku vykopaná, jej okraj značia bodky. Kým sú v nej len tanky tvojho tímu, tvoj tím ju drží; kto ju prvý udrží spolu nastavený počet sekúnd (Sekúnd na výhru, namiesto kôl), vyhráva zápas. Dva tímy vnútri: nikomu čas nebeží, tak ich vyžeň. Číslo vedľa panelu sú sekundy, koľko ju tvoj tím zatiaľ držal (pri 120 či 180 na výhru: sekundy, ktoré tvojmu tímu ešte chýbajú, od 99 dolu), aj štatistika ukazuje sekundy tvojho tímu; keď uplynie čas kola, vyhráva ten, kto ju držal najdlhšie. Zničené tanky sa po asi 3 sekundách vrátia do svojej základne - rozhoduje len zóna.",
-      score: "kopec {n}/{g} s",
-    },
-    cs: { stat: "sek.", note: "{n} s",
-      instr: "Zóna u středu mapy je na začátku vykopaná, její okraj značí tečky. Dokud jsou v ní jen tanky tvého týmu, tvůj tým ji drží; kdo ji první udrží celkem nastavený počet sekund (Sekund k výhře, místo kol), vyhrává zápas. Dva týmy uvnitř: nikomu čas neběží, tak je vyžeň. Číslo vedle panelu jsou sekundy, kolik ji tvůj tým zatím držel (při 120 či 180 k výhře: sekundy, které tvému týmu ještě chybí, od 99 dolů), i statistika ukazuje sekundy tvého týmu; když uplyne čas kola, vyhrává ten, kdo ji držel nejdéle. Zničené tanky se asi po 3 sekundách vrátí do své základny - rozhoduje jen zóna.",
-      score: "kopec {n}/{g} s",
-    },
-    uk: { stat: "сек.", note: "{n} с",
-      instr: "Зона біля центру мапи на початку розкопана, її край позначено крапками. Поки в ній лише танки твоєї команди, твоя команда її утримує; хто першим утримає її загалом задану кількість секунд (Секунд для перемоги, замість раундів), виграє матч. Дві команди всередині: нічий час не йде, тож вижени їх. Число біля панелі - скільки секунд твоя команда вже її утримала (при 120 чи 180 для перемоги: скільки секунд команді ще бракує, від 99 донизу), і статистика показує секунди твоєї команди; коли час раунду вийде, перемагає та, що утримувала найдовше. Знищені танки повертаються на свою базу приблизно за 3 секунди - вирішує лише зона.",
-      score: "пагорб {n}/{g} с",
-    },
-    ru: { stat: "сек.", note: "{n} с",
-      instr: "Зона у центра карты в начале раскопана, её край отмечен точками. Пока в ней только танки твоей команды, твоя команда её удерживает; кто первым удержит её в сумме заданное число секунд (Секунд для победы, вместо раундов), выигрывает матч. Две команды внутри: ничьё время не идёт, так что выгони их. Число рядом с панелью - сколько секунд твоя команда уже её удержала (при 120 или 180 для победы: сколько секунд команде ещё не хватает, от 99 вниз), и статистика показывает секунды твоей команды; когда время раунда выйдет, побеждает та, что удерживала дольше всех. Уничтоженные танки возвращаются на свою базу примерно через 3 секунды - решает только зона.",
-      score: "холм {n}/{g} с",
-    },
-    genz: { stat: "secs", note: "{n} secs",
-      instr: "There's a dotted circle in the middle of the map and it's literally the main character spot. Only your squad inside = your squad's clock is ticking; first squad to camp it for Seconds to win total (it replaces rounds to win) takes the whole match, no cap. Enemies in there too? Nobody's clock moves, so yeet them out. The number by your panel is your squad's seconds so far (on 120 or 180 it's a countdown of what your squad still needs, from 99 down), and the stats show your squad's seconds too; if the round timer hits zero, longest camper eats. Get wrecked? You respawn at your base in like 3 seconds - only the zone matters.",
-      score: "hill {n}/{g}s",
-    },
-  },
 
   init(e) {
     const G = e.GS, R = e.sc(24);

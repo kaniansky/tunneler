@@ -9,7 +9,7 @@ const keyOf = code => /^(Arrow|Enter|Escape|Tab|Backspace)/.test(code) ? code.re
 const assert = require("assert");
 const fs = require("fs"), path = require("path"), vm = require("vm");
 const PUB = path.join(__dirname, "..", "src");
-// a page script's source; /js/langs.js is generated (src/lang/*.js joined, as server.js serves it for src/)
+// a page script's source; /js/langs.js is generated (src/lang/<code>/*.js joined, as server.js serves it for src/)
 const { langBundle, modesBundle } = require("../server.js");
 const script = f => f.replace(/^\//, "") === "js/langs.js" ? langBundle(path.join(PUB, "lang"))
   : f.replace(/^\//, "") === "js/modes.js" ? modesBundle(path.join(PUB, "js", "modes")) : fs.readFileSync(path.join(PUB, f), "utf8");

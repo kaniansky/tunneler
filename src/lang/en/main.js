@@ -1,6 +1,8 @@
 "use strict";
-// English texts (see lang.js). One file per language: build.js joins every src/lang/*.js into
-// /js/langs.js, which the pages load right after /js/lang.js; adding a language is just a new file here.
+// English texts (see lang.js): the menus, pages and the engine's translation; the game
+// modes' texts are in modes/<mode>.js beside this file. One folder per language (src/lang/<code>/):
+// build.js joins them all into /js/langs.js, which the pages load right after /js/lang.js; adding a
+// language is just a new folder.
 // order: place in the language list (Language: on the main menu); a file without one goes last.
 Lang.register("en", {
   order: 0,

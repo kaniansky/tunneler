@@ -236,7 +236,8 @@ automatically when the page is served over HTTPS.
   lines.
 - `src/js/views.js` - what a viewer sees during play: one view screen, a grid of several, or the live
   map with scores.
-- `src/js/lang.js` (core), `src/lang/<code>.js` (one file per language, joined into `/js/langs.js`),
+- `src/js/lang.js` (core), `src/lang/<code>/` (one folder per language: `main.js`, a file per game mode in `modes/`, and
+  `en/engine.js` the engine's English text; all joined into `/js/langs.js`),
   `glyphs.js` - translations; letters the VGA font lacks are loaded from a VGA-style console font into
   unused font slots, and names and chat in the lobby are drawn in any alphabet.
 - `src/js/ai.js` - the computer tanks: deterministic, so every browser runs the same ones.

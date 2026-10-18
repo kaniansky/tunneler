@@ -261,57 +261,6 @@ E.registerMode("gold", {
   // the statistics: the gold each tank brought home in the (deciding) round; the rounds list: the winner's gold
   stat: (e, p) => e.modeScore[p] || 0,
   roundNote: (e, t) => t >= 0 && e.GS.home ? e.mt("note", { n: e.GS.home[t] || 0 }) : "",
-  strings: {
-    en: { stat: "gold", note: "{n} gold",
-      instr: "Gold nuggets lie hidden in the dirt. Drive over one to pick it up (5 at most) and bring them into " +
-        "your base or a teammate's: they count for your team. A hit makes you drop a nugget, a destroyed tank " +
-        "drops them all. One round decides the match: the first team to bring Gold to win home (a setting, " +
-        "instead of rounds to win) wins it; the last team left wins too, and when the round time runs out the " +
-        "most gold home wins. The number beside your instrument panel is the gold you carry.",
-      score: "gold {n}/{g}", scoreCarry: "gold {n}/{g} +{c}",
-    },
-    sk: { stat: "zlato", note: "{n} zlata",
-      instr: "V hline sú ukryté zlaté nugety. Prejdi cez nugetu a zober ju (najviac 5) a dovez ich do svojej " +
-        "základne alebo spoluhráčovej: rátajú sa tvojmu tímu. Zásah ťa pripraví o jednu nugetu, zničený tank " +
-        "stratí všetky. Zápas rozhodne jedno kolo: vyhrá ho tím, ktorý prvý dovezie domov nastavené zlato " +
-        "(Zlata na výhru, namiesto kôl); vyhrá aj posledný tím, ktorý zostane, a keď uplynie čas kola, vyhrá " +
-        "najviac zlata doma. Číslo vedľa prístrojového panelu je zlato, ktoré vezieš.",
-      score: "zlato {n}/{g}", scoreCarry: "zlato {n}/{g} +{c}",
-    },
-    cs: { stat: "zlato", note: "{n} zlata",
-      instr: "V hlíně jsou ukryté zlaté nugety. Přejeď přes nugetu a seber ji (nejvýš 5) a dovez je do své " +
-        "základny nebo spoluhráčovy: počítají se tvému týmu. Zásah tě připraví o jednu nugetu, zničený tank " +
-        "ztratí všechny. Zápas rozhodne jedno kolo: vyhraje ho tým, který první doveze domů nastavené zlato " +
-        "(Zlata k výhře, místo kol); vyhraje i poslední tým, který zůstane, a když uplyne čas kola, vyhraje " +
-        "nejvíc zlata doma. Číslo vedle přístrojového panelu je zlato, které vezeš.",
-      score: "zlato {n}/{g}", scoreCarry: "zlato {n}/{g} +{c}",
-    },
-    uk: { stat: "зол.", note: "{n} золота",
-      instr: "У ґрунті сховані золоті самородки. Наїдь на самородок, щоб підібрати його (не більше 5), і привези " +
-        "їх на свою базу або базу товариша: вони зараховуються твоїй команді. Влучання вибиває один самородок, " +
-        "знищений танк губить усі. Матч вирішує один раунд: перемагає команда, яка першою привезе додому задану " +
-        "кількість золота (Золота для перемоги, замість раундів); перемагає й остання команда, що лишилася, а " +
-        "коли час раунду минає - та, у кого вдома найбільше золота. Число біля панелі приладів - золото, яке ти везеш.",
-      score: "золото {n}/{g}", scoreCarry: "золото {n}/{g} +{c}",
-    },
-    ru: { stat: "зол.", note: "{n} золота",
-      instr: "В земле спрятаны золотые самородки. Наедь на самородок, чтобы подобрать его (не больше 5), и " +
-        "привези их на свою базу или базу союзника: они засчитываются твоей команде. Попадание выбивает один " +
-        "самородок, уничтоженный танк теряет все. Матч решает один раунд: побеждает команда, первой привезшая " +
-        "домой заданное количество золота (Золота для победы, вместо раундов); побеждает и последняя оставшаяся " +
-        "команда, а когда время раунда выходит - та, у кого дома больше всего золота. Число рядом с панелью " +
-        "приборов - золото, которое ты везешь.",
-      score: "золото {n}/{g}", scoreCarry: "золото {n}/{g} +{c}",
-    },
-    genz: { stat: "bling", note: "{n} bling",
-      instr: "There's gold hiding in the dirt, no cap. Roll over a nugget to yoink it (5 max, don't be greedy) and " +
-        "drop it at your base or your bestie's: it counts for the squad. Get hit and you leak a nugget, get " +
-        "wrecked and you lose the whole stash. One round, winner takes all: first squad to stack Bling to win " +
-        "at home (it replaces rounds to win) gets the W; last squad standing wins too, and when the timer hits " +
-        "zero, most bling at home wins. The number next to your dashboard is the bling you're hauling.",
-      score: "bling {n}/{g}", scoreCarry: "bling {n}/{g} +{c}",
-    },
-  },
 
   init(e) {
     buildReach(e);

@@ -1,8 +1,9 @@
 "use strict";
-// Languages: the core. The texts are in src/lang/<code>.js, one file per language, each calling
-// Lang.register(code, {...}); build.js joins them into /js/langs.js (server.js serves the same join when
-// it serves src/), which the pages load right after this file. In node, requiring this file also loads
-// every src/lang/*.js (docs/DESIGN-8P.md 24).
+// Languages: the core. Every text is in src/lang/<code>/, one folder per language: main.js
+// (Lang.register(code, {...}): the menus, pages, the engine's translation), modes/<mode>.js (a game mode's
+// texts: Lang.modeTexts(mode, code, {...})), and en/engine.js (the engine's English text, STRINGS_EN).
+// build.js joins them into /js/langs.js (server.js serves the same join when it serves src/), which the
+// pages load right after this file. In node, requiring this file also loads them (docs/DESIGN-8P.md 24).
 // Lang.t(key, params) returns a text ready to write into the emulated text screen: one JS
 // char per byte of the VGA font. The font is code page 437, which has no Slovak / Czech letters with
 // carons and no Cyrillic, so when a language is chosen its extra letters (glyphs.js, taken from the
@@ -12,6 +13,10 @@
 (function (root) {
 
 const L = {};
+// game modes' texts: MODE_TEXTS[mode][code] = {stat, note, instr, score, ...} (src/lang/<code>/modes/<mode>.js;
+// the engine reads them as TunnelerEngine.MODES[mode].strings)
+const MODE_TEXTS = {};
+function modeTexts(mode, c, texts) { (MODE_TEXTS[mode] = MODE_TEXTS[mode] || {})[c] = texts; }
 // registered language codes, in the order the Language: menu item steps through them (each file's
 // `order`, then load order); filled in place by register(), so Lang.codes stays the same array
 const CODES = [];
@@ -97,7 +102,7 @@ function set(c) {
   if (L[c]) use(c);
 }
 
-// src/lang/<code>.js: add a language (texts in the same structure as en.js). data.order places it in
+// src/lang/<code>/main.js: add a language (texts in the same structure as en/main.js). data.order places it in
 // Lang.codes (no order: after those with one, in load order). Registering the chosen language (or
 // English while the chosen one is not there) makes it current.
 function register(c, data) {
@@ -162,7 +167,7 @@ try {
 code = wanted;
 
 root.Lang = {
-  codes: CODES, get code() { return code; }, set, t, enc, apply, register, title, version,
+  codes: CODES, get code() { return code; }, set, t, enc, apply, register, title, version, modeTexts, modeData: MODE_TEXTS,
   name: c => enc(L[c].name), next: () => CODES[(CODES.indexOf(code) + 1) % CODES.length],
   raw: (key, c) => (L[c || code] || {})[key] !== undefined ? L[c || code][key] : (L.en || {})[key], data: L,
   colorKeys: COLOR_KEYS,
@@ -176,10 +181,20 @@ root.Lang = {
     ...(specs ? [t("pg.specs", { n: specs })] : [])],
 };
 
-// the language files of src/lang/ in load order: en.js first (the fallback), then alphabetically (the
-// same rule as build.js and server.js use for /js/langs.js; Lang.codes' order comes from `order`)
-function langFiles(names) {
-  return names.filter(f => f.endsWith(".js")).sort((a, b) => (a !== "en.js") - (b !== "en.js") || (a < b ? -1 : a > b ? 1 : 0));
+// node: the language files of a src/lang/ folder in load order (build.js / server.js join them into
+// /js/langs.js the same way): the folders en/ first (the fallback), then alphabetically; in each main.js,
+// its other .js files, then modes/*.js, alphabetically (Lang.codes' order comes from `order`)
+function langFiles(dir) {
+  const fs = require("fs"), path = require("path"), byName = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+  const js = d => fs.existsSync(d) ? fs.readdirSync(d).filter(f => f.endsWith(".js")).sort(byName).map(f => path.join(d, f)) : [];
+  const out = [];
+  for (const c of fs.readdirSync(dir).filter(c => fs.statSync(path.join(dir, c)).isDirectory())
+    .sort((a, b) => (a !== "en") - (b !== "en") || byName(a, b))) {
+    const d = path.join(dir, c), main = path.join(d, "main.js");
+    if (fs.existsSync(main)) out.push(main);
+    out.push(...js(d).filter(f => f !== main), ...js(path.join(d, "modes")));
+  }
+  return out;
 }
 
 // node (tests): load every language file, the same ones in the same order as /js/langs.js
@@ -187,11 +202,11 @@ if (typeof module !== "undefined" && module.exports && typeof require === "funct
   const fs = require("fs"), path = require("path");
   const dir = path.join(__dirname, "..", "lang");
   if (fs.existsSync(dir))
-    for (const f of langFiles(fs.readdirSync(dir))) {
-      const file = path.join(dir, f);
+    for (const file of langFiles(dir)) {
       delete require.cache[file];             // a fresh copy of this file registers them again
       require(file);
     }
+  root.Lang.files = langFiles;
   module.exports = root.Lang;
 }
 })(typeof window !== "undefined" ? window : globalThis);

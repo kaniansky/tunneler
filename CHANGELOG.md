@@ -14,6 +14,8 @@ a release is made by pushing a version tag (see CONTRIBUTING.md).
 - The AppImage has to be made executable once after downloading (`chmod +x`, or Properties -> Allow
   executing) - the homepage and the README say so.
 - The `.deb` no longer lists its dependencies twice.
+- Every text is now in `src/lang/<code>/`, one folder per language: `main.js`, a file per game mode in
+  `modes/` and the engine's English text in `en/engine.js` - a new language is a new folder.
 
 ## 3.1.1
 
