@@ -1,21 +1,22 @@
 "use strict";
 // Game mode "infection" (docs/DESIGN-8P.md 27; src/js/modes/infection.js) - run by test/modes-check.js.
 //   - round start: one random infected tank (team number 1), the rest healthy (team number 2), whatever
-//     the seats' teams; the mode's own 3-minute clock without a round time, the set one otherwise
+//     the seats' teams; the clock = the goal ("Survive for" minutes, default 3), any round time overridden
 //   - a healthy tank destroyed turns infected and is back at its base at once (its killer scores);
 //     an infected one is back after ~3 s, not on top of another tank
-//   - the last healthy tank destroyed: the infected win the round; time up: the healthy win it
-//   - the match: the first tank with winScore round wins
+//   - one round decides the match (winScore 1): the last healthy tank destroyed - the infected (everyone
+//     infected) win; the goal's time up - the tanks still healthy win; the round title, statistics, rounds list
 //   - the AI: the infected hunt the healthy (idle tanks all get infected, the round ends before the
 //     clock), the healthy hold their base
-//   - AI-only matches: 2 and 8 tanks, free-for-all and teams, small and large, a round time or not,
-//     the modifiers - finish, deterministic
+//   - AI-only matches: 2 and 8 tanks, free-for-all and teams, small / medium / large, the smallest and the
+//     largest goal, the modifiers - finish, deterministic
 const path = require("path");
 const H = require(path.join(__dirname, "..", "modes-harness.js"));
 const { E, check, slots, startEngine, runMatch } = H;
 const M = E.MODES.infection;
 const MaxPower = 11400;
-const OWN_TIME = Math.round(3 * 60 * 1193182 / 65536);
+const ticks = min => Math.round(min * 60 * 1193182 / 65536);
+const GOAL = E.GOALS.infection;
 const idle = e => ({ bits: new Array(e.nPlayers).fill(0), keys: [] });
 const start = (n, o) => startEngine(o && o.seed || 3, Object.assign({ slots: slots(Array.from({ length: n }, (_, i) => i + 1)),
   size: "small", winScore: 1, mode: "infection" }, o || {}));
@@ -34,9 +35,16 @@ check(!!M && M.eliminationEnds === false && M.aiAlways === true, "infection: reg
   const z = e.GS.inf.indexOf(true);
   check(e.teamNumber(z) === 1 && [1, 2, 3, 4].every(p => p === z || (e.teamNumber(p) === 2 && e.team(p) === 1)),
     "infection: the infected is team 1, every other tank team 2 (the seats' teams don't matter)");
-  check(e.roundTicks === OWN_TIME, "infection: without a round time the mode's own 3 minutes (" + e.roundTicks + " steps)");
-  const t = start(4, { roundTime: 2 });
-  check(t.roundTicks === Math.round(2 * 60 * 1193182 / 65536), "infection: a round time set is kept (2 min)");
+  check(GOAL.def === 3 && e.goal === 3 && e.roundTicks === ticks(3) && e.winScore === 1,
+    "infection: the default goal - survive 3 minutes, one round (" + e.roundTicks + " steps)");
+  const t = start(4, { roundTime: 10, goal: 2, winScore: 5 });
+  check(t.goal === 2 && t.roundTicks === ticks(2) && t.roundTime === 0 && t.winScore === 1,
+    "infection: the goal overrides a round time (2 min, not 10) and rounds to win (1)");
+  const u = start(4, { goal: 7 });
+  check(u.goal === 3 && u.roundTicks === ticks(3), "infection: a goal that isn't a choice falls back to the default");
+  t.showSettings = {};
+  const sp = t.settingsParts().join(", ");
+  check(sp.includes("survive 2 min") && !/round time|rounds to win/.test(sp), "infection: the settings show the goal only (" + sp + ")");
   // patient zero differs between rounds / seeds
   const zs = new Set();
   for (let s = 1; s <= 12; s++) zs.add(start(4, { seed: s }).GS.inf.indexOf(true));
@@ -118,101 +126,105 @@ const clearOf = (e, p) => [...Array(e.nPlayers).keys()].map(i => i + 1)
     (f.tankX[3] - f.baseX[3]) + "," + (f.tankY[3] - f.baseY[3]) + " from the middle)");
 }
 
-// ---- the end-of-match screens: each tank's own wins, the tanks with winScore wins are the winners
-{
-  const e = start(4, { winScore: 3 });
-  M.setInfected(e, [1, 2]);
-  e.wins = [0, 2, 1, 1, 1];
-  check(e.perTankWins() && e.teamName(0) === "infected" && e.teamName(1) === "healthy", "infection: the sides are named infected / healthy");
-  // the infected (1, 2) win the deciding round: tank 1 reaches 3 wins, tank 2 (2 wins) does not
-  e.killedBy[4] = 2;
-  M.setInfected(e, [1, 2, 3]);
-  e.killTankExt(4, e.tankX[4], e.tankY[4]);
-  let i = 0;
-  for (; i < 3000 && e.screen === "play"; i++) e.step(idle(e));
-  check(e.matchOver && e.wins.slice(1).join() === "3,2,2,1", "infection: the match ends when one tank has 3 wins (" + e.wins.slice(1) + ")");
-  check([1, 2, 3, 4].every(p => e.matchWinner(p) === (p === 1)), "infection: only that tank is the match winner (not its side's others)");
-  // the statistics: only BLUE's name blinks (attribute bit 7) - find the rows with the names
-  for (let k = 0; k < 3000 && e.screen !== "text"; k++) e.step({ bits: [0, 0, 0, 0], keys: e.screen === "map" ? [[32, 0x39]] : [] });
+// screen helpers: the text, the rows with blinking letters (the match winners on the statistics)
+const screenText = e => Array.from({ length: 2000 }, (_, k) => String.fromCharCode(e.vram[k * 2])).join("");
+const blinkRows = e => {
+  const v = e.vram, rows = new Set();
+  for (let r = 0; r < 25; r++) for (let c = 0; c < 80; c++) if (v[(r * 80 + c) * 2 + 1] & 128 && v[(r * 80 + c) * 2] !== 32) rows.add(r);
+  return [...rows].map(r => Array.from({ length: 80 }, (_, c) => String.fromCharCode(v[(r * 80 + c) * 2])).join(""));
+};
+// on to the statistics after the match (a key for the world map)
+const toStats = e => {
+  for (let k = 0; k < 3000 && e.screen !== "text"; k++) e.step({ bits: new Array(e.nPlayers).fill(0), keys: e.screen === "map" ? [[32, 0x39]] : [] });
   for (let k = 0; k < 50; k++) e.step(idle(e));
-  const v = e.vram, row = r => Array.from({ length: 80 }, (_, c) => String.fromCharCode(v[(r * 80 + c) * 2])).join("");
-  const blink = [];
-  for (let r = 0; r < 25; r++) for (let c = 0; c < 80; c++) if (v[(r * 80 + c) * 2 + 1] & 128 && v[(r * 80 + c) * 2] !== 32) blink.push(r);
-  const rows = [...new Set(blink)];
-  const blue = e.playerName(1);
-  check(rows.length === 1 && row(rows[0]).includes(blue) && !rows.some(r => [2, 3, 4].some(p => row(r).includes(e.playerName(p) + " "))),
-    "infection: the statistics mark only " + blue + " as a winner (blinking rows: " + rows.map(r => row(r).trim()).join(" | ") + ")");
-  const winLine = [...Array(25).keys()].map(row).find(l => l.includes((e.strings.stats.winner || "").trim()));
-  check(!winLine, "infection: no winner line - the winner blinks (" + (winLine || "").trim() + ")");
-  // the ROUNDS list: the side's name, no tank's colour
-  const lines = e.matchRoundLines(19);
-  check(lines.length >= 1 && lines[lines.length - 1].text.includes("infected") && lines[lines.length - 1].color === 7,
-    "infection: the rounds list names the winning side in gray (" + lines.map(l => l.text.trim()).join(" | ") + ")");
-}
+};
+
+// ---- the round title: the two sides (infected / healthy) with their members, the goal in the settings
 {
-  // the round title: every tank with its own wins (the free-for-all layout), not "TEAM n"
-  const e = start(4, { winScore: 3 });
-  M.setInfected(e, [1, 2]);
-  e.killedBy[3] = 1; e.killedBy[4] = 2;
-  M.setInfected(e, [1, 2, 3]);
-  e.killTankExt(4, e.tankX[4], e.tankY[4]);
+  const e = new E(3, { autoStart: true, slots: slots([1, 2, 3, 4]), size: "small", mode: "infection", extended: true, goal: 5 });
+  e.showSettings = {};
   let txt = "";
-  for (let i = 0; i < 3000 && !txt; i++) {
+  for (let i = 0; i < 20000 && e.screen !== "play"; i++) {
     e.step(idle(e));
-    if (e.screen === "text") {
-      const t = Array.from({ length: 2000 }, (_, k) => String.fromCharCode(e.vram[k * 2])).join("");
-      if (/ROUND/.test(t) && t.includes(e.playerName(4))) txt = t;
-    }
+    const t = screenText(e);
+    if (!txt && /ROUND 1/.test(t) && t.includes("healthy")) txt = t;
   }
-  check(!!txt && !/TEAM/.test(txt) && !txt.includes("infected") && [1, 2, 3, 4].every(p => txt.includes(e.playerName(p))),
-    "infection: the round title lists every tank with its own wins, no teams");
+  check(!e.perTankWins() && e.teamName(0) === "infected" && e.teamName(1) === "healthy", "infection: the sides are named infected / healthy, team wins (no per-tank wins)");
+  check(!!txt && txt.includes("infected") && !/TEAM/.test(txt) && [1, 2, 3, 4].every(p => txt.includes(e.playerName(p))) &&
+    txt.includes("survive 5 min") && !/rounds to win/.test(txt), "infection: the round title shows the two sides with every tank and the goal");
 }
 
-// ---- the last healthy tank destroyed: the infected win the round
+// ---- the last healthy tank destroyed: the infected win the round - and the match
 {
-  const e = start(3, { winScore: 3 });
+  const e = start(4);
   M.setInfected(e, [1, 2]);
   e.step(idle(e));
-  e.killedBy[3] = 2;
-  e.killTankExt(3, e.tankX[3], e.tankY[3]);
-  check(!e.GS.inf[3] && !e.alive[3] && e.endTimer >= 0, "infection: the last healthy tank destroyed stays out, the round ends");
-  check(untilRound(e, 400) && e.roundWinnerTeam === 0, "infection: ... won by the infected");
-  check(e.wins[1] === 1 && e.wins[2] === 1 && e.wins[3] === 0, "infection: every infected tank gets the round (" + e.wins.slice(1) + ")");
-  // the next round: new infection, teamWins = the best tank's wins on each side
-  for (let i = 0; i < 2000 && e.screen !== "play"; i++) e.step(idle(e));
-  check(e.screen === "play" && infCount(e) === 1, "infection: the next round starts with one infected tank again");
-  const best = t => Math.max(...e.teamMembers(t).map(p => e.wins[p]));
-  check(e.teamWins[0] === best(0) && e.teamWins[1] === best(1), "infection: each side's round wins = its best tank's (" + e.teamWins + ")");
+  e.killedBy[3] = 2; e.killTankExt(3, e.tankX[3], e.tankY[3]);
+  check(e.endTimer < 0 && e.GS.inf[3], "infection: one healthy tank left - the round goes on");
+  e.step(idle(e));
+  e.killedBy[4] = 1; e.killTankExt(4, e.tankX[4], e.tankY[4]);
+  check(!e.GS.inf[4] && !e.alive[4] && e.endTimer >= 0, "infection: the last healthy tank destroyed stays out, the round ends");
+  const r = e.round;
+  for (let i = 0; i < 400 && e.round === r; i++) e.step(idle(e));
+  check(e.round !== r && e.roundWinnerTeam === 0 && !e.timedOut && e.matchOver, "infection: ... the infected win it, and the match");
+  check(e.wins.slice(1).join() === "1,1,1,0" && e.teamWins[0] === 1 && e.teamWins[1] === 0,
+    "infection: patient zero and every tank it turned get the win, the last healthy one nothing (" + e.wins.slice(1) + ")");
+  check([1, 2, 3, 4].every(p => e.matchWinner(p) === (p !== 4)), "infection: the match winners = the infected side");
+  check(e.modeScore[1] === 1 && e.modeScore[2] === 1 && M.stat(e, 1) === 1, "infection: infections counted for the statistics");
+  const lines = e.matchRoundLines(19);
+  check(lines.length === 1 && lines[0].text.includes("infected") && /\d:\d\d$/.test(lines[0].text), "infection: the rounds list - one round, won by the infected, its length (" + lines.map(l => l.text.trim()).join(" | ") + ")");
+  toStats(e);
+  const b = blinkRows(e);
+  check(b.length === 3 && [1, 2, 3].every(p => b.some(l => l.includes(e.playerName(p)))) && !b.some(l => l.includes(e.playerName(4) + " ")),
+    "infection: the statistics blink the 3 infected tanks, not the last healthy one (" + b.map(l => l.trim()).join(" | ") + ")");
 }
 
-// ---- time up: the healthy win (own 3 minutes; a round time set)
-for (const rt of [0, 2]) {
-  const e = start(3, { roundTime: rt, winScore: 1 });
+// ---- the goal's time up: the tanks still healthy win the round and the match (two goal values; a round
+// time set is ignored)
+for (const [goal, n] of [[1, 3], [2, 4]]) {
+  const e = start(n, { goal, roundTime: 10 });
   M.setInfected(e, [2]);
   let frames = 0;
   const r = e.round;
-  for (; frames < 6000 && e.round === r; frames++) e.step(idle(e));
-  const want = rt ? Math.round(rt * 60 * 1193182 / 65536) : OWN_TIME;
-  check(e.round !== r && e.roundWinnerTeam === 1 && e.timedOut, "infection: time up (" + (rt ? rt + " min" : "own 3 min") + ") - the healthy win");
-  check(e.wins[1] === 1 && e.wins[3] === 1 && e.wins[2] === 0, "infection: ... every healthy tank gets the round, the infected nothing (" + e.wins.slice(1) + ")");
-  check(frames > want && frames < want + 200, "infection: ... at the time limit (" + frames + " frames, limit " + want + ")");
+  for (; frames < 20000 && e.round === r; frames++) e.step(idle(e));
+  const want = ticks(goal);
+  check(e.round !== r && e.roundWinnerTeam === 1 && e.timedOut && e.matchOver, "infection: survive " + goal + " min - time up, the healthy win the match");
+  check(frames > want && frames < want + 200, "infection: ... at the goal's time (" + frames + " frames, goal " + want + ", the 10 min round time ignored)");
+  check(e.wins[2] === 0 && [1, 3].every(p => e.wins[p] === 1) && [1, 2, 3].every(p => e.matchWinner(p) === (p !== 2)),
+    "infection: ... the healthy tanks are the winners, the infected one isn't (" + e.wins.slice(1) + ")");
+  const lines = e.matchRoundLines(19).map(l => l.text);
+  check(lines.length === 1 && lines[0].includes("healthy") && lines[0].endsWith(" " + (n - 1) + " left") && !/\d:\d\d/.test(lines[0]),
+    "infection: ... the rounds list shows the tanks still healthy, not the round's length (" + lines.join(" | ") + ")");
+}
+{
+  // a tank turned during the round is on the losing side
+  const e = start(4, { goal: 1 });
+  M.setInfected(e, [1]);
+  e.step(idle(e));
+  e.killedBy[2] = 1; e.killTankExt(2, e.tankX[2], e.tankY[2]);
+  for (let i = 0; i < 20000 && !e.matchOver; i++) e.step(idle(e));
+  check(e.matchOver && e.roundWinnerTeam === 1 && e.wins.slice(1).join() === "0,0,1,1", "infection: time up - only the tanks still healthy win (" + e.wins.slice(1) + ")");
+  toStats(e);
+  const b = blinkRows(e);
+  check(b.length === 2 && [3, 4].every(p => b.some(l => l.includes(e.playerName(p)))), "infection: the statistics blink the 2 survivors (" + b.map(l => l.trim()).join(" | ") + ")");
 }
 
 // ---- the AI: infected hunt, healthy hold their base
 for (const [n, size, lv] of [[4, "small", "expert"], [4, "small", "normal"], [3, "medium", "hard"]]) {
   let forced = false;
   const levels = [lv].concat(new Array(n - 1).fill(null));
-  const r = runMatch({ mode: "infection", slots: slots(Array.from({ length: n }, (_, i) => i + 1)), levels, seed: 9, size, winScore: 1, maxFrames: 20000,
+  const r = runMatch({ mode: "infection", slots: slots(Array.from({ length: n }, (_, i) => i + 1)), levels, seed: 9, size, maxFrames: 20000,
+    mods: { goal: 10 },
     onFrame: e => { if (!forced && e.screen === "play" && e.GS.inf) { M.setInfected(e, [1]); forced = true; } } });
   const e = r.engine;
-  check(r.finished && r.rounds[0].winnerTeam === 0 && !e.timedOut,
+  check(r.finished && r.rounds.length === 1 && r.rounds[0].winnerTeam === 0 && !e.timedOut,
     "infection AI (" + lv + ", " + size + "): an infected computer tank infects every idle tank before the clock (" + r.playFrames + " play frames)");
   check(e.modeScore[1] === n - 1, "infection AI (" + lv + ", " + size + "): ... " + e.modeScore[1] + " of " + (n - 1) + " infected by it");
 }
 {
   // a healthy computer tank stays at its base (the idle infected one is far away)
   let home = 0, play = 0, forced = false;
-  runMatch({ mode: "infection", slots: slots([1, 2]), levels: [null, "hard"], seed: 4, size: "small", winScore: 1, maxFrames: 1500,
+  runMatch({ mode: "infection", slots: slots([1, 2]), levels: [null, "hard"], seed: 4, size: "small", maxFrames: 1500,
     onFrame: e => {
       if (e.screen !== "play" || !e.GS.inf) return;
       if (!forced) { M.setInfected(e, [1]); forced = true; }
@@ -222,29 +234,29 @@ for (const [n, size, lv] of [[4, "small", "expert"], [4, "small", "normal"], [3,
   check(play > 1000 && home / play > 0.95, "infection AI: a healthy computer tank holds its base (" + home + " of " + play + " frames)");
 }
 
-// ---- AI-only matches: 2 / 8 tanks, free-for-all / teams, small / large, round time or not, modifiers
+// ---- AI-only matches: 2 / 8 tanks, free-for-all / teams, small / medium / large, the smallest and the
+// largest goal (a round time and rounds to win set are ignored), modifiers
 const LV = ["normal", "hard", "expert"];
+const gmin = Math.min(...GOAL.choices), gmax = Math.max(...GOAL.choices);
 const setups = [
-  { n: 2, teams: [1, 2], size: "small", rt: 0 },
-  { n: 2, teams: [1, 2], size: "large", rt: 2 },
-  { n: 8, teams: [1, 2, 3, 4, 5, 6, 7, 8], size: "small", rt: 0 },
-  { n: 8, teams: [1, 1, 1, 1, 2, 2, 2, 2], size: "small", rt: 3, ff: true },
-  { n: 8, teams: [1, 2, 3, 4, 1, 2, 3, 4], size: "large", rt: 0 },
-  { n: 4, teams: [1, 2, 1, 2], size: "medium", rt: 2, mods: { noRepair: true } },
-  { n: 5, teams: [1, 2, 3, 4, 5], size: "small", rt: 0, mods: { noRepair: true }, win: 3 },
-  // (the review's cases: a retreating infected tank kept a teammate out of its base for ~500 frames)
-  { n: 4, teams: [1, 2, 3, 4], size: "small", rt: 0, win: 3, seed: 3 },
-  { n: 8, teams: [1, 2, 3, 4, 5, 6, 7, 8], size: "medium", rt: 0, win: 3, seed: 3 },
-  { n: 3, teams: [1, 2, 3], size: "small", rt: 0, win: 3, seed: 1 },
+  { n: 2, teams: [1, 2], size: "small", goal: gmin },
+  { n: 2, teams: [1, 2], size: "large", goal: gmin, rt: 5 },
+  { n: 8, teams: [1, 2, 3, 4, 5, 6, 7, 8], size: "small", goal: gmax },
+  { n: 8, teams: [1, 1, 1, 1, 2, 2, 2, 2], size: "small", goal: gmin, ff: true },
+  { n: 4, teams: [1, 2, 1, 2], size: "medium", goal: gmin, mods: { noRepair: true } },
+  { n: 4, teams: [1, 2, 3, 4], size: "medium", goal: gmax, seed: 3 },
+  { n: 3, teams: [1, 2, 3], size: "small", goal: gmax, seed: 1 },
+  { n: 5, teams: [1, 2, 3, 4, 5], size: "small", mods: { noRepair: true } },
 ];
 for (const s of setups) {
-  const name = s.n + " tanks " + (new Set(s.teams).size === s.n ? "free-for-all" : "teams") + ", " + s.size +
-    (s.rt ? ", " + s.rt + " min" : ", no round time") + (s.ff ? ", friendly fire" : "") + (s.mods ? ", " + Object.keys(s.mods).join(" + ") : "") + ", " + (s.win || 1) + " to win";
-  const opts = { mode: "infection", slots: slots(s.teams), levels: s.teams.map((_, i) => LV[i % 3]), seed: s.seed || 21, size: s.size, winScore: s.win || 1,
-    roundTime: s.rt, friendlyFire: !!s.ff, mods: s.mods, maxFrames: 60000 };
+  const goal = s.goal || GOAL.def;
+  const name = s.n + " tanks " + (new Set(s.teams).size === s.n ? "free-for-all" : "teams") + ", " + s.size + ", survive " + goal + " min" +
+    (s.rt ? " (round time " + s.rt + " ignored)" : "") + (s.ff ? ", friendly fire" : "") + (s.mods ? ", " + Object.keys(s.mods).join(" + ") : "");
+  const opts = { mode: "infection", slots: slots(s.teams), levels: s.teams.map((_, i) => LV[i % 3]), seed: s.seed || 21, size: s.size, winScore: 3,
+    roundTime: s.rt || 0, friendlyFire: !!s.ff, mods: Object.assign({ goal }, s.mods || {}), maxFrames: ticks(goal) + 4000 };
   let bad = 0, maxRoundFrames = 0, cur = 0, maxConv = 0, maxInf = 0;
   const outSince = [], conv = [];
-  const limit = s.rt ? Math.round(s.rt * 60 * 1193182 / 65536) : OWN_TIME;
+  const limit = ticks(goal);
   const a = runMatch(Object.assign({}, opts, { onFrame: e => {
     if (e.screen === "play") { cur++; maxRoundFrames = Math.max(maxRoundFrames, cur); } else cur = 0;
     // how long a destroyed tank stays out (outside the round's end window): just infected / infected
@@ -261,12 +273,14 @@ for (const s of setups) {
     if (e.screen === "play" && e.GS.inf && (e.nTeams !== 2 || e.slots.some((x, i) => x.team !== (e.GS.inf[i + 1] ? 1 : 2)))) bad++;
   } }));
   const b = runMatch(opts);
-  const e = a.engine, w = e.wins.slice(1), ws = s.win || 1;
-  check(a.finished, "infection " + name + ": finishes (" + a.frames + " frames, rounds won by " + a.rounds.map(r => r.winnerTeam ? "healthy" : "infected").join(" ") + ")");
+  const e = a.engine, w = e.wins.slice(1);
+  const side = a.rounds.length ? a.rounds[0].winnerTeam : -2;
+  check(a.finished && a.rounds.length === 1 && e.winScore === 1 && e.goal === goal,
+    "infection " + name + ": one round, finishes (" + a.frames + " frames, won by " + (side === 1 ? "healthy" : side === 0 ? "infected" : side) + ")");
   check(a.bitsHash === b.bitsHash && a.stateHash === b.stateHash && a.frames === b.frames, "infection " + name + ": deterministic");
   check(maxConv <= 2 && maxInf <= 75, "infection " + name + ": destroyed tanks come back in time (just infected: " + maxConv + " frames, infected: " + maxInf + ")");
-  check(!bad && maxRoundFrames <= limit + 30, "infection " + name + ": two sides all along, no round past the clock (longest " + maxRoundFrames + " of " + limit + ")");
-  check(Math.max(...w) === ws && a.rounds.every(r => r.winnerTeam === 0 || r.winnerTeam === 1) &&
-    e.teamMembers(e.matchWinnerTeam()).some(p => e.wins[p] === ws) &&
-    w.every((x, i) => e.matchWinner(i + 1) === (x >= ws)), "infection " + name + ": the match goes to the first tank with " + ws + " round wins (" + w + ")");
+  check(!bad && maxRoundFrames <= limit + 30, "infection " + name + ": two sides all along, no round past the goal's clock (longest " + maxRoundFrames + " of " + limit + ")");
+  check((side === 0 || side === 1) && e.matchWinnerTeam() === side && (side === 1) === e.timedOut &&
+    w.every((x, i) => x === (e.team(i + 1) === side ? 1 : 0) && e.matchWinner(i + 1) === (x === 1)),
+    "infection " + name + ": the winning side's tanks win the match (" + w + ")");
 }
