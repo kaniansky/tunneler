@@ -147,6 +147,33 @@ for (const [size, teams, seed, goal] of [["small", [1, 2], 3], ["small", [1, 2, 
   check(e.roundWinnerTeam === e.team(1) && e.teamWins[e.team(1)] === 1, "elimination: the last team standing wins the round - and the match");
 }
 {
+  // every tank destroyed (a mutual kill): the most gold home wins the round - and the match (no drawn round
+  // that would scatter the gold anew and lose the lead); the statistics show that round's gold
+  for (const [label, kill] of [["at once", e => { e.killTankExt(1, e.tankX[1], e.tankY[1]); e.killTankExt(2, e.tankX[2], e.tankY[2]); }],
+    ["one after the other", e => { e.killTankExt(2, e.tankX[2], e.tankY[2]); for (let f = 0; f < 10; f++) idle(e); e.killTankExt(1, e.tankX[1], e.tankY[1]); }]]) {
+    const e = start(40, { goal: 5 }), S = e.GS, t1 = e.team(1), t2 = e.team(2);
+    for (let m = 0; m < 4; m++) { S.gx.pop(); S.gy.pop(); S.noP.pop(); S.noT.pop(); S.kn.pop(); }
+    S.carry[1] = 3; e.tankX[1] = e.baseX[1]; e.tankY[1] = e.baseY[1]; idle(e);
+    S.carry[2] = 1; e.tankX[2] = e.baseX[2]; e.tankY[2] = e.baseY[2]; idle(e);
+    check(S.home[t1] === 3 && S.home[t2] === 1 && e.endTimer < 0, "mutual kill (" + label + "): 3 : 1 home before (" + S.home.join(":") + ")");
+    kill(e);
+    check(e.endTimer >= 0 && e.modeWinner === t1, "mutual kill (" + label + "): the most gold home wins the round (" + e.modeWinner + ")");
+    let sawMap = false;
+    for (let f = 0; f < 600 && !sawMap; f++) { idle(e); if (e.screen === "map") sawMap = true; }
+    check(sawMap && e.round === 2 && e.teamWins[t1] === 1 && e.roundWinnerTeam === t1, "mutual kill (" + label + "): ... and the match, no second round");
+    check(G.stat(e, 1) === 3 && G.stat(e, 2) === 1, "mutual kill: the statistics show the round's gold (" + G.stat(e, 1) + ", " + G.stat(e, 2) + ")");
+  }
+  // a tie at the top when all are destroyed: nobody (a drawn round), and the next round's statistics
+  // start from 0 (the drawn round's gold doesn't count)
+  const e = start(41, { goal: 5 }), S = e.GS, r0 = e.round;
+  S.home[0] = 2; S.home[1] = 2; e.modeScore[1] = 2; e.modeScore[2] = 2;
+  e.killTankExt(1, e.tankX[1], e.tankY[1]); e.killTankExt(2, e.tankX[2], e.tankY[2]);
+  check(e.modeWinner === -1, "all destroyed with a tie at the top: nobody wins the round");
+  for (let f = 0; f < 2000 && !(e.round > r0 && e.screen === "play"); f++) idle(e);
+  check(e.round > r0 && e.teamWins.every(w => w === 0) && G.stat(e, 1) === 0 && G.stat(e, 2) === 0,
+    "... the next round's statistics start from 0 (" + G.stat(e, 1) + ", " + G.stat(e, 2) + ")");
+}
+{
   // all the gold home: the most wins, a tie at the top: nobody
   const e = start(24, { slots: slots([1, 2, 3]) }), S = e.GS;
   const set = home => { S.gx = []; S.gy = []; S.noP = []; S.noT = []; S.kn = []; S.carry.fill(0); S.home = home; S.total = home.reduce((a, b) => a + b, 0); e.endTimer = -1; e.modeWinner = undefined; G._checkEnd(e); };

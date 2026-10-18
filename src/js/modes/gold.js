@@ -10,7 +10,8 @@
 // can't pick that one up again for a moment), a destroyed tank drops all it carries.
 // The round ends when a team has the goal home, when the leader can't be caught any more (no other team
 // could even draw level with all the gold left), when all of it is home (the most wins, a tie: nobody), by
-// elimination as usual, or at the round time (the most gold home wins, a tie: nobody).
+// elimination as usual (every tank destroyed: the most gold home wins, a tie: nobody), or at the round
+// time (the most gold home wins, a tie: nobody).
 //
 // State (e.GS, reset at every match start; everything a function of the engine's history):
 //   reach, cw, ch  the 8 px cells a tank can get to (rock never changes: built once per match)
@@ -23,7 +24,8 @@
 //   total          all the gold of the round (lying + carried + home)
 //   sh[p]          tank p's shield after the last frame hook (a lower one now = hit)
 //   f              play frames of this round
-// e.modeScore[p]: the gold tank p brought home in the whole match.
+// e.modeScore[p]: the gold tank p brought home this round (reset every round: a drawn round's gold doesn't
+// count, so the statistics show the deciding round as the game did).
 (function (root) {
 const E = root.TunnelerEngine || require("../engine.js");
 
@@ -256,7 +258,7 @@ function prospect(ai, e, mx, my) {
 
 // ---------------------------------------------------------------- the mode
 E.registerMode("gold", {
-  // the statistics: the gold each tank brought home in the match; the rounds list: the winner's gold
+  // the statistics: the gold each tank brought home in the (deciding) round; the rounds list: the winner's gold
   stat: (e, p) => e.modeScore[p] || 0,
   roundNote: (e, t) => t >= 0 && e.GS.home ? e.mt("note", { n: e.GS.home[t] || 0 }) : "",
   strings: {
@@ -272,7 +274,7 @@ E.registerMode("gold", {
       instr: "V hline sú ukryté zlaté nugety. Prejdi cez nugetu a zober ju (najviac 5) a dovez ich do svojej " +
         "základne alebo spoluhráčovej: rátajú sa tvojmu tímu. Zásah ťa pripraví o jednu nugetu, zničený tank " +
         "stratí všetky. Zápas rozhodne jedno kolo: vyhrá ho tím, ktorý prvý dovezie domov nastavené zlato " +
-        "(Zlato na výhru, namiesto kôl); vyhrá aj posledný tím, ktorý zostane, a keď uplynie čas kola, vyhrá " +
+        "(Zlata na výhru, namiesto kôl); vyhrá aj posledný tím, ktorý zostane, a keď uplynie čas kola, vyhrá " +
         "najviac zlata doma. Číslo vedľa prístrojového panelu je zlato, ktoré vezieš.",
       score: "zlato {n}/{g}", scoreCarry: "zlato {n}/{g} +{c}",
     },
@@ -280,11 +282,11 @@ E.registerMode("gold", {
       instr: "V hlíně jsou ukryté zlaté nugety. Přejeď přes nugetu a seber ji (nejvýš 5) a dovez je do své " +
         "základny nebo spoluhráčovy: počítají se tvému týmu. Zásah tě připraví o jednu nugetu, zničený tank " +
         "ztratí všechny. Zápas rozhodne jedno kolo: vyhraje ho tým, který první doveze domů nastavené zlato " +
-        "(Zlato k výhře, místo kol); vyhraje i poslední tým, který zůstane, a když uplyne čas kola, vyhraje " +
+        "(Zlata k výhře, místo kol); vyhraje i poslední tým, který zůstane, a když uplyne čas kola, vyhraje " +
         "nejvíc zlata doma. Číslo vedle přístrojového panelu je zlato, které vezeš.",
       score: "zlato {n}/{g}", scoreCarry: "zlato {n}/{g} +{c}",
     },
-    uk: { stat: "злото", note: "{n} злота",
+    uk: { stat: "зол.", note: "{n} золота",
       instr: "У ґрунті сховані золоті самородки. Наїдь на самородок, щоб підібрати його (не більше 5), і привези " +
         "їх на свою базу або базу товариша: вони зараховуються твоїй команді. Влучання вибиває один самородок, " +
         "знищений танк губить усі. Матч вирішує один раунд: перемагає команда, яка першою привезе додому задану " +
@@ -292,7 +294,7 @@ E.registerMode("gold", {
         "коли час раунду минає - та, у кого вдома найбільше золота. Число біля панелі приладів - золото, яке ти везеш.",
       score: "золото {n}/{g}", scoreCarry: "золото {n}/{g} +{c}",
     },
-    ru: { stat: "злото", note: "{n} злота",
+    ru: { stat: "зол.", note: "{n} золота",
       instr: "В земле спрятаны золотые самородки. Наедь на самородок, чтобы подобрать его (не больше 5), и " +
         "привези их на свою базу или базу союзника: они засчитываются твоей команде. Попадание выбивает один " +
         "самородок, уничтоженный танк теряет все. Матч решает один раунд: побеждает команда, первой привезшая " +
@@ -322,6 +324,7 @@ E.registerMode("gold", {
     S.home = new Array(e.nTeams).fill(0);
     S.sh = e.shield.slice();
     S.f = 0;
+    e.modeScore.fill(0);
     scatter(e);
   },
 
@@ -373,6 +376,12 @@ E.registerMode("gold", {
       drop(e, tx + DX[a] * 5, ty + DY[a] * 5, tx, ty, 0);
     }
     S.carry[p] = 0;
+    // every tank destroyed (both at once, or the last one of the last team): the gold decides - the most
+    // home wins (a tie: nobody), instead of a drawn round that would scatter the gold anew
+    if (e.modeWinner === undefined && e.sidesLeft() === 0) {
+      e.modeWinner = mostGold(e);
+      if (e.endTimer < 0) e.endTimer = 25;
+    }
     return false;
   },
 
