@@ -516,7 +516,7 @@ DosUI.prototype.askName = function (done, back) {
     if (!v) { err = true; this.sel = 0; return draw(); }
     done(v);
   };
-  const draw = () => this.show({
+  const draw = () => (form.placeholder = T("ph.name"), this.show({
     lines: [{ row: 2, text: T("name.title"), color: 12 }, { row: 6, text: T("name.i1"), color: 3 }, { row: 7, text: T("name.i2"), color: 3 }],
     box: { y: 10 }, infoRow: 17, back,
     items: [{ key: "name", label: T("name.label"), input: form, align: "left",
@@ -524,7 +524,7 @@ DosUI.prototype.askName = function (done, back) {
     { key: "gap", label: "", disabled: true },
     { key: "go", label: T("name.go"), info: [T("name.i3")], go: ok },
     { key: "back", label: T("back.main"), info: [T("back.main.i")], go: back }],
-  }, true);
+  }, true));
   draw();
 };
 

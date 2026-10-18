@@ -3,6 +3,12 @@
 All notable changes to Tunneler Online. Versions follow [semantic versioning](https://semver.org/);
 a release is made by pushing a version tag (see CONTRIBUTING.md).
 
+## Unreleased
+
+- Every text input shows a gray placeholder while it's empty: your name, the game's name, Join by link,
+  Say.
+- Online game lobby: **View** is the Game box's first item, a blank row below it.
+
 ## 3.1.3
 
 - The Linux AppImage is now `tunneler-online-linux-x64.AppImage`, without a version in its name: an update

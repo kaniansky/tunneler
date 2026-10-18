@@ -160,6 +160,7 @@
   const nameForm = { value: DosUI.playerName(), max: DosUI.NAME_MAX, width: DosUI.NAME_MAX };
   const saveName = () => { nameForm.value = DosUI.setPlayerName(nameForm.value); };
   function settings(keep) {
+    nameForm.placeholder = T("ph.name");
     const leave = () => { saveName(); if (window.Endpoint && Endpoint.isApp) saveServer(); main(6); };
     ui.show({
       lines: screenTitle("set.title"), box: { y: 10 }, sel: 1, infoRow: 20,

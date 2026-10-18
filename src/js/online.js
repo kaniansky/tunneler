@@ -423,6 +423,10 @@
 
   function actionItems() {
     const items = [], seat = mySeat(), ready = isReady(), locked = !!st.match;
+    // what this player sees during play, up to the room's maximum (display only): first, a blank row below
+    if (viewChoices().length > 1) items.push({ key: "view", label: T("pg.view") + T("view." + viewChoice()),
+      info: [T("pg.view.i1"), T("pg.view.i2", { max: Lang.raw("view." + visibleNow()) })], go: () => setView(1), change: setView },
+      { key: "gapView", label: "", disabled: true });
     if (locked) items.push({ key: "busy", label: T("pg.busy"), disabled: true });
     else if (isHost()) {
       const why = st.cant;
@@ -438,9 +442,6 @@
     // (grayed while there is nobody to remove - the box doesn't jump)
     if (isHost() && !locked) items.push({ key: "kick", label: T("pg.kick"), disabled: !kickTargets().length,
       info: [T("pg.kick.i1"), T("pg.kick.i2")], go: () => drawKick(false) });
-    // what this player sees during play, up to the room's maximum (display only)
-    if (viewChoices().length > 1) items.push({ key: "view", label: T("pg.view") + T("view." + viewChoice()),
-      info: [T("pg.view.i1"), T("pg.view.i2", { max: Lang.raw("view." + visibleNow()) })], go: () => setView(1), change: setView });
     // the invite link (the server's own page: also from the desktop app); "Link copied" for 3 s
     const invite = Endpoint.web(Links.invite(roomId)), copy = () => copyLink(invite);
     items.push({ key: "gap", label: "", disabled: true });
@@ -470,6 +471,7 @@
     const chatX = actW + 4, chatTop = Math.max(12, sets.length + 3);
     chatPanel(lines, text, chatX, chatTop, 80, 21, 1);   // (its last row: the input below)
     chatForm.width = Math.max(8, 80 - chatX - 1 - W(T("pg.say")) - 2);
+    chatForm.placeholder = T("ph.say");
     const say = [{ key: "say", label: T("pg.say"), input: chatForm, align: "left", info: [T("pg.say.i")], go: sendChat }];
     const boxes = [{ x: 1, y: 1, w: seatW, title, items: seats },
       { x: 79 - setW, y: 1, w: setW, title: T("box.settings"), items: sets },

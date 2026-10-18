@@ -116,6 +116,7 @@
   // ------------------------------------------------------------ create a game
   function create(keep) {
     view = "create";
+    form.placeholder = T("ph.game");
     const yn = v => T(v ? "yes" : "no");
     const flip = k => () => { form[k] = !form[k]; form.error = ""; create(true); };
     const items = [
@@ -155,6 +156,7 @@
   const linkForm = { value: "", max: 300, width: 56, error: false };
   function joinLink(keep) {
     view = "link";
+    linkForm.placeholder = T("ph.link");
     const go = () => {
       const l = Links.parse(linkForm.value);
       if (!l) { linkForm.error = true; ui.sel = 0; return joinLink(true); }

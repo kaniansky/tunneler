@@ -18,6 +18,12 @@ const fits = (c, what, s, n) => { if (vis(s) > n) fail(c, what + " too long (" +
 for (const c of Lang.codes) {
   Lang.set(c);
   const D = Lang.data[c];
+  // every input's placeholder (shown while it's empty) fits the input: name 12 (DosUI.NAME_MAX), the
+  // game's name 18 (lobby.js), Say 16 (online.js: at least that wide), Join by link 56
+  for (const [k, n] of [["ph.name", 12], ["ph.game", 18], ["ph.say", 16], ["ph.link", 56]]) {
+    if (typeof D[k] !== "string" || !D[k]) fail(c, k + " missing");
+    else fits(c, k, Lang.t(k), n);
+  }
   // every character must be encodable (no "?" that was not in the source)
   const walk = (o, k) => {
     if (typeof o === "string") {
