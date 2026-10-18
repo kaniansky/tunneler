@@ -8,6 +8,9 @@ a release is made by pushing a version tag (see CONTRIBUTING.md).
 - Every text input shows a gray placeholder while it's empty: your name, the game's name, Join by link,
   Say.
 - Online game lobby: **View** is the Game box's first item, a blank row below it.
+- Online game lobby: the Settings box is as wide as the chat below it.
+- Skirmish: the Settings box is as wide as its widest possible value, so it no longer jumps when a
+  setting (e.g. After death) changes.
 
 ## 3.1.3
 

@@ -474,7 +474,7 @@
     chatForm.placeholder = T("ph.say");
     const say = [{ key: "say", label: T("pg.say"), input: chatForm, align: "left", info: [T("pg.say.i")], go: sendChat }];
     const boxes = [{ x: 1, y: 1, w: seatW, title, items: seats },
-      { x: 79 - setW, y: 1, w: setW, title: T("box.settings"), items: sets },
+      { x: 79 - Math.max(setW, 79 - chatX), y: 1, w: Math.max(setW, 79 - chatX), title: T("box.settings"), items: sets },   // (as wide as the chat below it)
       { x: 1, y: 12, w: actW, title: T("box.game"), items: acts },
       { x: chatX, y: 19, w: 80 - chatX - 1, items: say, joinTop: true }];   // (row 20, the panel's border below)
     const all = [].concat(seats, sets, acts, say), enabled = it => !it.static && !it.disabled;

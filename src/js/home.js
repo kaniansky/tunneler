@@ -314,7 +314,19 @@
     const selKey = typeof sel === "string" ? sel : "play";
     // (the slots and the settings side by side, 3 columns apart, centred together; the Game box centred
     // below them, the info under it)
-    const seatW = DosUI.boxWidth(slotItems), setW = DosUI.boxWidth(sets), actW = DosUI.boxWidth(acts);
+    // (the settings box as wide as its widest possible value, so it doesn't jump when one changes)
+    const noop = () => {}, labels = [
+      ...MODE_LIST.map(m => T("lc.mode") + T("gm." + m)),
+      ...SIZES.map(v => sizeItem(v, noop).label),
+      ...Object.keys(GOALS).flatMap(m => GOALS[m].choices.map(n => T("goal." + m) + (m === "infection" ? T("time.n", { n }) : n))),
+      ...[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => winItem(n, noop).label),
+      ...TIMES.map(v => timeItem(v, noop).label),
+      T("lc.ff") + T("lc.on"), T("lc.ff") + T("lc.off"),
+      ...VIEWS.map(v => T("cpu.view") + T("view." + v)),
+      ...TunnelerEngine.AFTER_DEATH.map(w => T("lc.watch") + T("watch." + w)),
+      T("mod.noRepair") + onOff(true), T("mod.noRepair") + onOff(false)];
+    const seatW = DosUI.boxWidth(slotItems), actW = DosUI.boxWidth(acts),
+      setW = Math.max(DosUI.boxWidth(sets), DosUI.boxWidth(labels.map(label => ({ label, align: "left" }))));
     const x0 = Math.max(1, 1 + ((80 - (seatW + 2 + 3 + setW + 2)) >> 1));
     // (the Game box one row below the taller of the two boxes above it)
     const gameY = Math.max(slotItems.length, sets.length) + 4;
