@@ -39,9 +39,16 @@ const ok = msg => { n++; console.log("  ok  " + msg); };
   put("tunneler-online-2.1.0-macos-x64.app.tar.gz.sig", "orphan");          // (its package is missing)
   const m = manifest(dir, "v2.1.0", "o/r", new Date("2026-10-18T10:00:00.123Z"));
   assert.strictEqual(m.version, "2.1.0"); assert.strictEqual(m.pub_date, "2026-10-18T10:00:00Z");
-  assert.deepStrictEqual(Object.keys(m.platforms).sort(), ["darwin-aarch64", "linux-x86_64", "windows-x86_64"]);
+  assert.deepStrictEqual(Object.keys(m.platforms).sort(), ["darwin-aarch64", "linux-x86_64", "linux-x86_64-appimage", "windows-x86_64"]);
   assert.deepStrictEqual(m.platforms["windows-x86_64"],
     { signature: "SIGW", url: "https://github.com/o/r/releases/download/v2.1.0/tunneler-online-2.1.0-windows-x64-setup.exe" });
+  // deb / rpm: their own entries (an app installed from a package updates with the same kind)
+  put("tunneler-online-2.1.0_amd64.deb", "x"); put("tunneler-online-2.1.0_amd64.deb.sig", "SIGD");
+  put("tunneler-online-2.1.0.x86_64.rpm", "x"); put("tunneler-online-2.1.0.x86_64.rpm.sig", "SIGR");
+  const pk = manifest(dir, "v2.1.0", "o/r");
+  assert.strictEqual(pk.platforms["linux-x86_64-deb"].url.split("/").pop(), "tunneler-online-2.1.0_amd64.deb");
+  assert.strictEqual(pk.platforms["linux-x86_64-rpm"].signature, "SIGR");
+  assert.strictEqual(pk.platforms["linux-x86_64"].url.split("/").pop(), "tunneler-online-2.1.0-linux-x64.AppImage", "plain linux = the AppImage");
   // (updater-manifest.yml: only the .sig files here, the packages named by the release's file list)
   fs.rmSync(path.join(dir, "tunneler-online-2.1.0-linux-x64.AppImage"));
   assert(!manifest(dir, "v2.1.0", "o/r").platforms["linux-x86_64"], "no package, no list: left out");

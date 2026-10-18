@@ -102,16 +102,16 @@
     settings(true);
   }
 
-  // desktop app: a newer release (src-tauri/src/main.rs). update = {version, install, busy, error}:
-  // install = the app can replace itself (download, install, restart), else the item opens the
-  // download page in the browser
+  // desktop app: a newer release (src-tauri/src/main.rs). update = {version, install, admin, busy, error}:
+  // install = the app can replace itself (download, install, restart; admin = a deb / rpm package: the
+  // system asks for the admin password), else the item opens the download page in the browser
   let update = null;
   const tauri = () => window.__TAURI__ && window.__TAURI__.core;
   const onMain = () => ui.spec && ui.spec.home;
   if (window.Endpoint && Endpoint.isApp && tauri()) {
     tauri().invoke("update_check").then(u => {
       if (!u || !u.version) return;
-      update = { version: String(u.version), install: !!u.install };
+      update = { version: String(u.version), install: !!u.install, admin: !!u.admin };
       if (onMain()) main(0, true);
     }).catch(() => { /* offline, no release yet */ });
   }
@@ -130,7 +130,7 @@
     { key: "update", label: T(update.busy ? "home.update.busy" : update.install ? "home.update" : "home.update.new", { v: update.version }),
       attr: 0x0E, go: runUpdate,
       info: update.error ? [{ text: Lang.enc(update.error), color: 12 }]
-        : [T(update.install ? "home.update.i" : "home.update.new.i", { v: update.version })] },
+        : [T(!update.install ? "home.update.new.i" : update.admin ? "home.update.admin.i" : "home.update.i", { v: update.version })] },
   ];
 
   function main(sel, keep) {

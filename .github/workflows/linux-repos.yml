@@ -1,0 +1,79 @@
+name: Linux repositories
+
+# The apt and dnf repositories at https://kaniansky.com/tunneler/apt and /rpm (tools/linux-repos.sh):
+# a release's .deb and .rpm, signed with the repository key, uploaded by FTPS next to the homepage.
+# release.yml runs it after the desktop app is attached; run it by hand (Actions -> Linux repositories
+# -> Run workflow) to publish a release's packages again. Needs the secrets REPO_GPG_PRIVATE_KEY and
+# SITE_FTP_USER / SITE_FTP_PASSWORD (optionally SITE_FTP_HOST); skipped without them. Only the newest
+# packages stay on the server.
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: "release tag (e.g. v3.1.2)"
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "release tag (e.g. v3.1.2)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  repos:
+    runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ inputs.tag }}
+      REPO: ${{ github.repository }}
+      GPG_KEY: ${{ secrets.REPO_GPG_PRIVATE_KEY }}
+      FTP_HOST: ${{ secrets.SITE_FTP_HOST || 'ing.r4.websupport.sk' }}
+      FTP_USER: ${{ secrets.SITE_FTP_USER }}
+      FTP_PASSWORD: ${{ secrets.SITE_FTP_PASSWORD }}
+      BASE: https://kaniansky.com/tunneler
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Secrets present?
+        id: check
+        run: |
+          if [ -n "$GPG_KEY" ] && [ -n "$FTP_USER" ] && [ -n "$FTP_PASSWORD" ]; then echo "ok=1" >> "$GITHUB_OUTPUT"
+          else echo "no REPO_GPG_PRIVATE_KEY / SITE_FTP_* secrets: the repositories are not published"; fi
+
+      - name: Build the repositories
+        if: steps.check.outputs.ok == '1'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -qq -y dpkg-dev apt-utils createrepo-c rpm
+          export GNUPGHOME="$RUNNER_TEMP/gnupg"; mkdir -m 700 "$GNUPGHOME"
+          printf '%s\n' "$GPG_KEY" | gpg --batch --import
+          mkdir pkgs
+          gh release download "$TAG" -R "$REPO" -D pkgs -p '*.deb' -p '*.rpm'
+          tools/linux-repos.sh pkgs out "$BASE"
+          rm -rf "$GNUPGHOME"
+
+      - name: Upload to kaniansky.com/tunneler
+        if: steps.check.outputs.ok == '1'
+        run: |
+          umask 077
+          printf 'user = "%s:%s"\n' "$FTP_USER" "$FTP_PASSWORD" > "$RUNNER_TEMP/ftp.cfg"
+          url="ftp://$FTP_HOST/web/tunneler"
+          put() { curl -sS --ssl-reqd --ftp-create-dirs -K "$RUNNER_TEMP/ftp.cfg" -T "out/$1" "$url/$1"; echo "uploaded $1"; }
+          # the packages first, then the indexes that list them, then the old files nobody lists any more
+          cd out
+          for f in apt/*.deb rpm/*.rpm; do put "$f"; done
+          for f in rpm/repodata/*; do case "$f" in */repomd.xml*) ;; *) put "$f" ;; esac; done
+          for f in tunneler-online.gpg tunneler-online.asc rpm/tunneler-online.repo apt/Packages apt/Packages.gz apt/Release apt/Release.gpg apt/InRelease rpm/repodata/repomd.xml rpm/repodata/repomd.xml.asc; do put "$f"; done
+          for d in apt rpm rpm/repodata; do
+            curl -sS --ssl-reqd -K "$RUNNER_TEMP/ftp.cfg" --list-only "$url/$d/" | tr -d '\r' | while read -r f; do
+              case "$f" in ""|.|..|repodata) continue ;; esac
+              [ -e "$d/$f" ] && continue
+              curl -sS --ssl-reqd -K "$RUNNER_TEMP/ftp.cfg" -o /dev/null -Q "DELE web/tunneler/$d/$f" "ftp://$FTP_HOST/" && echo "removed $d/$f"
+            done
+          done
+          rm -f "$RUNNER_TEMP/ftp.cfg"

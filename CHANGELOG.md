@@ -3,6 +3,18 @@
 All notable changes to Tunneler Online. Versions follow [semantic versioning](https://semver.org/);
 a release is made by pushing a version tag (see CONTRIBUTING.md).
 
+## 3.1.2
+
+**Linux updates**
+
+- The desktop app installed from the `.deb` or `.rpm` updates itself too: **Update to version X** downloads
+  the new package and installs it after asking for the admin password (`dpkg` / `rpm` need it).
+- **apt and dnf repositories** at https://kaniansky.com/tunneler/apt and /rpm (signed): add one once and
+  the game updates with the rest of the system - see the homepage or the README.
+- The AppImage has to be made executable once after downloading (`chmod +x`, or Properties -> Allow
+  executing) - the homepage and the README say so.
+- The `.deb` no longer lists its dependencies twice.
+
 ## 3.1.1
 
 - Online game lobby: the **View** item in the Game box is centered like the other items.

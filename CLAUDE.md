@@ -581,3 +581,12 @@ none, i.e. a page from before 2.0 - is refused (POST 409 `{code:
   label columns in their own colors (lobby.js `rowSpans`: name 15, mode 11, players 10, AI / watching 7,
   state 14 lobby / 13 match; another version's row attr 8). The games list box (y 3) shows up to `ROWS`
   = 9 games, its info right below (`bottom + 2`). Main menu box y 9.
+- Linux updates (3.1.2): a deb / rpm install updates in the app too - main.rs `system_package()` (bundle
+  type Deb / Rpm from `tauri::utils::platform::bundle_type()`, binary under /usr) -> `update_check`'s
+  `admin` (home.js info `home.update.admin.i`); the updater runs `dpkg -i` / `rpm -U` via pkexec / sudo.
+  latest.json: `linux-x86_64-deb` / `-rpm` / `-appimage` + `linux-x86_64` (= AppImage); app-build.yml
+  attaches the .deb / .rpm .sig files. apt / dnf repositories: `tools/linux-repos.sh` (flat apt repo with
+  signed Release / InRelease, createrepo_c + signed repomd.xml, rpmsign'd .rpm, tunneler-online.repo, the
+  public key as .gpg / .asc) built and uploaded by FTPS to web/tunneler/apt, /rpm by
+  `.github/workflows/linux-repos.yml` (release.yml job `repos`, or by hand per tag); secrets
+  REPO_GPG_PRIVATE_KEY (key 5E12365F...99223B06, copies in ~/.tauri and kaniansky/private) + SITE_FTP_*.

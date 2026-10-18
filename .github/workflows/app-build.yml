@@ -5,12 +5,13 @@ name: Desktop app
 #   Windows  tunneler-online-<v>-windows-x64.exe    portable, needs WebView2 (built into Windows 10/11)
 #            ...-windows-x64-setup.exe               installer (the installed app updates itself)
 #   Linux    tunneler-online-<v>-linux-x64.tar.gz   the binary, needs libwebkit2gtk-4.1
-#            ..._amd64.deb / ....x86_64.rpm          packages that pull that in
+#            ..._amd64.deb / ....x86_64.rpm          packages that pull that in (update with the admin
+#                                                    password, or from the apt / dnf repository: linux-repos.yml)
 #            ...-linux-x64.AppImage                  runs anywhere, updates itself
 #   macOS    tunneler-online-<v>-macos-arm64.dmg / -macos-x64.dmg  (unsigned: right click -> Open)
 # Updates (src-tauri/src/main.rs): with the repository secret TAURI_SIGNING_PRIVATE_KEY (the key whose
 # public half is in tauri.conf.json; TAURI_SIGNING_PRIVATE_KEY_PASSWORD if it has one) the setup.exe,
-# the AppImage and the macOS app (.app.tar.gz) are signed (.sig); release.yml then adds latest.json
+# the AppImage, the .deb, the .rpm and the macOS app (.app.tar.gz) are signed (.sig); release.yml then adds latest.json
 # (updater-manifest.yml), which the apps of older versions read to update themselves. Without the
 # secret everything else is built the same, just without those.
 # release.yml calls it for every release and the files are attached to that GitHub release; a push to
@@ -110,8 +111,8 @@ jobs:
               upd "$rel/bundle/nsis/*-setup.exe" "$out-setup.exe" ;;
             linux-*)
               tar -czf "dist/$out.tar.gz" -C "$rel" tunneler-online
-              cp "$rel"/bundle/deb/*.deb "dist/tunneler-online-${v}_amd64.deb"
-              cp "$rel"/bundle/rpm/*.rpm "dist/tunneler-online-$v.x86_64.rpm"
+              upd "$rel/bundle/deb/*.deb" "tunneler-online-${v}_amd64.deb"
+              upd "$rel/bundle/rpm/*.rpm" "tunneler-online-$v.x86_64.rpm"
               upd "$rel/bundle/appimage/*.AppImage" "$out.AppImage" ;;
             macos-*)
               cp "$rel"/bundle/dmg/*.dmg "dist/$out.dmg"

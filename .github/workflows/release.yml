@@ -74,6 +74,16 @@ jobs:
     permissions:
       contents: write
 
+  # the apt / dnf repositories at kaniansky.com/tunneler/apt and /rpm with this release's .deb / .rpm
+  repos:
+    needs: [release, app]
+    uses: ./.github/workflows/linux-repos.yml
+    with:
+      tag: v${{ needs.release.outputs.version }}
+    secrets: inherit           # REPO_GPG_PRIVATE_KEY, SITE_FTP_*
+    permissions:
+      contents: read
+
   # the homepage (site/) at https://kaniansky.com/tunneler/, uploaded by FTPS after every release: fresh
   # screenshots from screenshots/ (tools/site-images.py), the page itself reads the newest release's
   # downloads when it opens. Needs the repository secrets SITE_FTP_USER and SITE_FTP_PASSWORD (and
