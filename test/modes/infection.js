@@ -230,7 +230,7 @@ const setups = [
   { n: 8, teams: [1, 2, 3, 4, 5, 6, 7, 8], size: "small", rt: 0 },
   { n: 8, teams: [1, 1, 1, 1, 2, 2, 2, 2], size: "small", rt: 3, ff: true },
   { n: 8, teams: [1, 2, 3, 4, 1, 2, 3, 4], size: "large", rt: 0 },
-  { n: 4, teams: [1, 2, 1, 2], size: "medium", rt: 2, mods: { dark: true, hardRock: true, noRepair: true } },
+  { n: 4, teams: [1, 2, 1, 2], size: "medium", rt: 2, mods: { noRepair: true } },
   { n: 5, teams: [1, 2, 3, 4, 5], size: "small", rt: 0, mods: { noRepair: true }, win: 3 },
   // (the review's cases: a retreating infected tank kept a teammate out of its base for ~500 frames)
   { n: 4, teams: [1, 2, 3, 4], size: "small", rt: 0, win: 3, seed: 3 },

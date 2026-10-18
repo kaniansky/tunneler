@@ -48,17 +48,6 @@ for (const size of ["small", "medium", "large"]) {
   check(rock === 0, size + ": no rock left in the final circle (" + rock + " px)");
 }
 
-// ---- hard rock stretches the schedule where digging in would take too long (medium x1.5, large x2)
-for (const [size, f] of [["small", 1], ["medium", 1.5], ["large", 2]]) {
-  const e = start(8, { size, hardRock: true }), e0 = start(8, { size });
-  const T = M.stepT(e), C = M.closeT(e), G = e.GS;
-  check(M.stepT(e0) === M.STEP_T && T === Math.round(M.STEP_T * f) && C === Math.round(M.CLOSE_T * f),
-    size + " + hard rock: a step every " + Math.round(T / 18.2) + " s, closing over " + Math.round(C / 18.2) + " s (x" + f + ")");
-  check(M.radius(e, T - C - 1) === G.rs[0] && M.radius(e, T) === G.rs[1] && M.radius(e, M.STEPS * T - 1) > G.rs[M.STEPS] &&
-    M.radius(e, M.STEPS * T) === G.rs[M.STEPS] && M.hud(e, 1).value === Math.ceil((T - C) / (1193182 / 65536)),
-    size + " + hard rock: the radius and the hud follow the stretched schedule");
-}
-
 // ---- the drain outside the circle, bases outside, elimination
 {
   const e = start(2);
@@ -193,8 +182,8 @@ const setups = [
   { name: "8 tanks free-for-all, small", slots: slots([1, 2, 3, 4, 5, 6, 7, 8]), levels: L8, size: "small" },
   { name: "8 tanks, 4 teams of 2, large", slots: slots([1, 2, 3, 4, 1, 2, 3, 4]), levels: L8, size: "large" },
   { name: "2 tanks, large, round time 3", slots: slots([1, 2]), levels: ["normal", "hard"], size: "large", roundTime: 3 },
-  { name: "3 v 3, medium, round time 2, dark + hard rock + no repairs", slots: slots([1, 2, 1, 2, 1, 2]), levels: L8.slice(0, 6),
-    size: "medium", roundTime: 2, mods: { dark: true, hardRock: true, noRepair: true }, outMax: 0.06 },   // (hard rock: slow to get in)
+  { name: "3 v 3, medium, round time 2, no repairs", slots: slots([1, 2, 1, 2, 1, 2]), levels: L8.slice(0, 6),
+    size: "medium", roundTime: 2, mods: { noRepair: true }, outMax: 0.06 },
   { name: "4 free-for-all, small, no repairs, friendly fire", slots: slots([1, 2, 3, 4]), levels: L8.slice(0, 4), size: "small",
     mods: { noRepair: true }, friendlyFire: true },
 ];
@@ -204,28 +193,6 @@ for (const s of (standalone || !process.argv.includes("quick")) ? setups : setup
   check(a.finished && a.rounds.some(x => x.winnerTeam >= 0), s.name + ": the match finishes (" + a.frames + " frames, " + a.rounds.length + " rounds)");
   check(a.outF <= Math.max(5, a.aliveF * (s.outMax || 0.03)), s.name + ": the AI keeps inside the circle (" + a.outF + " of " + a.aliveF + ")");
   check(a.bitsHash === b.bitsHash && a.stateHash === b.stateHash && a.frames === b.frames, s.name + ": deterministic");
-}
-
-// ---- hard rock on the large map: the tanks can dig in before the circle closes - the zone decides few rounds
-{
-  const f0 = M.frame;
-  let zone = 0, deaths = 0, outF = 0, aliveF = 0;
-  M.frame = function (e) {
-    const a = e.alive.slice();
-    f0.call(this, e);
-    for (let p = 1; p <= e.nPlayers; p++) if (a[p] && !e.alive[p]) zone++;
-  };
-  try {
-    for (const seed of (standalone || !process.argv.includes("quick")) ? [1, 2, 3, 4, 5, 6] : [1, 2, 3]) {
-      const was = [];
-      const r = aiRun({ slots: slots([1, 2]), levels: ["hard", "expert"], size: "large", seed, winScore: 1, mods: { hardRock: true },
-        onFrame: e => { for (let p = 1; p <= e.nPlayers; p++) { if (was[p] && !e.alive[p] && e.screen === "play") deaths++; was[p] = e.alive[p]; } } });
-      check(r.finished, "large + hard rock, seed " + seed + ": the match finishes (" + r.frames + " frames)");
-      outF += r.outF; aliveF += r.aliveF;
-    }
-  } finally { M.frame = f0; }
-  check(deaths > 0 && zone <= deaths * 0.25 && outF <= aliveF * 0.03,
-    "large + hard rock, 2 tanks: the zone takes " + zone + " of " + deaths + " tanks, " + outF + " of " + aliveF + " tank frames outside");
 }
 
 if (standalone) H.done("modes/shrink");

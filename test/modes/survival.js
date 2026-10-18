@@ -305,7 +305,7 @@ const waveTankBases = e => e.GS.waveTanks.filter(p => e.alive[p]).map(p => { for
 const setups = [
   { name: "2 tanks, small", teams: [1, 2], levels: ["expert", "hard"], size: "small" },
   { name: "2 tanks, large, round time 2", teams: [1, 2], levels: ["hard", "normal"], size: "large", roundTime: 2 },
-  { name: "8 tanks free-for-all, small, modifiers", teams: [1, 2, 3, 4, 5, 6, 7, 8], levels: ["expert", "hard", "normal", "hard", "expert", "normal", "hard", "normal"], size: "small", mods: { dark: true, hardRock: true, noRepair: true } },
+  { name: "8 tanks free-for-all, small, modifiers", teams: [1, 2, 3, 4, 5, 6, 7, 8], levels: ["expert", "hard", "normal", "hard", "expert", "normal", "hard", "normal"], size: "small", mods: { noRepair: true } },
   { name: "8 tanks 3 v 5 teams, medium, round time 3, friendly fire", teams: [1, 1, 1, 2, 2, 2, 2, 2], levels: ["expert", "expert", "hard", "normal", "normal", "hard", "hard", "normal"], size: "medium", roundTime: 3, friendlyFire: true },
   { name: "4 tanks 2 v 2, large, no repairs, 2 rounds", teams: [1, 2, 1, 2], levels: ["expert", "hard", "hard", "normal"], size: "large", mods: { noRepair: true }, winScore: 2 },
 ];

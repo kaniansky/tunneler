@@ -3,8 +3,7 @@
 //   - every mode in TunnelerEngine.MODE_LIST but "standard" is registered (src/js/modes/<mode>.js)
 //   - every mode: AI-only matches (free-for-all and teams, small map, 1 round to win) finish, and the same
 //     match twice is identical (bits every frame, the final state hash) - online every client must agree
-//   - the modifiers: darkness blacks out the view beyond the tank's surroundings (display only, the game
-//     is the same), hard rock makes digging slower, no repairs stops shield repair at bases
+//   - the modifier: no repairs stops shield repair at bases
 //   - then each mode's own test, test/modes/<mode>.js, if there is one
 //   node test/modes-check.js [quick]
 const fs = require("fs"), path = require("path");
@@ -38,30 +37,6 @@ for (const m of Object.keys(E.MODES)) {
 }
 
 // ---- modifiers
-{
-  // darkness: display only - the same match with and without it is the same game; the view screen (71 rows
-  // of 38 bytes from 0x143, 160 bytes a row) has far fewer lit pixels
-  const opts = { slots: slots([1, 2]), levels: ["hard", "hard"], seed: 5, size: "small", winScore: 1, maxFrames: 3000 };
-  const litBytes = v => { let n = 0; for (let r = 0; r < 71; r++) for (let c = 0; c < 38; c++) if (v[0x143 + r * 160 + c * 2]) n++; return n; };
-  let darkLit = 0, fullLit = 0;
-  const dark = runMatch(Object.assign({}, opts, { mods: { dark: true }, onFrame: (e, f) => { if (f === 100) darkLit = litBytes(e.views[0]); } }));
-  const lit = runMatch(Object.assign({}, opts, { onFrame: (e, f) => { if (f === 100) fullLit = litBytes(e.views[0]); } }));
-  const darkPixels = darkLit > 0 && darkLit < fullLit * 0.5 ? 1 : 0;
-  check(dark.bitsHash === lit.bitsHash && dark.stateHash === lit.stateHash, "darkness: display only (the same game)");
-  check(darkPixels === 1, "darkness: the view screen is black away from the tank (" + darkLit + " of " + fullLit + " bytes lit)");
-}
-{
-  // hard rock: a tank digging straight on (up, out of its base's doorway) gets less far in the same time
-  const dig = mods => {
-    const e = H.startEngine(3, Object.assign({ slots: slots([1, 2]), size: "small", extended: true }, mods));
-    const x0 = e.tankY[1];
-    let dug = 0;
-    for (let f = 0; f < 100; f++) { e.step({ bits: [1, 0], keys: [] }); dug = e.metersDug[1]; }
-    return { dug, moved: Math.abs(e.tankY[1] - x0) };
-  };
-  const soft = dig({}), hard = dig({ hardRock: true });
-  check(hard.moved < soft.moved * 0.75, "hard rock: digging is slower (" + hard.moved + " vs " + soft.moved + " px through dirt in 100 frames)");
-}
 {
   // no repairs: a damaged tank at its own base gets energy back, but no shield
   const rep = mods => {

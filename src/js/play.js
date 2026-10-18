@@ -11,8 +11,8 @@
 // Old links (?mode=cpu&level=...&opp=1..7&teams=0|1, hide=1 = self / hide=0 = everyone) still work.
 (function () {
   const params = new URLSearchParams(location.search);
-  // /vs-computer?... or /split?... (play.html?mode=cpu|hotseat&... in the desktop app)
-  const mode = params.get("mode") === "cpu" || /^\/vs-computer\/?$/.test(location.pathname) ? "cpu" : "hotseat";
+  // /skirmish?... (old: /vs-computer?...) or /split?... (play.html?mode=cpu|hotseat&... in the desktop app)
+  const mode = params.get("mode") === "cpu" || /^\/(skirmish|vs-computer)\/?$/.test(location.pathname) ? "cpu" : "hotseat";
   const LEVELS = ["normal", "hard", "expert"];              // (easy / medium / hard; an old "easy" = "normal")
   const lvl = v => v === "easy" ? "normal" : v;
   const int = (v, lo, hi, d) => { v = parseInt(v, 10); return v >= lo && v <= hi ? v : d; };
@@ -20,9 +20,9 @@
   const winScore = int(params.get("win"), 1, 9, 3);
   // round time limit in minutes (&time=2|3|5|10; none / anything else = no limit)
   const roundTime = [2, 3, 5, 10].includes(int(params.get("time"), 0, 99, 0)) ? int(params.get("time"), 0, 99, 0) : 0;
-  // vs computer: the game mode (&gm=gold...) and the modifiers (&dark=1, &hard=1, &norepair=1) - docs/DESIGN-8P.md 27
+  // vs computer: the game mode (&gm=gold...) and the modifier (&norepair=1) - docs/DESIGN-8P.md 27
   const gmode = mode === "cpu" && (TunnelerEngine.MODE_LIST || []).includes(params.get("gm")) ? params.get("gm") : "standard";
-  const mods = mode === "cpu" ? { dark: params.get("dark") === "1", hardRock: params.get("hard") === "1", noRepair: params.get("norepair") === "1" } : {};
+  const mods = mode === "cpu" ? { noRepair: params.get("norepair") === "1" } : {};
   const VIEWS = ["self", "team", "everyone"];
   const view = VIEWS.includes(params.get("view")) ? params.get("view") : params.get("hide") === "0" ? "everyone" : "self";
   // vs computer, after death (watch=black|wreck|others; old 1 = others): what you see once your tank

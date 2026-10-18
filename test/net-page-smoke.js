@@ -174,8 +174,7 @@ function loadPage(page, search, stored, version) {
     press(env, "ArrowRight");
     assert(ws.sent.some(m => m.t === "set" && m.size === "large"), "size sent");
     assert.strictEqual(JSON.parse(env.ls.get("tunneler.online")).size, "large", "the host's settings remembered");
-    sel(lui, "spectators"); press(env, "Enter");
-    assert(ws.sent.some(m => m.t === "set" && m.spectators === false), "spectators off");
+    assert(!lui.spec.items.some(it => it.key === "spectators" || it.key === "public"), "public / spectators: only when the game is created");
     // everybody ready: Start game
     ws.recv(mkSt({ cant: null, seats: mkSt().seats.map((x, i) => i === 0 ? Object.assign({}, x, { ready: true }) : x) }));
     await wait(150);

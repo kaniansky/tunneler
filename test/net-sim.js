@@ -170,9 +170,9 @@ async function main() {
   {
     const page = async u => (await http(port, "GET", u)).text;
     const lobbyHtml = await page("/lobby.html"), onlineHtml = await page("/online.html"), playHtml = await page("/play.html");
-    const got = await Promise.all(["/games", "/game/some-room", "/game/some-room/", "/game/some-room/blue", "/game/some-room/watch", "/split", "/vs-computer"].map(page));
-    check("short addresses: /games, /game/<id>[/<role>] = the room's lobby, /split, /vs-computer", () => assert.deepStrictEqual(got,
-      [lobbyHtml, onlineHtml, onlineHtml, onlineHtml, onlineHtml, playHtml, playHtml]));
+    const got = await Promise.all(["/games", "/game/some-room", "/game/some-room/", "/game/some-room/blue", "/game/some-room/watch", "/split", "/vs-computer", "/skirmish"].map(page));
+    check("short addresses: /games, /game/<id>[/<role>] = the room's lobby, /split, /skirmish (old /vs-computer)", () => assert.deepStrictEqual(got,
+      [lobbyHtml, onlineHtml, onlineHtml, onlineHtml, onlineHtml, playHtml, playHtml, playHtml]));
   }
   check("create room", () => { assert.strictEqual(created.status, 200); assert(/^[a-z0-9-]+$/.test(id)); assert(!/[<>]/.test(created.json.name)); });
   check("default seats: BLUE + GREEN open, the rest closed; host key", () => {
@@ -488,6 +488,34 @@ async function main() {
   check("no player connected for a while: the match ends", () => assert.strictEqual(room.match, null));
   check("the host left: the spectator hosts now (with the key)", () => assert(spec1.hostKey === hostKey));
 
+  // ---------------------------------------------------------------- a game mode online (docs/DESIGN-8P.md 27)
+  console.log("game mode online");
+  {
+    const gr = (await http(port, "POST", "/api/rooms", { name: "Gold room", mode: "gold", noRepair: true,
+      seats: [{ kind: "open", team: 1 }, { kind: "open", team: 2 }, { kind: "hard", team: 1 }, { kind: "expert", team: 2 }], size: "small" })).json;
+    const g1 = await new FakeClient(port, gr.id, { name: "G1", host: gr.hostKey }).connect();
+    const g2 = await new FakeClient(port, gr.id, { name: "G2" }).connect();
+    const gs = await new FakeClient(port, gr.id, { name: "GS", role: "watch" }).connect();
+    await until(() => g1.status && g1.status.seats.filter(x => x.k).length === 2, "seated");
+    check("the room's mode and modifiers", () => assert(g1.status.settings.mode === "gold" && g1.status.settings.noRepair === true));
+    g2.send({ t: "ready", v: 1 });
+    await updated(g1, st => st.cant === null, "can start");
+    g1.send({ t: "start" });
+    await until(() => g1.match && g2.match && gs.match, "gold match");
+    check("a gold match: extended engine in the gold mode with no repairs, for every client", () =>
+      [g1, g2, gs].every(c => c.engine.extended && c.engine.gameMode === "gold" && c.engine.mods.noRepair));
+    g1.bits(UP); g2.bits(RIGHT | FIRE);
+    await until(() => g1.frames > 900, "gold frames", 60000);
+    g1.bits(0); g2.bits(0);
+    const gm = srv.rooms.get(gr.id).match, gn = gm.log.length;
+    await until(() => [g1, g2, gs].every(c => c.frames >= gn), "caught up");
+    for (const c of [g1, g2, gs]) check(c.name + " matches the reference (gold)", () =>
+      assert.deepStrictEqual(fingerprint(reference(gm, c.frames)), fingerprint(c.engine)));
+    check("gold: the mode's state the same everywhere", () => assert.strictEqual(JSON.stringify(g1.engine.GS), JSON.stringify(gs.engine.GS)));
+    check("no desync (gold)", () => assert(![g1, g2, gs].some(c => c.desync) && gm.desyncs === 0));
+    for (const c of [g1, g2, gs]) await c.close();
+  }
+
   // ---------------------------------------------------------------- kick, host handover, no spectators
   console.log("host");
   const a = await new FakeClient(port, id, { name: "A", host: hostKey }).connect();
@@ -507,17 +535,23 @@ async function main() {
   a.send({ t: "kick", k: b.hello.you.k });
   await until(() => b.errCode === "kicked" && !a.status.seats[bSeat].k, "player kicked");
   check("a kicked player's seat is free again", () => assert.strictEqual(a.status.seats[bSeat].kind, "open"));
-  a.send({ t: "set", spectators: false });
-  a.send({ t: "seatSet", i: 1, kind: "closed" }); a.send({ t: "seatSet", i: 2, kind: "closed" }); a.send({ t: "seatSet", i: 5, kind: "closed" });
-  await updated(a, s => !s.spectators && s.seats.filter(x => x.kind === "open").length === 1, "full room");
-  const full = new FakeClient(port, id, { name: "Full" });
+  a.send({ t: "set", spectators: false, public: false });
+  await sleep(60);
+  check("public / spectators can't be changed in the lobby (only when the game is created)", () => assert(a.status.spectators && a.status.public));
+  await a.close(); await spec1.close();
+  // a game created without spectators: no free seat -> turned away; no standing up
+  const ns = (await http(port, "POST", "/api/rooms", { name: "No spectators", spectators: false })).json;
+  const o1 = await new FakeClient(port, ns.id, { name: "O1", host: ns.hostKey }).connect();
+  const o2 = await new FakeClient(port, ns.id, { name: "O2" }).connect();
+  await until(() => o1.status && o1.status.seats.filter(x => x.k).length === 2, "both seated");
+  const full = new FakeClient(port, ns.id, { name: "Full" });
   await full.connect();
   await until(() => full.closed, "full");
   check("no free seat and no spectators: turned away", () => assert.strictEqual(full.errCode, "full"));
-  a.send({ t: "seat", i: -1 });
+  o1.send({ t: "seat", i: -1 });
   await sleep(60);
-  check("no standing up when the room allows no spectators", () => assert.strictEqual(a.seat(), 0));
-  await a.close(); await spec1.close();
+  check("no standing up when the room allows no spectators", () => assert.strictEqual(o1.seat(), 0));
+  await o1.close(); await o2.close();
 
   // ---------------------------------------------------------------- chat
   console.log("chat");

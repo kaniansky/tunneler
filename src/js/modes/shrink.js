@@ -2,15 +2,13 @@
 //
 // A safe circle around the middle of the map shrinks, in STEPS steps over 3 minutes of each round, from
 // covering the whole map to a radius of sc(40). Each step closes over CLOSE seconds (the radius goes down
-// a pixel at a time), then holds until the next one. With hard rock (digging ~4x slower) the schedule is
-// stretched where a tank couldn't dig from its base to the final circle in time: x1.5 on the medium map
-// (4.5 minutes), x2 on the large one (6 minutes) - else the zone, not the fighting, decides those rounds. A tank outside the circle loses shield every frame
+// a pixel at a time), then holds until the next one. A tank outside the circle loses shield every frame
 // (about 2 % of the maximum a second, more with every step) and a base outside the circle gives nothing.
 // The edge is marked with red dots in the view screens. Last team standing wins (usual elimination; with
 // a round time set, the usual damage rule at the time). hud: seconds until the next step starts closing.
 //
 // State (e.GS, set at match start): cx, cy (the middle), rs[0..STEPS] (the radius after each step),
-// stepT / closeT (engine steps per step / closing, after the hard rock stretch).
+// stepT / closeT (engine steps per step / closing).
 // Everything is a function of e.tick - e.roundStart (steps since the round's first play frame), so it is
 // the same on every client. The rock of the final circle (and a margin) turns to dirt at match start:
 // the last tanks can always get in.
@@ -24,15 +22,12 @@ const STEPS = 6;                                 // shrink steps a round
 const STEP_T = ticks(30);                        // one step every 30 s: the last one ends at 3 minutes
 const CLOSE_T = ticks(10);                       // ... each closing over its last 10 s
 const DRAIN = 12, DRAIN_STEP = 5;                // shield lost a frame outside: 12 (~2 % of MaxPower a second) + 5 a step
-const LOOKAHEAD = ticks(8);                      // AI: keeps inside the circle it will be in 8 s (hard rock:
-const LOOKAHEAD_HARD = ticks(25);                //   25 s - digging is much slower)
+const LOOKAHEAD = ticks(8);                      // AI: keeps inside the circle it will be in 8 s
 // sin(k * 22.5 deg) * 1000 (integers: the AI's waypoints must be the same on every JS engine)
 const SIN16 = [0, 383, 707, 924, 1000, 924, 707, 383, 0, -383, -707, -924, -1000, -924, -707, -383];
 
 // engine steps since the round's first play frame
 const elapsed = e => e.tick - e.roundStart;
-// the schedule's stretch: hard rock on the medium / large map gives the tanks more time to dig in
-const stretch = e => (!e.mods.hardRock ? 1 : e.size === "large" ? 2 : e.size === "medium" ? 1.5 : 1);
 // the radius of the safe circle t steps into the round
 function radiusAt(G, t) {
   const ST = G.stepT, CT = G.closeT;
@@ -53,7 +48,7 @@ const cheb = (ax, ay, bx, by) => Math.max(Math.abs(ax - bx), Math.abs(ay - by));
 // AI: the radius it aims to stay within (the circle 8 s from now, minus a margin), and the margin
 function aiRadius(e) {
   const G = e.GS, margin = Math.max(5, e.sc(10));
-  const look = e.mods.hardRock ? Math.round(LOOKAHEAD_HARD * G.stepT / STEP_T) : LOOKAHEAD;
+  const look = LOOKAHEAD;
   return { r: Math.max(margin, radiusAt(G, elapsed(e) + look) - margin), margin };
 }
 // AI: a waypoint inside the safe circle (kept until reached, too old, or out of the circle)
@@ -76,19 +71,19 @@ E.registerMode("shrink", {
   STEPS, STEP_T, CLOSE_T, stepT: e => e.GS.stepT, closeT: e => e.GS.closeT,
   drain: (e, t) => DRAIN + DRAIN_STEP * level(e.GS, t),
   strings: {
-    en: { instr: "A safe circle around the middle of the map shrinks every 30 seconds, until after 3 minutes only a small spot is left (with hard rock it takes longer: 4.5 minutes on the medium map, 6 on the large one). Outside it your shield drains away - faster with every step - and bases outside it give you nothing. The red dots mark its edge, and the number beside your instrument panel counts down to the next step. The last team standing wins the round." },
-    sk: { instr: "Bezpečný kruh okolo stredu mapy sa každých 30 sekúnd zmenší, až po 3 minútach ostane len malé miesto (s tvrdou zemou to trvá dlhšie: 4,5 minúty na strednej mape, 6 na veľkej). Mimo neho ti ubúda štít - s každým krokom rýchlejšie - a základne mimo neho ti nedajú nič. Jeho okraj označujú červené bodky a číslo pri prístrojovom paneli odpočítava čas do ďalšieho kroku. Kolo vyhráva tím, ktorý zostane posledný." },
-    cs: { instr: "Bezpečný kruh kolem středu mapy se každých 30 sekund zmenší, až po 3 minutách zbude jen malé místo (s tvrdou zemí to trvá déle: 4,5 minuty na střední mapě, 6 na velké). Mimo něj ti ubývá štít - s každým krokem rychleji - a základny mimo něj ti nedají nic. Jeho okraj označují červené tečky a číslo u přístrojového panelu odpočítává čas do dalšího kroku. Kolo vyhrává tým, který zůstane poslední." },
-    uk: { instr: "Безпечне коло навколо центру мапи стискається кожні 30 секунд, аж поки через 3 хвилини не лишиться маленька ділянка (з твердою землею довше: 4,5 хвилини на середній мапі, 6 на великій). Поза ним твій щит тане - з кожним кроком швидше - а бази поза ним нічого не дають. Червоні точки позначають його край, а число біля панелі приладів відлічує час до наступного кроку. Раунд виграє команда, що залишиться останньою." },
-    ru: { instr: "Безопасный круг вокруг центра карты сжимается каждые 30 секунд, пока через 3 минуты не останется маленький участок (с твёрдой землёй дольше: 4,5 минуты на средней карте, 6 на большой). Вне его твой щит тает - с каждым шагом быстрее - а базы вне его ничего не дают. Красные точки отмечают его край, а число у панели приборов отсчитывает время до следующего шага. Раунд выигрывает команда, оставшаяся последней." },
-    genz: { instr: "The zone around the middle of the map closes in every 30 seconds, and after 3 minutes it's basically a tiny dot (hard rock = slower squeeze: 4.5 minutes on medium, 6 on large, you're welcome). Outside it your shield just melts - faster every step, no cap - and bases out there are straight up useless. Red dots = the edge, and the number by your dashboard counts down to the next squeeze. Last team alive takes the W." },
+    en: { instr: "A safe circle around the middle of the map shrinks every 30 seconds, until after 3 minutes only a small spot is left. Outside it your shield drains away - faster with every step - and bases outside it give you nothing. The red dots mark its edge, and the number beside your instrument panel counts down to the next step. The last team standing wins the round." },
+    sk: { instr: "Bezpečný kruh okolo stredu mapy sa každých 30 sekúnd zmenší, až po 3 minútach ostane len malé miesto. Mimo neho ti ubúda štít - s každým krokom rýchlejšie - a základne mimo neho ti nedajú nič. Jeho okraj označujú červené bodky a číslo pri prístrojovom paneli odpočítava čas do ďalšieho kroku. Kolo vyhráva tím, ktorý zostane posledný." },
+    cs: { instr: "Bezpečný kruh kolem středu mapy se každých 30 sekund zmenší, až po 3 minutách zbude jen malé místo. Mimo něj ti ubývá štít - s každým krokem rychleji - a základny mimo něj ti nedají nic. Jeho okraj označují červené tečky a číslo u přístrojového panelu odpočítává čas do dalšího kroku. Kolo vyhrává tým, který zůstane poslední." },
+    uk: { instr: "Безпечне коло навколо центру мапи стискається кожні 30 секунд, аж поки через 3 хвилини не лишиться маленька ділянка. Поза ним твій щит тане - з кожним кроком швидше - а бази поза ним нічого не дають. Червоні точки позначають його край, а число біля панелі приладів відлічує час до наступного кроку. Раунд виграє команда, що залишиться останньою." },
+    ru: { instr: "Безопасный круг вокруг центра карты сжимается каждые 30 секунд, пока через 3 минуты не останется маленький участок. Вне его твой щит тает - с каждым шагом быстрее - а базы вне его ничего не дают. Красные точки отмечают его край, а число у панели приборов отсчитывает время до следующего шага. Раунд выигрывает команда, оставшаяся последней." },
+    genz: { instr: "The zone around the middle of the map closes in every 30 seconds, and after 3 minutes it's basically a tiny dot. Outside it your shield just melts - faster every step, no cap - and bases out there are straight up useless. Red dots = the edge, and the number by your dashboard counts down to the next squeeze. Last team alive takes the W." },
   },
 
   // match start: the middle, the radius after every step; the final circle's rock becomes dirt
   init(e) {
     const G = e.GS;
     G.cx = e.worldW >> 1; G.cy = e.worldH >> 1;
-    G.stepT = Math.round(STEP_T * stretch(e)); G.closeT = Math.round(CLOSE_T * stretch(e));
+    G.stepT = STEP_T; G.closeT = CLOSE_T;
     const r0 = Math.ceil(Math.sqrt(G.cx * G.cx + G.cy * G.cy)) + 1, rMin = e.sc(40);
     G.rs = [];
     for (let k = 0; k <= STEPS; k++) G.rs.push(r0 + Math.trunc((rMin - r0) * k / STEPS));

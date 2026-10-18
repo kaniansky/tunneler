@@ -181,8 +181,8 @@ const cases = [
   { name: "4 v 4, medium, friendly fire", teams: [1, 2, 1, 2, 1, 2, 1, 2], size: "medium", ff: true },
   { name: "3 teams, large", teams: [1, 2, 3, 1, 2, 3], size: "large" },
   { name: "2 v 2, small, round time 2", teams: [1, 2, 1, 2], size: "small", time: 2 },
-  { name: "4 free-for-all, small, dark + hard rock + no repairs", teams: [1, 2, 3, 4], size: "small", mods: { dark: true, hardRock: true, noRepair: true } },
-  { name: "1 v 1, large, round time 2, modifiers", teams: [1, 2], size: "large", time: 2, mods: { dark: true, hardRock: true, noRepair: true } },
+  { name: "4 free-for-all, small, no repairs", teams: [1, 2, 3, 4], size: "small", mods: { noRepair: true } },
+  { name: "1 v 1, large, round time 2, modifiers", teams: [1, 2], size: "large", time: 2, mods: { noRepair: true } },
 ];
 for (const c of cases) {
   const top = [];

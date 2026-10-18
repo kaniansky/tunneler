@@ -12,7 +12,7 @@ seats - open / closed / AI, teams, ping, chat, the host's settings, seats, kick 
 with three views). All
 modes have map sizes (small / medium / large), rounds to win (1-9) and friendly fire (team games).
 Anything but BLUE vs GREEN runs the engine's **extended mode** (`docs/DESIGN-8P.md` is its design,
-sections 0-26 all implemented; the classic 2-player game - medium map, 3 rounds to win - stays
+sections 0-27 all implemented; the classic 2-player game - medium map, 3 rounds to win - stays
 byte-for-byte the original). Author of this version: Norko Kaniansky, 2026,
 public domain (Unlicense).
 
@@ -548,6 +548,17 @@ none, i.e. a page from before 2.0 - is refused (POST 409 `{code:
   (`menuTop`, default 11 = the original), no title (play.js: vs computer only - split screen stays the
   original). online.js shows a match's statistics (a private engine with `STATS` copied from the
   finished one, `lastMatch`) once, as soon as that viewer closed the world map; Back = the lobby.
+- **Game modes** (DESIGN-8P 27): `src/js/modes/<mode>.js` (gold, infection, survival, hill, shrink, ctf,
+  siege, deathmatch) register hooks with `TunnelerEngine.registerMode`; joined into `/js/modes.js`
+  (build.js / server.js `modesBundle`; node: engine.js requires them). Engine: `gameMode`, `GM` (hooks),
+  `GS` (mode state), `modeScore`, `mods` ({noRepair}); hooks init / round / frame /
+  onKill / shotHit / baseUsable / timeUp / draw / hud / scoreText / stat (statistics column) / roundNote
+  (rounds list) / teamName / perTankWins; helpers
+  endRound / respawn / setTeamsNow / objPut / hudTag / mt (mode texts, font-encoded). AI hooks
+  aiOverride / aiGoal / aiFire / aiAlways / aiOpenBase; `e.aiDriven[p]` (set by TunnelerAI, survival).
+  Any mode or modifier = the extended engine. Settings: NetProto MODES / OWN_TEAMS / MODIFIERS / SETTINGS,
+  the online lobby's Settings box, vs computer (`&gm=&norepair=1`). Tests:
+  test/modes-check.js (+ test/modes/<mode>.js, test/modes-harness.js `runMatch`); net-sim runs a gold room.
 - Statistics centred vertically (vs computer's right half, the online page): drawn with `statsCentred`
   (settings held back), then `centreStats(c0, c1, r0, r1, width, mid)` finds the used rows, moves them
   (`shiftRows`, text + Unicode plane) to the middle and writes the settings one blank row below.

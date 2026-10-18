@@ -163,7 +163,7 @@ const setups = [
   { name: "8 tanks free-for-all, small", teams: [1, 2, 3, 4, 5, 6, 7, 8], levels: ["normal", "hard", "expert", "normal", "hard", "expert", "normal", "hard"], size: "small" },
   { name: "4 v 4, medium, friendly fire", teams: [1, 2, 1, 2, 1, 2, 1, 2], levels: ["hard", "expert", "normal", "hard", "expert", "normal", "hard", "hard"], size: "medium", friendlyFire: true },
   { name: "3 teams, small, round time 3", teams: [1, 2, 3, 1, 2, 3], levels: ["hard", "hard", "hard", "normal", "normal", "normal"], size: "small", roundTime: 3 },
-  { name: "2 v 2, small, dark + hard rock + no repairs", teams: [1, 2, 1, 2], levels: ["expert", "hard", "hard", "expert"], size: "small", mods: { dark: true, hardRock: true, noRepair: true } },
+  { name: "2 v 2, small, no repairs", teams: [1, 2, 1, 2], levels: ["expert", "hard", "hard", "expert"], size: "small", mods: { noRepair: true } },
   { name: "2 tanks, large", teams: [1, 2], levels: ["expert", "hard"], size: "large", maxFrames: 60000 },
   { name: "8 tanks in 4 teams, large", teams: [1, 2, 3, 4, 1, 2, 3, 4], levels: ["hard", "expert", "hard", "expert", "hard", "expert", "hard", "expert"], size: "large", maxFrames: 60000 },
 ];
@@ -235,7 +235,7 @@ for (const s of setups) {
 // repairs: it once waited there for a shield that never mends)
 {
   const o = { mode: "siege", slots: slots([1, 2, 3, 4, 5, 6, 7, 8]), levels: new Array(8).fill("expert"), seed: 9, size: "large", winScore: 1,
-    maxFrames: 13000, mods: { dark: true, hardRock: true, noRepair: true } };
+    maxFrames: 13000, mods: { noRepair: true } };
   const run = new Array(9).fill(0), longest = new Array(9).fill(0);
   const a = runMatch(Object.assign({ onFrame: e => {
     if (e.screen !== "play") return;

@@ -272,7 +272,7 @@ for (const [size, teams, seed] of [["small", [1, 2], 3], ["small", [1, 2, 3, 4, 
 
 // ---- 2..8 tanks, free-for-all and teams, map sizes, modifiers, round time: finish, deterministically
 {
-  const all = { dark: true, hardRock: true, noRepair: true };
+  const all = { noRepair: true };
   const cases = [
     { name: "8 free-for-all, small", teams: [1, 2, 3, 4, 5, 6, 7, 8], levels: ["hard", "normal", "expert", "hard", "normal", "hard", "expert", "normal"], size: "small" },
     { name: "4 v 4, small, friendly fire", teams: [1, 2, 1, 2, 1, 2, 1, 2], levels: ["hard", "normal", "expert", "hard", "normal", "hard", "expert", "normal"], size: "small", ff: true },

@@ -13,7 +13,7 @@ Lang.register("genz", {
   "ui.hint": "↑↓ and <ENTER>, or the mouse ig.", "ui.back": "<ESC> to dip.",
   "home.split": "Split screen", "home.split.i1": "Two besties, one keyboard, just like the OG.",
   "home.split.i2": "{blue}: W A S D + SHIFT     {green}: arrow keys + ENTER",
-  "home.cpu": "Vs the bots",
+  "home.cpu": "Skirmish fr",
   "home.cpu.i2": "Pick how sweaty they are on the next screen.",
   "home.online": "Online game", "home.online.i1": "Squad up with others on their computers (2 to 8 tanks),",
   "home.online.i2": "or just spectate and vibe.",
@@ -21,7 +21,7 @@ Lang.register("genz", {
   "home.lang.i2": "← →, <ENTER> or a click switches it up.",
   "home.settings": "Settings", "home.settings.i": "Language and sound, bestie.", "set.title": "SETTINGS", "set.sound": "Sound: ", "set.ping": "Show ping: ", "set.ping.on": "yep", "set.ping.off": "nah", "set.ping.i": "Online games: your lag in ms, top left on the border. stay humble.",
   "set.server": "Server: ", "set.server.i1": "Online games: where the server lives, e.g. example.com:8050.", "set.server.i2": "Empty = the public one. <ENTER> locks it in.", "sound.muted": "muted", "sound.original": "OG (PC speaker)", "sound.realistic": "realistic", "sound.cartoony": "cartoony", "sound.i1": "OG: the 1991 PC speaker beeps. Realistic: actual tank noises.", "sound.i2": "Cartoony: boings and pops. ← → switches it and plays a sample.",
-  "cpu.title": "VS THE BOTS", "cpu.start": "Lock in", "cpu.start.i1": "Start a game vs the bot ({level}).",
+  "cpu.title": "SKIRMISH FR", "cpu.start": "Lock in", "cpu.start.i1": "Start a game vs the bot ({level}).",
   "cpu.own": "You only see your own screen.", "cpu.both": "You see both screens (kinda sus).",
   "cpu.level": "Bot level: ", "cpu.level.i1": "How cracked the bot is:", "cpu.level.i2": "{levels}.",
   "cpu.view": "View: ", "cpu.view.own": "own only", "cpu.view.both": "both",
@@ -87,7 +87,7 @@ Lang.register("genz", {
       ff: ["friendly fire: off", "friendly fire: on"], view: "POV: {v}", visible: "max POV: {v}",
       views: ["main character", "the squad", "everyone fr"], watch: ["after you die: black screen", "after you die: my wreck", "after you die: spectate the squad", "after you die: spectate your killer", "after you die: spectate everyone"],
       modes: {"standard": "OG", "gold": "gold rush", "infection": "zombie mode", "survival": "survive the bots", "hill": "king of the hill", "shrink": "the zone", "ctf": "steal the flag", "siege": "base raid", "deathmatch": "deathmatch"},
-      dark: "lights out", hardRock: "hard rock", noRepair: "no repairs",
+      noRepair: "no repairs",
       time: "round timer: {n} min", timeShort: "timer: {n} min" },
     prompt: "<ENTER> for the main menu.",
     instr: {
@@ -156,7 +156,7 @@ Lang.register("genz", {
         ["Split screen:  ", "the OG game - two besties on one keyboard, {9}BLUE{3} on the left half " +
           "of the screen and {10}GREEN{3} on the right.  Pick the map size, W's to win and round timer " +
           "first."],
-        ["Vs the bots:  ", "you drive {9}BLUE{3} with either set of keys against 1 to 7 bots.  For " +
+        ["Skirmish fr:  ", "you drive {9}BLUE{3} with either set of keys against 1 to 7 bots.  For " +
           "every other color pick nobody or a bot and its level, plus every tank's squad (1-8); then " +
           "map size, W's to win, round timer, friendly fire, POV and after you die.  <ESC> while " +
           "playing ends the match; <ESC> on the game's menu takes you back to the settings."],
@@ -191,7 +191,7 @@ Lang.register("genz", {
         "same low-res screen (160x100 in 16 colors) with a simulated PC speaker."],
       waysHead: "Ways to play:",
       ways: [["split screen", "two besties on one keyboard, just like the OG"],
-        ["vs the bots", "you vs 1 to 7 bot tanks, solo or with a squad"],
+        ["Skirmish fr", "you vs 1 to 7 bot tanks, solo or with a squad"],
         ["online game", "2 to 8 tanks on other computers, bots welcome"],
         ["lurk", "watch an online game: all screens, the live map, or one tank"]],
       p2: ["Up to 8 tanks go free-for-all or in squads (friendly fire on or off), on",
@@ -314,10 +314,6 @@ Lang.register("genz", {
   "gm.deathmatch.i": "Wrecked tanks respawn at home: most kills takes the round.",
   "lc.mode": "Mode: ",
   "lc.mode.i": "← →: pick the vibe.",
-  "mod.dark": "Lights out: ",
-  "mod.dark.i": "On: you only see what's right next to you. Spooky.",
-  "mod.hardRock": "Hard rock: ",
-  "mod.hardRock.i": "On: digging takes forever. Rocky era.",
   "mod.noRepair": "Base repairs: ",
   "mod.noRepair.i": "Off: bases refuel but never fix your shield.",
   "pg.cant.ai": "Survival needs at least one bot (the waves).",

@@ -47,7 +47,7 @@ const ROUND_TIMES = [0, 2, 3, 5, 10];                    // round time limit, mi
 // needs AI tanks (the waves) and players.
 const MODES = ["standard", "gold", "infection", "survival", "hill", "shrink", "ctf", "siege", "deathmatch"];
 const OWN_TEAMS = ["infection", "survival"];
-const MODIFIERS = ["dark", "hardRock", "noRepair"];      // darkness, slow-to-dig dirt, no shield repair at bases
+const MODIFIERS = ["noRepair"];                          // no shield repair at bases
 const clampInt = (v, lo, hi, def) => { v = Math.trunc(Number(v)); return Number.isFinite(v) ? Math.max(lo, Math.min(hi, v)) : def; };
 
 // characters never kept in names / chat: control, bidi, zero-width, variation selectors, private use
@@ -106,8 +106,6 @@ const SETTINGS = {
   visible: v => VISIBLE.includes(v) ? v : undefined,
   watchOut: v => AFTER_DEATH.includes(v) ? v : undefined,
   mode: v => MODES.includes(v) ? v : undefined,
-  dark: v => typeof v === "boolean" ? v : undefined,
-  hardRock: v => typeof v === "boolean" ? v : undefined,
   noRepair: v => typeof v === "boolean" ? v : undefined,
 };
 // A new room's settings from POST /api/rooms -> {seats: [8 x {kind, team}], size, winScore, friendlyFire,
@@ -120,7 +118,7 @@ function roomSettings(o) {
   return { seats, size: SIZES.includes(o.size) ? o.size : "medium", winScore: clampInt(o.winScore, 1, 9, 3),
     friendlyFire: o.friendlyFire === true, roundTime: roundTime(o.roundTime),
     visible: VISIBLE.includes(o.visible) ? o.visible : "self", watchOut: afterDeath(o.watchOut),
-    mode: MODES.includes(o.mode) ? o.mode : "standard", dark: o.dark === true, hardRock: o.hardRock === true, noRepair: o.noRepair === true };
+    mode: MODES.includes(o.mode) ? o.mode : "standard", noRepair: o.noRepair === true };
 }
 
 // The tanks of a match: the seats with a player (human) or a computer tank, in colour order ->
@@ -172,7 +170,7 @@ function readCfg(c) {
   return { ext: !!c.ext, players: slots.length, slots, names, size: SIZES.includes(c.size) ? c.size : "medium",
     winScore: clampInt(c.winScore, 1, 9, 3), friendlyFire: !!c.friendlyFire, roundTime: roundTime(c.roundTime),
     visible: VISIBLE.includes(c.visible) ? c.visible : "self", watchOut: afterDeath(c.watchOut),
-    mode: MODES.includes(c.mode) ? c.mode : "standard", dark: c.dark === true, hardRock: c.hardRock === true, noRepair: c.noRepair === true };
+    mode: MODES.includes(c.mode) ? c.mode : "standard", noRepair: c.noRepair === true };
 }
 
 // One frame -> engine input ({keyDown, keys}); identical on every client.

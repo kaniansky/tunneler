@@ -108,17 +108,20 @@ for (const [size, n] of [["small", 200], ["medium", 40], ["large", 20]]) {
   check(e.screen === "play" && G.pts.every(v => v === 0) && G.cx > 0, "hill: points reset every round, the zone stays");
 }
 
-// ---- round time: the most points win; no points or a tie: the usual damage rule
+// ---- round time: the most points win; no points or a tie: the damage rule (decided by the mode)
 {
   const e = startEngine(6, { slots: slots([1, 2, 3]), size: "small", mode: "hill", extended: true });
   idle(e);
   e.GS.pts = [10, 30, 5];
   check(e.GM.timeUp(e) === true && e.modeWinner === 1, "hill: time up - the team with the most points wins");
-  const f = startEngine(6, { slots: slots([1, 2, 3]), size: "small", mode: "hill", extended: true });
+  let f = startEngine(6, { slots: slots([1, 2, 3]), size: "small", mode: "hill", extended: true });
   idle(f);
   f.GS.pts = [0, 0, 0];
-  check(f.GM.timeUp(f) === false && f.modeWinner === undefined, "hill: time up with no points - left to the damage rule");
+  f.roundDamage[3] = 0x700;
+  check(f.GM.timeUp(f) === true && f.modeWinner === 2, "hill: time up with no points - the damage rule, decided by the mode (tanks come back: no elimination)");
   // a tie at the top: only the tied teams count - the one with more damage wins, a third team's damage doesn't
+  f = startEngine(6, { slots: slots([1, 2, 3]), size: "small", mode: "hill", extended: true });
+  idle(f);
   f.GS.pts = [30, 30, 0];
   f.roundDamage[1] = 0x700; f.roundDamage[2] = 0x700 * 2; f.roundDamage[3] = 0x700 * 9;
   check(f.GM.timeUp(f) === true && f.modeWinner === 1, "hill: time up with a tie - the tied team with more damage wins, not a third team (" + f.modeWinner + ")");
@@ -163,8 +166,8 @@ const matches = [
   { name: "4 v 4, medium", teams: [1, 2, 1, 2, 1, 2, 1, 2], levels: ["hard", "hard", "normal", "expert", "expert", "normal", "hard", "hard"], size: "medium" },
   { name: "free-for-all 8, medium", teams: [1, 2, 3, 4, 5, 6, 7, 8], levels: new Array(8).fill("hard"), size: "medium", winScore: 1 },
   { name: "2 v 2, large", teams: [1, 2, 1, 2], levels: ["expert", "hard", "hard", "expert"], size: "large" },
-  { name: "3 teams, round time 2, modifiers", teams: [1, 2, 3, 1, 2, 3], levels: ["hard", "hard", "hard", "normal", "expert", "normal"], size: "small", roundTime: 2, mods: { dark: true, hardRock: true, noRepair: true } },
-  { name: "1 v 1 large, round time 2, modifiers", teams: [1, 2], levels: ["expert", "expert"], size: "large", roundTime: 2, mods: { dark: true, hardRock: true, noRepair: true } },
+  { name: "3 teams, round time 2, modifiers", teams: [1, 2, 3, 1, 2, 3], levels: ["hard", "hard", "hard", "normal", "expert", "normal"], size: "small", roundTime: 2, mods: { noRepair: true } },
+  { name: "1 v 1 large, round time 2, modifiers", teams: [1, 2], levels: ["expert", "expert"], size: "large", roundTime: 2, mods: { noRepair: true } },
 ];
 let totalHeld = 0, totalPlay = 0, topPts = 0, byPoints = 0;
 for (const m of matches) {

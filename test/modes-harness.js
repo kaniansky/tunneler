@@ -5,7 +5,7 @@
 //
 //   const H = require("./modes-harness.js");
 //   const r = H.runMatch({ mode: "gold", slots: H.slots([1, 2, 3, 4]), levels: ["hard", "hard", null, "normal"],
-//                          seed: 7, size: "small", winScore: 1, maxFrames: 60000, mods: {dark: true}, roundTime: 0,
+//                          seed: 7, size: "small", winScore: 1, maxFrames: 60000, mods: {noRepair: true}, roundTime: 0,
 //                          onFrame: (e, frame) => {...} });
 //   r = {engine, frames, playFrames, rounds: [{winnerTeam, winner}], finished, bitsHash, stateHash}
 //   levels[i]: the AI level of player i + 1, or null = a tank that never moves (a human who does nothing)

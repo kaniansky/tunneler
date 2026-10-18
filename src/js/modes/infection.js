@@ -109,28 +109,30 @@ function setInfected(e, list) {
 }
 
 E.registerMode("infection", {
+  // the statistics: healthy tanks each one infected (the rounds list names the winning side already)
+  stat: (e, p) => e.modeScore[p] || 0,
   strings: {
-    en: {
+    en: { stat: "inf.",
       instr: "One random tank starts the round infected (team 1), all the others are healthy (team 2). A healthy tank destroyed comes back at once at its base - infected; an infected tank destroyed returns after 3 seconds. The infected win the round when no healthy tank is left; the healthy tanks still standing when the time runs out (3 minutes without a round time) win it. Every tank counts its own round wins; infected tanks carry a red mark.",
       infected: "infected", healthy: "healthy",
     },
-    sk: {
+    sk: { stat: "nak.",
       instr: "Na začiatku kola je jeden náhodný tank nakazený (tím 1), všetky ostatné sú zdravé (tím 2). Zničený zdravý tank sa hneď vráti na svoju základňu - nakazený; zničený nakazený tank sa vráti po 3 sekundách. Nakazení vyhrajú kolo, keď nezostane žiadny zdravý tank; zdravé tanky, ktoré vydržia do konca času (bez časového limitu 3 minúty), ho vyhrajú. Každý tank má vlastné výhry kôl; nakazené tanky majú červenú značku.",
       infected: "nakazený", healthy: "zdravý",
     },
-    cs: {
+    cs: { stat: "nak.",
       instr: "Na začátku kola je jeden náhodný tank nakažený (tým 1), všechny ostatní jsou zdravé (tým 2). Zničený zdravý tank se hned vrátí na svou základnu - nakažený; zničený nakažený tank se vrátí po 3 sekundách. Nakažení vyhrají kolo, když nezůstane žádný zdravý tank; zdravé tanky, které vydrží do konce času (bez časového limitu 3 minuty), ho vyhrají. Každý tank má vlastní výhry kol; nakažené tanky mají červenou značku.",
       infected: "nakažený", healthy: "zdravý",
     },
-    uk: {
+    uk: { stat: "інф.",
       instr: "На початку раунду один випадковий танк заражений (команда 1), усі інші здорові (команда 2). Знищений здоровий танк одразу повертається на свою базу - вже зараженим; знищений заражений танк повертається через 3 секунди. Заражені виграють раунд, коли не лишається жодного здорового танка; здорові танки, що протрималися до кінця часу (без ліміту часу - 3 хвилини), виграють його. Кожен танк рахує власні перемоги в раундах; заражені танки мають червону позначку.",
       infected: "заражений", healthy: "здоровий",
     },
-    ru: {
+    ru: { stat: "зар.",
       instr: "В начале раунда один случайный танк заражён (команда 1), все остальные здоровы (команда 2). Уничтоженный здоровый танк сразу возвращается на свою базу - уже заражённым; уничтоженный заражённый танк возвращается через 3 секунды. Заражённые выигрывают раунд, когда не остаётся ни одного здорового танка; здоровые танки, продержавшиеся до конца времени (без лимита времени - 3 минуты), выигрывают его. Каждый танк считает свои победы в раундах; у заражённых танков красная метка.",
       infected: "заражён", healthy: "здоров",
     },
-    genz: {
+    genz: { stat: "zomb",
       instr: "One random tank spawns as patient zero (team 1), everyone else is clean (team 2). Get wrecked while clean and you respawn instantly at your base as a zombie, no cap; wrecked zombies are back in 3 seconds. Zombies take the round when nobody clean is left, but if the clean squad survives the clock (3 minutes when there's no round time) they win it. Everyone stacks their own round wins, and zombies wear a red drip on top.",
       infected: "zombie", healthy: "clean",
     },

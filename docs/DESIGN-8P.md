@@ -445,16 +445,15 @@ Refinements (owner, 2026-10-18):
 
 ## 27. Game modes and modifiers (owner, 2026-10-18)
 
-A **Mode** setting (online lobby Settings box, vs computer screen; first row) and three **modifiers**.
+A **Mode** setting (online lobby Settings box, vs computer screen; first row) and one **modifier**.
 "standard" = the game so far (last team standing). Every other mode and any modifier runs the extended
 engine (also for BLUE vs GREEN). Online the mode is a room setting like the others (`NetProto.MODES`,
-`SETTINGS.mode / dark / hardRock / noRepair`, `engineOptions`); vs computer it goes into the link
-(`&gm=gold&dark=1&hard=1&norepair=1`, localStorage `tunneler.cpu.mode` / `.dark` / `.hardRock` / `.noRepair`).
+`SETTINGS.mode / noRepair`, `engineOptions`); vs computer it goes into the link
+(`&gm=gold&norepair=1`, localStorage `tunneler.cpu.mode` / `.noRepair`).
 Infection and survival make their own teams (`NetProto.OWN_TEAMS`: the seats' teams don't matter, no
 "2 teams" check); survival needs at least one AI tank (`startProblem` -> "ai").
 
-Modifiers (engine, done): **dark** - every view screen black beyond ~26 px of its tank (`darkView`, display
-only); **hardRock** - after each dig a tank waits HARD_ROCK_DELAY frames instead of 1; **noRepair** - bases
+Modifier (engine, done; "darkness" and "hard rock" were dropped - owner: not fun, hard rock confused the AI): **noRepair** - bases
 refuel but never repair shields.
 
 ### The framework (src/js/engine.js, src/js/ai.js, done)
@@ -488,6 +487,9 @@ Hooks (all optional; `e` = the engine; players are 1..e.nPlayers; teams are inde
 - `hud(e, p)` -> `{value: 0..99, color}` or null: a number on a black tag beside player p's instrument
   panel (right side; the round clock is on the left).
 - `scoreText(e, p)` -> short text for the spectators' map table ("gold 3"; use `e.mt`).
+- `stat(e, p)` -> the mode's match total for tank p in the statistics table (replaces "moved"; its
+  heading: `strings.<lang>.stat`, at most 5 characters); `roundNote(e, team)` -> the round winner's
+  score in the rounds list ("9 gold", instead of the round's length) - so it's clear why a tank won.
 - AI: `aiOverride(ai, e, mx, my, ctx)` -> null (as usual) or `{x, y, dig, mode}` to go to (the AI's
   `goTo` path finding) or `{dir}` (-1 = stand still) - checked before retreat / engage, every frame;
   `ctx = {E, recent, dE, T, atHome}`. `aiGoal(ai, e, mx, my)` -> `{x, y, mode, dig}` instead of exploring
@@ -535,7 +537,8 @@ only `ai.rng()`.
 - **hill** (king of the hill): a zone (circle, radius sc(24)) in the middle of the map, dug free at match
   start, its edge marked (dots, white; the holding team's colour). Every frame only one team's tanks (alive)
   are in it, that team gets a point; the first to 1000 points (~55 s) wins the round; at the round time the
-  most points. hud: own team's points as 0..99 %.
+  most points. Destroyed tanks come back at their base after ~3 s (owner: otherwise fights ended the rounds
+  before the zone mattered). hud: own team's points as 0..99 %.
 - **shrink** (shrinking world): a safe circle around the middle shrinks from covering the map to sc(40)
   over 3 minutes; outside it a tank loses shield (~2 % of MaxPower per second, more later) and bases
   outside don't help. Its edge is marked (dots, red). Last team standing wins (usual elimination). hud:

@@ -14,6 +14,19 @@
 const E = root.TunnelerEngine || require("../engine.js");
 
 const TARGET = 1000;                 // points (frames held) to win a round
+const RESPAWN_FRAMES = 55;           // a destroyed tank comes back at its base after ~3 s (only the zone decides)
+// where a tank may come back inside its base (the middle first): the first spot no other tank alive is near
+const SPOTS = [[0, 0], [-9, 0], [9, 0], [0, -9], [0, 9], [-9, -9], [9, -9], [-9, 9], [9, 9]];
+function spawnSpot(e, p) {
+  for (const [dx, dy] of SPOTS) {
+    const x = e.baseX[p] + dx, y = e.baseY[p] + dy;
+    let free = true;
+    for (let q = 1; q <= e.nPlayers && free; q++)
+      if (q !== p && e.alive[q] && e.distance(Math.abs(x - e.tankX[q]), Math.abs(y - e.tankY[q])) < 8) free = false;
+    if (free) return [x, y];
+  }
+  return null;
+}
 
 const cheb = (ax, ay, bx, by) => Math.max(Math.abs(ax - bx), Math.abs(ay - by));
 const inZone = (G, x, y) => { const dx = x - G.cx, dy = y - G.cy; return dx * dx + dy * dy <= G.r * G.r; };
@@ -67,29 +80,40 @@ function edgeDots(cx, cy, r) {
 }
 
 E.registerMode("hill", {
+  // the statistics: seconds each tank held the zone; the rounds list: the winner's points
+  stat: (e, p) => Math.round((e.modeScore[p] || 0) / 18.2),
+  roundNote: (e, t) => t >= 0 && e.GS.pts ? Math.min(100, Math.floor((e.GS.pts[t] || 0) * 100 / TARGET)) + "%" : "",
+  // destroyed tanks come back (the round is never decided by elimination - only the zone or the time)
+  eliminationEnds: false,
+  aiAlways: true,
+  onKill(e, p) {
+    if (!e.GS.back) e.GS.back = new Array(e.nPlayers + 1).fill(0);
+    e.GS.back[p] = (e.GS.f || 0) + RESPAWN_FRAMES;
+    return true;
+  },
   strings: {
-    en: {
-      instr: "A zone near the middle of the map is dug free at the start, its edge marked with dots. Every moment only your team's tanks are inside it, your team scores a point; whoever fills the score first (about 55 seconds of holding it) wins the round. Two teams inside: nobody scores, so clear them out. The number beside your panel is your team's score in percent; at the round time the most points win.",
+    en: { stat: "secs",
+      instr: "A zone near the middle of the map is dug free at the start, its edge marked with dots. Every moment only your team's tanks are inside it, your team scores a point; whoever fills the score first (about 55 seconds of holding it) wins the round. Two teams inside: nobody scores, so clear them out. The number beside your panel is your team's score in percent; at the round time the most points win. Destroyed tanks come back at their base after about 3 seconds - only the zone decides.",
       score: "hill {n}%",
     },
-    sk: {
-      instr: "Zóna pri strede mapy je na začiatku vykopaná, jej okraj značia bodky. Kým sú v nej len tanky tvojho tímu, tvoj tím získava body; kto prvý naplní skóre (asi 55 sekúnd držania), vyhráva kolo. Dva tímy vnútri: nikto neboduje, tak ich vyžeň. Číslo vedľa panelu je skóre tvojho tímu v percentách; po uplynutí času kola vyhráva najviac bodov.",
+    sk: { stat: "sek.",
+      instr: "Zóna pri strede mapy je na začiatku vykopaná, jej okraj značia bodky. Kým sú v nej len tanky tvojho tímu, tvoj tím získava body; kto prvý naplní skóre (asi 55 sekúnd držania), vyhráva kolo. Dva tímy vnútri: nikto neboduje, tak ich vyžeň. Číslo vedľa panelu je skóre tvojho tímu v percentách; po uplynutí času kola vyhráva najviac bodov. Zničené tanky sa po asi 3 sekundách vrátia do svojej základne - rozhoduje len zóna.",
       score: "kopec {n}%",
     },
-    cs: {
-      instr: "Zóna u středu mapy je na začátku vykopaná, její okraj značí tečky. Dokud jsou v ní jen tanky tvého týmu, tvůj tým získává body; kdo první naplní skóre (asi 55 sekund držení), vyhrává kolo. Dva týmy uvnitř: nikdo neboduje, tak je vyžeň. Číslo vedle panelu je skóre tvého týmu v procentech; po uplynutí času kola vyhrává nejvíc bodů.",
+    cs: { stat: "sek.",
+      instr: "Zóna u středu mapy je na začátku vykopaná, její okraj značí tečky. Dokud jsou v ní jen tanky tvého týmu, tvůj tým získává body; kdo první naplní skóre (asi 55 sekund držení), vyhrává kolo. Dva týmy uvnitř: nikdo neboduje, tak je vyžeň. Číslo vedle panelu je skóre tvého týmu v procentech; po uplynutí času kola vyhrává nejvíc bodů. Zničené tanky se asi po 3 sekundách vrátí do své základny - rozhoduje jen zóna.",
       score: "kopec {n}%",
     },
-    uk: {
-      instr: "Зона біля центру мапи на початку розкопана, її край позначено крапками. Поки в ній лише танки твоєї команди, твоя команда отримує очки; хто перший заповнить рахунок (приблизно 55 секунд утримання), виграє раунд. Дві команди всередині: ніхто не отримує очок, тож вижени їх. Число біля панелі - рахунок твоєї команди у відсотках; коли час раунду вийде, перемагає найбільше очок.",
+    uk: { stat: "сек.",
+      instr: "Зона біля центру мапи на початку розкопана, її край позначено крапками. Поки в ній лише танки твоєї команди, твоя команда отримує очки; хто перший заповнить рахунок (приблизно 55 секунд утримання), виграє раунд. Дві команди всередині: ніхто не отримує очок, тож вижени їх. Число біля панелі - рахунок твоєї команди у відсотках; коли час раунду вийде, перемагає найбільше очок. Знищені танки повертаються на свою базу приблизно за 3 секунди - вирішує лише зона.",
       score: "пагорб {n}%",
     },
-    ru: {
-      instr: "Зона у центра карты в начале раскопана, её край отмечен точками. Пока в ней только танки твоей команды, твоя команда получает очки; кто первым заполнит счёт (около 55 секунд удержания), выигрывает раунд. Две команды внутри: никто не получает очков, так что выгони их. Число рядом с панелью - счёт твоей команды в процентах; когда время раунда выйдет, побеждает больше очков.",
+    ru: { stat: "сек.",
+      instr: "Зона у центра карты в начале раскопана, её край отмечен точками. Пока в ней только танки твоей команды, твоя команда получает очки; кто первым заполнит счёт (около 55 секунд удержания), выигрывает раунд. Две команды внутри: никто не получает очков, так что выгони их. Число рядом с панелью - счёт твоей команды в процентах; когда время раунда выйдет, побеждает больше очков. Уничтоженные танки возвращаются на свою базу примерно через 3 секунды - решает только зона.",
       score: "холм {n}%",
     },
-    genz: {
-      instr: "There's a dotted circle in the middle of the map and it's literally the main character spot. Only your squad inside = your squad farms points; first to max out (like 55 seconds of camping) takes the round, no cap. Enemies in there too? Nobody scores, so yeet them out. The number by your panel is your squad's percent; when the round timer hits zero, most points eats.",
+    genz: { stat: "secs",
+      instr: "There's a dotted circle in the middle of the map and it's literally the main character spot. Only your squad inside = your squad farms points; first to max out (like 55 seconds of camping) takes the round, no cap. Enemies in there too? Nobody scores, so yeet them out. The number by your panel is your squad's percent; when the round timer hits zero, most points eats. Get wrecked? You respawn at your base in like 3 seconds - only the zone matters.",
       score: "hill {n}%",
     },
   },
@@ -113,10 +137,19 @@ E.registerMode("hill", {
     G.lastPts = G.pts;                               // (the previous round's final points: tests / debugging)
     G.pts = new Array(e.nTeams).fill(0);
     G.holder = -1;
+    G.f = 0;
+    G.back = new Array(e.nPlayers + 1).fill(0);
   },
 
   frame(e) {
     const G = e.GS, N = e.nPlayers;
+    G.f = (G.f || 0) + 1;
+    if (e.endTimer < 0)                              // (destroyed tanks back at their base, ~3 s later)
+      for (let p = 1; p <= N; p++)
+        if (!e.alive[p] && G.back[p] && G.f >= G.back[p]) {
+          const at = spawnSpot(e, p);
+          if (at) { G.back[p] = 0; e.respawn(p, at[0], at[1]); }
+        }
     let holder = -1;
     for (let p = 1; p <= N; p++) {
       if (!e.alive[p] || !inZone(G, e.tankX[p], e.tankY[p])) continue;
@@ -132,14 +165,18 @@ E.registerMode("hill", {
   },
 
   // at the round time: the most points win; a tie at the top is decided among the tied teams only (their
-  // members' damage to enemies this round, the most wins; equal: nobody); nobody scored: the usual rule
+  // members' damage to enemies this round, the most wins; equal: nobody); nobody scored: the same damage
+  // rule among all the teams
   timeUp(e) {
     const pts = e.GS.pts || [];
     let best = 0, top = [];
     for (let t = 0; t < pts.length; t++) {
       if (pts[t] > best) { best = pts[t]; top = [t]; } else if (pts[t] === best && best > 0) top.push(t);
     }
-    if (!top.length) return false;                   // nobody scored: the usual damage rule
+    if (!top.length) {                               // nobody scored: the damage rule - every team's damage to
+      top = [];                                      // enemies this round, the most wins (a tie: nobody); decided
+      for (let t = 0; t < e.nTeams; t++) top.push(t); //  here: tanks come back, so elimination never ends the round
+    }
     if (top.length === 1) { e.endRound(top[0]); return true; }
     let bestD = -1, win = -1;
     for (const t of top) {

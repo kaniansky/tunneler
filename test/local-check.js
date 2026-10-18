@@ -148,7 +148,7 @@ function play(search) {
   env.page("index.html");
   env.key("ArrowDown"); env.key("Enter");                  // Vs computer
   env.key("Enter");                                        // Start a new game (selected first)
-  assert.strictEqual(decodeURIComponent(env.win.location.href), "/vs-computer?slots=0:you:1,1:normal:2&size=medium&win=3&ff=0&view=self&watch=wreck",
+  assert.strictEqual(decodeURIComponent(env.win.location.href), "/skirmish?slots=0:you:1,1:normal:2&size=medium&win=3&ff=0&view=self&watch=wreck",
     "default = the classic game");
   // CYAN: computer (easy) in team 2 -> 1 vs 2 teams; large map; 5 to win; friendly fire on; view everyone
   env = makeEnv("", store);
@@ -168,7 +168,7 @@ function play(search) {
   pick(env, "watch"); env.key("Enter");                    // after death: wreck -> team
   pick(env, "play"); env.key("Enter");                     // start
   assert.strictEqual(decodeURIComponent(env.win.location.href),
-    "/vs-computer?slots=0:you:1,1:normal:2,2:normal:2,7:expert:8&size=large&win=5&ff=1&view=everyone&watch=team&time=3");
+    "/skirmish?slots=0:you:1,1:normal:2,2:normal:2,7:expert:8&size=large&win=5&ff=1&view=everyone&watch=team&time=3");
   assert.strictEqual(store.get("tunneler.cpu.watch"), "team", "after death remembered");
   assert.strictEqual(store.get("tunneler.cpu.time"), "3", "round time remembered");
   // number keys (top row and the numeric keypad with NumLock on) set the team of the selected slot row
@@ -188,11 +188,11 @@ function play(search) {
     const st = new Map(), en = makeEnv("", st);
     en.page("index.html"); en.key("ArrowDown"); en.key("Enter");
     pick(en, "mode"); en.key("ArrowRight");                 // standard -> gold
-    pick(en, "dark"); en.key("Enter"); pick(en, "noRepair"); en.key("Enter");
+    pick(en, "noRepair"); en.key("Enter");
     pick(en, "play"); en.key("Enter");
-    assert(/&gm=gold&dark=1&norepair=1$/.test(decodeURIComponent(en.win.location.href)), en.win.location.href);
-    assert(st.get("tunneler.cpu.mode") === "gold" && st.get("tunneler.cpu.dark") === "1" && st.get("tunneler.cpu.noRepair") === "1");
-    ok("vs computer: Mode and the modifiers go into the link and are remembered");
+    assert(/&gm=gold&norepair=1$/.test(decodeURIComponent(en.win.location.href)), en.win.location.href);
+    assert(st.get("tunneler.cpu.mode") === "gold" && st.get("tunneler.cpu.noRepair") === "1");
+    ok("vs computer: Mode and the modifier go into the link and are remembered");
   }
   // friendly fire: always listed, grayed out (not selectable) while no team has 2+ tanks
   {
@@ -238,7 +238,7 @@ function play(search) {
   env.page("index.html");
   env.key("ArrowDown"); env.key("Enter"); env.key("Enter");
   assert.strictEqual(decodeURIComponent(env.win.location.href),
-    "/vs-computer?slots=0:you:1,1:normal:2,2:normal:2,7:expert:8&size=large&win=5&ff=1&view=everyone&watch=team&time=3");
+    "/skirmish?slots=0:you:1,1:normal:2,2:normal:2,7:expert:8&size=large&win=5&ff=1&view=everyone&watch=team&time=3");
   ok("vs computer slot editor: default classic, slots / teams / options, remembered in localStorage");
 
   // nobody but you: "Start a new game" does nothing

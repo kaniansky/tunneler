@@ -70,28 +70,31 @@ function dropFlag(e, G, p) {
 }
 
 E.registerMode("ctf", {
+  // the statistics: captures; the rounds list: the winner's captures
+  stat: (e, p) => e.modeScore[p] || 0,
+  roundNote: (e, t) => t >= 0 && e.GS.caps ? e.mt("note", { n: e.GS.caps[t] || 0 }) : "",
   strings: {
-    en: {
+    en: { stat: "caps", note: "{n} caps",
       instr: "Every team has a flag at its base (free-for-all: every tank). Drive over an enemy flag to take it, then bring it to your own base while your own flag is at home: a capture. A destroyed carrier drops the flag - its own team returns it by touching it, an enemy picks it up again. The first to 3 captures wins the round (at the round time: the most captures); destroyed tanks come back at their base after 3 seconds.",
       score: "caps {n}", carrying: "+flag",
     },
-    sk: {
+    sk: { stat: "vlaj.", note: "{n} vlaj.",
       instr: "Každý tím má vlajku na svojej základni (každý sám za seba: každý tank). Prejdi cez nepriateľskú vlajku, zober ju a dovez na svoju základňu, kým je tvoja vlajka doma: to je bod. Zničený tank vlajku stratí na mieste - jeho tím ju dotykom vráti domov, nepriateľ ju zoberie znova. Kolo vyhrá, kto prvý získa 3 body (po uplynutí času kola najviac bodov); zničené tanky sa po 3 sekundách vrátia na svoju základňu.",
       score: "vlajky {n}", carrying: "+vlajka",
     },
-    cs: {
+    cs: { stat: "vlaj.", note: "{n} vlaj.",
       instr: "Každý tým má vlajku na své základně (každý sám za sebe: každý tank). Přejeď přes nepřátelskou vlajku, vezmi ji a dovez na svou základnu, dokud je tvoje vlajka doma: to je bod. Zničený tank vlajku ztratí na místě - jeho tým ji dotykem vrátí domů, nepřítel ji sebere znovu. Kolo vyhraje, kdo první získá 3 body (po uplynutí času kola nejvíc bodů); zničené tanky se po 3 sekundách vrátí na svou základnu.",
       score: "vlajky {n}", carrying: "+vlajka",
     },
-    uk: {
+    uk: { stat: "прап.", note: "{n} прап.",
       instr: "Кожна команда має прапор на своїй базі (кожен сам за себе: кожен танк). Наїдь на ворожий прапор, щоб узяти його, і привези на свою базу, поки твій прапор удома: це очко. Знищений танк губить прапор на місці - його команда дотиком повертає його додому, ворог підбирає знову. Раунд виграє той, хто першим набере 3 очки (коли час раунду вийде - найбільше очок); знищені танки повертаються на свою базу через 3 секунди.",
       score: "прапори {n}", carrying: "+прапор",
     },
-    ru: {
+    ru: { stat: "флаги", note: "{n} флаг.",
       instr: "У каждой команды есть флаг на её базе (каждый сам за себя: у каждого танка). Наедь на вражеский флаг, чтобы взять его, и привези на свою базу, пока твой флаг дома: это очко. Уничтоженный танк роняет флаг на месте - его команда касанием возвращает его домой, враг подбирает снова. Раунд выигрывает тот, кто первым наберёт 3 очка (когда время раунда выйдет - больше всех очков); уничтоженные танки возвращаются на свою базу через 3 секунды.",
       score: "флаги {n}", carrying: "+флаг",
     },
-    genz: {
+    genz: { stat: "caps", note: "{n} caps",
       instr: "Every squad got a flag chilling at its base (free-for-all: every tank, no cap). Roll over the opps' flag to yoink it, then bring it back to your crib while your own flag is home: that's a capture, W. Get clapped while carrying and you drop it - your squad touches it to send it home, the opps can yoink it again. First to 3 captures takes the round (round timer out: most captures); wrecked tanks respawn at their base after 3 secs, no cap.",
       score: "caps {n}", carrying: "+flag fr",
     },

@@ -58,7 +58,8 @@
 //                     {t:"me", name?, team?}  own name (any time) / own seat's team 1..8 (not while ready)
 //                     {t:"ready", v}  seated players: ready (1) / not (0)
 //                     host: {t:"seatSet", i, kind?, team?} (a seat nobody sits on), {t:"set", size?, winScore?,
-//                     roundTime?, friendlyFire?, visible?, watchOut?, public?, spectators?} (every player
+//                     roundTime?, friendlyFire?, visible?, watchOut?, mode?, noRepair?} (public /
+//                     spectators only when the game is created; every player
 //                     unready after either), {t:"start"}, {t:"kick", k} (remove + ban by client id)
 //                     match players: {t:"b", v} held bits, {t:"k", a, s} keystroke (relayed as ANY_KEY),
 //                     {t:"h", m, n, h} state hash, {t:"r", screen, playing, round, wins, teamWins} cosmetic
@@ -169,7 +170,7 @@ function createServer(opts = {}) {
     const room = {
       id, name, public: !!isPublic, allowSpec: !!allowSpec,
       size: st.size, winScore: st.winScore, friendlyFire: st.friendlyFire, roundTime: st.roundTime,
-      visible: st.visible, watchOut: st.watchOut, mode: st.mode, dark: st.dark, hardRock: st.hardRock, noRepair: st.noRepair,
+      visible: st.visible, watchOut: st.watchOut, mode: st.mode, noRepair: st.noRepair,
       seats: st.seats.map(s => ({ kind: s.kind, team: s.team, occ: null, last: null })),
       chat: [],                                    // the last CHAT_LOG chat messages [{from, text}]
       hostKey: crypto.randomBytes(16).toString("hex"), banned: new Set(), serial: 0,
@@ -184,7 +185,7 @@ function createServer(opts = {}) {
     return room;
   }
   const settingsOf = room => ({ size: room.size, winScore: room.winScore, friendlyFire: room.friendlyFire, roundTime: room.roundTime,
-    visible: room.visible, watchOut: room.watchOut, mode: room.mode, dark: room.dark, hardRock: room.hardRock, noRepair: room.noRepair });
+    visible: room.visible, watchOut: room.watchOut, mode: room.mode, noRepair: room.noRepair });
   const seated = room => room.seats.map((s, i) => s.occ ? i : -1).filter(i => i >= 0);
   // the tanks a match would have now
   const slotsNow = room => matchSlots(room.seats, i => !!room.seats[i].occ);
@@ -419,7 +420,7 @@ function createServer(opts = {}) {
     [/^\/games\/?$/, "/lobby.html"],                       // the games list
     [/^\/game\/[^/]+(\/[a-z]+)?\/?$/, "/online.html"],      // one game's lobby (/watch: as a spectator; /<colour>: that seat)
     [/^\/split\/?$/, "/play.html"],                         // split screen
-    [/^\/vs-computer\/?$/, "/play.html"],                   // against the computer
+    [/^\/(skirmish|vs-computer)\/?$/, "/play.html"],       // a skirmish against AI tanks (/vs-computer: before 2.1)
   ];
   // the API answers any origin (CORS): the desktop app's pages come from tauri://localhost /
   // tauri.localhost, not from this server; nothing here uses cookies or other credentials
@@ -664,8 +665,6 @@ function createServer(opts = {}) {
             const v = SETTINGS[k](msg[k]);
             if (v !== undefined && v !== room[k]) { room[k] = v; changed = true; }
           }
-          if (typeof msg.public === "boolean" && msg.public !== room.public) { room.public = msg.public; changed = true; }
-          if (typeof msg.spectators === "boolean" && msg.spectators !== room.allowSpec) { room.allowSpec = msg.spectators; changed = true; }
           if (changed) { unreadyAll(room); sendStatus(room); }
           break;
         }

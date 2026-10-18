@@ -30,7 +30,7 @@ const PICK = 5;                 // pick-up distance (tank middle - nugget middle
 const HOME = 15;                // a tank this close to a base's middle is in it (as refuelling)
 const NO_PICK = 50;             // frames a tank can't pick up the nugget it dropped
 const HIT = 0x700;              // the shield a hit takes
-const SEE = 40, SEE_DARK = 13;  // a tank sees a nugget this close (Chebyshev; the view is 76 x 71, dark ~26)
+const SEE = 40;                  // a tank sees a nugget this close (Chebyshev; the view is 76 x 71)
 const HEAR = 150;               // ... and knows where one was dropped (a hit / a destroyed tank) this close
 // what a computer tank knows of the gold besides what it has seen / heard: any nugget within this many px
 // of it (0: nothing more; Infinity: the whole map)
@@ -237,40 +237,43 @@ function prospect(ai, e, mx, my) {
 
 // ---------------------------------------------------------------- the mode
 E.registerMode("gold", {
+  // the statistics: the gold each tank brought home in the match; the rounds list: the winner's gold
+  stat: (e, p) => e.modeScore[p] || 0,
+  roundNote: (e, t) => t >= 0 && e.GS.home ? e.mt("note", { n: e.GS.home[t] || 0 }) : "",
   strings: {
-    en: {
+    en: { stat: "gold", note: "{n} gold",
       instr: "Gold nuggets lie hidden in the dirt. Drive over one to pick it up (5 at most) and bring them into " +
         "your base or a teammate's: they count for your team. A hit makes you drop a nugget, a destroyed tank " +
         "drops them all. More than half of the gold home wins the round; at the round time the most gold home wins.",
       score: "gold {n}", scoreCarry: "gold {n} +{c}",
     },
-    sk: {
+    sk: { stat: "zlato", note: "{n} zlata",
       instr: "V hline sú ukryté zlaté nugety. Prejdi cez nugetu a zober ju (najviac 5) a dovez ich do svojej " +
         "základne alebo spoluhráčovej: rátajú sa tvojmu tímu. Zásah ťa pripraví o jednu nugetu, zničený tank " +
         "stratí všetky. Kto má doma viac ako polovicu zlata, vyhral kolo; po čase kola vyhráva najviac zlata doma.",
       score: "zlato {n}", scoreCarry: "zlato {n} +{c}",
     },
-    cs: {
+    cs: { stat: "zlato", note: "{n} zlata",
       instr: "V hlíně jsou ukryté zlaté nugety. Přejeď přes nugetu a seber ji (nejvýš 5) a dovez je do své " +
         "základny nebo spoluhráčovy: počítají se tvému týmu. Zásah tě připraví o jednu nugetu, zničený tank " +
         "ztratí všechny. Kdo má doma víc než polovinu zlata, vyhrál kolo; po čase kola vyhrává nejvíc zlata doma.",
       score: "zlato {n}", scoreCarry: "zlato {n} +{c}",
     },
-    uk: {
+    uk: { stat: "злото", note: "{n} злота",
       instr: "У ґрунті сховані золоті самородки. Наїдь на самородок, щоб підібрати його (не більше 5), і привези " +
         "їх на свою базу або базу товариша: вони зараховуються твоїй команді. Влучання вибиває один самородок, " +
         "знищений танк губить усі. Більше половини золота вдома - перемога в раунді; коли час раунду минає, " +
         "перемагає той, у кого вдома найбільше золота.",
       score: "золото {n}", scoreCarry: "золото {n} +{c}",
     },
-    ru: {
+    ru: { stat: "злото", note: "{n} злота",
       instr: "В земле спрятаны золотые самородки. Наедь на самородок, чтобы подобрать его (не больше 5), и " +
         "привези их на свою базу или базу союзника: они засчитываются твоей команде. Попадание выбивает один " +
         "самородок, уничтоженный танк теряет все. Больше половины золота дома - победа в раунде; когда время " +
         "раунда выходит, побеждает тот, у кого дома больше всего золота.",
       score: "золото {n}", scoreCarry: "золото {n} +{c}",
     },
-    genz: {
+    genz: { stat: "bling", note: "{n} bling",
       instr: "There's gold hiding in the dirt, no cap. Roll over a nugget to yoink it (5 max, don't be greedy) and " +
         "drop it at your base or your bestie's: it counts for the squad. Get hit and you leak a nugget, get " +
         "wrecked and you lose the whole stash. Over half the gold at home = W; when the timer hits zero, " +
@@ -294,7 +297,7 @@ E.registerMode("gold", {
   },
 
   frame(e) {
-    const S = e.GS, N = e.nPlayers, see = e.mods && e.mods.dark ? SEE_DARK : SEE;
+    const S = e.GS, N = e.nPlayers, see = SEE;
     S.f++;
     for (let p = 1; p <= N; p++) {
       if (!e.alive[p]) continue;

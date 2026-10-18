@@ -13,7 +13,7 @@
 // Endpoint.DEFAULT               the public server
 //
 // Links: the pages' addresses - short ones on a server (/games, /game/<id> = its lobby, /game/<id>/watch,
-// /split, /vs-computer; server.js maps them to the pages), the plain files in the desktop app (no
+// /split, /skirmish (old: /vs-computer); server.js maps them to the pages), the plain files in the desktop app (no
 // server behind its pages: /lobby.html, /online.html?room=...[&role=watch], /play.html?mode=...).
 // Links.room / game / here() read either form, Links.parse a pasted invite link. Invite links
 // (Endpoint.web) always use the short form.
@@ -58,7 +58,7 @@ const Links = {
   game: (id, role) => isApp ? "/online.html?room=" + enc(id) + (role ? "&role=" + role : "") : "/game/" + enc(id) + (role ? "/" + watchRole(role) : ""),
   room: id => Links.game(id),
   split: query => (isApp ? "/play.html?mode=hotseat" + (query ? "&" + query : "") : "/split" + (query ? "?" + query : "")),
-  cpu: query => (isApp ? "/play.html?mode=cpu" + (query ? "&" + query : "") : "/vs-computer" + (query ? "?" + query : "")),
+  cpu: query => (isApp ? "/play.html?mode=cpu" + (query ? "&" + query : "") : "/skirmish" + (query ? "?" + query : "")),
   invite: id => "/game/" + enc(id),              // (for Endpoint.web: always on a server)
   // A pasted invite link -> {origin, room, role} or null: https://host/game/<id>[/<color|watch>], the
   // .html forms (?room=&role=), "host/game/<id>" without https://, or just a game's id (origin "" = this

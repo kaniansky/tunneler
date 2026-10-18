@@ -151,33 +151,35 @@ function fightNow(ai, e, mx, my, ctx, s) {
 }
 
 const LANG = {
-  en: {
+  en: { stat: "hits",
     instr: "Every base can take 30 hits; enemy shots exploding on its walls wear it down (yours never hurt your own team's bases). A base at 0 falls to rubble and no longer refuels or repairs. A destroyed tank comes back at its base after about 3 seconds - unless the base has fallen. The last team with a base or a tank left wins the round; when the round time (10 minutes if none is set) runs out, the team with the most base hits left wins.",
     score: "base {n}", fallen: "base down",
   },
-  sk: {
+  sk: { stat: "zás.",
     instr: "Každá základňa vydrží 30 zásahov; nepriateľské strely vybuchujúce na jej stenách ju ničia (tvoje nikdy nepoškodia základne tvojho tímu). Základňa na nule sa rozpadne na trosky a už nedopĺňa energiu ani neopravuje. Zničený tank sa po asi 3 sekundách vráti na svoju základňu - ak ešte stojí. Kolo vyhrá posledný tím, ktorému zostala základňa alebo tank; keď vyprší čas kola (bez nastaveného času 10 minút), tím s najviac zásahmi, ktoré jeho základne ešte vydržia.",
     score: "základňa {n}", fallen: "bez základne",
   },
-  cs: {
+  cs: { stat: "zás.",
     instr: "Každá základna vydrží 30 zásahů; nepřátelské střely vybuchující na jejích zdech ji ničí (tvoje nikdy nepoškodí základny tvého týmu). Základna na nule se rozpadne na trosky a už nedoplňuje energii ani neopravuje. Zničený tank se asi po 3 sekundách vrátí na svou základnu - pokud ještě stojí. Kolo vyhraje poslední tým, kterému zbyla základna nebo tank; když vyprší čas kola (bez nastaveného času 10 minut), tým s nejvíce zásahy, které jeho základny ještě vydrží.",
     score: "základna {n}", fallen: "bez základny",
   },
-  uk: {
+  uk: { stat: "влуч.",
     instr: "Кожна база витримує 30 влучань; ворожі постріли, що вибухають на її стінах, руйнують її (твої ніколи не шкодять базам твоєї команди). База на нулі розсипається на уламки й більше не заправляє і не ремонтує. Знищений танк повертається на свою базу приблизно за 3 секунди - якщо вона ще стоїть. Раунд виграє остання команда, в якої лишилася база або танк; коли час раунду спливає (без заданого часу - 10 хвилин), команда, чиї бази витримають найбільше влучань.",
     score: "база {n}", fallen: "без бази",
   },
-  ru: {
+  ru: { stat: "попад",
     instr: "Каждая база выдерживает 30 попаданий; вражеские выстрелы, взрывающиеся на её стенах, разрушают её (твои никогда не вредят базам твоей команды). База на нуле рассыпается в обломки и больше не заправляет и не чинит. Уничтоженный танк возвращается на свою базу примерно через 3 секунды - если она ещё стоит. Раунд выигрывает последняя команда, у которой осталась база или танк; когда время раунда истекает (без заданного времени - 10 минут), команда, чьи базы выдержат больше всего попаданий.",
     score: "база {n}", fallen: "без базы",
   },
-  genz: {
+  genz: { stat: "hits",
     instr: "Every base tanks 30 hits; enemy shots popping on its walls chip it down (your own shots never touch your squad's bases, no cap). Base hits 0? It's rubble, no more refuels or repairs, it's giving nothing. Get wrecked and you respawn at your base in like 3 seconds - unless it already fell, then you're cooked. Last squad with a base or a tank still up takes the round; if the round timer runs out (10 minutes when nobody set one), the squad whose bases have the most hits left wins.",
     score: "base {n}", fallen: "base gone",
   },
 };
 
 E.registerMode("siege", {
+  // the statistics: hits on enemy bases
+  stat: (e, p) => e.modeScore[p] || 0,
   strings: LANG,
   eliminationEnds: false,
   aiAlways: true,               // an enemy base still standing is something to do, even with no enemy alive

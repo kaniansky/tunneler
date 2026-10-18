@@ -3,6 +3,17 @@
 All notable changes to Tunneler Online. Versions follow [semantic versioning](https://semver.org/);
 a release is made by pushing a version tag (see CONTRIBUTING.md).
 
+## Unreleased
+
+- **Game modes** (vs computer and online, a new "Mode" setting): gold rush, infection, survival, king of
+  the hill, shrinking world, capture the flag, base siege and deathmatch - besides the standard game.
+  Each has its own rules, objects on the map (gold, flags, the zone, the safe area's edge), a score tag
+  beside the instrument panel, its score in the spectators' map table, its own computer-player tactics,
+  and an explanation on the Instructions page.
+- A **modifier** for any mode: no base repairs.
+- Online, "List publicly" and "Allow spectators" are chosen only when a game is created.
+- The vs computer screen no longer overlaps when the settings box is long.
+
 ## 2.0.0
 
 **Online play is reworked** - a 2.0 server and older pages or desktop apps can't play together (each

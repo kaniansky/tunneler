@@ -33,7 +33,7 @@
   // the game mode and the modifiers (docs/DESIGN-8P.md 27)
   const MODE_LIST = TunnelerEngine.MODE_LIST || ["standard"];
   let gmode = MODE_LIST.includes(load("tunneler.cpu.mode")) ? load("tunneler.cpu.mode") : "standard";
-  const mods = { dark: load("tunneler.cpu.dark", "0") === "1", hardRock: load("tunneler.cpu.hardRock", "0") === "1",
+  const mods = {
     noRepair: load("tunneler.cpu.noRepair", "0") === "1" };
   // after death (black / wreck / others): what you see once your tank is destroyed (views.js)
   let watchOut = TunnelerEngine.afterDeath(load("tunneler.cpu.watch", "wreck"));
@@ -186,7 +186,7 @@
       used, nCpu, me,
       // the original engine: you as BLUE against one computer GREEN, in different teams
       classic: used.length === 2 && used[0].color === 0 && used[0].kind === "you" && used[1].color === 1 && used[0].team !== used[1].team &&
-        gmode === "standard" && !mods.dark && !mods.hardRock && !mods.noRepair,
+        gmode === "standard" && !mods.noRepair,
       nTeams: perTeam.size,
       teamGame: [...perTeam.values()].some(n => n > 1) || ownTeams,
       mates: me >= 0 ? perTeam.get(slots[me].team) - 1 : 0,   // computer tanks on your team
@@ -202,7 +202,7 @@
       const list = S.used.map(u => u.color + ":" + u.kind + ":" + u.team).join(",");
       location.href = Links.cpu("slots=" + encodeURIComponent(list) + "&size=" + cpuSize + "&win=" + cpuWin +
         "&ff=" + (ff && S.teamGame ? 1 : 0) + "&view=" + view + "&watch=" + watchOut + timeArg(cpuTime) +
-        (gmode !== "standard" ? "&gm=" + gmode : "") + (mods.dark ? "&dark=1" : "") + (mods.hardRock ? "&hard=1" : "") + (mods.noRepair ? "&norepair=1" : ""));
+        (gmode !== "standard" ? "&gm=" + gmode : "") + (mods.noRepair ? "&norepair=1" : ""));
     };
     // slot rows: "you                team 1", the who column padded to the longest text in this language,
     // each row in its tank's color (which is all that tells the colors apart - no color name)
@@ -252,8 +252,6 @@
     const setWatch = d => { watchOut = step(TunnelerEngine.AFTER_DEATH, watchOut, d); redraw(); };
     options.push({ key: "watch", label: T("lc.watch") + T("watch." + watchOut),
       info: [T("watch.i1"), T("watch.i2")], go: () => setWatch(1), change: setWatch });
-    options.push({ key: "dark", label: T("mod.dark") + onOff(mods.dark), info: [T("mod.dark.i")], go: flip("dark"), change: flip("dark") });
-    options.push({ key: "hardRock", label: T("mod.hardRock") + onOff(mods.hardRock), info: [T("mod.hardRock.i")], go: flip("hardRock"), change: flip("hardRock") });
     options.push({ key: "noRepair", label: T("mod.noRepair") + onOff(!mods.noRepair), info: [T("mod.noRepair.i")], go: flip("noRepair"), change: flip("noRepair") });
     // like the online game lobby (online.js), without the chat: the 8 slot rows (the screen's title in the
     // box's border) and the settings on top, Start / Back below them, the selected item's info under it
@@ -269,12 +267,14 @@
     // below them, the info under it)
     const seatW = DosUI.boxWidth(slotItems), setW = DosUI.boxWidth(sets), actW = DosUI.boxWidth(acts);
     const x0 = Math.max(1, 1 + ((80 - (seatW + 2 + 3 + setW + 2)) >> 1));
+    // (the Game box one row below the taller of the two boxes above it)
+    const gameY = Math.max(slotItems.length, sets.length) + 4;
     ui.show({
       boxes: [{ x: x0, y: 1, w: seatW, title: T("cpu.title"), items: slotItems },
         { x: x0 + seatW + 5, y: 1, w: setW, title: T("box.settings"), items: sets },
-        { x: 41 - ((actW + 2) >> 1), y: 12, w: actW, title: T("box.game"), items: acts }],
+        { x: 41 - ((actW + 2) >> 1), y: gameY, w: actW, title: T("box.game"), items: acts }],
       hint: T("create.hint"),
-      sel: Math.max(0, items.findIndex(it => it.key === selKey)), infoRow: 18,
+      sel: Math.max(0, items.findIndex(it => it.key === selKey)), infoRow: gameY + acts.length + 3,
       back: () => main(1),
     }, keep);
   }

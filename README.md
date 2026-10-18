@@ -36,6 +36,22 @@ All menus, the lobby and the status lines use the same DOS text screen.
   Addresses: `/games` (the list), `/game/<name>` (the game's lobby), `/game/<name>/watch` (spectating),
   `/split`, `/vs-computer`.
 
+Game modes (vs computer and online; every mode's AI plays it too):
+
+- **Standard** - the last tank (or team) still standing wins the round, as in the original.
+- **Gold rush** - gold nuggets lie in the dirt: dig them up and bring them to your base; a hit makes you
+  drop one. The most gold wins the round.
+- **Infection** - one tank starts infected; tanks it destroys come back infected on its side. The healthy
+  tanks win if any of them lasts until the time is up.
+- **Survival** - all players together against waves of AI tanks that grow with every wave.
+- **King of the hill** - hold the zone in the middle of the map alone to fill your bar.
+- **Shrinking world** - the safe area closes in; outside it your shield melts away.
+- **Capture the flag** - bring the enemy's flag to your base while yours is at home.
+- **Base siege** - shoot the enemy bases down; the last side with a base wins.
+- **Deathmatch** - destroyed tanks come back at their base; the first side to 10 kills wins.
+
+A modifier for any mode: **no base repairs** (bases refuel but don't repair shields).
+
 Settings (split screen: map size, rounds to win and round time only):
 
 - **Slots and teams** - 8 slots (BLUE, GREEN, CYAN, YELLOW, WHITE, PINK, VIOLET, TEAL), each nobody,

@@ -307,12 +307,7 @@
     rememberSettings();
     drawLobby(true);
   }
-  function setRoomFlag(k, v) {
-    if (!st || !isHost() || st.match) return;
-    st[k] = v;
-    send({ t: "set", [k]: v });
-    drawLobby(true);
-  }
+
   function seatSet(i, change) {
     if (!st || !isHost() || st.match) return;
     Object.assign(st.seats[i], change);
@@ -390,7 +385,7 @@
   }
 
   function settingItems() {
-    const s = st.settings, host = isHost() && !st.match, yn = v => T(v ? "yes" : "no");
+    const s = st.settings, host = isHost() && !st.match;
     // friendly fire only matters with teammates: grayed out while no team has 2+ seats that aren't closed
     const teamOf = {};
     for (const x of st.seats) if (x.kind !== "closed") teamOf[x.team] = (teamOf[x.team] || 0) + 1;
@@ -411,11 +406,7 @@
       row("ff", T("os.ff") + T(s.friendlyFire ? "os.on" : "os.off"), [T("os.ff.i1"), T("os.ff.i2")], () => setSetting("friendlyFire", !s.friendlyFire), !teams),
       row("visible", T("os.visible") + T("view." + s.visible), [T("os.visible.i1"), T("os.visible.i2")], d => setSetting("visible", cycle(VISIBLE, s.visible, d))),
       row("watch", T("os.watch") + T("watch." + s.watchOut), [T("watch.i1"), T("watch.i2")], d => setSetting("watchOut", cycle(AFTER_DEATH, s.watchOut, d))),
-      row("dark", T("mod.dark") + onOff(s.dark), [T("mod.dark.i")], () => setSetting("dark", !s.dark)),
-      row("hardRock", T("mod.hardRock") + onOff(s.hardRock), [T("mod.hardRock.i")], () => setSetting("hardRock", !s.hardRock)),
       row("noRepair", T("mod.noRepair") + onOff(!s.noRepair), [T("mod.noRepair.i")], () => setSetting("noRepair", !s.noRepair)),
-      row("public", T("create.public") + yn(st.public), [T("create.public.i1"), T("create.public.i2")], () => setRoomFlag("public", !st.public)),
-      row("spectators", T("create.spect") + yn(st.spectators), [T("create.spect.i1"), T("create.spect.i2")], () => setRoomFlag("spectators", !st.spectators)),
     ];
   }
 

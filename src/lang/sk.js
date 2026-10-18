@@ -13,14 +13,14 @@ Lang.register("sk", {
   "ui.hint": "↑↓ a <ENTER>, alebo myš.", "ui.back": "<ESC> späť.",
   "home.split": "Delená obrazovka", "home.split.i1": "Dvaja hráči na jednej klávesnici, ako v origináli.",
   "home.split.i2": "{blue}: W A S D + SHIFT     {green}: šípky + ENTER",
-  "home.cpu": "Proti počítaču",
+  "home.cpu": "Potýčka",
   "home.cpu.i2": "Obtiažnosť zvolíš na ďalšej obrazovke.",
   "home.online": "Hra online", "home.online.i1": "Hraj s inými na ich počítačoch (2 až 8 tankov)",
   "home.online.i2": "alebo sa pozeraj ako divák.",
   "home.lang": "Jazyk: ", "home.lang.i1": "Jazyk menu a hry.", "home.lang.i2": "← →, <ENTER> alebo klik ho prepne.",
   "home.settings": "Nastavenia", "home.settings.i": "Jazyk a zvuk.", "set.title": "NASTAVENIA", "set.sound": "Zvuk: ", "set.ping": "Zobraziť ping: ", "set.ping.on": "áno", "set.ping.off": "nie", "set.ping.i": "Online hry: odozva v ms, vľavo hore na okraji hry.",
   "set.server": "Server: ", "set.server.i1": "Online hry: adresa servera, napr. example.com:8050.", "set.server.i2": "Prázdne = verejný server. <ENTER> ju uloží.", "sound.muted": "vypnutý", "sound.original": "pôvodný (PC speaker)", "sound.realistic": "realistický", "sound.cartoony": "rozprávkový", "sound.i1": "Pôvodný: pípanie PC speakera z roku 1991. Realistický: zvuky tankov.", "sound.i2": "Rozprávkový: boingy a puky. ← → ho zmení a prehrá ukážku.",
-  "cpu.title": "PROTI POČÍTAČU", "cpu.start": "Začať novú hru", "cpu.start.i1": "Začni hru proti počítaču ({level}).",
+  "cpu.title": "POTÝČKA", "cpu.start": "Začať novú hru", "cpu.start.i1": "Začni hru proti počítaču ({level}).",
   "cpu.own": "Vidíš iba svoju obrazovku.", "cpu.both": "Vidíš obe obrazovky.",
   "cpu.level": "Obtiažnosť: ", "cpu.level.i1": "Ako dobre hrá počítač:", "cpu.level.i2": "{levels}.",
   "cpu.view": "Pohľad: ", "cpu.view.own": "iba môj", "cpu.view.both": "oba",
@@ -91,7 +91,7 @@ Lang.register("sk", {
       ff: ["priateľská paľba: vypnutá", "priateľská paľba: zapnutá"], view: "pohľad: {v}", visible: "limit pohľadu: {v}",
       views: ["len ja", "tím", "všetci"], watch: ["po smrti: čierna obrazovka", "po smrti: môj vrak", "po smrti: sledovať tím", "po smrti: sledovať vraha", "po smrti: sledovať všetkých"],
       modes: {"standard": "štandard", "gold": "zlatá horúčka", "infection": "nákaza", "survival": "prežitie", "hill": "kráľ kopca", "shrink": "zmenšujúci sa svet", "ctf": "ukradni vlajku", "siege": "obliehanie základní", "deathmatch": "zápas na smrť"},
-      dark: "tma", hardRock: "tvrdá zem", noRepair: "bez opráv",
+      noRepair: "bez opráv",
       time: "čas kola: {n} min", timeShort: "čas: {n} min" },
     prompt: "<ENTER> - hlavné menu.",
     instr: {
@@ -161,7 +161,7 @@ Lang.register("sk", {
         ["Delená obrazovka:  ", "pôvodná hra - dvaja hráči na jednej klávesnici, {9}MODRÝ{3} na " +
           "ľavej polovici obrazovky a {10}ZELENÝ{3} na pravej.  Najprv si zvoľ veľkosť mapy, počet kôl " +
           "na výhru a čas kola."],
-        ["Proti počítaču:  ", "riadiš {9}MODRÝ{3} tank ktoroukoľvek sadou kláves proti 1 až 7 " +
+        ["Potýčka:  ", "riadiš {9}MODRÝ{3} tank ktoroukoľvek sadou kláves proti 1 až 7 " +
           "počítačovým tankom.  Pre každú ďalšiu farbu zvoľ nikoho alebo počítač a jeho úroveň, pre " +
           "každý tank jeho tím (1-8); potom veľkosť mapy, kolá na výhru, čas kola, priateľskú paľbu, " +
           "pohľad a čo po smrti.  <ESC> počas hry ukončí zápas; <ESC> v menu hry ťa vráti k " +
@@ -198,7 +198,7 @@ Lang.register("sk", {
         "na rovnakej obrazovke (160x100 v 16 farbách) so zvukom PC reproduktora."],
       waysHead: "Spôsoby hry:",
       ways: [["Delená obrazovka", "dvaja hráči na jednej klávesnici, ako v origináli"],
-        ["Proti počítaču", "ty proti 1 až 7 tankom počítača, sám alebo v tímoch"],
+        ["Potýčka", "ty proti 1 až 7 tankom počítača, sám alebo v tímoch"],
         ["Hra online", "2 až 8 tankov na iných počítačoch, aj tanky počítača"],
         ["Sledovať", "hru online: všetky obrazovky, živá mapa či jeden tank"]],
       p2: ["Až 8 tankov bojuje každý za seba alebo v tímoch (priateľská paľba podľa voľby)",
@@ -320,10 +320,6 @@ Lang.register("sk", {
   "gm.deathmatch.i": "Zničené tanky sa vrátia do základne: kolo vyhrá najviac zostrelov.",
   "lc.mode": "Režim: ",
   "lc.mode.i": "← →: herný režim.",
-  "mod.dark": "Tma: ",
-  "mod.dark.i": "Zapnutá: vidíš len okolie svojho tanku.",
-  "mod.hardRock": "Tvrdá zem: ",
-  "mod.hardRock.i": "Zapnutá: kopanie trvá oveľa dlhšie.",
   "mod.noRepair": "Opravy v základni: ",
   "mod.noRepair.i": "Vypnuté: základne tankujú, ale štít neopravujú.",
   "pg.cant.ai": "Prežitie potrebuje aspoň jeden AI tank (vlny).",

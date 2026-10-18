@@ -54,7 +54,7 @@ ok("desktop app (tauri://localhost, tauri.localhost): the public server by defau
   const web = load("https://x.example/").L, app = load("tauri://localhost/").L;
   assert.deepStrictEqual([web.games(), web.room("friday-night"), web.game("friday-night", "blue"), web.game("a b", "spectate"),
     web.split("size=small"), web.cpu("slots=0:you:1")],
-    ["/games", "/game/friday-night", "/game/friday-night/blue", "/game/a%20b/watch", "/split?size=small", "/vs-computer?slots=0:you:1"]);
+    ["/games", "/game/friday-night", "/game/friday-night/blue", "/game/a%20b/watch", "/split?size=small", "/skirmish?slots=0:you:1"]);
   assert.deepStrictEqual([app.games(), app.room("x"), app.game("x", "green"), app.split("win=2"), app.cpu(""), app.invite("x")],
     ["/lobby.html", "/online.html?room=x", "/online.html?room=x&role=green", "/play.html?mode=hotseat&win=2", "/play.html?mode=cpu", "/game/x"]);
   const here = href => JSON.parse(JSON.stringify(load(href).L.here()));   // (out of the vm context)
@@ -63,7 +63,7 @@ ok("desktop app (tauri://localhost, tauri.localhost): the public server by defau
   assert.deepStrictEqual(here("https://x.example/game/" + encodeURIComponent("żółw") + "/"), { room: "żółw", role: null });
   assert.deepStrictEqual(here("https://x.example/online.html?room=r1&role=green"), { room: "r1", role: "green" });
   assert.deepStrictEqual(here("https://x.example/games"), { room: null, role: null });
-  ok("Links: /games, /game/<id>[/<color|watch>], /split, /vs-computer (app: the .html files); read back from either");
+  ok("Links: /games, /game/<id>[/<color|watch>], /split, /skirmish (app: the .html files); read back from either");
 }
 {
   // a pasted invite link (lobby.js "Join by link..."): the server, the game, the role
