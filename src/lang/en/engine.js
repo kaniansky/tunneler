@@ -111,7 +111,7 @@ const STRINGS_EN = {
         "around your tank as it is now; the rest of the view screen shows the world as you last saw " +
         "it, in gray (an enemy tank stays where you last saw it).  True - the same, but dirt, rock and " +
         "base walls hide what is behind them: in a tunnel you see only the tunnel.  Computer tanks " +
-        "still see everything."],
+        "see the same way; medium and hard ones also hear roughly where the nearest enemy is."],
       ["Split screen:  ", "the original game - two players on one keyboard, {9}BLUE{3} on the left " +
         "half of the screen and {10}GREEN{3} on the right.  First choose the map size, the rounds to " +
         "win and the round time."],

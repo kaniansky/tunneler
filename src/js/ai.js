@@ -22,6 +22,8 @@
 // steering through other bases' doorways (doorway), breaking dirt standoffs on a firing line (engage),
 // a coin toss to break off a losing head-on duel (decide), a bigger A* budget on the large map, no spinning
 // in place (clues of dead tanks dropped, reached clues used up, doorway hysteresis, ditherN -> unstick).
+// Line of sight (engine.sight circle / walls, both engines): it sees only what engine.sightSees allows,
+// and the best level gets rough positions instead of exact ones (SIGHT_LEVELS); off = unchanged.
 //
 // The AI only *reads* engine state (tank positions, world pixels, shots) and presses the same keys a human
 // would; it never touches the engine and never calls engine.random(), so games stay deterministic.
@@ -101,6 +103,8 @@ const teamOf = (e, p) => (e.team ? e.team(p) : p);
 //   fastDig     fires while digging when energy is above this (0 = never)
 //   wander      share of exploration waypoints picked anywhere on the map instead of near an enemy base
 //   engage      distance at which a known enemy is attacked instead of hunted
+//   noisyEvery / noisyErr  intel "noisy": a rough position of the nearest enemy every noisyEvery frames,
+//               up to noisyErr / 2 px off
 const LEVELS = {
   easy:   { delay: 10, intel: "none",  knowsMap: false, aimTol: 5, lead: false, fireProb: 0.35, fireDirt: 0,
             dodge: 0,    retreatE: 1500, retreatS: 1900, leaveAt: 9000,  fastDig: 0,    wander: 0.55, engage: 50,
@@ -110,12 +114,16 @@ const LEVELS = {
             spotEvery: 6, memory: 120 },
   hard:   { delay: 3,  intel: "noisy", knowsMap: true,  aimTol: 2, lead: true,  fireProb: 0.95, fireDirt: 5,
             dodge: 0.85, retreatE: 3000, retreatS: 5500, leaveAt: 10800, fastDig: 7000, wander: 0.1,  engage: 70,
-            spotEvery: 4, memory: 200 },
+            spotEvery: 4, memory: 200, noisyEvery: 55, noisyErr: 50 },
   expert: { delay: 1,  intel: "exact", knowsMap: true,  aimTol: 2, lead: true,  fireProb: 1,    fireDirt: 8,
             dodge: 1,    retreatE: 3000, retreatS: 5500, leaveAt: 11000, fastDig: 6000, wander: 0,    engage: 80,
             spotEvery: 3, memory: 400 },
 };
 const LEVEL_NAMES = Object.keys(LEVELS);
+// with line of sight (engine.sight circle / walls) every level sees only what a player would (engine.sightSees,
+// instead of the whole view window); the best level is no longer told where every enemy is - it gets a
+// rough position more often and more precisely than the level below (it "hears" the nearest enemy)
+const SIGHT_LEVELS = { expert: { intel: "noisy", noisyEvery: 18, noisyErr: 20 } };
 
 // 32-bit integer PRNG -> [0, 1) (exact: an integer divided by 2^32)
 function mulberry32(a) {
@@ -430,6 +438,8 @@ class TunnelerAI {
     let s = mix(mix(mix(0x5EED, this.me), LEVEL_NAMES.indexOf(this.levelName)), this.seed);
     s = mix(mix(s, e.randSeed | 0), e.round | 0);
     if (e.extended) this.rng = mulberry32(s);
+    this.sight = e.sight && e.sight !== "full" && e.sightSees ? e : null;   // (line of sight: the engine says what it sees)
+    this.cfg = this.sight && SIGHT_LEVELS[this.levelName] ? Object.assign({}, LEVELS[this.levelName], SIGHT_LEVELS[this.levelName]) : LEVELS[this.levelName];
     this.t = 0;
     this.ring = [];                  // perception history, ring[t % RING]
     this.mem = new Array(N + 1).fill(null);   // last perceived {x, y, vx, vy, svx, svy, dir, t} per enemy
@@ -507,6 +517,7 @@ class TunnelerAI {
 
   // ---------------------------------------------------------------- perception
   visibleFrom(mx, my, x, y) {
+    if (this.sight) return this.sight.sightSees(this.me, x, y);
     return x >= mx - VIEW_L && x <= mx + VIEW_R && y >= my - VIEW_U && y <= my + VIEW_D;
   }
 
@@ -575,10 +586,10 @@ class TunnelerAI {
       }
 
     // hard: rough position of the nearest enemy every ~3 s
-    if (cfg.intel === "noisy" && this.t - this.noisyT >= 55) {
+    if (cfg.intel === "noisy" && this.t - this.noisyT >= cfg.noisyEvery) {
       this.noisyT = this.t;
       const q = this.nearestEnemy(e, mx, my);
-      if (q) this.noisy = { x: e.tankX[q] + Math.round((this.rng() - 0.5) * 50), y: e.tankY[q] + Math.round((this.rng() - 0.5) * 50), q };
+      if (q) this.noisy = { x: e.tankX[q] + Math.round((this.rng() - 0.5) * cfg.noisyErr), y: e.tankY[q] + Math.round((this.rng() - 0.5) * cfg.noisyErr), q };
     }
     // a rough position / clue of a tank destroyed since is worthless (it led to the wreck after a kill)
     if (this.noisy && !e.alive[this.noisy.q]) this.noisy = null;

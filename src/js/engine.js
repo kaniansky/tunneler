@@ -123,8 +123,9 @@ const SIGHT_CELLS = (() => {
   list.sort((a, b) => Math.max(Math.abs(a[0]), Math.abs(a[1])) - Math.max(Math.abs(b[0]), Math.abs(b[1])));
   const at = new Map(list.map(([dx, dy], k) => [dx + "," + dy, k]));
   const dxs = new Int8Array(list.length), dys = new Int8Array(list.length), prev = new Int16Array(list.length);
+  const W = 2 * SIGHT_RX + 1, idx = new Int16Array(W * (2 * SIGHT_RY + 1)).fill(-1);   // offset -> index (-1 = outside)
   list.forEach(([dx, dy], k) => {
-    dxs[k] = dx; dys[k] = dy;
+    dxs[k] = dx; dys[k] = dy; idx[(dy + SIGHT_RY) * W + dx + SIGHT_RX] = k;
     if (!dx && !dy) { prev[k] = -1; return; }
     // one step towards the tank along the major axis, along the minor one too when the line from the
     // tank has moved half a pixel or more on it
@@ -133,7 +134,7 @@ const SIGHT_CELLS = (() => {
     const py = ay > ax ? dy - Math.sign(dy) : dy - Math.sign(dy) * Math.round(ay / ax);
     prev[k] = at.get(px + "," + py);
   });
-  return { n: list.length, dx: dxs, dy: dys, prev };
+  return { n: list.length, dx: dxs, dy: dys, prev, at: (dx, dy) => Math.abs(dx) > SIGHT_RX || Math.abs(dy) > SIGHT_RY ? -1 : idx[(dy + SIGHT_RY) * W + dx + SIGHT_RX] };
 })();
 const MENU_SCANS = [59, 60, 68];
 const MENU_ROWS = [0, 2, 4];                         // box row of each item (blank rows between groups)
@@ -690,6 +691,17 @@ class TunnelerEngine {
       if (vx >= 0 && vx < 76 && vy >= 0 && vy < 71) m[vy * 76 + vx] = 1;
     }
     return m;
+  }
+  // does player p's tank see world pixel (x, y) now - the same rule as its view (sightView)? With line of
+  // sight off: always (the AI asks it; computer tanks see what a player would)
+  sightSees(p, x, y) {
+    if (this.sight === "full") return true;
+    const C = SIGHT_CELLS, tx = this.tankX[p], ty = this.tankY[p];
+    const k = C.at(x - tx, y - ty);
+    if (k < 0) return false;
+    if (this.sight !== "walls") return true;
+    for (let q = C.prev[k]; q >= 0 && C.prev[q] >= 0; q = C.prev[q]) if (this.sightBlocks(tx + C.dx[q], ty + C.dy[q])) return false;
+    return true;
   }
   // does the pixel at x, y hide what is behind it? Dirt (6, 8), rock (7) and base walls (tanks, shots and
   // explosions don't)

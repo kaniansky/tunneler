@@ -165,7 +165,7 @@ Lang.register("cs", {
           "kolem svého tanku; zbytek obrazovky ukazuje svět tak, jak jsi ho naposledy viděl, šedě " +
           "(nepřátelský tank zůstane tam, kde jsi ho viděl naposledy).  Skutečný - totéž, ale hlína, " +
           "skála a zdi základen zakryjí, co je za nimi: v tunelu vidíš jen tunel.  Počítačové tanky " +
-          "pořád vidí všechno."],
+          "vidí stejně; střední a těžké navíc zhruba slyší, kde je nejbližší nepřítel."],
         ["Dělená obrazovka:  ", "původní hra - dva hráči na jedné klávesnici, {9}MODRÝ{3} na levé " +
           "polovině obrazovky a {10}ZELENÝ{3} na pravé.  Nejdřív si zvol velikost mapy, počet kol k " +
           "výhře a čas kola."],

@@ -586,5 +586,10 @@ A game setting "Line of sight" (skirmish, the online lobby's Settings; engine op
   pixels in the dim plane (`engine.dim`, per view `viewDims`; snapshots carry `dim` / `dims` only with
   line of sight); `Display.paint(..., dim)` draws them gray. Never read by the simulation, not in
   stateHash; online every client draws every view the same way. Off = byte-for-byte the original.
-- Computer tanks still see everything (AI unchanged for now). The live map (spectators) shows the whole
-  world. Split screen has no such setting.
+- Computer tanks (owner, 2026-10-20): with line of sight they see only what a player would -
+  `TunnelerAI.visibleFrom` asks `engine.sightSees(p, x, y)` (the same ellipse / walls as the view, along
+  the same pixel chain) instead of the whole view window. Medium (`hard`) keeps its rough position of the
+  nearest enemy (every 55 frames, +-25 px); hard (`expert`) no longer knows every position exactly but gets
+  one more often and closer (`SIGHT_LEVELS`: every 18 frames, +-10 px). Their knowledge of the tunnels
+  (`knowsMap`) stays. Line of sight off: the AI exactly as before (classic golden values unchanged).
+- The live map (spectators) shows the whole world. Split screen has no such setting.

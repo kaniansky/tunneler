@@ -614,5 +614,6 @@ none, i.e. a page from before 2.0 - is refused (POST 409 `{code:
   dirt 6 / 8, rock 7, base wall rings) come from the world and go into `sightMem[p]` (cleared by
   `sightReset` when a match starts; `sightNewRound` drops only the ghosts), the rest from that memory, marked in the dim plane (`engine.dim`, extended
   `viewDims` per view; snapshots `dim` / `dims` only with line of sight) -> `Display.paint(..., dim)` draws
-  them gray (`GRAY_OF`). Ghosts of tanks / shots stay in the memory on purpose. The AI still sees
-  everything. Test: local-check "line of sight".
+  them gray (`GRAY_OF`). Ghosts of tanks / shots stay in the memory on purpose. The AI sees the same
+  (`resetRound`: `this.sight` -> `visibleFrom` = `engine.sightSees(p, x, y)`; expert's exact intel becomes
+  noisy via `SIGHT_LEVELS`). Tests: local-check "line of sight", ai-ext-sim "sight" configs + "Line of sight".

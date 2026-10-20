@@ -135,6 +135,11 @@ const configs = [
   { name: "large 8 free-for-all", opts: { players: 8, size: "large" }, levels: lv(8) },
   { name: "winScore 1", opts: { players: 3, winScore: 1 }, levels: ["normal", "hard", "easy"] },
   { name: "winScore 5, 2 tanks", opts: { extended: true, winScore: 5 }, levels: ["hard", "normal"] },
+  // line of sight: the bots see only what a player would (engine.sightSees), the best level no longer exactly
+  { name: "4 ffa sight circle", opts: { players: 4, sight: "circle" }, levels: lv(4) },
+  { name: "4 ffa sight walls", opts: { players: 4, sight: "walls" }, levels: lv(4) },
+  { name: "2v2 sight walls", opts: { players: 4, teams: true, sight: "walls" }, levels: ["expert", "hard", "normal", "expert"] },
+  { name: "1v1 sight walls", opts: { extended: true, sight: "walls" }, levels: ["expert", "hard"] },
 ];
 const SEEDS = quick ? [101] : [101, 202, 303, 404, 505];
 
@@ -172,6 +177,29 @@ for (const c of configs) {
   if (ff) check(friendly * 10 <= hits, c.name + ": too much friendly fire (" + friendly + " of " + hits + " hits)");
 }
 check(homeTotal > 0, "no bot ever went home to refuel");
+
+// ------------------------------------------------------------------ line of sight: what the bots see
+console.log("\nLine of sight");
+{
+  const r = runMatch(7, { players: 4, sight: "walls" }, lv(4), { maxFrames: 3000 });
+  const e = r.e;
+  let checked = 0, unseen = 0;
+  for (const ai of r.ais) {
+    check(ai.cfg.intel !== "exact", "line of sight: " + ai.levelName + " still knows where every enemy is");
+    const me = ai.me, mx = e.tankX[me], my = e.tankY[me];
+    for (let y = my - 40; y <= my + 40; y += 3)
+      for (let x = mx - 40; x <= mx + 40; x += 3) {
+        const v = ai.visibleFrom(mx, my, x, y);
+        if (v !== e.sightSees(me, x, y)) check(false, "line of sight: the bot sees what the engine does not (" + x + ", " + y + ")");
+        checked++; if (!v) unseen++;
+      }
+  }
+  check(unseen > checked / 2, "line of sight: most of the window hidden (" + unseen + " of " + checked + ")");
+  // the same game twice: deterministic
+  const s = runMatch(7, { players: 4, sight: "walls" }, lv(4), { maxFrames: 3000 });
+  check(s.bitsHash === r.bitsHash && s.randSeed === r.randSeed, "line of sight: not deterministic");
+  console.log("  bots see what the engine shows (" + unseen + " of " + checked + " points hidden), deterministic");
+}
 
 // ------------------------------------------------------------------ teams changed between matches
 // (online pre-game lobby, section 18: setTeams at the same step on every client) - the same bot objects

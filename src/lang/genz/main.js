@@ -160,8 +160,8 @@ Lang.register("genz", {
         ["Vision:  ", "full - the OG: you see your whole screen.  Circle - you only see a circle around your " +
           "tank live; the rest of the screen is the world as you last saw it, in gray (an enemy tank " +
           "stays where you last clocked it).  Real fr - same, but dirt, rock and base walls block " +
-          "what's behind them: in a tunnel you only see the tunnel.  Bots still see everything, no " +
-          "cap."],
+          "what's behind them: in a tunnel you only see the tunnel.  Bots see the same way, but " +
+          "medium and hard ones kinda hear where the nearest enemy is, no cap."],
         ["Split screen:  ", "the OG game - two besties on one keyboard, {9}BLUE{3} on the left half " +
           "of the screen and {10}GREEN{3} on the right.  Pick the map size, W's to win and round timer " +
           "first."],

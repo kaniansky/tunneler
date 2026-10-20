@@ -10,8 +10,11 @@ a release is made by pushing a version tag (see CONTRIBUTING.md).
   that player last saw it, in gray - an enemy tank stays where you saw it last. What you have seen stays
   from round to round (the world is the same); only the tanks' old places are forgotten. "True" also hides what
   dirt, rock and base walls stand in front of: in a tunnel you see only the tunnel. Only the picture
-  changes - the game itself, online play and the comparison with the original stay the same. Computer
-  tanks still see everything.
+  changes - the game itself, online play and the comparison with the original stay the same.
+- **Computer tanks and line of sight**: with it on, computer tanks see only what a player would - the same
+  circle, the same walls - instead of their whole view window. Medium ones still get a rough position of
+  the nearest enemy every few seconds; hard ones no longer know where every enemy is, but get a closer
+  guess about once a second. With line of sight off they play exactly as before.
 
 ## 3.2.0
 
