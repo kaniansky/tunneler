@@ -3,22 +3,33 @@
 All notable changes to Tunneler Online. Versions follow [semantic versioning](https://semver.org/);
 a release is made by pushing a version tag (see CONTRIBUTING.md).
 
-## Unreleased
+## 4.0.0
 
-- **Short skirmish links**: a skirmish game's address is now `/skirmish?g=` plus 13 characters (all its
-  settings packed) instead of a long list; the long addresses still work.
-- **Smooth scrolling is on by default** (homepage Settings turns it off; whoever turned it on or off keeps
-  that choice).
 - **Line of sight** (skirmish and the online game's Settings; off by default = the original): with
   "circle" a tank sees the world live only in a circle around it; the rest of its view shows the world as
   that player last saw it, in gray - an enemy tank stays where you saw it last. What you have seen stays
-  from round to round (the world is the same); only the tanks' old places are forgotten. "True" also hides what
-  dirt, rock and base walls stand in front of: in a tunnel you see only the tunnel. Only the picture
-  changes - the game itself, online play and the comparison with the original stay the same.
+  from round to round (the world is the same); only the tanks' old places are forgotten. "True" also
+  hides what dirt, rock and base walls stand in front of: in a tunnel you see only the tunnel. Only the
+  picture changes - the game itself, online play and the comparison with the original stay the same.
 - **Computer tanks and line of sight**: with it on, computer tanks see only what a player would - the same
   circle, the same walls - instead of their whole view window. Medium ones still get a rough position of
   the nearest enemy every few seconds; hard ones no longer know where every enemy is, but get a closer
   guess about once a second. With line of sight off they play exactly as before.
+- Computer tanks with **base repairs off** no longer wait at their base for a shield that never comes back:
+  they go home only for energy.
+- Computer levels: three (easy, medium, hard) - an unused weaker fourth one is gone; settings and links
+  saved by older versions keep the level they had.
+- **After death**: "watch killer", "watch team" and "watch all" show only the tanks watched - your own
+  destroyed view no longer sits black beside them (view "self" + "watch killer" = only the killer).
+- Online game lobby: the host cycles a free seat **closed -> open -> AI easy -> medium -> hard**.
+- **Short skirmish links**: a skirmish game's address is now `/skirmish?g=` plus 13 characters (all its
+  settings packed) instead of a long list; the long addresses still work.
+- **Smooth scrolling is on by default** (homepage Settings turns it off; whoever chose before keeps that).
+- Settings: the box keeps its size in every language (no jumping when the language changes); the name's
+  placeholder says "your online name".
+- An empty input's blinking cursor sits under the first letter of its placeholder, like a DOS cursor.
+- No browser menu on a right click anywhere in the game (text fields excepted).
+- A new major version: games and servers of 3.x and 4.0 don't play together (as with every version).
 
 ## 3.2.0
 

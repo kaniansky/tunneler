@@ -64,14 +64,18 @@ Settings (split screen: map size, rounds to win and round time only):
 - **Round time limit** - off, 2, 3, 5 or 10 minutes. When the time is up, the side that hit enemy tanks
   the most wins the round (a tie: nobody); the last 30 seconds count down next to the instrument panel.
 - **Friendly fire** - on or off in team games (off: a shot at a teammate explodes like on a wall).
+- **Line of sight** - off (the original), circle (each tank sees the world live only in a circle around it;
+  the rest of its view is the world as that player last saw it, in gray - an enemy stays where you saw it
+  last) or true (dirt, rock and base walls also hide what is behind them: in a tunnel you see only the
+  tunnel). Computer tanks see the same way.
 - **View limit** - the most a player may see during play: their own view, their team's or everybody's.
 - **After death** - what you see once your tank is destroyed, until the round ends: a black DESTROYED
   screen, your wreck (the original), all your teammates still alive, the tank that destroyed you (then
-  its killer, ...) or every tank still alive; nobody left to watch - black. Except with "my wreck", a
-  destroyed teammate's view goes black too.
+  its killer, ...) or every tank still alive (then only those - your own destroyed view goes); nobody left
+  to watch - black. Except with "my wreck", a destroyed teammate's view goes black too.
 
 The homepage's **Settings** screen holds your name for online games, the language, the **sound** - muted, original (the PC speaker),
-realistic or cartoony (a sample plays when you change it) - **Smooth scrolling** (off by default: the original
+realistic or cartoony (a sample plays when you change it) - **Smooth scrolling** (on by default: the original
 moves the view sideways 2 pixels at a time - its screen mode holds two pixels per byte - so it stutters a
 little when you drive left or right; on, the view follows 1 pixel at a time; only the picture changes, not
 the game) - and **Show ping** (your round-trip time as
