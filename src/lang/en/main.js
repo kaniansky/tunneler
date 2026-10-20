@@ -122,7 +122,7 @@ Lang.register("en", {
   // ghost mode (home.js vs computer, lobby.js create screen, online.js pre-game lobby; docs/DESIGN-8P.md 25)
   "lc.watch": "After death: ", "os.watch": "After death: ", "watch.black": "black screen", "watch.wreck": "my wreck", "watch.team": "watch team", "watch.killer": "watch killer", "watch.others": "watch all",
   "watch.i1": "What you see once your tank is destroyed, until the round ends: a black",
-  "watch.i2": "screen, your wreck, your teammates, one tank (your killer first) or all.",
+  "watch.i2": "screen, your wreck, your teammates, one tank (your killer first) or all.", "lc.sight": "Line of sight: ", "os.sight": "Line of sight: ", "sight.full": "off", "sight.circle": "circle", "sight.walls": "true", "sight.i1": "Circle: you see live only around your tank, the rest as you saw it, in gray.", "sight.i2": "True: dirt, rock and base walls hide what is behind them too. Off = original.",
   "pg.watch.black": "after death: black screen", "pg.watch.wreck": "after death: my wreck", "pg.watch.team": "after death: watch team", "pg.watch.killer": "after death: watch killer", "pg.watch.others": "after death: watch all",
   // the titles of the two boxes on the vs computer / create-a-game screens
   "box.game": "Game", "box.players": "Players", "box.settings": "Settings",

@@ -41,6 +41,7 @@ const SIZES = ["small", "medium", "large"];              // world sizes (engine 
 const MAX_PLAYER_NAME = 12;                              // player names (pre-game lobby), display columns
 const MAX_CHAT = 60;                                     // characters per lobby chat message
 const VISIBLE = ["self", "team", "everyone"];            // what a player may see during play (room setting)
+const SIGHTS = ["full", "circle", "walls"];              // line of sight (room setting, display only; engine.js SIGHTS)
 const ROUND_TIMES = [0, 2, 3, 5, 10];                    // round time limit, minutes (0 = none; room setting)
 // game modes (docs/DESIGN-8P.md 27; src/js/modes/<mode>.js - the server never loads them): standard = last
 // team standing. Infection and survival make their own teams (the seats' teams don't matter); survival
@@ -110,7 +111,8 @@ function seatOf(s, i) {
 
 // The game settings the host chooses in the room lobby. One setting checked: the value, or undefined
 // when it isn't one. visible: the most a player may see during play - "self" (default), "team" or
-// "everyone" (docs/DESIGN-8P.md 23; display only). watchOut: after death (display only). roundTime:
+// "everyone" (docs/DESIGN-8P.md 23; display only). watchOut: after death (display only). sight: line of
+// sight - full (the original), circle or walls (display only, the engine draws the views). roundTime:
 // the round time limit in minutes (changes the simulation).
 const SETTINGS = {
   size: v => SIZES.includes(v) ? v : undefined,
@@ -119,12 +121,13 @@ const SETTINGS = {
   friendlyFire: v => typeof v === "boolean" ? v : undefined,
   visible: v => VISIBLE.includes(v) ? v : undefined,
   watchOut: v => AFTER_DEATH.includes(v) ? v : undefined,
+  sight: v => SIGHTS.includes(v) ? v : undefined,
   mode: v => MODES.includes(v) ? v : undefined,
   noRepair: v => typeof v === "boolean" ? v : undefined,
   goals: v => goalsOf(v) || undefined,
 };
 // A new room's settings from POST /api/rooms -> {seats: [8 x {kind, team}], size, winScore, friendlyFire,
-// roundTime, visible, watchOut}; anything missing or wrong gets its default. o.seats (or the older
+// roundTime, visible, watchOut, sight}; anything missing or wrong gets its default. o.seats (or the older
 // o.slots: {kind: none|human|level}) up to 8, index = colour.
 function roomSettings(o) {
   o = o || {};
@@ -132,7 +135,7 @@ function roomSettings(o) {
   const seats = list ? ROLES.map((r, i) => i < list.length ? seatOf(list[i], i) : { kind: "closed", team: i + 1 }) : defaultSeats();
   return { seats, size: SIZES.includes(o.size) ? o.size : "medium", winScore: clampInt(o.winScore, 1, 9, 3),
     friendlyFire: o.friendlyFire === true, roundTime: roundTime(o.roundTime),
-    visible: VISIBLE.includes(o.visible) ? o.visible : "self", watchOut: afterDeath(o.watchOut),
+    visible: VISIBLE.includes(o.visible) ? o.visible : "self", watchOut: afterDeath(o.watchOut), sight: SIGHTS.includes(o.sight) ? o.sight : "full",
     mode: MODES.includes(o.mode) ? o.mode : "standard", noRepair: o.noRepair === true, goals: goalsOf(o.goals) || {} };
 }
 
@@ -164,11 +167,12 @@ const isClassic = (slots, st) => slots.length === 2 && slots[0].color === 0 && s
   slots[0].team !== slots[1].team && !special(st);
 
 // TunnelerEngine options for a match's cfg ({ext, slots: [{color, team}], size, winScore, friendlyFire,
-// roundTime}): every client the same. autoStart: no menu before the first round (the lobby was it).
+// roundTime, sight}): every client the same. autoStart: no menu before the first round (the lobby was it).
 function engineOptions(cfg) {
   const o = { slots: cfg.slots.map(s => ({ color: s.color, team: s.team })), size: cfg.size || "medium",
     winScore: cfg.winScore || 3, friendlyFire: !!cfg.friendlyFire, autoStart: true };
   if (roundTime(cfg.roundTime)) o.roundTime = roundTime(cfg.roundTime);
+  if (SIGHTS.includes(cfg.sight) && cfg.sight !== "full") o.sight = cfg.sight;
   if (cfg.ext) o.extended = true;
   if (MODES.includes(cfg.mode) && cfg.mode !== "standard") o.mode = cfg.mode;
   for (const k of MODIFIERS) if (cfg[k] === true) o[k] = true;
@@ -185,7 +189,7 @@ function readCfg(c) {
     : slots.map(() => null);
   return { ext: !!c.ext, players: slots.length, slots, names, size: SIZES.includes(c.size) ? c.size : "medium",
     winScore: clampInt(c.winScore, 1, 9, 3), friendlyFire: !!c.friendlyFire, roundTime: roundTime(c.roundTime),
-    visible: VISIBLE.includes(c.visible) ? c.visible : "self", watchOut: afterDeath(c.watchOut),
+    visible: VISIBLE.includes(c.visible) ? c.visible : "self", watchOut: afterDeath(c.watchOut), sight: SIGHTS.includes(c.sight) ? c.sight : "full",
     mode: MODES.includes(c.mode) ? c.mode : "standard", noRepair: c.noRepair === true, goals: goalsOf(c.goals) || {} };
 }
 
@@ -324,7 +328,7 @@ function stateHash(e) {
 }
 
 const NetProto = { TICK_MS, UP, DOWN, LEFT, RIGHT, FIRE, ESC, ALL_BITS, EXT_BITS, BLUE_SCAN, GREEN_SCAN, F10,
-  AFTER_DEATH, afterDeath, ROLES, MAX_SLOTS, LEVELS, SEAT_KINDS, SIZES, MAX_PLAYER_NAME, MAX_CHAT, VISIBLE, ROUND_TIMES, roundTime,
+  AFTER_DEATH, afterDeath, ROLES, MAX_SLOTS, LEVELS, SEAT_KINDS, SIZES, MAX_PLAYER_NAME, MAX_CHAT, VISIBLE, SIGHTS, ROUND_TIMES, roundTime,
   cleanPlayerName, cleanChat, cleanRoomName, SETTINGS, defaultSeats, roomSettings, matchSlots, startProblem, isClassic, engineOptions, readCfg,
   MODES, OWN_TEAMS, MODIFIERS, GOALS, goalOf,
   frameToInput, frameToInputExt, FrameLog, FrameQueue, HASH_EVERY, stateHash };

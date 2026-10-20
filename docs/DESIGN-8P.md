@@ -567,3 +567,24 @@ enough that AI-only matches finish.
   gold to win (5-50, 10), survive N minutes (infection: 1-10, 3 - the round time is grayed out there),
   waves to win (3-20, 5), seconds to win (hill: 30-180, 60), captures to win (1-10, 3), base strength
   (siege: hits, 10-80, 30), kills to win (5-50, 10).
+
+## 28. Line of sight (owner, 2026-10-20) - implemented
+
+A game setting "Line of sight" (skirmish, the online lobby's Settings; engine option `sight`,
+`TunnelerEngine.SIGHTS` = `NetProto.SIGHTS`): **off** (`full`, the original - the default), **circle** and
+**true** (`walls`).
+- Circle: a view shows the world live only within an ellipse around its tank (`SIGHT_RX` 32 x `SIGHT_RY` 27
+  pixels - about round on screen); the rest of the view shows the world as that player last saw it, in
+  gray (darkened brightness of each color); never seen = black. Enemy tanks, shots and explosions stay in
+  that memory where they were last seen ("ghosts" - the owner wanted them kept).
+- True: the same, but within the ellipse only what a line from the tank reaches: dirt (6, 8), rock (7) and
+  base walls hide what is behind them (the first such pixel is seen); tanks, shots and explosions don't.
+  One pass per view over the ellipse's offsets ordered by distance, each linked to the next pixel towards
+  the tank (`SIGHT_CELLS`).
+- Display only: `blitSight` (instead of `blitView`'s copy, the static unchanged) writes the vram from the
+  world / the player's memory (`sightMem[p]`, world bytes, cleared every round) and marks remembered
+  pixels in the dim plane (`engine.dim`, per view `viewDims`; snapshots carry `dim` / `dims` only with
+  line of sight); `Display.paint(..., dim)` draws them gray. Never read by the simulation, not in
+  stateHash; online every client draws every view the same way. Off = byte-for-byte the original.
+- Computer tanks still see everything (AI unchanged for now). The live map (spectators) shows the whole
+  world. Split screen has no such setting.

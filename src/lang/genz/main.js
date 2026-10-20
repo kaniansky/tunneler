@@ -88,7 +88,7 @@ Lang.register("genz", {
     // the game's settings on the round title / statistics (display only)
     settings: { size: ["map size: smol", "map size: mid", "map size: huge"], win: "W's to win: {n}",
       ff: ["friendly fire: off", "friendly fire: on"], view: "POV: {v}", visible: "max POV: {v}",
-      views: ["main character", "the squad", "everyone fr"], watch: ["after you die: black screen", "after you die: my wreck", "after you die: spectate the squad", "after you die: spectate your killer", "after you die: spectate everyone"],
+      views: ["main character", "the squad", "everyone fr"], watch: ["after you die: black screen", "after you die: my wreck", "after you die: spectate the squad", "after you die: spectate your killer", "after you die: spectate everyone"], sight: ["vision: circle", "vision: real"],
       modes: {"standard": "OG", "gold": "gold rush", "infection": "zombie mode", "survival": "survive the bots", "hill": "king of the hill", "shrink": "the zone", "ctf": "steal the flag", "siege": "base raid", "deathmatch": "deathmatch"},
       noRepair: "no repairs",
       goals: {"gold": "bling to win: {n}", "infection": "survive {n} min", "survival": "waves to win: {n}", "hill": "seconds to win: {n}", "ctf": "caps to win: {n}", "siege": "base HP: {n}", "deathmatch": "kills to win: {n}"},
@@ -157,13 +157,18 @@ Lang.register("genz", {
         ["After you die:  ", "what you see once you're cooked, until the round ends: a black " +
           "screen, your wreck, your squad, your killer (the tank that got you, then whoever got " +
           "them...) or every tank still alive."],
+        ["Vision:  ", "full - the OG: you see your whole screen.  Circle - you only see a circle around your " +
+          "tank live; the rest of the screen is the world as you last saw it, in gray (an enemy tank " +
+          "stays where you last clocked it).  Real fr - same, but dirt, rock and base walls block " +
+          "what's behind them: in a tunnel you only see the tunnel.  Bots still see everything, no " +
+          "cap."],
         ["Split screen:  ", "the OG game - two besties on one keyboard, {9}BLUE{3} on the left half " +
           "of the screen and {10}GREEN{3} on the right.  Pick the map size, W's to win and round timer " +
           "first."],
         ["Skirmish fr:  ", "your own game vs 1 to 7 bots, either set of keys.  Each of the 8 colors is you, nobody " +
           "or a bot (easy, medium, hard) with its squad (1-8) - play whatever color you vibe with; " +
-          "then the mode, map size, W's to win, round timer, friendly fire, POV, after you die and " +
-          "base repairs.  <ESC> while playing ends the match; <ESC> on the game's menu takes you " +
+          "then the mode, map size, W's to win, round timer, friendly fire, POV, after you die, vision " +
+          "and base repairs.  <ESC> while playing ends the match; <ESC> on the game's menu takes you " +
           "back to the settings."],
         ["Online game:  ", "2 to 8 tanks on different computers, bots allowed.  Online needs a name (asked the first " +
           "time, rebrand in Settings).  Make a game - its name, public or private (people join with " +
@@ -268,7 +273,7 @@ Lang.register("genz", {
   // ghost mode (home.js vs computer, lobby.js create screen, online.js pre-game lobby; docs/DESIGN-8P.md 25)
   "lc.watch": "After you die: ", "os.watch": "Dead: ", "watch.black": "black screen", "watch.wreck": "my wreck", "watch.team": "spectate the squad", "watch.killer": "spectate your killer", "watch.others": "spectate everyone",
   "watch.i1": "What you see after getting wrecked, till the round ends: black screen,",
-  "watch.i2": "your wreck, your squad, one tank (your killer first), or everyone.",
+  "watch.i2": "your wreck, your squad, one tank (your killer first), or everyone.", "lc.sight": "Vision: ", "os.sight": "Vision: ", "sight.full": "full", "sight.circle": "circle", "sight.walls": "real fr", "sight.i1": "Circle: you only see live around your tank, the rest is a gray memory.", "sight.i2": "Real fr: dirt, rock and base walls block the view too. Full = the OG.",
   "pg.watch.black": "after you die: black screen", "pg.watch.wreck": "after you die: my wreck", "pg.watch.team": "after you die: spectate the squad", "pg.watch.killer": "after you die: spectate your killer", "pg.watch.others": "after you die: spectate everyone",
   // the titles of the two boxes on the vs computer / create-a-game screens
   "box.game": "The game", "box.players": "The squad", "box.settings": "The rules",

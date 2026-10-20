@@ -30,7 +30,7 @@
 //        GET /api/rooms/<id>      one room (also private ones: their ids carry a random suffix)
 //        POST /api/rooms          {name, public, spectators, seats?: [{kind: open|closed|normal|hard|expert,
 //                                  team: 1..8} x 8 (index = colour)], size, winScore, friendlyFire, roundTime,
-//                                  visible, watchOut} -> roomInfo + hostKey (defaults for anything missing:
+//                                  visible, watchOut, sight} -> roomInfo + hostKey (defaults for anything missing:
 //                                  BLUE + GREEN open, the rest closed; the older slots form still works)
 // WS:    /ws?room=<id>&cid=<client id: 8-64 of A-Z a-z 0-9 _ ->&name=<player name>[&role=<colour>|watch]
 //            [&host=<hostKey>][&match=<no>&have=<frames>]&v=<client version | dev>
@@ -41,12 +41,12 @@
 //                     match = null or {no, seed, cfg, you: player index | -1, n, from, f: [entries]} (frames
 //                           from `from` on; a long log: the rest follows in "f" messages before any live frame)
 //                     cfg = {ext, players, slots: [{color, bot, level, team}], names, size, winScore,
-//                           friendlyFire, roundTime, visible, watchOut}
+//                           friendlyFire, roundTime, visible, watchOut, sight}
 //                     {t:"match", no, seed, cfg, you, n, from, f}   a match starts (or: see hello)
 //                     {t:"f", m: match no, n, f: [entries]}       frames starting at frame index n
 //                     {t:"end", no}                               the match is over: back to the lobby
 //                     {t:"st", name, public, spectators, settings: {size, winScore, friendlyFire, roundTime,
-//                           visible, watchOut}, seats: [{kind, team, k, name, ready, host, ping}] x 8 (k: the
+//                           visible, watchOut, sight}, seats: [{kind, team, k, name, ready, host, ping}] x 8 (k: the
 //                           connection sitting there or null), specs: [{k, name, host, ping}], cant: why the
 //                           host can't start (null | "tanks" | "human" | "teams" | "ready" | "match"),
 //                           match: null | {no, running, conn: [per tank], names}}
@@ -58,7 +58,7 @@
 //                     {t:"me", name?, team?}  own name (any time) / own seat's team 1..8 (not while ready)
 //                     {t:"ready", v}  seated players: ready (1) / not (0)
 //                     host: {t:"seatSet", i, kind?, team?} (a seat nobody sits on), {t:"set", size?, winScore?,
-//                     roundTime?, friendlyFire?, visible?, watchOut?, mode?, noRepair?, goals?} (public /
+//                     roundTime?, friendlyFire?, visible?, watchOut?, sight?, mode?, noRepair?, goals?} (public /
 //                     spectators only when the game is created; every player
 //                     unready after either), {t:"start"}, {t:"kick", k} (remove + ban by client id)
 //                     match players: {t:"b", v} held bits, {t:"k", a, s} keystroke (relayed as ANY_KEY),
@@ -180,7 +180,7 @@ function createServer(opts = {}) {
     const room = {
       id, name, public: !!isPublic, allowSpec: !!allowSpec,
       size: st.size, winScore: st.winScore, friendlyFire: st.friendlyFire, roundTime: st.roundTime,
-      visible: st.visible, watchOut: st.watchOut, mode: st.mode, noRepair: st.noRepair, goals: st.goals,
+      visible: st.visible, watchOut: st.watchOut, sight: st.sight, mode: st.mode, noRepair: st.noRepair, goals: st.goals,
       seats: st.seats.map(s => ({ kind: s.kind, team: s.team, occ: null, last: null })),
       chat: [],                                    // the last CHAT_LOG chat messages [{from, text}]
       hostKey: crypto.randomBytes(16).toString("hex"), banned: new Set(), serial: 0,
@@ -195,7 +195,7 @@ function createServer(opts = {}) {
     return room;
   }
   const settingsOf = room => ({ size: room.size, winScore: room.winScore, friendlyFire: room.friendlyFire, roundTime: room.roundTime,
-    visible: room.visible, watchOut: room.watchOut, mode: room.mode, noRepair: room.noRepair, goals: room.goals });
+    visible: room.visible, watchOut: room.watchOut, sight: room.sight, mode: room.mode, noRepair: room.noRepair, goals: room.goals });
   const seated = room => room.seats.map((s, i) => s.occ ? i : -1).filter(i => i >= 0);
   // the tanks a match would have now
   const slotsNow = room => matchSlots(room.seats, i => !!room.seats[i].occ);

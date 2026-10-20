@@ -606,3 +606,13 @@ none, i.e. a page from before 2.0 - is refused (POST 409 `{code:
   `blitView(col, row, scrOfs, noise, x)`: with it and the followed tank on an odd x the view is copied one
   pixel further right (screen byte = high nibble of a world byte | low nibble of the next << 4); not in
   stateHash, the vram only. Test: local-check "smooth scrolling".
+- **Line of sight** (DESIGN-8P 28, display only, off = the original): engine option `sight` "full" |
+  "circle" | "walls" (`TunnelerEngine.SIGHTS` = `NetProto.SIGHTS`; room setting `sight`, `engineOptions`
+  passes it; skirmish `&sight=`, `tunneler.cpu.sight`; texts `lc.sight` / `os.sight` / `sight.*`, engine
+  `settings.sight`, an Instructions section). `blitView(..., p)` -> `blitSight`: the pixels p's tank sees
+  (`sightView`: an ellipse `SIGHT_RX` x `SIGHT_RY`; "walls": `SIGHT_CELLS` in one pass, `sightBlocks` =
+  dirt 6 / 8, rock 7, base wall rings) come from the world and go into `sightMem[p]` (cleared by
+  `sightReset` every round), the rest from that memory, marked in the dim plane (`engine.dim`, extended
+  `viewDims` per view; snapshots `dim` / `dims` only with line of sight) -> `Display.paint(..., dim)` draws
+  them gray (`GRAY_OF`). Ghosts of tanks / shots stay in the memory on purpose. The AI still sees
+  everything. Test: local-check "line of sight".

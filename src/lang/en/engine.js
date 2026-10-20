@@ -28,6 +28,8 @@ const STRINGS_EN = {
     // timeShort when time does not fit there, and leaves it out when neither does
     time: "round time: {n} min", timeShort: "time: {n} min",
     views: ["self", "team", "everyone"], watch: ["after death: black screen", "after death: my wreck", "after death: watch team", "after death: watch killer", "after death: watch all"],
+    // line of sight when it isn't full (option sight): circle, walls
+    sight: ["sight: circle", "sight: true"],
     // game modes (the round title / statistics settings: the mode's name first) and modifiers
     modes: {"standard": "standard", "gold": "gold rush", "infection": "infection", "survival": "survival", "hill": "king of the hill", "shrink": "shrinking world", "ctf": "capture the flag", "siege": "base siege", "deathmatch": "deathmatch"},
     noRepair: "no repairs",
@@ -105,13 +107,18 @@ const STRINGS_EN = {
       ["After death:  ", "what you see once your tank is destroyed, until the round ends: a black " +
         "screen, your wreck, your teammates, your killer (the tank that destroyed you, then the one " +
         "that destroyed it...) or all the tanks still alive."],
+      ["Line of sight:  ", "off - the original: you see your whole view screen.  Circle - you see only a circle " +
+        "around your tank as it is now; the rest of the view screen shows the world as you last saw " +
+        "it, in gray (an enemy tank stays where you last saw it).  True - the same, but dirt, rock and " +
+        "base walls hide what is behind them: in a tunnel you see only the tunnel.  Computer tanks " +
+        "still see everything."],
       ["Split screen:  ", "the original game - two players on one keyboard, {9}BLUE{3} on the left " +
         "half of the screen and {10}GREEN{3} on the right.  First choose the map size, the rounds to " +
         "win and the round time."],
       ["Skirmish:  ", "your own game against 1 to 7 computer tanks, driven with either set of keys.  Each of " +
         "the 8 colors is you, nobody or a computer tank (easy, medium, hard), with its team (1-8) " +
         "- you can play any color; then the mode, map size, rounds to win, round time, friendly " +
-        "fire, view, after death and base repairs.  <ESC> during play ends the match; <ESC> on " +
+        "fire, view, after death, line of sight and base repairs.  <ESC> during play ends the match; <ESC> on " +
         "the game's menu goes back to the settings."],
       ["Online game:  ", "2 to 8 tanks on different computers, some of them may be computer tanks.  Online play " +
         "needs a name (asked the first time, changed in Settings).  Create a game - its name, " +

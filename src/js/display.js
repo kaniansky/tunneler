@@ -26,6 +26,10 @@ const dac = pal => pal.map(c => c.map(v => (v << 2) | (v >> 4)));
 const LORES_PALETTE = dac(PAL_RGB), EXT_PALETTE = dac(EXT_PAL_RGB);
 const toU32 = pal => pal.map(([r, g, b]) => (255 << 24) | (b << 16) | (g << 8) | r);  // little-endian RGBA
 const TEXT_U32 = toU32(TEXT_PALETTE), LORES_U32 = toU32(LORES_PALETTE), EXT_U32 = toU32(EXT_PALETTE);
+// line of sight (engine.js blitSight): what a player only remembers is drawn in gray - each colour's
+// brightness, darkened
+const GRAY_OF = new Map([LORES_PALETTE, EXT_PALETTE].map((pal, i) => [[LORES_U32, EXT_U32][i],
+  toU32(pal.map(([r, g, b]) => { const v = Math.round((r * 0.3 + g * 0.59 + b * 0.11) * 0.55); return [v, v, v]; }))]));
 
 const BLINK_MS = 16 * 1000 / 70;   // VGA toggles blink every 16 frames at 70 Hz
 
@@ -80,7 +84,7 @@ class Display {
     if (!this.img) this.img = this.ctx.createImageData(width, height);
     const px = new Uint32Array(this.img.data.buffer);
     const text = s.mode === "text";
-    paint(px, width, 0, 0, s.vram, c0, c1, text ? 25 : 100, text, paletteOf(s), blinkOn, this.font, text ? s.uni : null);
+    paint(px, width, 0, 0, s.vram, c0, c1, text ? 25 : 100, text, paletteOf(s), blinkOn, this.font, text ? s.uni : null, text ? null : s.dim);
     this.ctx.putImageData(this.img, 0, 0);
   }
 }
@@ -91,9 +95,11 @@ function paletteOf(s) { return s.mode === "text" ? TEXT_U32 : s.palette === "ext
 // Draws columns c0..c1-1 of rows 0..rows-1 of a B800-layout buffer (160 bytes per row) into px (32-bit
 // pixels, width W) with its top-left corner at (x0, y0): 9 dots per cell, 16 scan lines per row in
 // text mode (blink bit honoured), 4 in LORES. uni: the Unicode plane (text mode; 80 cells per row) or
-// null. Also used by views.js for the multi-view screens and the map's score table.
-function paint(px, W, x0, y0, vram, c0, c1, rows, text, pal, blinkOn, font, uni) {
+// null. dim: the dim plane (LORES, 80 cells per row: 1 = the attribute's low nibble remembered, 2 = the
+// high one's - drawn gray) or null. Also used by views.js for the multi-view screens and the map's score table.
+function paint(px, W, x0, y0, vram, c0, c1, rows, text, pal, blinkOn, font, uni, dim) {
   const lines = text ? 16 : 4;
+  const gray = dim ? GRAY_OF.get(pal) || pal : null;
   const CONT = root.UniText ? root.UniText.CONT : -1;
   for (let row = 0; row < rows; row++)
     for (let col = c0; col < c1; col++) {
@@ -101,7 +107,8 @@ function paint(px, W, x0, y0, vram, c0, c1, rows, text, pal, blinkOn, font, uni)
       const ch = vram[o], attr = vram[o + 1];
       let fg = attr & 15, bg = attr >> 4;
       if (text) { bg &= 7; if ((attr & 0x80) && !blinkOn) fg = bg; }
-      const fgc = pal[fg], bgc = pal[bg];
+      const dm = gray ? dim[row * 80 + col] : 0;
+      const fgc = dm & 1 ? gray[fg] : pal[fg], bgc = dm & 2 ? gray[bg] : pal[bg];
       let p = (y0 + row * lines) * W + x0 + (col - c0) * 9;
       const u = uni && text ? uni[row * 80 + col] : 0;
       if (u === CONT) {
@@ -152,7 +159,7 @@ Display.TEXT_U32 = TEXT_U32;
 Display.LORES_U32 = LORES_U32;
 Display.EXT_U32 = EXT_U32;
 Display.EXT_PALETTE = EXT_PALETTE;   // 8-bit RGB of the extended palette (map / scoreboard drawing)
-Display.paint = paint;              // (px, W, x0, y0, vram, c0, c1, rows, text, pal, blinkOn, font, uni)
+Display.paint = paint;              // (px, W, x0, y0, vram, c0, c1, rows, text, pal, blinkOn, font, uni, dim)
 Display.paletteOf = paletteOf;
 Display.uniCell = uniCell;          // (px, W, p, codePoint, fgc, bgc, maxW) - one Unicode character
 Display.glyphOf = glyphOf;          // code point (or character) -> {rows, wide} ("?" when there is none)

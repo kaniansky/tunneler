@@ -92,7 +92,7 @@ Lang.register("sk", {
     // the game's settings on the round title / statistics (display only)
     settings: { size: ["mapa: malá", "mapa: stredná", "mapa: veľká"], win: "kôl na víťazstvo: {n}",
       ff: ["priateľská paľba: vypnutá", "priateľská paľba: zapnutá"], view: "pohľad: {v}", visible: "limit pohľadu: {v}",
-      views: ["len ja", "tím", "všetci"], watch: ["po smrti: čierna obrazovka", "po smrti: môj vrak", "po smrti: sledovať tím", "po smrti: sledovať vraha", "po smrti: sledovať všetkých"],
+      views: ["len ja", "tím", "všetci"], watch: ["po smrti: čierna obrazovka", "po smrti: môj vrak", "po smrti: sledovať tím", "po smrti: sledovať vraha", "po smrti: sledovať všetkých"], sight: ["dohľad: kruh", "dohľad: skutočný"],
       modes: {"standard": "štandard", "gold": "zlatá horúčka", "infection": "nákaza", "survival": "prežitie", "hill": "kráľ kopca", "shrink": "zmenšujúci sa svet", "ctf": "ukradni vlajku", "siege": "obliehanie základní", "deathmatch": "zápas na smrť"},
       noRepair: "bez opráv",
       goals: {"gold": "zlata na výhru: {n}", "infection": "prežiť {n} min", "survival": "vĺn na výhru: {n}", "hill": "sekúnd na výhru: {n}", "ctf": "vlajok na výhru: {n}", "siege": "odolnosť základne: {n}", "deathmatch": "zostrely na výhru: {n}"},
@@ -162,13 +162,18 @@ Lang.register("sk", {
         ["Po smrti:  ", "čo vidíš od zničenia svojho tanku do konca kola: čiernu obrazovku, svoj " +
           "vrak, svojich spoluhráčov, svojho vraha (tank, ktorý ťa zničil, potom ten, ktorý zničil " +
           "jeho...) alebo všetky tanky, ktoré ešte žijú."],
+        ["Dohľad:  ", "vypnutý - ako v origináli: vidíš celú svoju obrazovku.  Kruh - naživo vidíš len kruh " +
+          "okolo svojho tanku; zvyšok obrazovky ukazuje svet tak, ako si ho naposledy videl, v sivej " +
+          "(nepriateľský tank ostane tam, kde si ho videl naposledy).  Skutočný - to isté, ale hlina, " +
+          "skala a steny základní zakryjú, čo je za nimi: v tuneli vidíš len tunel.  Počítačové tanky " +
+          "stále vidia všetko."],
         ["Delená obrazovka:  ", "pôvodná hra - dvaja hráči na jednej klávesnici, {9}MODRÝ{3} na " +
           "ľavej polovici obrazovky a {10}ZELENÝ{3} na pravej.  Najprv si zvoľ veľkosť mapy, počet kôl " +
           "na výhru a čas kola."],
         ["Potýčka:  ", "vlastná hra proti 1 až 7 počítačovým tankom, riadiš ktoroukoľvek sadou kláves.  Každá z " +
           "8 farieb je ty, nikto alebo počítačový tank (ľahký, stredný, ťažký) s tímom (1-8) - hrať " +
           "môžeš za akúkoľvek farbu; potom režim, veľkosť mapy, kolá na výhru, čas kola, priateľská " +
-          "paľba, pohľad, čo po smrti a opravy v základni.  <ESC> počas hry ukončí zápas; <ESC> v " +
+          "paľba, pohľad, čo po smrti, dohľad a opravy v základni.  <ESC> počas hry ukončí zápas; <ESC> v " +
           "menu hry ťa vráti k nastaveniam."],
         ["Hra online:  ", "2 až 8 tankov na rôznych počítačoch, niektoré z nich môžu byť počítačové.  Hra online " +
           "potrebuje meno (spýta sa naň prvýkrát, zmeníš ho v Nastaveniach).  Vytvor hru - jej " +
@@ -273,7 +278,7 @@ Lang.register("sk", {
   // ghost mode (home.js vs computer, lobby.js create screen, online.js pre-game lobby; docs/DESIGN-8P.md 25)
   "lc.watch": "Po smrti: ", "os.watch": "Po smrti: ", "watch.black": "čierna obrazovka", "watch.wreck": "môj vrak", "watch.team": "sledovať tím", "watch.killer": "sledovať vraha", "watch.others": "sledovať všetkých",
   "watch.i1": "Čo vidíš po zničení svojho tanku až do konca kola: čiernu obrazovku,",
-  "watch.i2": "svoj vrak, svoj tím, jeden tank (najprv toho, kto ťa zničil) či všetkých.",
+  "watch.i2": "svoj vrak, svoj tím, jeden tank (najprv toho, kto ťa zničil) či všetkých.", "lc.sight": "Dohľad: ", "os.sight": "Dohľad: ", "sight.full": "vypnutý", "sight.circle": "kruh", "sight.walls": "skutočný", "sight.i1": "Kruh: naživo vidíš len okolie tanku, zvyšok tak, ako si ho videl, v sivej.", "sight.i2": "Skutočný: aj hlina, skala a steny základní skryjú, čo je za nimi.",
   "pg.watch.black": "po smrti: čierna obrazovka", "pg.watch.wreck": "po smrti: môj vrak", "pg.watch.team": "po smrti: sledovať tím", "pg.watch.killer": "po smrti: sledovať vraha", "pg.watch.others": "po smrti: sledovať všetkých",
   // the titles of the two boxes on the vs computer / create-a-game screens
   "box.game": "Hra", "box.players": "Hráči", "box.settings": "Nastavenia",

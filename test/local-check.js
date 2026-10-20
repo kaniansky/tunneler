@@ -75,6 +75,78 @@ function makeEnv(search, store) {
   ok("smooth scrolling: the same game, views shifted one pixel on odd x only (" + odd + " / " + even + " frames)");
 }
 
+// ---------------------------------------------------------------- line of sight (display only)
+{
+  // the same game with sight full / circle / walls: identical simulation; with line of sight the views
+  // show the world live only within the ellipse around the tank (walls: less), the rest remembered (dim
+  // plane); the snapshots carry the dim plane(s) only then
+  const E = require(path.join(SRC, "js", "engine.js"));
+  const NP = require(path.join(SRC, "js", "netproto.js"));
+  const run = (opts, steps, input, check) => {
+    const es = ["full", "circle", "walls"].map(sight => new E(9, Object.assign({ autoStart: true, sight }, opts)));
+    const dimmed = [0, 0, 0];
+    for (let i = 0; i < steps; i++) {
+      const inp = input(i);
+      es.forEach(e => e.step({ keyDown: inp.keyDown && inp.keyDown.slice(), bits: inp.bits && inp.bits.slice(), keys: [] }));
+      assert(es.every(e => e.randSeed === es[0].randSeed), "same RNG at " + i);
+      assert(es.every(e => NP.stateHash(e) === NP.stateHash(es[0])), "same state at " + i);
+      if (es[0].screen !== "play") continue;
+      es.forEach((e, k) => {
+        const s = e.snapshots[e.snapshots.length - 1];
+        if (!s) return;
+        if (k === 0) assert(!s.dim && !s.dims, "no dim plane without line of sight");
+        else assert(opts.slots ? s.dims && s.dims.length === e.nPlayers : s.dim, "a dim plane with line of sight");
+        if (k) dimmed[k] += (s.dims ? s.dims[0] : s.dim).reduce((n, v) => n + (v ? 1 : 0), 0);
+      });
+      if (check) check(es, i);
+    }
+    same(Array.from(es[1].world), Array.from(es[0].world));
+    same(Array.from(es[2].world), Array.from(es[0].world));
+    return dimmed;
+  };
+  const sightCount = { n: 0 };
+  // classic: BLUE drives around firing; the cells around BLUE's tank are live (same as full)
+  const classic = run({}, 2600, i => {
+    const kd = new Uint8Array(128);
+    if (i > 200) { kd[E.KEYS.KeyFire[1]] = 1; kd[(i >> 6) & 1 ? E.KEYS.KeyLeft[1] : E.KEYS.KeyUp[1]] = 1; }
+    return { keyDown: kd };
+  }, es => {
+    if (!es[0].alive[1]) return;
+    // the view's middle row (row 38: the tank's own), the tank's own cells 18..20: as without line of sight
+    const o = 0x143 + 38 * 160;
+    for (const e of es.slice(1)) for (let c = 18; c <= 20; c++) assert.strictEqual(e.vram[o + c * 2], es[0].vram[o + c * 2], "live around the tank");
+    // the view's corners are remembered (outside the ellipse)
+    for (const e of es.slice(1)) assert.strictEqual(e.dim[0x143 >> 1] & 1, 1, "a corner remembered");
+    sightCount.n++;
+  });
+  assert(sightCount.n > 100, "checked during play");
+  assert(classic[2] > classic[1], "walls hide more than the circle (" + classic[1] + " / " + classic[2] + ")");
+  // extended, 4 tanks driven by bits: every view gets its dim plane
+  const ext = run({ slots: [0, 1, 2, 3].map(c => ({ color: c, team: c + 1 })) }, 1500,
+    i => ({ bits: [0, 1, 2, 3].map(p => i > 200 ? 16 | [1, 2, 4, 8][((i >> 6) + p) & 3] : 0) }));
+  assert(ext[2] > ext[1] && ext[1] > 0, "extended views dimmed (" + ext[1] + " / " + ext[2] + ")");
+  // 8 tanks on the large map with walls: time per step
+  {
+    const e = new E(3, { autoStart: true, size: "large", sight: "walls", slots: [0, 1, 2, 3, 4, 5, 6, 7].map(c => ({ color: c, team: c + 1 })) });
+    let t = 0, n = 0;
+    for (let i = 0; i < 1200; i++) {
+      const t0 = process.hrtime.bigint();
+      e.step({ bits: Array.from({ length: 8 }, (_, p) => i > 200 ? 16 | [1, 2, 4, 8][((i >> 5) + p) & 3] : 0), keys: [] });
+      if (e.screen === "play") { t += Number(process.hrtime.bigint() - t0) / 1e6; n++; }
+    }
+    assert(n > 100 && t / n < 25, "8 views with line of sight: " + (t / n).toFixed(2) + " ms a step");
+    ok("line of sight: 8 tanks, large map, walls: " + (t / n).toFixed(2) + " ms a step");
+  }
+  // settings: checked, defaults, passed to the engine
+  assert.strictEqual(NP.SETTINGS.sight("walls"), "walls");
+  assert.strictEqual(NP.SETTINGS.sight("x-ray"), undefined);
+  assert.strictEqual(NP.roomSettings({}).sight, "full");
+  assert.strictEqual(NP.readCfg({ slots: [{ color: 0 }, { color: 1 }], sight: "circle" }).sight, "circle");
+  assert.strictEqual(NP.engineOptions({ slots: [{ color: 0, team: 1 }, { color: 1, team: 2 }], sight: "circle" }).sight, "circle");
+  assert.strictEqual(NP.engineOptions({ slots: [{ color: 0, team: 1 }, { color: 1, team: 2 }], sight: "full" }).sight, undefined);
+  ok("line of sight: the same game, views live only around the tank (classic " + classic.join(" / ") + ", extended " + ext.join(" / ") + " dimmed cells)");
+}
+
 // ---------------------------------------------------------------- sound attenuation
 {
   const Speaker = require(path.join(SRC, "js", "speaker.js"));

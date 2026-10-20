@@ -17,7 +17,7 @@
 // Online play needs a player name (DosUI.askName, "tunneler.name"): asked before connecting when this
 // browser has none. Names and chat go through the Unicode plane (unitext.js), so every language shows.
 (function () {
-  const { TICK_MS, UP, DOWN, LEFT, RIGHT, FIRE, ESC, ROLES, MAX_CHAT, VISIBLE, SIZES, ROUND_TIMES, AFTER_DEATH, SEAT_KINDS,
+  const { TICK_MS, UP, DOWN, LEFT, RIGHT, FIRE, ESC, ROLES, MAX_CHAT, VISIBLE, SIGHTS, SIZES, ROUND_TIMES, AFTER_DEATH, SEAT_KINDS,
     frameToInput, frameToInputExt, FrameQueue, HASH_EVERY, stateHash, engineOptions, readCfg } = NetProto;
   const here = Links.here();                           // /game/<id>[/<colour|watch>] or ?room=&role=
   const roomId = (here.room || "").toLowerCase();
@@ -418,6 +418,8 @@
       row("ff", T("os.ff") + T(s.friendlyFire ? "os.on" : "os.off"), [T("os.ff.i1"), T("os.ff.i2")], () => setSetting("friendlyFire", !s.friendlyFire), !teams),
       row("visible", T("os.visible") + T("view." + s.visible), [T("os.visible.i1"), T("os.visible.i2")], d => setSetting("visible", cycle(VISIBLE, s.visible, d))),
       row("watch", T("os.watch") + T("watch." + s.watchOut), [T("watch.i1"), T("watch.i2")], d => setSetting("watchOut", cycle(AFTER_DEATH, s.watchOut, d))),
+      row("sight", T("os.sight") + T("sight." + (SIGHTS.includes(s.sight) ? s.sight : "full")), [T("sight.i1"), T("sight.i2")],
+        d => setSetting("sight", cycle(SIGHTS, SIGHTS.includes(s.sight) ? s.sight : "full", d))),
       row("noRepair", T("mod.noRepair") + onOff(!s.noRepair), [T("mod.noRepair.i")], () => setSetting("noRepair", !s.noRepair)),
     ];
   }
@@ -462,20 +464,23 @@
     // below them (the chat input fills the actions' width), the spectators in between
     const seatW = DosUI.boxWidth(seats), setW = DosUI.boxWidth(sets);
     const title = UniText.slice(Lang.enc(roomName || roomId) + (st.public ? "" : " " + T("room.private")), seatW - 4);
-    const specs = (st.specs || []).map(x => x.name).filter(Boolean);
-    if (specs.length) {
-      lines.push({ row: 11, col: 2, text: T("pg.specs.who"), color: 8 });
-      text.push({ row: 11, col: 2 + W(T("pg.specs.who")), text: UniText.truncRaw(specs.join(", "), 77 - W(T("pg.specs.who"))), color: 7 });
-    }
     const actW = Math.max(seatW, DosUI.boxWidth(acts));
     // the chat below the settings box, its last row the "Say:" input (a box joined to the panel above it)
     const chatX = actW + 4, chatTop = Math.max(12, sets.length + 3);
+    const setX = 79 - Math.max(setW, 79 - chatX);
+    // (row 11: up to the settings box when it reaches down there)
+    const specs = (st.specs || []).map(x => x.name).filter(Boolean);
+    if (specs.length) {
+      const end = sets.length + 2 >= 11 ? setX - 2 : 78;
+      lines.push({ row: 11, col: 2, text: T("pg.specs.who"), color: 8 });
+      text.push({ row: 11, col: 2 + W(T("pg.specs.who")), text: UniText.truncRaw(specs.join(", "), end - 1 - W(T("pg.specs.who"))), color: 7 });
+    }
     chatPanel(lines, text, chatX, chatTop, 80, 21, 1);   // (its last row: the input below)
     chatForm.width = Math.max(8, 80 - chatX - 1 - W(T("pg.say")) - 2);
     chatForm.placeholder = T("ph.say");
     const say = [{ key: "say", label: T("pg.say"), input: chatForm, align: "left", info: [T("pg.say.i")], go: sendChat }];
     const boxes = [{ x: 1, y: 1, w: seatW, title, items: seats },
-      { x: 79 - Math.max(setW, 79 - chatX), y: 1, w: Math.max(setW, 79 - chatX), title: T("box.settings"), items: sets },   // (as wide as the chat below it)
+      { x: setX, y: 1, w: Math.max(setW, 79 - chatX), title: T("box.settings"), items: sets },   // (as wide as the chat below it)
       { x: 1, y: 12, w: actW, title: T("box.game"), items: acts },
       { x: chatX, y: 19, w: 80 - chatX - 1, items: say, joinTop: true }];   // (row 20, the panel's border below)
     const all = [].concat(seats, sets, acts, say), enabled = it => !it.static && !it.disabled;

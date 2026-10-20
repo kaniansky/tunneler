@@ -42,6 +42,9 @@
     noRepair: load("tunneler.cpu.noRepair", "0") === "1" };
   // after death (black / wreck / others): what you see once your tank is destroyed (views.js)
   let watchOut = TunnelerEngine.afterDeath(load("tunneler.cpu.watch", "wreck"));
+  // line of sight (full / circle / walls): how much of the world around your tank you see live
+  const SIGHTS = TunnelerEngine.SIGHTS || ["full"];
+  let sight = SIGHTS.includes(load("tunneler.cpu.sight")) ? load("tunneler.cpu.sight") : "full";
   const slots = COLORS.map((c, i) => ({ kind: i ? "none" : "you", team: i + 1 }));
   {
     const oldLevel = load("tunneler.level");
@@ -64,6 +67,7 @@
     save("tunneler.cpu.slots", JSON.stringify(slots));
     save("tunneler.cpu.size", cpuSize); save("tunneler.cpu.win", String(cpuWin)); save("tunneler.cpu.ff", ff ? "1" : "0");
     save("tunneler.cpu.view", view); save("tunneler.cpu.watch", watchOut); save("tunneler.cpu.time", String(cpuTime));
+    save("tunneler.cpu.sight", sight);
     save("tunneler.cpu.mode", gmode); save("tunneler.cpu.goals", JSON.stringify(cpuGoals));
     for (const k in mods) save("tunneler.cpu." + k, mods[k] ? "1" : "0");
   };
@@ -243,7 +247,7 @@
       if (S.error) return;
       const list = S.used.map(u => u.color + ":" + u.kind + ":" + u.team).join(",");
       location.href = Links.cpu("slots=" + encodeURIComponent(list) + "&size=" + cpuSize + "&win=" + cpuWin +
-        "&ff=" + (ff && S.teamGame ? 1 : 0) + "&view=" + view + "&watch=" + watchOut + timeArg(cpuTime) +
+        "&ff=" + (ff && S.teamGame ? 1 : 0) + "&view=" + view + "&watch=" + watchOut + timeArg(cpuTime) + (sight !== "full" ? "&sight=" + sight : "") +
         (gmode !== "standard" ? "&gm=" + gmode : "") + (GOALS[gmode] ? "&goal=" + goalOf(gmode) : "") + (mods.noRepair ? "&norepair=1" : ""));
     };
     // slot rows: "you                team 1", the who column padded to the longest text in this language,
@@ -305,6 +309,9 @@
     const setWatch = d => { watchOut = step(TunnelerEngine.AFTER_DEATH, watchOut, d); redraw(); };
     options.push({ key: "watch", label: T("lc.watch") + T("watch." + watchOut),
       info: [T("watch.i1"), T("watch.i2")], go: () => setWatch(1), change: setWatch });
+    const setSight = d => { sight = step(SIGHTS, sight, d); redraw(); };
+    options.push({ key: "sight", label: T("lc.sight") + T("sight." + sight),
+      info: [T("sight.i1"), T("sight.i2")], go: () => setSight(1), change: setSight });
     options.push({ key: "noRepair", label: T("mod.noRepair") + onOff(!mods.noRepair), info: [T("mod.noRepair.i")], go: flip("noRepair"), change: flip("noRepair") });
     // like the online game lobby (online.js), without the chat: the 8 slot rows (the screen's title in the
     // box's border) and the settings on top, Start / Back below them, the selected item's info under it
@@ -328,6 +335,7 @@
       T("lc.ff") + T("lc.on"), T("lc.ff") + T("lc.off"),
       ...VIEWS.map(v => T("cpu.view") + T("view." + v)),
       ...TunnelerEngine.AFTER_DEATH.map(w => T("lc.watch") + T("watch." + w)),
+      ...SIGHTS.map(v => T("lc.sight") + T("sight." + v)),
       T("mod.noRepair") + onOff(true), T("mod.noRepair") + onOff(false)];
     const seatW = DosUI.boxWidth(slotItems), actW = DosUI.boxWidth(acts),
       setW = Math.max(DosUI.boxWidth(sets), DosUI.boxWidth(labels.map(label => ({ label, align: "left" }))));

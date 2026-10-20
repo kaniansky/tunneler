@@ -1,6 +1,6 @@
 "use strict";
 // Local modes: split-screen hotseat (?mode=hotseat&size=small|medium|large&win=1..9[&time=2|3|5|10]) and against the
-// computer (?mode=cpu&slots=<color>:<who>:<team>,...&size=...&win=1..9&ff=0|1&view=self|team|everyone&watch=black|wreck|others[&time=minutes] - home.js's slot
+// computer (?mode=cpu&slots=<color>:<who>:<team>,...&size=...&win=1..9&ff=0|1&view=self|team|everyone&watch=black|wreck|others[&time=minutes][&sight=circle|walls] - home.js's slot
 // editor, docs/DESIGN-8P.md 20: the used slots in slot order, color 0..7, who = "you" (any color, exactly
 // one) or a computer level easy|normal|hard|expert, team 1..8). Everything runs in this browser.
 // You as BLUE + a computer GREEN in different teams is the classic engine exactly as the original (the AI
@@ -29,6 +29,8 @@
   // vs computer, after death (watch=black|wreck|others; old 1 = others): what you see once your tank
   // is destroyed (views.js setWatchOut); split screen shows both halves anyway
   const watchOut = TunnelerEngine.afterDeath(mode === "cpu" ? params.get("watch") : null);
+  // vs computer, line of sight (sight=circle|walls; none = full, the original): display only
+  const sight = mode === "cpu" && (TunnelerEngine.SIGHTS || []).includes(params.get("sight")) ? params.get("sight") : "full";
 
   // vs computer: [{color, team, level}] in slot (color) order - you have level null, the computer tanks
   // their difficulty
@@ -71,7 +73,7 @@
   // (escEnds: BLUE's Esc ends the match as in the original - the extended engine ignores Esc online)
   const engine = new TunnelerEngine(seed, slots
     ? { slots: slots.map(s => ({ color: s.color, team: s.team })), size, winScore, roundTime, friendlyFire: ff, escEnds: true, escPlayer: me, autoStart: true, noInstructions: true,
-        extended: me !== 0, mode: gmode, goal, ...mods }   // the classic engine only with you as BLUE (standard mode, no modifier)
+        sight, extended: me !== 0, mode: gmode, goal, ...mods }   // the classic engine only with you as BLUE (standard mode, no modifier)
     : { size, winScore, roundTime, autoStart: true, noInstructions: true });   // settings were chosen on the page: no menu before round 1
   const ext = engine.extended;
   // display only: views scroll sideways 1 pixel at a time (the homepage's Settings, "tunneler.smooth")

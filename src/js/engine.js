@@ -106,6 +106,35 @@ const Banner = [
 // bar and Enter (or a mouse click) picks the item. The item's old F-key scan code is still what the menu
 // loop dispatches on internally, so a keystroke with that scan code selects the item directly.
 const AFTER_DEATH = ["black", "wreck", "team", "killer", "others"];         // the "after death" setting (watchOut), display only
+// line of sight (option sight, display only): "full" = the original, "circle" = live only within an ellipse
+// around the tank, "walls" = within it only what dirt, rock and base walls don't hide; the rest of a view
+// as its player last saw it, in grey. The ellipse is SIGHT_RX x SIGHT_RY pixels (about round on screen:
+// a pixel is 4.5 dots wide and 5.4 tall).
+const SIGHTS = ["full", "circle", "walls"];
+const SIGHT_RX = 32, SIGHT_RY = 27;
+// the ellipse's offsets [dx, dy] ordered by max(|dx|, |dy|), each with the index of the next one towards
+// the tank (-1 = the tank's own pixel): line of sight in one pass - a pixel is seen when the light passes
+// that next one
+const SIGHT_CELLS = (() => {
+  const list = [];
+  for (let dy = -SIGHT_RY; dy <= SIGHT_RY; dy++)
+    for (let dx = -SIGHT_RX; dx <= SIGHT_RX; dx++)
+      if (dx * dx * SIGHT_RY * SIGHT_RY + dy * dy * SIGHT_RX * SIGHT_RX <= SIGHT_RX * SIGHT_RX * SIGHT_RY * SIGHT_RY) list.push([dx, dy]);
+  list.sort((a, b) => Math.max(Math.abs(a[0]), Math.abs(a[1])) - Math.max(Math.abs(b[0]), Math.abs(b[1])));
+  const at = new Map(list.map(([dx, dy], k) => [dx + "," + dy, k]));
+  const dxs = new Int8Array(list.length), dys = new Int8Array(list.length), prev = new Int16Array(list.length);
+  list.forEach(([dx, dy], k) => {
+    dxs[k] = dx; dys[k] = dy;
+    if (!dx && !dy) { prev[k] = -1; return; }
+    // one step towards the tank along the major axis, along the minor one too when the line from the
+    // tank has moved half a pixel or more on it
+    const ax = Math.abs(dx), ay = Math.abs(dy);
+    const px = ax >= ay ? dx - Math.sign(dx) : dx - Math.sign(dx) * Math.round(ax / ay);
+    const py = ay > ax ? dy - Math.sign(dy) : dy - Math.sign(dy) * Math.round(ay / ax);
+    prev[k] = at.get(px + "," + py);
+  });
+  return { n: list.length, dx: dxs, dy: dys, prev };
+})();
 const MENU_SCANS = [59, 60, 68];
 const MENU_ROWS = [0, 2, 4];                         // box row of each item (blank rows between groups)
 const MENU_ATTR = 0x05, MENU_SEL_ATTR = 0x5F;          // magenta text / white on magenta bar
@@ -292,6 +321,13 @@ class TunnelerEngine {
     this.showSettings = null;                     // {view, visible, watchOut}: list the game's settings on the
                                                   // round title / statistics (null = not at all, as the original)
     this.smoothScroll = !!o.smoothScroll;         // views scroll sideways 1 pixel at a time (blitView; the original: 2)
+    this.sight = SIGHTS.includes(o.sight) ? o.sight : "full";   // line of sight (SIGHTS; blitSight)
+    this.sightMem = [];                           // [player] the world as that player last saw it (world bytes)
+    this.sightLit = null;                         // (sightView's scratch: per SIGHT_CELLS cell 1 = seen, 2 = seen and see-through)
+    this.sightMask = new Uint8Array(76 * 71);     // (and per view pixel: 1 = seen)
+    // dim plane: per cell of the LORES screen, 1 = its low-nibble pixel is remembered (grey), 2 = the
+    // high one's; extended: one per view buffer (snapshots carry them only with line of sight)
+    this.dim = new Uint8Array(8000);
 
     // PlayGame locals
     this.obstacle = 0; this.static = false; this.soundOn = true; this.roundOver = false; this.matchOver = false;
@@ -325,6 +361,7 @@ class TunnelerEngine {
     this.baseMinDist = 100;                       // pair distance the bases were placed with
     this.extSprites = null;                       // [player 1..N][dir] coloured tank sprites
     this.views = this.extended ? Array.from({ length: this.nPlayers }, () => new Uint8Array(16000)) : null;
+    this.viewDims = this.extended ? this.views.map(() => new Uint8Array(8000)) : null;
 
     // virtual machine
     this.tick = 0; this.now = 0; this.waitUntil = 0; this.cpu = 0;
@@ -376,6 +413,7 @@ class TunnelerEngine {
     const s = { t: (t - this.stepStart) * 1000 / PIT_HZ, mode: this.mode, screen: this.screen,
       vram: this.vram.slice(0, 16000) };
     this.snapUni(s);
+    if (this.sight !== "full" && this.screen === "play") s.dim = this.dim.slice();
     this.snapshots.push(s);
   }
   // a copy of the Unicode plane when it holds something (most snapshots: none)
@@ -388,7 +426,10 @@ class TunnelerEngine {
   // (vram = views[0])
   snapshotExt(t) {
     const s = { t: (t - this.stepStart) * 1000 / PIT_HZ, mode: this.mode, screen: this.screen, palette: "extended" };
-    if (this.screen === "play") { s.views = this.views.map(v => v.slice()); s.vram = s.views[0]; }
+    if (this.screen === "play") {
+      s.views = this.views.map(v => v.slice()); s.vram = s.views[0];
+      if (this.sight !== "full") s.dims = this.viewDims.map(d => d.slice());
+    }
     else { s.vram = this.vram.slice(0, 16000); this.snapUni(s); }
     this.snapshots.push(s);
   }
@@ -576,7 +617,9 @@ class TunnelerEngine {
   // x: the followed tank's pixel x - with smoothScroll (display only, not in the original) a view whose
   // tank is on an odd x is copied one pixel further right: each screen byte = the right pixel of one world
   // byte + the left pixel of the next, so it scrolls sideways 1 pixel a frame like it does up and down
-  blitView(col, row, scrOfs, noise, x) {
+  // p: the player whose view it is (line of sight: blitSight)
+  blitView(col, row, scrOfs, noise, x, p) {
+    if (p && this.sight !== "full") return this.blitSight(col, row, scrOfs, noise, x, p);
     let src, mem, skip;
     if (noise) { src = this.random(30000); mem = LOW_MEMORY; skip = 474; }
     else { src = row * this.ws + col; mem = this.world; skip = this.ws - 38; }
@@ -592,6 +635,78 @@ class TunnelerEngine {
       src += skip; dst += 84;
     }
     this.dirty = true;
+  }
+
+  // blitView with line of sight (display only: no random numbers but the static's, the world unchanged):
+  // the pixels player p's tank sees come from the world and go into what p remembers, the others come
+  // from that memory and are marked in the dim plane (drawn grey); never seen = black
+  blitSight(col, row, scrOfs, noise, x, p) {
+    const dim = this.dim;
+    if (noise) {
+      this.blitView(col, row, scrOfs, noise, x);
+      for (let r = 0; r < 71; r++) dim.fill(0, (scrOfs >> 1) + r * 80, (scrOfs >> 1) + r * 80 + 38);
+      return;
+    }
+    const x0 = col * 2 + (this.smoothScroll && (x & 1) === 1 ? 1 : 0), y0 = row;
+    const vis = this.sightView(p, x0, y0);
+    let mem = this.sightMem[p];
+    if (!mem || mem.length !== this.world.length) mem = this.sightMem[p] = new Uint8Array(this.world.length);
+    const W = this.worldW, H = this.worldH, ws = this.ws, world = this.world;
+    let dst = scrOfs;
+    for (let r = 0; r < 71; r++) {
+      const wy = y0 + r;
+      for (let c = 0; c < 38; c++) {
+        let byte = 0, d = 0;
+        for (let k = 0; k < 2; k++) {
+          const wx = x0 + 2 * c + k;
+          if (wx < 0 || wx >= W || wy < 0 || wy >= H) continue;
+          const i = wy * ws + (wx >> 1), sh = (wx & 1) << 2;
+          let v;
+          if (vis[r * 76 + 2 * c + k]) { v = (world[i] >> sh) & 15; mem[i] = (mem[i] & ~(15 << sh)) | (v << sh); }
+          else { v = (mem[i] >> sh) & 15; d |= 1 << k; }
+          byte |= v << (k << 2);
+        }
+        this.vram[dst] = byte; dim[dst >> 1] = d;
+        dst += 2;
+      }
+      dst += 84;
+    }
+    this.dirty = true;
+  }
+  // which pixels of the 76 x 71 view at world pixel (x0, y0) player p's tank sees: sightMask (1 = seen)
+  sightView(p, x0, y0) {
+    const m = this.sightMask, C = SIGHT_CELLS, tx = this.tankX[p], ty = this.tankY[p];
+    const walls = this.sight === "walls";
+    const lit = this.sightLit || (this.sightLit = new Uint8Array(C.n));
+    m.fill(0);
+    for (let k = 0; k < C.n; k++) {
+      const x = tx + C.dx[k], y = ty + C.dy[k];
+      if (walls) {
+        const q = C.prev[k];
+        if (q >= 0 && lit[q] !== 2) { lit[k] = 0; continue; }
+        lit[k] = q >= 0 && this.sightBlocks(x, y) ? 1 : 2;
+      }
+      const vx = x - x0, vy = y - y0;
+      if (vx >= 0 && vx < 76 && vy >= 0 && vy < 71) m[vy * 76 + vx] = 1;
+    }
+    return m;
+  }
+  // does the pixel at x, y hide what is behind it? Dirt (6, 8), rock (7) and base walls (tanks, shots and
+  // explosions don't)
+  sightBlocks(x, y) {
+    if (x < 0 || y < 0 || x >= this.worldW || y >= this.worldH) return true;
+    const c = this.getPixel(x, y);
+    if (c === 6 || c === 7 || c === 8) return true;
+    if (c === 0) return false;
+    for (let b = 1; b <= this.nPlayers; b++) {
+      const ax = Math.abs(x - this.baseX[b]), ay = Math.abs(y - this.baseY[b]);
+      if (ax <= 17 && ay <= 17 && (ax === 17 || ay === 17)) return true;
+    }
+    return false;
+  }
+  // a new round, a new world: nothing seen yet
+  sightReset() {
+    for (const m of this.sightMem) if (m) m.fill(0);
   }
 
   // world scale (option size): v * W / 1024, and the original-world row / column that output row / column
@@ -1045,7 +1160,7 @@ class TunnelerEngine {
   // the game's settings as compact font-text parts ("map size: medium", "rounds to win: 3", ...): map size,
   // rounds to win, friendly fire (only when a team has 2+ tanks), the view / online visible limit and
   // ghost mode when the page set them (showSettings), the round time limit when there is one (time: 0 =
-  // the full text, 1 = the short one, 2 = left out); [] without showSettings
+  // the full text, 1 = the short one, 2 = left out; 3 = the line of sight left out too); [] without showSettings
   settingsParts(time = 0) {
     const o = this.showSettings;
     if (!o) return [];
@@ -1056,6 +1171,7 @@ class TunnelerEngine {
     if (this.gameMode !== "standard") parts.unshift((S.modes || {})[this.gameMode] || this.gameMode);
     if (this.mods.noRepair && S.noRepair) parts.push(S.noRepair);
     if (this.teams) parts.push(S.ff[this.friendlyFire ? 1 : 0]);
+    if (this.sight !== "full" && time < 3) parts.push(S.sight[SIGHTS.indexOf(this.sight) - 1]);   // (short: it packs well here)
     const vi = ["self", "team", "everyone"].indexOf(o.view);
     if (vi >= 0) parts.push((o.visible ? S.visible : S.view).replace("{v}", S.views[vi]));
     // the round time limit only when there is one (here, before the longest part, it fits best)
@@ -1064,10 +1180,11 @@ class TunnelerEngine {
     return parts;
   }
   // the parts joined by ", " and wrapped into lines of at most `width` columns; more than maxLines lines:
-  // the round time's short text, else without it
+  // the round time's short text, else without it, else without the line of sight too
   settingsLines(width, maxLines = 4) {
     let lines;
-    for (let time = 0; time < (this.roundTime ? 3 : 1); time++) {
+    for (let time = 0; time < 4; time++) {
+      if (time === 3 ? this.sight === "full" : time && !this.roundTime) continue;
       lines = [];
       let cur = "";
       for (const p of this.settingsParts(time)) {
@@ -1199,6 +1316,7 @@ class TunnelerEngine {
       this.drawBases();
       this.drawFrame();
       this.roundStart = this.tick; this.clockShown = -1; this.timedOut = false;
+      this.sightReset();
       do {
         if (KD[1]) { this.roundOver = true; this.matchOver = true; }
         if (KD[0x3B]) this.soundOn = true;
@@ -1296,7 +1414,7 @@ class TunnelerEngine {
           }
           this.static = this.staticTimer[I] > 0;
           if (this.static) this.staticTimer[I]--;
-          this.blitView(shr(this.tankX[I], 1) - 19, this.tankY[I] - 38, ViewOfs[I], this.static, this.tankX[I]);
+          this.blitView(shr(this.tankX[I], 1) - 19, this.tankY[I] - 38, ViewOfs[I], this.static, this.tankX[I], I);
           this.cpu += CPU_BLIT;
         }
         for (let I = 1; I <= 2; I++) {
@@ -1327,8 +1445,8 @@ class TunnelerEngine {
       }
       for (let I = 1; I <= 20; I++) {
         this.I = I;
-        this.blitView(shr(this.tankX[1], 1) - 19, this.tankY[1] - 38, 0x143, !this.alive[1], this.tankX[1]);
-        this.blitView(shr(this.tankX[2], 1) - 19, this.tankY[2] - 38, 0x193, !this.alive[2], this.tankX[2]);
+        this.blitView(shr(this.tankX[1], 1) - 19, this.tankY[1] - 38, 0x143, !this.alive[1], this.tankX[1], 1);
+        this.blitView(shr(this.tankX[2], 1) - 19, this.tankY[2] - 38, 0x193, !this.alive[2], this.tankX[2], 2);
         yield END_BLIT_DELAY;
       }
       this.doneLores();
@@ -1500,9 +1618,9 @@ class TunnelerEngine {
 
   // run fn with this.vram pointing at player p's view buffer (all drawing helpers write this.vram)
   inView(p, fn) {
-    const v = this.vram;
-    this.vram = this.views[p - 1];
-    try { fn(); } finally { this.vram = v; }
+    const v = this.vram, d = this.dim;
+    this.vram = this.views[p - 1]; this.dim = this.viewDims[p - 1];
+    try { fn(); } finally { this.vram = v; this.dim = d; }
   }
 
   // N bases with the engine RNG in the original's area (scaled with the world size), every pair farther
@@ -2128,6 +2246,7 @@ class TunnelerEngine {
       this.drawBases();
       for (let p = 1; p <= N; p++) this.inView(p, () => this.drawFrameExt(p));
       this.roundStart = this.tick; this.clockShown = -1; this.timedOut = false;
+      this.sightReset();
       do {
         if (this.escHeld) { this.roundOver = true; this.matchOver = true; }   // (escEnds only)
         if (this.roundTicks) this.roundClock();
@@ -2239,7 +2358,7 @@ class TunnelerEngine {
           }
           this.static = this.alive[I] && this.staticTimer[I] > 0;
           if (this.static) this.staticTimer[I]--;
-          this.inView(I, () => this.blitView(shr(this.tankX[I], 1) - 19, this.tankY[I] - 38, ViewOfs[1], this.static, this.tankX[I]));
+          this.inView(I, () => this.blitView(shr(this.tankX[I], 1) - 19, this.tankY[I] - 38, ViewOfs[1], this.static, this.tankX[I], I));
           if (I <= 2) this.cpu += CPU_BLIT;       // sound timing within the frame as the original's 2 blits
         }
         this.objRestore();
@@ -2258,7 +2377,7 @@ class TunnelerEngine {
       for (let I = 1; I <= 20; I++) {
         this.I = I;
         for (let p = 1; p <= N; p++)
-          this.inView(p, () => this.blitView(shr(this.tankX[p], 1) - 19, this.tankY[p] - 38, ViewOfs[1], !this.alive[p], this.tankX[p]));
+          this.inView(p, () => this.blitView(shr(this.tankX[p], 1) - 19, this.tankY[p] - 38, ViewOfs[1], !this.alive[p], this.tankX[p], p));
         yield END_BLIT_DELAY;
       }
       this.doneLores();
@@ -2804,6 +2923,7 @@ TunnelerEngine.PixelClass = PixelClass;
 TunnelerEngine.PixelClassExt = PixelClassExt;
 TunnelerEngine.MAX_PLAYERS = EXT_MAX_PLAYERS;
 TunnelerEngine.AFTER_DEATH = AFTER_DEATH;
+TunnelerEngine.SIGHTS = SIGHTS;
 TunnelerEngine.afterDeath = v => v === true || v === "1" ? "others" : AFTER_DEATH.includes(v) ? v : "wreck";   // (true / "1": older "ghost mode on")
 TunnelerEngine.PLAYER_KEYS = EXT_KEYS;              // role / lang key of player i (0-based)
 TunnelerEngine.PLAYER_COLORS = EXT_COLORS;          // LORES colour index of slot color i (extended palette; per player: engine.playerColor(p))

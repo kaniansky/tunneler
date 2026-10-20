@@ -377,8 +377,8 @@ class ViewModes {
     px.fill(pal[0]);
     L.cells.forEach((v, k) => {
       const x = (k % L.cols) * 360, y = Math.floor(k / L.cols) * CH;
-      if (s.views) { if (s.views[v]) D.paint(px, W, x, y + top, s.views[v], 0, 40, 100, false, pal, true, root.VGA_FONT); }
-      else D.paint(px, W, x, y + top, s.vram, v * 40, v * 40 + 40, 100, false, pal, true, root.VGA_FONT);
+      if (s.views) { if (s.views[v]) D.paint(px, W, x, y + top, s.views[v], 0, 40, 100, false, pal, true, root.VGA_FONT, null, s.dims ? s.dims[v] : null); }
+      else D.paint(px, W, x, y + top, s.vram, v * 40, v * 40 + 40, 100, false, pal, true, root.VGA_FONT, null, s.dim);
       // after death "black": the view window (cells 1-38 x 2-72, 9 x 4 pixels each) black with DESTROYED;
       // the frame and the instrument panel stay
       if (this.blackedOut(v, e)) {
