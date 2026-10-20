@@ -97,8 +97,8 @@ function match(label, seed, opts, levels, maxFrames) {
 }
 
 for (const [label, seed, opts, levels, cap] of [
-  ["classic", 4242, undefined, ["hard", "hard"], 40000],
-  ["extended 4 free-for-all", 77, { players: 4, size: "small", winScore: 1 }, ["hard", "normal", "hard", "normal"], 40000],
+  ["classic", 4242, undefined, ["normal", "normal"], 40000],
+  ["extended 4 free-for-all", 77, { players: 4, size: "small", winScore: 1 }, ["normal", "easy", "normal", "easy"], 40000],
 ]) {
   const r1 = match(label, seed, opts, levels, cap);
   const r2 = match(label + " (again)", seed, opts, levels, cap);

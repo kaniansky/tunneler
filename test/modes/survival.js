@@ -45,7 +45,7 @@ const waveTankBases = e => e.GS.waveTanks.filter(p => e.alive[p]).map(p => { for
 
 // ---- the sides and teams
 {
-  const g = setupGame({ teams: [3, 1, 4, 1], levels: [null, "hard", "hard", "normal"] });
+  const g = setupGame({ teams: [3, 1, 4, 1], levels: [null, "normal", "normal", "easy"] });
   g.step(2, still);
   const e = g.e, G = e.GS;
   check(String(G.players) === "1" && String(G.bots) === "2,3,4", "sides: the seat no AI drives plays, the AI seats are the waves (" + G.players + " / " + G.bots + ")");
@@ -60,17 +60,17 @@ const waveTankBases = e => e.GS.waveTanks.filter(p => e.alive[p]).map(p => { for
 }
 {
   // AI-only: the lowest team number is the players' side
-  const g = setupGame({ teams: [2, 1, 2, 1, 3], levels: ["hard", "hard", "hard", "hard", "hard"] });
+  const g = setupGame({ teams: [2, 1, 2, 1, 3], levels: ["normal", "normal", "normal", "normal", "normal"] });
   g.step(2, still);
   check(String(g.e.GS.players) === "2,4" && String(g.e.GS.bots) === "1,3,5", "AI-only: the seats of the lowest team play the players' side (" + g.e.GS.players + ")");
-  const h = setupGame({ teams: [1, 1], levels: ["hard", "hard"] });
+  const h = setupGame({ teams: [1, 1], levels: ["normal", "normal"] });
   h.step(2, still);
   check(String(h.e.GS.players) === "1" && String(h.e.GS.bots) === "2", "AI-only, one team: player 1 against the rest");
 }
 
 // ---- waves
 {
-  const g = setupGame({ teams: [1, 2, 3, 4, 5, 6], levels: [null, null, "hard", "hard", "hard", "hard"] });
+  const g = setupGame({ teams: [1, 2, 3, 4, 5, 6], levels: [null, null, "normal", "normal", "normal", "normal"] });
   g.step(2, still);
   const e = g.e, G = e.GS;
   check(String(G.players) === "1,2" && G.bots.length === 4, "two players, four AI seats");
@@ -125,7 +125,7 @@ function clearUntilEnd(g, maxWaves) {
   return -1;
 }
 for (const goal of [GMIN, 7, GMAX]) {
-  const g = setupGame({ teams: [1, 2, 3, 4], levels: [null, "hard", "hard", "hard"], goal });
+  const g = setupGame({ teams: [1, 2, 3, 4], levels: [null, "normal", "normal", "normal"], goal });
   g.step(2, still);
   const e = g.e;
   const w = clearUntilEnd(g, goal + 2);
@@ -136,11 +136,11 @@ for (const goal of [GMIN, 7, GMAX]) {
 }
 {
   // an invalid goal falls back to the default; winScore is always 1
-  const g = setupGame({ teams: [1, 2], levels: [null, "hard"], goal: 4, winScore: 5 });
+  const g = setupGame({ teams: [1, 2], levels: [null, "normal"], goal: 4, winScore: 5 });
   check(g.e.goal === GOALS.def && g.e.winScore === 1, "an invalid goal: the default (" + g.e.goal + "); winScore forced to 1 (" + g.e.winScore + ")");
   check(String(GOALS.choices) === "3,5,7,10,15,20" && String(NetProto.GOALS.survival.choices) === String(GOALS.choices) && NetProto.GOALS.survival.def === 5,
     "the choices: 3 5 7 10 15 20 (engine and NetProto), default 5");
-  const h = setupGame({ teams: [1, 2], levels: [null, "hard"], goal: 15 });
+  const h = setupGame({ teams: [1, 2], levels: [null, "normal"], goal: 15 });
   h.e.showSettings = {};
   check(h.e.settingsParts().some(x => /waves to win: 15/.test(x)), "settings: \"waves to win: 15\" instead of rounds to win (" + h.e.settingsParts() + ")");
 }
@@ -152,7 +152,7 @@ for (const goal of [GMIN, 7, GMAX]) {
   const mono = a => a.every((x, i) => !i || x >= a[i - 1]);
   check(mono(sh) && mono(ar) && sh[6] === 11400 && sh[24] === 11400 && sh[5] < 11400, "wave shield grows up to a full one at wave 7 (" + sh.slice(0, 8) + ")");
   check(ar[4] === 0x380 && ar[9] === 6 * 0x380 && ar[24] === 6 * 0x380 && ar[8] < ar[9], "armor grows from wave 5 to wave 10, then stays (" + ar.slice(3, 11) + ")");
-  const g = setupGame({ teams: [1, 2, 3], levels: [null, "hard", "hard"], goal: GMAX });
+  const g = setupGame({ teams: [1, 2, 3], levels: [null, "normal", "normal"], goal: GMAX });
   g.step(2, still);
   const e = g.e, G = e.GS;
   let maxN = 0, okTough = true;
@@ -170,7 +170,7 @@ for (const goal of [GMIN, 7, GMAX]) {
 }
 {
   // armor keeps a wave tank's shield up: it takes more hits
-  const g = setupGame({ teams: [1, 2], levels: [null, "hard"] });
+  const g = setupGame({ teams: [1, 2], levels: [null, "normal"] });
   g.step(2, still);
   const e = g.e, G = e.GS;
   G.wave = 5; G.armor[2] = 3 * 0x380;
@@ -180,7 +180,7 @@ for (const goal of [GMIN, 7, GMAX]) {
 }
 {
   // a wave never appears on top of a tank: the own base taken -> another base
-  const g = setupGame({ teams: [1, 2, 3], levels: [null, "hard", "hard"] });
+  const g = setupGame({ teams: [1, 2, 3], levels: [null, "normal", "normal"] });
   g.step(2, still);
   const e = g.e, G = e.GS;
   for (const p of aliveOf(e, G.bots)) kill(e, p);
@@ -197,7 +197,7 @@ for (const goal of [GMIN, 7, GMAX]) {
   // parked 20 px from the only AI base -> wave 2 comes out of a base at least sc(80) away (here the
   // player's own one: the last resort), the base marked during the wait is where it comes from, and the
   // tank finds its way out of that base (not its own)
-  const g = setupGame({ teams: [1, 2], levels: [null, "normal"], size: "medium", seed: 3 });
+  const g = setupGame({ teams: [1, 2], levels: [null, "easy"], size: "medium", seed: 3 });
   g.step(2, still);
   const e = g.e, G = e.GS, far = e.sc(80);
   for (const p of aliveOf(e, G.bots)) kill(e, p);
@@ -216,7 +216,7 @@ for (const goal of [GMIN, 7, GMAX]) {
 }
 {
   // several AI bases: the one nearest the players that is far enough
-  const g = setupGame({ teams: [1, 2, 3, 4], levels: [null, "hard", "hard", "hard"], size: "medium", seed: 4 });
+  const g = setupGame({ teams: [1, 2, 3, 4], levels: [null, "normal", "normal", "normal"], size: "medium", seed: 4 });
   g.step(2, still);
   const e = g.e, G = e.GS, far = e.sc(80);
   const dist = b => Math.max(Math.abs(e.baseX[b] - e.tankX[1]), Math.abs(e.baseY[b] - e.tankY[1]));
@@ -230,7 +230,7 @@ for (const goal of [GMIN, 7, GMAX]) {
 }
 {
   // all players destroyed: the AI wins; destroyed players stay out
-  const g = setupGame({ teams: [1, 2, 3], levels: [null, null, "hard"] });
+  const g = setupGame({ teams: [1, 2, 3], levels: [null, null, "normal"] });
   g.step(2, still);
   const e = g.e, G = e.GS;
   kill(e, 1);
@@ -251,14 +251,14 @@ for (const goal of [GMIN, 7, GMAX]) {
 }
 {
   // round time: players alive -> the players win (they survived); hook decides
-  const g = setupGame({ teams: [1, 2], levels: [null, "normal"], roundTime: 2 });
+  const g = setupGame({ teams: [1, 2], levels: [null, "easy"], roundTime: 2 });
   g.step(2, still);
   const e = g.e;
   check(e.roundTicks > 0, "round time set: the clock runs");
   const pTeam = e.GS.pTeam;
   const f = frameOfRoundEnd(g, e.roundTicks + 200);
   check(f > 0 && e.wins[1] === 1 && e.wins[2] === 0, "round time up with a player alive: the players win the round (" + f + " frames)");
-  const h = setupGame({ teams: [1, 2], levels: [null, "normal"] });
+  const h = setupGame({ teams: [1, 2], levels: [null, "easy"] });
   h.step(2, still);
   check(M.timeUp(h.e) === true && h.e.modeWinner === h.e.GS.pTeam && pTeam === 0, "timeUp decides the round");
 }
@@ -267,14 +267,14 @@ for (const goal of [GMIN, 7, GMAX]) {
 {
   // the waves hunt the players: an idle player is found and destroyed (small and large map)
   for (const size of ["small", "large"]) {
-    const g = setupGame({ teams: [1, 2, 3], levels: [null, "hard", "expert"], size, seed: 5 });
+    const g = setupGame({ teams: [1, 2, 3], levels: [null, "normal", "hard"], size, seed: 5 });
     let f = 0;
     for (; f < 20000 && g.e.round === 1; f++) g.step(1);
     // (large: it was 16,967 frames - a wave tank that came out of another tank's base turned around in it)
     check((g.e.round > 1 || g.e.screen !== "play") && f < 5000, "the waves find and destroy an idle player (" + size + ": " + f + " frames)");
     check(g.e.wins[2] === 1, "... the AI wins that round (" + size + ")");
   }
-  const g = setupGame({ teams: [1, 2], levels: [null, "hard"] });
+  const g = setupGame({ teams: [1, 2], levels: [null, "normal"] });
   g.step(2, still);
   const e = g.e, ai = g.ais[1];
   e.tankX[1] = 100; e.tankY[1] = 60;
@@ -291,7 +291,7 @@ for (const goal of [GMIN, 7, GMAX]) {
   check(goal.x === 100 && goal.y === 70, "aiGoal, wave 3 on: the nearest player's exact position");
   e.GS.wave = 1;
   // the players' side between waves: home
-  const pa = new TunnelerAI("hard", 1, { seed: 1 });
+  const pa = new TunnelerAI("normal", 1, { seed: 1 });
   check(M.aiOverride(pa, e, 100, 60) === null, "aiOverride: a player AI fights while the wave is on");
   kill(e, 2); g.step(1, still);
   const ov = M.aiOverride(pa, e, 100, 60);
@@ -300,7 +300,7 @@ for (const goal of [GMIN, 7, GMAX]) {
 {
   // a wave tank low on energy refuels at the nearest base, not its own far-away one; a low shield never
   // sends it home
-  const g = setupGame({ teams: [1, 2, 3], levels: [null, "hard", "hard"], size: "medium", seed: 2 });
+  const g = setupGame({ teams: [1, 2, 3], levels: [null, "normal", "normal"], size: "medium", seed: 2 });
   g.step(2, still);
   const e = g.e, G = e.GS, w = G.waveTanks[0], ai = g.ais[w - 1];
   const other = w === 2 ? 3 : 2;
@@ -320,7 +320,7 @@ for (const goal of [GMIN, 7, GMAX]) {
   // the large map: a lone wave tank reaches an idle player in reasonable time (it was up to 8,721 frames)
   const times = [];
   for (const seed of [1, 2, 4]) {
-    const g = setupGame({ teams: [1, 2], levels: [null, "normal"], size: "large", seed });
+    const g = setupGame({ teams: [1, 2], levels: [null, "easy"], size: "large", seed });
     let f = 0;
     for (; f < 9000 && g.e.endTimer < 0; f++) g.step(1);
     times.push(f);
@@ -329,7 +329,7 @@ for (const goal of [GMIN, 7, GMAX]) {
 }
 {
   // an AI player clears waves (an expert against one easy AI seat, medium map)
-  const r = runMatch({ mode: "survival", slots: slots([1, 2]), levels: ["expert", "normal"], seed: 1, size: "medium", maxFrames: 60000 });
+  const r = runMatch({ mode: "survival", slots: slots([1, 2]), levels: ["hard", "easy"], seed: 1, size: "medium", maxFrames: 60000 });
   const cleared = r.engine.modeScore[1];
   check(r.finished && r.rounds.length === 1 && cleared >= 3, "AI players clear waves (" + cleared + " in one round: " + r.rounds.map(x => x.winnerTeam) + ")");
 }
@@ -340,7 +340,7 @@ for (const goal of [GMIN, 7, GMAX]) {
 // reloads mid-game: stepping stops, then goes on), running its own AIs; they must agree all the way.
 {
   const opts = { slots: slots([1, 2, 3, 4]), size: "small", mode: "survival", extended: true, roundTime: 0, goal: GMAX };
-  const levels = [null, "hard", "normal", "expert"];
+  const levels = [null, "normal", "easy", "hard"];
   const human = f => [8, 8, 1, 1, 4, 4, 2, 2, 16, 0][(f >> 5) % 10] | ((f % 23) === 0 ? 16 : 0);   // (a scripted human)
   const mk = () => { const e = new E(7, Object.assign({ autoStart: true }, opts)); return { e, ais: levels.map((l, i) => (l ? new TunnelerAI(l, i + 1, { seed: 7 })  : null)) }; };
   const A = mk(), B = mk(), FR = 9000, log = [];
@@ -375,15 +375,15 @@ for (const goal of [GMIN, 7, GMAX]) {
 
 // ---- AI-only matches: finish, deterministic
 const setups = [
-  { name: "2 tanks, small", teams: [1, 2], levels: ["expert", "hard"], size: "small" },
-  { name: "2 tanks, large, round time 2", teams: [1, 2], levels: ["hard", "normal"], size: "large", roundTime: 2 },
-  { name: "8 tanks free-for-all, small, modifiers", teams: [1, 2, 3, 4, 5, 6, 7, 8], levels: ["expert", "hard", "normal", "hard", "expert", "normal", "hard", "normal"], size: "small", mods: { noRepair: true } },
-  { name: "8 tanks 3 v 5 teams, medium, round time 3, friendly fire", teams: [1, 1, 1, 2, 2, 2, 2, 2], levels: ["expert", "expert", "hard", "normal", "normal", "hard", "hard", "normal"], size: "medium", roundTime: 3, friendlyFire: true },
-  { name: "4 tanks 2 v 2, large, no repairs", teams: [1, 2, 1, 2], levels: ["expert", "hard", "hard", "normal"], size: "large", mods: { noRepair: true } },
-  { name: "3 tanks, small, goal " + GMIN, teams: [1, 2, 3], levels: ["expert", "hard", "normal"], size: "small", goal: GMIN },
-  { name: "3 tanks, small, goal " + GMAX, teams: [1, 2, 3], levels: ["expert", "hard", "normal"], size: "small", goal: GMAX },
-  { name: "4 tanks, medium, goal " + GMIN, teams: [1, 1, 2, 2], levels: ["expert", "hard", "normal", "hard"], size: "medium", goal: GMIN },
-  { name: "4 tanks, medium, goal " + GMAX, teams: [1, 1, 2, 2], levels: ["expert", "hard", "normal", "hard"], size: "medium", goal: GMAX },
+  { name: "2 tanks, small", teams: [1, 2], levels: ["hard", "normal"], size: "small" },
+  { name: "2 tanks, large, round time 2", teams: [1, 2], levels: ["normal", "easy"], size: "large", roundTime: 2 },
+  { name: "8 tanks free-for-all, small, modifiers", teams: [1, 2, 3, 4, 5, 6, 7, 8], levels: ["hard", "normal", "easy", "normal", "hard", "easy", "normal", "easy"], size: "small", mods: { noRepair: true } },
+  { name: "8 tanks 3 v 5 teams, medium, round time 3, friendly fire", teams: [1, 1, 1, 2, 2, 2, 2, 2], levels: ["hard", "hard", "normal", "easy", "easy", "normal", "normal", "easy"], size: "medium", roundTime: 3, friendlyFire: true },
+  { name: "4 tanks 2 v 2, large, no repairs", teams: [1, 2, 1, 2], levels: ["hard", "normal", "normal", "easy"], size: "large", mods: { noRepair: true } },
+  { name: "3 tanks, small, goal " + GMIN, teams: [1, 2, 3], levels: ["hard", "normal", "easy"], size: "small", goal: GMIN },
+  { name: "3 tanks, small, goal " + GMAX, teams: [1, 2, 3], levels: ["hard", "normal", "easy"], size: "small", goal: GMAX },
+  { name: "4 tanks, medium, goal " + GMIN, teams: [1, 1, 2, 2], levels: ["hard", "normal", "easy", "normal"], size: "medium", goal: GMIN },
+  { name: "4 tanks, medium, goal " + GMAX, teams: [1, 1, 2, 2], levels: ["hard", "normal", "easy", "normal"], size: "medium", goal: GMAX },
 ];
 for (const s of setups) {
   const o = { mode: "survival", slots: slots(s.teams), levels: s.levels, seed: 21, size: s.size, winScore: 1, maxFrames: 80000,
@@ -402,7 +402,7 @@ for (const s of setups) {
   let stuckMax = 0;
   for (const seed of [1, 2, 3, 4, 5, 6]) for (const off of [[-30, -30], [-30, 30], [30, 30], [-25, 22], [-40, 10]]) {
     const e = startEngine(seed, { mode: "survival", slots: slots([1, 2, 3]), size: "small", winScore: 1, extended: true });
-    const ais = [null, new TunnelerAI("hard", 2, { seed }), new TunnelerAI("expert", 3, { seed })];
+    const ais = [null, new TunnelerAI("normal", 2, { seed }), new TunnelerAI("hard", 3, { seed })];
     const inside = {};
     let placed = -1;
     for (let f = 0; f < 2500 && e.screen === "play"; f++) {

@@ -47,7 +47,7 @@ for (const c of Lang.codes) {
   // the room lobby (online.js): the seats box (who - name, open, closed, AI level -, team, ping) and the
   // settings box side by side on the top half; the info lines below
   {
-    const levels = ["normal", "hard", "expert"].map(l => vis(t("seat.cpu", { level: Lang.raw("level." + l) })));
+    const levels = ["easy", "normal", "hard"].map(l => vis(t("seat.cpu", { level: Lang.raw("level." + l) })));
     const nw = Math.max(14, vis(t("seat.open")), vis(t("seat.closed")), ...levels), tw = Math.max(vis(t("pg.teamn", { n: 8 })));
     const box = len => { const w = Math.max(14, len + 4); return w + w % 2 + 2; };   // (DosUI.boxWidth + the borders)
     const seatsW = box(2 + nw + 1 + tw + 8);
@@ -69,7 +69,7 @@ for (const c of Lang.codes) {
   }
   fits(c, "pg.kick.sure", t("pg.kick.sure", { name: "W".repeat(12) }), 78);
   for (const v of ["set.ping.on", "set.ping.off"]) fits(c, "set.ping", t("set.ping") + t(v), 34);
-  for (const l of ["normal", "hard", "expert"]) fits(c, "cpu.level", t("cpu.level") + t("level." + l), 34);
+  for (const l of ["easy", "normal", "hard"]) fits(c, "cpu.level", t("cpu.level") + t("level." + l), 34);
   fits(c, "cpu.view", t("cpu.view") + t("cpu.view.own"), 34); fits(c, "cpu.view", t("cpu.view") + t("cpu.view.both"), 34);
   // view self / team / everyone (vs computer, pre-game lobby, create screen) and the chat's "Say:" input (16 shown)
   for (const v of ["self", "team", "everyone"]) {
@@ -94,7 +94,7 @@ for (const c of Lang.codes) {
   {
     const bw = len => { const w = Math.max(14, len + 4); return w + w % 2; };
     const mx = a => Math.max(...a.map(x => typeof x === "number" ? x : vis(x)));
-    const lv = ["normal", "hard", "expert"], names = ["blue", "green", "cyan", "yellow", "white", "pink", "violet", "teal"].map(r => t(r));
+    const lv = ["easy", "normal", "hard"], names = ["blue", "green", "cyan", "yellow", "white", "pink", "violet", "teal"].map(r => t(r));
     const cpuL = [...["small", "medium", "large"].map(z => t("lc.size") + t("lc.size." + z)), t("lc.win") + "9", t("lc.time") + t("time.off"), t("lc.time") + t("time.n", { n: 10 }), t("lc.ff") + t("lc.on"), t("lc.ff") + t("lc.off"),
       ...["self", "team", "everyone"].map(v => t("cpu.view") + t("view." + v)), ...["black", "wreck", "team", "killer", "others"].map(v => t("lc.watch") + t("watch." + v)),
       t("cpu.start"), t("menu.instr"), t("back.main")];
@@ -110,7 +110,7 @@ for (const c of Lang.codes) {
   fits(c, "create.name", t("create.name") + "x".repeat(26), 38);
   for (const k of ["create.public", "create.spect"]) for (const y of ["yes", "no"]) fits(c, k, t(k) + t(y), 39);
   // single lines on the 80-column screen
-  for (const k in D) if (typeof D[k] === "string" && k !== "name") fits(c, k, t(k, { name: "GREEN", names: "BLUE and GREEN", level: "expert", levels: "easy, normal, hard, expert", msg: "x", n: 99, s: 9 }), 79);
+  for (const k in D) if (typeof D[k] === "string" && k !== "name") fits(c, k, t(k, { name: "GREEN", names: "BLUE and GREEN", level: "hard", levels: "easy, normal, hard, expert", msg: "x", n: 99, s: 9 }), 79);
   fits(c, "ui hint", t("ui.hint") + "  " + t("ui.back"), 78);
   fits(c, "create hint", t("create.hint"), 78);
   // the engine's own pages

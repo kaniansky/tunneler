@@ -27,7 +27,7 @@ catch (e) {
       return [UP, RIGHT][(ai.t >> 4) & 1] | ((ai.t & 31) === 0 ? FIRE : 0);
     } };
 }
-const makeBots = cfg => cfg.ext ? cfg.slots.map((s, i) => s.bot ? new AI(s.level || "normal", i + 1) : null) : null;
+const makeBots = cfg => cfg.ext ? cfg.slots.map((s, i) => s.bot ? new AI(s.level || "easy", i + 1) : null) : null;
 function makeEngine(seed, cfg) {
   const e = new TunnelerEngine(seed, engineOptions(cfg));
   if (cfg.names) e.setNames(cfg.names);
@@ -209,11 +209,11 @@ async function main() {
   }
   const trav = await fetch(`http://127.0.0.1:${port}/..%2fserver.js`);
   check("no path traversal", () => assert.notStrictEqual(trav.status, 200));
-  const seeded = await http(port, "POST", "/api/rooms", { name: "Seeded", seats: [{ kind: "open", team: 1 }, { kind: "expert", team: 2 },
+  const seeded = await http(port, "POST", "/api/rooms", { name: "Seeded", seats: [{ kind: "open", team: 1 }, { kind: "hard", team: 2 },
     { kind: "easy", team: 9 }, { kind: "bogus" }, { kind: "human", team: 3 }, { kind: "none" }], size: "large", winScore: 12, roundTime: 4, visible: "team" });
   check("seats / settings from the request, checked (old kinds too)", () => {
     const r = seeded.json;
-    assert.deepStrictEqual(r.seats.map(s => s.kind), ["open", "expert", "normal", "closed", "open", "closed", "closed", "closed"]);
+    assert.deepStrictEqual(r.seats.map(s => s.kind), ["open", "hard", "easy", "closed", "open", "closed", "closed", "closed"]);
     assert.deepStrictEqual(r.seats.slice(0, 3).map(s => s.team), [1, 2, 8]);
     assert(r.size === "large" && r.winScore === 9 && r.roundTime === 0 && r.visible === "team");
   });
@@ -433,14 +433,14 @@ async function main() {
   // ---------------------------------------------------------------- an extended match
   console.log("extended match (computer players: " + aiName + ")");
   host.send({ t: "seatSet", i: 2, kind: "open", team: 1 });
-  host.send({ t: "seatSet", i: 3, kind: "hard", team: 2 });
-  host.send({ t: "seatSet", i: 4, kind: "expert", team: 3 });
+  host.send({ t: "seatSet", i: 3, kind: "normal", team: 2 });
+  host.send({ t: "seatSet", i: 4, kind: "hard", team: 3 });
   host.send({ t: "seatSet", i: 5, kind: "open" });           // nobody takes it: no tank
   host.send({ t: "seatSet", i: 6, kind: "closed" });
-  host.send({ t: "seatSet", i: 7, kind: "normal", team: 9 }); // bad team: the kind still changes
-  await updated(host, s => s.seats[7].kind === "normal", "seats set");
+  host.send({ t: "seatSet", i: 7, kind: "easy", team: 9 }); // bad team: the kind still changes
+  await updated(host, s => s.seats[7].kind === "easy", "seats set");
   check("host seat changes; a bad team ignored", () => {
-    assert.deepStrictEqual(seatKinds(host.status), ["open", "open", "open", "hard", "expert", "open", "closed", "normal"]);
+    assert.deepStrictEqual(seatKinds(host.status), ["open", "open", "open", "normal", "hard", "open", "closed", "easy"]);
     assert.strictEqual(host.status.seats[7].team, 8);
   });
   third.send({ t: "seat", i: 2 });
@@ -454,7 +454,7 @@ async function main() {
   check("the extended match: tanks of the taken and computer seats only, in colour order", () => {
     assert(host.cfg.ext);
     assert.deepStrictEqual(host.cfg.slots.map(s => [s.color, s.bot, s.level, s.team]),
-      [[0, false, null, 1], [1, false, null, 2], [2, false, null, 1], [3, true, "hard", 2], [4, true, "expert", 3], [7, true, "normal", 8]]);
+      [[0, false, null, 1], [1, false, null, 2], [2, false, null, 1], [3, true, "normal", 2], [4, true, "hard", 3], [7, true, "easy", 8]]);
     assert.deepStrictEqual(host.cfg.names.slice(0, 3), ["Norko b", "Norko b 2", "Third"]);
     assert(host.engine.extended && host.engine.nPlayers === 6);
     assert.notStrictEqual(m2.seed, m1.seed);
@@ -492,7 +492,7 @@ async function main() {
   console.log("game mode online");
   {
     const gr = (await http(port, "POST", "/api/rooms", { name: "Gold room", mode: "gold", noRepair: true,
-      seats: [{ kind: "open", team: 1 }, { kind: "open", team: 2 }, { kind: "hard", team: 1 }, { kind: "expert", team: 2 }], size: "small" })).json;
+      seats: [{ kind: "open", team: 1 }, { kind: "open", team: 2 }, { kind: "normal", team: 1 }, { kind: "hard", team: 2 }], size: "small" })).json;
     const g1 = await new FakeClient(port, gr.id, { name: "G1", host: gr.hostKey }).connect();
     const g2 = await new FakeClient(port, gr.id, { name: "G2" }).connect();
     const gs = await new FakeClient(port, gr.id, { name: "GS", role: "watch" }).connect();

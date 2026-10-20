@@ -210,7 +210,7 @@ for (const [goal, n] of [[1, 3], [2, 4]]) {
 }
 
 // ---- the AI: infected hunt, healthy hold their base
-for (const [n, size, lv] of [[4, "small", "expert"], [4, "small", "normal"], [3, "medium", "hard"]]) {
+for (const [n, size, lv] of [[4, "small", "hard"], [4, "small", "easy"], [3, "medium", "normal"]]) {
   let forced = false;
   const levels = [lv].concat(new Array(n - 1).fill(null));
   const r = runMatch({ mode: "infection", slots: slots(Array.from({ length: n }, (_, i) => i + 1)), levels, seed: 9, size, maxFrames: 20000,
@@ -224,7 +224,7 @@ for (const [n, size, lv] of [[4, "small", "expert"], [4, "small", "normal"], [3,
 {
   // a healthy computer tank stays at its base (the idle infected one is far away)
   let home = 0, play = 0, forced = false;
-  runMatch({ mode: "infection", slots: slots([1, 2]), levels: [null, "hard"], seed: 4, size: "small", maxFrames: 1500,
+  runMatch({ mode: "infection", slots: slots([1, 2]), levels: [null, "normal"], seed: 4, size: "small", maxFrames: 1500,
     onFrame: e => {
       if (e.screen !== "play" || !e.GS.inf) return;
       if (!forced) { M.setInfected(e, [1]); forced = true; }
@@ -236,7 +236,7 @@ for (const [n, size, lv] of [[4, "small", "expert"], [4, "small", "normal"], [3,
 
 // ---- AI-only matches: 2 / 8 tanks, free-for-all / teams, small / medium / large, the smallest and the
 // largest goal (a round time and rounds to win set are ignored), modifiers
-const LV = ["normal", "hard", "expert"];
+const LV = ["easy", "normal", "hard"];
 const gmin = Math.min(...GOAL.choices), gmax = Math.max(...GOAL.choices);
 const setups = [
   { n: 2, teams: [1, 2], size: "small", goal: gmin },

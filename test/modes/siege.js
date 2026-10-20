@@ -195,29 +195,29 @@ for (const goal of [10, 80]) {
 
 // ---- the AI goes for the bases
 {
-  const r = runMatch({ mode: "siege", slots: slots([1, 2]), levels: ["hard", null], seed: 8, size: "small", maxFrames: 30000 });
+  const r = runMatch({ mode: "siege", slots: slots([1, 2]), levels: ["normal", null], seed: 8, size: "small", maxFrames: 30000 });
   check(r.finished && r.engine.GS.hp[2] === 0 && r.engine.modeScore[1] >= 30 && r.rounds[0].winnerTeam === 0,
     "a hard AI against an idle tank shoots its base down and wins (" + r.frames + " frames, " + r.engine.modeScore[1] + " hits)");
-  const n = runMatch({ mode: "siege", slots: slots([1, 2]), levels: ["normal", null], seed: 9, size: "small", maxFrames: 30000 });
+  const n = runMatch({ mode: "siege", slots: slots([1, 2]), levels: ["easy", null], seed: 9, size: "small", maxFrames: 30000 });
   check(n.finished && n.engine.GS.hp[2] === 0 && n.rounds[0].winnerTeam === 0, "a normal AI too (" + n.frames + " frames)");
 }
 
 // ---- AI matches: finish, bases do fall, deterministic
 const setups = [
-  { name: "2 tanks, small, strength 10", teams: [1, 2], levels: ["normal", "expert"], size: "small", goal: 10 },
-  { name: "2 tanks, small, strength 80", teams: [1, 2], levels: ["normal", "expert"], size: "small", goal: 80 },
-  { name: "2 v 2, small, strength 80", teams: [1, 2, 1, 2], levels: ["hard", "expert", "normal", "hard"], size: "small", goal: 80 },
-  { name: "2 tanks, medium, strength 10", teams: [1, 2], levels: ["hard", "expert"], size: "medium", goal: 10 },
-  { name: "2 tanks, medium, strength 80", teams: [1, 2], levels: ["hard", "expert"], size: "medium", goal: 80 },
-  { name: "4 free-for-all, medium, strength 80", teams: [1, 2, 3, 4], levels: ["hard", "normal", "expert", "hard"], size: "medium", goal: 80 },
-  { name: "2 v 2, medium, strength 10", teams: [1, 2, 1, 2], levels: ["hard", "expert", "normal", "hard"], size: "medium", goal: 10 },
-  { name: "2 tanks, small", teams: [1, 2], levels: ["normal", "expert"], size: "small" },
-  { name: "8 tanks free-for-all, small", teams: [1, 2, 3, 4, 5, 6, 7, 8], levels: ["normal", "hard", "expert", "normal", "hard", "expert", "normal", "hard"], size: "small" },
-  { name: "4 v 4, medium, friendly fire", teams: [1, 2, 1, 2, 1, 2, 1, 2], levels: ["hard", "expert", "normal", "hard", "expert", "normal", "hard", "hard"], size: "medium", friendlyFire: true },
-  { name: "3 teams, small, round time 3", teams: [1, 2, 3, 1, 2, 3], levels: ["hard", "hard", "hard", "normal", "normal", "normal"], size: "small", roundTime: 3 },
-  { name: "2 v 2, small, no repairs", teams: [1, 2, 1, 2], levels: ["expert", "hard", "hard", "expert"], size: "small", mods: { noRepair: true } },
-  { name: "2 tanks, large", teams: [1, 2], levels: ["expert", "hard"], size: "large", maxFrames: 60000 },
-  { name: "8 tanks in 4 teams, large", teams: [1, 2, 3, 4, 1, 2, 3, 4], levels: ["hard", "expert", "hard", "expert", "hard", "expert", "hard", "expert"], size: "large", maxFrames: 60000 },
+  { name: "2 tanks, small, strength 10", teams: [1, 2], levels: ["easy", "hard"], size: "small", goal: 10 },
+  { name: "2 tanks, small, strength 80", teams: [1, 2], levels: ["easy", "hard"], size: "small", goal: 80 },
+  { name: "2 v 2, small, strength 80", teams: [1, 2, 1, 2], levels: ["normal", "hard", "easy", "normal"], size: "small", goal: 80 },
+  { name: "2 tanks, medium, strength 10", teams: [1, 2], levels: ["normal", "hard"], size: "medium", goal: 10 },
+  { name: "2 tanks, medium, strength 80", teams: [1, 2], levels: ["normal", "hard"], size: "medium", goal: 80 },
+  { name: "4 free-for-all, medium, strength 80", teams: [1, 2, 3, 4], levels: ["normal", "easy", "hard", "normal"], size: "medium", goal: 80 },
+  { name: "2 v 2, medium, strength 10", teams: [1, 2, 1, 2], levels: ["normal", "hard", "easy", "normal"], size: "medium", goal: 10 },
+  { name: "2 tanks, small", teams: [1, 2], levels: ["easy", "hard"], size: "small" },
+  { name: "8 tanks free-for-all, small", teams: [1, 2, 3, 4, 5, 6, 7, 8], levels: ["easy", "normal", "hard", "easy", "normal", "hard", "easy", "normal"], size: "small" },
+  { name: "4 v 4, medium, friendly fire", teams: [1, 2, 1, 2, 1, 2, 1, 2], levels: ["normal", "hard", "easy", "normal", "hard", "easy", "normal", "normal"], size: "medium", friendlyFire: true },
+  { name: "3 teams, small, round time 3", teams: [1, 2, 3, 1, 2, 3], levels: ["normal", "normal", "normal", "easy", "easy", "easy"], size: "small", roundTime: 3 },
+  { name: "2 v 2, small, no repairs", teams: [1, 2, 1, 2], levels: ["hard", "normal", "normal", "hard"], size: "small", mods: { noRepair: true } },
+  { name: "2 tanks, large", teams: [1, 2], levels: ["hard", "normal"], size: "large", maxFrames: 60000 },
+  { name: "8 tanks in 4 teams, large", teams: [1, 2, 3, 4, 1, 2, 3, 4], levels: ["normal", "hard", "normal", "hard", "normal", "hard", "normal", "hard"], size: "large", maxFrames: 60000 },
 ];
 for (const s of setups) {
   const o = { mode: "siege", slots: slots(s.teams), levels: s.levels, seed: 13, size: s.size, winScore: 1, maxFrames: s.maxFrames || 40000,
@@ -239,7 +239,7 @@ for (const s of setups) {
 // ---- AI retreats (GM.aiRetreat): only for energy while the own base stands; never once it has fallen
 {
   const e = startEngine(26, { mode: "siege", slots: slots([1, 2]), size: "small" });
-  const ai = new H.TunnelerAI("expert", 1, { seed: 26 });
+  const ai = new H.TunnelerAI("hard", 1, { seed: 26 });
   H.TunnelerAI.bitsFor(ai, e);
   check(GM.aiRetreat(ai, e) === "energy", "AI: its base standing - a low shield is no reason to go home");
   e.GS.hp[1] = 0;
@@ -255,7 +255,7 @@ for (const s of setups) {
 // the last world: a crash reading a spot list of the new world)
 {
   const e = startEngine(2, { mode: "siege", slots: slots([1, 2, 3, 4]), size: "small", winScore: 1, extended: true });
-  const ais = [1, 2, 3, 4].map(p => new H.TunnelerAI("hard", p, { seed: 2 }));
+  const ais = [1, 2, 3, 4].map(p => new H.TunnelerAI("normal", p, { seed: 2 }));
   let matches = 0, prev = e.screen, err = null, stale = 0, f = 0;
   try {
     for (; f < 100000 && matches < 3; f++) {
@@ -274,7 +274,7 @@ for (const s of setups) {
 // ---- 8 tanks free-for-all, no round time, medium and large: no endless stalemate (the round time of the
 // mode, 10 minutes, is the safety net; most rounds end before it)
 {
-  const L = ["normal", "hard", "expert"];
+  const L = ["easy", "normal", "hard"];
   let early = 0, all = 0;
   for (const size of ["medium", "large"])
     for (let seed = 1; seed <= 6; seed++) {
@@ -290,7 +290,7 @@ for (const s of setups) {
 // ---- large, 8 expert tanks, every modifier: deterministic, and no tank sits at its own base for good (no
 // repairs: it once waited there for a shield that never mends)
 {
-  const o = { mode: "siege", slots: slots([1, 2, 3, 4, 5, 6, 7, 8]), levels: new Array(8).fill("expert"), seed: 9, size: "large", winScore: 1,
+  const o = { mode: "siege", slots: slots([1, 2, 3, 4, 5, 6, 7, 8]), levels: new Array(8).fill("hard"), seed: 9, size: "large", winScore: 1,
     maxFrames: 13000, mods: { noRepair: true } };
   const run = new Array(9).fill(0), longest = new Array(9).fill(0);
   const a = runMatch(Object.assign({ onFrame: e => {

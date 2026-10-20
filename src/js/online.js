@@ -117,7 +117,7 @@
     engine.uiMode = "online";
     engine.setNames(cfg.names);                            // display only (raw Unicode)
     engine.smoothScroll = store.get("tunneler.smooth") === "1";   // display only: per player (homepage Settings)
-    bots = cfg.ext ? cfg.slots.map((sl, i) => sl.bot ? new TunnelerAI(sl.level || "normal", i + 1) : null) : null;
+    bots = cfg.ext ? cfg.slots.map((sl, i) => sl.bot ? new TunnelerAI(sl.level || "easy", i + 1) : null) : null;
     views = makeViews(player >= 0);
     runner = new Runner(engine, views, speaker);
     // a player hears the other tanks quieter the farther they are from their own (docs/DESIGN-8P.md 8);
@@ -299,7 +299,7 @@
   function rememberSettings() {
     if (!st) return;
     store.set("tunneler.online", JSON.stringify(Object.assign({}, st.settings,
-      { seats: st.seats.map(s => ({ kind: s.kind, team: s.team })) })));
+      { seats: st.seats.map(s => ({ kind: s.kind, team: s.team })), levels: 2 })));   // (levels: 2 = today's level names)
   }
   function setSetting(k, v) {
     if (!st || !isHost() || st.match) return;

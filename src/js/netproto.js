@@ -33,10 +33,12 @@ const EXT_BITS = UP | DOWN | LEFT | RIGHT | FIRE;        // extended rooms: no E
 // slot i's role (= tank colour, lang key); the first two are the classic BLUE / GREEN
 const ROLES = ["blue", "green", "cyan", "yellow", "white", "pink", "violet", "teal"];
 const MAX_SLOTS = ROLES.length;
-// computer levels to choose (ai.js), shown as easy / medium / hard; an old "easy" (a weaker level ai.js no
-// longer has) becomes "normal"
-const LEVELS = ["normal", "hard", "expert"];
-const level = v => v === "easy" ? "normal" : v;
+// computer levels to choose (ai.js), shown as easy / medium / hard. Up to version 3.2 they were called
+// normal / hard / expert (and a weaker easy came first): oldLevel turns such a name into today's - for what
+// a browser stored then (tunneler.online without levels: 2)
+const LEVELS = ["easy", "normal", "hard"];
+const OLD_LEVELS = { easy: "easy", normal: "easy", hard: "normal", expert: "hard" };
+const oldLevel = v => OLD_LEVELS[v] || v;
 const SIZES = ["small", "medium", "large"];              // world sizes (engine option size)
 const MAX_PLAYER_NAME = 12;                              // player names (pre-game lobby), display columns
 const MAX_CHAT = 60;                                     // characters per lobby chat message
@@ -101,9 +103,9 @@ const roundTime = v => ROUND_TIMES.includes(Number(v)) ? Number(v) : 0;
 // sit there, nobody has to), "closed" (nobody may) or a computer level, with a team 1..8.
 const SEAT_KINDS = ["open", "closed", ...LEVELS];
 const defaultSeats = () => ROLES.map((r, i) => ({ kind: i < 2 ? "open" : "closed", team: i + 1 }));
-// one seat from a request: kinds of the older slot editor too (human = open, none = closed, easy = normal)
+// one seat from a request: kinds of the older slot editor too (human = open, none = closed)
 function seatOf(s, i) {
-  let kind = s && level(s.kind);
+  let kind = s && s.kind;
   if (kind === "human") kind = "open";
   else if (kind === "none") kind = "closed";
   return { kind: SEAT_KINDS.includes(kind) ? kind : i < 2 ? "open" : "closed", team: clampInt(s && s.team, 1, 8, i + 1) };
@@ -183,7 +185,7 @@ function engineOptions(cfg) {
 function readCfg(c) {
   if (!c || typeof c !== "object" || !Array.isArray(c.slots)) return null;
   const slots = c.slots.slice(0, MAX_SLOTS).map((s, i) => ({ color: clampInt(s && s.color, 0, MAX_SLOTS - 1, i),
-    bot: !!(s && s.bot), level: s && LEVELS.includes(level(s.level)) ? level(s.level) : null, team: clampInt(s && s.team, 1, 8, i + 1) }));
+    bot: !!(s && s.bot), level: s && LEVELS.includes(s.level) ? s.level : null, team: clampInt(s && s.team, 1, 8, i + 1) }));
   if (slots.length < 2) return null;
   const names = Array.isArray(c.names) ? slots.map((s, i) => typeof c.names[i] === "string" ? cleanPlayerName(c.names[i]) || null : null)
     : slots.map(() => null);
@@ -328,7 +330,7 @@ function stateHash(e) {
 }
 
 const NetProto = { TICK_MS, UP, DOWN, LEFT, RIGHT, FIRE, ESC, ALL_BITS, EXT_BITS, BLUE_SCAN, GREEN_SCAN, F10,
-  AFTER_DEATH, afterDeath, ROLES, MAX_SLOTS, LEVELS, SEAT_KINDS, SIZES, MAX_PLAYER_NAME, MAX_CHAT, VISIBLE, SIGHTS, ROUND_TIMES, roundTime,
+  AFTER_DEATH, afterDeath, ROLES, MAX_SLOTS, LEVELS, oldLevel, SEAT_KINDS, SIZES, MAX_PLAYER_NAME, MAX_CHAT, VISIBLE, SIGHTS, ROUND_TIMES, roundTime,
   cleanPlayerName, cleanChat, cleanRoomName, SETTINGS, defaultSeats, roomSettings, matchSlots, startProblem, isClassic, engineOptions, readCfg,
   MODES, OWN_TEAMS, MODIFIERS, GOALS, goalOf,
   frameToInput, frameToInputExt, FrameLog, FrameQueue, HASH_EVERY, stateHash };

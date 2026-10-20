@@ -337,7 +337,7 @@ Server-clocked deterministic lockstep, no prediction/rollback; the full message 
 header. A **room** (`POST /api/rooms {name, public, spectators, seats?: [{kind, team}] x 8, size,
 winScore, roundTime, friendlyFire, visible, watchOut}`, `NetProto.roomSettings`: defaults for anything
 missing - BLUE + GREEN open, the rest closed; the old `slots` form still works; 30 creates / minute /
-address) is a lobby: `seats[i]` (index = color) `{kind: open|closed|normal|hard|expert, team, occ:
+address) is a lobby: `seats[i]` (index = color) `{kind: open|closed|easy|normal|hard, team, occ:
 socket, last: client id}`, the settings, the chat, `hostKey` (returned once; `&host=<key>` = host;
 `ensureHost` hands it over with `{t:"host", key}`), banned client ids. Connecting
 (`/ws?room&cid&name[&role=<color>|watch][&host][&match&have]`): the name is cleaned and made unique
@@ -456,7 +456,7 @@ none, i.e. a page from before 2.0 - is refused (POST 409 `{code:
   tank gets sc(64) px out with no rock within 3 px of its box (13x13); if neither is, the least rock on
   the cheapest way out (Dijkstra) becomes dirt. Worlds with a way out are unchanged; classic untouched
   (it can have the same rare flaw). Tests: ext-sim "a way out of every base", ai-ext-sim "time at the
-  own base" (longest stretch there while not retreating, every level, was 462 expert / 1242 normal).
+  own base" (longest stretch there while not retreating, every level, was 462 hard / 1242 easy).
 - Release: push a `vX.Y.Z` tag (package.json + CHANGELOG heading set to it first); a push to main is no
   release any more (since 1.4.1); CI also runs on release/** branches.
   docker-compose.yml runs the published image.
@@ -544,9 +544,11 @@ none, i.e. a page from before 2.0 - is refused (POST 409 `{code:
   trailing ".0" (DosUI `spec.footer`; build.js writes public/js/version.js, src/js/version.js has null =
   no version); every other screen has its own red title (set.title, lc.split.title,
   cpu.title, lobby.title, room.title, create.title, pg.kick.title).
-- Computer levels offered: `LEVELS = ["normal", "hard", "expert"]` (netproto / home / play), shown as
-  easy / medium / hard (`level.*` strings); ai.js still knows "easy", but an old "easy" (links, stored
-  settings, room requests) is turned into "normal" everywhere.
+- Computer levels: `LEVELS = ["easy", "normal", "hard"]` (ai.js / netproto / home / play), shown as
+  easy / medium / hard (`level.*` strings). Up to 3.2 they were called normal / hard / expert (and ai.js had a
+  weaker 4th "easy"); old names are converted once (`OLD_LEVELS`, `NetProto.oldLevel`): stored skirmish slots
+  without localStorage "tunneler.levels" = "2", skirmish links without `&lv=2`, `tunneler.online` without
+  `levels: 2`. The PRNG seeds keep each level's old number (ai.js `LEVEL_NUMBER`), so games are unchanged.
 - Host handover: `ensureHost(room)` (server.js, after every connect / disconnect) - when no connected
   socket is a host, the first seated player (else a spectator) becomes one and gets `{t:"host", key}`;
   online.js stores the key (`tunneler.host.<id>`, read again at every connect) and turns its host items
@@ -615,5 +617,5 @@ none, i.e. a page from before 2.0 - is refused (POST 409 `{code:
   `sightReset` when a match starts; `sightNewRound` drops only the ghosts), the rest from that memory, marked in the dim plane (`engine.dim`, extended
   `viewDims` per view; snapshots `dim` / `dims` only with line of sight) -> `Display.paint(..., dim)` draws
   them gray (`GRAY_OF`). Ghosts of tanks / shots stay in the memory on purpose. The AI sees the same
-  (`resetRound`: `this.sight` -> `visibleFrom` = `engine.sightSees(p, x, y)`; expert's exact intel becomes
+  (`resetRound`: `this.sight` -> `visibleFrom` = `engine.sightSees(p, x, y)`; hard's exact intel becomes
   noisy via `SIGHT_LEVELS`). Tests: local-check "line of sight", ai-ext-sim "sight" configs + "Line of sight".

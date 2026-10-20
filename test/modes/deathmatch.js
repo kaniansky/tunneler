@@ -102,13 +102,13 @@ for (const [name, teams, killer, winTeam] of [["free-for-all", [1, 2, 3], 2, 1],
 // ---- the AI hunts: one computer tank against a tank that never moves keeps destroying it as it comes back
 {
   let maxKills = 0;
-  const r = runMatch({ mode: "deathmatch", slots: slots([1, 2]), levels: ["hard", null], seed: 9, size: "small", maxFrames: 30000,
+  const r = runMatch({ mode: "deathmatch", slots: slots([1, 2]), levels: ["normal", null], seed: 9, size: "small", maxFrames: 30000,
     onFrame: e => { if (e.screen === "play") maxKills = Math.max(maxKills, e.modeScore[1]); } });
   check(r.finished && r.rounds[0] && r.rounds[0].winnerTeam === 0 && maxKills >= 10,
     "AI vs a tank standing still: hunts it down again after every respawn (" + maxKills + " kills, " + r.playFrames + " frames)");
   // no enemy alive: the AI doesn't stop (aiAlways) - it heads for an enemy base
   const e = startEngine(27, opts([1, 2]));
-  const ai = new H.TunnelerAI("normal", 1, { seed: 1 });
+  const ai = new H.TunnelerAI("easy", 1, { seed: 1 });
   idle(e);
   killBy(e, 2, 0);
   const x0 = e.tankX[1], y0 = e.tankY[1];
@@ -122,14 +122,14 @@ for (const [name, teams, killer, winTeam] of [["free-for-all", [1, 2, 3], 2, 1],
 {
   // a retreating tank at home with full energy and no shield: with noRepair it leaves (the shield never comes back)
   const e = startEngine(28, opts([1, 2], { noRepair: true }));
-  const ai = new H.TunnelerAI("hard", 1, { seed: 1 });
+  const ai = new H.TunnelerAI("normal", 1, { seed: 1 });
   idle(e);
   e.step({ bits: [H.TunnelerAI.bitsFor(ai, e), 0], keys: [] });
   e.shield[1] = 1000; e.energy[1] = 12000; e.tankX[1] = e.baseX[1]; e.tankY[1] = e.baseY[1];
   H.TunnelerAI.bitsFor(ai, e);
   check(!ai.retreating && ai.mode !== "retreat", "noRepair: low shield, full energy at home - the AI goes hunting (" + ai.mode + ")");
   const f = startEngine(28, opts([1, 2]));
-  const bi = new H.TunnelerAI("hard", 1, { seed: 1 });
+  const bi = new H.TunnelerAI("normal", 1, { seed: 1 });
   idle(f);
   f.step({ bits: [H.TunnelerAI.bitsFor(bi, f), 0], keys: [] });
   f.shield[1] = 1000; f.energy[1] = 12000; f.tankX[1] = f.baseX[1]; f.tankY[1] = f.baseY[1];
@@ -142,7 +142,7 @@ for (const [name, teams, killer, winTeam] of [["free-for-all", [1, 2, 3], 2, 1],
 
   // 4 hard tanks, medium map, noRepair: longest stretch parked at home while retreating
   const N = 4, g = startEngine(41, opts([1, 2, 3, 4], { size: "medium", noRepair: true, roundTime: 3 }));
-  const ais = [1, 2, 3, 4].map(p => new H.TunnelerAI("hard", p, { seed: 41 }));
+  const ais = [1, 2, 3, 4].map(p => new H.TunnelerAI("normal", p, { seed: 41 }));
   const run = new Array(N + 1).fill(0);
   let longest = 0, parked = 0, alive = 0;
   for (let fr = 0; fr < 4000 && g.screen === "play"; fr++) {
@@ -159,7 +159,7 @@ for (const [name, teams, killer, winTeam] of [["free-for-all", [1, 2, 3], 2, 1],
 
   // a rematch on the same engine with the same AIs (play.js vs computer): the old match's hunt goal is dropped
   const m = startEngine(29, opts([1, 2], { winScore: 1 }));
-  const two = [new H.TunnelerAI("hard", 1, { seed: 2 }), new H.TunnelerAI("hard", 2, { seed: 2 })];
+  const two = [new H.TunnelerAI("normal", 1, { seed: 2 }), new H.TunnelerAI("normal", 2, { seed: 2 })];
   let sawMap = false, rematch = false;
   for (let fr = 0; fr < 40000; fr++) {
     const keys = m.screen === "map" ? [[32, 0x39]] : (sawMap && m.screen !== "play" && fr % 4 === 0 ? [[13, 0x1C]] : []);
@@ -174,7 +174,7 @@ for (const [name, teams, killer, winTeam] of [["free-for-all", [1, 2, 3], 2, 1],
 
 // ---- AI-only matches: 2 and 8 tanks, teams and free-for-all, small / large maps, round time, modifiers;
 // each finishes with a winner holding 10 kills (or the time decides), and the same match twice is identical
-const LV = ["normal", "hard", "expert"];
+const LV = ["easy", "normal", "hard"];
 const cases = [
   { name: "1 v 1, small", teams: [1, 2], size: "small" },
   { name: "8 free-for-all, small", teams: [1, 2, 3, 4, 5, 6, 7, 8], size: "small" },

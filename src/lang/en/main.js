@@ -30,7 +30,7 @@ Lang.register("en", {
   "cpu.level": "Difficulty: ", "cpu.level.i1": "How well the computer plays:", "cpu.level.i2": "{levels}.",
   "cpu.view": "View: ", "cpu.view.own": "own only", "cpu.view.both": "both",
   "cpu.view.i1": "Show only your own view screen, or the", "cpu.view.i2": "computer's too (like the split-screen original).",
-  "level.normal": "easy", "level.hard": "medium", "level.expert": "hard",
+  "level.easy": "easy", "level.normal": "medium", "level.hard": "hard",
   // vs computers with 1-7 opponents / teams, spectator view modes (views.js)
   "home.cpu.i1n": "Your own game against 1 to 7 AI tanks: pick your color, teams and mode.",
   "cpu.start.n": "Start a game against {n} computer tanks ({level}).", "cpu.start.t": "Start a team game against {n} computer tanks ({level}).",

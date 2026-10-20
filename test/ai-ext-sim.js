@@ -109,37 +109,37 @@ function runMatch(seed, engOpts, levels, opts) {
   return res;
 }
 
-const LV = ["expert", "hard", "normal", "normal"];
+const LV = ["hard", "normal", "easy", "easy"];
 const lv = n => Array.from({ length: n }, (_, i) => LV[i % 4]);
 const configs = [
-  { name: "4 free-for-all", opts: { players: 4 }, levels: ["expert", "hard", "normal", "normal"] },
-  { name: "4 all normal", opts: { players: 4 }, levels: lv(4).fill("normal") },
+  { name: "4 free-for-all", opts: { players: 4 }, levels: ["hard", "normal", "easy", "easy"] },
+  { name: "4 all normal", opts: { players: 4 }, levels: lv(4).fill("easy") },
   { name: "8 free-for-all", opts: { players: 8 }, levels: lv(8) },
-  { name: "3 other colors", opts: { slots: slots([4, 6, 1], [3, 7, 5]) }, levels: ["hard", "normal", "expert"] },
+  { name: "3 other colors", opts: { slots: slots([4, 6, 1], [3, 7, 5]) }, levels: ["normal", "easy", "hard"] },
   // team 1 = players 1, 3, 5, 7; team 2 = 2, 4, 6, 8: one of each level on both sides
-  { name: "4v4", opts: { players: 8, teams: true }, levels: ["expert", "expert", "hard", "hard", "normal", "normal", "normal", "normal"] },
+  { name: "4v4", opts: { players: 8, teams: true }, levels: ["hard", "hard", "normal", "normal", "easy", "easy", "easy", "easy"] },
   { name: "4v4 friendly fire", opts: { players: 8, teams: true, friendlyFire: true },
-    levels: ["expert", "expert", "hard", "hard", "normal", "normal", "normal", "normal"] },
-  { name: "2v2", opts: { players: 4, teams: true }, levels: ["hard", "normal", "normal", "hard"] },
+    levels: ["hard", "hard", "normal", "normal", "easy", "easy", "easy", "easy"] },
+  { name: "2v2", opts: { players: 4, teams: true }, levels: ["normal", "easy", "easy", "normal"] },
   // uneven, odd team numbers: team 3 = players 1, 3, 5 (expert, hard, hard); team 7 = 2, 4, 6, 7, 8
   { name: "3v5", opts: { slots: slots([3, 7, 3, 7, 3, 7, 7, 7]) },
-    levels: ["expert", "normal", "hard", "normal", "hard", "normal", "normal", "normal"] },
+    levels: ["hard", "easy", "normal", "easy", "normal", "easy", "easy", "easy"] },
   { name: "3v5 friendly fire", opts: { slots: slots([3, 7, 3, 7, 3, 7, 7, 7]), friendlyFire: true },
-    levels: ["expert", "normal", "hard", "normal", "hard", "normal", "normal", "normal"] },
+    levels: ["hard", "easy", "normal", "easy", "normal", "easy", "easy", "easy"] },
   { name: "4 teams of 2", opts: { slots: slots([2, 5, 8, 6, 2, 5, 8, 6]) }, levels: lv(8) },
   { name: "4 teams of 2 ff", opts: { slots: slots([2, 5, 8, 6, 2, 5, 8, 6]), friendlyFire: true }, levels: lv(8) },
   { name: "small 4 free-for-all", opts: { players: 4, size: "small" }, levels: lv(4) },
   { name: "small 3v3", opts: { slots: slots([1, 2, 1, 2, 1, 2]), size: "small" }, levels: lv(6) },
   { name: "large 4 free-for-all", opts: { players: 4, size: "large" }, levels: lv(4) },
-  { name: "large 2v2", opts: { players: 4, teams: true, size: "large" }, levels: ["hard", "normal", "normal", "hard"] },
+  { name: "large 2v2", opts: { players: 4, teams: true, size: "large" }, levels: ["normal", "easy", "easy", "normal"] },
   { name: "large 8 free-for-all", opts: { players: 8, size: "large" }, levels: lv(8) },
-  { name: "winScore 1", opts: { players: 3, winScore: 1 }, levels: ["normal", "hard", "normal"] },
-  { name: "winScore 5, 2 tanks", opts: { extended: true, winScore: 5 }, levels: ["hard", "normal"] },
+  { name: "winScore 1", opts: { players: 3, winScore: 1 }, levels: ["easy", "normal", "easy"] },
+  { name: "winScore 5, 2 tanks", opts: { extended: true, winScore: 5 }, levels: ["normal", "easy"] },
   // line of sight: the bots see only what a player would (engine.sightSees), the best level no longer exactly
   { name: "4 ffa sight circle", opts: { players: 4, sight: "circle" }, levels: lv(4) },
   { name: "4 ffa sight walls", opts: { players: 4, sight: "walls" }, levels: lv(4) },
-  { name: "2v2 sight walls", opts: { players: 4, teams: true, sight: "walls" }, levels: ["expert", "hard", "normal", "expert"] },
-  { name: "1v1 sight walls", opts: { extended: true, sight: "walls" }, levels: ["expert", "hard"] },
+  { name: "2v2 sight walls", opts: { players: 4, teams: true, sight: "walls" }, levels: ["hard", "normal", "easy", "hard"] },
+  { name: "1v1 sight walls", opts: { extended: true, sight: "walls" }, levels: ["hard", "normal"] },
 ];
 const SEEDS = quick ? [101] : [101, 202, 303, 404, 505];
 
@@ -206,7 +206,7 @@ console.log("\nLine of sight");
 // play on and must follow the new teams from the next match's first round
 console.log("\nsetTeams between matches");
 {
-  const levels = lv(4).fill("hard");
+  const levels = lv(4).fill("normal");
   const a = runMatch(42, { players: 4, winScore: 1 }, levels, { maxFrames: 40000 });
   check(a.finished, "setTeams: first match did not finish");
   const e = a.e;
@@ -320,12 +320,12 @@ function borderMatch(seed, engOpts, levels, maxFrames) {
 {
   console.log("\nThe rock around the world: waypoints in it / time hugging it while exploring");
   const games = [
-    ["classic small", { size: "small" }, ["normal", "normal"]],
-    ["classic medium", null, ["normal", "normal"]],
-    ["classic large", { size: "large" }, ["normal", "hard"]],
+    ["classic small", { size: "small" }, ["easy", "easy"]],
+    ["classic medium", null, ["easy", "easy"]],
+    ["classic large", { size: "large" }, ["easy", "normal"]],
     ["ext small 4", { players: 4, size: "small" }, lv(4)],
     ["ext medium 4", { players: 4 }, lv(4)],
-    ["ext large 2 normal", { extended: true, size: "large" }, ["normal", "normal"]],
+    ["ext large 2 normal", { extended: true, size: "large" }, ["easy", "easy"]],
     ["ext large 8", { players: 8, size: "large" }, lv(8)],
   ];
   const seeds = quick ? [1, 6] : [1, 2, 3, 4, 5, 6];
@@ -356,7 +356,7 @@ function borderMatch(seed, engOpts, levels, maxFrames) {
 {
   console.log("\nTime at the own base when not retreating (team games, every level)");
   const games = [
-    ["small 3v3, BLUE idle", { slots: slots([1, 2, 1, 2, 1, 2]), size: "small" }, [null, "expert", "expert", "hard", "expert", "normal"], [2, 3]],
+    ["small 3v3, BLUE idle", { slots: slots([1, 2, 1, 2, 1, 2]), size: "small" }, [null, "hard", "hard", "normal", "hard", "easy"], [2, 3]],
     ["small 3v3", { slots: slots([1, 2, 1, 2, 1, 2]), size: "small" }, null, [2]],
     ["small 4v4", { players: 8, teams: true, size: "small" }, null, [2]],
     ["medium 4v4", { players: 8, teams: true }, null, [5]],
@@ -411,12 +411,12 @@ function borderMatch(seed, engOpts, levels, maxFrames) {
   console.log("\nSpinning in place (longest stretch in frames)");
   const WIN = 18;
   const games = [
-    ["2v2", { players: 4, teams: true }, ["hard", "normal", "expert", "hard"]],
-    ["4 free-for-all hard", { players: 4 }, ["hard", "hard", "hard", "hard"]],
-    ["5 free-for-all", { players: 5 }, ["normal", "hard", "expert", "hard", "normal"]],
-    ["6 free-for-all", { players: 6 }, ["hard", "normal", "expert", "hard", "normal", "expert"]],
-    ["6 free-for-all normal", { players: 6 }, lv(6).fill("normal")],
-    ["3v3", { slots: slots([1, 2, 1, 2, 1, 2]) }, ["hard", "normal", "expert", "hard", "normal", "expert"]],
+    ["2v2", { players: 4, teams: true }, ["normal", "easy", "hard", "normal"]],
+    ["4 free-for-all hard", { players: 4 }, ["normal", "normal", "normal", "normal"]],
+    ["5 free-for-all", { players: 5 }, ["easy", "normal", "hard", "normal", "easy"]],
+    ["6 free-for-all", { players: 6 }, ["normal", "easy", "hard", "normal", "easy", "hard"]],
+    ["6 free-for-all normal", { players: 6 }, lv(6).fill("easy")],
+    ["3v3", { slots: slots([1, 2, 1, 2, 1, 2]) }, ["normal", "easy", "hard", "normal", "easy", "hard"]],
   ];
   const seeds = quick ? [111, 148] : [37, 74, 111, 148, 185, 222, 259, 296];
   const frames = quick ? 6000 : 20000;
@@ -453,8 +453,8 @@ function borderMatch(seed, engOpts, levels, maxFrames) {
     }
     console.log("  " + pad(name, 24) + "spins " + pad(spins, 5) + "longest " + pad(longest, 5) + (who ? "(" + who + ")" : ""));
   }
-  console.log("  longest per level: " + ["normal", "hard", "expert"].map(l => l + " " + (perLevel[l] || 0)).join(", "));
-  for (const l of ["normal", "hard", "expert"])
+  console.log("  longest per level: " + ["easy", "normal", "hard"].map(l => l + " " + (perLevel[l] || 0)).join(", "));
+  for (const l of ["easy", "normal", "hard"])
     check((perLevel[l] || 0) <= 36, l + ": a bot spun in place for " + perLevel[l] + " frames");
 }
 
@@ -463,7 +463,7 @@ for (const size of ["medium", "large"]) {
   console.log("\nTime: 7 bots (every level) + idle BLUE, 8 players free-for-all, " + size + " map");
   let ms = 0, calls = 0, worst = 0, frames = 0;
   for (const seed of quick ? [11] : [11, 22, 33]) {
-    const r = runMatch(seed, { players: 8, size }, [null, "expert", "hard", "normal", "normal", "expert", "hard", "normal"],
+    const r = runMatch(seed, { players: 8, size }, [null, "hard", "normal", "easy", "easy", "hard", "normal", "easy"],
       { maxFrames: quick ? 4000 : 8000 });
     ms += r.ms; calls += r.calls; worst = Math.max(worst, r.worst); frames += r.frames;
   }

@@ -224,14 +224,14 @@ for (const [size, teams, seed, goal] of [["small", [1, 2], 3], ["small", [1, 2, 
   check((S.kn[0] & bit) && !(S.kn[1] & bit) && !(S.kn[2] & bit), "a tank sees the nuggets within " + G.SEE + " px only (" + S.kn.join(",") + ")");
   const ai = level => ({ me: 1, levelName: level, mates: [] });
   const pick = level => { const n = G._pickNugget(ai(level), e, e.tankX[1], e.tankY[1]); return n; };
-  check(pick("normal") === 0, "normal AI: goes for the nugget it has seen");
+  check(pick("easy") === 0, "normal AI: goes for the nugget it has seen");
   S.kn[0] = 0;
-  check(pick("normal") === -1, "normal AI: no nugget seen - none to go for (it explores)");
-  check(pick("hard") === 0, "hard AI: knows the nuggets nearby without seeing them");
+  check(pick("easy") === -1, "normal AI: no nugget seen - none to go for (it explores)");
+  check(pick("normal") === 0, "hard AI: knows the nuggets nearby without seeing them");
   S.gx[0] = far[0]; S.gy[0] = far[1] - 10;
-  check(pick("hard") === 1 && pick("normal") === -1, "hard AI: knows the nuggets within " + G.AI_KNOW.hard + " px");
+  check(pick("normal") === 1 && pick("easy") === -1, "hard AI: knows the nuggets within " + G.AI_KNOW.hard + " px");
   S.gx[1] = far[0]; S.gy[1] = far[1] + 10;
-  check(pick("hard") === -1 && pick("expert") >= 0, "expert AI: knows the whole map, hard does not");
+  check(pick("normal") === -1 && pick("hard") >= 0, "expert AI: knows the whole map, hard does not");
   // a drop is heard by the tanks near it
   const e2 = start(27, { slots: slots([1, 2, 3]) }), S2 = e2.GS;
   placeTank(e2, 1, 100, 60); placeTank(e2, 2, 150, 60); placeTank(e2, 3, 100 + G.HEAR + 40, 60);
@@ -297,7 +297,7 @@ for (const [size, teams, seed, goal] of [["small", [1, 2], 3], ["small", [1, 2, 
 // ---- the AI plays for the gold
 {
   // against a tank that never moves: it digs the gold up and brings it home - the round is won by gold
-  for (const level of ["normal", "hard", "expert"]) {
+  for (const level of ["easy", "normal", "hard"]) {
     let firstPick = -1, firstHome = -1, decided;
     const r = runMatch({ mode: "gold", slots: slots([1, 2]), levels: [level, null], seed: 43, size: "small", winScore: 1, maxFrames: 20000,
       onFrame: e => {
@@ -316,9 +316,9 @@ for (const [size, teams, seed, goal] of [["small", [1, 2], 3], ["small", [1, 2, 
   // AI-only matches, the smallest and the largest goal on small and medium maps: one round each, it
   // finishes, many are won by gold (the goal / the most when all is home), most tanks pick some up
   const setups = [
-    { teams: [1, 2, 3, 4], levels: ["hard", "normal", "expert", "hard"] },
-    { teams: [1, 2, 1, 2], levels: ["expert", "hard", "hard", "expert"] },
-    { teams: [1, 2], levels: ["hard", "hard"] },
+    { teams: [1, 2, 3, 4], levels: ["normal", "easy", "hard", "normal"] },
+    { teams: [1, 2, 1, 2], levels: ["hard", "normal", "normal", "hard"] },
+    { teams: [1, 2], levels: ["normal", "normal"] },
   ];
   let matches = 0, byGold = 0, goalHit = 0, picked = 0, tanks = 0;
   for (const size of ["small", "medium"])
@@ -350,11 +350,11 @@ for (const [size, teams, seed, goal] of [["small", [1, 2], 3], ["small", [1, 2, 
 {
   const all = { noRepair: true };
   const cases = [
-    { name: "8 free-for-all, small", teams: [1, 2, 3, 4, 5, 6, 7, 8], levels: ["hard", "normal", "expert", "hard", "normal", "hard", "expert", "normal"], size: "small" },
-    { name: "4 v 4, small, friendly fire", teams: [1, 2, 1, 2, 1, 2, 1, 2], levels: ["hard", "normal", "expert", "hard", "normal", "hard", "expert", "normal"], size: "small", ff: true },
-    { name: "2, medium, modifiers", teams: [1, 2], levels: ["hard", "expert"], size: "medium", mods: all },
-    { name: "3 v 1 v 2, small, round time 2, modifiers", teams: [1, 1, 1, 2, 3, 3], levels: ["normal", "hard", "normal", "expert", "hard", "hard"], size: "small", mods: all, roundTime: 2 },
-    { name: "5 free-for-all, medium, round time 3", teams: [1, 2, 3, 4, 5], levels: ["hard", "normal", "expert", "hard", "normal"], size: "medium", roundTime: 3 },
+    { name: "8 free-for-all, small", teams: [1, 2, 3, 4, 5, 6, 7, 8], levels: ["normal", "easy", "hard", "normal", "easy", "normal", "hard", "easy"], size: "small" },
+    { name: "4 v 4, small, friendly fire", teams: [1, 2, 1, 2, 1, 2, 1, 2], levels: ["normal", "easy", "hard", "normal", "easy", "normal", "hard", "easy"], size: "small", ff: true },
+    { name: "2, medium, modifiers", teams: [1, 2], levels: ["normal", "hard"], size: "medium", mods: all },
+    { name: "3 v 1 v 2, small, round time 2, modifiers", teams: [1, 1, 1, 2, 3, 3], levels: ["easy", "normal", "easy", "hard", "normal", "normal"], size: "small", mods: all, roundTime: 2 },
+    { name: "5 free-for-all, medium, round time 3", teams: [1, 2, 3, 4, 5], levels: ["normal", "easy", "hard", "normal", "easy"], size: "medium", roundTime: 3 },
   ];
   for (const c of quick ? cases.slice(0, 2) : cases) {
     const o = { mode: "gold", slots: slots(c.teams), levels: c.levels, seed: 61, size: c.size, maxFrames: 80000,
@@ -367,7 +367,7 @@ for (const [size, teams, seed, goal] of [["small", [1, 2], 3], ["small", [1, 2, 
     check(a.bitsHash === b.bitsHash && a.stateHash === b.stateHash && a.frames === b.frames && gs1 === gs2, c.name + ": deterministic");
   }
   // the large map: gold is found and brought home, deterministically
-  const o = { mode: "gold", slots: slots([1, 2, 3]), levels: ["hard", "expert", "normal"], seed: 62, size: "large", winScore: 1, maxFrames: quick ? 6000 : 30000 };
+  const o = { mode: "gold", slots: slots([1, 2, 3]), levels: ["normal", "hard", "easy"], seed: 62, size: "large", winScore: 1, maxFrames: quick ? 6000 : 30000 };
   const a = runMatch(o), b = runMatch(o);
   const gold = a.engine.modeScore.reduce((s, v) => s + v, 0) + (a.engine.GS.home ? a.engine.GS.home.reduce((s, v) => s + v, 0) : 0);
   check(gold > 0 && (quick || a.finished), "large map: gold brought home (" + a.frames + " frames, " + gold + ")");

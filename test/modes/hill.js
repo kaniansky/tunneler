@@ -214,7 +214,7 @@ const F = s => Math.round(s * 1193182 / 65536);          // seconds -> frames (1
 {
   // against a tank that does nothing: the match won on the zone, in one round
   let pts = 0;
-  const r = runMatch({ mode: "hill", slots: slots([1, 2]), levels: ["normal", null], seed: 3, size: "medium", maxFrames: 20000,
+  const r = runMatch({ mode: "hill", slots: slots([1, 2]), levels: ["easy", null], seed: 3, size: "medium", maxFrames: 20000,
     onFrame: e => { if (e.GS.pts) pts = Math.max(pts, e.GS.pts[0]); } });
   check(r.finished && r.rounds.length === 1 && r.rounds[0].winnerTeam === 0 && pts === 1092,
     "hill AI: against an idle tank it takes the zone and wins the match in one round (" + r.frames + " frames, " + pts + " points)");
@@ -223,14 +223,14 @@ const F = s => Math.round(s * 1193182 / 65536);          // seconds -> frames (1
 // AI-only matches: the smallest (30) and the largest (180) goal on small and medium maps, the default, round
 // time + modifiers (runMatch passes `mods` on to the engine options: the goal goes there too)
 const matches = [
-  { name: "1 v 1, small, goal 30", teams: [1, 2], levels: ["hard", "expert"], size: "small", goal: 30 },
-  { name: "1 v 1, small, goal 180", teams: [1, 2], levels: ["hard", "expert"], size: "small", goal: 180 },
-  { name: "free-for-all 8, small, goal 180", teams: [1, 2, 3, 4, 5, 6, 7, 8], levels: ["normal", "hard", "expert", "hard", "normal", "expert", "hard", "hard"], size: "small", goal: 180 },
-  { name: "4 v 4, medium, goal 30", teams: [1, 2, 1, 2, 1, 2, 1, 2], levels: ["hard", "hard", "normal", "expert", "expert", "normal", "hard", "hard"], size: "medium", goal: 30 },
-  { name: "free-for-all 8, medium, goal 180", teams: [1, 2, 3, 4, 5, 6, 7, 8], levels: new Array(8).fill("hard"), size: "medium", goal: 180 },
-  { name: "2 v 2, medium, default goal", teams: [1, 2, 1, 2], levels: ["expert", "hard", "hard", "expert"], size: "medium" },
-  { name: "3 teams, round time 2, modifiers, goal 120", teams: [1, 2, 3, 1, 2, 3], levels: ["hard", "hard", "hard", "normal", "expert", "normal"], size: "small", roundTime: 2, mods: { noRepair: true }, goal: 120 },
-  { name: "1 v 1 large, round time 2, modifiers", teams: [1, 2], levels: ["expert", "expert"], size: "large", roundTime: 2, mods: { noRepair: true } },
+  { name: "1 v 1, small, goal 30", teams: [1, 2], levels: ["normal", "hard"], size: "small", goal: 30 },
+  { name: "1 v 1, small, goal 180", teams: [1, 2], levels: ["normal", "hard"], size: "small", goal: 180 },
+  { name: "free-for-all 8, small, goal 180", teams: [1, 2, 3, 4, 5, 6, 7, 8], levels: ["easy", "normal", "hard", "normal", "easy", "hard", "normal", "normal"], size: "small", goal: 180 },
+  { name: "4 v 4, medium, goal 30", teams: [1, 2, 1, 2, 1, 2, 1, 2], levels: ["normal", "normal", "easy", "hard", "hard", "easy", "normal", "normal"], size: "medium", goal: 30 },
+  { name: "free-for-all 8, medium, goal 180", teams: [1, 2, 3, 4, 5, 6, 7, 8], levels: new Array(8).fill("normal"), size: "medium", goal: 180 },
+  { name: "2 v 2, medium, default goal", teams: [1, 2, 1, 2], levels: ["hard", "normal", "normal", "hard"], size: "medium" },
+  { name: "3 teams, round time 2, modifiers, goal 120", teams: [1, 2, 3, 1, 2, 3], levels: ["normal", "normal", "normal", "easy", "hard", "easy"], size: "small", roundTime: 2, mods: { noRepair: true }, goal: 120 },
+  { name: "1 v 1 large, round time 2, modifiers", teams: [1, 2], levels: ["hard", "hard"], size: "large", roundTime: 2, mods: { noRepair: true } },
 ];
 let byPoints = 0;
 for (const m of matches) {

@@ -162,7 +162,7 @@ function aiRun(o) {
   r.outF = outF; r.aliveF = aliveF;
   return r;
 }
-const L8 = ["normal", "hard", "expert", "hard", "normal", "expert", "hard", "normal"];
+const L8 = ["easy", "normal", "hard", "normal", "easy", "hard", "normal", "easy"];
 {
   const r = aiRun({ slots: slots([1, 2, 3, 4, 5, 6]), levels: L8.slice(0, 6), size: "medium", winScore: 3, seed: 3 });
   check(r.finished && r.aliveF > 1000 && r.outF <= r.aliveF * 0.02,
@@ -171,7 +171,7 @@ const L8 = ["normal", "hard", "expert", "hard", "normal", "expert", "hard", "nor
 {
   // AI tanks against tanks that never move: the zone gets them, the AI is inside
   let idleZone = 0;
-  const r = aiRun({ slots: slots([1, 2, 3]), levels: ["hard", null, null], size: "medium", winScore: 2, seed: 2,
+  const r = aiRun({ slots: slots([1, 2, 3]), levels: ["normal", null, null], size: "medium", winScore: 2, seed: 2,
     onFrame: e => { if (e.screen === "play") for (const p of [2, 3]) if (e.alive[p] && outside(e, p, M.radius(e))) idleZone = 1; } });
   check(r.finished && r.rounds.length >= 2 && r.rounds.every(x => x.winnerTeam === 0) && idleZone === 1 && r.outF === 0,
     "AI vs tanks that never move: the zone takes them, the AI wins every round (" + r.rounds.map(x => x.winnerTeam).join(",") + ")");
@@ -179,10 +179,10 @@ const L8 = ["normal", "hard", "expert", "hard", "normal", "expert", "hard", "nor
 
 // ---- matches: 2 and 8 tanks, teams / free-for-all, small / large, a round time, the modifiers; determinism
 const setups = [
-  { name: "2 tanks, small", slots: slots([1, 2]), levels: ["hard", "expert"], size: "small" },
+  { name: "2 tanks, small", slots: slots([1, 2]), levels: ["normal", "hard"], size: "small" },
   { name: "8 tanks free-for-all, small", slots: slots([1, 2, 3, 4, 5, 6, 7, 8]), levels: L8, size: "small" },
   { name: "8 tanks, 4 teams of 2, large", slots: slots([1, 2, 3, 4, 1, 2, 3, 4]), levels: L8, size: "large" },
-  { name: "2 tanks, large, round time 3", slots: slots([1, 2]), levels: ["normal", "hard"], size: "large", roundTime: 3 },
+  { name: "2 tanks, large, round time 3", slots: slots([1, 2]), levels: ["easy", "normal"], size: "large", roundTime: 3 },
   { name: "3 v 3, medium, round time 2, no repairs", slots: slots([1, 2, 1, 2, 1, 2]), levels: L8.slice(0, 6),
     size: "medium", roundTime: 2, mods: { noRepair: true }, outMax: 0.06 },
   { name: "4 free-for-all, small, no repairs, friendly fire", slots: slots([1, 2, 3, 4]), levels: L8.slice(0, 4), size: "small",

@@ -33,8 +33,8 @@ for (const m of Object.keys(E.MODES)) {
 
 // ---- every registered mode: matches finish, deterministically
 const setups = [
-  { name: "free-for-all 4", teams: [1, 2, 3, 4], levels: ["hard", "normal", "expert", "hard"] },
-  { name: "2 v 2", teams: [1, 2, 1, 2], levels: ["expert", "hard", "hard", "expert"] },
+  { name: "free-for-all 4", teams: [1, 2, 3, 4], levels: ["normal", "easy", "hard", "normal"] },
+  { name: "2 v 2", teams: [1, 2, 1, 2], levels: ["hard", "normal", "normal", "hard"] },
 ];
 for (const m of Object.keys(E.MODES).filter(modeOn)) {
   for (const s of quick ? setups.slice(0, 1) : setups) {

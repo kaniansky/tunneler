@@ -28,7 +28,7 @@ Lang.register("sk", {
   "cpu.level": "Obtiažnosť: ", "cpu.level.i1": "Ako dobre hrá počítač:", "cpu.level.i2": "{levels}.",
   "cpu.view": "Pohľad: ", "cpu.view.own": "iba môj", "cpu.view.both": "oba",
   "cpu.view.i1": "Ukáž iba svoju obrazovku, alebo aj obrazovku", "cpu.view.i2": "počítača (ako v pôvodnej delenej obrazovke).",
-  "level.normal": "ľahká", "level.hard": "stredná", "level.expert": "ťažká",
+  "level.easy": "ľahká", "level.normal": "stredná", "level.hard": "ťažká",
   // vs computers with 1-7 opponents / teams, spectator view modes (views.js)
   "home.cpu.i1n": "Vlastná hra proti 1 až 7 AI tankom: farbu, tímy aj režim si zvolíš.",
   "cpu.start.n": "Začni hru proti {n} tankom počítača ({level}).", "cpu.start.t": "Začni tímovú hru proti {n} tankom počítača ({level}).",

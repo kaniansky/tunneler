@@ -113,7 +113,7 @@ function loadPage(page, search, stored, version) {
     seats: [{ kind: "open", team: 1, k: 1, name: "Bob", ready: false, host: false, ping: 30 },
       { kind: "open", team: 2, k: 2, name: "Zed", ready: false, host: true, ping: 20 },
       { kind: "open", team: 3, k: null, name: "", ready: false, host: false, ping: null },
-      { kind: "hard", team: 2, k: null, name: "", ready: false, host: false, ping: null },
+      { kind: "normal", team: 2, k: null, name: "", ready: false, host: false, ping: null },
       ...[4, 5, 6, 7].map(i => ({ kind: "closed", team: i + 1, k: null, name: "", ready: false, host: false, ping: null }))],
     specs: [{ k: 5, name: "Watcher", host: false, ping: 12 }], cant: "ready", match: null }, over || {});
   const sel = (ui, k) => { ui.sel = ui.spec.items.findIndex(it => it.key === k); assert(ui.sel >= 0, "no item " + k); ui.draw(); };
@@ -157,7 +157,7 @@ function loadPage(page, search, stored, version) {
     // a computer seat: kind and team
     sel(lui, "seat3");
     press(env, "ArrowRight"); press(env, "Digit4", "4");
-    assert(ws.sent.some(m => m.t === "seatSet" && m.i === 3 && m.kind === "expert") && ws.sent.some(m => m.t === "seatSet" && m.i === 3 && m.team === 4), "host: computer seat");
+    assert(ws.sent.some(m => m.t === "seatSet" && m.i === 3 && m.kind === "hard") && ws.sent.some(m => m.t === "seatSet" && m.i === 3 && m.team === 4), "host: computer seat");
     assert(!lui.spec.items.find(it => it.key === "seat0").digit && lui.spec.items.find(it => it.key === "seat0").static, "somebody else's seat: read-only");
     // friendly fire: selectable while a team has 2+ seats (GREEN and the AI share team 2), grayed out otherwise
     ws.recv(mkSt());
@@ -262,7 +262,7 @@ function loadPage(page, search, stored, version) {
     assert(ws.sent.some(m => m.t === "chat" && m.text === "Hello all"), "spectator chat sent");
     assert(/Zed: old/.test(screenText(env.win, ui.display.snap)), "history from hello shown");
     // a match this page watches: a spectator's view keys, no bits
-    ws.recv({ t: "match", no: 3, seed: 9, cfg: { ext: true, players: 3, slots: [{ color: 0, team: 1 }, { color: 1, team: 2 }, { color: 3, bot: true, level: "hard", team: 2 }],
+    ws.recv({ t: "match", no: 3, seed: 9, cfg: { ext: true, players: 3, slots: [{ color: 0, team: 1 }, { color: 1, team: 2 }, { color: 3, bot: true, level: "normal", team: 2 }],
       names: ["Bob", "Zed", null] }, you: -1, n: 300, from: 0, f: [[[0, 0, 0], 300]] });
     await wait(500);
     const e = env.win.tunnelerEngine();
@@ -277,10 +277,10 @@ function loadPage(page, search, stored, version) {
     const env = loadPage("online.html", "?room=end", { "tunneler.name": "Host", "tunneler.host.end": "b".repeat(32) });
     await wait(20);
     const ws = env.sockets[0];
-    const cfg = { ext: true, slots: [{ color: 0, team: 1 }, { color: 3, bot: true, level: "expert", team: 2 }, { color: 4, bot: true, level: "expert", team: 3 }],
+    const cfg = { ext: true, slots: [{ color: 0, team: 1 }, { color: 3, bot: true, level: "hard", team: 2 }, { color: 4, bot: true, level: "hard", team: 3 }],
       names: ["Ann", null, null], size: "small", winScore: 1 };
-    const seats = mkSt().seats.map((x, i) => i === 0 ? Object.assign({}, x, { k: 7, name: "Ann", host: false }) : i === 3 ? Object.assign({}, x, { kind: "expert" })
-      : i === 4 ? Object.assign({}, x, { kind: "expert", k: null }) : Object.assign({}, x, { k: null, name: "", kind: "closed" }));
+    const seats = mkSt().seats.map((x, i) => i === 0 ? Object.assign({}, x, { k: 7, name: "Ann", host: false }) : i === 3 ? Object.assign({}, x, { kind: "hard" })
+      : i === 4 ? Object.assign({}, x, { kind: "hard", k: null }) : Object.assign({}, x, { k: null, name: "", kind: "closed" }));
     const playing = { no: 1, running: true, conn: [true, true, true], names: ["Ann", null, null] };
     ws.recv({ t: "hello", id: "end", name: "End", created: 1, you: { k: 9, host: true, name: "Host" }, chat: [],
       match: { no: 1, seed: 77, cfg, you: -1, n: 900, from: 0, f: [[[0, 0, 0], 900]] } });

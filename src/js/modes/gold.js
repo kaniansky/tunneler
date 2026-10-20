@@ -39,7 +39,7 @@ const SEE = 40;                  // a tank sees a nugget this close (Chebyshev; 
 const HEAR = 150;               // ... and knows where one was dropped (a hit / a destroyed tank) this close
 // what a computer tank knows of the gold besides what it has seen / heard: any nugget within this many px
 // of it (0: nothing more; Infinity: the whole map)
-const AI_KNOW = { normal: 0, hard: 100, expert: Infinity };
+const AI_KNOW = { easy: 0, normal: 100, hard: Infinity };
 const DX = [0, 1, 1, 1, 0, -1, -1, -1], DY = [-1, -1, 0, 1, 1, 1, 0, -1];
 const cheb = (ax, ay, bx, by) => Math.max(Math.abs(ax - bx), Math.abs(ay - by));
 

@@ -173,7 +173,7 @@ check(!!M, "ctf: registered");
     check(e.screen === "map", "goal " + goal + ": the match is over - the end-of-match map, no second round (screen " + e.screen + ")");
   }
   // a whole match with a goal: one round
-  const r = runMatch({ mode: "ctf", slots: slots([1, 2]), levels: ["hard", null], seed: 2, size: "small", maxFrames: 6000, mods: { goal: 1 } });
+  const r = runMatch({ mode: "ctf", slots: slots([1, 2]), levels: ["normal", null], seed: 2, size: "small", maxFrames: 6000, mods: { goal: 1 } });
   check(r.finished && r.rounds.length === 1 && r.rounds[0].winnerTeam === 0 && r.engine.modeScore[1] === 1,
     "goal 1 vs an idle tank: one capture wins the match, one round (" + r.frames + " frames)");
 }
@@ -226,7 +226,7 @@ check(!!M, "ctf: registered");
 // ---- computer players play for the flags
 {
   const modes = new Set();
-  const r = runMatch({ mode: "ctf", slots: slots([1, 2]), levels: ["hard", null], seed: 2, size: "small", winScore: 1, maxFrames: 6000,
+  const r = runMatch({ mode: "ctf", slots: slots([1, 2]), levels: ["normal", null], seed: 2, size: "small", winScore: 1, maxFrames: 6000,
     onFrame: (e) => { if (e.screen === "play") modes.add(e.GS.carry[1] >= 0 ? "carry" : "free"); } });
   const e = r.engine;
   check(r.finished && r.rounds[0].winnerTeam === 0 && e.modeScore[1] === 3, "vs an idle tank: the AI captures 3 flags and wins (" + r.frames + " frames)");
@@ -237,7 +237,7 @@ check(!!M, "ctf: registered");
   const seen = new Set();
   const ais = [];
   const e = fresh([1, 2], {});
-  const ai = new H.TunnelerAI("expert", 1, { seed: 1 });
+  const ai = new H.TunnelerAI("hard", 1, { seed: 1 });
   for (let f = 0; f < 3000 && e.round === 1; f++) {
     const b = H.TunnelerAI.bitsFor(ai, e);
     seen.add(ai.mode);
@@ -251,7 +251,7 @@ check(!!M, "ctf: registered");
   for (const dy of [15, -15]) {
     const e = fresh([1, 2]);
     const G = e.GS, F = G.flags[1];
-    const ai = new H.TunnelerAI("expert", 2, { seed: 4 });
+    const ai = new H.TunnelerAI("hard", 2, { seed: 4 });
     place(e, 2, e.baseX[2], e.baseY[2]);
     F.x = e.baseX[2]; F.y = e.baseY[2] + dy;
     let n = 0, retreating = false, modes = new Set();
@@ -266,7 +266,7 @@ check(!!M, "ctf: registered");
 {
   // far from home, a retreating AI not about to be destroyed goes on for the enemy flag (dying costs ~3 s)
   const e = fresh([1, 2]);
-  const ai = new H.TunnelerAI("hard", 1, { seed: 4 });
+  const ai = new H.TunnelerAI("normal", 1, { seed: 4 });
   const seen = new Set();
   let far = 0;
   for (let f = 0; f < 3000 && e.round === 1; f++) {
@@ -280,19 +280,19 @@ check(!!M, "ctf: registered");
 
 // ---- AI-only matches: finish, deterministic; 2 and 8 tanks, teams / free-for-all, sizes, round time, modifiers
 const setups = [
-  { name: "1 v 1 small, goal 1", teams: [1, 2], levels: ["hard", "normal"], size: "small", goal: 1 },
-  { name: "1 v 1 small, goal 10", teams: [1, 2], levels: ["expert", "hard"], size: "small", goal: 10 },
-  { name: "2 v 2 medium, goal 1", teams: [1, 2, 1, 2], levels: ["hard", "expert", "normal", "hard"], size: "medium", goal: 1 },
-  { name: "1 v 1 medium, goal 10", teams: [1, 2], levels: ["expert", "hard"], size: "medium", goal: 10 },
-  { name: "1 v 1 small", teams: [1, 2], levels: ["hard", "normal"], size: "small" },
-  { name: "8 free-for-all small", teams: [1, 2, 3, 4, 5, 6, 7, 8], levels: ["hard", "normal", "expert", "hard", "normal", "expert", "hard", "normal"], size: "small" },
-  { name: "4 v 4 small", teams: [1, 2, 1, 2, 1, 2, 1, 2], levels: ["hard", "expert", "normal", "hard", "expert", "normal", "hard", "hard"], size: "small" },
-  { name: "3 teams of 2 small, friendly fire", teams: [1, 2, 3, 1, 2, 3], levels: ["hard", "hard", "expert", "normal", "expert", "hard"], size: "small", friendlyFire: true },
-  { name: "1 v 1 medium", teams: [1, 2], levels: ["expert", "hard"], size: "medium" },
-  { name: "2 v 2 large, round time 3", teams: [1, 2, 1, 2], levels: ["expert", "expert", "hard", "hard"], size: "large", roundTime: 3 },
-  { name: "1 v 1 small, round time 2, all modifiers", teams: [1, 2], levels: ["hard", "expert"], size: "small", roundTime: 2, mods: { noRepair: true } },
-  { name: "4 free-for-all small, no repairs", teams: [1, 2, 3, 4], levels: ["expert", "hard", "normal", "hard"], size: "small", mods: { noRepair: true } },
-  { name: "8 free-for-all large, round time 5", teams: [1, 2, 3, 4, 5, 6, 7, 8], levels: Array(8).fill("hard"), size: "large", roundTime: 5 },
+  { name: "1 v 1 small, goal 1", teams: [1, 2], levels: ["normal", "easy"], size: "small", goal: 1 },
+  { name: "1 v 1 small, goal 10", teams: [1, 2], levels: ["hard", "normal"], size: "small", goal: 10 },
+  { name: "2 v 2 medium, goal 1", teams: [1, 2, 1, 2], levels: ["normal", "hard", "easy", "normal"], size: "medium", goal: 1 },
+  { name: "1 v 1 medium, goal 10", teams: [1, 2], levels: ["hard", "normal"], size: "medium", goal: 10 },
+  { name: "1 v 1 small", teams: [1, 2], levels: ["normal", "easy"], size: "small" },
+  { name: "8 free-for-all small", teams: [1, 2, 3, 4, 5, 6, 7, 8], levels: ["normal", "easy", "hard", "normal", "easy", "hard", "normal", "easy"], size: "small" },
+  { name: "4 v 4 small", teams: [1, 2, 1, 2, 1, 2, 1, 2], levels: ["normal", "hard", "easy", "normal", "hard", "easy", "normal", "normal"], size: "small" },
+  { name: "3 teams of 2 small, friendly fire", teams: [1, 2, 3, 1, 2, 3], levels: ["normal", "normal", "hard", "easy", "hard", "normal"], size: "small", friendlyFire: true },
+  { name: "1 v 1 medium", teams: [1, 2], levels: ["hard", "normal"], size: "medium" },
+  { name: "2 v 2 large, round time 3", teams: [1, 2, 1, 2], levels: ["hard", "hard", "normal", "normal"], size: "large", roundTime: 3 },
+  { name: "1 v 1 small, round time 2, all modifiers", teams: [1, 2], levels: ["normal", "hard"], size: "small", roundTime: 2, mods: { noRepair: true } },
+  { name: "4 free-for-all small, no repairs", teams: [1, 2, 3, 4], levels: ["hard", "normal", "easy", "normal"], size: "small", mods: { noRepair: true } },
+  { name: "8 free-for-all large, round time 5", teams: [1, 2, 3, 4, 5, 6, 7, 8], levels: Array(8).fill("normal"), size: "large", roundTime: 5 },
 ];
 for (const s of quick ? setups.slice(0, 4) : setups) {
   // (the goal goes to the engine with the other options: the harness merges mods into them)

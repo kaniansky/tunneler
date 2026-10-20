@@ -138,6 +138,9 @@
     // the game settings the host chose last time (online.js keeps them): the new game's defaults
     let last = {};
     try { last = JSON.parse(store.get("tunneler.online") || "{}") || {}; } catch (e) { /* bad data */ }
+    // (stored by version 3.2 or older - no levels: 2: the computer levels had the old names)
+    if (last.levels !== 2 && Array.isArray(last.seats)) last.seats = last.seats.map(s => s ? Object.assign({}, s, { kind: NetProto.oldLevel(s.kind) }) : s);
+    delete last.levels;
     const body = Object.assign({}, last, { name: form.value.trim(), public: form.public, spectators: form.spectators });
     body.version = myVersion || "dev";                 // (another version is refused; dev: not built)
     try {

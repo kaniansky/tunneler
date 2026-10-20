@@ -8,7 +8,11 @@
   const T = Lang.t;
   const load = (k, d) => { try { const v = localStorage.getItem(k); return v == null ? d : v; } catch (e) { return d; } };
   const save = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* private mode */ } };
-  const LEVELS = ["normal", "hard", "expert"];              // shown as easy / medium / hard (an old "easy" = "normal")
+  const LEVELS = ["easy", "normal", "hard"];              // shown as easy / medium / hard
+  // up to version 3.2 the levels were called normal / hard / expert: what was stored then (no
+  // "tunneler.levels" = "2") is renamed once
+  const OLD_LEVELS = { easy: "easy", normal: "easy", hard: "normal", expert: "hard" };
+  const newNames = load("tunneler.levels") === "2", today = v => newNames ? v : OLD_LEVELS[v] || v;
   const KINDS = ["none", "you"].concat(LEVELS);           // who drives a slot: you can sit in any color
   const SIZES = TunnelerEngine.SIZES || ["small", "medium", "large"];
   const COLORS = TunnelerEngine.PLAYER_KEYS || ["blue", "green", "cyan", "yellow", "white", "pink", "violet", "teal"];
@@ -47,13 +51,13 @@
   let sight = SIGHTS.includes(load("tunneler.cpu.sight")) ? load("tunneler.cpu.sight") : "full";
   const slots = COLORS.map((c, i) => ({ kind: i ? "none" : "you", team: i + 1 }));
   {
-    const oldLevel = load("tunneler.level");
-    slots[1].kind = LEVELS.includes(oldLevel) ? oldLevel : "normal";
+    const oldLevel = today(load("tunneler.level"));
+    slots[1].kind = LEVELS.includes(oldLevel) ? oldLevel : "easy";
     let stored = null;
     try { stored = JSON.parse(load("tunneler.cpu.slots", "null")); } catch (e) { stored = null; }
     if (Array.isArray(stored)) stored.slice(0, 8).forEach((s, i) => {
       if (!s) return;
-      const k = s.kind === "easy" ? "normal" : s.kind;
+      const k = today(s.kind);
       if (KINDS.includes(k)) slots[i].kind = k;
       slots[i].team = clampInt(s.team, 1, 8, slots[i].team);
     });
@@ -64,7 +68,7 @@
     yours.slice(1).forEach(i => { slots[i].kind = "none"; });
   }
   const saveCpu = () => {
-    save("tunneler.cpu.slots", JSON.stringify(slots));
+    save("tunneler.cpu.slots", JSON.stringify(slots)); save("tunneler.levels", "2");
     save("tunneler.cpu.size", cpuSize); save("tunneler.cpu.win", String(cpuWin)); save("tunneler.cpu.ff", ff ? "1" : "0");
     save("tunneler.cpu.view", view); save("tunneler.cpu.watch", watchOut); save("tunneler.cpu.time", String(cpuTime));
     save("tunneler.cpu.sight", sight);
@@ -248,7 +252,7 @@
       const list = S.used.map(u => u.color + ":" + u.kind + ":" + u.team).join(",");
       location.href = Links.cpu("slots=" + encodeURIComponent(list) + "&size=" + cpuSize + "&win=" + cpuWin +
         "&ff=" + (ff && S.teamGame ? 1 : 0) + "&view=" + view + "&watch=" + watchOut + timeArg(cpuTime) + (sight !== "full" ? "&sight=" + sight : "") +
-        (gmode !== "standard" ? "&gm=" + gmode : "") + (GOALS[gmode] ? "&goal=" + goalOf(gmode) : "") + (mods.noRepair ? "&norepair=1" : ""));
+        (gmode !== "standard" ? "&gm=" + gmode : "") + (GOALS[gmode] ? "&goal=" + goalOf(gmode) : "") + (mods.noRepair ? "&norepair=1" : "") + "&lv=2");   // (lv=2: today's level names)
     };
     // slot rows: "you                team 1", the who column padded to the longest text in this language,
     // each row in its tank's color (which is all that tells the colors apart - no color name)

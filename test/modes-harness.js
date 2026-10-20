@@ -4,7 +4,7 @@
 // TunnelerAI.bitsFor() exactly as the pages do.
 //
 //   const H = require("./modes-harness.js");
-//   const r = H.runMatch({ mode: "gold", slots: H.slots([1, 2, 3, 4]), levels: ["hard", "hard", null, "normal"],
+//   const r = H.runMatch({ mode: "gold", slots: H.slots([1, 2, 3, 4]), levels: ["normal", "normal", null, "easy"],
 //                          seed: 7, size: "small", winScore: 1, maxFrames: 60000, mods: {noRepair: true}, roundTime: 0,
 //                          onFrame: (e, frame) => {...} });
 //   r = {engine, frames, playFrames, rounds: [{winnerTeam, winner}], finished, bitsHash, stateHash}

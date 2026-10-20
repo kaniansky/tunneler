@@ -28,7 +28,7 @@
 //
 // HTTP:  GET /api/rooms           public rooms
 //        GET /api/rooms/<id>      one room (also private ones: their ids carry a random suffix)
-//        POST /api/rooms          {name, public, spectators, seats?: [{kind: open|closed|normal|hard|expert,
+//        POST /api/rooms          {name, public, spectators, seats?: [{kind: open|closed|easy|normal|hard,
 //                                  team: 1..8} x 8 (index = colour)], size, winScore, friendlyFire, roundTime,
 //                                  visible, watchOut, sight} -> roomInfo + hostKey (defaults for anything missing:
 //                                  BLUE + GREEN open, the rest closed; the older slots form still works)

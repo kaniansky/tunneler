@@ -29,7 +29,7 @@ Lang.register("genz", {
   "cpu.level": "Bot level: ", "cpu.level.i1": "How cracked the bot is:", "cpu.level.i2": "{levels}.",
   "cpu.view": "View: ", "cpu.view.own": "own only", "cpu.view.both": "both",
   "cpu.view.i1": "Only your own screen, or peek at the", "cpu.view.i2": "bot's too (like the split-screen OG).",
-  "level.normal": "chill", "level.hard": "mid", "level.expert": "goated",
+  "level.easy": "chill", "level.normal": "mid", "level.hard": "goated",
   // vs computers with 1-7 opponents / teams, spectator view modes (views.js)
   "home.cpu.i1n": "Your own game vs 1 to 7 bots: pick your color, squads and mode.",
   "cpu.start.n": "Run it vs {n} bot tanks ({level}).", "cpu.start.t": "Team up vs {n} bot tanks ({level}).",

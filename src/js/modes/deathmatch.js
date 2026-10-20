@@ -120,7 +120,7 @@ E.registerMode("deathmatch", {
       // (renewed for another round / match / engine too: ai.roundKey changes and ai.t restarts with
       // every resetRound - a rematch on the same engine starts at round 1 again)
       if (!S || S.q !== q || S.key !== ai.roundKey || S.eng !== e || ai.t < S.t || ai.t - S.t > 36 || !e.alive[q]) {
-        const noise = { normal: 40, hard: 24, expert: 8 }[ai.levelName] || 40;
+        const noise = { easy: 40, normal: 24, hard: 8 }[ai.levelName] || 40;
         ai.dmGoal = { q, key: ai.roundKey, eng: e, t: ai.t,
           x: e.tankX[q] + Math.round((ai.rng() - 0.5) * noise), y: e.tankY[q] + Math.round((ai.rng() - 0.5) * noise) };
       }

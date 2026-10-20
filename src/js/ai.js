@@ -1,8 +1,8 @@
 "use strict";
 // Computer opponent for TUNNELER.
 //
-//   const ai = new TunnelerAI(level, player[, {seed}]); // level: "normal" | "hard" | "expert" (shown as easy /
-//                                                       // medium / hard; anything else = "normal"),
+//   const ai = new TunnelerAI(level, player[, {seed}]); // level: "easy" | "normal" | "hard" (shown as easy /
+//                                                       // medium / hard; anything else = "easy"),
 //                                                       // player: 1..N (1 = BLUE, 2 = GREEN, 3 = CYAN, ...)
 //   const keys = ai.update(engine);                     // once per engine step, before engine.step()
 //   -> { up, down, left, right, fire }
@@ -107,23 +107,23 @@ const teamOf = (e, p) => (e.team ? e.team(p) : p);
 //   noisyEvery / noisyErr  intel "noisy": a rough position of the nearest enemy every noisyEvery frames,
 //               up to noisyErr / 2 px off
 const LEVELS = {
-  normal: { delay: 7,  intel: "none",  knowsMap: false, aimTol: 3, lead: false, fireProb: 0.6,  fireDirt: 2,
+  easy:   { delay: 7,  intel: "none",  knowsMap: false, aimTol: 3, lead: false, fireProb: 0.6,  fireDirt: 2,
             dodge: 0.2,  retreatE: 2500, retreatS: 3700, leaveAt: 10200, fastDig: 9000, wander: 0.2,  engage: 60,
             spotEvery: 6, memory: 120 },
-  hard:   { delay: 3,  intel: "noisy", knowsMap: true,  aimTol: 2, lead: true,  fireProb: 0.95, fireDirt: 5,
+  normal: { delay: 3,  intel: "noisy", knowsMap: true,  aimTol: 2, lead: true,  fireProb: 0.95, fireDirt: 5,
             dodge: 0.85, retreatE: 3000, retreatS: 5500, leaveAt: 10800, fastDig: 7000, wander: 0.1,  engage: 70,
             spotEvery: 4, memory: 200, noisyEvery: 55, noisyErr: 50 },
-  expert: { delay: 1,  intel: "exact", knowsMap: true,  aimTol: 2, lead: true,  fireProb: 1,    fireDirt: 8,
+  hard:   { delay: 1,  intel: "exact", knowsMap: true,  aimTol: 2, lead: true,  fireProb: 1,    fireDirt: 8,
             dodge: 1,    retreatE: 3000, retreatS: 5500, leaveAt: 11000, fastDig: 6000, wander: 0,    engage: 80,
             spotEvery: 3, memory: 400 },
 };
 // each level's number in the PRNG seeds (from when a weaker "easy" level came first - kept, so every game
 // plays as before)
-const LEVEL_NUMBER = { normal: 1, hard: 2, expert: 3 };
+const LEVEL_NUMBER = { easy: 1, normal: 2, hard: 3 };
 // with line of sight (engine.sight circle / walls) every level sees only what a player would (engine.sightSees,
 // instead of the whole view window); the best level is no longer told where every enemy is - it gets a
 // rough position more often and more precisely than the level below (it "hears" the nearest enemy)
-const SIGHT_LEVELS = { expert: { intel: "noisy", noisyEvery: 18, noisyErr: 20 } };
+const SIGHT_LEVELS = { hard: { intel: "noisy", noisyEvery: 18, noisyErr: 20 } };
 
 // 32-bit integer PRNG -> [0, 1) (exact: an integer divided by 2^32)
 function mulberry32(a) {
@@ -404,7 +404,7 @@ const NONE = Object.freeze({ up: false, down: false, left: false, right: false, 
 class TunnelerAI {
   // opts: { seed } (optional, e.g. the room seed: mixed into the per-round PRNG seed) or just the seed
   constructor(level, player, opts) {
-    this.levelName = LEVELS[level] ? level : "normal";
+    this.levelName = LEVELS[level] ? level : "easy";
     this.cfg = LEVELS[this.levelName];
     const p = player | 0;
     this.me = p >= 1 && p <= 8 ? p : 2;
@@ -585,7 +585,7 @@ class TunnelerAI {
         break;
       }
 
-    // hard: rough position of the nearest enemy every ~3 s
+    // normal: rough position of the nearest enemy every ~3 s
     if (cfg.intel === "noisy" && this.t - this.noisyT >= cfg.noisyEvery) {
       this.noisyT = this.t;
       const q = this.nearestEnemy(e, mx, my);
@@ -663,7 +663,7 @@ class TunnelerAI {
     } else if (!this.retreating) {
       let low = e.energy[me] < cfg.retreatE + homeDist * 4 || e.shield[me] < cfg.retreatS;
       // the best levels finish a fight they are winning
-      if (low && this.levelName === "expert" && T && e.energy[me] > 1500 &&
+      if (low && this.levelName === "hard" && T && e.energy[me] > 1500 &&
           cheb(mx, my, T.x, T.y) < 40 && e.shield[me] > 3000) low = false;
       if (low) { this.retreating = true; this.path = null; }
     } else if (atHome && e.energy[me] >= cfg.leaveAt && e.shield[me] >= cfg.leaveAt) {

@@ -80,7 +80,7 @@ let failures = 0;
 const check = (ok, msg) => { if (!ok) { failures++; console.log("  FAIL: " + msg); } };
 
 // ------------------------------------------------------------------ AI vs AI
-const pairings = [["hard", "normal"], ["expert", "hard"], ["expert", "normal"]];
+const pairings = [["normal", "easy"], ["hard", "normal"], ["hard", "easy"]];
 console.log("AI vs AI matches (first to 3 rounds; levels swap colours on alternate seeds)");
 console.log(pad("A vs B", 18) + pad("rounds A:B", 12) + pad("matches A:B", 13) + pad("draws", 7) + pad("contact(fr)", 13) + pad("round len", 11) + pad("stuck A/B", 11) + "ms/update (worst)");
 for (const [A, B] of pairings) {
@@ -99,7 +99,7 @@ for (const [A, B] of pairings) {
   });
   console.log(pad(A + " vs " + B, 18) + pad(ra + ":" + rb, 12) + pad(ma + ":" + mb, 13) + pad(draws, 7) +
     pad(Math.round(avg(contacts)), 13) + pad(Math.round(avg(lens)), 11) + pad(sa + "/" + sb, 11) + (ms / calls).toFixed(3) + " (" + worst.toFixed(1) + ")");
-  if ((A === "expert" && B === "normal") || (A === "hard" && B === "normal")) check(ra > rb * 2 && ma > mb, A + " should clearly beat " + B);
+  if ((A === "hard" && B === "easy") || (A === "normal" && B === "easy")) check(ra > rb * 2 && ma > mb, A + " should clearly beat " + B);
 }
 
 // ------------------------------------------------------------------ AI vs idle tank
@@ -109,12 +109,12 @@ for (const [A, B] of pairings) {
 // 16 px away from rock - TunnelerAI.interior); normal seed 11 picks a waypoint at (154, 156), 12 px from
 // rock, which is now moved to (161, 153): 1552 -> 1560 frames. Everything else is still the original's.
 const CLASSIC_GOLDEN = {
-  normal: { 11: 1560, 22: 266, 33: 426, 44: 465, 55: 402, 66: 360 },
-  hard:   { 11: 1556, 22: 285, 33: 406, 44: 507, 55: 373, 66: 395 },
-  expert: { 11: 1511, 22: 197, 33: 331, 44: 380, 55: 319, 66: 291 },
+  easy: { 11: 1560, 22: 266, 33: 426, 44: 465, 55: 402, 66: 360 },
+  normal:   { 11: 1556, 22: 285, 33: 406, 44: 507, 55: 373, 66: 395 },
+  hard: { 11: 1511, 22: 197, 33: 331, 44: 380, 55: 319, 66: 291 },
 };
 console.log("\nAI (green) vs idle Blue: frames until the idle tank is destroyed (cap " + ROUND_CAP + ")");
-for (const lvl of ["normal", "hard", "expert"]) {
+for (const lvl of ["easy", "normal", "hard"]) {
   const times = [];
   let ms = 0, calls = 0, stuck = 0;
   for (const seed of SEEDS) {
@@ -137,7 +137,7 @@ for (const lvl of ["normal", "hard", "expert"]) {
 
 // the AI as Blue too
 {
-  const r = play(SEEDS[0], [null, new TunnelerAI("normal", 1), null], 1);
+  const r = play(SEEDS[0], [null, new TunnelerAI("easy", 1), null], 1);
   const rd = r.rounds[0];
   console.log("normal as Blue vs idle Green: " + (rd && rd.winner === 1 ? rd.frames + " frames" : "FAIL"));
   check(rd && rd.winner === 1, "AI must work as player 1");

@@ -2,7 +2,7 @@
 // Local modes: split-screen hotseat (?mode=hotseat&size=small|medium|large&win=1..9[&time=2|3|5|10]) and against the
 // computer (?mode=cpu&slots=<color>:<who>:<team>,...&size=...&win=1..9&ff=0|1&view=self|team|everyone&watch=black|wreck|others[&time=minutes][&sight=circle|walls] - home.js's slot
 // editor, docs/DESIGN-8P.md 20: the used slots in slot order, color 0..7, who = "you" (any color, exactly
-// one) or a computer level normal|hard|expert (shown as easy / medium / hard), team 1..8). Everything runs in this browser.
+// one) or a computer level easy|normal|hard, team 1..8; &lv=2 - without it the old names normal|hard|expert). Everything runs in this browser.
 // You as BLUE + a computer GREEN in different teams is the classic engine exactly as the original (the AI
 // drives GREEN; size and rounds to win still apply); anything else runs the extended engine with a
 // computer tank in every slot but yours (either key set drives your tank). view (docs/DESIGN-8P.md 23):
@@ -13,8 +13,10 @@
   const params = new URLSearchParams(location.search);
   // /skirmish?... (old: /vs-computer?...) or /split?... (play.html?mode=cpu|hotseat&... in the desktop app)
   const mode = params.get("mode") === "cpu" || /^\/(skirmish|vs-computer)\/?$/.test(location.pathname) ? "cpu" : "hotseat";
-  const LEVELS = ["normal", "hard", "expert"];              // (easy / medium / hard; an old "easy" = "normal")
-  const lvl = v => v === "easy" ? "normal" : v;
+  const LEVELS = ["easy", "normal", "hard"];              // (shown as easy / medium / hard)
+  // a link without lv=2 is from version 3.2 or older: its levels were called normal / hard / expert
+  const OLD_LEVELS = { easy: "easy", normal: "easy", hard: "normal", expert: "hard" };
+  const lvl = v => params.get("lv") === "2" ? v : OLD_LEVELS[v] || v;
   const int = (v, lo, hi, d) => { v = parseInt(v, 10); return v >= lo && v <= hi ? v : d; };
   const size = (TunnelerEngine.SIZES || []).includes(params.get("size")) ? params.get("size") : "medium";
   const winScore = int(params.get("win"), 1, 9, 3);
@@ -50,12 +52,12 @@
       out.sort((a, b) => a.color - b.color);
     } else {
       out = [{ color: 0, team: 1, level: null }];                                     // old links: opp computer tanks, teams = every second one
-      const level = LEVELS.includes(lvl(params.get("level"))) ? lvl(params.get("level")) : "normal";
+      const level = LEVELS.includes(lvl(params.get("level"))) ? lvl(params.get("level")) : "easy";
       const opp = int(params.get("opp"), 1, 7, 1), teams = params.get("teams") === "1" && opp >= 3;
       for (let i = 1; i <= opp; i++) out.push({ color: i, team: teams ? i % 2 + 1 : i + 1, level });
       if (teams) out[0].team = 1;
     }
-    if (out.length < 2) out.push({ color: 1, team: 2, level: "normal" });
+    if (out.length < 2) out.push({ color: 1, team: 2, level: "easy" });
     if (!out.some(s => s.team !== out[0].team)) out[out.length - 1].team = out[0].team % 8 + 1;   // 2+ teams
     return out;
   }
