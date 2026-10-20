@@ -7,7 +7,8 @@ a release is made by pushing a version tag (see CONTRIBUTING.md).
 
 - **Line of sight** (skirmish and the online game's Settings; off by default = the original): with
   "circle" a tank sees the world live only in a circle around it; the rest of its view shows the world as
-  that player last saw it, in gray - an enemy tank stays where you saw it last. "True" also hides what
+  that player last saw it, in gray - an enemy tank stays where you saw it last. What you have seen stays
+  from round to round (the world is the same); only the tanks' old places are forgotten. "True" also hides what
   dirt, rock and base walls stand in front of: in a tunnel you see only the tunnel. Only the picture
   changes - the game itself, online play and the comparison with the original stay the same. Computer
   tanks still see everything.

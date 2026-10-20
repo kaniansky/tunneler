@@ -704,9 +704,22 @@ class TunnelerEngine {
     }
     return false;
   }
-  // a new round, a new world: nothing seen yet
+  // a new match, a new world: nothing seen yet
   sightReset() {
     for (const m of this.sightMem) if (m) m.fill(0);
+  }
+  // a new round in the same world: what was seen stays, but the tanks are back at their bases - the
+  // remembered tanks and shots (any pixel but tunnel, dirt and rock) become what the world holds there now
+  // (no tank or shot is drawn in it between frames; base walls are the same)
+  sightNewRound() {
+    const w = this.world, ground = c => c === 0 || c === 6 || c === 7 || c === 8;
+    for (const m of this.sightMem) {
+      if (!m || m.length !== w.length) continue;
+      for (let i = 0; i < m.length; i++) {
+        const lo = m[i] & 15, hi = m[i] >> 4;
+        if (!ground(lo) || !ground(hi)) m[i] = (ground(lo) ? lo : w[i] & 15) | (ground(hi) ? hi << 4 : w[i] & 0xF0);
+      }
+    }
   }
 
   // world scale (option size): v * W / 1024, and the original-world row / column that output row / column
@@ -1304,6 +1317,7 @@ class TunnelerEngine {
     this.newMatch();
     this.installKbd();
     this.matchOver = false;
+    this.sightReset();                            // (a new match, a new world)
     this.tickMarker = 160;
     this.soundOn = true;
     const KD = this.keyDown;
@@ -1316,7 +1330,7 @@ class TunnelerEngine {
       this.drawBases();
       this.drawFrame();
       this.roundStart = this.tick; this.clockShown = -1; this.timedOut = false;
-      this.sightReset();
+      this.sightNewRound();
       do {
         if (KD[1]) { this.roundOver = true; this.matchOver = true; }
         if (KD[0x3B]) this.soundOn = true;
@@ -2236,6 +2250,7 @@ class TunnelerEngine {
     this.newMatchExt();
     this.installKbd();
     this.matchOver = false;
+    this.sightReset();                            // (a new match, a new world)
     this.soundOn = true;
     do {
       this.roundOver = false;
@@ -2246,7 +2261,7 @@ class TunnelerEngine {
       this.drawBases();
       for (let p = 1; p <= N; p++) this.inView(p, () => this.drawFrameExt(p));
       this.roundStart = this.tick; this.clockShown = -1; this.timedOut = false;
-      this.sightReset();
+      this.sightNewRound();
       do {
         if (this.escHeld) { this.roundOver = true; this.matchOver = true; }   // (escEnds only)
         if (this.roundTicks) this.roundClock();

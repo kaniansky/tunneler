@@ -612,7 +612,7 @@ none, i.e. a page from before 2.0 - is refused (POST 409 `{code:
   `settings.sight`, an Instructions section). `blitView(..., p)` -> `blitSight`: the pixels p's tank sees
   (`sightView`: an ellipse `SIGHT_RX` x `SIGHT_RY`; "walls": `SIGHT_CELLS` in one pass, `sightBlocks` =
   dirt 6 / 8, rock 7, base wall rings) come from the world and go into `sightMem[p]` (cleared by
-  `sightReset` every round), the rest from that memory, marked in the dim plane (`engine.dim`, extended
+  `sightReset` when a match starts; `sightNewRound` drops only the ghosts), the rest from that memory, marked in the dim plane (`engine.dim`, extended
   `viewDims` per view; snapshots `dim` / `dims` only with line of sight) -> `Display.paint(..., dim)` draws
   them gray (`GRAY_OF`). Ghosts of tanks / shots stay in the memory on purpose. The AI still sees
   everything. Test: local-check "line of sight".

@@ -582,7 +582,7 @@ A game setting "Line of sight" (skirmish, the online lobby's Settings; engine op
   One pass per view over the ellipse's offsets ordered by distance, each linked to the next pixel towards
   the tank (`SIGHT_CELLS`).
 - Display only: `blitSight` (instead of `blitView`'s copy, the static unchanged) writes the vram from the
-  world / the player's memory (`sightMem[p]`, world bytes, cleared every round) and marks remembered
+  world / the player's memory (`sightMem[p]`, world bytes, cleared at a match's start - the world stays for all its rounds; a new round only turns remembered tanks and shots into what the world holds there now, `sightNewRound`) and marks remembered
   pixels in the dim plane (`engine.dim`, per view `viewDims`; snapshots carry `dim` / `dims` only with
   line of sight); `Display.paint(..., dim)` draws them gray. Never read by the simulation, not in
   stateHash; online every client draws every view the same way. Off = byte-for-byte the original.

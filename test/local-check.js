@@ -137,6 +137,25 @@ function makeEnv(search, store) {
     assert(n > 100 && t / n < 25, "8 views with line of sight: " + (t / n).toFixed(2) + " ms a step");
     ok("line of sight: 8 tanks, large map, walls: " + (t / n).toFixed(2) + " ms a step");
   }
+  // a new round (the same world): the memory stays, only remembered tanks / shots become the world's pixels
+  {
+    const e = new E(4, { autoStart: true, sight: "circle" });
+    for (let i = 0; i < 400; i++) e.step({ keyDown: new Uint8Array(128), keys: [] });
+    const m = e.sightMem[1];
+    assert(m && m.some(v => v), "BLUE remembers something");
+    const k = m.findIndex((v, i) => v === 0 && e.world[i] === 0 && i > 1000);
+    m[k] = 0x9E;                                   // a ghost: BLUE's tank colors where the world is tunnel
+    const before = m.slice(), g = c => [0, 6, 7, 8].includes(c);
+    e.sightNewRound();
+    assert.strictEqual(m[k], 0, "the ghost is gone");
+    for (let i = 0; i < m.length; i++) {
+      if (g(before[i] & 15) && g(before[i] >> 4)) assert.strictEqual(m[i], before[i], "tunnel, dirt and rock stay remembered");
+      else if (!g(m[i] & 15) || !g(m[i] >> 4)) assert.strictEqual(m[i], e.world[i], "else only what the world holds (base walls)");
+    }
+    assert(m.filter(v => v).length > 100, "most of it stays");
+    e.sightReset();
+    assert(!m.some(v => v), "a new match: nothing seen");
+  }
   // settings: checked, defaults, passed to the engine
   assert.strictEqual(NP.SETTINGS.sight("walls"), "walls");
   assert.strictEqual(NP.SETTINGS.sight("x-ray"), undefined);
