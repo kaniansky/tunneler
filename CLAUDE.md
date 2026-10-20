@@ -633,3 +633,11 @@ none, i.e. a page from before 2.0 - is refused (POST 409 `{code:
   team - 1, then 4 packed characters for size / win, time / ff / view, watch / sight / noRepair, mode /
   goal index); play.js expands `g` with `CpuCode.decode` into the long query (lv=2) and reads that as
   before. The long form still works; a broken code = the default game. Test: local-check "short skirmish links".
+- **Flatpak** (`flatpak/`, id `com.kaniansky.TunnelerOnline` - on the owner's domain: a Flathub id allows
+  no hyphen, and io.github.kaniansky.tunneler_online would name a repository that doesn't exist; Flathub
+  verifies it by a token at kaniansky.com/.well-known/org.flathub.VerifiedApps.txt): the manifest repackages the release's `.deb` on org.gnome.Platform (WebKitGTK
+  4.1), x86_64 only (`flathub.json`); its own .desktop / metainfo (AppStream: store page, screenshots from
+  the tag's `screenshots/`, OARS, releases) / icons renamed to the id. `tools/flatpak-update.sh <version>`
+  sets the .deb url + sha256 and adds the metainfo <release>. Inside a Flatpak the app offers no update
+  (main.rs `flatpak()`: FLATPAK_ID / /.flatpak-info). Flathub publishes it from its own repository
+  (flathub/com.kaniansky.TunnelerOnline) once the submission PR is accepted.

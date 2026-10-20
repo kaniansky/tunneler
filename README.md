@@ -191,6 +191,16 @@ sudo curl -fsSL -o /etc/yum.repos.d/tunneler-online.repo https://kaniansky.com/t
 sudo dnf install tunneler-online
 ```
 
+There is also a **Flatpak** (`flatpak/`, app id `com.kaniansky.TunnelerOnline`) - the release's
+`.deb` on the GNOME runtime - meant for [Flathub](https://flathub.org), where software managers such as
+Linux Mint's find it; it updates through them, not through the app. To build and install it yourself:
+
+```bash
+flatpak install --user flathub org.flatpak.Builder org.gnome.Sdk//51
+flatpak run org.flatpak.Builder --user --install --force-clean build-dir flatpak/com.kaniansky.TunnelerOnline.yml
+flatpak run com.kaniansky.TunnelerOnline
+```
+
 Split screen and skirmish work offline. Online play goes to the public server; to play on your own,
 set **Server** on the homepage's Settings screen (e.g. `example.com:8050`, empty = the public one). The
 app is built by `.github/workflows/app-build.yml` from `src-tauri/` ([Tauri](https://tauri.app)); to

@@ -64,8 +64,16 @@ fn system_package() -> bool {
     }
 }
 
+// running as a Flatpak (Flathub): the software manager updates it, the app offers no update of its own
+fn flatpak() -> bool {
+    std::env::var_os("FLATPAK_ID").is_some() || std::path::Path::new("/.flatpak-info").exists()
+}
+
 #[tauri::command]
 async fn update_check(app: tauri::AppHandle) -> Result<Option<UpdateInfo>, String> {
+    if flatpak() {
+        return Ok(None);
+    }
     let update = app.updater().map_err(|e| e.to_string())?.check().await.map_err(|e| e.to_string())?;
     Ok(update.map(|u| UpdateInfo { version: u.version.clone(), install: can_install(), admin: system_package() }))
 }

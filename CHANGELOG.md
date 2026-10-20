@@ -3,6 +3,11 @@
 All notable changes to Tunneler Online. Versions follow [semantic versioning](https://semver.org/);
 a release is made by pushing a version tag (see CONTRIBUTING.md).
 
+## Unreleased
+
+- **Flatpak** (`flatpak/`, `com.kaniansky.TunnelerOnline`) for Flathub - and so for software managers
+  such as Linux Mint's. Inside a Flatpak the app no longer offers updates of its own (Flathub brings them).
+
 ## 4.0.0
 
 - **Line of sight** (skirmish and the online game's Settings; off by default = the original): with
