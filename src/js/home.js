@@ -169,11 +169,28 @@
   // the player's name for online games (DosUI.playerName, "tunneler.name"), stored on Enter and when leaving
   const nameForm = { value: DosUI.playerName(), max: DosUI.NAME_MAX, width: DosUI.NAME_MAX };
   const saveName = () => { nameForm.value = DosUI.setPlayerName(nameForm.value); };
+  // the settings box as wide as its widest row in any language with any value - it doesn't jump when the
+  // language (or a value) changes
+  const settingsWidth = () => {
+    const R = (k, c) => Lang.raw(k, c) || "", app = window.Endpoint && Endpoint.isApp;
+    const labels = [];
+    for (const c of Lang.codes) {
+      labels.push({ label: R("set.name", c), input: nameForm }, { label: R("back.main", c) });
+      for (const l of Lang.codes) labels.push({ label: R("home.lang", c) + ((Lang.data[l] || {}).name || l) });
+      for (const s of SOUNDS) labels.push({ label: R("set.sound", c) + R("sound." + s, c) });
+      for (const k of ["set.smooth", "set.ping"]) for (const v of ["set.ping.on", "set.ping.off"]) labels.push({ label: R(k, c) + R(v, c) });
+      if (app) labels.push({ label: R("set.server", c), input: serverForm });
+    }
+    return DosUI.boxWidth(labels);
+  };
   function settings(keep) {
-    nameForm.placeholder = T("ph.name");
+    nameForm.placeholder = T("ph.online");
+    // (the input as wide as the placeholder in the longest language - names stay at most NAME_MAX)
+    nameForm.width = Math.max(DosUI.NAME_MAX, ...Lang.codes.map(c => UniText.cols(Lang.raw("ph.online", c) || "")));
+    const w = settingsWidth();
     const leave = () => { saveName(); if (window.Endpoint && Endpoint.isApp) saveServer(); main(6); };
     ui.show({
-      lines: screenTitle("set.title"), box: { y: 8 }, sel: 1, infoRow: window.Endpoint && Endpoint.isApp ? 20 : 19,
+      lines: screenTitle("set.title"), box: { x: 41 - ((w + 2) >> 1), y: 8, w }, sel: 1, infoRow: window.Endpoint && Endpoint.isApp ? 20 : 19,
       back: leave,
       items: [
         { key: "name", label: T("set.name"), input: nameForm, align: "left", info: [T("set.name.i1"), T("set.name.i2")],
