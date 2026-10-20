@@ -254,8 +254,8 @@ project dependency; install playwright-core in a scratch dir when needed).
   Statistics after a match; Kick a player (host); Back to the lobby = the games list), bottom right
   the chat panel. Seat rows: own seat - Left / Right / 1-8 / Enter / a click on the team = team;
   a free open seat - Enter / a left click sits there (everyone, the host too); the host on any seat
-  nobody sits on - Left / Right or a right click anywhere on the row cycle open -> closed -> AI easy ->
-  medium -> hard -> open (a left click on a closed / AI seat too, except on its team) (`NetProto.SEAT_KINDS`), 1-8 / a click on
+  nobody sits on - Left / Right or a right click anywhere on the row cycle closed -> open -> AI easy ->
+  medium -> hard -> closed (a left click on a closed / AI seat too, except on its team) (`NetProto.SEAT_KINDS`), 1-8 / a click on
   the team its team (DosUI `zones`). The host's choices are remembered in `tunneler.online`. Esc: unready,
   else leave. Every match is its own engine (`newMatch`: `engineOptions(cfg)` with autoStart,
   `setNames(cfg.names)`, AIs, new `ViewModes` - a player's or a spectator's); the lobby shows again

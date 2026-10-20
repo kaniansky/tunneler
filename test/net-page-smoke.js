@@ -148,11 +148,13 @@ function loadPage(page, search, stored, version) {
     assert(ws.sent.some(m => m.t === "me" && m.team === 3), "team + 1 sent");
     press(env, "Digit6", "6");
     assert(ws.sent.some(m => m.t === "me" && m.team === 6), "digit 6: team 6");
-    // a free seat: Enter sits there; the host switches it (open -> closed) with Right
+    // a free seat: Enter sits there; the host switches it (open -> AI easy) with Right, back (-> open -> closed) with Left
     sel(lui, "seat2");
     press(env, "Enter");
     assert(ws.sent.some(m => m.t === "seat" && m.i === 2), "sit on CYAN");
     press(env, "ArrowRight");
+    assert(ws.sent.some(m => m.t === "seatSet" && m.i === 2 && m.kind === "easy"), "host: CYAN computer (easy)");
+    press(env, "ArrowLeft"); press(env, "ArrowLeft");
     assert(ws.sent.some(m => m.t === "seatSet" && m.i === 2 && m.kind === "closed"), "host: CYAN closed");
     // a computer seat: kind and team
     sel(lui, "seat3");

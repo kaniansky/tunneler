@@ -101,7 +101,7 @@ const roundTime = v => ROUND_TIMES.includes(Number(v)) ? Number(v) : 0;
 
 // A room's seats (docs/DESIGN-8P.md 26): one per tank colour (index = colour), each "open" (anybody may
 // sit there, nobody has to), "closed" (nobody may) or a computer level, with a team 1..8.
-const SEAT_KINDS = ["open", "closed", ...LEVELS];
+const SEAT_KINDS = ["closed", "open", ...LEVELS];   // (the order the host cycles a seat through)
 const defaultSeats = () => ROLES.map((r, i) => ({ kind: i < 2 ? "open" : "closed", team: i + 1 }));
 // one seat from a request: kinds of the older slot editor too (human = open, none = closed)
 function seatOf(s, i) {

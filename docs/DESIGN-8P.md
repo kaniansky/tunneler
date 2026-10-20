@@ -423,8 +423,8 @@ Refinements (owner, 2026-10-18):
 - Seat rows have three columns in the seat's color: who (a player's name / "open" / "closed" / "AI (easy
   | medium | hard)"), the team, the ping; "√" in front of a ready player (else "►" in front of your own
   seat); no host marker, no state column. A left click on a free open seat sits there (the host too); the
-  host changes a seat nobody sits on with a right click anywhere on its row (open -> closed -> AI easy ->
-  medium -> hard -> open; a left click on a closed / AI seat too), a click on the team the team.
+  host changes a seat nobody sits on with a right click anywhere on its row (closed -> open -> AI easy ->
+  medium -> hard -> closed - owner, 2026-10-20; a left click on a closed / AI seat too), a click on the team the team.
 - Layout: seats top left, settings top right, the actions bottom left, the chat bottom right.
 - After a match each viewer gets its statistics as soon as they close the world map (Back: the lobby);
   they don't pop up again when the match ends for everybody.

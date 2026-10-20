@@ -371,8 +371,8 @@
         return Object.assign(it, { info: [T("seat.mine.i1"), T("seat.mine.i2")], change: d => setTeam(d), go: () => setTeam(1),
           digit: n => setTeam(0, n), zones: [teamZone(d => setTeam(d))] });
       }
-      // The host on a seat nobody sits on: a right click anywhere on the row = the next kind (open ->
-      // closed -> AI easy -> medium -> hard -> open); a left click on the team = the next team; any other left
+      // The host on a seat nobody sits on: a right click anywhere on the row = the next kind (closed ->
+      // open -> AI easy -> medium -> hard -> closed); a left click on the team = the next team; any other left
       // click: on an open seat sits there, on a closed / AI seat = the next kind as well
       const other = d => d < 0 || s.kind !== "open" ? kind(1) : sitOn(i);
       const hostZones = [{ from: 0, to: 3 + c.nw, click: other },
