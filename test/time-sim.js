@@ -185,7 +185,7 @@ function digest(opts, seed, steps, bots) {
   ok("roundTime 0 changes nothing (classic, extended, teams)");
   let timeouts = 0;
   for (const [label, opts] of [["classic", { roundTime: 2 }], ["extended 4", { players: 4, roundTime: 2 }], ["2 v 2", { slots: slots([0, 1, 2, 3], [1, 2, 1, 2]), roundTime: 2 }]]) {
-    const a = digest(opts, 5, 12000, "easy"), b = digest(opts, 5, 12000, "easy");
+    const a = digest(opts, 5, 12000, "normal"), b = digest(opts, 5, 12000, "normal");
     check(a.hash === b.hash && JSON.stringify(a.log) === JSON.stringify(b.log), label + ": the same game twice is identical");
     // every timed-out round: the winners are the top-damage side among those alive (computer tanks dealing real damage)
     for (const r of a.log.filter(x => x.timedOut)) {

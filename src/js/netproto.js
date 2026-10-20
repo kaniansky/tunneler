@@ -33,8 +33,8 @@ const EXT_BITS = UP | DOWN | LEFT | RIGHT | FIRE;        // extended rooms: no E
 // slot i's role (= tank colour, lang key); the first two are the classic BLUE / GREEN
 const ROLES = ["blue", "green", "cyan", "yellow", "white", "pink", "violet", "teal"];
 const MAX_SLOTS = ROLES.length;
-// computer levels to choose (ai.js), shown as easy / medium / hard; ai.js's "easy" is no longer offered
-// (an old "easy" becomes "normal")
+// computer levels to choose (ai.js), shown as easy / medium / hard; an old "easy" (a weaker level ai.js no
+// longer has) becomes "normal"
 const LEVELS = ["normal", "hard", "expert"];
 const level = v => v === "easy" ? "normal" : v;
 const SIZES = ["small", "medium", "large"];              // world sizes (engine option size)

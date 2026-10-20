@@ -1,7 +1,8 @@
 "use strict";
 // Computer opponent for TUNNELER.
 //
-//   const ai = new TunnelerAI(level, player[, {seed}]); // level: "easy" | "normal" | "hard" | "expert",
+//   const ai = new TunnelerAI(level, player[, {seed}]); // level: "normal" | "hard" | "expert" (shown as easy /
+//                                                       // medium / hard; anything else = "normal"),
 //                                                       // player: 1..N (1 = BLUE, 2 = GREEN, 3 = CYAN, ...)
 //   const keys = ai.update(engine);                     // once per engine step, before engine.step()
 //   -> { up, down, left, right, fire }
@@ -106,9 +107,6 @@ const teamOf = (e, p) => (e.team ? e.team(p) : p);
 //   noisyEvery / noisyErr  intel "noisy": a rough position of the nearest enemy every noisyEvery frames,
 //               up to noisyErr / 2 px off
 const LEVELS = {
-  easy:   { delay: 10, intel: "none",  knowsMap: false, aimTol: 5, lead: false, fireProb: 0.35, fireDirt: 0,
-            dodge: 0,    retreatE: 1500, retreatS: 1900, leaveAt: 9000,  fastDig: 0,    wander: 0.55, engage: 50,
-            spotEvery: 12, memory: 60 },
   normal: { delay: 7,  intel: "none",  knowsMap: false, aimTol: 3, lead: false, fireProb: 0.6,  fireDirt: 2,
             dodge: 0.2,  retreatE: 2500, retreatS: 3700, leaveAt: 10200, fastDig: 9000, wander: 0.2,  engage: 60,
             spotEvery: 6, memory: 120 },
@@ -119,7 +117,9 @@ const LEVELS = {
             dodge: 1,    retreatE: 3000, retreatS: 5500, leaveAt: 11000, fastDig: 6000, wander: 0,    engage: 80,
             spotEvery: 3, memory: 400 },
 };
-const LEVEL_NAMES = Object.keys(LEVELS);
+// each level's number in the PRNG seeds (from when a weaker "easy" level came first - kept, so every game
+// plays as before)
+const LEVEL_NUMBER = { normal: 1, hard: 2, expert: 3 };
 // with line of sight (engine.sight circle / walls) every level sees only what a player would (engine.sightSees,
 // instead of the whole view window); the best level is no longer told where every enemy is - it gets a
 // rough position more often and more precisely than the level below (it "hears" the nearest enemy)
@@ -412,7 +412,7 @@ class TunnelerAI {
     // classic 2-player engine (local vs computer only): one PRNG stream for the whole match, seeded as the
     // original 1-vs-1 AI did, so that game plays exactly as before. The extended engine reseeds it every
     // round (resetRound) so that every client computes the same keys.
-    this.rng = mulberry32((this.me * 7919) ^ (LEVEL_NAMES.indexOf(this.levelName) * 104729) ^ 0x5EED);
+    this.rng = mulberry32((this.me * 7919) ^ (LEVEL_NUMBER[this.levelName] * 104729) ^ 0x5EED);
     this.roundKey = null;
     this.eng = null;
     // statistics for tests / debugging
@@ -435,7 +435,7 @@ class TunnelerAI {
     this.grid = new Grid(e, ((bx % 4) + 4) % 4, ((by % 4) + 4) % 4);
     // extended engine: the PRNG restarts every round from engine state (identical on every client) +
     // player + level + seed (classic: one stream for the match, see the constructor)
-    let s = mix(mix(mix(0x5EED, this.me), LEVEL_NAMES.indexOf(this.levelName)), this.seed);
+    let s = mix(mix(mix(0x5EED, this.me), LEVEL_NUMBER[this.levelName]), this.seed);
     s = mix(mix(s, e.randSeed | 0), e.round | 0);
     if (e.extended) this.rng = mulberry32(s);
     this.sight = e.sight && e.sight !== "full" && e.sightSees ? e : null;   // (line of sight: the engine says what it sees)

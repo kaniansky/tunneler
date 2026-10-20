@@ -2,7 +2,7 @@
 // Local modes: split-screen hotseat (?mode=hotseat&size=small|medium|large&win=1..9[&time=2|3|5|10]) and against the
 // computer (?mode=cpu&slots=<color>:<who>:<team>,...&size=...&win=1..9&ff=0|1&view=self|team|everyone&watch=black|wreck|others[&time=minutes][&sight=circle|walls] - home.js's slot
 // editor, docs/DESIGN-8P.md 20: the used slots in slot order, color 0..7, who = "you" (any color, exactly
-// one) or a computer level easy|normal|hard|expert, team 1..8). Everything runs in this browser.
+// one) or a computer level normal|hard|expert (shown as easy / medium / hard), team 1..8). Everything runs in this browser.
 // You as BLUE + a computer GREEN in different teams is the classic engine exactly as the original (the AI
 // drives GREEN; size and rounds to win still apply); anything else runs the extended engine with a
 // computer tank in every slot but yours (either key set drives your tank). view (docs/DESIGN-8P.md 23):

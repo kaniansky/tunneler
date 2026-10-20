@@ -37,7 +37,7 @@ const GUARD = 40;                                   // a healthy computer tank f
 const BLOCKED = 15;                                   // frames an infected tank waits for its blocked base
 const SPOTS = [[0, 0], [-10, -10], [10, -10], [-10, 10], [10, 10], [0, -11], [0, 11], [-11, 0], [11, 0],
   [0, -17], [0, 17], [0, -21], [0, 21]];               // base floor, then the doorways (offsets from the middle)
-const SENSE = { easy: { every: 110, noise: 40 }, normal: { every: 110, noise: 40 }, hard: { every: 55, noise: 20 }, expert: { every: 1, noise: 0 } };
+const SENSE = { normal: { every: 110, noise: 40 }, hard: { every: 55, noise: 20 }, expert: { every: 1, noise: 0 } };
 
 const cheb = (ax, ay, bx, by) => Math.max(Math.abs(ax - bx), Math.abs(ay - by));
 
