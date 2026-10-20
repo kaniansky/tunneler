@@ -381,6 +381,9 @@ generated list) so no page or script tag has to change. Node tests load every fi
   columns in every language.
 - Pre-game lobby: the selection starts on "Start game" (not in the Name input); number keys 1..8 set the
   own team from any row but the Name / Say inputs; classic rooms (BLUE against GREEN) show no TEAM column.
+- After death (owner, 2026-10-20): once "watch team / killer / all" shows somebody, the destroyed views of
+  the player's own choice go - view self + watch killer shows only the killer, not the black own view
+  beside it. Black with DESTROYED stays for "black screen" and when nobody is left to watch.
 
 ## 26. Room lobby with seats (owner, 2026-10-18) - implemented; supersedes 15 (online part), 18, 19 (start / kick details)
 

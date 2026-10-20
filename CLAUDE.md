@@ -435,7 +435,9 @@ none, i.e. a page from before 2.0 - is refused (POST 409 `{code:
   "team" = the views of all teammates still alive, "killer" ("watch killer") = one view: the tank that
   destroyed the watched one (`engine.killedBy`, display only, not in stateHash; followed along the
   chain), else the first alive (own team first), staying on it while it lives, "others" ("watch all")
-  = every tank still alive (own team first). These ignore the view limit. Nobody left to watch
+  = every tank still alive (own team first). These ignore the view limit, and once they show someone the
+  destroyed views of the player's scope go (view self + watch killer = only the killer; the scope's living
+  views stay first - `layout`). Nobody left to watch
   (`views.ghostNone`): black, as "black". With every setting but "wreck", any destroyed tank's view in
   the player's scope (e.g. a dead teammate's while you live) is black with DESTROYED (`blackedOut`);
   the sound is muted only for "black" / nobody watched. Nobody left to watch: the layout shows only the
