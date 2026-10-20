@@ -85,6 +85,11 @@ class Display {
     const px = new Uint32Array(this.img.data.buffer);
     const text = s.mode === "text";
     paint(px, width, 0, 0, s.vram, c0, c1, text ? 25 : 100, text, paletteOf(s), blinkOn, this.font, text ? s.uni : null, text ? null : s.dim);
+    // a text cursor (DosUI: an empty input) - the VGA's underline: the cell's last two scan lines, bright
+    // white, blinking with the text
+    const cur = text && blinkOn ? s.cursor : null;
+    if (cur && cur.col >= c0 && cur.col < c1 && cur.row >= 0 && cur.row < 25)
+      for (let l = 13; l < 15; l++) px.fill(TEXT_U32[15], (cur.row * 16 + l) * width + (cur.col - c0) * 9, (cur.row * 16 + l) * width + (cur.col - c0) * 9 + 8);
     this.ctx.putImageData(this.img, 0, 0);
   }
 }

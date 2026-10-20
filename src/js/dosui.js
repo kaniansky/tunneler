@@ -242,7 +242,9 @@ class DosUI {
       for (let c = x0 - labelW + it.dim[0]; c < Math.min(b.w, x0 - labelW + it.dim[1]); c++) t.vram[o + c * 2 + 1] = DISABLED;
     if (it.input && !it.input.value && value)
       for (let c = x0; c < Math.min(b.w, x0 + valueW); c++) t.vram[o + c * 2 + 1] = i === this.sel ? 0x57 : DISABLED;
-    if (it.input && i === this.sel) {                     // blinking cursor after the text
+    if (it.input && i === this.sel && !it.input.value && value && x0 < b.w)
+      this.cursor = { col: b.x + x0, row: row - 1 };     // empty: a blinking underline under the placeholder's first letter (Display)
+    else if (it.input && i === this.sel) {                // blinking cursor after the text
       const at = x0 + valueW;
       if (at < b.w) { t.vram[o + at * 2] = 0x5F; t.vram[o + at * 2 + 1] = SEL | 0x80; t.uni[(o >> 1) + at] = 0; }
     }
@@ -287,6 +289,7 @@ class DosUI {
 
   draw() {
     const t = this.t, s = this.spec;
+    this.cursor = null;                                  // (drawItem: an empty input's cursor cell)
     t.textMode();
     t.window(1, 1, 80, 25);
     t.textBackground(0);
@@ -344,6 +347,7 @@ class DosUI {
     if (s.footer) { t.textColor(8); t.gotoXY(2, 25); t.write(" " + U.slice(s.footer, 78 - U.cols(hint) - 2) + " "); }   // (bottom left)
     const snap = { t: 0, mode: "text", screen: "text", vram: t.vram.slice(0, 16000) };
     t.snapUni(snap);
+    if (this.cursor) snap.cursor = this.cursor;
     this.present(snap);
   }
 

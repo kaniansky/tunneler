@@ -625,3 +625,6 @@ none, i.e. a page from before 2.0 - is refused (POST 409 `{code:
   unless a page handler already did - DosUI's right-click zones - or the target is a real text field).
 - AI without base repairs (modifier noRepair, no `GM.aiRetreat` answer): retreats only for energy (`rp =
   "energy"`) - it used to wait at home for a shield that never comes back. Test: modes-check core.
+- Text cursor in an empty input (DosUI): a blinking underline under the placeholder's first letter - the
+  snapshot's `cursor: {col, row}` (0-based cell), drawn by `Display.draw` as the VGA cursor (scan lines
+  13-14, white, blinking with the text); typed text keeps the "_" cell after it.
