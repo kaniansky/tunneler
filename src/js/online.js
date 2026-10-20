@@ -116,7 +116,7 @@
     Lang.apply(engine);                                    // texts only: the simulation is the same
     engine.uiMode = "online";
     engine.setNames(cfg.names);                            // display only (raw Unicode)
-    engine.smoothScroll = store.get("tunneler.smooth") === "1";   // display only: per player (homepage Settings)
+    engine.smoothScroll = store.get("tunneler.smooth") !== "0";   // display only: per player (homepage Settings; on by default)
     bots = cfg.ext ? cfg.slots.map((sl, i) => sl.bot ? new TunnelerAI(sl.level || "easy", i + 1) : null) : null;
     views = makeViews(player >= 0);
     runner = new Runner(engine, views, speaker);

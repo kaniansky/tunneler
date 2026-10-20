@@ -5,6 +5,8 @@ a release is made by pushing a version tag (see CONTRIBUTING.md).
 
 ## Unreleased
 
+- **Smooth scrolling is on by default** (homepage Settings turns it off; whoever turned it on or off keeps
+  that choice).
 - **Line of sight** (skirmish and the online game's Settings; off by default = the original): with
   "circle" a tank sees the world live only in a circle around it; the rest of its view shows the world as
   that player last saw it, in gray - an enemy tank stays where you saw it last. What you have seen stays

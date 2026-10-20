@@ -433,8 +433,8 @@ function play(search) {
   assert.strictEqual(store.get("tunneler.sound"), "realistic", "sound style remembered");
   env.key("ArrowLeft"); env.key("ArrowLeft");              // -> muted
   assert.strictEqual(store.get("tunneler.sound"), "muted");
-  env.key("ArrowDown"); env.key("Enter");                  // Smooth scrolling: off -> on
-  assert.strictEqual(store.get("tunneler.smooth"), "1", "smooth scrolling remembered");
+  env.key("ArrowDown"); env.key("Enter");                  // Smooth scrolling: on (the default) -> off
+  assert.strictEqual(store.get("tunneler.smooth"), "0", "smooth scrolling (on by default) turned off, remembered");
   env.key("ArrowDown"); env.key("Enter");                  // Show ping: off -> on
   assert.strictEqual(store.get("tunneler.ping"), "1", "show ping remembered");
   env.key("ArrowUp"); env.key("ArrowUp");

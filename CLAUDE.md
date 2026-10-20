@@ -606,7 +606,7 @@ none, i.e. a page from before 2.0 - is refused (POST 409 `{code:
   `.github/workflows/linux-repos.yml` (release.yml job `repos`, or by hand per tag); secrets
   REPO_GPG_PRIVATE_KEY (key 5E12365F...99223B06, copies in ~/.tauri and kaniansky/private) + SITE_FTP_*.
 - Smooth scrolling (3.2.0, display only, off = the original): `engine.smoothScroll` (option `smoothScroll`;
-  play.js / online.js set it from localStorage "tunneler.smooth", homepage Settings row below Sound).
+  play.js / online.js set it from localStorage "tunneler.smooth" - on unless "0" (default on since 3.3), homepage Settings row below Sound).
   `blitView(col, row, scrOfs, noise, x)`: with it and the followed tank on an odd x the view is copied one
   pixel further right (screen byte = high nibble of a world byte | low nibble of the next << 4); not in
   stateHash, the vram only. Test: local-check "smooth scrolling".

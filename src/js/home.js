@@ -101,8 +101,8 @@
     const v = S && S.loadStyle ? S.loadStyle() : load("tunneler.sound", "original");
     return SOUNDS.includes(v) ? v : "original";
   };
-  // smooth sideways scrolling: display only (play.js / online.js read "tunneler.smooth"; off = the original)
-  function toggleSmooth() { save("tunneler.smooth", load("tunneler.smooth", "0") === "1" ? "0" : "1"); settings(true); }
+  // smooth sideways scrolling: display only (play.js / online.js read "tunneler.smooth"; on by default; "0" = off, the original)
+  function toggleSmooth() { save("tunneler.smooth", load("tunneler.smooth", "1") === "0" ? "1" : "0"); settings(true); }
   // online games: show the ping on the status line (online.js reads "tunneler.ping")
   function togglePing() { save("tunneler.ping", load("tunneler.ping", "0") === "1" ? "0" : "1"); settings(true); }
   function setSound(d) {
@@ -200,7 +200,7 @@
           go: () => setLang(1), change: setLang },
         { key: "sound", label: T("set.sound") + T("sound." + soundStyle()), info: [T("sound.i1"), T("sound.i2")],
           go: () => setSound(1), change: setSound },
-        { key: "smooth", label: T("set.smooth") + T(load("tunneler.smooth", "0") === "1" ? "set.ping.on" : "set.ping.off"),
+        { key: "smooth", label: T("set.smooth") + T(load("tunneler.smooth", "1") !== "0" ? "set.ping.on" : "set.ping.off"),
           info: [T("set.smooth.i1"), T("set.smooth.i2")], go: toggleSmooth, change: toggleSmooth },
         { key: "ping", label: T("set.ping") + T(load("tunneler.ping", "0") === "1" ? "set.ping.on" : "set.ping.off"),
           info: [T("set.ping.i"), T("home.lang.i2")], go: togglePing, change: togglePing },

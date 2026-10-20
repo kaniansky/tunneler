@@ -78,8 +78,8 @@
         sight, extended: me !== 0, mode: gmode, goal, ...mods }   // the classic engine only with you as BLUE (standard mode, no modifier)
     : { size, winScore, roundTime, autoStart: true, noInstructions: true });   // settings were chosen on the page: no menu before round 1
   const ext = engine.extended;
-  // display only: views scroll sideways 1 pixel at a time (the homepage's Settings, "tunneler.smooth")
-  try { engine.smoothScroll = localStorage.getItem("tunneler.smooth") === "1"; } catch (e) { /* private mode */ }
+  // display only: views scroll sideways 1 pixel at a time (the homepage's Settings, "tunneler.smooth"; on unless "0")
+  try { engine.smoothScroll = localStorage.getItem("tunneler.smooth") !== "0"; } catch (e) { engine.smoothScroll = true; }
   // vs computer: BLUE's own view, its team's or everyone's (BLUE first); split screen: the full split screen
   const views = new ViewModes(canvas, display, () => engine, { mode: mode === "cpu" ? "follow" : "grid", follow: me, lockFollow: true, keys: false, labels: mode === "cpu" });
   if (mode === "cpu") { views.setScope(me, view); views.setWatchOut(watchOut); }
