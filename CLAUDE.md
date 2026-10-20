@@ -619,3 +619,7 @@ none, i.e. a page from before 2.0 - is refused (POST 409 `{code:
   them gray (`GRAY_OF`). Ghosts of tanks / shots stay in the memory on purpose. The AI sees the same
   (`resetRound`: `this.sight` -> `visibleFrom` = `engine.sightSees(p, x, y)`; hard's exact intel becomes
   noisy via `SIGHT_LEVELS`). Tests: local-check "line of sight", ai-ext-sim "sight" configs + "Line of sight".
+- No browser context menu anywhere (pads.js, loaded by every page: a window `contextmenu` listener prevents it
+  unless a page handler already did - DosUI's right-click zones - or the target is a real text field).
+- AI without base repairs (modifier noRepair, no `GM.aiRetreat` answer): retreats only for energy (`rp =
+  "energy"`) - it used to wait at home for a shield that never comes back. Test: modes-check core.

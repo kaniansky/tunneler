@@ -56,6 +56,18 @@ if (core) {
   };
   const on = rep({}), off = rep({ noRepair: true });
   check(on.shield > 5000 && off.shield <= 5000 && off.energy > 5000, "no repairs: the base refuels but doesn't repair (shield " + off.shield + " vs " + on.shield + ")");
+  // the standard mode's AI with no repairs: low shield, full energy at home - it goes on (the shield never
+  // comes back); with repairs it stays to repair
+  const home = mods => {
+    const e = H.startEngine(28, Object.assign({ slots: slots([1, 2]), size: "small", extended: true }, mods));
+    const ai = new H.TunnelerAI("normal", 1, { seed: 1 });
+    for (let f = 0; f < 3000 && e.screen !== "play"; f++) e.step({ bits: [0, 0], keys: [] });
+    e.step({ bits: [H.TunnelerAI.bitsFor(ai, e), 0], keys: [] });
+    e.shield[1] = 1000; e.energy[1] = 12000; e.tankX[1] = e.baseX[1]; e.tankY[1] = e.baseY[1];
+    H.TunnelerAI.bitsFor(ai, e);
+    return ai.retreating;
+  };
+  check(!home({ noRepair: true }) && home({}), "no repairs: the AI doesn't wait at home for a shield that never comes back");
 }
 if (core) {
   // the classic engine never runs a mode or a modifier

@@ -242,6 +242,12 @@ function start(opts) {
   return { poll, pads, touch, showTouch };
 }
 
+// every page (all of them load this file): no browser menu on a right click / long press - unless
+// something on the page already handled it (DosUI's right-click zones prevent it themselves) or it is
+// a real text field (copy / paste)
+const textField = t => !!t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName || ""));
+if (root.addEventListener) root.addEventListener("contextmenu", e => { if (!e.defaultPrevented && !textField(e.target)) e.preventDefault(); });
+
 // index.html / lobby.html: <script src="/js/pads.js" data-menu> - a gamepad steers the menus
 const me = root.document && root.document.currentScript;
 if (me && me.hasAttribute && me.hasAttribute("data-menu")) start({ menu: () => true });

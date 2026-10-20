@@ -651,7 +651,10 @@ class TunnelerAI {
     // "energy" (only low energy sends it home and holds it there - e.g. no base repairs shields, or a
     // destroyed tank comes back at once anyway), false (no retreat now; one under way ends). The mode keeps
     // its answer steady (a retreat started / ended every other frame would replan the path every frame).
-    const rp = e.GM && e.GM.aiRetreat ? e.GM.aiRetreat(this, e) : null;
+    // Without base repairs (modifier noRepair) and no word from the mode: "energy" - the shield never comes
+    // back at a base, so a tank going home for it would wait there for the rest of the round.
+    let rp = e.GM && e.GM.aiRetreat ? e.GM.aiRetreat(this, e) : null;
+    if (rp == null && e.mods && e.mods.noRepair) rp = "energy";
     if (rp === false) {
       if (this.retreating) { this.retreating = false; this.path = null; this.waypoint = null; }
     } else if (rp === "energy") {
