@@ -304,14 +304,14 @@
     const toggleFF = () => { ff = !ff; redraw(); };
     options.push({ key: "ff", label: T("lc.ff") + T(ff ? "lc.on" : "lc.off"), info: [T("lc.ff.i1"), T("lc.ff.i2")], go: toggleFF, change: toggleFF,
       disabled: !S.teamGame });
+    const setSight = d => { sight = step(SIGHTS, sight, d); redraw(); };
+    options.push({ key: "sight", label: T("lc.sight") + T("sight." + sight),
+      info: [T("sight.i1"), T("sight.i2")], go: () => setSight(1), change: setSight });
     options.push({ key: "view", label: T("cpu.view") + T("view." + view),
       info: [T("view.i1"), T("view.i2")], go: () => setView(1), change: setView });
     const setWatch = d => { watchOut = step(TunnelerEngine.AFTER_DEATH, watchOut, d); redraw(); };
     options.push({ key: "watch", label: T("lc.watch") + T("watch." + watchOut),
       info: [T("watch.i1"), T("watch.i2")], go: () => setWatch(1), change: setWatch });
-    const setSight = d => { sight = step(SIGHTS, sight, d); redraw(); };
-    options.push({ key: "sight", label: T("lc.sight") + T("sight." + sight),
-      info: [T("sight.i1"), T("sight.i2")], go: () => setSight(1), change: setSight });
     options.push({ key: "noRepair", label: T("mod.noRepair") + onOff(!mods.noRepair), info: [T("mod.noRepair.i")], go: flip("noRepair"), change: flip("noRepair") });
     // like the online game lobby (online.js), without the chat: the 8 slot rows (the screen's title in the
     // box's border) and the settings on top, Start / Back below them, the selected item's info under it
@@ -333,9 +333,9 @@
       ...[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => winItem(n, noop).label),
       ...TIMES.map(v => timeItem(v, noop).label),
       T("lc.ff") + T("lc.on"), T("lc.ff") + T("lc.off"),
+      ...SIGHTS.map(v => T("lc.sight") + T("sight." + v)),
       ...VIEWS.map(v => T("cpu.view") + T("view." + v)),
       ...TunnelerEngine.AFTER_DEATH.map(w => T("lc.watch") + T("watch." + w)),
-      ...SIGHTS.map(v => T("lc.sight") + T("sight." + v)),
       T("mod.noRepair") + onOff(true), T("mod.noRepair") + onOff(false)];
     const seatW = DosUI.boxWidth(slotItems), actW = DosUI.boxWidth(acts),
       setW = Math.max(DosUI.boxWidth(sets), DosUI.boxWidth(labels.map(label => ({ label, align: "left" }))));
