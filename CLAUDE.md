@@ -628,3 +628,8 @@ none, i.e. a page from before 2.0 - is refused (POST 409 `{code:
 - Text cursor in an empty input (DosUI): a blinking underline under the placeholder's first letter - the
   snapshot's `cursor: {col, row}` (0-based cell), drawn by `Display.draw` as the VGA cursor (scan lines
   13-14, white, blinking with the text); typed text keeps the "_" cell after it.
+- Short skirmish links (`src/js/cpucode.js`, loaded by index.html + play.html): home.js starts a game at
+  `/skirmish?g=<13 characters>` (`CpuCode.encode`: format "1", one base-64 character per slot = kind * 8 +
+  team - 1, then 4 packed characters for size / win, time / ff / view, watch / sight / noRepair, mode /
+  goal index); play.js expands `g` with `CpuCode.decode` into the long query (lv=2) and reads that as
+  before. The long form still works; a broken code = the default game. Test: local-check "short skirmish links".

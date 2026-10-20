@@ -10,7 +10,9 @@
 // split screen).
 // Old links (?mode=cpu&level=...&opp=1..7&teams=0|1, hide=1 = self / hide=0 = everyone) still work.
 (function () {
-  const params = new URLSearchParams(location.search);
+  // a short link (?g=<code>, cpucode.js) stands for the long query it encodes
+  const query = new URLSearchParams(location.search), code = query.get("g") && window.CpuCode ? CpuCode.decode(query.get("g")) : null;
+  const params = code ? new URLSearchParams(code + (query.get("mode") ? "&mode=" + query.get("mode") : "")) : query;
   // /skirmish?... (old: /vs-computer?...) or /split?... (play.html?mode=cpu|hotseat&... in the desktop app)
   const mode = params.get("mode") === "cpu" || /^\/(skirmish|vs-computer)\/?$/.test(location.pathname) ? "cpu" : "hotseat";
   const LEVELS = ["easy", "normal", "hard"];              // (shown as easy / medium / hard)

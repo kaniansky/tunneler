@@ -18,6 +18,9 @@ let n = 0;
 const ok = msg => { n++; console.log("  ok  " + msg); };
 // (values made inside the page vm have other prototypes: compare as JSON)
 const same = (a, b, msg) => assert.strictEqual(JSON.stringify(a), JSON.stringify(b), msg);
+// a skirmish link with its short code (cpucode.js) as the long query it stands for
+const CpuCode = require(path.join(SRC, "js", "cpucode.js"));
+const longLink = href => decodeURIComponent(String(href).replace(/([?&])g=([^&]+)/, (m, s, c) => s + CpuCode.decode(c)));
 
 function makeEnv(search, store) {
   const listeners = {};
@@ -225,6 +228,34 @@ function play(search) {
   ok("1 vs 3 teams: extended, large, 5 to win, friendly fire, computer levels per slot");
 }
 {
+  // the short link (?g=<13 characters>, cpucode.js): the same game as the long one
+  const E = require(path.join(SRC, "js", "engine.js"));
+  const s = { slots: [{ kind: "you", team: 1 }, { kind: "normal", team: 2 }, { kind: "none", team: 3 }, { kind: "hard", team: 2 },
+    { kind: "none", team: 5 }, { kind: "none", team: 6 }, { kind: "easy", team: 1 }, { kind: "none", team: 8 }],
+    size: "large", win: 5, time: 3, ff: true, view: "team", watch: "killer", sight: "walls", mode: "standard", noRepair: true };
+  const code = CpuCode.encode(s);
+  assert.strictEqual(code.length, 13, "13 characters");
+  const w = play("?mode=cpu&g=" + code), e = w.tunnelerEngine();
+  assert(e.extended && e.size === "large" && e.winScore === 5 && e.roundTime === 3 && e.friendlyFire && e.sight === "walls" && e.mods.noRepair);
+  same(Array.from(e.slots, x => [x.color, x.team]), [[0, 1], [1, 2], [3, 2], [6, 1]]);
+  same(w.tunnelerAIs().map(a => [a.me, a.levelName]), [[2, "normal"], [3, "hard"], [4, "easy"]]);
+  same([w.tunnelerViews().watchOut, e.showSettings.view], ["killer", "team"]);
+  // every value of every field comes back
+  const back = c => new URLSearchParams(CpuCode.decode(c));
+  for (const [k, vs, q] of [["size", ["small", "medium", "large"], "size"], ["win", [1, 9], "win"], ["view", ["self", "team", "everyone"], "view"],
+    ["watch", ["black", "wreck", "team", "killer", "others"], "watch"], ["time", [2, 10], "time"], ["sight", ["circle", "walls"], "sight"]])
+    for (const v of vs) assert.strictEqual(back(CpuCode.encode(Object.assign({}, s, { [k]: v }))).get(q), String(v), k + " " + v);
+  for (const m of E.MODE_LIST.filter(m => m !== "standard"))
+    for (const g of (E.GOALS[m] || { choices: [undefined] }).choices) {
+      const p = back(CpuCode.encode(Object.assign({}, s, { mode: m, goal: g })));
+      assert(p.get("gm") === m && (g === undefined ? !p.has("goal") : p.get("goal") === String(g)), m + " goal " + g);
+    }
+  // a broken code: the defaults (the classic game)
+  assert.strictEqual(CpuCode.decode("1xyz"), null);
+  assert(!play("?mode=cpu&g=bogus").tunnelerEngine().extended, "a broken code: the default game");
+  ok("short skirmish links: " + code + " = the long query, every value round trips, a broken one = the default game");
+}
+{
   // skipped slots keep their colors; friendly fire is dropped without teammates
   const w = play("?mode=cpu&slots=" + encodeURIComponent("0:you:1,3:normal:4,7:expert:8") + "&size=small&ff=1");
   const e = w.tunnelerEngine();
@@ -271,7 +302,7 @@ function play(search) {
   env.page("index.html");
   env.key("ArrowDown"); env.key("Enter");                  // Vs computer
   env.key("Enter");                                        // Start a new game (selected first)
-  assert.strictEqual(decodeURIComponent(env.win.location.href), "/skirmish?slots=0:you:1,1:easy:2&size=medium&win=3&ff=0&view=self&watch=wreck&lv=2",
+  assert.strictEqual(longLink(env.win.location.href), "/skirmish?slots=0:you:1,1:easy:2&size=medium&win=3&ff=0&view=self&watch=wreck&lv=2",
     "default = the classic game");
   // CYAN: computer (easy) in team 2 -> 1 vs 2 teams; large map; 5 to win; friendly fire on; view everyone
   env = makeEnv("", store);
@@ -290,7 +321,7 @@ function play(search) {
   pick(env, "view"); env.key("Enter"); env.key("Enter");   // view: self -> team -> everyone
   pick(env, "watch"); env.key("Enter");                    // after death: wreck -> team
   pick(env, "play"); env.key("Enter");                     // start
-  assert.strictEqual(decodeURIComponent(env.win.location.href),
+  assert.strictEqual(longLink(env.win.location.href),
     "/skirmish?slots=0:you:1,1:easy:2,2:easy:2,7:hard:8&size=large&win=5&ff=1&view=everyone&watch=team&time=3&lv=2");
   assert.strictEqual(store.get("tunneler.cpu.watch"), "team", "after death remembered");
   assert.strictEqual(store.get("tunneler.cpu.time"), "3", "round time remembered");
@@ -313,7 +344,7 @@ function play(search) {
     pick(en, "mode"); en.key("ArrowRight");                 // standard -> gold
     pick(en, "noRepair"); en.key("Enter");
     pick(en, "play"); en.key("Enter");
-    assert(/&gm=gold&goal=10&norepair=1&lv=2$/.test(decodeURIComponent(en.win.location.href)), en.win.location.href);
+    assert(/&gm=gold&goal=10&norepair=1&lv=2$/.test(longLink(en.win.location.href)), en.win.location.href);
     assert(st.get("tunneler.cpu.mode") === "gold" && st.get("tunneler.cpu.noRepair") === "1");
     ok("vs computer: Mode and the modifier go into the link and are remembered");
     // deathmatch: "Kills to win" instead of "Rounds to win", into the link
@@ -325,7 +356,7 @@ function play(search) {
     assert(uid.spec.items.some(it => it.key === "goal") && !uid.spec.items.some(it => it.key === "win"), "deathmatch: Kills to win, no Rounds to win");
     pick(ed, "goal"); ed.key("ArrowRight");                              // 10 -> 15
     pick(ed, "play"); ed.key("Enter");
-    assert(/&gm=deathmatch&goal=15/.test(decodeURIComponent(ed.win.location.href)), ed.win.location.href);
+    assert(/&gm=deathmatch&goal=15/.test(longLink(ed.win.location.href)), ed.win.location.href);
     ok("skirmish deathmatch: Kills to win replaces Rounds to win, into the link");
   }
   // friendly fire: always listed, grayed out (not selectable) while no team has 2+ tanks
@@ -377,7 +408,7 @@ function play(search) {
   env = makeEnv("", store);
   env.page("index.html");
   env.key("ArrowDown"); env.key("Enter"); env.key("Enter");
-  assert.strictEqual(decodeURIComponent(env.win.location.href),
+  assert.strictEqual(longLink(env.win.location.href),
     "/skirmish?slots=0:you:1,1:easy:2,2:easy:2,7:hard:8&size=large&win=5&ff=1&view=everyone&watch=team&time=3&lv=2");
   ok("vs computer slot editor: default classic, slots / teams / options, remembered in localStorage");
 
@@ -399,7 +430,7 @@ function play(search) {
     env = makeEnv("", s4);
     env.page("index.html");
     env.key("ArrowDown"); env.key("Enter"); env.key("Enter");
-    const href = decodeURIComponent(env.win.location.href);
+    const href = longLink(env.win.location.href);
     if (marker) assert(!/expert/.test(href), "an unknown level is not kept: " + href);
     else assert(href.includes("slots=0:you:1," + want + "&"), href);
   }

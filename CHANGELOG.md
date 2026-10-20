@@ -5,6 +5,8 @@ a release is made by pushing a version tag (see CONTRIBUTING.md).
 
 ## Unreleased
 
+- **Short skirmish links**: a skirmish game's address is now `/skirmish?g=` plus 13 characters (all its
+  settings packed) instead of a long list; the long addresses still work.
 - **Smooth scrolling is on by default** (homepage Settings turns it off; whoever turned it on or off keeps
   that choice).
 - **Line of sight** (skirmish and the online game's Settings; off by default = the original): with

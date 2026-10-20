@@ -266,10 +266,11 @@
     const redraw = () => { saveCpu(); cpu(true); };
     const start = () => {
       if (S.error) return;
-      const list = S.used.map(u => u.color + ":" + u.kind + ":" + u.team).join(",");
-      location.href = Links.cpu("slots=" + encodeURIComponent(list) + "&size=" + cpuSize + "&win=" + cpuWin +
-        "&ff=" + (ff && S.teamGame ? 1 : 0) + "&view=" + view + "&watch=" + watchOut + timeArg(cpuTime) + (sight !== "full" ? "&sight=" + sight : "") +
-        (gmode !== "standard" ? "&gm=" + gmode : "") + (GOALS[gmode] ? "&goal=" + goalOf(gmode) : "") + (mods.noRepair ? "&norepair=1" : "") + "&lv=2");   // (lv=2: today's level names)
+      // the whole setup as a short code (cpucode.js: /skirmish?g=<13 characters>)
+      const all = COLORS.map((c, i) => ({ kind: "none", team: slots[i].team }));
+      for (const u of S.used) all[u.color] = { kind: u.kind, team: u.team };
+      location.href = Links.cpu("g=" + CpuCode.encode({ slots: all, size: cpuSize, win: cpuWin, time: cpuTime, ff: ff && S.teamGame,
+        view, watch: watchOut, sight, mode: gmode, goal: GOALS[gmode] ? goalOf(gmode) : undefined, noRepair: mods.noRepair }));
     };
     // slot rows: "you                team 1", the who column padded to the longest text in this language,
     // each row in its tank's color (which is all that tells the colors apart - no color name)
