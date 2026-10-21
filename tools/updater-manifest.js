@@ -4,7 +4,7 @@
 // signed update packages app-build.yml collected:
 //   node tools/updater-manifest.js <dir> <tag> <owner/repo> [assets.txt]  > latest.json
 // <dir> holds tunneler-online-<v>-windows-x64-setup.exe(.sig), tunneler-online[-<v>]-linux-x64.AppImage(.sig),
-// tunneler-online-<v>_amd64.deb(.sig), tunneler-online-<v>.x86_64.rpm(.sig), -macos-arm64.app.tar.gz(.sig),
+// tunneler-online-<v>_amd64.deb(.sig), tunneler-online-<v>.x86_64.rpm(.sig) (ARM64: _arm64.deb, .aarch64.rpm), -macos-arm64.app.tar.gz(.sig),
 // -macos-x64.app.tar.gz(.sig); the URLs point at the release <tag>. An app looks for
 // "<os>-<arch>-<its package type>" first, then "<os>-<arch>": linux-x86_64 is the AppImage, a deb / rpm
 // install gets its own package (installed with the admin password).
@@ -18,6 +18,8 @@ const PLATFORMS = [
   [/-linux-x64\.AppImage$/, "linux-x86_64", "linux-x86_64-appimage"],
   [/_amd64\.deb$/, "linux-x86_64-deb"],
   [/\.x86_64\.rpm$/, "linux-x86_64-rpm"],
+  [/_arm64\.deb$/, "linux-aarch64-deb"],
+  [/\.aarch64\.rpm$/, "linux-aarch64-rpm"],
   [/-macos-arm64\.app\.tar\.gz$/, "darwin-aarch64"],
   [/-macos-x64\.app\.tar\.gz$/, "darwin-x86_64"],
 ];

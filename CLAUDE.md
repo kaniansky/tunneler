@@ -635,9 +635,13 @@ none, i.e. a page from before 2.0 - is refused (POST 409 `{code:
   before. The long form still works; a broken code = the default game. Test: local-check "short skirmish links".
 - **Flatpak** (`flatpak/`, id `com.kaniansky.TunnelerOnline` - on the owner's domain: a Flathub id allows
   no hyphen, and io.github.kaniansky.tunneler_online would name a repository that doesn't exist; Flathub
-  verifies it by a token at kaniansky.com/.well-known/org.flathub.VerifiedApps.txt): the manifest repackages the release's `.deb` on org.gnome.Platform (WebKitGTK
-  4.1), x86_64 only (`flathub.json`); its own .desktop / metainfo (AppStream: store page, screenshots from
-  the tag's `screenshots/`, OARS, releases) / icons renamed to the id. `tools/flatpak-update.sh <version>`
-  sets the .deb url + sha256 and adds the metainfo <release>. Inside a Flatpak the app offers no update
-  (main.rs `flatpak()`: FLATPAK_ID / /.flatpak-info). Flathub publishes it from its own repository
-  (flathub/com.kaniansky.TunnelerOnline) once the submission PR is accepted.
+  verifies it by kaniansky.com/.well-known/org.flathub.VerifiedApps.txt). The manifest (no comments - the
+  Flathub review asked) repackages the release's `.deb` per architecture (`_amd64.deb` x86_64,
+  `_arm64.deb` aarch64 - app-build.yml's linux-arm64 job) on org.gnome.Platform (WebKitGTK 4.1) and
+  installs the `.desktop` / metainfo from this repository at the release tag (a git source - they belong
+  upstream, not in the Flathub repo); gamepads: `--device-if=all:!has-input-device` + `--device=input`.
+  Release steps: `node tools/flatpak-update.js --metainfo <v>` before tagging (the metainfo's <release>),
+  `node tools/flatpak-update.js <v>` after (both .deb sha256 + the tag's commit), then the manifest into
+  the Flathub repository. Inside a Flatpak the app offers no update (main.rs `flatpak()`: FLATPAK_ID /
+  /.flatpak-info). Flathub submission flathub/flathub#10724: on hold until the project has 2-3 months of
+  history (reviewer, 2026-10-21); AI tools must not drive that PR or its review (Flathub's AI policy).

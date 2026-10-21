@@ -4,8 +4,8 @@ name: Desktop app
 # in the app) for Windows, Linux and macOS, built as small as possible:
 #   Windows  tunneler-online-<v>-windows-x64.exe    portable, needs WebView2 (built into Windows 10/11)
 #            ...-windows-x64-setup.exe               installer (the installed app updates itself)
-#   Linux    tunneler-online-<v>-linux-x64.tar.gz   the binary, needs libwebkit2gtk-4.1
-#            ..._amd64.deb / ....x86_64.rpm          packages that pull that in (update with the admin
+#   Linux    tunneler-online-<v>-linux-x64.tar.gz   the binary, needs libwebkit2gtk-4.1 (-linux-arm64: ARM64)
+#            ..._amd64.deb / ....x86_64.rpm          packages that pull that in (_arm64.deb / .aarch64.rpm: ARM64; update with the admin
 #                                                    password, or from the apt / dnf repository: linux-repos.yml)
 #            tunneler-online-linux-x64.AppImage      runs anywhere, updates itself - no version in its name:
 #                                                    the update writes over the same file (shortcuts keep working)
@@ -44,6 +44,10 @@ jobs:
           - os: ubuntu-22.04
             name: linux-x64
             args: --bundles deb,rpm,appimage
+          # ARM64 Linux (Raspberry Pi, ARM laptops; the Flatpak's aarch64 build): the packages, no AppImage
+          - os: ubuntu-22.04-arm
+            name: linux-arm64
+            args: --bundles deb,rpm
           - os: macos-latest
             name: macos-arm64
             target: aarch64-apple-darwin
@@ -110,6 +114,10 @@ jobs:
             windows-*)
               cp "$rel/tunneler-online.exe" "dist/$out.exe"
               upd "$rel/bundle/nsis/*-setup.exe" "$out-setup.exe" ;;
+            linux-arm64)
+              tar -czf "dist/$out.tar.gz" -C "$rel" tunneler-online
+              upd "$rel/bundle/deb/*.deb" "tunneler-online-${v}_arm64.deb"
+              upd "$rel/bundle/rpm/*.rpm" "tunneler-online-$v.aarch64.rpm" ;;
             linux-*)
               tar -czf "dist/$out.tar.gz" -C "$rel" tunneler-online
               upd "$rel/bundle/deb/*.deb" "tunneler-online-${v}_amd64.deb"

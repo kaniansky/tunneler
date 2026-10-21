@@ -49,6 +49,13 @@ const ok = msg => { n++; console.log("  ok  " + msg); };
   assert.strictEqual(pk.platforms["linux-x86_64-deb"].url.split("/").pop(), "tunneler-online-2.1.0_amd64.deb");
   assert.strictEqual(pk.platforms["linux-x86_64-rpm"].signature, "SIGR");
   assert.strictEqual(pk.platforms["linux-x86_64"].url.split("/").pop(), "tunneler-online-2.1.0-linux-x64.AppImage", "plain linux = the AppImage");
+  // ARM64 Linux: its deb / rpm (no AppImage, so no plain linux-aarch64)
+  put("tunneler-online-2.1.0_arm64.deb", "x"); put("tunneler-online-2.1.0_arm64.deb.sig", "SIGAD");
+  put("tunneler-online-2.1.0.aarch64.rpm", "x"); put("tunneler-online-2.1.0.aarch64.rpm.sig", "SIGAR");
+  const arm = manifest(dir, "v2.1.0", "o/r");
+  assert.strictEqual(arm.platforms["linux-aarch64-deb"].url.split("/").pop(), "tunneler-online-2.1.0_arm64.deb");
+  assert.strictEqual(arm.platforms["linux-aarch64-rpm"].signature, "SIGAR");
+  assert(!arm.platforms["linux-aarch64"], "no ARM64 AppImage: no plain linux-aarch64");
   // the AppImage without a version in its name (3.1.3 on): the same entries
   const d2 = fs.mkdtempSync(path.join(os.tmpdir(), "tunneler-upd-"));
   fs.writeFileSync(path.join(d2, "tunneler-online-linux-x64.AppImage.sig"), "SIGN");

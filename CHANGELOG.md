@@ -7,6 +7,8 @@ a release is made by pushing a version tag (see CONTRIBUTING.md).
 
 - **Flatpak** (`flatpak/`, `com.kaniansky.TunnelerOnline`) for Flathub - and so for software managers
   such as Linux Mint's. Inside a Flatpak the app no longer offers updates of its own (Flathub brings them).
+- **ARM64 Linux**: the desktop app also comes as `_arm64.deb` / `.aarch64.rpm` / `-linux-arm64.tar.gz`
+  (Raspberry Pi, ARM laptops); the packages update themselves like the x64 ones.
 
 ## 4.0.0
 

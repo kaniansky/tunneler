@@ -28,7 +28,7 @@ gpg --batch --yes --armor --export "$key" > "$out/tunneler-online.asc"
     -o APT::FTPArchive::Release::Origin="Tunneler Online" \
     -o APT::FTPArchive::Release::Label="Tunneler Online" \
     -o APT::FTPArchive::Release::Suite=stable \
-    -o APT::FTPArchive::Release::Architectures=amd64 \
+    -o APT::FTPArchive::Release::Architectures="amd64 arm64" \
     -o APT::FTPArchive::Release::Description="Tunneler Online desktop app" \
     release . > ../Release.tmp
   mv ../Release.tmp Release
