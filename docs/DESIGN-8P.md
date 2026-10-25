@@ -709,3 +709,6 @@ and replaying a match is fairly cheap").
   /replay/<id> is copied (and shown). Opening it fetches the replay (GET /api/replays/<id>), keeps it with
   the others and plays it; "Open a replay link" on the Replays screen takes a pasted link (another server's
   too) or an id.
+- Where they're kept (owner, 2026-10-25: "go with r2"): an S3-compatible bucket when the server has one
+  (Cloudflare R2 for the live server - its host's free disk is wiped on every deploy), else the folder, else
+  memory.

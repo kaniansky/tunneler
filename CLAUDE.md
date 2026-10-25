@@ -856,6 +856,10 @@ none, i.e. a page from before 2.0 - is refused (POST 409 `{code:
   a bare id). Server: `validReplay` (gunzip, the replay's fields, re-gzip), `keepShared` / `sharedReplay`
   (REPLAY_DIR - opts.replayDir, default shared-replays/, null = memory; the Docker image sets /app/shared-replays,
   docker-compose a volume), `MAX_SHARES_PER_MIN` 10, `MAX_SHARED` 5000, `MAX_REPLAY_BYTES` 512 KB; PRETTY
-  /replay/<id>. test/replay-share-check.js (the API) + replay-check (the page). Texts `rp.*`,
+  /replay/<id>. An S3-compatible bucket first when configured (owner, 2026-10-25: Cloudflare R2 - Render's free
+  disk is wiped on deploys): `REPLAY_S3_ENDPOINT / _BUCKET / _ACCESS_KEY / _SECRET_KEY / _REGION` (opts.replayS3),
+  `s3Request` (GET / PUT, path-style) signed by `sigV4` (Signature V4 with node's crypto - no SDK; tested against
+  AWS's example), objects `<id>.replay`, a 500-entry memory cache, a failing bucket = 503; the start-up log names
+  the store (`replayStore`). test/replay-share-check.js (the API) + replay-check (the page). Texts `rp.*`,
   `home.replays`, `back.replays`, an Information section. Test hooks `tunnelerReplay / tunnelerReplayUI /
   tunnelerReplayList`. Test: replay-check.js.

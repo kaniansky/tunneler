@@ -238,6 +238,21 @@ The live version at <https://tunneler-online.onrender.com/> runs this repo's `Do
 host that runs a Docker image or `npm run build && npm start` and allows websockets works the same way.
 Games live in the server's memory, so a restart ends running games.
 
+**Shared replays** (the links from "Share a link") need a place that survives restarts. In order:
+
+- an **S3-compatible bucket** - Cloudflare R2 (10 GB free), MinIO, AWS S3 - set by environment variables:
+  `REPLAY_S3_ENDPOINT` (R2: `https://<account id>.r2.cloudflarestorage.com`), `REPLAY_S3_BUCKET`,
+  `REPLAY_S3_ACCESS_KEY`, `REPLAY_S3_SECRET_KEY`, `REPLAY_S3_REGION` (R2: `auto`, the default). For R2:
+  create a bucket, then an R2 API token with "Object Read & Write" for that bucket - its Access Key ID and
+  Secret Access Key are the two keys. Replays stay until the bucket's own rules delete them (an R2 lifecycle
+  rule, if you want one);
+- else a folder: `REPLAY_DIR` (default `shared-replays/` next to server.js; the Docker image uses
+  `/app/shared-replays`, docker-compose.yml mounts a volume there), the newest 5000 kept;
+- else the server's memory (lost on a restart).
+
+The server's log says which one it uses at start (`shared replays: ...`). The live server uses R2: Render's
+free disk is wiped on every deploy.
+
 ### Docker
 
 The easiest way is Docker Compose with the published image (`docker-compose.yml` in this repo):

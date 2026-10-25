@@ -3,6 +3,11 @@
 All notable changes to Tunneler Online. Versions follow [semantic versioning](https://semver.org/);
 a release is made by pushing a version tag (see CONTRIBUTING.md).
 
+## Unreleased
+
+- Shared replays can live in an S3-compatible bucket (Cloudflare R2, MinIO, AWS S3: `REPLAY_S3_*`, see
+  README.md, Hosting) - the live server's links now survive restarts and deploys.
+
 ## 5.0.1
 
 - **Share a replay as a link**: a replay's screen has "Share a link" - the replay goes to the game's server

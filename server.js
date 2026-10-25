@@ -28,8 +28,9 @@
 //
 // HTTP:  GET /api/rooms           public rooms
 //        GET /api/rooms/<id>      one room (also private ones: their ids carry a random suffix)
-//        POST /api/replays        a replay (src/js/replay.js: gzip'd or plain JSON) -> {id}: shared - kept in
-//                                 REPLAY_DIR (memory when it can't be written), the newest MAX_SHARED
+//        POST /api/replays        a replay (src/js/replay.js: gzip'd or plain JSON) -> {id}: shared - kept in an
+//                                 S3-compatible bucket (REPLAY_S3_*: Cloudflare R2...), else REPLAY_DIR (the
+//                                 newest MAX_SHARED), else memory
 //        GET  /api/replays/<id>   that replay (gzip'd JSON); the page address /replay/<id> plays it
 //        POST /api/rooms          {name, public, spectators, seats?: [{kind: open|closed|easy|normal|hard,
 //                                  team: 1..8} x 8 (index = colour)], size, winScore, friendlyFire, roundTime,
@@ -118,6 +119,40 @@ function slugify(s) {
 // MAX_NAME display columns (wide CJK / emoji count 2)
 function cleanName(s) {
   return NetProto.cleanRoomName(s, MAX_NAME);
+}
+
+// ------------------------------------------------------------ an S3-compatible bucket (Cloudflare R2, MinIO, AWS S3)
+// The shared replays' store when configured: REPLAY_S3_ENDPOINT (R2: https://<account id>.r2.cloudflarestorage.com),
+// REPLAY_S3_BUCKET, REPLAY_S3_ACCESS_KEY, REPLAY_S3_SECRET_KEY, REPLAY_S3_REGION (R2: "auto", the default).
+// Requests are signed with AWS Signature Version 4 (path-style URLs) - no SDK.
+function s3Config(c) {
+  if (!c || !c.endpoint || !c.bucket || !c.accessKey || !c.secretKey) return null;
+  return { endpoint: String(c.endpoint).replace(/\/+$/, ""), bucket: c.bucket, accessKey: c.accessKey, secretKey: c.secretKey, region: c.region || "auto" };
+}
+const sha256 = b => crypto.createHash("sha256").update(b).digest("hex");
+const hmac = (k, b) => crypto.createHmac("sha256", k).update(b).digest();
+// the Authorization header for a request: method, path (already URI-encoded), query ("" or canonical), headers to
+// sign ({name: value}, host included), the payload's sha256, the time (amz "YYYYMMDDTHHMMSSZ")
+function sigV4(cfg, method, pathname, query, headers, payloadHash, amzDate) {
+  const names = Object.keys(headers).map(h => h.toLowerCase()).sort();
+  const lower = {};
+  for (const h of Object.keys(headers)) lower[h.toLowerCase()] = String(headers[h]).trim();
+  const canonical = [method, pathname, query, names.map(h => h + ":" + lower[h] + "\n").join(""), names.join(";"), payloadHash].join("\n");
+  const day = amzDate.slice(0, 8), scope = day + "/" + cfg.region + "/s3/aws4_request";
+  const toSign = ["AWS4-HMAC-SHA256", amzDate, scope, sha256(canonical)].join("\n");
+  const key = hmac(hmac(hmac(hmac("AWS4" + cfg.secretKey, day), cfg.region), "s3"), "aws4_request");
+  return "AWS4-HMAC-SHA256 Credential=" + cfg.accessKey + "/" + scope + ", SignedHeaders=" + names.join(";") + ", Signature=" + hmac(key, toSign).toString("hex");
+}
+// GET / PUT one object -> {status, body (Buffer)}
+async function s3Request(cfg, method, key, body) {
+  const url = new URL(cfg.endpoint + "/" + encodeURIComponent(cfg.bucket) + "/" + encodeURIComponent(key));
+  const amzDate = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d+/, "");
+  const payloadHash = sha256(body || "");
+  const headers = { host: url.host, "x-amz-content-sha256": payloadHash, "x-amz-date": amzDate };
+  const auth = sigV4(cfg, method, url.pathname, "", headers, payloadHash, amzDate);
+  const res = await fetch(url, { method, body: body || undefined, signal: AbortSignal.timeout(10000),
+    headers: { "x-amz-content-sha256": payloadHash, "x-amz-date": amzDate, Authorization: auth, ...(body ? { "Content-Type": "application/gzip" } : {}) } });
+  return { status: res.status, body: Buffer.from(await res.arrayBuffer()) };
 }
 
 function createServer(opts = {}) {
@@ -467,12 +502,16 @@ function createServer(opts = {}) {
 
   // ------------------------------------------------------------ shared replays (docs/DESIGN-8P.md 33)
   // A replay someone shares: checked (a replay's fields), stored gzip'd under a random id, given back to
-  // whoever has the link. On disk in replayDir (opts.replayDir / REPLAY_DIR, default shared-replays/ next to
-  // this file - null: memory only), else memory; the newest MAX_SHARED kept. Nothing else is kept with it.
+  // whoever has the link. In the S3-compatible bucket when there is one (opts.replayS3 / REPLAY_S3_*: kept until
+  // the bucket's own rules delete them - an R2 lifecycle rule, if wanted), else on disk in replayDir (opts.replayDir
+  // / REPLAY_DIR, default shared-replays/ next to this file - null: memory only; the newest MAX_SHARED kept), else
+  // memory. Nothing else is kept with it.
+  const s3 = s3Config(opts.replayS3 !== undefined ? opts.replayS3 : { endpoint: process.env.REPLAY_S3_ENDPOINT, bucket: process.env.REPLAY_S3_BUCKET,
+    accessKey: process.env.REPLAY_S3_ACCESS_KEY, secretKey: process.env.REPLAY_S3_SECRET_KEY, region: process.env.REPLAY_S3_REGION });
   const replayDir = opts.replayDir !== undefined ? opts.replayDir : process.env.REPLAY_DIR || path.join(__dirname, "shared-replays");
   const shared = new Map();                              // id -> gzip'd bytes (memory, or a cache of the disk)
   let diskOk = false;
-  if (replayDir) { try { fs.mkdirSync(replayDir, { recursive: true }); fs.accessSync(replayDir, fs.constants.W_OK); diskOk = true; } catch (e) { diskOk = false; } }
+  if (replayDir && !s3) { try { fs.mkdirSync(replayDir, { recursive: true }); fs.accessSync(replayDir, fs.constants.W_OK); diskOk = true; } catch (e) { diskOk = false; } }
   const replayFile = id => path.join(replayDir, id + ".replay");
   function validReplay(bytes) {
     let raw = bytes;
@@ -484,7 +523,14 @@ function createServer(opts = {}) {
       rep.opts && typeof rep.opts === "object" && Number.isFinite(rep.seed);
     return ok ? zlib.gzipSync(Buffer.from(JSON.stringify(rep))) : null;
   }
-  function keepShared(id, gz) {
+  async function keepShared(id, gz) {
+    if (s3) {                                            // (the bucket: a failed upload is the sharer's error)
+      const r = await s3Request(s3, "PUT", id + ".replay", gz);
+      if (r.status < 200 || r.status >= 300) throw new Error("storage " + r.status);
+      shared.set(id, gz);
+      while (shared.size > 500) shared.delete(shared.keys().next().value);   // (a cache of the last ones)
+      return;
+    }
     shared.set(id, gz);
     if (diskOk) {
       try { fs.writeFileSync(replayFile(id), gz); } catch (e) { /* the memory copy stays */ }
@@ -498,8 +544,16 @@ function createServer(opts = {}) {
     }
     while (shared.size > MAX_SHARED) shared.delete(shared.keys().next().value);
   }
-  function sharedReplay(id) {
+  async function sharedReplay(id) {
     if (shared.has(id)) return shared.get(id);
+    if (s3) {
+      const r = await s3Request(s3, "GET", id + ".replay");
+      if (r.status === 404) return null;
+      if (r.status < 200 || r.status >= 300) throw new Error("storage " + r.status);
+      shared.set(id, r.body);
+      while (shared.size > 500) shared.delete(shared.keys().next().value);
+      return r.body;
+    }
     if (!diskOk) return null;
     try { return fs.readFileSync(replayFile(id)); } catch (e) { return null; }
   }
@@ -538,13 +592,14 @@ function createServer(opts = {}) {
       const gz = validReplay(bytes);
       if (!gz) return json(res, 400, { error: "not a replay" });
       let id = replayId();
-      while (sharedReplay(id)) id = replayId();
-      keepShared(id, gz);
+      while (shared.has(id) || (!s3 && await sharedReplay(id))) id = replayId();   // (a bucket: 32^8 ids - no lookup)
+      try { await keepShared(id, gz); } catch (e) { return json(res, 503, { error: "could not store it, try later" }); }
       return json(res, 200, { id });
     }
     const rm = /^\/api\/replays\/([a-z2-9]{8})$/.exec(p);
     if (rm && req.method === "GET") {
-      const gz = sharedReplay(rm[1]);
+      let gz;
+      try { gz = await sharedReplay(rm[1]); } catch (e) { return json(res, 503, { error: "storage unavailable, try later" }); }
       if (!gz) return json(res, 404, { error: "no such replay" });
       res.writeHead(200, { "Content-Type": "application/gzip", "Cache-Control": "public, max-age=86400", ...CORS });
       return res.end(gz);
@@ -895,6 +950,7 @@ function createServer(opts = {}) {
 
   return {
     server, rooms, createRoom,
+    replayStore: s3 ? "the bucket " + s3.bucket + " at " + s3.endpoint : diskOk ? "the folder " + replayDir : "memory (lost on a restart)",
     listen(port, cb) { server.listen(port, () => cb && cb(server.address().port)); return this; },
     close(cb) {
       clearInterval(heartbeat); clearInterval(idleSweep);
@@ -943,7 +999,7 @@ function watchReleases(current, say = log) {
   setInterval(check, DAY_MS).unref();
 }
 
-module.exports = { createServer, slugify, cleanName, newerVersion, latestRelease };
+module.exports = { createServer, slugify, cleanName, newerVersion, latestRelease, sigV4, s3Request };
 
 // Readable start-up errors instead of a Node stack trace (exit code 1).
 function startupError(port, err) {
@@ -971,6 +1027,7 @@ if (require.main === module) {
   srv.server.on("error", err => startupError(port, err));
   srv.listen(port, p => {
     log("TUNNELER server " + (VERSION || "") + " on http://localhost:" + p);
+    log("shared replays: " + srv.replayStore);
     if (VERSION && !/^(0|false|no|off)$/i.test(process.env.UPDATE_CHECK || "")) watchReleases(VERSION);
   });
 }

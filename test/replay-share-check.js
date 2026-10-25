@@ -3,9 +3,10 @@
 // docs/DESIGN-8P.md 33): a recorded match uploaded gzip'd or as plain JSON gets an id and comes back the same;
 // junk, too large and too many are refused; an unknown id is 404; the replays outlive a restart (on disk) and
 // work without a folder (memory); the page address /replay/<id> answers with the page.
-const fs = require("fs"), os = require("os"), path = require("path"), zlib = require("zlib");
+const fs = require("fs"), os = require("os"), path = require("path"), zlib = require("zlib"), crypto = require("crypto");
 const { TunnelerEngine: E, TunnelerAI } = require("./src.js");
-const { createServer } = require("../server.js");
+const { createServer, sigV4 } = require("../server.js");
+const http = require("http");
 const { Replay } = require(path.join(__dirname, "..", "src", "js", "replay.js"));
 const { Links } = require(path.join(__dirname, "..", "src", "js", "endpoint.js"));
 
@@ -66,6 +67,52 @@ const stop = s => new Promise(r => s.close(r));
   ok(m && (await req(port, "GET", "/api/replays/" + m)).status === 200, "without a folder: kept in memory");
   await stop(s);
   fs.rmSync(dir, { recursive: true, force: true });
+
+  // the request signer against AWS's own Signature V4 example (S3 docs, "Example: GET Object")
+  {
+    const empty = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+    const a = sigV4({ accessKey: "AKIAIOSFODNN7EXAMPLE", secretKey: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY", region: "us-east-1" }, "GET", "/test.txt", "",
+      { host: "examplebucket.s3.amazonaws.com", range: "bytes=0-9", "x-amz-content-sha256": empty, "x-amz-date": "20130524T000000Z" }, empty, "20130524T000000Z");
+    ok(a.endsWith("Signature=f0e8bdb87c964420e857bd35b5d6ed310bd44f0170aba48dd91039c6036bdb41"), "Signature V4: AWS's example signature");
+  }
+  // an S3-compatible bucket (Cloudflare R2): a fake one that checks every request's signature (Signature V4,
+  // recomputed here) and keeps the objects
+  {
+    const cfg = { accessKey: "TESTKEY", secretKey: "testsecret", region: "auto" }, objects = new Map(), seen = [];
+    const fake = http.createServer((q, r) => {
+      const chunks = [];
+      q.on("data", c => chunks.push(c));
+      q.on("end", () => {
+        const body = Buffer.concat(chunks), payload = crypto.createHash("sha256").update(body).digest("hex");
+        const h = { host: q.headers.host, "x-amz-content-sha256": q.headers["x-amz-content-sha256"], "x-amz-date": q.headers["x-amz-date"] };
+        const good = q.headers["x-amz-content-sha256"] === payload &&
+          q.headers.authorization === sigV4(cfg, q.method, q.url, "", h, payload, q.headers["x-amz-date"]);
+        seen.push(q.method + " " + q.url + (good ? "" : " BAD SIGNATURE"));
+        if (!good) { r.writeHead(403); return r.end(); }
+        if (q.method === "PUT") { objects.set(q.url, body); r.writeHead(200); return r.end(); }
+        if (q.method === "GET" && objects.has(q.url)) { r.writeHead(200); return r.end(objects.get(q.url)); }
+        r.writeHead(404); r.end();
+      });
+    });
+    const fport = await new Promise(r => fake.listen(0, () => r(fake.address().port)));
+    const replayS3 = Object.assign({ endpoint: "http://127.0.0.1:" + fport, bucket: "tunneler-replays" }, cfg);
+    ({ s, port } = await start({ replayS3, replayDir: null }));
+    ok(s.replayStore.includes("tunneler-replays"), "with a bucket configured: " + s.replayStore);
+    const up2 = await req(port, "POST", "/api/replays", gz), bid = JSON.parse(up2.bytes.toString()).id;
+    ok(up2.status === 200 && objects.has("/tunneler-replays/" + bid + ".replay") && seen.every(x => !/BAD/.test(x)),
+      "an upload goes into the bucket (PUT /tunneler-replays/" + bid + ".replay, signed)");
+    await stop(s);
+    ({ s, port } = await start({ replayS3, replayDir: null }));   // (a restart: nothing in memory)
+    const got = await req(port, "GET", "/api/replays/" + bid);
+    ok(got.status === 200 && (await Replay.fromBytes(new Uint8Array(got.bytes))).id === rep.id && seen.some(x => x.startsWith("GET")), "after a restart it comes from the bucket");
+    ok((await req(port, "GET", "/api/replays/zzzz2345")).status === 404, "not in the bucket: 404");
+    await stop(s);
+    // the bucket refusing (a wrong key): the sharer is told, nothing breaks
+    ({ s, port } = await start({ replayS3: Object.assign({}, replayS3, { secretKey: "wrong" }), replayDir: null }));
+    ok((await req(port, "POST", "/api/replays", gz)).status === 503, "the bucket refuses (a wrong key): 503 to the sharer");
+    await stop(s);
+    fake.close();
+  }
 
   // links
   const P = Links.parseReplay;

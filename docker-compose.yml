@@ -18,7 +18,9 @@ services:
       - "${TUNNELER_PORT:-8050}:8050"
     environment:
       PORT: "8050"
-    # shared replays (links people send): kept across restarts and updates in this volume
+    # shared replays (links people send): kept across restarts and updates in this volume - or in an
+    # S3-compatible bucket (Cloudflare R2...): set REPLAY_S3_ENDPOINT, REPLAY_S3_BUCKET, REPLAY_S3_ACCESS_KEY,
+    # REPLAY_S3_SECRET_KEY (README.md, Hosting)
     volumes:
       - replays:/app/shared-replays
     healthcheck:
