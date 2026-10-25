@@ -155,7 +155,7 @@ class DosUI {
     window.addEventListener("resize", () => { if (this.active() && this.spec && !this.spec.page) this.draw(); });
     // (a drag moves the content with the finger - fractions of a row: smooth; let go while moving: it glides on)
     canvas.addEventListener("touchstart", e => {
-      if (!this.active() || !this.narrow || e.touches.length !== 1) return;
+      if (!this.active() || !this.narrow || e.touches.length !== 1 || (this.spec && this.spec.page && !this.spec.nlines)) return;
       this.ndrag = { y0: e.touches[0].clientY, top0: this.ntopU || 0, y: e.touches[0].clientY, t: performance.now(), v: 0 };
       this.nanim = null; this.dragged = false;
     }, { passive: true });
@@ -717,7 +717,9 @@ class DosUI {
   }
   // the phone layout's content window from `top` (units); animate: glide there (the selection moved out of view)
   presentNarrowAt(top) {
-    if (!this.nbase || !this.narrow) return;
+    // (not over a page a screen put up itself - the online game's statistics after a match: a drag there drew
+    // the lobby's old picture back over it)
+    if (!this.nbase || !this.narrow || (this.spec && this.spec.page && !this.spec.nlines)) return;
     this.ntopU = Math.max(0, Math.min(top, this.narrow.maxTop));
     this.present(Object.assign({}, this.nbase, { view: { rows: this.narrow.height, units: this.narrow.view, top: this.ntopU } }));
   }

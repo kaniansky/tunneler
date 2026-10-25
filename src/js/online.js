@@ -509,6 +509,9 @@ export function mount() {
     lobby.page = "lobby";
     if (lobby.setOpen && lobbyUI.isNarrow()) return drawGameSettings(keep, selKey);
     const seats = seatItems(), sets = settingItems(), acts = actionItems();
+    // (the Game box ends above the info on row 22: at most 8 rows - View and, after a match, Statistics made
+    // 9 and it ran into the info; empty rows go first, from the top - the one above Back to the lobby last)
+    while (acts.length > 8 && acts.some(it => it.disabled && !it.label)) acts.splice(acts.findIndex(it => it.disabled && !it.label), 1);
     const lines = [], text = [];
     // the seats (the game's name in the top border) and the settings on top, the actions and the chat
     // below them (the chat input fills the actions' width), the spectators in between
