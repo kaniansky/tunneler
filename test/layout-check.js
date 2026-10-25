@@ -34,7 +34,10 @@ function makeEnv(pathname, size, touch, realTimers) {
   const rooms = [{ id: "friday", name: "Friday night tunnels", public: true, spectators: true, locked: false, version: "dev", state: "lobby", round: 0, wins: [], teamWins: [],
     ext: true, mode: "standard", players: 2, places: 4, bots: 1, open: 2, spec: 1, seats: [] },
   { id: "cup", name: "Championship of the long names", public: true, spectators: true, locked: true, version: "dev", state: "play", round: 2, wins: [1, 0], teamWins: [],
-    ext: false, mode: "gold", players: 2, places: 2, bots: 0, open: 0, spec: 3, seats: [] }];
+    ext: false, mode: "gold", players: 2, places: 2, bots: 0, open: 0, spec: 3, seats: [] },
+  // (a running 4-tank free-for-all: its score in the state column fits the row)
+  { id: "quick-play", name: "Quick play", qp: true, public: true, spectators: true, locked: false, version: "dev", state: "playing", round: 3, wins: [2, 1, 0, 2],
+    teamWins: [], ext: true, teams: false, mode: "standard", players: 3, places: 4, bots: 1, open: 1, spec: 0, seats: [] }];
   const win = {
     document: { title: "", getElementById: id => elements[id] || (elements[id] = mkEl(id)), createElement: mkEl, querySelector: () => null, querySelectorAll: () => [],
       body: Object.assign(mkEl("body"), { classList: { toggle() {}, contains: c => touch && c === "touch", add() {}, remove() {} } }),

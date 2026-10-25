@@ -30,7 +30,7 @@ export function mount() {
   const home = () => { Nav.go("/"); };
   const old = new URLSearchParams(location.search).get("room");
   if (old) { Nav.go(Links.game(old), true); return; }
-  const quickStart = new URLSearchParams(location.search).get("quick") === "1";
+  let quickStart = new URLSearchParams(location.search).get("quick") === "1";
 
   let view = null;                                   // "name" | "list" | "create"
   let rooms = [];
@@ -46,12 +46,18 @@ export function mount() {
   }
   function stateText(r) {
     if (r.state === "lobby") return T("state.lobby");
-    const score = r.round && !ui.isNarrow() ? "  " + scoreText(r) : "";   // (a phone: the round only - the row is narrow)
-    return (r.state === "paused" ? T("state.paused") : T("state.round", { n: r.round || 1 })) + score;
+    const head = r.state === "paused" ? T("state.paused") : T("state.round", { n: r.round || 1 });
+    if (!r.round || ui.isNarrow()) return head;                    // (a phone: the round only - the row is narrow)
+    // the score in what is left of the row (a wider row slid the whole row left: a 4-tank game's "0:0:0:0" cut the
+    // name's first letter): one space less, then the best score only, then none
+    const room = ROW_W - WIDE.reduce((a, b) => a + b, 0), sc = scoreText(r);
+    const tries = ["  " + sc, " " + sc, ...(r.ext && !r.teams ? ["  " + T("lobby.best", { n: Math.max(0, ...r.wins) })] : [])];
+    return head + (tries.find(x => UniText.cols(head + x) <= room) || "");
   }
   // the list's columns after the name: PLAYERS ("2/4": seated / seats they can take - during a match:
   // connected / its players), AI (computer tanks), WATCHING (spectators); 0 = blank
   const WIDE = [22, 17, 8, 4, 9];                    // (name, mode, players, AI, watching; the state takes the rest)
+  const ROW_W = 75;                                  // a row's columns in the box (76 wide; one more slides the row left)
   // the phone layout (DosUI narrow, DosUI.NARROW_W - 2 columns): name, players and the state (0 = the column left out)
   const NARROW = [13, 0, 8, 0, 0];
   const cols = () => ui.isNarrow() ? NARROW : WIDE;
@@ -186,16 +192,23 @@ export function mount() {
   }
 
   // ------------------------------------------------------------ quick play
-  // "Looking for a game...", then straight to the game the server found or made (the history entry replaced: Back
-  // from the game leads where this screen came from); a refusal in red with Try again / Back.
+  // "Looking for a game...", then straight to the game the server found or made (from the main menu - /games?quick=1 -
+  // that history entry replaced: Back from the game leads to the main menu, not to another search; from the list a
+  // new entry: Back leads to the list); a refusal in red with Try again / Back.
   let quickBusy = false, quickErr = null;
   function drawQuick() {
     ui.show({
       lines: [{ row: 2, text: T("qp.title"), color: 12 }, quickErr || { row: 9, text: T("qp.finding"), color: 14 }],
-      box: { y: 13 }, infoRow: 18, back: () => list(),
+      box: { y: 13 }, infoRow: 18, back: quickBack,
       items: [...(quickErr ? [{ key: "again", label: T("qp.again"), info: [T("home.quick.i1"), T("home.quick.i2")], go: () => quick() }] : []),
-        { key: "back", label: T("back.lobby"), info: [T("back.lobby.i")], go: () => list() }],
+        { key: "back", label: T("back.lobby"), info: [T("back.lobby.i")], go: quickBack }],
     }, view === "quick");
+  }
+  // back to the list (its address without ?quick=1: a reload shows the list, not another search)
+  function quickBack() {
+    if (quickStart) try { history.replaceState(history.state, "", Links.games()); } catch (e) { /* (a test's stub) */ }
+    quickStart = false;
+    list();
   }
   function quick() {
     if (view !== "quick") ui.sel = 0;
@@ -213,7 +226,7 @@ export function mount() {
         quickBusy = false;
         if (view !== "quick") return;                  // (went back meanwhile)
         if (r.hostKey) store.set("tunneler.host." + r.id, r.hostKey);   // (a new game: this browser hosts it)
-        Nav.go(Links.game(r.id), true);
+        Nav.go(Links.game(r.id), quickStart);
       })
       .catch(err => failed(T("qp.err", { msg: E(String(err && err.message || err)) })));
   }
