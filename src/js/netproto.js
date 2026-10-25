@@ -17,6 +17,8 @@
 // and engineOptions() turns a match's cfg into TunnelerEngine options (every client the same).
 // display columns of user text (CJK / emoji take 2) - names are limited by columns, not characters
 import { UniText } from "./unitext.js";
+// custom maps (docs/v6/MAPS.md): a match's cfg carries the room's map code
+import { MapData } from "./mapdata.js";
 
 const TICK_MS = 65536 * 1000 / 1193182;
 
@@ -100,6 +102,10 @@ function cleanPassword(s) {
 const AFTER_DEATH = ["black", "wreck", "team", "killer", "others"];
 const afterDeath = v => v === true || v === "1" ? "others" : AFTER_DEATH.includes(v) ? v : "wreck";
 
+// a shared map's id (POST /api/maps: the content's hash, docs/v6/MAPS.md); "" = no map (a random world)
+const MAP_ID = /^[a-z2-9]{10}$/;
+const mapId = v => typeof v === "string" && MAP_ID.test(v) ? v : "";
+
 // a round time limit setting: one of ROUND_TIMES, else 0 (no limit)
 const roundTime = v => ROUND_TIMES.includes(Number(v)) ? Number(v) : 0;
 
@@ -141,7 +147,7 @@ function roomSettings(o) {
   return { seats, size: SIZES.includes(o.size) ? o.size : "medium", winScore: clampInt(o.winScore, 1, 9, 3),
     friendlyFire: o.friendlyFire === true, roundTime: roundTime(o.roundTime),
     visible: VISIBLE.includes(o.visible) ? o.visible : "self", watchOut: afterDeath(o.watchOut), sight: SIGHTS.includes(o.sight) ? o.sight : "full",
-    mode: MODES.includes(o.mode) ? o.mode : "standard", goals: goalsOf(o.goals) || {} };
+    mode: MODES.includes(o.mode) ? o.mode : "standard", goals: goalsOf(o.goals) || {}, map: mapId(o.map) };
 }
 
 // The tanks of a match: the seats with a player (human) or a computer tank, in colour order ->
@@ -156,16 +162,18 @@ function matchSlots(seats, occupied) {
   return out;
 }
 // Why a match can't start, or null: "tanks" (fewer than 2), "human" (no player), "teams" (fewer than 2 -
-// not for the modes that make their own teams), "ai" (survival without AI tanks)
-function startProblem(slots, mode) {
+// not for the modes that make their own teams), "ai" (survival without AI tanks), "map" (the room's map has
+// fewer bases than the match would have tanks - mapBases: its number of bases, null = no map)
+function startProblem(slots, mode, mapBases) {
   if (slots.length < 2) return "tanks";
+  if (mapBases != null && mapBases < slots.length) return "map";
   if (!slots.some(s => !s.bot)) return "human";
   if (mode === "survival" && !slots.some(s => s.bot)) return "ai";
   if (!OWN_TEAMS.includes(mode) && new Set(slots.map(s => s.team)).size < 2) return "teams";
   return null;
 }
-// a game mode: always the extended engine
-const special = st => !!st && !!st.mode && st.mode !== "standard";
+// a game mode or a custom map: always the extended engine
+const special = st => !!st && ((!!st.mode && st.mode !== "standard") || !!st.map);
 // the classic game: exactly BLUE + GREEN, both players, in different teams, the standard mode -
 // the original protocol and engine (st: the settings; none = standard)
 const isClassic = (slots, st) => slots.length === 2 && slots[0].color === 0 && slots[1].color === 1 && !slots[0].bot && !slots[1].bot &&
@@ -181,6 +189,7 @@ function engineOptions(cfg) {
   if (cfg.ext) o.extended = true;
   if (MODES.includes(cfg.mode) && cfg.mode !== "standard") o.mode = cfg.mode;
   if (GOALS[cfg.mode]) o.goal = goalOf(cfg.mode, cfg.goals);
+  if (cfg.map) { o.map = cfg.map; o.extended = true; }
   return o;
 }
 // a received match cfg, checked (null = unusable)
@@ -194,7 +203,8 @@ function readCfg(c) {
   return { ext: !!c.ext, players: slots.length, slots, names, size: SIZES.includes(c.size) ? c.size : "medium",
     winScore: clampInt(c.winScore, 1, 9, 3), friendlyFire: !!c.friendlyFire, roundTime: roundTime(c.roundTime),
     visible: VISIBLE.includes(c.visible) ? c.visible : "self", watchOut: afterDeath(c.watchOut), sight: SIGHTS.includes(c.sight) ? c.sight : "full",
-    mode: MODES.includes(c.mode) ? c.mode : "standard", goals: goalsOf(c.goals) || {} };
+    mode: MODES.includes(c.mode) ? c.mode : "standard", goals: goalsOf(c.goals) || {},
+    map: typeof c.map === "string" && c.map && MapData.decode(c.map) ? c.map : "" };
 }
 
 // One frame -> engine input ({keyDown, keys}); identical on every client.
@@ -334,7 +344,7 @@ function stateHash(e) {
 const NetProto = { TICK_MS, UP, DOWN, LEFT, RIGHT, FIRE, ESC, ALL_BITS, EXT_BITS, BLUE_SCAN, GREEN_SCAN, F10,
   AFTER_DEATH, afterDeath, ROLES, MAX_SLOTS, LEVELS, oldLevel, SEAT_KINDS, SIZES, MAX_PLAYER_NAME, MAX_CHAT, VISIBLE, SIGHTS, ROUND_TIMES, roundTime,
   cleanPlayerName, cleanChat, cleanRoomName, MAX_PASSWORD, cleanPassword, SETTINGS, defaultSeats, roomSettings, matchSlots, startProblem, isClassic, engineOptions, readCfg,
-  MODES, OWN_TEAMS, GOALS, goalOf,
+  MODES, OWN_TEAMS, GOALS, goalOf, MAP_ID, mapId,
   frameToInput, frameToInputExt, FrameLog, FrameQueue, HASH_EVERY, stateHash };
 
 export { NetProto };

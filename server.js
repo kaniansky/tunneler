@@ -32,6 +32,10 @@
 //                                 S3-compatible bucket (REPLAY_S3_*: Cloudflare R2...), else REPLAY_DIR (the
 //                                 newest MAX_SHARED), else memory; {id, days} when REPLAY_KEEP_DAYS says how long
 //        GET  /api/replays/<id>   that replay (gzip'd JSON); the page address /replay/<id> plays it
+//        POST /api/maps           a custom map (src/js/mapdata.js bytes, docs/v6/MAPS.md) -> {id}: checked,
+//                                 kept in its canonical form under the hash of its content (the same store
+//                                 as the replays: the bucket's maps/, MAP_DIR - default REPLAY_DIR/maps -, memory)
+//        GET  /api/maps/<id>      that map's bytes; the page address /map/<id> opens it
 //        POST /api/rooms          {name, public, spectators, seats?: [{kind: open|closed|easy|normal|hard,
 //                                  team: 1..8} x 8 (index = colour)], size, winScore, friendlyFire, roundTime,
 //                                  visible, watchOut, sight, password?} -> roomInfo + hostKey (defaults for anything
@@ -67,7 +71,9 @@
 //                     {t:"me", name?, team?}  own name (any time) / own seat's team 1..8 (not while ready)
 //                     {t:"ready", v}  seated players: ready (1) / not (0)
 //                     host: {t:"seatSet", i, kind?, team?} (a seat nobody sits on), {t:"set", size?, winScore?,
-//                     roundTime?, friendlyFire?, visible?, watchOut?, sight?, mode?, goals?} (public /
+//                     roundTime?, friendlyFire?, visible?, watchOut?, sight?, mode?, goals?, map?} (map: a shared
+//                     map's id, "" = a random world - loaded from the store, then st.map = {id, name, size,
+//                     bases} and the match cfg's map = its code; the room's size follows it) (public /
 //                     spectators only when the game is created; every player
 //                     unready after either), {t:"start"}, {t:"kick", k} (remove + ban by client id)
 //                     match players: {t:"b", v} held bits, {t:"k", a, s} keystroke (relayed as ANY_KEY),
@@ -78,6 +84,7 @@ const { WebSocketServer } = require("ws");
 // shared with the browser; the source copy, so the server never depends on a build (an ES module: node
 // >= 20.19 requires it as it is - package.json engines)
 const { NetProto } = require("./src/js/netproto.js");
+const { MapData } = require("./src/js/mapdata.js");
 // this server's version (package.json): clients of another version can't create or join its games
 const VERSION = (() => { try { return require("./package.json").version || null; } catch (e) { return null; } })();
 const { FrameLog, ALL_BITS, EXT_BITS, F10, HASH_EVERY, ROLES, MAX_SLOTS, MAX_PLAYER_NAME, SEAT_KINDS, SETTINGS, cleanPlayerName, cleanChat,
@@ -97,6 +104,9 @@ const MAX_CREATES_PER_MIN = 30;        // POST /api/rooms per address
 const MAX_SHARES_PER_MIN = 10;         // POST /api/replays per address
 const MAX_SHARED = 5000;               // shared replays kept (the oldest go)
 const MAX_REPLAY_BYTES = 512 * 1024;   // one shared replay, as sent (gzip'd: a long match is ~50 KB)
+const MAX_MAP_SHARES_PER_MIN = 20;     // POST /api/maps per address
+const MAX_SHARED_MAPS = 5000;          // shared maps kept in the folder (the oldest go)
+const MAX_MAP_BYTES = 40 * 1024;       // one map, as sent (mapdata.js: at most ~33 KB, usually a few hundred bytes)
 const MAX_ROOMS_PER_ADDR = 20;         // rooms created by one address that still exist
 const MAX_CONNECTS_PER_MIN = 120;      // websocket connections per address
 const MAX_PW_FAILS = 10;               // wrong game passwords per address and minute (then refused unchecked)
@@ -144,14 +154,14 @@ function sigV4(cfg, method, pathname, query, headers, payloadHash, amzDate) {
   return "AWS4-HMAC-SHA256 Credential=" + cfg.accessKey + "/" + scope + ", SignedHeaders=" + names.join(";") + ", Signature=" + hmac(key, toSign).toString("hex");
 }
 // GET / PUT one object -> {status, body (Buffer)}
-async function s3Request(cfg, method, key, body) {
+async function s3Request(cfg, method, key, body, type = "application/gzip") {
   const url = new URL(cfg.endpoint + "/" + encodeURIComponent(cfg.bucket) + "/" + encodeURIComponent(key));
   const amzDate = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d+/, "");
   const payloadHash = sha256(body || "");
   const headers = { host: url.host, "x-amz-content-sha256": payloadHash, "x-amz-date": amzDate };
   const auth = sigV4(cfg, method, url.pathname, "", headers, payloadHash, amzDate);
   const res = await fetch(url, { method, body: body || undefined, signal: AbortSignal.timeout(10000),
-    headers: { "x-amz-content-sha256": payloadHash, "x-amz-date": amzDate, Authorization: auth, ...(body ? { "Content-Type": "application/gzip" } : {}) } });
+    headers: { "x-amz-content-sha256": payloadHash, "x-amz-date": amzDate, Authorization: auth, ...(body ? { "Content-Type": type } : {}) } });
   return { status: res.status, body: Buffer.from(await res.arrayBuffer()) };
 }
 
@@ -211,6 +221,7 @@ function createServer(opts = {}) {
       id, name, public: !!isPublic, allowSpec: !!allowSpec,
       size: st.size, winScore: st.winScore, friendlyFire: st.friendlyFire, roundTime: st.roundTime,
       visible: st.visible, watchOut: st.watchOut, sight: st.sight, mode: st.mode, goals: st.goals,
+      map: "", mapCode: "", mapInfo: null, mapWant: "",   // a custom map (setMap): its id, code, {id, name, size, bases}
       seats: st.seats.map(s => ({ kind: s.kind, team: s.team, occ: null, last: null })),
       chat: [],                                    // the last CHAT_LOG chat messages [{from, text}]
       hostKey: crypto.randomBytes(16).toString("hex"), banned: new Set(), serial: 0,
@@ -222,12 +233,27 @@ function createServer(opts = {}) {
       stTimer: null, cleanupTimer: null, lastActive: Date.now(),
     };
     rooms.set(id, room);
+    if (st.map) setMap(room, st.map);              // (the host's last map: loaded from the store)
     armCleanup(room);
     say("room created", id, JSON.stringify(name), room.seats.map((s, i) => ROLES[i] + ":" + s.kind + ":" + s.team).join(" "));
     return room;
   }
   const settingsOf = room => ({ size: room.size, winScore: room.winScore, friendlyFire: room.friendlyFire, roundTime: room.roundTime,
-    visible: room.visible, watchOut: room.watchOut, sight: room.sight, mode: room.mode, goals: room.goals });
+    visible: room.visible, watchOut: room.watchOut, sight: room.sight, mode: room.mode, goals: room.goals, map: room.map });
+  // The room's custom map (docs/v6/MAPS.md): "" = a random world; an id is loaded from the shared maps (async -
+  // the last one asked for wins; unknown ids are ignored), then the room's size follows it and every player has
+  // to agree again. Only in the lobby.
+  async function setMap(room, id) {
+    id = NetProto.mapId(id);
+    room.mapWant = id;
+    let got = null;
+    if (id) { try { got = await loadMap(id); } catch (e) { got = null; } if (!got) { if (room.mapWant === id) room.mapWant = room.map; return; } }
+    if (room.mapWant !== id || room.match || !rooms.has(room.id) || room.map === id) return;
+    room.map = id; room.mapCode = got ? got.code : ""; room.mapInfo = got ? got.info : null;
+    if (got) room.size = got.info.size;
+    unreadyAll(room);
+    sendStatus(room);
+  }
   const seated = room => room.seats.map((s, i) => s.occ ? i : -1).filter(i => i >= 0);
   // the tanks a match would have now
   const slotsNow = room => matchSlots(room.seats, i => !!room.seats[i].occ);
@@ -264,7 +290,7 @@ function createServer(opts = {}) {
     return { id: r.id, name: r.name, public: r.public, spectators: r.allowSpec, locked: !!r.password, version,
       state: m ? (m.running ? "playing" : "paused") : "lobby", round: m ? m.report.round : 0,
       wins: m ? m.report.wins : [], teamWins: m ? m.report.teamWins : [], ext: m ? m.ext : !isClassic(slots, r),
-      created: r.created, ...settingsOf(r),
+      created: r.created, ...settingsOf(r), mapName: r.mapInfo ? r.mapInfo.name : "",
       tanks: slots.length, players, places, bots: slots.filter(s => s.bot).length,
       open: r.seats.filter(s => s.kind === "open" && !s.occ).length,
       spec: r.sockets.size - players, teams: Object.values(teamSizes).some(n => n > 1), nTeams: Object.keys(teamSizes).length,
@@ -284,7 +310,7 @@ function createServer(opts = {}) {
     const m = {
       room, no: ++room.matches, seed: (Math.random() * 0x100000000) >>> 0, ext, slots,
       cfg: { ext, players: N, slots: slots.map(s => ({ color: s.color, bot: s.bot, level: s.level, team: s.team })),
-        names: slots.map(s => s.bot ? null : s.name), ...settingsOf(room) },
+        names: slots.map(s => s.bot ? null : s.name), ...settingsOf(room), map: room.mapCode || "" },
       log: new FrameLog(), socks: slots.map(s => s.bot ? null : room.seats[s.color].occ),
       held: new Array(N).fill(0), latch: new Array(N).fill(0), keys: [],
       running: false, timer: null, startAt: 0, startN: 0, hashes: new Map(), desyncs: 0, aloneTimer: null,
@@ -408,7 +434,7 @@ function createServer(opts = {}) {
   // seated player other than the host isn't ready), "match" (one is on)
   function cantStart(room) {
     if (room.match) return "match";
-    const p = startProblem(slotsNow(room), room.mode);
+    const p = startProblem(slotsNow(room), room.mode, room.mapInfo ? room.mapInfo.bases : null);
     if (p) return p;
     if (seated(room).some(i => { const ws = room.seats[i].occ; return !ws.host && !ws.ready; })) return "ready";
     return null;
@@ -437,7 +463,7 @@ function createServer(opts = {}) {
     const m = room.match;
     const specs = [];
     for (const ws of room.sockets) if (ws.seat < 0) specs.push({ k: ws.serial, host: !!ws.host, ping: pingOf(ws), name: ws.name });
-    broadcast(room, JSON.stringify({ t: "st", name: room.name, public: room.public, spectators: room.allowSpec, settings: settingsOf(room),
+    broadcast(room, JSON.stringify({ t: "st", name: room.name, public: room.public, spectators: room.allowSpec, settings: settingsOf(room), map: room.mapInfo,
       seats: room.seats.map(s => ({ kind: s.kind, team: s.team, k: s.occ ? s.occ.serial : null, name: s.occ ? s.occ.name : "",
         ready: !!(s.occ && s.occ.ready), host: !!(s.occ && s.occ.host), ping: pingOf(s.occ) })),
       specs, cant: cantStart(room),
@@ -474,7 +500,9 @@ function createServer(opts = {}) {
     [/^\/(split|skirmish|vs-computer)\/?$/, "/index.html"], // split screen, a skirmish (/vs-computer: before 2.1)
     [/^\/replays(\/[^/]+)?\/?$/, "/index.html"],           // the replays kept in the browser, one of them played
     [/^\/replay\/[a-z2-9]{8}\/?$/, "/index.html"],          // a shared replay (POST /api/replays)
-    [/^\/(lobby|online|play|replays)\.html$/, "/index.html"], // the pages before 5.0 (the desktop app's addresses)
+    [/^\/maps(\/[^/]+)?\/?$/, "/index.html"],              // the maps kept in the browser, one of them edited
+    [/^\/map\/[a-z2-9]{10}\/?$/, "/index.html"],            // a shared map (POST /api/maps)
+    [/^\/(lobby|online|play|replays|maps)\.html$/, "/index.html"], // the pages before 5.0 (the desktop app's addresses)
   ];
   // the API answers any origin (CORS): the desktop app's pages come from tauri://localhost /
   // tauri.localhost, not from this server; nothing here uses cookies or other credentials
@@ -499,6 +527,7 @@ function createServer(opts = {}) {
     };
   }
   const allowCreate = rateLimiter(MAX_CREATES_PER_MIN), allowConnect = rateLimiter(maxConnectsPerMin), allowShare = rateLimiter(MAX_SHARES_PER_MIN);
+  const allowMapShare = rateLimiter(MAX_MAP_SHARES_PER_MIN);
 
   // ------------------------------------------------------------ shared replays (docs/DESIGN-8P.md 33)
   // A replay someone shares: checked (a replay's fields), stored gzip'd under a random id, given back to
@@ -512,10 +541,59 @@ function createServer(opts = {}) {
     accessKey: process.env.REPLAY_S3_ACCESS_KEY, secretKey: process.env.REPLAY_S3_SECRET_KEY, region: process.env.REPLAY_S3_REGION });
   const replayDir = opts.replayDir !== undefined ? opts.replayDir : process.env.REPLAY_DIR || path.join(__dirname, "shared-replays");
   const keepDays = Math.max(0, Math.floor(+(opts.replayKeepDays !== undefined ? opts.replayKeepDays : process.env.REPLAY_KEEP_DAYS) || 0));
-  const shared = new Map();                              // id -> gzip'd bytes (memory, or a cache of the disk)
-  let diskOk = false;
-  if (replayDir && !s3) { try { fs.mkdirSync(replayDir, { recursive: true }); fs.accessSync(replayDir, fs.constants.W_OK); diskOk = true; } catch (e) { diskOk = false; } }
-  const replayFile = id => path.join(replayDir, id + ".replay");
+  // A store of shared things (replays, maps) by id: the bucket (objects <prefix><id><ext>, a memory cache of
+  // the last 500 in front of it), else a folder (dir; the newest max kept, and none older than keepDays), else
+  // memory (the newest max).
+  function sharedStore({ prefix, ext, dir, max, keepDays: days, type }) {
+    const mem = new Map();                               // id -> bytes (memory, or a cache of the disk / bucket)
+    let disk = false;
+    if (dir && !s3) { try { fs.mkdirSync(dir, { recursive: true }); fs.accessSync(dir, fs.constants.W_OK); disk = true; } catch (e) { disk = false; } }
+    const file = id => path.join(dir, id + ext);
+    const cache = (id, b) => { mem.set(id, b); while (mem.size > 500) mem.delete(mem.keys().next().value); };
+    async function keep(id, bytes) {
+      if (s3) {                                          // (the bucket: a failed upload is the sharer's error)
+        const r = await s3Request(s3, "PUT", prefix + id + ext, bytes, type);
+        if (r.status < 200 || r.status >= 300) throw new Error("storage " + r.status);
+        cache(id, bytes);
+        return;
+      }
+      mem.set(id, bytes);
+      if (disk) {
+        try { fs.writeFileSync(file(id), bytes); } catch (e) { /* the memory copy stays */ }
+        if (Math.random() < 0.05 || mem.size > max) {     // (now and then: the oldest files beyond the limit go,
+          try {                                           // and those older than keepDays)
+            const files = fs.readdirSync(dir).filter(f => f.endsWith(ext))
+              .map(f => ({ f, t: fs.statSync(path.join(dir, f)).mtimeMs })).sort((x, y) => y.t - x.t);
+            const old = days ? Date.now() - days * 86400000 : -Infinity;
+            for (const { f } of files.filter((x, i) => i >= max || x.t < old)) { fs.unlinkSync(path.join(dir, f)); mem.delete(f.slice(0, -ext.length)); }
+          } catch (e) { /* later */ }
+        }
+      }
+      while (mem.size > max) mem.delete(mem.keys().next().value);
+    }
+    async function get(id) {
+      if (mem.has(id)) return mem.get(id);
+      if (s3) {
+        const r = await s3Request(s3, "GET", prefix + id + ext);
+        if (r.status === 404) return null;
+        if (r.status < 200 || r.status >= 300) throw new Error("storage " + r.status);
+        cache(id, r.body);
+        return r.body;
+      }
+      if (!disk) return null;
+      try {
+        const f = file(id);
+        if (days && fs.statSync(f).mtimeMs < Date.now() - days * 86400000) return null;   // (expired, not swept yet)
+        return fs.readFileSync(f);
+      } catch (e) { return null; }
+    }
+    return { keep, get, has: id => mem.has(id),
+      describe: () => s3 ? "the bucket " + s3.bucket + " at " + s3.endpoint + (prefix ? " (" + prefix + ")" : "") : disk ? "the folder " + dir : "memory (lost on a restart)" };
+  }
+  const replays = sharedStore({ prefix: "", ext: ".replay", dir: replayDir, max: MAX_SHARED, keepDays, type: "application/gzip" });
+  // shared maps (docs/v6/MAPS.md): MAP_DIR (opts.mapDir; null: memory only), by default a folder in the replays' one
+  const mapDir = opts.mapDir !== undefined ? opts.mapDir : process.env.MAP_DIR || (replayDir ? path.join(replayDir, "maps") : null);
+  const maps = sharedStore({ prefix: "maps/", ext: ".map", dir: mapDir, max: MAX_SHARED_MAPS, keepDays: 0, type: "application/octet-stream" });
   function validReplay(bytes) {
     let raw = bytes;
     try { if (raw[0] === 0x1F && raw[1] === 0x8B) raw = zlib.gunzipSync(raw, { maxOutputLength: 16 * 1024 * 1024 }); } catch (e) { return null; }
@@ -526,44 +604,14 @@ function createServer(opts = {}) {
       rep.opts && typeof rep.opts === "object" && Number.isFinite(rep.seed);
     return ok ? zlib.gzipSync(Buffer.from(JSON.stringify(rep))) : null;
   }
-  async function keepShared(id, gz) {
-    if (s3) {                                            // (the bucket: a failed upload is the sharer's error)
-      const r = await s3Request(s3, "PUT", id + ".replay", gz);
-      if (r.status < 200 || r.status >= 300) throw new Error("storage " + r.status);
-      shared.set(id, gz);
-      while (shared.size > 500) shared.delete(shared.keys().next().value);   // (a cache of the last ones)
-      return;
-    }
-    shared.set(id, gz);
-    if (diskOk) {
-      try { fs.writeFileSync(replayFile(id), gz); } catch (e) { /* the memory copy stays */ }
-      if (Math.random() < 0.05 || shared.size > MAX_SHARED) {   // (now and then: the oldest files beyond the limit go,
-        try {                                                     // and those older than keepDays)
-          const files = fs.readdirSync(replayDir).filter(f => f.endsWith(".replay"))
-            .map(f => ({ f, t: fs.statSync(path.join(replayDir, f)).mtimeMs })).sort((a, b) => b.t - a.t);
-          const old = keepDays ? Date.now() - keepDays * 86400000 : -Infinity;
-          for (const { f } of files.filter((x, i) => i >= MAX_SHARED || x.t < old)) { fs.unlinkSync(path.join(replayDir, f)); shared.delete(f.slice(0, -7)); }
-        } catch (e) { /* later */ }
-      }
-    }
-    while (shared.size > MAX_SHARED) shared.delete(shared.keys().next().value);
-  }
-  async function sharedReplay(id) {
-    if (shared.has(id)) return shared.get(id);
-    if (s3) {
-      const r = await s3Request(s3, "GET", id + ".replay");
-      if (r.status === 404) return null;
-      if (r.status < 200 || r.status >= 300) throw new Error("storage " + r.status);
-      shared.set(id, r.body);
-      while (shared.size > 500) shared.delete(shared.keys().next().value);
-      return r.body;
-    }
-    if (!diskOk) return null;
-    try {
-      const f = replayFile(id);
-      if (keepDays && fs.statSync(f).mtimeMs < Date.now() - keepDays * 86400000) return null;   // (expired, not swept yet)
-      return fs.readFileSync(f);
-    } catch (e) { return null; }
+  // a map's id: its content's hash (10 characters of the replay ids' alphabet) - the same map is one object
+  const mapIdOf = bytes => { const h = crypto.createHash("sha256").update(bytes).digest(); let id = ""; for (let i = 0; i < 10; i++) id += "abcdefghijkmnpqrstuvwxyz23456789"[h[i] & 31]; return id; };
+  // a shared map by id -> {id, code, info: {id, name, size, bases}} or null (unknown, not a map)
+  async function loadMap(id) {
+    if (!NetProto.mapId(id)) return null;
+    const bytes = await maps.get(id);
+    const m = bytes ? MapData.decode(bytes) : null;
+    return m ? { id, code: MapData.code(m), info: { id, name: m.name, size: m.size, bases: m.bases.length } } : null;
   }
   const replayId = () => { const a = crypto.randomBytes(8); let s = ""; for (const b of a) s += "abcdefghijkmnpqrstuvwxyz23456789"[b & 31]; return s; };
   // wrong passwords per address: pwBlocked before checking one, pwFailed after a wrong one
@@ -600,17 +648,36 @@ function createServer(opts = {}) {
       const gz = validReplay(bytes);
       if (!gz) return json(res, 400, { error: "not a replay" });
       let id = replayId();
-      while (shared.has(id) || (!s3 && await sharedReplay(id))) id = replayId();   // (a bucket: 32^8 ids - no lookup)
-      try { await keepShared(id, gz); } catch (e) { return json(res, 503, { error: "could not store it, try later" }); }
+      while (replays.has(id) || (!s3 && await replays.get(id))) id = replayId();   // (a bucket: 32^8 ids - no lookup)
+      try { await replays.keep(id, gz); } catch (e) { return json(res, 503, { error: "could not store it, try later" }); }
       return json(res, 200, keepDays ? { id, days: keepDays } : { id });
     }
     const rm = /^\/api\/replays\/([a-z2-9]{8})$/.exec(p);
     if (rm && req.method === "GET") {
       let gz;
-      try { gz = await sharedReplay(rm[1]); } catch (e) { return json(res, 503, { error: "storage unavailable, try later" }); }
+      try { gz = await replays.get(rm[1]); } catch (e) { return json(res, 503, { error: "storage unavailable, try later" }); }
       if (!gz) return json(res, 404, { error: "no such replay" });
       res.writeHead(200, { "Content-Type": "application/gzip", "Cache-Control": "public, max-age=86400", ...CORS });
       return res.end(gz);
+    }
+    if (p === "/api/maps" && req.method === "POST") {
+      let bytes;
+      try { bytes = await readRaw(req, MAX_MAP_BYTES); } catch (e) { return json(res, 413, { error: "too large" }); }
+      if (!allowMapShare(addressOf(req))) return json(res, 429, { error: "too many shared maps, try again in a minute" });
+      const canon = MapData.canonical(bytes);
+      if (!canon) return json(res, 400, { error: "not a map" });
+      const buf = Buffer.from(canon), id = mapIdOf(buf);
+      // (the id is the content's hash: the same map shared again is already there)
+      if (!maps.has(id)) try { await maps.keep(id, buf); } catch (e) { return json(res, 503, { error: "could not store it, try later" }); }
+      return json(res, 200, { id });
+    }
+    const mp = /^\/api\/maps\/([a-z2-9]{10})$/.exec(p);
+    if (mp && req.method === "GET") {
+      let b;
+      try { b = await maps.get(mp[1]); } catch (e) { return json(res, 503, { error: "storage unavailable, try later" }); }
+      if (!b) return json(res, 404, { error: "no such map" });
+      res.writeHead(200, { "Content-Type": "application/octet-stream", "Cache-Control": "public, max-age=31536000, immutable", ...CORS });
+      return res.end(b);
     }
     const m = /^\/api\/rooms\/([a-z0-9-]{1,60})$/.exec(p);
     if (m && req.method === "GET") {
@@ -814,8 +881,9 @@ function createServer(opts = {}) {
         case "set": {                                      // host: the game settings
           if (!ws.host || !lobby) break;
           let changed = false;
+          if (msg.map !== undefined) setMap(room, msg.map);   // (async: its own status when loaded)
           for (const k of Object.keys(SETTINGS)) {
-            if (msg[k] === undefined) continue;
+            if (msg[k] === undefined || (k === "size" && room.map)) continue;   // (a map has its own size)
             const v = SETTINGS[k](msg[k]);
             if (v !== undefined && v !== room[k]) { room[k] = v; changed = true; }
           }
@@ -958,7 +1026,7 @@ function createServer(opts = {}) {
 
   return {
     server, rooms, createRoom,
-    replayStore: s3 ? "the bucket " + s3.bucket + " at " + s3.endpoint : diskOk ? "the folder " + replayDir : "memory (lost on a restart)",
+    replayStore: replays.describe(), mapStore: maps.describe(),
     listen(port, cb) { server.listen(port, () => cb && cb(server.address().port)); return this; },
     close(cb) {
       clearInterval(heartbeat); clearInterval(idleSweep);
@@ -1036,6 +1104,7 @@ if (require.main === module) {
   srv.listen(port, p => {
     log("TUNNELER server " + (VERSION || "") + " on http://localhost:" + p);
     log("shared replays: " + srv.replayStore);
+    log("shared maps: " + srv.mapStore);
     if (VERSION && !/^(0|false|no|off)$/i.test(process.env.UPDATE_CHECK || "")) watchReleases(VERSION);
   });
 }
