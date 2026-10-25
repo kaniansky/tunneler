@@ -89,13 +89,15 @@ rock in the frame darker - it can't be painted), the tools on the status line un
 also the phone's way to choose). A desktop (two rows under the 4:3 screen):
 
 ```
- 1 Tunnel   2 Dirt   3 Rock   4 Base   Undo  Menu      (the tool: the chosen one white on magenta)
- Brush - 3 +  Zoom - 1:1 +  X 120  Y 64  Bases: 2 of 8  ESC: menu ...   (or a message in red)
+ 1 Tunnel   2 Dirt   3 Rock   4 Base   Undo  Menu  SPACE: paint  ESC: menu   (the chosen tool white on magenta)
+ Brush - 3 +  Zoom - 1:1 +  X 120  Y 64  Bases: 2 of 8  (a message in red)
 ```
 
 A phone (40 columns, three rows - there is room under the screen): the tools; Brush, Undo, Menu; Zoom, the
-bases, a message. What a row can't hold goes first: the key hint, the position, the zoom, the brush - the tools,
-Undo, Menu and a message always stay (map-check checks it in every language).
+bases, a message (else "1 finger paints, 2 move"); there `-` and `+` are three cells wide (a finger's target).
+What a row can't hold goes first: the key hint, the position, the zoom, the brush - the tools, Undo, Menu and a
+message always stay, and on a desktop the key hint fits beside the tools (map-check checks both in every
+language).
 
 - Keyboard: arrows / W A S D move the cursor (Shift: 8 cells), Space / Enter paint (held: draw while
   moving), 1-4 the tools, Tab the next tool, [ ] (or , .) the brush, + - the zoom, U or Ctrl+Z undo, Esc
@@ -113,7 +115,10 @@ tunnel (twice to confirm), Undo, Save and back. The info says whether the map is
 and which bases are walled in ("a way out will be dug"). Leaving the editor always saves.
 
 **Storage**: IndexedDB database "tunneler-maps", store "maps" (keyPath id): `{id, name, size, bases,
-code, date, shared}` - `shared` = the server id once shared. No IndexedDB: the page's memory.
+code, date, shared, sharedAt}` - `shared` = the server id once shared, `sharedAt` = that server's address (a map
+shared on one server - a link from another site, the desktop app's Server setting - is sent again to the game's
+server before it is used there: `MapStore.sharedHere(rec)`; the id comes out the same, it is the content's hash).
+No IndexedDB: the page's memory.
 
 ## 5. Sharing (server)
 
@@ -128,7 +133,7 @@ code, date, shared}` - `shared` = the server id once shared. No IndexedDB: the p
 - Storage: the shared replays' store, generalised (`sharedStore(kind)` in server.js): the S3-compatible
   bucket when configured (objects `<id>.map` beside the replays' `<id>.replay`), else a folder (`MAP_DIR` / opts.mapDir, default
   `<REPLAY_DIR>/maps`, the newest `MAX_SHARED_MAPS` 5000 kept), else memory; a 500-entry memory cache in front
-  of the bucket. Replays keep their own limits and their keep-days; maps are never expired by age.
+  of the bucket and the folder (only the memory store keeps everything in memory). Replays keep their own limits and their keep-days; maps are never expired by age.
 
 ## 6. Playing a map
 
@@ -136,12 +141,12 @@ code, date, shared}` - `shared` = the server id once shared. No IndexedDB: the p
 through random and your maps; on a phone in the Game settings screen). With a map the Map size row shows the
 map's size and can't be changed; a map with fewer bases than the skirmish has tanks turns Start red ("This
 map has 2 bases - fewer tanks or another map"). Stored as `tunneler.cpu.map` (the local id). The link:
-`/skirmish?g=<code>&lmap=<local id>`, or `&map=<shared id>` once the map is shared (that link works
+`/skirmish?g=<code>&lmap=<local id>`, and `&map=<shared id>` once the map is shared on this server (that link works
 anywhere: play.js fetches it from the server and keeps it). Old links (no map) are unchanged; the short
 `g=` code stays 13 characters (the map is a parameter of its own). Rematch remembers the map.
 
 **Online** (online.js, the room's Settings box; the phone's Game settings): **Map: random / <name>**. The host
-steps through random and their own maps; choosing one uploads it (once - its shared id is kept with it) and
+steps through random and their own maps; choosing one uploads it (once per server - its shared id is kept with it) and
 sends `{t:"set", map: <id>}`. The server loads it from its store (async), keeps the canonical code with the
 room and shows `st.map = {id, name, size, bases}` (others see the name, read-only). The room's size follows
 the map. `cantStart` gives `"map"` while the map has fewer bases than the match would have tanks; a map
@@ -156,7 +161,8 @@ Creating a game with a remembered map id (tunneler.online) applies it once loade
 - Every decoded field is range-checked; anything odd -> null (400 on the API, ignored in options / cfg).
 - Request bodies over 40 KB -> 413; 20 shares a minute per address; 5000 maps on disk (oldest go); the
   bucket keeps everything (its own rules may delete).
-- A room's `set {map}` with an unknown / bad id is ignored; only the host, only in the lobby, at most
+- A room's `set {map}` with an unknown / bad id is ignored (the host's page sends a map to the room's server
+  before choosing it, so its id is known there); only the host, only in the lobby, at most
   `MAP_LOADS_PER_MIN` (30) new ids a minute per room (each a lookup in the store); a map arriving after the
   match started is dropped; the last one chosen wins.
 - Names are cleaned (no control / bidi characters, 24 columns) and shown through the Unicode plane.

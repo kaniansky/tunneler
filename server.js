@@ -234,7 +234,7 @@ function createServer(opts = {}) {
       stTimer: null, cleanupTimer: null, lastActive: Date.now(),
     };
     rooms.set(id, room);
-    if (st.map) setMap(room, st.map);              // (the host's last map: loaded from the store)
+    if (st.map) setMap(room, st.map).catch(() => {});   // (the host's last map: loaded from the store)
     armCleanup(room);
     say("room created", id, JSON.stringify(name), room.seats.map((s, i) => ROLES[i] + ":" + s.kind + ":" + s.team).join(" "));
     return room;
@@ -249,7 +249,7 @@ function createServer(opts = {}) {
     // (each id is a lookup in the store - the bucket: a request; at most MAP_LOADS_PER_MIN a room)
     const now = Date.now();
     room.mapLoads = (room.mapLoads || []).filter(t => now - t < 60000);
-    if (id && id !== room.map && room.mapLoads.push(now) > MAP_LOADS_PER_MIN) return;
+    if (id && id !== room.map) { if (room.mapLoads.length >= MAP_LOADS_PER_MIN) return; room.mapLoads.push(now); }
     room.mapWant = id;
     let got = null;
     if (id) { try { got = await loadMap(id); } catch (e) { got = null; } if (!got) { if (room.mapWant === id) room.mapWant = room.map; return; } }
@@ -551,7 +551,7 @@ function createServer(opts = {}) {
   // memory (the newest max).
   function sharedStore({ prefix, ext, dir, max, keepDays: days, type }) {
     const mem = new Map();                               // id -> bytes (memory, or a cache of the disk / bucket)
-    let disk = false;
+    let disk = false, writes = 0;
     if (dir && !s3) { try { fs.mkdirSync(dir, { recursive: true }); fs.accessSync(dir, fs.constants.W_OK); disk = true; } catch (e) { disk = false; } }
     const file = id => path.join(dir, id + ext);
     const cache = (id, b) => { mem.set(id, b); while (mem.size > 500) mem.delete(mem.keys().next().value); };
@@ -562,10 +562,12 @@ function createServer(opts = {}) {
         cache(id, bytes);
         return;
       }
-      mem.set(id, bytes);
       if (disk) {
-        try { fs.writeFileSync(file(id), bytes); } catch (e) { /* the memory copy stays */ }
-        if (Math.random() < 0.05 || mem.size > max) {     // (now and then: the oldest files beyond the limit go,
+        let written = false;
+        try { fs.writeFileSync(file(id), bytes); written = true; } catch (e) { /* the memory copy stays */ }
+        if (written) cache(id, bytes); else mem.set(id, bytes);   // (the folder holds them: memory only a cache)
+        if (Math.random() < 0.05 || ++writes >= 50) {     // (now and then: the oldest files beyond the limit go,
+          writes = 0;
           try {                                           // and those older than keepDays)
             const files = fs.readdirSync(dir).filter(f => f.endsWith(ext))
               .map(f => ({ f, t: fs.statSync(path.join(dir, f)).mtimeMs })).sort((x, y) => y.t - x.t);
@@ -573,7 +575,7 @@ function createServer(opts = {}) {
             for (const { f } of files.filter((x, i) => i >= max || x.t < old)) { fs.unlinkSync(path.join(dir, f)); mem.delete(f.slice(0, -ext.length)); }
           } catch (e) { /* later */ }
         }
-      }
+      } else mem.set(id, bytes);
       while (mem.size > max) mem.delete(mem.keys().next().value);
     }
     async function get(id) {
@@ -886,7 +888,7 @@ function createServer(opts = {}) {
         case "set": {                                      // host: the game settings
           if (!ws.host || !lobby) break;
           let changed = false;
-          if (msg.map !== undefined) setMap(room, msg.map);   // (async: its own status when loaded)
+          if (msg.map !== undefined) setMap(room, msg.map).catch(() => {});   // (async: its own status when loaded)
           for (const k of Object.keys(SETTINGS)) {
             if (msg[k] === undefined || (k === "size" && room.map)) continue;   // (a map has its own size)
             const v = SETTINGS[k](msg[k]);

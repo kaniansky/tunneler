@@ -355,7 +355,9 @@ export function mount() {
   MapStore.list().then(l => { myMaps = l; if (lobby && st) drawLobby(true); }, () => {});
   const MAP_COLS = 14;
   function mapChoices() {
-    const id = st.settings.map || "", out = [{ id: "" }].concat(myMaps.map(r => ({ id: r.shared || null, rec: r })));
+    const id = st.settings.map || "", out = [{ id: "" }].concat(myMaps.map(r =>
+      // (sent to this server already - or the room's map: ids are the content's hash; null = to be sent first)
+      ({ id: MapStore.sharedHere(r) || (id && r.shared === id ? id : null), rec: r })));
     if (id && !out.some(o => o.id === id)) out.push({ id, room: true });
     return out;
   }

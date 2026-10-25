@@ -347,7 +347,64 @@ const ticks = async (n = 8) => { for (let i = 0; i < n; i++) await tick(); };
     assert(ed2.map.size === "medium" && n[2] > ed2.map.cells.length * 0.2 && n[1] > 0, "a random world: " + JSON.stringify(n));
   });
 
-  await okAsync("the editor's status line in every language: what must stay (tools, Undo, Menu, bases, a message) fits - a phone 40 columns, a desktop 80", async () => {
+  await okAsync("the editor by pointer: a base dragged to another spot (and back where it can't go), two fingers move the view and paint nothing", async () => {
+    const env = makeEnv("/maps");
+    env.page("maps.html");
+    await ticks();
+    const w = env.win, api = w.tunnelerMapsApi, cv = env.el("screen");
+    const m = MapData.blank("small"); m.bases.push({ x: 40, y: 32 }, { x: 90, y: 32 });
+    const rec = await w.MapStore.save(m);
+    api.edit(rec, MapData.decode(rec.code));
+    const ed = w.tunnelerMapEditor();
+    // a cell -> the pointer's client position (the canvas 720 x 400: a LORES pixel 4.5 x 4)
+    const at = (cx, cy) => { const z = [0.25, 0.5, 1, 2, 4][ed.zoom], px = Math.floor(2 + (cx - ed.ox + 0.5) * z), py = Math.floor(1 + (cy - ed.oy + 0.5) * z); return { clientX: px * 4.5 + 2, clientY: py * 4 + 2 }; };
+    const ptr = (t, cx, cy, extra) => cv.fire(t, Object.assign({ button: 0, pointerType: "mouse", pointerId: 1 }, at(cx, cy), extra));
+    api.setTool("base");
+    ptr("pointerdown", 40, 32);
+    for (let x = 41; x <= 60; x++) ptr("pointermove", x, 36);
+    ptr("pointerup", 60, 36);
+    assert.deepStrictEqual(ed.map.bases.map(b => [b.x, b.y]), [[60, 36], [90, 32]], "base 1 dragged: " + JSON.stringify(ed.map.bases));
+    assert.strictEqual(ed.undo.length, 1, "one step to undo");
+    ptr("pointerdown", 60, 36);
+    for (let x = 61; x <= 88; x++) ptr("pointermove", x, 33);
+    ptr("pointerup", 88, 33);
+    assert.deepStrictEqual(ed.map.bases.map(b => [b.x, b.y]), [[60, 36], [90, 32]], "onto the other base: stays");
+    assert(ed.msg, "and says why");
+    api.undo();
+    assert.deepStrictEqual(ed.map.bases.map(b => [b.x, b.y]), [[40, 32], [90, 32]], "undo: back");
+    // a tap on a base removes it, a tap on an empty spot places one
+    ptr("pointerdown", 90, 32); ptr("pointerup", 90, 32);
+    assert.strictEqual(ed.map.bases.length, 1, "tapped away");
+    // two fingers: the first one's stroke is taken back, the view moves, nothing is painted
+    api.setTool("rock"); api.setZoom(2);
+    const before = ed.map.cells.slice(), undos = ed.undo.length, o0 = [ed.ox, ed.oy];
+    const t = (type, id, cx, cy) => cv.fire(type, Object.assign({ button: 0, pointerType: "touch", pointerId: id }, at(cx, cy)));
+    t("pointerdown", 11, 50, 30); t("pointermove", 11, 52, 30);
+    t("pointerdown", 12, 60, 30);
+    for (let k = 1; k <= 5; k++) { t("pointermove", 11, 52 - k * 3, 30); t("pointermove", 12, 60 - k * 3, 30); }
+    t("pointerup", 12, 45, 30); t("pointermove", 11, 30, 30); t("pointerup", 11, 30, 30);
+    assert(Buffer.compare(Buffer.from(before), Buffer.from(ed.map.cells)) === 0, "nothing painted");
+    assert.strictEqual(ed.undo.length, undos, "no step to undo");
+    assert(ed.ox !== o0[0], "the view moved: " + o0 + " -> " + [ed.ox, ed.oy]);
+  });
+
+  await okAsync("a map shared on another server is sent again to this one (the ids are the content's hash)", async () => {
+    const env = makeEnv("/maps");
+    env.page("maps.html");
+    await ticks();
+    const w = env.win, MS = w.MapStore;
+    const rec = await MS.save(testMap("small", 2));
+    rec.shared = "otherid222"; rec.sharedAt = "https://elsewhere.test";
+    assert.strictEqual(MS.sharedHere(rec), "", "not shared here");
+    assert.strictEqual(await MS.share(rec), "sharedid22", "sent again");
+    assert(env.fetches.some(f => /\/api\/maps$/.test(f[0]) && f[1] === "POST"), "POST /api/maps");
+    assert.strictEqual(MS.sharedHere(rec), "sharedid22", "now shared here");
+    const n = env.fetches.length;
+    await MS.share(rec);
+    assert.strictEqual(env.fetches.length, n, "not twice");
+  });
+
+  await okAsync("the editor's status line in every language: what must stay (tools, Undo, Menu, bases, a message) fits - a phone 40 columns, a desktop 80 (with the keys)", async () => {
     const env = makeEnv("/maps");
     env.page("maps.html");
     await ticks();
@@ -366,6 +423,8 @@ const ticks = async (n = 8) => { for (let i = 0; i < n; i++) await tick(); };
             const keep = r.filter(s => (s.prio || 0) === 0 || (s.prio === 1 && !msg));
             assert(width(keep) <= cols, code + (phone ? " phone" : " desktop") + " row " + (i + 1) + " (" + msg + "): " + width(keep) + " > " + cols + ": " +
               keep.map(s => w.Lang.decode(s.text)).join("|"));
+            // (a desktop: the keys fit beside the tools - nothing of that row is dropped)
+            if (!phone && i === 0) assert(width(r) <= cols, code + " desktop: the keys beside the tools: " + width(r) + " > " + cols);
           });
         }
       }

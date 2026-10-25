@@ -513,7 +513,7 @@ export function mount() {
       for (const u of S.used) all[u.color] = { kind: u.kind, team: u.team };
       Nav.go(Links.cpu("g=" + CpuCode.encode({ slots: all, size: cpuSize, win: cpuWin, time: cpuTime, ff: ff && S.teamGame,
         view, watch: watchOut, sight, mode: gmode, goal: GOALS[gmode] ? goalOf(gmode) : undefined }) +
-        (rec ? "&lmap=" + rec.id + (rec.shared ? "&map=" + rec.shared : "") : "")));   // (the map: this browser's copy, else the shared one)
+        (rec ? "&lmap=" + rec.id + (MapStore.sharedHere(rec) ? "&map=" + rec.shared : "") : "")));   // (the map: this browser's copy, else the shared one)
     };
     // slot rows: "you                team 1", the who column padded to the longest text in this language,
     // each row in its tank's color (which is all that tells the colors apart - no color name)

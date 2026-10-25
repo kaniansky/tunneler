@@ -7,7 +7,7 @@ Lang.extend("en", {
   "map.title": "MAPS", "map.h.name": "NAME", "map.h.size": "SIZE", "map.h.bases": "BASES",
   "map.info": "A {size} map with {n} bases.", "map.row.i": "<ENTER> opens it: edit, play, share a link, delete.",
   "map.row.i.touch": "Tap it to open it: edit, play, share, delete.",
-  "map.none": "No maps yet: make one, or open a link someone sent you.",
+  "map.none": "No maps yet.",
   "map.new": "Make a new map", "map.new.i": "Paint your own world - rock, dirt and tunnels - and place up to 8 bases.",
   "map.link": "Open a map link", "map.link.i": "A map link someone sent you: the map goes into your maps.",
   "back.maps": "Back to the maps", "back.maps.i": "Back to the list of your maps.",
@@ -34,7 +34,7 @@ Lang.extend("en", {
   "map.m.tunnel": "tunnel", "map.m.dirt": "dirt", "map.m.rock": "rock",
   "map.brush": "Brush", "map.zoom": "Zoom", "map.undo": "Undo", "map.menu": "Menu",
   "map.pos": "X {x}  Y {y}", "map.bases": "Bases: {n} of 8",
-  "map.keys": "ESC: menu  SPACE: paint  1-4: tool  +/-: zoom", "map.keys.touch": "1 finger paints, 2 move",
+  "map.keys": "SPACE: paint  ESC: menu", "map.keys.touch": "1 finger paints, 2 move",
   "map.err.max": "8 bases at most.", "map.err.edge": "Too close to the edge for a base.",
   "map.err.near": "Too close to another base.",
   // the editor's menu

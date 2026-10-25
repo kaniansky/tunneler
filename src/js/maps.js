@@ -307,19 +307,21 @@ export function mount() {
   // the status line's rows (a phone: 40 columns and room below the screen - three rows; a desktop: two, under the
   // 4:3 screen); the groups a row may drop have the higher prio numbers (StatusLine drops those first)
   function barRows(phone) {
-    const m = ed.map;
+    const m = ed.map, pm = t => phone ? " " + t + " " : t;   // (a phone: - and + three cells wide - a finger's target)
     const tools = TOOLS.map((t, i) => ({ text: " " + (phone ? "" : (i + 1) + " ") + T("map.t." + t) + " ", attr: t === ed.tool ? 0x5F : 0x07, prio: 0,
       onClick: () => setTool(t) }));
-    const brush = [{ text: T("map.brush"), attr: 0x07, prio: 2 }, { text: "-", attr: 0x0F, prio: 2, onClick: () => setBrush(-1) },
-      { text: String(BRUSHES[ed.brush] * 2 + 1), attr: 0x0E, prio: 2 }, { text: "+", attr: 0x0F, prio: 2, onClick: () => setBrush(1) }];
-    const zoom = [{ text: T("map.zoom"), attr: 0x07, prio: 3 }, { text: "-", attr: 0x0F, prio: 3, onClick: () => setZoom(-1) },
-      { text: ZOOM_TEXT[ed.zoom], attr: 0x0E, prio: 3 }, { text: "+", attr: 0x0F, prio: 3, onClick: () => setZoom(1) }];
+    const brush = [{ text: T("map.brush"), attr: 0x07, prio: 2 }, { text: pm("-"), attr: 0x0F, prio: 2, onClick: () => setBrush(-1) },
+      { text: String(BRUSHES[ed.brush] * 2 + 1), attr: 0x0E, prio: 2 }, { text: pm("+"), attr: 0x0F, prio: 2, onClick: () => setBrush(1) }];
+    const zoom = [{ text: T("map.zoom"), attr: 0x07, prio: 3 }, { text: pm("-"), attr: 0x0F, prio: 3, onClick: () => setZoom(-1) },
+      { text: ZOOM_TEXT[ed.zoom], attr: 0x0E, prio: 3 }, { text: pm("+"), attr: 0x0F, prio: 3, onClick: () => setZoom(1) }];
     const acts = [{ text: T("map.undo"), attr: ed.undo.length ? 0x0B : 0x08, prio: 0, onClick: () => undo() },
       { text: T("map.menu"), attr: 0x0D, prio: 0, onClick: () => openMenu() }];
     const bases = { text: T("map.bases", { n: m.bases.length }), attr: m.bases.length >= MapData.MIN_BASES ? 0x0A : 0x0C, prio: 1 };
-    const say = ed.msg ? { text: ed.msg, attr: 0x0C, prio: 0 } : { text: T(phone ? "map.keys.touch" : "map.keys"), attr: 0x08, prio: 5 };
-    if (phone) return [tools, brush.concat(acts), zoom.concat([bases, say])];
-    return [tools.concat(acts), brush.concat(zoom, [{ text: T("map.pos", { x: ed.cx * MapData.CELL, y: ed.cy * MapData.CELL }), attr: 0x07, prio: 4 }, bases, say])];
+    const msg = ed.msg ? [{ text: ed.msg, attr: 0x0C, prio: 0 }] : [];
+    if (phone) return [tools, brush.concat(acts), zoom.concat([bases], msg.length ? msg : [{ text: T("map.keys.touch"), attr: 0x08, prio: 5 }])];
+    // (a desktop: the keys beside the tools - the row with room for them -, a message on the second row)
+    return [tools.concat(acts, [{ text: T("map.keys"), attr: 0x08, prio: 5 }]),
+      brush.concat(zoom, [{ text: T("map.pos", { x: ed.cx * MapData.CELL, y: ed.cy * MapData.CELL }), attr: 0x07, prio: 4 }, bases], msg)];
   }
   const say = msg => { ed.msg = msg; clearTimeout(ed.msgTimer); ed.msgTimer = setTimeout(() => { if (ed) { ed.msg = null; renderBar(); } }, 3000); };
   function setTool(t) { ed.tool = t; ed.drag = null; render(); }
@@ -519,7 +521,9 @@ export function mount() {
     return ed.walled;
   }
   function openMenu() { ed.menu = true; endStroke(); ed.drag = null; pan = null; pinch = null; touches.clear(); statusEl.style.display = "none"; nameForm.value = ed.map.name; menu(); }
-  function closeMenu() { ed.map.name = MapData.cleanName(nameForm.value) || ed.map.name; ed.menu = false; statusEl.style.display = ""; render(); }
+  function closeMenu() { setName(); ed.menu = false; statusEl.style.display = ""; render(); }
+  // the name typed in the menu (a changed name is a change: kept when the screen is left some other way)
+  function setName() { const n = MapData.cleanName(nameForm.value) || ed.map.name; if (n !== ed.map.name) { ed.map.name = n; ed.changed = true; } }
   function menu(keep, sel) {
     const m = ed.map, n = m.bases.length, walled = walledIn();
     const state = n >= MapData.MIN_BASES ? { text: T("map.ok", { n }), color: 10 } : { text: T("map.need"), color: 12 };
@@ -537,7 +541,7 @@ export function mount() {
         { key: "name", label: T("map.name"), input: nameForm, align: "left", info: [T("map.name.i")], go: closeMenu },
         { key: "tool", label: T("map.tool") + T("map.t." + ed.tool), info: [T(mobile ? "map.tool.i.touch" : "map.tool.i")], go: () => setT(1), change: setT },
         { key: "brush", label: T("map.brushsize") + (BRUSHES[ed.brush] * 2 + 1), info: [T(mobile ? "map.brush.i.touch" : "map.brush.i")], go: () => setB(1), change: setB },
-        { key: "fill", label: T("map.fill") + T("map.t." + ed.fill), info: [sure ? { text: T("map.fill.sure", { what: Lang.raw("map.t." + ed.fill) }), color: 12 } : T("map.fill.i")],
+        { key: "fill", label: T("map.fill") + T("map.t." + ed.fill), info: [sure ? { text: T("map.fill.sure", { what: Lang.raw("map.m." + ed.fill) }), color: 12 } : T("map.fill.i")],
           change: setF, go: () => {
             if (!sure) { ed.fillArmed = performance.now() + 4000; return menu(true); }
             ed.fillArmed = 0; snapshotUndo(); m.cells.fill(VALUE[ed.fill]); MapData.frame(m); closeMenu();
@@ -550,8 +554,8 @@ export function mount() {
     }, keep);
   }
   async function leaveEditor() {
+    if (ed.menu) setName();
     const e = ed;
-    e.map.name = MapData.cleanName(nameForm.value) || e.map.name;
     ed = null;
     statusEl.style.display = "none";
     const rec = await saveMap(e);

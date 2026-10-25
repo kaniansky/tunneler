@@ -898,7 +898,7 @@ none, i.e. a page from before 2.0 - is refused (POST 409 `{code:
   option `map` (a code): `paintMapStep` instead of the generator (no Random()), forces the extended engine and the
   map's size, `mapBases` deals N of the K bases with the engine's RNG (K < N: the rest placed at random), `openBase`
   as always; without it nothing changes. `src/js/mapstore.js` (`MapStore`: IndexedDB "tunneler-maps", `share` = POST
-  /api/maps, `fetchShared`). Route `/maps` (`maps.js`; `/maps/<id>`, `/map/<id>` = a shared one; the app:
+  /api/maps - once per server: `sharedAt` / `sharedHere(rec)` -, `fetchShared`). Route `/maps` (`maps.js`; `/maps/<id>`, `/map/<id>` = a shared one; the app:
   `maps.html?id= / ?share=`): the list, a new map (dirt / a random world), a map's screen, open a link, the editor
   (LORES screen + the clickable status line; keys / mouse / touch - two fingers move and pinch - / gamepad; undo;
   the editor's menu; leaving saves). Main menu "Maps". Skirmish: Settings row Map (`tunneler.cpu.map`, links
