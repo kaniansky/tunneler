@@ -35,7 +35,7 @@
 //                digit(n): number keys 1..8 on this row (e.g. a slot's team)
 //                zones: [{from, to, click(dir)}] - parts of the label (display columns from..to-1 of the
 //                label text) a mouse click acts on: left button dir +1, right button -1 (no browser menu
-//                then); a click elsewhere on a row with zones only selects it
+//                then); a click elsewhere on a row with zones only selects it (clickGo: true - it goes, as Enter)
 //                info lines may be {text, color, onClick} - clickable (e.g. the invite link)
 //                static: a read-only text row (never selected; attr, default light gray)
 //                dim: [from, to] - label columns from..to-1 drawn gray (a part that doesn't apply now)
@@ -867,7 +867,8 @@ class DosUI {
     if (this.narrow && this.dragged) { this.dragged = false; return; }   // (the end of a drag, not a tap)
     const i = this.itemAt(ev);
     if (i < 0) return;
-    if (this.spec.items[i].zones) { if (i !== this.sel) { this.sel = i; this.draw(); } return; }   // (selects only)
+    // (a row with zones: a click elsewhere on it selects only - unless the item says clickGo: then it does go)
+    if (this.spec.items[i].zones && !this.spec.items[i].clickGo) { if (i !== this.sel) { this.sel = i; this.draw(); } return; }
     const it = this.spec.items[i];
     if (it.input && !it.disabled && touchScreen(ev)) { this.sel = i; this.draw(); this.softFocus(it.input); return; }   // (touch: its keyboard)
     this.sel = i; it.go();

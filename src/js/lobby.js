@@ -107,9 +107,12 @@ export function mount() {
           + (GameScreen.mobile() && !(!r.spectators && !(r.state === "lobby" && r.open)) ? ".touch" : ""))].filter(Boolean),
       disabled: !r.spectators && !(r.state === "lobby" && r.open),
       go: () => join(r.id, !(r.state === "lobby" && r.open)),
-      // → or a right click (DosUI: change(-1)): watch it; a tap / click on its state column too (a phone has neither)
+      // → or a right click (DosUI: change(-1)): watch it; on a phone a tap on its state column (it has neither)
       change: d => { if (r.spectators && d !== 0) join(r.id, true); },
-      zones: r.spectators ? [{ from: cols().reduce((a, b) => a + b, 0), to: 200, click: () => join(r.id, true) }] : undefined,   // (the state column)
+      // (a phone only: on a desktop a click anywhere on the row joins - a click on its right end watching instead
+      // made players spectators)
+      zones: r.spectators && GameScreen.mobile() ? [{ from: cols().reduce((a, b) => a + b, 0), to: 200, click: () => join(r.id, true) }] : undefined,
+      clickGo: true,                                 // (a tap elsewhere on the row: join, as Enter)
     }));
     if (!rooms.length) items.push({ key: "none", label: T("lobby.none"), disabled: true });
     items.push({ key: "sep", separator: true });
