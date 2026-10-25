@@ -512,15 +512,15 @@ function play(search) {
   assert.strictEqual(store.get("tunneler.smooth"), "0");
   env.key("Escape"); env.key("ArrowDown");                 // Sound
   assert.ok(right()[0] === "sound", "Sound: the style first");
-  env.key("Enter"); env.key("ArrowRight");                 // original -> realistic
-  assert.strictEqual(store.get("tunneler.sound"), "realistic", "sound style remembered");
+  env.key("Enter"); env.key("ArrowRight");                 // realistic (the default) -> recorded
+  assert.strictEqual(store.get("tunneler.sound"), "recorded", "sound style remembered");
   // the mouse wheel over a switch steps it (up: forward), as Left / Right
   const u = ui(), at = key => u.spec.items.findIndex(i => i.key === key);
   u.itemAt = () => at("sound");
   u.wheel({ deltaY: -120, deltaMode: 0 });
-  assert.strictEqual(store.get("tunneler.sound"), env.win.Speaker.STYLES[env.win.Speaker.STYLES.indexOf("realistic") + 1], "wheel up: the next style");
+  assert.strictEqual(store.get("tunneler.sound"), env.win.Speaker.STYLES[env.win.Speaker.STYLES.indexOf("recorded") + 1], "wheel up: the next style");
   u.wheel({ deltaY: 120, deltaMode: 0 });
-  assert.strictEqual(store.get("tunneler.sound"), "realistic", "wheel down: back");
+  assert.strictEqual(store.get("tunneler.sound"), "recorded", "wheel down: back");
   // the volume: a meter of 10 cells; a click on a cell sets it there; it stops at 100 and 0
   const vol = ui().spec.items[at("volume")];
   assert.strictEqual((vol.label.match(/\xDB/g) || []).length, 10, "100 %: ten full cells");

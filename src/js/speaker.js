@@ -51,7 +51,7 @@ const NEAR = 40, FAR = 240;
 const VIEW_W = 76;                         // a view screen's width in world pixels (engine blitView: 38 bytes)
 const EDGE_PAN = 0.8, MAX_PAN = 0.9, SPLIT_PAN = 0.6;
 const STYLES = ["muted", "original", "realistic", "recorded", "cartoony"];
-const DEFAULT_STYLE = "original";
+const DEFAULT_STYLE = "realistic";   // (owner, 2026-10-25: was the original PC speaker)
 const STORE_KEY = "tunneler.sound";
 const OLD_MUTE_KEYS = ["tunneler.muted", "tunneler.mute"];   // a stored "1" / "true" migrates to "muted"
 const PIT_HZ = 1193182;

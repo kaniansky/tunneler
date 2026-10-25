@@ -4,7 +4,7 @@
 //     gives the same fx every frame), every kind seen, fire at a tank, positions inside the world, t inside
 //     the step; output only: an engine with emitFx = false (no fx at all) stays identical every frame
 //     (stateHash, RandSeed, vram, world, speaker events, snapshots)
-//   - stored style: default "original", round trip, invalid values, migration of an old mute flag,
+//   - stored style: default "realistic", round trip, invalid values, migration of an old mute flag,
 //     storage that throws; Speaker instances: setStyle / setMuted / muted alias
 //   - play() with a mock AudioContext: "original" drives the square wave exactly as before (fx ignored),
 //     realistic / cartoony build voices for every kind and ignore the speaker events, muted is silent,
@@ -137,27 +137,27 @@ class Store {
 }
 {
   check(JSON.stringify(Speaker.STYLES) === JSON.stringify(["muted", "original", "realistic", "recorded", "cartoony"]), "STYLES");
-  check(Speaker.DEFAULT_STYLE === "original", "default style");
+  check(Speaker.DEFAULT_STYLE === "realistic", "default style");
   delete globalThis.localStorage;
-  check(Speaker.loadStyle() === "original", "no storage: original");
+  check(Speaker.loadStyle() === "realistic", "no storage: realistic");
   check(Speaker.saveStyle("cartoony") === "cartoony", "no storage: save does not throw");
   const st = new Store();
   globalThis.localStorage = st;
-  check(Speaker.loadStyle() === "original", "empty storage: original");
+  check(Speaker.loadStyle() === "realistic", "empty storage: realistic");
   for (const s of Speaker.STYLES) { Speaker.saveStyle(s); check(Speaker.loadStyle() === s && st.getItem("tunneler.sound") === s, "round trip " + s); }
-  check(Speaker.saveStyle("loud") === "original" && Speaker.loadStyle() === "original", "invalid style saves the default");
+  check(Speaker.saveStyle("loud") === "realistic" && Speaker.loadStyle() === "realistic", "invalid style saves the default");
   st.setItem("tunneler.sound", "bogus");
-  check(Speaker.loadStyle() === "original", "invalid stored value: default");
+  check(Speaker.loadStyle() === "realistic", "invalid stored value: default");
   // migration of an old mute flag
   st.m.clear(); st.setItem("tunneler.muted", "1");
   check(Speaker.loadStyle() === "muted" && st.getItem("tunneler.sound") === "muted" && st.getItem("tunneler.muted") === null, "old mute flag migrates to muted");
   st.m.clear(); st.setItem("tunneler.mute", "0");
-  check(Speaker.loadStyle() === "original" && st.getItem("tunneler.mute") === null, "old unmuted flag migrates to original");
+  check(Speaker.loadStyle() === "realistic" && st.getItem("tunneler.mute") === null, "old unmuted flag migrates to the default");
   // storage that throws (blocked site data)
   globalThis.localStorage = { getItem() { throw new Error("no"); }, setItem() { throw new Error("no"); }, removeItem() { throw new Error("no"); } };
-  check(Speaker.loadStyle() === "original" && Speaker.saveStyle("realistic") === "realistic", "throwing storage");
+  check(Speaker.loadStyle() === "realistic" && Speaker.saveStyle("cartoony") === "cartoony", "throwing storage");
   Object.defineProperty(globalThis, "localStorage", { configurable: true, get() { throw new Error("denied"); } });
-  check(Speaker.loadStyle() === "original", "throwing localStorage accessor");
+  check(Speaker.loadStyle() === "realistic", "throwing localStorage accessor");
   delete globalThis.localStorage;
 
   globalThis.localStorage = st; st.m.clear();
@@ -178,7 +178,7 @@ class Store {
   st.setItem("tunneler.sound", "muted");
   const sm = new Speaker();
   sm.setMuted(false);
-  check(sm.style === "original", "unmuting a speaker that started muted: original");
+  check(sm.style === "realistic", "unmuting a speaker that started muted: the default");
   ok("stored style: default, round trip, migration, throwing storage, setMuted / muted alias");
 }
 
@@ -229,6 +229,7 @@ class MockCtx {
   const st = new Store();
   globalThis.localStorage = st;
   const sp = new Speaker();
+  sp.setStyle("original", true);                    // (the PC speaker: no longer the default)
   sp.unlock();
   check(sp.ctx instanceof MockCtx, "unlock creates the AudioContext");
   const at = performance.now();
@@ -291,7 +292,7 @@ class MockCtx {
   vm.createContext(ctx);
   require("./page-env.js").run(ctx, ["js/speaker.js"]);
   const S = ctx.Speaker;
-  check(S.loadStyle() === "original" && S.preview("cartoony") === false && S.saveStyle("muted") === "muted", "standalone without AudioContext / storage");
+  check(S.loadStyle() === "realistic" && S.preview("cartoony") === false && S.saveStyle("muted") === "muted", "standalone without AudioContext / storage");
   const sp = new S();
   sp.play([{ t: 0, hz: 100 }], 0, null, [{ t: 0, kind: "fire", x: 1, y: 1 }]);
   sp.silence(); sp.setMuted(true);
@@ -328,6 +329,7 @@ class MockCtx {
   globalThis.localStorage = new Store();
   made.pans = [];
   const sp = new Speaker();
+  sp.setStyle("original", true);
   sp.unlock();
   check(sp.panner && made.pans.length === 1, "original: one StereoPannerNode for the speaker voice");
   const t0 = performance.now();

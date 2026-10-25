@@ -566,7 +566,7 @@ none, i.e. a page from before 2.0 - is refused (POST 409 `{code:
   not) Esc twice within 3 s leaves for the room page; the first shows "on.escagain" across the middle
   of the game (`views.setNotice(text)` / `drawNotice()`: yellow on a black band; `escToLeave` in
   online.js; not on the end-of-match map, where any key closes the map).
-- Sound styles: `Speaker.STYLES` muted / original (the PC speaker, unchanged) / realistic / cartoony
+- Sound styles (default realistic since 6.0 - owner, 2026-10-25): `Speaker.STYLES` muted / original (the PC speaker, unchanged) / realistic / cartoony
   (WebAudio synthesis in speaker.js), stored in localStorage "tunneler.sound" (`Speaker.loadStyle` /
   `saveStyle`; a new Speaker reads it). The engine emits semantic effects next to `soundEvents`:
   `engine.fx` = [{t, kind, x, y}] per step, kinds `TunnelerEngine.FX_KINDS` (impact, dig, hit, destroy,

@@ -5,6 +5,8 @@ a release is made by pushing a version tag (see CONTRIBUTING.md).
 
 ## Unreleased
 
+- Sound: "realistic" is the default style now (was the original PC speaker); a style you chose stays.
+
 - Maps: a map is played only when a tank can drive between all of its bases. The editor says which bases can't be
   reached and that a way has to be dug (its "Bases" turn red), the list shows such maps in red, and the skirmish and
   online games refuse them with the reason (the server checks too). Maps that aren't ready can still be saved and
