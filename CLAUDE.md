@@ -52,10 +52,10 @@ may be redesigned, but always in the original's DOS look.
 - `server.js` - Node http + `ws` server: serves `public/` (or `STATIC_DIR`; `src/` works too - browsers load
   the modules natively), REST lobby API, websocket lockstep relay. Requires `src/js/netproto.js` (an ES
   module) directly (shared with the browser). Every page address answers with index.html (`PRETTY`). Port
-  `PORT` (8050).
+  `PORT` (8050). Player accounts live in `accounts.js` (required by server.js; docs/v6/ACCOUNTS.md).
 - `build.js` - `node build.js` once, `node build.js --watch` = rebuild on change + `node --watch server.js`
   (restart a running watcher after build.js itself changes: it keeps the old build in memory).
-- `Dockerfile` - two stages (build with esbuild, then prod deps + server.js + challenge-worker.js + src/package.json +
+- `Dockerfile` - two stages (build with esbuild, then prod deps + server.js + accounts.js + challenge-worker.js + src/package.json +
   src/js + src/lang (netproto.js for the server, the engine / AI / modes / English texts for the daily challenge's
   replay check) + public/), runs
   as `node`, port 8050. `.github/workflows`: ci (npm ci, build, test, docker build), **release** (only a pushed
@@ -124,6 +124,10 @@ may be redesigned, but always in the original's DOS look.
     or held fire without friendly fire, little with it, determinism (also bots created mid-match), time
     budget for 7 bots on the medium and the large map, no bot hanging around its own base while not
     retreating (team games, every level).
+  - `accounts-check.js` / `accounts-page-check.js` - player accounts (docs/v6/ACCOUNTS.md): the real server's
+    /api/account* (names, passwords, lockout, tokens, change / reset / delete, the stores across a restart - folder,
+    fake S3 -, accounts off), online with tickets (identity, reconnect, kick, quick play by account), the daily
+    challenge by account; the pages in a vm (LOG IN, creating an account, tickets, Settings' rows, daily Send).
   - `net-sim.js` - real server (4 ms ticks) + fake websocket clients running the engine: the list API
     (seats / settings from the request, checked), joining (first open seat, a taken name gets a number,
     watch, no seat -> spectator / turned away without spectators), the room lobby (only the host sets
@@ -975,3 +979,28 @@ none, i.e. a page from before 2.0 - is refused (POST 409 `{code:
   `MAP_DIR` default `REPLAY_DIR/maps` / memory), map ids = content hash (10 of a-z2-9), `MAX_MAP_BYTES` 40 KB, 20
   shares / min. `Lang.extend(code, {...})` (lang.js) for feature text files: `src/lang/<code>/maps.js`. Tests:
   map-check.js, map-share-check.js, net-sim "custom map online", layout-check (the maps screens).
+- **Player accounts** (v6, docs/v6/ACCOUNTS.md - owner: "online games will require this"): a username + password per
+  server (Endpoint's). Server `accounts.js` (`createAccounts`: the store - bucket `account-<id>.json` /
+  `account-name-<sha256>.json` / `account-secret.json` (`ACCOUNT_S3_BUCKET`, else the replays' bucket), else
+  `ACCOUNT_DIR` (default `REPLAY_DIR/accounts`), else memory (dev only) -, scrypt N 2^14 (async, 4 at a time;
+  `opts.scryptN` for tests), tokens `t1.<payload>.<HMAC>` {a: id, g: password generation, i, e: 90 days} (refreshed by
+  GET /api/account after a day; a new password / reset bumps `gen`, deleting removes the account), one-time
+  websocket tickets (POST /api/ticket -> `&ticket=`, 60 s, used once, checked before the upgrade), recovery codes
+  (20 of `NetProto.RECOVERY_ALPHABET`, scrypt-hashed, new on every reset), per-address limits + a per-username
+  lockout (5 wrong in 15 min -> 5 min), the same answer for unknown names; `/api/account/signup | login | reset |
+  password | delete`, GET `/api/account`). server.js: `createServer({accounts})` default **off** (tests); the
+  program on unless `ACCOUNTS=off`; `ACCOUNT_SECRET` (else generated and stored); `GET /api/config` {version,
+  accounts} (+ /api/health); with them on a connection's `ws.cid` = "acc-" + id (seat.last, slot.cid, bans,
+  admitted, quick play's lastCid, sid replacement, the handoff - unchanged code) and `ws.name` = the username (`&name`,
+  `me {name}` ignored); `POST /api/rooms` / `/api/quickplay` / the daily challenge's POST need `Authorization: Bearer`
+  (401 `session`); the board keyed "acc-" + id (GET's `you` by the token); deleting an account closes its sockets and
+  removes its board entries (+ their replays: `sharedStore.del`). NetProto: `cleanUsername` (strict
+  cleanPlayerName, a letter / digit, `RESERVED_NAMES`), `usernameKey`, `passwordProblem` (8..200), `cleanRecovery`.
+  Pages: `src/js/account.js` (`Account`: session `tunneler.session.<origin>`, the server's answer
+  `tunneler.accounts.<origin>` "1"/"0", `required()` / `config()` / `check()` / `ticket()` / `auth()`...),
+  `src/js/login.js` (`Login.ask` LOG IN -> CREATE AN ACCOUNT / RESET PASSWORD -> YOUR RECOVERY CODE (`Login.code`),
+  `Login.change`, `Login.remove` (asks twice)) on any DosUI; lobby.js / online.js (err `login`: a new ticket once,
+  then LOG IN) / daily.js (Send) ask to log in instead of the name prompt on such servers; home.js Settings, Online:
+  Account / Log in / Log out / Change password / Delete account (no Name row then). Texts
+  `src/lang/<code>/accounts.js` (`acc.*`, `set.account*`) + an Information section. Privacy: site/privacy.html
+  (#accounts, #delete), docs/play-store/forms.md. Tests: accounts-check.js, accounts-page-check.js, layout-check.

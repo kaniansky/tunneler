@@ -21,8 +21,8 @@
 // /api/ticket with the session) instead of the name - LOG IN (login.js) first when there is no session, or when the
 // server refuses with "login"; the name prompt only on a server without accounts.
 import "./gfx-modern.js";
-import { Account } from "./account.js";
 import "./gfx-hud.js";
+import { Account } from "./account.js";
 import { TunnelerAI } from "./ai.js";
 import { Controls } from "./controls.js";
 import { Display } from "./display.js";
@@ -1259,5 +1259,5 @@ export function mount() {
   else if (DosUI.playerName()) connect();
   else askName();
   // (the server's answer about accounts: never asked before, or changed - the name prompt becomes LOG IN)
-  Account.config().then(on => { if (on && asking === "name") { if (Account.session()) { asking = false; msgSnap = null; connect(); } else askLogin(); } });
+  Account.config().then(on => { if (on && asking === "name") { if (Account.session()) { asking = false; msgSnap = null; presentOverlay(); updateOverlay(); connect(); } else askLogin(); } });
 }

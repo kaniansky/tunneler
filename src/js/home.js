@@ -238,6 +238,7 @@ export function mount() {
         go: () => Login.change(ui, { done: () => toAccount({ text: T("acc.changed"), color: 10 }), back: () => toAccount() }) },
       { key: "delacc", label: T("acc.delete"), info: [T("acc.delete.i")],
         go: () => Login.remove(ui, { done: () => toAccount({ text: T("acc.deleted"), color: 10 }), back: () => toAccount() }) });
+    rows.push({ key: "gap-acc", label: "", disabled: true });   // (the account's group, then the rest)
     return rows;
   }
   // ------------------------------------------------------------------ Settings: two boxes - the categories

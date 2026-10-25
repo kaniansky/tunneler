@@ -5,6 +5,16 @@ a release is made by pushing a version tag (see CONTRIBUTING.md).
 
 ## Unreleased
 
+- **Player accounts** (docs/v6/ACCOUNTS.md): online games and the daily challenge's leaderboard now need an account
+  on the game's server - a username (the name everybody sees, unique on the server) and a password, no e-mail. The
+  games list, quick play, an invite link and "Send your result" ask to log in first (LOG IN / CREATE AN ACCOUNT)
+  and then go on where you were going. Creating an account shows a recovery code once: it is the only way to set a
+  new password (RESET PASSWORD). Settings, Online: your account, Log out, Change password (logs out every other
+  device), Delete account (also removes your leaderboard entries). Split screen, skirmish, replays, maps and
+  looking at the daily challenge need no account. In online rooms a player is their account: a seat or tank comes
+  back from any device, a kick keeps that account out. Server operators can switch accounts off (`ACCOUNTS=off`:
+  free names as before); `ACCOUNT_SECRET`, `ACCOUNT_S3_BUCKET`, `ACCOUNT_DIR` (README, Hosting). Passwords are
+  kept only as scrypt hashes; the websocket uses one-time tickets, so no login token ever appears in a URL.
 - Running reliably (docs/v6/RELIABILITY.md):
   - A server restart or deploy no longer ends online games. The server hands its games (lobbies and
     running matches) over to the next one, and the players' pages reconnect and carry on where they were.
