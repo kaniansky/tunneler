@@ -312,6 +312,24 @@ const copy = rep => JSON.parse(JSON.stringify(rep));
     ok(items.includes("send") === offered, "last week's unsent result " + (later / 3600000) + " h into the new week: " + (offered ? "Send offered" : "no Send"));
   }
 
+  // a match given up with Esc wins nothing (survival between two waves: only the players were left - Esc won the round
+  // and the match, and the result topped the board)
+  {
+    const week = "2026-W43", cfg = Challenge.config(week), opts = Challenge.engineOptions(cfg);
+    const e = new E(cfg.seed, JSON.parse(JSON.stringify(opts))), kills = Challenge.track(e);
+    const ais = cfg.slots.map((sl, i) => new TunnelerAI(sl.level || "hard", i + 1));
+    let rep = null;
+    const rec = Replay.recorder(e, { kind: "skirmish", seed: cfg.seed, opts, challenge: week }, r => { rep = r; });
+    for (let n = 0; n < 20000 && !rep; n++) {
+      const bits = ais.map(ai => TunnelerAI.bitsFor(ai, e));
+      if (n >= 400 && n < 410) bits[0] = 32;
+      const inp = { bits, keys: [] }; rec.input(inp); e.step(inp); rec.stepped();
+    }
+    const res = rep && Challenge.result(e, kills, rep.steps), last = e.roundLog[e.roundLog.length - 1];
+    ok(cfg.mode === "survival" && res && !res.won && res.rounds === 0 && last && last.how === "esc",
+      "a survival challenge given up with Esc: no round, not won (" + JSON.stringify(res) + ", " + JSON.stringify(last) + ")");
+  }
+
   console.log(failures ? "challenge-check: " + failures + " FAILED" : "challenge-check: all passed");
   process.exit(failures ? 1 : 0);
 })().catch(e => { console.error(e); process.exit(1); });

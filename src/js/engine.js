@@ -2273,8 +2273,9 @@ class TunnelerEngine {
       for (let p = 1; p <= N; p++) this.inView(p, () => this.drawFrameExt(p));
       this.roundStart = this.tick; this.clockShown = -1; this.timedOut = false;
       this.sightNewRound();
+      let byEsc = false;
       do {
-        if (this.escHeld) { this.roundOver = true; this.matchOver = true; }   // (escEnds only)
+        if (this.escHeld) { this.roundOver = true; this.matchOver = true; byEsc = true; }   // (escEnds only)
         if (this.roundTicks) this.roundClock();
         for (let P = 1; P <= N; P++) {
           this.P = P;
@@ -2412,13 +2413,14 @@ class TunnelerEngine {
       for (let I = 1; I <= 20; I++) { this.I = I; this.updateExplosions(); }
       this.round = i16(this.round + 1);
       // round winner: the team whose tanks are the only ones left (free-for-all: the last tank); nobody if
-      // all died (or Esc ended it with several teams alive). Every member's wins go up with the team's.
+      // all died, or Esc ended it (a match given up wins nothing - survival between two waves had only the players
+      // left: Esc won the round and the weekly challenge). Every member's wins go up with the team's.
       const left = [];
       for (let p = 1; p <= N; p++) if (this.alive[p]) left.push(p);
       this.roundWinner = 0; this.roundWinnerTeam = -1;
       // (a game mode that decided the round: its winner - a team index, -1 = nobody)
       const decided = this.modeWinner !== undefined, mt = this.modeWinner;
-      if (decided ? mt >= 0 && mt < this.nTeams : left.length && left.every(p => this.team(p) === this.team(left[0]))) {
+      if (!byEsc && (decided ? mt >= 0 && mt < this.nTeams : left.length && left.every(p => this.team(p) === this.team(left[0])))) {
         const t = decided ? mt : this.team(left[0]), members = this.teamMembers(t);
         this.teamWins[t]++;
         this.roundWinnerTeam = t;

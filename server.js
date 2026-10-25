@@ -882,6 +882,8 @@ function createServer(opts = {}) {
     checking.add(addr);
     let r;
     try { r = await runCheck(new Uint8Array(bytes), week, name); } finally { checking.delete(addr); }
+    if (r && !r.code && !r.result) say("challenge check: an answer without a result:", JSON.stringify(r).slice(0, 300));
+    if (!r || (!r.code && !r.result)) return challengeError(res, "bad", "the check failed");
     if (r.code) return challengeError(res, r.code, r.code === "version" ? "the replay is of another version than this server's " + version : null);
     if (taken()) return challengeError(res, "taken", "another player has that name on this week's board");
     const res0 = r.result;
@@ -1029,7 +1031,11 @@ function createServer(opts = {}) {
     try { p = decodeURIComponent(new URL(req.url, "http://x").pathname); } catch (e) { res.writeHead(400); return res.end(); }
     if (p.startsWith("/api/") && req.method === "OPTIONS") { res.writeHead(204, CORS); return res.end(); }   // (CORS preflight)
     if (closing && p !== "/api/health") { res.writeHead(503, { "Retry-After": "2", ...CORS }); return res.end(); }   // (shutting down)
-    if (p.startsWith("/api/")) return api(req, res, p).catch(() => json(res, 500, { error: "server error" }));
+    // (an exception in an API handler: logged - with its stack - and a 500 for the caller; the server goes on)
+    if (p.startsWith("/api/")) return api(req, res, p).catch(e => {
+      say("API error", req.method, p, e && e.stack ? e.stack : String(e));
+      if (!res.headersSent) json(res, 500, { error: "server error" });
+    });
     if (req.method !== "GET" && req.method !== "HEAD") { res.writeHead(405); return res.end(); }
     // short addresses for the pages (src/js/endpoint.js Links): the page reads its room / role / mode
     // from the path itself
