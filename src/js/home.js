@@ -172,6 +172,7 @@ export function mount() {
       { key: "cpu", label: T("home.cpu"), info: [T(MOBILE ? "home.cpu.i1m" : "home.cpu.i1n"), T("home.cpu.i2")], go: () => cpu() },
       { key: "online", label: T("home.online"), info: [T("home.online.i1"), T("home.online.i2")],
         go: () => { Nav.go(Links.games()); } },
+      { key: "challenge", label: T("home.challenge"), info: [T("home.challenge.i")], go: () => { Nav.go(Links.challenge()); } },   // (docs/v6/CHALLENGE.md)
       { key: "replays", label: T("home.replays"), info: [T("home.replays.i")], go: () => { Nav.go(Links.replays()); } },
       { key: "gap", label: "", disabled: true },
       { key: "instr", label: T("menu.instr"), info: [T("menu.instr.i")], go: () => ui.showPage("instructions", "hotseat", () => main("instr")) },
@@ -180,7 +181,7 @@ export function mount() {
       ...updateItems(),
     ];
     if (typeof sel === "string") sel = Math.max(0, items.findIndex(it => it.key === sel));
-    ui.show({ lines: title(), box: { y: 9 }, sel, infoRow: update ? 22 : 20, footer: Lang.version(), home: true, items }, keep);
+    ui.show({ lines: title(), box: { y: 9 }, sel, infoRow: update ? 22 : 21, footer: Lang.version(), home: true, items }, keep);
   }
 
   // ------------------------------------------------------------------ settings: language, sound

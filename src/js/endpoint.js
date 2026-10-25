@@ -65,6 +65,8 @@ const Links = {
   // a shared replay (POST /api/replays): its page here, and the link to send (always the server's address)
   sharedReplay: id => isApp ? "/replays.html?share=" + enc(id) : "/replay/" + enc(id),
   replayLink: id => "/replay/" + enc(id),
+  // the weekly challenge's screen (docs/v6/CHALLENGE.md); playing it: Links.cpu("challenge=<week>")
+  challenge: () => isApp ? "/challenge.html" : "/challenge",
   // a pasted replay link -> {origin, id} or null: https://host/replay/<id>, "host/replay/<id>", the app's
   // ?share=<id> form, or just the id (origin "" = this server)
   parseReplay(text) {
