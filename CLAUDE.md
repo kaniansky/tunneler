@@ -914,3 +914,20 @@ none, i.e. a page from before 2.0 - is refused (POST 409 `{code:
   `tunnelerApp.routes` for tests). `Lang.extend(code, {...})`: a feature's texts in `src/lang/<code>/<feature>.js`
   (here reliability.js, `rel.*`). Tests: test/reliability-check.js, app-check (chunk / crash), layout-check (status
   screens).
+- **Quick play** (docs/v6/QUICKPLAY.md, version 6): main menu / games list "Quick play" -> lobby.js `quick()` (`/games?quick=1`)
+  -> `POST /api/quickplay {version, name}` -> `{id, created, hostKey?}` (server.js `quickRoom`: a public quick-play room with a
+  place for one more human - a seat nobody sits on, or a computer-driven tank of its running match -, the most humans first;
+  else `createRoom(..., qp)`: `NetProto.quickSettings()` = 4 tanks free-for-all, computer level "normal", fixed settings).
+  `room.qp`: `seat.ai` = the seat's level, an unoccupied seat's kind is it (`qpSeat`), `free()` counts it; `set` / `seatSet` /
+  `ready` / `me {team}` refused; `qpSchedule` starts the match by itself (`qpStartMs` 10 s after a player sat down, `qpAfterMs`
+  20 s after a match; `st.qp = {left}`). Matches: `cfg.qp`, every slot has a level -> every client runs a TunnelerAI for every
+  tank (`NetProto.aiSlot`). Taking over: `qpTake` (a connection without `role=watch` joining a running match, or `qpFill` for
+  waiting spectators -> `{t:"you", m, p}`) / `qpRelease` (its socket closes) queue **drive markers** `[p, k, name]` (k = the
+  connection number, 0 = the computer) that the tick puts into the next frame: extended entry `[[bits], 1, keys|null, drives]`
+  (FrameLog.pushN's 3rd argument; never merged; FrameQueue returns `[bits, keys, drives]`, `readDrives` checks them). Clients
+  (online.js `drive`, `setPlayer`): markers first (`human[p]`, `engine.setNames`), then `NetProto.botInputs` - every computer
+  player's `update()` runs every frame, a human-driven tank's AI bits are dropped. Engine untouched; replays record the bits
+  stepped. A released tank is kept `qpHoldMs` (15 s) for the client id that drove it (`slot.holdUntil`, `qpFreeTanks(m, cid)`:
+  a reload / dropped connection gets it back). No `kick` in quick-play rooms. Texts `src/lang/<code>/quickplay.js`
+  (`Lang.extend`) + an Information section. Tests:
+  test/quickplay-sim.js, net-page-smoke, layout-check.

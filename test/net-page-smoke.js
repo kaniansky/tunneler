@@ -367,6 +367,77 @@ function loadPage(page, search, stored, version) {
     console.log("  ok  online.js end of a match: a tap beside the map closes it, the statistics once, then the lobby");
   }
   {
+    // quick play (docs/v6/QUICKPLAY.md): the lobby's countdown (no ready), read-only settings, sitting on a computer
+    // seat; then a match this page watches, a tank handed to it ({t:"you"}) and the drive marker naming it: its
+    // name on the tank, the notice, its bits sent; handed back: the computer's again
+    const env = loadPage("online.html", "?room=qp", { "tunneler.name": "Cleo" });
+    await wait(20);
+    const ws = env.sockets[0];
+    ws.recv({ t: "hello", id: "qp", name: "Quick play", created: 1, you: { k: 4, host: false, name: "Cleo" }, chat: [], match: null });
+    const none = { k: null, name: "", ready: false, host: false, ping: null };
+    const qseats = [{ kind: "open", team: 1, k: 1, name: "Anna", ready: false, host: true, ping: 20 },
+      ...[1, 2, 3].map(i => Object.assign({ kind: "normal", team: i + 1 }, none)), ...[4, 5, 6, 7].map(i => Object.assign({ kind: "closed", team: i + 1 }, none))];
+    ws.recv(mkSt({ name: "Quick play", seats: qseats, specs: [{ k: 4, name: "Cleo", host: false, ping: 9 }], cant: null, qp: { left: 8000 },
+      settings: Object.assign({}, SETTINGS, { roundTime: 5, visible: "self" }) }));
+    await wait(250);
+    const ui = env.win.tunnelerLobbyUI(), text = () => screenText(env.win, ui.display.snap);
+    assert(/Next match in [5-8] s/.test(text()), "the countdown: " + text());
+    assert(!ui.spec.items.some(it => it.key === "ready" || it.key === "start"), "no ready, no start (not the host)");
+    assert(ui.spec.items.filter(it => ["size", "win", "time", "mode"].includes(it.key)).every(it => it.static), "the settings read-only");
+    assert(ui.spec.items.find(it => it.key === "seat0").static, "another player's seat: nothing to do");
+    sel(ui, "seat2");
+    assert(/take this tank from the computer/.test(text()), "a computer seat's info: " + text());
+    press(env, "Enter");
+    assert(ws.sent.some(m => m.t === "seat" && m.i === 2), "Enter on a computer seat sits there");
+    const cfg = { ext: true, qp: true, players: 4, slots: [0, 1, 2, 3].map(c => ({ color: c, bot: c > 0, level: "normal", team: c + 1 })),
+      names: ["Anna", null, null, null], size: "small", winScore: 3 };
+    ws.recv({ t: "match", no: 1, seed: 5, cfg, you: -1, n: 200, from: 0, f: [[[0, 0, 0, 0], 200]] });
+    const caught = () => { const f = env.win.tunnelerFrames(); return !f.catching && f.queued === 0 && f.frames >= 200; };
+    await waitFor(caught, "the quick-play match caught up");
+    const e = env.win.tunnelerEngine();
+    assert(e && [1, 2, 3, 4].every(p => e.aiDriven && e.aiDriven[p]), "a computer player for every tank of a quick-play match (also Anna's)");
+    press(env, "KeyD");
+    assert(!ws.sent.some(m => m.t === "b" && m.v), "watching: no bits");
+    ws.recv({ t: "you", m: 1, p: 1 });
+    ws.recv({ t: "f", m: 1, n: 200, f: [[[0, 0, 0, 0], 1, null, [[1, 4, "Cleo"]]], [[0, 0, 0, 0], 5]] });
+    await waitFor(() => e.names[1] === "Cleo", "the marker run");
+    const views = env.win.tunnelerViews();
+    assert(/You drive the GREEN tank now/.test(views.noticeText || ""), "the notice: " + views.noticeText);
+    assert.strictEqual(e.youPlayer, 2, "this page's tank marked");
+    key(env, "keydown", "KeyD");
+    assert(ws.sent.some(m => m.t === "b" && m.v), "a player now: its bits are sent");
+    key(env, "keyup", "KeyD");
+    ws.recv({ t: "f", m: 1, n: 206, f: [[[0, 0, 0, 0], 1, null, [[1, 0, ""]]]] });
+    await waitFor(() => e.names[1] === null, "handed back");
+    ws.recv({ t: "f", m: 1, n: 207, f: [[[0, 0, 0, 0], 1, null, [[9, 4, "x"]]]] });   // (a bad marker: refused, the page reconnects)
+    await waitFor(() => ws.readyState === 3, "a malformed marker closes the connection");
+    console.log("  ok  online.js quick play: the countdown, read-only settings, a computer seat; handed a tank mid-match, the marker, handed back");
+  }
+  {
+    // quick play from the main menu (/games?quick=1): POST /api/quickplay, then straight to the game (its host key
+    // kept); a server that doesn't answer: the reason in red, Try again
+    const env = loadPage("lobby.html", "?quick=1", { "tunneler.name": "Cleo" });
+    env.byId.set("new-game", { id: "new-game", name: "Quick play", qp: true });   // (the list's polling keeps the key of a game that exists)
+    await waitFor(() => env.win.location.href === "/game/new-game", "to the game");
+    const post = env.fetches.find(f => /\/api\/quickplay$/.test(f.url));
+    assert(post && post.o.method === "POST" && JSON.parse(post.o.body).name === "Quick play", "asked the server");
+    assert.strictEqual(env.ls.get("tunneler.host.new-game"), "f".repeat(32), "a new game: this browser hosts it");
+    const off = loadPage("lobby.html", "?quick=1", { "tunneler.name": "Cleo", "test.offline": "1" });
+    const ui = () => off.win.tunnelerLobbyUI();
+    await waitFor(() => ui().spec && ui().spec.items.some(it => it.key === "again"), "the error screen");
+    assert(/QUICK PLAY/.test(screenText(off.win, ui().display.snap)) && /Could not find a game/.test(screenText(off.win, ui().display.snap)), "the reason shown");
+    const list = loadPage("lobby.html", "", { "tunneler.name": "Cleo" });
+    list.rooms.push({ id: "qp1", name: "Quick play", public: true, spectators: true, version: "dev", state: "playing", round: 1, wins: [0, 0, 0, 0], teamWins: [],
+      ext: true, mode: "standard", qp: true, players: 2, places: 4, bots: 2, open: 2, spec: 0, seats: [] });
+    await waitFor(() => list.win.tunnelerLobbyUI().spec && list.win.tunnelerLobbyUI().spec.items.some(it => it.key === "room:qp1"), "the list");
+    const lui = list.win.tunnelerLobbyUI(), row = lui.spec.items.find(it => it.key === "room:qp1");
+    assert(/^Quick play +quick play +2\/4 +2 /.test(row.label), "a quick-play row: " + row.label);
+    assert(lui.spec.items.some(it => it.key === "quick"), "Quick play in the list");
+    row.go();
+    assert.strictEqual(list.win.location.href, "/game/qp1", "Enter on a running quick-play game with a computer tank: joins to play");
+    console.log("  ok  lobby.js quick play: finds / makes a game and goes to it, the reason when it can't; quick-play rows join running games");
+  }
+  {
     // no name yet: asked first, then connected with it
     const env = loadPage("online.html", "?room=lob");
     await wait(50);

@@ -79,6 +79,9 @@ export function mount() {
   // ------------------------------------------------------------ room state
   let me = { k: 0, host: false, name: "" };            // this connection: number, host?, name (as the server made it)
   let st = null;                                       // the room's last status ("st"; see server.js)
+  let qpAt = 0;                                        // quick play: when the next match starts (performance.now(); 0 = not counting)
+  const isQuick = () => !!(st && st.qp);
+  const qpLeft = () => qpAt ? Math.max(0, Math.ceil((qpAt - performance.now()) / 1000)) : null;
   let roomName = "";
   const isHost = () => !!me.host;
   const mySeat = () => st ? st.seats.findIndex(s => s.k === me.k && me.k) : -1;
@@ -86,6 +89,9 @@ export function mount() {
 
   // ------------------------------------------------------------ the match (one engine per match)
   let engine = null, runner = null, cfg = null, bots = null;
+  // who drives each tank (quick play, docs/v6/QUICKPLAY.md: the drive markers in the frame log change it) and the
+  // names shown (a tank taken over shows its player's name)
+  let human = null, names = null, tookTimer = null;
   let matchNo = 0;                   // the match this page runs (0 = none)
   let player = -1;                   // this page's tank in it (0-based), -1 = watching
   let ended = false;                 // the server said the match is over (the frames left still run)
@@ -148,7 +154,11 @@ export function mount() {
     engine.setNames(cfg.names);                            // display only (raw Unicode)
     // display only: per player (homepage Settings; on by default; always with graphics modern)
     engine.smoothScroll = store.get("tunneler.smooth") !== "0" || Gfx.mode() === "modern";
-    bots = cfg.ext ? cfg.slots.map((sl, i) => sl.bot ? new TunnelerAI(sl.level || "easy", i + 1) : null) : null;
+    // computer players: for the computer tanks - and in a quick-play match for every tank (NetProto.aiSlot): its
+    // computer player drives it whenever no human does
+    bots = cfg.ext ? cfg.slots.map((sl, i) => NetProto.aiSlot(cfg, sl) ? new TunnelerAI(sl.level || "easy", i + 1) : null) : null;
+    human = cfg.slots.map(sl => !sl.bot);
+    names = cfg.names.slice();
     views = makeViews(player >= 0);
     runner = new Runner(engine, views, speaker);
     // every match played or watched here is recorded (replay.js): kept once it reaches its world map
@@ -173,7 +183,7 @@ export function mount() {
     if (!engine) return;
     if (engine.menuShift !== 0 && (!lastMatch || lastMatch.no !== matchNo)) lastMatch = { engine, cfg, player, no: matchNo };
     if (runner) runner.stop();
-    runner = null; engine = null; bots = null; matchNo = 0; player = -1; ended = false;
+    runner = null; engine = null; bots = null; human = null; names = null; matchNo = 0; player = -1; ended = false;
     queue.clear(); catching = false;
     views = makeViews(false);
     renderBar();
@@ -187,10 +197,46 @@ export function mount() {
     return (k.up ? UP : 0) | (k.down ? DOWN : 0) | (k.left ? LEFT : 0) | (k.right ? RIGHT : 0) | (k.fire ? FIRE : 0);
   }
 
+  // Quick play's drive markers (a frame's [[p, k, name], ...]): from this frame on tank p is driven by connection k
+  // (0: its computer player again) and shows that player's name - on every client at the same frame. The one
+  // that names this page: "You drive the CYAN tank now" across the game for a few seconds.
+  function drive(list) {
+    for (const [p, k, name] of list) {
+      if (!human || p >= human.length) continue;
+      human[p] = k > 0;
+      names[p] = name || null;
+      engine.setNames(names);                              // (display only)
+      if (k && k === me.k) {
+        const note = T("qp.took", { name: NAME(ROLES[cfg.slots[p].color]) });
+        const v = views;
+        v.setNotice(note);
+        clearTimeout(tookTimer);
+        tookTimer = setTimeout(() => { if (v.noticeText === note) v.setNotice(null); }, 4000);
+      }
+    }
+  }
+  // this page drives tank p of the match now (quick play: a tank handed over - {t:"you"}), -1 = watching again:
+  // the views of its role
+  function setPlayer(p) {
+    if (!engine || p === player) return;
+    player = p;
+    views = makeViews(player >= 0);
+    if (runner) runner.display = views;
+    if (player >= 0) views.setScope(player, viewChoice());
+    views.setWatchOut(player >= 0 ? cfg.watchOut : "wreck");
+    if (showPing) views.setPing(rtt == null ? null : Math.round(rtt));
+    markEngine(engine, player);
+    bits = 0; lastReport = "";
+    presentOverlay();
+    renderBar();
+  }
+
   function stepFrame(at, quiet) {
     const f = queue.shift();
     const ext = Array.isArray(f[0]);
-    const input = ext ? frameToInputExt(f, bots && bots.map(ai => ai ? botBits(ai) : null)) : frameToInput(f[0], f[1], f[2]);
+    if (ext && f[2]) drive(f[2]);
+    // (every computer player thinks every frame - also while a human drives its tank: NetProto.botInputs)
+    const input = ext ? frameToInputExt(f, NetProto.botInputs(bots, human, botBits)) : frameToInput(f[0], f[1], f[2]);
     runner.runStep(input, at, quiet);
     frames++;
     if (engine.screen === "map" && (!lastMatch || lastMatch.no !== matchNo))   // the match is over: its statistics are final
@@ -423,6 +469,14 @@ export function mount() {
       const it = { key: "seat" + i, align: "left", label: seatText(s, i, c), attr: s.kind === "closed" && !s.k ? 8 : TEXT_COLORS[i],
         dim: ownTeams() ? [teamCols.from, teamCols.to] : null };
       if (locked) return Object.assign(it, { static: true });
+      // quick play (docs/v6/QUICKPLAY.md): fixed seats and teams - anybody takes a computer tank's seat (Enter / a
+      // click), the own seat only stands up (a click on the own name)
+      if (isQuick()) {
+        if (i === mine) return Object.assign(it, st.spectators ? { info: [T("qp.mine.i")], go: () => {},
+          zones: [{ from: -9, to: teamCols.from, click: d => { if (d > 0) sitOn(-1); } }] } : { static: true });
+        if (!s.k && NetProto.LEVELS.includes(s.kind)) return Object.assign(it, { info: [T("qp.sit.i1"), T("qp.sit.i2")], go: () => sitOn(i) });
+        return Object.assign(it, { static: true });
+      }
       const own = ownTeams();
       if (isHost() && (!s.k || i === mine)) {               // the host: a free seat or the own one
         const cycleZone = { from: -9, to: 99, click: d => hostCycle(i, d) };
@@ -465,7 +519,7 @@ export function mount() {
   }
 
   function settingItems() {
-    const s = st.settings, host = isHost() && !st.match;
+    const s = st.settings, host = isHost() && !st.match && !isQuick();   // (quick play: fixed settings)
     // friendly fire only matters with teammates: grayed out while no team has 2+ seats that aren't closed
     const teamOf = {};
     for (const x of st.seats) if (x.kind !== "closed") teamOf[x.team] = (teamOf[x.team] || 0) + 1;
@@ -504,7 +558,14 @@ export function mount() {
       info: [T("pg.view.i1"), T("pg.view.i2", { max: Lang.raw("view." + visibleNow()) })], go: () => setView(1), change: setView },
       { key: "gapView", label: "", disabled: true });
     if (locked) items.push({ key: "busy", label: T("pg.busy"), disabled: true });
-    else if (isHost()) {
+    else if (isQuick()) {
+      // quick play: the next match starts by itself (no ready); the host may start it now
+      const left = qpLeft();
+      items.push({ key: "qpnext", label: left == null ? T("qp.wait") : T("qp.next", { s: left }), info: [T("qp.next.i1"), T("qp.next.i2")], go: () => {} });
+      if (isHost()) items.push({ key: "start", label: T("pg.go"),
+        info: st.cant ? [{ text: T("pg.cant." + st.cant), color: 14 }] : [T("qp.go.i", { s: left == null ? "-" : left })],
+        go: () => { if (!st.cant) send({ t: "start" }); } });
+    } else if (isHost()) {
       const why = st.cant;
       items.push({ key: "start", label: T("pg.go"), info: why ? [{ text: T("pg.cant." + why), color: 14 }] : [T("pg.go.i")],
         go: () => { if (!st.cant) send({ t: "start" }); } });
@@ -514,7 +575,7 @@ export function mount() {
     }
     // the host: "Kick a player" (opens the list of whom it may remove), right below
     // (grayed while there is nobody to remove - the box doesn't jump)
-    if (isHost() && !locked) items.push({ key: "kick", label: T("pg.kick"), disabled: !kickTargets().length,
+    if (isHost() && !locked && !isQuick()) items.push({ key: "kick", label: T("pg.kick"), disabled: !kickTargets().length,
       info: [T("pg.kick.i1"), T("pg.kick.i2")], go: () => drawKick(false) });
     // the invite link (the server's own page: also from the desktop app); "Link copied" for 3 s
     const invite = Endpoint.web(Links.invite(roomId)), copy = () => copyLink(invite);
@@ -579,7 +640,7 @@ export function mount() {
     const all = [].concat(...boxes.map(b => b.items)), enabled = it => !it.static && !it.disabled;
     // the selection: given, else (the first time) Start / Ready, else the first open seat, else Say
     let first = selKey;
-    if (!first) first = ["start", "ready"].find(k => all.some(it => it.key === k)) ||
+    if (!first) first = ["start", "ready", "qpnext"].find(k => all.some(it => it.key === k)) ||
       (all.find(it => /^seat/.test(it.key) && enabled(it)) || all.find(enabled) || { key: "say" }).key;
     const spec = { lines, text, boxes, infoRow: 22, hint: T("create.hint"),
       back: () => { if (isReady()) send({ t: "ready", v: 0 }); else leave(gamesHref); } };   // Esc: unready, else out
@@ -761,7 +822,7 @@ export function mount() {
     lobbyUI.present(snap);
   }
 
-  const lobbyKey = () => JSON.stringify([st, me, Lang.code, roomName, chatSeq, myView, !!lastMatch]);
+  const lobbyKey = () => JSON.stringify([st, me, Lang.code, roomName, chatSeq, myView, !!lastMatch, qpLeft()]);
   function openLobby() {
     lobby = { page: "lobby", key: "" };
     drawLobby(false);
@@ -909,7 +970,7 @@ export function mount() {
     if (!(engine && m.no === matchNo && m.from === frames + queue.length && m.from > 0)) {
       if (engine && m.no !== matchNo) dropMatch();
       if (m.from !== 0 || !newMatch(m)) { if (ws) ws.close(); return; }
-    } else player = Number.isInteger(m.you) ? m.you : player;
+    } else if (Number.isInteger(m.you) && m.you !== player) setPlayer(m.you);
     queue.pushEntries(m.f || []);
     if (queue.length > 3) catching = true;
     else nextAt = performance.now();
@@ -936,6 +997,9 @@ export function mount() {
       case "end":
         if (engine && m.no === matchNo) ended = true;
         break;
+      case "you":                                          // quick play: this page drives a tank now (or watches)
+        if (engine && m.m === matchNo && Number.isInteger(m.p) && m.p >= -1 && m.p < cfg.slots.length) setPlayer(m.p);
+        break;
       case "chat":                                         // a lobby chat message (not part of the game)
         if (typeof m.text !== "string" || !m.from) break;
         chat.push({ from: m.from, text: m.text });
@@ -946,13 +1010,14 @@ export function mount() {
       case "f":
         if (!engine || m.m !== matchNo) break;
         if (m.n !== frames + queue.length) { if (ws) ws.close(); return; }   // gap: reconnect resumes
-        queue.pushEntries(m.f);
+        if (!queue.pushEntries(m.f) && ws) ws.close();     // (a malformed entry - e.g. a bad drive marker: reconnect resumes)
         break;
       case "st": {
         // somebody new in the room (a seat taken or a spectator): the join sound
         const people = x => x ? (x.seats || []).filter(q => q.k).length + (x.specs || []).length : 0;
         if (st && !m.match && people(m) > people(st)) chatBeep("join");
         st = m;
+        qpAt = m.qp && m.qp.left != null ? performance.now() + Math.max(0, Number(m.qp.left) || 0) : 0;
         roomName = m.name || roomName;
         if (isHost() && !m.match) rememberSettings();
         renderBar();

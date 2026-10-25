@@ -7,6 +7,8 @@
 // presents it, which makes this browser the game's host. A game with a password has a lock before its
 // name; online.js asks for the password (the host never needs it).
 // /lobby.html?room=<id> (old links) goes straight to that game's lobby.
+// Quick play (docs/v6/QUICKPLAY.md; the main menu goes to /games?quick=1, the list has the item too): the server
+// finds a quick-play game with a place for one more (or makes one) - POST /api/quickplay - and this page goes to it.
 import { DosUI } from "./dosui.js";
 import { Endpoint, Links } from "./endpoint.js";
 import { Lang } from "./lang.js";
@@ -29,6 +31,7 @@ export function mount() {
   const home = () => { Nav.go("/"); };
   const old = new URLSearchParams(location.search).get("room");
   if (old) { Nav.go(Links.game(old), true); return; }
+  let quickStart = new URLSearchParams(location.search).get("quick") === "1";
 
   let view = null;                                   // "name" | "list" | "create"
   let rooms = [];
@@ -44,20 +47,29 @@ export function mount() {
   }
   function stateText(r) {
     if (r.state === "lobby") return T("state.lobby");
-    const score = r.round && !ui.isNarrow() ? "  " + scoreText(r) : "";   // (a phone: the round only - the row is narrow)
-    return (r.state === "paused" ? T("state.paused") : T("state.round", { n: r.round || 1 })) + score;
+    const head = r.state === "paused" ? T("state.paused") : T("state.round", { n: r.round || 1 });
+    if (!r.round || ui.isNarrow()) return head;                    // (a phone: the round only - the row is narrow)
+    // the score in what is left of the row (a wider row slid the whole row left: a 4-tank game's "0:0:0:0" cut the
+    // name's first letter): one space less, then the best score only, then none
+    const room = ROW_W - WIDE.reduce((a, b) => a + b, 0), sc = scoreText(r);
+    const tries = ["  " + sc, " " + sc, ...(r.ext && !r.teams ? ["  " + T("lobby.best", { n: Math.max(0, ...r.wins) })] : [])];
+    return head + (tries.find(x => UniText.cols(head + x) <= room) || "");
   }
   // the list's columns after the name: PLAYERS ("2/4": seated / seats they can take - during a match:
   // connected / its players), AI (computer tanks), WATCHING (spectators); 0 = blank
   const WIDE = [22, 17, 8, 4, 9];                    // (name, mode, players, AI, watching; the state takes the rest)
+  const ROW_W = 75;                                  // a row's columns in the box (76 wide; one more slides the row left)
   // the phone layout (DosUI narrow, DosUI.NARROW_W - 2 columns): name, players and the state (0 = the column left out)
   const NARROW = [13, 0, 8, 0, 0];
   const cols = () => ui.isNarrow() ? NARROW : WIDE;
-  const ROWS = 9;                                    // game rows shown at most (the box then ends on row 20, the info on rows 22-23)
+  const ROWS = 8;                                    // game rows shown at most (the box then ends on row 20, the info on rows 22-23)
+  const FIXED = 6;                                   // the items below the games: separator, Quick play, Create, Join by link, gap, Back
   const places = r => r.places != null ? r.places : r.players + (r.open || 0);
+  // a game Enter joins as a player: a free seat in its lobby - a quick-play game also a computer tank during a match
+  const joinable = r => !!r.open && (r.state === "lobby" || !!r.qp);
   function rowText(r, state) {
     const C = cols(), cell = (t, k) => C[k] ? UniText.padEnd(UniText.slice(t, C[k] - 1), C[k]) : "";
-    return cell(E((r.locked ? LOCK : "") + r.name), 0) + cell(T("gm." + (r.mode || "standard")), 1) + cell(r.players + "/" + places(r), 2) +
+    return cell(E((r.locked ? LOCK : "") + r.name), 0) + cell(r.qp ? T("qp.mode") : T("gm." + (r.mode || "standard")), 1) + cell(r.players + "/" + places(r), 2) +
       cell(r.bots ? String(r.bots) : "", 3) + cell(r.spec ? String(r.spec) : "", 4) + state;
   }
   // its columns' colors (DosUI spans): the name white, the mode light cyan, the players light green, AI /
@@ -104,10 +116,10 @@ export function mount() {
       label: rowText(r, stateText(r)), align: "left", key: "room:" + r.id, spans: rowSpans(r),   // (the games you host: first, no mark)
       // (the table says the rest: only whether you host it and the keys)
       info: [hosting(r) ? { text: T("lobby.host.i"), color: 14 } : r.locked ? { text: T("lobby.locked.i"), color: 14 } : null,
-        T((r.spectators ? (r.state === "lobby" && r.open ? "lobby.join2" : "lobby.watch") : r.state === "lobby" && r.open ? "lobby.join" : "lobby.closed")
-          + (GameScreen.mobile() && !(!r.spectators && !(r.state === "lobby" && r.open)) ? ".touch" : ""))].filter(Boolean),
-      disabled: !r.spectators && !(r.state === "lobby" && r.open),
-      go: () => join(r.id, !(r.state === "lobby" && r.open)),
+        T((r.spectators ? (joinable(r) ? "lobby.join2" : "lobby.watch") : joinable(r) ? "lobby.join" : "lobby.closed")
+          + (GameScreen.mobile() && !(!r.spectators && !joinable(r)) ? ".touch" : ""))].filter(Boolean),
+      disabled: !r.spectators && !joinable(r),
+      go: () => join(r.id, !joinable(r)),
       // → or a right click (DosUI: change(-1)): watch it; on a phone a tap on its state column (it has neither)
       change: d => { if (r.spectators && d !== 0) join(r.id, true); },
       // (a phone only: on a desktop a click anywhere on the row joins - a click on its right end watching instead
@@ -117,17 +129,19 @@ export function mount() {
     }));
     if (!rooms.length) items.push({ key: "none", label: T("lobby.none"), disabled: true });
     items.push({ key: "sep", separator: true });
+    items.push({ key: "quick", label: T("home.quick"), info: serverVersion ? versionInfo() : [T("home.quick.i1"), T("home.quick.i2")],
+      go: () => { if (!serverVersion) quick(); } });
     items.push({ key: "create", label: T("lobby.create"), info: serverVersion ? versionInfo() : [T("lobby.create.i")],
       go: () => { if (!serverVersion) create(); } });
     items.push({ key: "link", label: T("lobby.link"), info: [T("lobby.link.i1"), T("lobby.link.i2")], go: () => joinLink() });
     items.push({ key: "gap", label: "", disabled: true });
     items.push({ key: "back", label: T("back.main"), info: [T("back.main.i")], go: home });
     // as many games as fit (up to ROWS, then they scroll); the box ends below them and the info follows it
-    const shown = Math.max(1, Math.min(items.length - 5, ROWS)), bottom = 3 + 3 + shown + 5;
+    const shown = Math.max(1, Math.min(items.length - FIXED, ROWS)), bottom = 3 + 3 + shown + FIXED;
     ui.show({
       lines: [{ row: 2, text: T("lobby.title"), color: 12 },
         ...(serverVersion ? [{ row: 1, text: T("ver.server", { server: serverVersion, you: myVersion }), color: 12 }] : [])],
-      box: { x: 2, y: 3, w: 76, rows: shown }, fixed: 5,
+      box: { x: 2, y: 3, w: 76, rows: shown }, fixed: FIXED,
       // (each title cut to leave a space before the next: the phone's narrow columns)
       header: UniText.padEnd(" " + UniText.slice(T("lobby.name"), cols()[0] - 1), cols()[0] + 1) + [T("lobby.mode"), T("lobby.players"), T("lobby.ai"), T("lobby.spec")].map((h, i) => cols()[i + 1] ? UniText.padEnd(UniText.slice(h, cols()[i + 1] - 1), cols()[i + 1]) : "").join("") +
         T("lobby.state"),
@@ -179,6 +193,46 @@ export function mount() {
     } catch (err) { form.error = T("create.err", { msg: err.message }); create(true); }
   }
 
+  // ------------------------------------------------------------ quick play
+  // "Looking for a game...", then straight to the game the server found or made (from the main menu - /games?quick=1 -
+  // that history entry replaced: Back from the game leads to the main menu, not to another search; from the list a
+  // new entry: Back leads to the list); a refusal in red with Try again / Back.
+  let quickBusy = false, quickErr = null;
+  function drawQuick() {
+    ui.show({
+      lines: [{ row: 2, text: T("qp.title"), color: 12 }, quickErr || { row: 9, text: T("qp.finding"), color: 14 }],
+      box: { y: 13 }, infoRow: 18, back: quickBack,
+      items: [...(quickErr ? [{ key: "again", label: T("qp.again"), info: [T("home.quick.i1"), T("home.quick.i2")], go: () => quick() }] : []),
+        { key: "back", label: T("back.lobby"), info: [T("back.lobby.i")], go: quickBack }],
+    }, view === "quick");
+  }
+  // back to the list (its address without ?quick=1: a reload shows the list, not another search)
+  function quickBack() {
+    if (quickStart) try { history.replaceState(history.state, "", Links.games()); } catch (e) { /* (a test's stub) */ }
+    quickStart = false;
+    list();
+  }
+  function quick() {
+    if (view !== "quick") ui.sel = 0;
+    view = "quick"; quickErr = null;
+    drawQuick();
+    if (quickBusy) return;
+    quickBusy = true;
+    const failed = text => { quickBusy = false; if (view === "quick") { quickErr = { row: 9, text, color: 12 }; drawQuick(); } };
+    fetch(Endpoint.api("/api/quickplay"), { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ version: myVersion || "dev", name: Lang.raw("qp.room") }) })
+      .then(res => res.json().then(r => ({ res, r })))
+      .then(({ res, r }) => {
+        if (res.status === 409 && r && r.code === "version") { serverVersion = r.version; return failed(T("ver.server", { server: serverVersion, you: myVersion })); }
+        if (!res.ok || !r || typeof r.id !== "string") return failed(T("qp.err", { msg: E(String(r && r.error || res.status)) }));
+        quickBusy = false;
+        if (view !== "quick") return;                  // (went back meanwhile)
+        if (r.hostKey) store.set("tunneler.host." + r.id, r.hostKey);   // (a new game: this browser hosts it)
+        Nav.go(Links.game(r.id), quickStart);
+      })
+      .catch(err => failed(T("qp.err", { msg: E(String(err && err.message || err)) })));
+  }
+
   // ------------------------------------------------------------ join by link
   // An invite link pasted (or just a game's id): this server's game -> its lobby; another server's -> in a
   // browser that site's page, in the desktop app that server becomes the one it plays on (Settings: Server)
@@ -216,7 +270,7 @@ export function mount() {
   // minute to wake up): "Connecting to <server>...", <ESC> / Back to the main menu. One request at a time.
   let reached = false, busy = false, failed = false;
   function connecting() {
-    if (view === "name") return;
+    if (view === "name" || view === "quick") return;
     const host = (Endpoint.base() || location.origin).replace(/^https?:\/\//, "");
     ui.show({
       lines: [{ row: 2, text: T("lobby.title"), color: 12 }, { row: 9, text: T("lobby.connecting"), color: 14 }, { row: 11, text: E(host), color: 7 },
@@ -260,6 +314,7 @@ export function mount() {
 
   setTimeout(() => { if (!reached) connecting(); }, 300);   // (until the server answers; no flash when it's quick)
   setTimeout(() => { if (!reached) { failed = true; connecting(); } }, 3000);   // (still waiting: the wake-up hint)
-  if (!DosUI.playerName()) askName(() => { view = null; if (reached) list(); else connecting(); refreshList(false); });
+  if (quickStart) { if (DosUI.playerName()) quick(); else askName(() => quick()); }
+  else if (!DosUI.playerName()) askName(() => { view = null; if (reached) list(); else connecting(); refreshList(false); });
   refreshList(false);
 }

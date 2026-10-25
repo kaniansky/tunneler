@@ -20,6 +20,13 @@ a release is made by pushing a version tag (see CONTRIBUTING.md).
     message in a browser. A screen whose code is gone after a deploy reloads the page too.
   - A screen that crashes shows a message and a way back instead of a blank page. Errors that pages catch
     are reported to the server's log. There is also a new `/api/health`.
+- **Quick play** (main menu and the list of games): straight into an online game. The server finds a quick-play
+  game with a place for you, or makes one - four tanks free-for-all, computer tanks in every seat nobody sits on,
+  matches that start by themselves after a short countdown. Join a game that is already running and you take over
+  a computer tank at once; leave, and the computer drives it again (a dropped connection or a reload gets the same
+  tank back within 15 s). The taken-over tank shows your name. Every
+  client switches the tank at exactly the same frame (a marker in the game's frame log), so spectators, late
+  joiners and replays see the same game. (docs/v6/QUICKPLAY.md)
 
 ## 5.0.4
 
