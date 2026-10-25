@@ -57,7 +57,8 @@
   h3 { font: 600 15px/1.4 var(--mono); color: var(--yellow); text-transform: uppercase; letter-spacing: .06em; margin: 0 0 .6em; }
 
   /* top line */
-  .top { border-bottom: 1px solid var(--rule); }
+  .top { border-bottom: 1px solid var(--rule); position: sticky; top: 0; z-index: 10; background: var(--black); }
+  html { scroll-padding-top: 72px; }      /* (the sticky header: a #section link lands below it) */
   .top .wrap { display: flex; align-items: center; gap: 4px 22px; flex-wrap: wrap; min-height: 52px; padding-top: 8px; padding-bottom: 8px; }
   .top .brand { font: 16px/16px var(--vga); color: var(--lred); text-decoration: none; margin-right: auto; }
   .top nav { display: flex; gap: 4px 20px; flex-wrap: wrap; }
@@ -157,10 +158,10 @@
   .rel { font: 14px var(--mono); color: var(--gray); margin: 0 0 4px; }
   pre.cmd { background: #0d0d0d; border-left: 2px solid var(--dgray); padding: 12px 14px; overflow-x: auto; color: var(--white);
     font-size: 13px; line-height: 1.6; margin: 10px 0 18px; }
-  .repos { margin-top: 48px; max-width: 60em; }
+  .repos { margin-top: 48px; }
   .repos h3 { margin-top: 32px; }
   .repos h3:first-child { margin-top: 0; }
-  .repos p { margin-bottom: 0; }
+  .repos p { margin-bottom: 0; max-width: 46em; }
 
   .credits { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: 48px; }
   ul.plain { list-style: none; margin: 0; padding: 0; }
@@ -241,6 +242,9 @@
     .gallery { gap: 24px; }
     .top nav { display: none; }
     .lang span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+    .top .wrap { gap: 4px 8px; }            /* (the sticky header in one row: the name, Look, Language) */
+    .top .brand { font-size: 14px; }
+    .lang select, html[data-theme="modern"] .lang select { font-size: 13px; padding: 3px 2px; max-width: 30vw; }
     .dl a.file { font-size: 13px; }
     .box { padding: 24px 16px 16px; }
     table.keys th, table.keys td { padding-right: 14px; }

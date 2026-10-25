@@ -59,7 +59,9 @@ may be redesigned, but always in the original's DOS look.
   netproto.js needs (netproto, unitext, unidata, glyphs, vgafont) + public/), runs
   as `node`, port 8050. `.github/workflows`: ci (npm ci, build, test, docker build), **release** (only a pushed
   `vX.Y.Z` tag: a GitHub Release with that version's CHANGELOG.md section as notes
-  (`tools/changelog-notes.sh`), the desktop app, the Docker image on ghcr.io as `latest` / `X.Y.Z` /
+  (`tools/changelog-notes.sh`) - a draft until the apps and latest.json are attached (app-build.yml uploads with
+  `gh release upload`), then job `publish` makes it public, and only then the homepage, the Linux repositories and
+  the Flatpak manifest (owner, 2026-10-25: the homepage kept showing the old version while the new one built) -, the desktop app, the Docker image on ghcr.io as `latest` / `X.Y.Z` /
   `X.Y` / short sha, amd64 + arm64, the homepage upload; pushes to main only run CI; release-notes.yml
   rewrites an old release's notes by hand), docker-publish (manual image build
   only), keep-awake (pings the live server every 10 minutes: Render's free plan sleeps after 15 idle
@@ -871,6 +873,8 @@ none, i.e. a page from before 2.0 - is refused (POST 409 `{code:
   disk is wiped on deploys): `REPLAY_S3_ENDPOINT / _BUCKET / _ACCESS_KEY / _SECRET_KEY / _REGION` (opts.replayS3),
   `s3Request` (GET / PUT, path-style) signed by `sigV4` (Signature V4 with node's crypto - no SDK; tested against
   AWS's example), objects `<id>.replay`, a 500-entry memory cache, a failing bucket = 503; the start-up log names
-  the store (`replayStore`). test/replay-share-check.js (the API) + replay-check (the page). Texts `rp.*`,
+  the store (`replayStore`). `REPLAY_KEEP_DAYS` (opts.replayKeepDays; the live server: 90, with the R2 bucket's
+  lifecycle rule doing the deleting): the POST answers `{id, days}` -> `rp.shared.days` under the copied link; the
+  folder store drops older files (and won't serve one not swept yet). test/replay-share-check.js (the API) + replay-check (the page). Texts `rp.*`,
   `home.replays`, `back.replays`, an Information section. Test hooks `tunnelerReplay / tunnelerReplayUI /
   tunnelerReplayList`. Test: replay-check.js.

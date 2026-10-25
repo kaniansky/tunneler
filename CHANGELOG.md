@@ -3,6 +3,16 @@
 All notable changes to Tunneler Online. Versions follow [semantic versioning](https://semver.org/);
 a release is made by pushing a version tag (see CONTRIBUTING.md).
 
+## Unreleased
+
+- A shared replay's link says how long it works when the server keeps them for a limited time
+  (`REPLAY_KEEP_DAYS`; the live server: 90 days).
+- Releases: the GitHub release stays a draft until every app is attached, so the homepage, the apps' updater
+  and the Linux repositories keep offering the previous version while a new one is being built.
+- Homepage: the header stays at the top while scrolling (one row on a phone); the Linux repository commands use
+  the page's full width.
+- `npm run check:phone` also plays an online game (a desktop host and the phone) to its end.
+
 ## 5.0.2
 
 - Shared replays can live in an S3-compatible bucket (Cloudflare R2, MinIO, AWS S3: `REPLAY_S3_*`, see

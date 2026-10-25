@@ -128,7 +128,7 @@ export function mount() {
   window.tunnelerEngine = () => engine;                    // for tests / debugging in the console
   window.tunnelerRunner = () => runner;
   window.tunnelerViews = () => views;
-  window.tunnelerFrames = () => ({ frames, queued: queue.length, catching });   // (tests: caught up?)
+  window.tunnelerFrames = () => ({ frames, queued: queue.length, catching, desync: desyncAt });   // (tests: caught up? in step?)
 
   // a new match ({no, seed, cfg, you} from "match" / "hello")
   function newMatch(m) {
