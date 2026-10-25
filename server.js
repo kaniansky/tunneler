@@ -1186,11 +1186,14 @@ function createServer(opts = {}) {
     ws.left = true;
     room.sockets.delete(ws);
     if (closing) return;                          // (shutting down: the snapshot is taken - no timers, nothing changes)
-    if (ws.seat >= 0 && room.seats[ws.seat].occ === ws) room.seats[ws.seat].occ = null;   // (last: a reload gets it back)
+    // (quick play: a seat / tank nobody drives goes back to its computer player - not when the page's new connection
+    // replaces this one: that one gets them back by its client id)
+    if (ws.seat >= 0 && room.seats[ws.seat].occ === ws) { room.seats[ws.seat].occ = null; if (!replaced) qpSeat(room, ws.seat); }   // (last: a reload gets it back)
     const m = room.match;
     if (m && ws.player >= 0 && m.socks[ws.player] === ws) {
       m.socks[ws.player] = null;
       m.held[ws.player] = 0; m.latch[ws.player] = 0;   // extended: the tank stands still from the next frame on
+      if (m.qp && !replaced) qpRelease(room, m, ws.player);   // (quick play: its computer player drives it again)
       if (!m.socks.some(Boolean)) {               // no player left: the match ends unless one comes back soon
         clearTimeout(m.aloneTimer);
         m.aloneTimer = setTimeout(() => { if (room.match === m && !m.socks.some(Boolean)) endMatch(room, "gone"); }, matchAloneMs);
@@ -1199,34 +1202,13 @@ function createServer(opts = {}) {
     }
     if (replaced) return;
     say("room", room.id, ws.name, "disconnected");
+    qpFill(room);                                 // (quick play: a waiting spectator gets the tank / seat)
+    qpSchedule(room);
     ensureHost(room);                             // (the host left: somebody else hosts now)
     matchReport(room);                            // (the others may be most of the players now)
     updateClock(room);                            // (classic: paused)
     sendStatus(room);
     if (room.sockets.size === 0) armCleanup(room);
-    ws.on("close", () => {
-      room.sockets.delete(ws);
-      if (ws.seat >= 0 && room.seats[ws.seat].occ === ws) { room.seats[ws.seat].occ = null; qpSeat(room, ws.seat); }   // (last: a reload gets it back)
-      const m = room.match;
-      if (m && ws.player >= 0 && m.socks[ws.player] === ws) {
-        m.socks[ws.player] = null;
-        m.held[ws.player] = 0; m.latch[ws.player] = 0;   // extended: the tank stands still from the next frame on
-        if (m.qp) qpRelease(room, m, ws.player);      // (quick play: its computer player drives it again)
-        if (!m.socks.some(Boolean)) {               // no player left: the match ends unless one comes back soon
-          clearTimeout(m.aloneTimer);
-          m.aloneTimer = setTimeout(() => { if (room.match === m && !m.socks.some(Boolean)) endMatch(room, "gone"); }, matchAloneMs);
-          if (m.aloneTimer.unref) m.aloneTimer.unref();
-        }
-      }
-      say("room", room.id, ws.name, "disconnected");
-      qpFill(room);                                 // (quick play: a waiting spectator gets the tank / seat)
-      qpSchedule(room);
-      ensureHost(room);                             // (the host left: somebody else hosts now)
-      matchReport(room);                            // (the others may be most of the players now)
-      updateClock(room);                            // (classic: paused)
-      sendStatus(room);
-      if (room.sockets.size === 0) armCleanup(room);
-    });
   }
 
   // A room always has a host while anybody is connected: when no connected socket is one (the host
