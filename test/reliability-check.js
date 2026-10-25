@@ -346,7 +346,206 @@ async function main() {
     fs.rmSync(dir, { recursive: true, force: true });
   }
 
+  await pageTests();
   console.log(failures ? `reliability-check: ${failures} FAILED` : "reliability-check: all passed");
   process.exit(failures ? 1 : 0);
 }
+// ---------------------------------------------------------------- the online page (vm, stub DOM and websocket)
+const vm = require("vm");
+const { runPage, run } = require("./page-env.js");
+function pageEnv(search, opts = {}) {
+  const listeners = {}, elements = {}, sockets = [], ls = new Map(Object.entries(opts.stored || { "tunneler.name": "Ann" })), fetches = [];
+  const session = opts.session || new Map();
+  const mkEl = id => ({ id, width: 720, height: 400, style: {}, hidden: false, children: [], classList: { toggle() {}, add() {}, remove() {}, contains: () => false },
+    appendChild(c) { this.children.push(c); return c; }, setAttribute() {}, addEventListener() {}, removeEventListener() {}, focus() {}, blur() {},
+    getBoundingClientRect: () => ({ left: 0, top: 0, width: 720, height: 400 }),
+    getContext: () => ({ createImageData: (w, h) => ({ data: new Uint8ClampedArray(w * h * 4) }), putImageData() {}, fillRect() {}, clearRect() {}, drawImage() {} }) });
+  class FakeWS {
+    constructor(url) { this.url = url; this.readyState = 0; this.sent = []; sockets.push(this); setTimeout(() => { if (this.readyState === 0) { this.readyState = 1; this.onopen && this.onopen(); } }, 0); }
+    send(m) { this.sent.push(JSON.parse(m)); }
+    close() { if (this.readyState === 3) return; this.readyState = 3; this.closedByPage = true; this.onclose && this.onclose({ code: 1005 }); }
+    recv(m) { this.onmessage && this.onmessage({ data: JSON.stringify(m) }); }
+    serverClose(code) { if (this.readyState === 3) return; this.readyState = 3; this.onclose && this.onclose({ code }); }
+  }
+  const win = {
+    document: { title: "", getElementById: id => elements[id] || (elements[id] = mkEl(id)), createElement: mkEl, querySelector: () => null, querySelectorAll: () => [],
+      body: Object.assign(mkEl("body"), { classList: { toggle() {}, contains: () => false, add() {}, remove() {} } }), visibilityState: "visible",
+      documentElement: { style: { setProperty() {}, removeProperty() {} }, classList: { toggle() {} } },
+      addEventListener: (t, f) => (listeners["doc:" + t] = listeners["doc:" + t] || []).push(f) },
+    location: { search, pathname: "/online.html", protocol: "http:", host: "x.test", hostname: "x.test", origin: "http://x.test", href: "http://x.test/online.html" + search,
+      reloads: 0, reload() { this.reloads++; }, replace(u) { this.href = u; } },
+    history: { replaceState() {}, pushState() {} },
+    localStorage: { getItem: k => ls.has(k) ? ls.get(k) : null, setItem: (k, v) => ls.set(k, String(v)), removeItem: k => ls.delete(k), key: i => [...ls.keys()][i] || null, get length() { return ls.size; } },
+    sessionStorage: { getItem: k => session.has(k) ? session.get(k) : null, setItem: (k, v) => session.set(k, String(v)) },
+    navigator: { onLine: true, userAgent: "test" },
+    addEventListener: (t, f) => (listeners[t] = listeners[t] || []).push(f), removeEventListener() {},
+    requestAnimationFrame: f => setTimeout(() => f(performance.now()), 16), cancelAnimationFrame: t => clearTimeout(t),
+    matchMedia: () => ({ matches: false }), innerWidth: 1280, innerHeight: 800, devicePixelRatio: 1,
+    fetch: async (url, o) => { fetches.push({ url, o }); return { ok: true, status: 200, headers: { get: () => null }, json: async () => [] }; },
+    WebSocket: FakeWS, performance, setTimeout, setInterval, clearTimeout, clearInterval, console, URLSearchParams, URL, Math, atob, btoa, Uint8Array,
+    TextEncoder, TextDecoder, tunnelerNetTimes: opts.times,
+  };
+  win.window = win; win.globalThis = win;
+  const ctx = vm.createContext(win);
+  const fire = (t, ev) => { for (const f of listeners[t] || []) f(ev || {}); };
+  return { ctx, win, sockets, ls, session, fetches, fire, load: () => runPage(ctx, "online.html", { version: opts.version }) };
+}
+const statusText = env => {
+  const ui = env.win.tunnelerStatusUI && env.win.tunnelerStatusUI();
+  return ui && ui.spec ? ui.spec.lines.map(l => env.win.Lang.decode(String(l.text))).join("\n") : "";
+};
+const SETTINGS = { size: "small", winScore: 3, friendlyFire: false, roundTime: 0, visible: "self", watchOut: "wreck", sight: "full", mode: "standard" };
+const status = (k, match) => ({ t: "st", name: "Room", public: true, spectators: true, settings: SETTINGS,
+  seats: [{ kind: "open", team: 1, k, name: "Ann", ready: false, host: true, ping: 10 }, { kind: "open", team: 2, k: 9, name: "Bob", ready: false, host: false, ping: 10 },
+    ...[2, 3, 4, 5, 6, 7].map(i => ({ kind: "closed", team: i + 1, k: null, name: "", ready: false, host: false, ping: null }))],
+  specs: [], cant: null, match: match || null });
+const hello = (k, match) => ({ t: "hello", id: "room", name: "Room", created: 1, you: { k, host: true, name: "Ann" }, chat: [], match: match || null });
+const sidOf = url => new URL(url, "http://x").searchParams.get("sid");
+
+async function pageTests() {
+  console.log("the online page");
+  {
+    // a dead connection: pings answered by nothing - dropped and reconnected (the same sid); the network back: at once
+    const env = pageEnv("?room=room", { times: { dead: 250, ping: 60, gone: 700 } });
+    env.load();
+    await until(() => env.sockets[0] && env.sockets[0].readyState === 1, "socket 0");
+    const s0 = env.sockets[0];
+    s0.recv(hello(1)); s0.recv(status(1));
+    await until(() => s0.sent.some(m => m.t === "ping"), "a ping");
+    s0.recv({ t: "pong", c: s0.sent.find(m => m.t === "ping").c });
+    await until(() => env.sockets.length > 1, "reconnected", 5000);
+    check("a connection that answers nothing is dropped (its handlers off) and the page reconnects with the same sid", () => {
+      assert(s0.closedByPage && s0.onclose === null && s0.onmessage === null);
+      assert(sidOf(s0.url) && sidOf(s0.url) === sidOf(env.sockets[1].url));
+    });
+    // the server restarts: the restart screen, a quick reconnect
+    const s1 = env.sockets[1];
+    await until(() => s1.readyState === 1, "socket 1 open");
+    s1.recv(hello(2)); s1.recv(status(2));
+    s1.recv({ t: "restart", saved: true }); s1.serverClose(1012);
+    await until(() => /restarting/.test(statusText(env)), "the restart screen", 2000);
+    check("{t:'restart'} + 1012: 'The server is restarting...' / 'Your game goes on as soon as it is back.'", () =>
+      assert(/The server is restarting\.\.\.\nYour game goes on as soon as it is back\./.test(statusText(env)), statusText(env)));
+    const t0 = Date.now();
+    await until(() => env.sockets.length > 2, "reconnected after the restart", 2000);
+    check("... and reconnects at once (within half a second)", () => assert(Date.now() - t0 < 500, Date.now() - t0 + " ms"));
+    // the next server doesn't have the game (yet): keeps trying, then says it is gone
+    let n = env.sockets.length;
+    const refuse = async () => { const s = env.sockets[env.sockets.length - 1]; await until(() => s.readyState === 1, "open"); s.recv({ t: "err", code: "noroom", msg: "No such room" }); s.serverClose(4000); };
+    await refuse();
+    await until(() => env.sockets.length > n, "tries again after noroom", 3000);
+    check("no such room right after a restart: not an error yet - the restart screen, trying again", () => assert(/restarting/.test(statusText(env))));
+    await sleep(750);
+    for (let k = 0; k < 6 && !/gone/.test(statusText(env)); k++) { n = env.sockets.length; await refuse(); await sleep(30); if (env.sockets.length === n) await until(() => env.sockets.length > n || /gone/.test(statusText(env)), "next", 12000); }
+    check("then: 'The server was restarted and this game is gone.' / 'Create a new game or join one from the list.'", () =>
+      assert(/The server was restarted and this game is gone\.\nCreate a new game or join one from the list\./.test(statusText(env)), statusText(env)));
+    n = env.sockets.length;
+    await sleep(300);
+    check("... and no more tries", () => assert.strictEqual(env.sockets.length, n));
+  }
+  {
+    // the network back / offline
+    const env = pageEnv("?room=room", { times: { ping: 5000 } });
+    env.load();
+    await until(() => env.sockets[0] && env.sockets[0].readyState === 1, "socket 0");
+    env.sockets[0].recv(hello(1)); env.sockets[0].recv(status(1));
+    env.win.navigator.onLine = false;
+    env.sockets[0].serverClose(1006);
+    await until(() => /No network/.test(statusText(env)), "offline screen", 2000);
+    check("no network: 'No network connection - waiting for it...'", () => assert(/No network connection - waiting for it\.\.\./.test(statusText(env))));
+    // (the next try is ~0.5-0.7 s away: the network comes back now - at once)
+    env.win.navigator.onLine = true;
+    const n = env.sockets.length;
+    env.fire("online");
+    check("the network is back: the page reconnects at once", () => assert.strictEqual(env.sockets.length, n + 1));
+  }
+  {
+    // a desync: the match rebuilt from frame 0 (a connection without &match), twice at most, then shown
+    const env = pageEnv("?room=room", { times: { ping: 5000 } });
+    env.load();
+    await until(() => env.sockets[0] && env.sockets[0].readyState === 1, "socket 0");
+    const cfg = { ext: true, players: 2, slots: [{ color: 0, bot: false, team: 1 }, { color: 1, bot: true, level: "easy", team: 2 }], names: ["Ann", null],
+      size: "small", winScore: 3, friendlyFire: false, roundTime: 0, visible: "self", watchOut: "wreck", sight: "full", mode: "standard" };
+    const match = from => ({ no: 1, seed: 1234, cfg, you: 0, n: 40, from, f: [[[0, 0], 40]] });
+    const s0 = env.sockets[0];
+    s0.recv(hello(1, match(0))); s0.recv(status(1, { no: 1, running: true, conn: [true, true], names: ["Ann", null] }));
+    await until(() => env.win.tunnelerFrames().frames >= 37, "frames run");
+    s0.recv({ t: "desync", n: 64 });
+    await until(() => env.sockets.length > 1, "rebuild connection", 2000);
+    check("a desync: the page drops its connection and asks for the whole match again (no &match / &have, same sid)", () => {
+      assert(s0.closedByPage); assert(/&match=1&have=/.test(s0.url) === false);
+      const u = env.sockets[1].url; assert(!/[?&]match=/.test(u) && !/[?&]have=/.test(u), u); assert.strictEqual(sidOf(u), sidOf(s0.url));
+      assert.strictEqual(env.win.tunnelerFrames().rebuilds, 1); assert.strictEqual(env.win.tunnelerEngine(), null);
+    });
+    const s1 = env.sockets[1];
+    await until(() => s1.readyState === 1, "open");
+    s1.recv(hello(1, match(0)));
+    await until(() => env.win.tunnelerFrames().frames >= 37, "rebuilt");
+    check("... the match runs again from frame 0 on a fresh engine", () => assert(env.win.tunnelerEngine() && env.win.tunnelerFrames().desync === -1));
+    s1.recv({ t: "desync", n: 128 });
+    await until(() => env.sockets.length > 2, "second rebuild", 2000);
+    const s2 = env.sockets[2];
+    await until(() => s2.readyState === 1, "open");
+    s2.recv(hello(1, match(0)));
+    await until(() => env.win.tunnelerEngine() && env.win.tunnelerFrames().frames >= 37, "rebuilt again");
+    s2.recv({ t: "desync", n: 192 });
+    await sleep(100);
+    check("a third desync in the same match: no more rebuilds - 'DESYNC at frame n' as before", () => {
+      assert.strictEqual(env.sockets.length, 3); assert.strictEqual(env.win.tunnelerFrames().desync, 192); assert.strictEqual(env.win.tunnelerFrames().rebuilds, 2);
+    });
+    check("every connection carries the page's sid", () => assert(env.sockets.every(s => /[?&]sid=/.test(s.url))));
+  }
+  {
+    // another version on the server: a built browser page reloads itself once for it; the same refusal again: the message
+    const session = new Map();
+    const env = pageEnv("?room=room", { version: "6.0.0", session });
+    env.load();
+    await until(() => env.sockets[0] && env.sockets[0].readyState === 1, "socket 0");
+    env.sockets[0].recv({ t: "err", code: "version", version: "6.0.1", msg: "x" }); env.sockets[0].serverClose(4000);
+    await sleep(50);
+    check("version refused: the page reloads (once for that version), no reconnects meanwhile", () => {
+      assert.strictEqual(env.win.location.reloads, 1); assert.strictEqual(session.get("tunneler.reloadFor"), "6.0.1"); assert.strictEqual(env.sockets.length, 1);
+    });
+    const again = pageEnv("?room=room", { version: "6.0.0", session });
+    again.load();
+    await until(() => again.sockets[0] && again.sockets[0].readyState === 1, "socket 0");
+    again.sockets[0].recv({ t: "err", code: "version", version: "6.0.1", msg: "x" }); again.sockets[0].serverClose(4000);
+    await until(() => /This server runs version 6\.0\.1/.test(statusText(again)), "the version message", 2000);
+    check("refused again after the reload: no loop - the message", () => assert.strictEqual(again.win.location.reloads, 0));
+  }
+  {
+    // client error reports: built pages only, at most 5 per page, each error once
+    const env = pageEnv("", { version: "6.0.0" });
+    run(env.ctx, ["js/report.js"], { version: "6.0.0" });
+    const R = env.win.Report;
+    const e = new Error("boom"); e.stack = "Error: boom\n    at x (http://x.test/js/app-AAAA.js:1:2)";
+    R.error("online loop", e); R.error("online loop", e);
+    for (let i = 0; i < 8; i++) R.error("page", new Error("other " + i));
+    const sent = env.fetches.filter(f => /\/api\/errors$/.test(f.url));
+    const body = JSON.parse(sent[0].o.body);
+    check("Report.error: POST /api/errors (text/plain, keepalive) with where, msg, stack, path, version; each error once; 5 per page", () => {
+      assert.strictEqual(sent.length, 5);
+      assert.deepStrictEqual([body.where, body.msg, body.version, body.url], ["online loop", "boom", "6.0.0", "/online.html"]);
+      assert(/app-AAAA/.test(body.stack)); assert.strictEqual(sent[0].o.headers["Content-Type"], "text/plain"); assert(sent[0].o.keepalive);
+    });
+    const dev = pageEnv("", {});
+    run(dev.ctx, ["js/report.js"], {});
+    dev.win.Report.error("x", new Error("y"));
+    check("... not from a development page (no version)", () => assert.strictEqual(dev.fetches.length, 0));
+  }
+  {
+    // the status screens fit (the texts in every language; DosUI centres them, layout-check checks the boxes)
+    const env = pageEnv("", {});
+    run(env.ctx, ["js/lang.js", "lang/index.js"]);
+    const L = env.win.Lang, U = env.win.UniText, bad = [];
+    for (const c of L.codes) {
+      L.set(c);
+      for (const k of ["rel.restart", "rel.restart2", "rel.gone", "rel.gone2", "rel.offline", "rel.rebuild", "rel.crash"])
+        if (U.cols(L.t(k)) > 78) bad.push(c + " " + k + " " + U.cols(L.t(k)));
+      for (const k of ["rel.load", "rel.load2", "rel.crash", "rel.crash2"]) if (!L.raw(k) || L.raw(k).length > 80) bad.push(c + " " + k);
+    }
+    check("every language's texts fit a line (78 columns)", () => assert.deepStrictEqual(bad, []));
+  }
+}
+
 main().catch(e => { console.error(e); process.exit(1); });

@@ -31,6 +31,7 @@ import { Lang } from "./lang.js";
 import { NetProto } from "./netproto.js";
 import { Pads } from "./pads.js";
 import { Replay } from "./replay.js";
+import { Report, Reload } from "./report.js";
 import { Runner } from "./runner.js";
 import { Speaker } from "./speaker.js";
 import { StatusLine } from "./statusline.js";
@@ -66,6 +67,9 @@ export function mount() {
   }
   let clientId = store.get("tunneler.client");
   if (!clientId || !/^[A-Za-z0-9_-]{8,64}$/.test(clientId)) { clientId = randomId(); store.set("tunneler.client", clientId); }
+  // this page's own id (docs/v6/RELIABILITY.md 2.4): its new connection replaces its dead one on the server at
+  // once - seat, tank, host role - where another tab of this browser (same client id) is somebody else
+  const sessionId = randomId();
 
   const unlock = () => speaker.unlock();
   window.addEventListener("keydown", unlock);
@@ -128,13 +132,14 @@ export function mount() {
   window.tunnelerEngine = () => engine;                    // for tests / debugging in the console
   window.tunnelerRunner = () => runner;
   window.tunnelerViews = () => views;
-  window.tunnelerFrames = () => ({ frames, queued: queue.length, catching, desync: desyncAt });   // (tests: caught up? in step?)
+  window.tunnelerFrames = () => ({ frames, queued: queue.length, catching, desync: desyncAt, rebuilds });   // (tests: caught up? in step?)
 
   // a new match ({no, seed, cfg, you} from "match" / "hello")
   function newMatch(m) {
     if (runner) runner.stop();
     const c = readCfg(m.cfg);
     if (!c) { fatal = "Bad game settings."; updateOverlay(); return false; }
+    if (m.no !== rebuildsOf) { rebuildsOf = m.no; rebuilds = 0; }   // (a new match: its own rebuilds)
     cfg = c; matchNo = m.no; player = Number.isInteger(m.you) ? m.you : -1; ended = false;
     const opts = engineOptions(cfg);
     engine = new TunnelerEngine(m.seed >>> 0, JSON.parse(JSON.stringify(opts)));
@@ -208,16 +213,27 @@ export function mount() {
     if (s !== lastReport) { lastReport = s; send(r); }
   }
 
+  // (an error running the game: reported, and the match rebuilt from frame 0 like a desync - once more at most)
   function pump() {
     if (!runner) return;
+    try { pumpFrames(); }
+    catch (e) {
+      if (window.console) console.error(e);
+      Report.error("online loop", e);
+      if (rebuilds < MAX_REBUILDS) rebuild();
+      else { fatal = T("rel.crash"); if (runner) runner.stop(); runner = null; engine = null; if (ws) ws.close(); updateOverlay(); }
+    }
+  }
+  function pumpFrames() {
     const now = performance.now();
     if (catching) {
       const end = now + 25;
       while (queue.length > 3 && performance.now() < end) stepFrame(0, true);
-      if (queue.length <= 3) { catching = false; nextAt = performance.now(); }
+      if (queue.length <= 3) { catching = false; rebuilding = false; nextAt = performance.now(); renderBar(); }
       updateOverlay();
       return;
     }
+    if (rebuilding && queue.length <= 3) { rebuilding = false; renderBar(); }
     if (queue.length > 60) { catching = true; return; }       // far behind (tab was hidden): fast-forward
     if (queue.length && nextAt < now - 250) nextAt = now;      // stream stalled and resumed: resync
     while (queue.length && now >= nextAt) { stepFrame(nextAt, false); nextAt += TICK_MS; }
@@ -323,6 +339,7 @@ export function mount() {
   const lobbyUI = new DosUI(canvas, { display, active: () => !!lobby && !msgSnap && !mapPending,
     present: snap => { menuSnap = snap; presentOverlay(); } });
   window.tunnelerLobbyUI = () => lobbyUI;                  // tests / debugging
+  window.tunnelerStatusUI = () => (msgSnap ? dos : null);  // (the connecting / restarting / error screen while shown)
   const STATS = ["menuShift", "wins", "teamWins", "alive", "shotsFired", "shotsHit", "metersDug", "metersMoved", "roundLog"];
   const cycle = (list, v, d) => list[(list.indexOf(v) + d + list.length) % list.length];
   const W = UniText.cols;
@@ -758,7 +775,7 @@ export function mount() {
     (!engine.kbdInstalled && ((engine.screen === "text" && engine.menuShift !== 0) || (engine.screen === "map" && !mapPending)));
   setInterval(() => {
     if (ended && !queue.length && engine) dropMatch();
-    const want = !!st && !catching && !asking && matchOver();
+    const want = !!st && !catching && !asking && !rebuilding && matchOver();
     if (want && !lobby) openLobby();
     else if (!want && lobby) closeLobby();
     else if (lobby && lobby.page === "lobby" && lobby.key !== lobbyKey()) drawLobby(true);
@@ -772,12 +789,75 @@ export function mount() {
   let lastScreen = "";
 
   // ------------------------------------------------------------ connection
-  let ws = null, retry = 0, pingTimer = null, rtt = null, rttSent = -9, pongs = 0;
+  let ws = null, retry = 0, pingTimer = null, retryTimer = null, rtt = null, rttSent = -9, pongs = 0;
+  // running reliably (docs/v6/RELIABILITY.md 2.5, 2.6): a ping answered by nothing at all for DEAD_MS = a dead
+  // connection (only once a pong came: a server always answers); the server restarting / this game gone with it;
+  // a desync rebuilt from frame 0 (MAX_REBUILDS per match)
+  const TUNE = window.tunnelerNetTimes || {};             // (tests: shorter times)
+  const DEAD_MS = TUNE.dead || 8000, GONE_RETRY_MS = TUNE.gone || 30000, PING_MS = TUNE.ping || 2000, MAX_REBUILDS = 2;
+  let awaitSince = null, gotPong = false;      // the oldest ping not answered by any message yet
+  let hadHello = false, restarting = false, goneUntil = 0;
+  let rebuilds = 0, rebuildsOf = 0, rebuilding = false;
 
   function send(m) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(m)); }
 
+  // the connection is closed (or found dead): reconnect after a while - at once after a restart, then backing
+  // off (x1.6 up to 10 s) with up to 30% more at random (pages coming back after a restart don't all arrive at once)
+  function closed(code) {
+    ws = null;
+    clearTimeout(pingTimer); clearTimeout(retryTimer);
+    if (leaving || asking) return;
+    if (fatal) { setConn("conn.closed"); updateOverlay(); return; }
+    if (code === 1012 && !restarting) { restarting = true; goneUntil = 0; retry = 0; }   // ("service restart", the message may have been lost)
+    const base = restarting && retry === 0 ? 300 : Math.min(10000, 500 * Math.pow(1.6, retry));
+    const delay = Math.round(base * (1 + Math.random() * 0.3));
+    retry++;
+    setConn("conn.retry", { s: Math.max(1, Math.round(delay / 1000)) });
+    updateOverlay();
+    retryTimer = setTimeout(connect, delay);
+  }
+  // drops a connection this page gave up on: its handlers off first (a late close changes nothing) - then as closed
+  function dropSocket() {
+    const old = ws;
+    if (!old) return;
+    old.onopen = old.onmessage = old.onclose = old.onerror = null;
+    try { old.close(); } catch (e) { /* closed */ }
+    closed(0);
+  }
+  // reconnect now (the network is back, the page is shown again) - when no connection is open or on its way
+  function reconnectNow() {
+    if (ws || leaving || asking || fatal || !hadTried) return;
+    clearTimeout(retryTimer);
+    retry = Math.min(retry, 1);
+    connect();
+  }
+  let hadTried = false;
+  window.addEventListener("online", () => { reconnectNow(); updateOverlay(); });
+  window.addEventListener("offline", () => updateOverlay());
+  document.addEventListener && document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "visible") return;
+    if (!ws) reconnectNow();
+    else if (ws.readyState === 1) { clearTimeout(pingTimer); ping(); }   // (check it now: a laptop woke up, a phone came back)
+  });
+  // the match went out of step (desync) or its engine failed: rebuilt from frame 0 - a connection without
+  // &match&have gets the whole log, as a late spectator does, run on a fresh engine (the same seed, cfg and
+  // frames as everybody's: the canonical run); the page's new connection keeps its tank (&sid)
+  function rebuild() {
+    rebuilds++;
+    rebuilding = true;
+    desyncAt = -1;
+    if (runner) runner.stop();
+    runner = null; engine = null; bots = null; ended = false;
+    queue.clear(); catching = false; mapPending = false; mapSnap = null;
+    renderBar();
+    if (ws) { dropSocket(); clearTimeout(retryTimer); retry = 0; connect(); }
+    updateOverlay();
+  }
+
   function connect() {
     if (!roomId) { fatal = "No room given."; updateOverlay(); return; }
+    hadTried = true;
+    clearTimeout(retryTimer);
     let url = Endpoint.ws("/ws?room=" + encodeURIComponent(roomId)) + "&cid=" + encodeURIComponent(clientId) +
       "&name=" + encodeURIComponent(DosUI.playerName());
     url += "&v=" + encodeURIComponent(VERSION || "dev");   // (another version is refused; dev: not built)
@@ -791,8 +871,10 @@ export function mount() {
     if (hostKey) url += "&host=" + encodeURIComponent(hostKey);
     if (password) url += "&pw=" + encodeURIComponent(password);
     if (engine && !ended) url += "&match=" + matchNo + "&have=" + (frames + queue.length);
+    url += "&sid=" + sessionId;
     setConn(retry ? "conn.reconnecting" : "conn.connecting");
-    ws = new WebSocket(url);
+    const sock = ws = new WebSocket(url);
+    awaitSince = null; gotPong = false;
     ws.onopen = () => {
       retry = 0;
       setConn("conn.connected");
@@ -801,25 +883,24 @@ export function mount() {
       ping();
     };
     ws.onmessage = ev => {
+      if (ws !== sock) return;
+      awaitSince = null;                                   // (anything at all: the connection lives)
       let m;
       try { m = JSON.parse(ev.data); } catch (e) { return; }
       handle(m);
     };
-    ws.onclose = () => {
-      ws = null;
-      clearTimeout(pingTimer);
-      if (leaving || asking) return;
-      if (fatal) { setConn("conn.closed"); updateOverlay(); return; }
-      const delay = Math.min(10000, 1000 * Math.pow(1.6, retry++));
-      setConn("conn.retry", { s: Math.round(delay / 1000) });
-      updateOverlay();
-      setTimeout(connect, delay);
-    };
+    ws.onclose = ev => { if (ws === sock) closed(ev && ev.code); };
   }
 
+  // every 2 s; a ping not answered by any message within DEAD_MS: the connection is dead - dropped, reconnected
+  // (the clock starts when a ping is sent: a hidden tab's throttled timers can't make a live connection look dead)
   function ping() {
-    send({ t: "ping", c: performance.now() });
-    pingTimer = setTimeout(ping, 2000);
+    clearTimeout(pingTimer);
+    const now = performance.now();
+    if (gotPong && awaitSince !== null && now - awaitSince > DEAD_MS) { dropSocket(); return; }
+    if (awaitSince === null) awaitSince = now;
+    send({ t: "ping", c: now });
+    pingTimer = setTimeout(ping, PING_MS);
   }
 
   // a match from "hello" / "match": resumed when it is the one this page runs and the frames fit
@@ -837,6 +918,7 @@ export function mount() {
   function handle(m) {
     switch (m.t) {
       case "hello": {
+        hadHello = true; restarting = false; goneUntil = 0;
         roomName = m.name;
         document.title = "Tunneler - " + m.name;
         me = { k: m.you ? m.you.k | 0 : 0, host: !!(m.you && m.you.host), name: m.you && m.you.name || "" };
@@ -882,21 +964,38 @@ export function mount() {
         me.host = true;
         if (lobby && lobby.page === "lobby") drawLobby(true);
         break;
+      case "restart":                                      // the server is going away: reconnect soon, say so meanwhile
+        restarting = true; goneUntil = 0; retry = 0;
+        updateOverlay();
+        break;
       case "pong":
+        gotPong = true;
         rtt = performance.now() - m.c;
         // every player's round-trip time is shown in the lobby (docs/DESIGN-8P.md 21): report it now and then
         if (++pongs % 2 === 1 && Math.abs(Math.round(rtt) - rttSent) >= 2) { rttSent = Math.round(rtt); send({ t: "rtt", ms: rttSent }); }
         if (showPing) views.setPing(Math.round(rtt));
         renderBar();
         break;
-      case "desync":
-        if (desyncAt < 0) {
+      case "desync":                                       // out of step: rebuilt from frame 0 (twice at most), then shown
+        if (engine && !rebuilding && rebuilds < MAX_REBUILDS) rebuild();
+        else if (desyncAt < 0 && !rebuilding) {
           desyncAt = m.n;
           renderBar();
         }
         break;
       case "err":
         if (m.code === "password" || m.code === "pwlimit") { askPassword(m.code === "pwlimit" ? "pw.limit" : m.bad ? "pw.err" : null); break; }
+        // the game isn't on this server (any more) though this page was in it / the server restarted: the
+        // next server may still be reading the rooms it was handed - try again for GONE_RETRY_MS, then say so
+        if (m.code === "noroom" && (hadHello || restarting)) {
+          if (!goneUntil) goneUntil = Date.now() + GONE_RETRY_MS;
+          if (Date.now() < goneUntil) { restarting = true; updateOverlay(); break; }
+          fatal = T("rel.gone"); fatal2 = T("rel.gone2");
+          updateOverlay();
+          break;
+        }
+        // another version on the server: a browser page reloads itself once for it (the new code is a reload away)
+        if (m.code === "version" && Reload.forVersion(String(m.version))) { leaving = true; break; }
         fatal = m.code === "kicked" ? T("pg.kicked") : m.code === "idle" ? T("on.idle") : m.code === "full" ? T("on.full")
           : m.code === "busy" ? T("on.busy") : m.code === "noroom" ? T("room.notfound")
           : m.code === "version" ? T("ver.server", { server: String(m.version), you: VERSION || "?" }) : Lang.enc(String(m.msg));
@@ -960,8 +1059,9 @@ export function mount() {
     if (asking) return;
     let msg = null;
     if (fatal) msg = [{ text: fatal, color: 12 }, ...(fatal2 ? [{ text: fatal2, color: 3 }] : [])];
-    else if (!ws || ws.readyState !== 1 || !st) msg = [T("on.connecting")];
-    else if (catching) msg = [T("on.catching"), frames + " / " + (frames + queue.length)];
+    else if (restarting) msg = [T("rel.restart"), { text: T("rel.restart2"), color: 3 }];
+    else if (!ws || ws.readyState !== 1 || !st) msg = [window.navigator && navigator.onLine === false ? T("rel.offline") : T("on.connecting")];
+    else if (catching || rebuilding) msg = [rebuilding ? T("rel.rebuild") : T("on.catching"), frames + " / " + (frames + queue.length)];
     else if (engine && !ended && st.match && !st.match.running && !matchOver()) {   // (a classic match: one player is away)
       const missing = cfg.slots.map((s, i) => st.match.conn[i] ? null : cfg.names[i] || NAME(ROLES[s.color])).filter(Boolean);
       msg = [T("on.paused"), T("on.waitre", { names: missing.join(Lang.raw("on.and")) || Lang.raw("on.players") })];

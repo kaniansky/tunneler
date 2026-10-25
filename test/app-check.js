@@ -49,7 +49,7 @@ function makeEnv(href) {
   const document = Object.assign(new El("document"), { documentElement: html, body, title: "",
     getElementById: id => elements[id] || null, createElement: t => new El(t), querySelectorAll: () => [], fonts: null });
   const location = { href: u.href, origin: u.origin, protocol: u.protocol, host: u.host, hostname: u.hostname, pathname: u.pathname, search: u.search, hash: u.hash,
-    replace(v) { this.href = v; }, assign(v) { this.href = v; } };
+    replace(v) { this.href = v; }, assign(v) { this.href = v; }, reloads: 0, reload() { this.reloads++; } };
   const setUrl = v => { const x = new URL(v, location.href); Object.assign(location, { href: x.href, pathname: x.pathname, search: x.search, hash: x.hash }); };
   const history = { entries: [u.href], at: 0,
     pushState(s, t, v) { setUrl(v); this.entries.splice(this.at + 1); this.entries.push(location.href); this.at++; },
@@ -59,7 +59,7 @@ function makeEnv(href) {
     constructor(url) { this.url = url; this.readyState = 0; this.closed = false; sockets.push(this); }
     send() {} close() { this.closed = true; this.readyState = 3; if (this.onclose) this.onclose({}); }
   }
-  const store = new Map([["tunneler.name", "Ann"], ["tunneler.gfx", "original"]]);
+  const store = new Map([["tunneler.name", "Ann"], ["tunneler.gfx", "original"]]), session = new Map();
   const win = {
     document, location, history, navigator: { userAgent: "test", getGamepads: () => [] }, EventTarget: ET, WebSocket: FakeWS,
     localStorage: { getItem: k => store.has(k) ? store.get(k) : null, setItem: (k, v) => store.set(k, String(v)), removeItem: k => store.delete(k),
@@ -71,6 +71,7 @@ function makeEnv(href) {
     requestAnimationFrame: f => { const id = setTimeout(() => { frames.delete(id); f(performance.now()); }, 16); frames.add(id); return id; },
     cancelAnimationFrame: id => { frames.delete(id); clearTimeout(id); },
     matchMedia: () => ({ matches: false }), devicePixelRatio: 1, performance, console, URL, URLSearchParams, atob, Uint8Array,
+    sessionStorage: { getItem: k => session.has(k) ? session.get(k) : null, setItem: (k, v) => session.set(k, String(v)) },
     fetch: async () => ({ ok: true, status: 200, json: async () => [] }), PopStateEvent: class { constructor(t) { this.type = t; } },
   };
   // (the window's own listeners: through ET's methods, looked up when called - so scope.js's patch counts them)
@@ -81,7 +82,8 @@ function makeEnv(href) {
   const ctx = vm.createContext(win);
   const counts = () => ({ listeners: listeners.length, timers: timers.size, tpad: body.children.filter(c => c.className && /tpad/.test(c.className)).length,
     elements: body.children.length });
-  return { ctx, win, location, history, sockets, counts, elements, body, back: () => { history.at--; setUrl(history.entries[history.at]); win.dispatchEvent({ type: "popstate" }); } };
+  const fire = (target, type, ev) => { for (const l of listeners.slice()) if (l.target === target && l.type === type) l.fn(Object.assign({ type }, ev || {})); };
+  return { ctx, win, location, history, sockets, counts, elements, body, fire, back: () => { history.at--; setUrl(history.entries[history.at]); win.dispatchEvent({ type: "popstate" }); } };
 }
 
 (async () => {
@@ -133,6 +135,35 @@ function makeEnv(href) {
     assert(typeof env.win.tunnelerHomeUI === "function", "Back: the main menu again");
     ok("Nav.go changes the screen without a page load, Back returns; leaving a screen leaves nothing behind (3 rounds: " +
       first.listeners + " listeners, " + first.timers + " timers)");
+  }
+  {
+    // a screen's code that fails to load (after a deploy its chunk is gone): the page reloads itself - once a
+    // minute at most -, then says so (a key / click: reload); a screen that throws in mount(): not a blank page -
+    // the message, a click goes to the main menu (docs/v6/RELIABILITY.md 2.8, 2.9)
+    const env = makeEnv("http://x.test/");
+    vm.runInContext(app, env.ctx, { filename: "app.js" });
+    await wait(40);
+    const routes = env.win.tunnelerApp.routes, route = name => routes.find(r => r.name === name);
+    route("games").load = () => Promise.reject(new TypeError("Failed to fetch dynamically imported module"));
+    env.win.Nav.go("/games"); await wait(40);
+    assert.strictEqual(env.location.reloads, 1, "a chunk that fails to load: the page reloads");
+    env.win.Nav.go("/"); await wait(40);
+    assert(env.elements.loading.hidden && typeof env.win.tunnelerHomeUI === "function", "the main menu still works");
+    env.win.Nav.go("/games"); await wait(40);
+    assert.strictEqual(env.location.reloads, 1, "not again within a minute");
+    assert(!env.elements.loading.hidden && /^Loading failed - check the connection\. Click, tap or press a key to try again\.$/.test(env.elements.loading.textContent),
+      "the message: " + env.elements.loading.textContent);
+    env.fire(env.win, "keydown", {});
+    assert.strictEqual(env.location.reloads, 2, "a key: reload");
+    route("replays").load = () => Promise.resolve({ mount() { throw new Error("broken screen"); } });
+    const err = console.error; console.error = () => {};
+    env.win.Nav.go("/replays"); await wait(40);
+    console.error = err;
+    assert(!env.elements.loading.hidden && /^Something went wrong/.test(env.elements.loading.textContent), "a crashed screen says so");
+    env.fire(env.elements.loading, "click", {});
+    await wait(40);
+    assert(env.location.pathname === "/" && env.elements.loading.hidden && env.elements.loading.style.pointerEvents === "", "a click: the main menu");
+    ok("a chunk that fails to load: the page reloads (once a minute), then the message; a screen that crashes: the message, then the main menu");
   }
   console.log("app-check: " + n + " ok");
   process.exit(0);

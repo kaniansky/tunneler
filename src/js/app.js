@@ -14,16 +14,20 @@ import "./gfx-text.js";
 import "./pads.js";
 import { Endpoint } from "./endpoint.js";
 import { Gfx } from "./gfx.js";
+import { Lang } from "./lang.js";
 import { Nav } from "./nav.js";
+import { Report, Reload } from "./report.js";
 import { Scope } from "./scope.js";
 import { VERSION } from "./version.js";
 
+Report.install();                          // (errors nobody would see go to the server - docs/v6/RELIABILITY.md 2.9)
+
 const ROUTES = [
-  { re: /^\/(games\/?|lobby\.html)$/, title: "Tunneler - online", load: () => import("./lobby.js") },
-  { re: /^\/(game\/.+|online\.html)$/, title: "Tunneler - online", load: () => import("./online.js") },
-  { re: /^\/(split|skirmish|vs-computer)\/?$|^\/play\.html$/, title: "Tunneler", load: () => import("./play.js") },
-  { re: /^\/(replays(\/[^/]+)?\/?|replay\/[a-z2-9]{8}\/?|replays\.html)$/, title: "Tunneler - replays", load: () => import("./replays.js") },
-  { re: /^/, title: "Tunneler", load: () => import("./home.js") },
+  { name: "games", re: /^\/(games\/?|lobby\.html)$/, title: "Tunneler - online", load: () => import("./lobby.js") },
+  { name: "online", re: /^\/(game\/.+|online\.html)$/, title: "Tunneler - online", load: () => import("./online.js") },
+  { name: "play", re: /^\/(split|skirmish|vs-computer)\/?$|^\/play\.html$/, title: "Tunneler", load: () => import("./play.js") },
+  { name: "replays", re: /^\/(replays(\/[^/]+)?\/?|replay\/[a-z2-9]{8}\/?|replays\.html)$/, title: "Tunneler - replays", load: () => import("./replays.js") },
+  { name: "home", re: /^/, title: "Tunneler", load: () => import("./home.js") },
 ];
 const LOADING_DELAY = 150;                 // ms before "Loading..." shows while a route's module arrives
 
@@ -31,7 +35,44 @@ const $ = id => document.getElementById(id);
 let scope = null, seq = 0, first = true;
 
 // the loading screen (index.html: shown until the first route runs; again while a route's chunk loads)
-function loading(on) { const el = $("loading"); if (el) el.hidden = !on; }
+let loadingHTML = null, failing = null;
+function loading(on) {
+  const el = $("loading");
+  if (!el) return;
+  if (failing) { failing(); failing = null; }
+  el.hidden = !on;
+}
+// What went wrong, on the loading screen (plain HTML - a screen that couldn't load has no DOS screen to show it
+// on): two lines; a click, a tap or a key runs then() (docs/v6/RELIABILITY.md 2.8)
+function failScreen(line1, line2, then) {
+  const el = $("loading");
+  if (!el) return;
+  if (failing) failing();
+  if (loadingHTML === null) loadingHTML = el.innerHTML || "";
+  el.textContent = Lang.raw(line1) + " " + Lang.raw(line2);
+  el.style.pointerEvents = "auto"; el.style.cursor = "pointer"; el.style.padding = "0 16px"; el.style.textAlign = "center";
+  el.style.lineHeight = "1.6"; el.style.flexWrap = "wrap";
+  el.hidden = false;
+  const go = e => { if (e && (e.ctrlKey || e.altKey || e.metaKey || e.repeat)) return; done(); then(); };
+  const done = () => {
+    Scope.free(() => { el.removeEventListener("click", go); removeEventListener("keydown", go); });
+    for (const k of ["pointerEvents", "cursor", "padding", "textAlign", "lineHeight", "flexWrap"]) el.style[k] = "";
+    if (loadingHTML !== null) el.innerHTML = loadingHTML;
+    if (failing === done) failing = null;
+  };
+  failing = done;
+  Scope.free(() => { el.addEventListener("click", go); addEventListener("keydown", go); });
+}
+// a screen's code failed to load: after a deploy its chunk is gone (a browser keeps a failed import failed),
+// so the page reloads - at most once a minute -, without a connection once it is back; else the message
+function chunkFailed(e) {
+  Report.error("chunk", e);
+  if (root.navigator && navigator.onLine === false) {
+    Scope.free(() => addEventListener("online", () => location.reload(), { once: true }));
+  } else if (Reload.afterChunkFailure()) return;
+  failScreen("rel.load", "rel.load2", () => location.reload());
+}
+const root = globalThis;
 
 // the canvases as a new route expects them (what routes change: the split screen's shape, the cursor, the
 // status line shown). The phone layout's shape (style width / aspect-ratio, display.js) stays until the new
@@ -51,7 +92,7 @@ async function show() {
   const timer = setTimeout(() => loading(true), LOADING_DELAY);
   let mod;
   try { mod = await route.load(); }
-  catch (e) { clearTimeout(timer); loading(true); $("loading").textContent = "Loading failed - check the connection and reload."; return; }
+  catch (e) { clearTimeout(timer); if (n === seq) chunkFailed(e); return; }
   clearTimeout(timer);
   // the first screen in the modern look: the loading screen stays until its font is there (at most FONT_WAIT)
   if (first && Gfx.mode() === "modern") await Promise.race([Gfx.Text.fontReady(), new Promise(r => setTimeout(r, Gfx.Text.FONT_WAIT))]);
@@ -60,7 +101,13 @@ async function show() {
   loading(false);
   document.title = route.title;
   scope = Scope.begin();
-  try { mod.mount(); } catch (e) { console.error(e); }
+  try { mod.mount(); }
+  catch (e) {                              // (not a blank page: the error reported, a way back to the main menu)
+    console.error(e);
+    Report.error("mount " + route.name, e);
+    const home = route.name === "home";
+    failScreen("rel.crash", "rel.crash2", () => home ? location.reload() : Nav.go("/"));
+  }
   Gfx.refresh();
 }
 
@@ -72,6 +119,7 @@ Nav.handler = (url, replace) => {
   show();
 };
 addEventListener("popstate", show);
+globalThis.tunnelerApp = { routes: ROUTES };   // (tests: a route whose chunk fails to load)
 show();
 // the installable app (docs/DESIGN-8P.md 32): its service worker - only when built (src/ has no file list),
 // served over http(s) (not the desktop app)
