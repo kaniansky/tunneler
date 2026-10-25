@@ -194,7 +194,42 @@ function readCfg(c) {
   return { ext: !!c.ext, players: slots.length, slots, names, size: SIZES.includes(c.size) ? c.size : "medium",
     winScore: clampInt(c.winScore, 1, 9, 3), friendlyFire: !!c.friendlyFire, roundTime: roundTime(c.roundTime),
     visible: VISIBLE.includes(c.visible) ? c.visible : "self", watchOut: afterDeath(c.watchOut), sight: SIGHTS.includes(c.sight) ? c.sight : "full",
-    mode: MODES.includes(c.mode) ? c.mode : "standard", goals: goalsOf(c.goals) || {} };
+    mode: MODES.includes(c.mode) ? c.mode : "standard", goals: goalsOf(c.goals) || {}, qp: !!c.qp };
+}
+
+// ------------------------------------------------------------ quick play (docs/v6/QUICKPLAY.md)
+// A quick-play room: QUICK_TANKS seats free-for-all, every seat nobody sits on a computer tank of QUICK_LEVEL,
+// the settings fixed; it starts its matches by itself, and a human who joins takes over a computer tank -
+// in the middle of a match too. Who drives a tank changes by "drive markers" in the frame log (FrameLog.pushN).
+const QUICK_TANKS = 4, QUICK_LEVEL = "normal";
+const quickSettings = () => roomSettings({
+  seats: ROLES.map((r, i) => i < QUICK_TANKS ? { kind: QUICK_LEVEL, team: i + 1 } : { kind: "closed", team: i + 1 }),
+  size: "medium", winScore: 3, roundTime: 5, friendlyFire: false, visible: "self", watchOut: "wreck", sight: "full", mode: "standard" });
+// does slot s of a match get a computer player on every client? Its computer tanks - and in a quick-play match
+// every tank (a human's too: its computer player takes over when the human leaves)
+const aiSlot = (cfg, s) => !!s && (!!s.bot || (!!cfg && !!cfg.qp && LEVELS.includes(s.level)));
+// A frame entry's drive markers, checked: [[p (tank index), k (the driving player's connection number, 0 = the
+// computer), name], ...] -> the list (names cleaned) or null (not a list / malformed / too many)
+const MAX_DRIVES = 16;
+function readDrives(d) {
+  if (!Array.isArray(d) || !d.length || d.length > MAX_DRIVES) return null;
+  const out = [];
+  for (const x of d) {
+    if (!Array.isArray(x) || !Number.isInteger(x[0]) || x[0] < 0 || x[0] >= MAX_SLOTS || !Number.isInteger(x[1]) || x[1] < 0) return null;
+    out.push([x[0], x[1], x[1] ? cleanPlayerName(typeof x[2] === "string" ? x[2] : "") : ""]);
+  }
+  return out;
+}
+// The computer players' bits for one frame: every computer player is asked (bitsOf(ai) runs its update() - it
+// must think every frame, whoever drives its tank, so that it is the same on every client when it gets the
+// tank back); those of tanks a human drives (human[i]) are dropped (null: the frame's own bits count).
+function botInputs(bots, human, bitsOf) {
+  if (!bots) return null;
+  return bots.map((ai, i) => {
+    if (!ai) return null;
+    const b = bitsOf(ai);
+    return human && human[i] ? null : b;
+  });
 }
 
 // One frame -> engine input ({keyDown, keys}); identical on every client.
@@ -226,10 +261,13 @@ const sameBits = (a, b) => a.length === b.length && a.every((v, i) => v === b[i]
 // extended ones pushN([b0..bN-1], keys).
 class FrameLog {
   constructor() { this.entries = []; this.length = 0; }
-  pushN(bits, k) {
+  pushN(bits, k, drives) {
     const last = this.entries[this.entries.length - 1];
     let e;
-    if (!k || !k.length) {
+    if (drives && drives.length) {                        // (quick play: drive markers - an entry of its own)
+      e = [bits.slice(), 1, k && k.length ? k : null, drives];
+      this.entries.push(e);
+    } else if (!k || !k.length) {
       if (last && last.length === 2 && isExt(last) && sameBits(last[0], bits)) last[1]++;
       else this.entries.push([bits.slice(), 1]);
       e = [bits.slice(), 1];
@@ -280,11 +318,13 @@ class FrameQueue {
   pushEntries(entries) {
     for (const e of entries) {
       if (!Array.isArray(e)) return false;
-      if (isExt(e)) {                                       // extended: [[b0..bN-1], count, keys?]
+      if (isExt(e)) {                                       // extended: [[b0..bN-1], count, keys?, drives?]
         if (e.length < 2 || e[0].length > MAX_SLOTS) return false;
         const n = e[1] | 0;
         if (n < 1) return false;
-        this.q.push([null, null, n, Array.isArray(e[2]) && e[2].length ? e[2] : null, e[0].map(v => v & EXT_BITS)]);
+        const drives = e[3] != null ? readDrives(e[3]) : null;
+        if (e[3] != null && (!drives || n !== 1)) return false;
+        this.q.push([null, null, n, Array.isArray(e[2]) && e[2].length ? e[2] : null, e[0].map(v => v & EXT_BITS), drives]);
         this.length += n;
         continue;
       }
@@ -296,12 +336,12 @@ class FrameQueue {
     }
     return true;
   }
-  // -> classic [b, g, keys|null], extended [[b0..bN-1], keys|null], or null
-  // (a run of count > 1 never has keys)
+  // -> classic [b, g, keys|null], extended [[b0..bN-1], keys|null] (+ drives: [..., [[p, k, name], ...]]), or null
+  // (a run of count > 1 never has keys or drives)
   shift() {
     if (!this.length) return null;
     const e = this.q[this.head];
-    const f = e[4] ? [e[4].slice(), e[3]] : [e[0], e[1], e[3]];
+    const f = e[4] ? (e[5] ? [e[4].slice(), e[3], e[5]] : [e[4].slice(), e[3]]) : [e[0], e[1], e[3]];
     if (--e[2] === 0) {
       this.q[this.head++] = null;
       if (this.head > 1024 && this.head * 2 > this.q.length) { this.q = this.q.slice(this.head); this.head = 0; }
@@ -334,7 +374,7 @@ function stateHash(e) {
 const NetProto = { TICK_MS, UP, DOWN, LEFT, RIGHT, FIRE, ESC, ALL_BITS, EXT_BITS, BLUE_SCAN, GREEN_SCAN, F10,
   AFTER_DEATH, afterDeath, ROLES, MAX_SLOTS, LEVELS, oldLevel, SEAT_KINDS, SIZES, MAX_PLAYER_NAME, MAX_CHAT, VISIBLE, SIGHTS, ROUND_TIMES, roundTime,
   cleanPlayerName, cleanChat, cleanRoomName, MAX_PASSWORD, cleanPassword, SETTINGS, defaultSeats, roomSettings, matchSlots, startProblem, isClassic, engineOptions, readCfg,
-  MODES, OWN_TEAMS, GOALS, goalOf,
+  MODES, OWN_TEAMS, GOALS, goalOf, QUICK_TANKS, QUICK_LEVEL, quickSettings, aiSlot, readDrives, botInputs,
   frameToInput, frameToInputExt, FrameLog, FrameQueue, HASH_EVERY, stateHash };
 
 export { NetProto };
