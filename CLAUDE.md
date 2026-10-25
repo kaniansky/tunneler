@@ -55,8 +55,9 @@ may be redesigned, but always in the original's DOS look.
   `PORT` (8050).
 - `build.js` - `node build.js` once, `node build.js --watch` = rebuild on change + `node --watch server.js`
   (restart a running watcher after build.js itself changes: it keeps the old build in memory).
-- `Dockerfile` - two stages (build with esbuild, then prod deps + server.js + src/package.json + the modules
-  netproto.js needs (netproto, unitext, unidata, glyphs, vgafont) + public/), runs
+- `Dockerfile` - two stages (build with esbuild, then prod deps + server.js + challenge-worker.js + src/package.json +
+  src/js + src/lang (netproto.js for the server, the engine / AI / modes / English texts for the weekly challenge's
+  replay check) + public/), runs
   as `node`, port 8050. `.github/workflows`: ci (npm ci, build, test, docker build), **release** (only a pushed
   `vX.Y.Z` tag: a GitHub Release with that version's CHANGELOG.md section as notes
   (`tools/changelog-notes.sh`) - a draft until the apps and latest.json are attached (app-build.yml uploads with
@@ -931,3 +932,24 @@ none, i.e. a page from before 2.0 - is refused (POST 409 `{code:
   a reload / dropped connection gets it back). No `kick` in quick-play rooms. Texts `src/lang/<code>/quickplay.js`
   (`Lang.extend`) + an Information section. Tests:
   test/quickplay-sim.js, net-page-smoke, layout-check.
+- **Weekly challenge** (docs/v6/CHALLENGE.md, v6): `src/js/challenge.js` (`Challenge`, shared by the pages and the
+  server) - the ISO week (UTC) -> one skirmish for everybody (`config(week)`: seed, mode - no infection -, size,
+  1-4 computer tanks with levels / teams, rounds, round time, sight, friendly fire; own PRNG on the week's name),
+  `query(cfg)` = the skirmish link play.js reads (`?challenge=<week>`: the week's seed, view self, "Back to the
+  challenge" instead of Rematch, the result in localStorage `tunneler.challenge.last` - a better unsent one of the
+  same week stays), `engineOptions(cfg)`,
+  `track(engine)` (kills, by wrapping the engine object's killTankExt - reads only), `result` {rounds, won, kills,
+  secs}, `compare` (the board's order), `verify(rep, {Engine, AI, week, name})` (-> also the cleaned replay the board
+  keeps: only a replay's fields, frames up to the last step, the server's own state checks / summary, the name on
+  BLUE). Route `/challenge` (`/challenge.html`)
+  = `src/js/weekly.js` (the week, time left, the description - `challengeLines` -, your place, Play, Send your
+  result - also last week's during the grace -, Leaderboard -> a row watches its shared replay); home.js main menu
+  item after Online game; an Information section. Server: `GET /api/challenge[/<week>][?cid=]` (the last
+  `BOARD_WEEKS` 12 weeks: they fit the board cache), `POST /api/challenge/<week>?cid=&name=` (the replay) -> `runCheck` in a
+  worker thread (`challenge-worker.js`: version, week, seed + options, the server's own TunnelerAIs must give the
+  recorded bits, the state hashes, the world map at the last step; `CHALLENGE_TIME_MS` 60 s, 1 worker, 6 waiting,
+  6 a minute and one at a time per address), the board per week (`challenge-<week>.json.gz` in the bucket / REPLAY_DIR / memory, one
+  entry per client id, a name taken by another client id refused, an improvement stored as a shared replay),
+  the current week + `WEEK_GRACE_MS` (2 h) after it; `opts.now` for tests. Dockerfile copies src/js + src/lang
+  and the worker. Texts `src/lang/<code>/challenge.js` via `Lang.extend`, keys `ch.*`,
+  `home.challenge(.i)`. Tests: test/challenge-check.js, layout-check / app-check screens.

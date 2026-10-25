@@ -174,6 +174,7 @@ export function mount() {
       { key: "quick", label: T("home.quick"), info: [T("home.quick.i1"), T("home.quick.i2")], go: () => { Nav.go(Links.games() + "?quick=1"); } },
       { key: "online", label: T("home.online"), info: [T("home.online.i1"), T("home.online.i2")],
         go: () => { Nav.go(Links.games()); } },
+      { key: "challenge", label: T("home.challenge"), info: [T("home.challenge.i")], go: () => { Nav.go(Links.challenge()); } },   // (docs/v6/CHALLENGE.md)
       { key: "replays", label: T("home.replays"), info: [T("home.replays.i")], go: () => { Nav.go(Links.replays()); } },
       { key: "gap", label: "", disabled: true },
       { key: "instr", label: T("menu.instr"), info: [T("menu.instr.i")], go: () => ui.showPage("instructions", "hotseat", () => main("instr")) },
@@ -182,7 +183,8 @@ export function mount() {
       ...updateItems(),
     ];
     if (typeof sel === "string") sel = Math.max(0, items.findIndex(it => it.key === sel));
-    ui.show({ lines: title(), box: { y: 8 }, sel, infoRow: update ? 22 : 20, footer: Lang.version(), home: true, items }, keep);   // (y 8: room for Quick play)
+    ui.show({ lines: title(), box: { y: update ? 7 : 8 }, sel, infoRow: update ? 22 : 21,   // (Quick play + Weekly challenge; the update rows: a row higher)
+      footer: Lang.version(), home: true, items }, keep);
   }
 
   // ------------------------------------------------------------------ settings: language, sound

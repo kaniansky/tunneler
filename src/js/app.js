@@ -4,8 +4,8 @@
 // ends (scope.js takes away whatever it set up: listeners, timers, the websocket, its sound) and the new
 // one is mounted on the same canvases, so fullscreen, the audio permission and loaded fonts stay.
 // Paths: / (#split / #cpu: the local games' setup), /games, /game/<id>[/<colour|watch>], /split, /skirmish
-// (old /vs-computer), /replays[/<id>], and the desktop app's forms /lobby.html, /online.html?room=, /play.html?mode=,
-// /replays.html[?id=] (endpoint.js
+// (old /vs-computer), /replays[/<id>], /challenge (the weekly challenge), and the desktop app's forms /lobby.html,
+// /online.html?room=, /play.html?mode=, /replays.html[?id=], /challenge.html (endpoint.js
 // Links builds them). Unknown paths show the main menu.
 import "../lang/index.js";
 import "./modes/index.js";
@@ -27,6 +27,7 @@ const ROUTES = [
   { name: "online", re: /^\/(game\/.+|online\.html)$/, title: "Tunneler - online", load: () => import("./online.js") },
   { name: "play", re: /^\/(split|skirmish|vs-computer)\/?$|^\/play\.html$/, title: "Tunneler", load: () => import("./play.js") },
   { name: "replays", re: /^\/(replays(\/[^/]+)?\/?|replay\/[a-z2-9]{8}\/?|replays\.html)$/, title: "Tunneler - replays", load: () => import("./replays.js") },
+  { name: "challenge", re: /^\/(challenge\/?|challenge\.html)$/, title: "Tunneler - weekly challenge", load: () => import("./weekly.js") },
   { name: "home", re: /^/, title: "Tunneler", load: () => import("./home.js") },
 ];
 const LOADING_DELAY = 150;                 // ms before "Loading..." shows while a route's module arrives

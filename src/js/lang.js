@@ -121,10 +121,12 @@ function register(c, data) {
 }
 
 // src/lang/<code>/<feature>.js: more texts for a language registered before it (its index.js imports main.js
-// first) - a feature keeps its texts in its own file (lang-check: every English key translated, everything fits)
+// first) - a feature keeps its texts in its own file (lang-check: every English key translated, everything fits).
+// The current language's letters are loaded again (a letter only the new texts use gets its font slot).
 function extend(c, texts) {
   if (!L[c]) throw new Error("Lang.extend(" + c + "): register the language first (main.js)");
   Object.assign(L[c], texts);
+  if (active === c) use(c);
 }
 
 const cur = () => L[code] || L.en || {};

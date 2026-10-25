@@ -27,6 +27,10 @@ a release is made by pushing a version tag (see CONTRIBUTING.md).
   tank back within 15 s). The taken-over tank shows your name. Every
   client switches the tank at exactly the same frame (a marker in the game's frame log), so spectators, late
   joiners and replays see the same game. (docs/v6/QUICKPLAY.md)
+- Weekly challenge (main menu): every week the same skirmish for everyone - the same world, mode, map size and
+  computer opponents. Play it as often as you like and send your result: the server plays the match's replay
+  again with its own computer players, so only real results get on the week's leaderboard (won, rounds, kills,
+  time). The leaderboard shows the week's best, and every entry's match can be watched.
 
 ## 5.0.4
 

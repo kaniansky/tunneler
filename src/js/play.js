@@ -8,11 +8,15 @@
 // self = only your view screen, team = your team's, everyone = all of them (yours first; classic: the full
 // split screen).
 // Old links (?mode=cpu&level=...&opp=1..7&teams=0|1, hide=1 = self / hide=0 = everyone) still work.
+// ?challenge=<week> (docs/v6/CHALLENGE.md): that week's challenge - challenge.js's query for it, the week's seed, its
+// result remembered for the challenge screen (localStorage tunneler.challenge.last); after the match: back to it.
 import "./gfx-modern.js";
 import "./gfx-hud.js";
 import { TunnelerAI } from "./ai.js";
+import { Challenge } from "./challenge.js";
 import { CpuCode } from "./cpucode.js";
 import { Display } from "./display.js";
+import { Links } from "./endpoint.js";
 import { TunnelerEngine } from "./engine.js";
 import { Gfx } from "./gfx.js";
 import { Keyboard } from "./input.js";
@@ -27,7 +31,10 @@ import { GameScreen } from "./screen.js";
 export function mount() {
   // a short link (?g=<code>, cpucode.js) stands for the long query it encodes
   const query = new URLSearchParams(location.search), code = query.get("g") ? CpuCode.decode(query.get("g")) : null;
-  const params = code ? new URLSearchParams(code + (query.get("mode") ? "&mode=" + query.get("mode") : "")) : query;
+  // the weekly challenge (?challenge=2026-W43, docs/v6/CHALLENGE.md): that week's skirmish, read from the query it stands for
+  const chWeek = Challenge.validWeek(query.get("challenge")) ? query.get("challenge") : null, ch = chWeek ? Challenge.config(chWeek) : null;
+  const params = ch ? new URLSearchParams(Challenge.query(ch) + "&mode=cpu")
+    : code ? new URLSearchParams(code + (query.get("mode") ? "&mode=" + query.get("mode") : "")) : query;
   // /skirmish?... (old: /vs-computer?...) or /split?... (play.html?mode=cpu|hotseat&... in the desktop app)
   const mode = params.get("mode") === "cpu" || /^\/(skirmish|vs-computer)\/?$/.test(location.pathname) ? "cpu" : "hotseat";
   const LEVELS = ["easy", "normal", "hard"];              // (shown as easy / medium / hard)
@@ -90,7 +97,7 @@ export function mount() {
   const display = new Display(canvas);
   const speaker = new Speaker();
   const keyboard = new Keyboard(window);
-  const seed = (Math.random() * 0x100000000) >>> 0;
+  const seed = ch ? ch.seed : (Math.random() * 0x100000000) >>> 0;   // (the challenge: the week's world)
   // the engine itself picks classic (BLUE + GREEN in different teams) or extended
   // (escEnds: BLUE's Esc ends the match as in the original - the extended engine ignores Esc online)
   const opts = slots
@@ -99,6 +106,7 @@ export function mount() {
     : { size, winScore, roundTime, autoStart: true, noInstructions: true };   // settings were chosen on the page: no menu before round 1
   const engine = new TunnelerEngine(seed, JSON.parse(JSON.stringify(opts)));
   const ext = engine.extended;
+  const kills = ch ? Challenge.track(engine) : null;      // (the challenge's result: the enemies you destroyed)
   // display only: views scroll sideways 1 pixel at a time (the homepage's Settings, "tunneler.smooth"; on unless "0";
   // always with graphics modern - the setting is only offered for the original)
   try { engine.smoothScroll = localStorage.getItem("tunneler.smooth") !== "0"; } catch (e) { engine.smoothScroll = true; }
@@ -125,6 +133,7 @@ export function mount() {
   // stored where that screen reads them, so also a game opened from a link comes back as it was (owner,
   // 2026-10-24)
   function toLobby() {
+    if (ch) { leave(Links.challenge()); return; }        // (the challenge: back to its screen - the skirmish's settings stay)
     const save = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* no storage */ } };
     if (mode === "cpu") {
       const all = [0, 1, 2, 3, 4, 5, 6, 7].map(c => {
@@ -157,6 +166,7 @@ export function mount() {
 
   engine.uiMode = mode;
   Lang.apply(engine);
+  if (ch) engine.strings = Object.assign({}, engine.strings, { rematch: Lang.t("ch.back") });   // ("Back to the challenge")
 
   // mouse: click a main menu item to choose it; click anywhere on a menu page / "press any key" screen
   // to go on (acts like Enter)
@@ -267,7 +277,18 @@ export function mount() {
   runner.onStep = e => { if (e.halted) leave("/"); };
 
   // the match is recorded (replay.js): kept with the newest replays once it reaches its world map
-  runner.recorder = Replay.recorder(engine, { kind: mode === "cpu" ? "skirmish" : "split", seed, opts }, rep => { Replay.save(rep).catch(e => console.warn("replay:", e)); });
+  // (the challenge: its week on the replay, and the result remembered as this week's last - the challenge screen sends it)
+  runner.recorder = Replay.recorder(engine, { kind: mode === "cpu" ? "skirmish" : "split", seed, opts, challenge: chWeek }, rep => {
+    Replay.save(rep).catch(e => console.warn("replay:", e));
+    // (a better unsent result of the same week stays: "Send your result" sends the best match since the last one sent)
+    if (ch) try {
+      const result = Challenge.result(engine, kills, rep.steps);
+      let kept = null;
+      try { kept = JSON.parse(localStorage.getItem("tunneler.challenge.last") || "null"); } catch (e) { kept = null; }
+      if (!(kept && kept.week === chWeek && !kept.sent && kept.result && Challenge.compare(kept.result, result) < 0))
+        localStorage.setItem("tunneler.challenge.last", JSON.stringify({ week: chWeek, id: rep.id, result, sent: false }));
+    } catch (e) { /* no storage */ }
+  });
   const clock = new LocalClock(runner, ext ? extInput : classicInput);
   // gamepads / touch controls (pads.js) make the same keys as the keyboard: split screen - gamepad 1
   // BLUE (W A S D + Space), gamepad 2 GREEN (arrows + Enter); vs computer - any gamepad your tank;

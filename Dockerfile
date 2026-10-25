@@ -12,10 +12,12 @@ FROM node:lts-alpine
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
-COPY server.js ./
-# server.js shares the wire protocol helpers with the browser (ES modules: src/package.json says so)
+COPY server.js challenge-worker.js ./
+# server.js shares the wire protocol helpers with the browser (ES modules: src/package.json says so); the weekly
+# challenge's replay check (challenge-worker.js) runs the game's engine, computer players, modes and English texts
 COPY src/package.json ./src/
-COPY src/js/netproto.js src/js/unitext.js src/js/unidata.js src/js/glyphs.js src/js/vgafont.js ./src/js/
+COPY src/js ./src/js
+COPY src/lang ./src/lang
 COPY --from=builder /app/public ./public
 ENV PORT=8050
 # shared replays (POST /api/replays): a folder the server may write - a volume keeps them across restarts

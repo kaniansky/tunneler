@@ -48,7 +48,8 @@ function summary(e) {
 }
 
 class Recorder {
-  // info: {kind: "split" | "skirmish" | "online", seed, opts (the engine's options), room (online: its name)}
+  // info: {kind: "split" | "skirmish" | "online", seed, opts (the engine's options), room (online: its name),
+  // challenge (the weekly challenge's week)}
   constructor(engine, info, onDone) {
     this.e = engine; this.info = info; this.onDone = onDone;
     this.frames = []; this.last = null; this.n = 0; this.checks = []; this.done = false;
@@ -76,6 +77,7 @@ class Recorder {
       aiDriven: e.aiDriven ? Array.from(e.aiDriven, v => !!v) : null,
       steps: this.n, frames: this.frames, checks: this.checks, end: [this.n, NetProto.stateHash(e)], meta: summary(e),
     };
+    if (this.info.challenge) rep.challenge = this.info.challenge;   // (the weekly challenge's week: challenge.js)
     if (this.onDone) try { this.onDone(rep); } catch (err) { console.warn("replay:", err); }
   }
 }
