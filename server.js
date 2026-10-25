@@ -32,6 +32,12 @@
 //                                 S3-compatible bucket (REPLAY_S3_*: Cloudflare R2...), else REPLAY_DIR (the
 //                                 newest MAX_SHARED), else memory; {id, days} when REPLAY_KEEP_DAYS says how long
 //        GET  /api/replays/<id>   that replay (gzip'd JSON); the page address /replay/<id> plays it
+//        GET  /api/challenge[/<week>][?cid=]   the weekly challenge's leaderboard (docs/v6/CHALLENGE.md): {week, current,
+//                                 ends, now, total, top: [{rank, name, rounds, won, kills, secs, replay}], you}
+//        POST /api/challenge/<week>?cid=&name=   a challenge match's replay (gzip'd or plain JSON): played again in a
+//                                 worker thread with the server's own computer players -> {ok, result, best, rank, total,
+//                                 improved} or {error, code}: bad / name / config / differs / unfinished / long (400),
+//                                 week / taken / version (409), busy / storage (503)
 //        POST /api/rooms          {name, public, spectators, seats?: [{kind: open|closed|easy|normal|hard,
 //                                  team: 1..8} x 8 (index = colour)], size, winScore, friendlyFire, roundTime,
 //                                  visible, watchOut, sight, password?} -> roomInfo + hostKey (defaults for anything
@@ -78,6 +84,10 @@ const { WebSocketServer } = require("ws");
 // shared with the browser; the source copy, so the server never depends on a build (an ES module: node
 // >= 20.19 requires it as it is - package.json engines)
 const { NetProto } = require("./src/js/netproto.js");
+// the weekly challenge (docs/v6/CHALLENGE.md): the week's settings; its replays are checked in a worker thread
+// (challenge-worker.js runs the engine and the computer players)
+const { Challenge } = require("./src/js/challenge.js");
+const { Worker } = require("worker_threads");
 // this server's version (package.json): clients of another version can't create or join its games
 const VERSION = (() => { try { return require("./package.json").version || null; } catch (e) { return null; } })();
 const { FrameLog, ALL_BITS, EXT_BITS, F10, HASH_EVERY, ROLES, MAX_SLOTS, MAX_PLAYER_NAME, SEAT_KINDS, SETTINGS, cleanPlayerName, cleanChat,
@@ -97,6 +107,12 @@ const MAX_CREATES_PER_MIN = 30;        // POST /api/rooms per address
 const MAX_SHARES_PER_MIN = 10;         // POST /api/replays per address
 const MAX_SHARED = 5000;               // shared replays kept (the oldest go)
 const MAX_REPLAY_BYTES = 512 * 1024;   // one shared replay, as sent (gzip'd: a long match is ~50 KB)
+const MAX_CHALLENGE_PER_MIN = 6;       // POST /api/challenge/<week> per address
+const MAX_BOARD = 5000;                // entries on a week's challenge leaderboard (the worst go)
+const BOARD_TOP = 50;                  // entries GET /api/challenge sends
+const WEEK_GRACE_MS = 2 * 3600 * 1000; // the last week's challenge still takes results this long after it ended
+const CHALLENGE_TIME_MS = 60 * 1000;   // checking one challenge replay at most (then its worker is stopped)
+const CHALLENGE_QUEUE = 6;             // challenge replays waiting for a worker at most (then "busy")
 const MAX_ROOMS_PER_ADDR = 20;         // rooms created by one address that still exist
 const MAX_CONNECTS_PER_MIN = 120;      // websocket connections per address
 const MAX_PW_FAILS = 10;               // wrong game passwords per address and minute (then refused unchecked)
@@ -474,7 +490,8 @@ function createServer(opts = {}) {
     [/^\/(split|skirmish|vs-computer)\/?$/, "/index.html"], // split screen, a skirmish (/vs-computer: before 2.1)
     [/^\/replays(\/[^/]+)?\/?$/, "/index.html"],           // the replays kept in the browser, one of them played
     [/^\/replay\/[a-z2-9]{8}\/?$/, "/index.html"],          // a shared replay (POST /api/replays)
-    [/^\/(lobby|online|play|replays)\.html$/, "/index.html"], // the pages before 5.0 (the desktop app's addresses)
+    [/^\/challenge\/?$/, "/index.html"],                    // the weekly challenge
+    [/^\/(lobby|online|play|replays|challenge)\.html$/, "/index.html"], // the pages before 5.0 (the desktop app's addresses)
   ];
   // the API answers any origin (CORS): the desktop app's pages come from tauri://localhost /
   // tauri.localhost, not from this server; nothing here uses cookies or other credentials
@@ -499,6 +516,7 @@ function createServer(opts = {}) {
     };
   }
   const allowCreate = rateLimiter(MAX_CREATES_PER_MIN), allowConnect = rateLimiter(maxConnectsPerMin), allowShare = rateLimiter(MAX_SHARES_PER_MIN);
+  const allowChallenge = rateLimiter(opts.maxChallengePerMin || MAX_CHALLENGE_PER_MIN);
 
   // ------------------------------------------------------------ shared replays (docs/DESIGN-8P.md 33)
   // A replay someone shares: checked (a replay's fields), stored gzip'd under a random id, given back to
@@ -566,6 +584,144 @@ function createServer(opts = {}) {
     } catch (e) { return null; }
   }
   const replayId = () => { const a = crypto.randomBytes(8); let s = ""; for (const b of a) s += "abcdefghijkmnpqrstuvwxyz23456789"[b & 31]; return s; };
+
+  // ------------------------------------------------------------ the weekly challenge (docs/v6/CHALLENGE.md)
+  // A board per week {week, entries: [{cid, name, rounds, won, kills, secs, date, replay}]} (one entry per client id,
+  // its best), kept where the shared replays are: the bucket (challenge-<week>.json.gz), else the folder, else memory;
+  // cached here once read, written after every change (one write at a time per week). A result comes as its replay:
+  // a worker thread plays it again (challenge-worker.js) - the board only ever holds what the server's engine says.
+  const now = opts.now || Date.now;
+  const challengeTimeMs = opts.challengeTimeMs || CHALLENGE_TIME_MS;
+  const challengeWorkers = opts.challengeWorkers || 1;
+  const boards = new Map();                              // week -> Promise of the board
+  const boardFile = week => path.join(replayDir, "challenge-" + week + ".json.gz");
+  const readBoardBytes = async week => {
+    if (s3) {
+      const r = await s3Request(s3, "GET", "challenge-" + week + ".json.gz");
+      if (r.status === 404) return null;
+      if (r.status < 200 || r.status >= 300) throw new Error("storage " + r.status);
+      return r.body;
+    }
+    if (!diskOk) return null;
+    try { return fs.readFileSync(boardFile(week)); } catch (e) { return null; }
+  };
+  function loadBoard(week) {
+    if (!boards.has(week)) {
+      const p = readBoardBytes(week).then(gz => {
+        let b = null;
+        try { b = gz ? JSON.parse(zlib.gunzipSync(gz).toString("utf8")) : null; } catch (e) { b = null; }
+        const entries = b && Array.isArray(b.entries) ? b.entries.filter(x => x && typeof x.cid === "string" && typeof x.name === "string") : [];
+        return { week, entries: entries.sort(Challenge.compare), saving: Promise.resolve() };
+      });
+      p.catch(() => boards.delete(week));                // (the storage failed: asked again next time)
+      boards.set(week, p);
+      while (boards.size > 30) boards.delete(boards.keys().next().value);
+    }
+    return boards.get(week);
+  }
+  function saveBoard(board) {
+    const gz = zlib.gzipSync(Buffer.from(JSON.stringify({ week: board.week, entries: board.entries })));
+    board.saving = board.saving.catch(() => {}).then(async () => {
+      if (s3) {
+        const r = await s3Request(s3, "PUT", "challenge-" + board.week + ".json.gz", gz);
+        if (r.status < 200 || r.status >= 300) throw new Error("storage " + r.status);
+      } else if (diskOk) fs.writeFileSync(boardFile(board.week), gz);
+    });
+    return board.saving;
+  }
+  // a week still taking results: the current one, the last one for WEEK_GRACE_MS after it ended
+  const weekOpen = week => { const t = now(); return week === Challenge.weekOf(t) || (Challenge.weekEnd(week) <= t && t < Challenge.weekEnd(week) + WEEK_GRACE_MS); };
+  const publicEntry = (x, i) => ({ rank: i + 1, name: x.name, rounds: x.rounds, won: !!x.won, kills: x.kills, secs: x.secs, replay: x.replay || null });
+  function boardInfo(board, cid) {
+    const t = now(), i = cid ? board.entries.findIndex(x => x.cid === cid) : -1;
+    return { week: board.week, current: board.week === Challenge.weekOf(t), ends: Challenge.weekEnd(board.week), now: t, total: board.entries.length,
+      top: board.entries.slice(0, BOARD_TOP).map(publicEntry), you: i >= 0 ? publicEntry(board.entries[i], i) : null };
+  }
+  // the replay checks: at most challengeWorkers at a time, CHALLENGE_QUEUE waiting
+  let checksRunning = 0;
+  const checksWaiting = [], checkWorkers = new Set();
+  function runCheck(bytes, week) {
+    return new Promise(resolve => {
+      const job = () => {
+        checksRunning++;
+        let done = false;
+        const finish = r => {
+          if (done) return;
+          done = true; clearTimeout(timer); checksRunning--;
+          resolve(r);
+          const next = checksWaiting.shift();
+          if (next) next();
+        };
+        let w;
+        try {
+          w = new Worker(path.join(__dirname, "challenge-worker.js"), { workerData: { bytes, week, version },
+            resourceLimits: { maxOldGenerationSizeMb: 256 } });
+        } catch (e) { return finish({ code: "busy" }); }
+        checkWorkers.add(w);
+        w.once("exit", () => checkWorkers.delete(w));
+        const timer = setTimeout(() => { w.terminate(); finish({ code: "long" }); }, challengeTimeMs);
+        w.once("message", m => { finish(m || { code: "bad" }); w.terminate(); });
+        w.once("error", e => { say("challenge check failed:", e && e.message); finish({ code: "bad" }); });
+        w.once("exit", () => finish({ code: "bad" }));
+      };
+      if (checksRunning < challengeWorkers) job();
+      else if (checksWaiting.length < CHALLENGE_QUEUE) checksWaiting.push(job);
+      else resolve({ code: "busy" });
+    });
+  }
+  const STATUS = { bad: 400, name: 400, config: 400, differs: 400, unfinished: 400, long: 400, week: 409, taken: 409, version: 409, busy: 503, storage: 503 };
+  const challengeError = (res, code, error) => json(res, STATUS[code] || 400, { error: error || code, code });
+  async function challengeApi(req, res, p) {
+    const u = new URL(req.url, "http://x"), m = /^\/api\/challenge(?:\/(\d{4}-W\d{2}))?$/.exec(p);
+    const week = m[1] || Challenge.weekOf(now());
+    if (!Challenge.validWeek(week)) return challengeError(res, "bad", "no such week");
+    if (req.method === "GET") {
+      if (Challenge.weekStart(week) > now()) return json(res, 404, { error: "that week hasn't started" });
+      let board;
+      try { board = await loadBoard(week); } catch (e) { return challengeError(res, "storage", "storage unavailable, try later"); }
+      return json(res, 200, boardInfo(board, u.searchParams.get("cid")));
+    }
+    if (req.method !== "POST" || !m[1]) return json(res, 404, { error: "not found" });
+    const cid = u.searchParams.get("cid") || "", name = cleanPlayerName(u.searchParams.get("name"));
+    if (!/^[A-Za-z0-9_-]{8,64}$/.test(cid)) return challengeError(res, "bad", "bad client id");
+    if (!name) return challengeError(res, "name", "a name is needed");
+    let bytes;
+    try { bytes = await readRaw(req, MAX_REPLAY_BYTES); } catch (e) { return json(res, 413, { error: "too large" }); }
+    if (!allowChallenge(addressOf(req))) return json(res, 429, { error: "too many results, try again in a minute", code: "busy" });
+    if (!weekOpen(week)) return challengeError(res, "week", "that week's challenge is over");
+    let board;
+    try { board = await loadBoard(week); } catch (e) { return challengeError(res, "storage", "storage unavailable, try later"); }
+    const taken = () => board.entries.some(x => x.cid !== cid && x.name.toLowerCase() === name.toLowerCase());
+    if (taken()) return challengeError(res, "taken", "another player has that name on this week's board");
+    const r = await runCheck(new Uint8Array(bytes), week);
+    if (r.code) return challengeError(res, r.code, r.code === "version" ? "the replay is of another version than this server's " + version : null);
+    if (taken()) return challengeError(res, "taken", "another player has that name on this week's board");
+    const res0 = r.result;
+    const entry = { cid, name, rounds: res0.rounds | 0, won: !!res0.won, kills: res0.kills | 0, secs: res0.secs | 0, date: now(), replay: null };
+    const at = board.entries.findIndex(x => x.cid === cid);
+    const improved = at < 0 || Challenge.compare(entry, board.entries[at]) < 0;
+    if (improved) {
+      let id = replayId();
+      while (shared.has(id)) id = replayId();
+      try { await keepShared(id, Buffer.from(r.gz)); } catch (e) { return challengeError(res, "storage", "could not store it, try later"); }
+      entry.replay = id;
+      const i = board.entries.findIndex(x => x.cid === cid);   // (again: another result of this client may have come meanwhile)
+      if (i >= 0 && Challenge.compare(entry, board.entries[i]) >= 0) { /* that one was better */ }
+      else {
+        if (i >= 0) board.entries.splice(i, 1);
+        board.entries.push(entry);
+        board.entries.sort(Challenge.compare);
+        if (board.entries.length > MAX_BOARD) board.entries.length = MAX_BOARD;
+        try { await saveBoard(board); } catch (e) { say("challenge board not stored:", e.message); }
+      }
+    } else if (board.entries[at].name !== name) {      // (a new name for the same player: the board follows it)
+      board.entries[at].name = name;
+      try { await saveBoard(board); } catch (e) { say("challenge board not stored:", e.message); }
+    }
+    const k = board.entries.findIndex(x => x.cid === cid);
+    say("challenge", week, JSON.stringify(name), JSON.stringify(res0), improved ? "best" : "");
+    return json(res, 200, { ok: true, result: res0, best: k >= 0 ? publicEntry(board.entries[k], k) : null, rank: k + 1, total: board.entries.length, improved });
+  }
   // wrong passwords per address: pwBlocked before checking one, pwFailed after a wrong one
   const pwFails = new Map();
   const pwRecent = addr => (pwFails.get(addr) || []).filter(t => Date.now() - t < 60000);
@@ -603,6 +759,10 @@ function createServer(opts = {}) {
       while (shared.has(id) || (!s3 && await sharedReplay(id))) id = replayId();   // (a bucket: 32^8 ids - no lookup)
       try { await keepShared(id, gz); } catch (e) { return json(res, 503, { error: "could not store it, try later" }); }
       return json(res, 200, keepDays ? { id, days: keepDays } : { id });
+    }
+    if (/^\/api\/challenge(\/[^/]*)?$/.test(p)) {
+      if (!/^\/api\/challenge(\/\d{4}-W\d{2})?$/.test(p)) return json(res, 404, { error: "not found" });
+      return challengeApi(req, res, p);
     }
     const rm = /^\/api\/replays\/([a-z2-9]{8})$/.exec(p);
     if (rm && req.method === "GET") {
@@ -962,6 +1122,7 @@ function createServer(opts = {}) {
     listen(port, cb) { server.listen(port, () => cb && cb(server.address().port)); return this; },
     close(cb) {
       clearInterval(heartbeat); clearInterval(idleSweep);
+      for (const w of checkWorkers) w.terminate();
       for (const r of rooms.values()) { if (r.match) { stopClock(r.match); clearTimeout(r.match.aloneTimer); } clearTimeout(r.cleanupTimer); clearTimeout(r.stTimer); }
       for (const ws of wss.clients) ws.terminate();
       wss.close();
