@@ -3,8 +3,8 @@ name: Release
 # A release is made by pushing a version tag (pushes to main only run CI):
 #   git tag -a v1.4.1 -m v1.4.1 && git push origin v1.4.1
 # It creates the GitHub release with that version's CHANGELOG.md section as its notes
-# (tools/changelog-notes.sh), builds the desktop app (app-build.yml) and the Docker image, and uploads
-# the homepage (site/). package.json's version and the CHANGELOG.md heading should match the tag.
+# (tools/changelog-notes.sh), builds the desktop and Android app (app-build.yml) and the Docker image, uploads
+# the homepage (site/) and commits the Flatpak manifest for it to main (job flatpak). package.json's version and the CHANGELOG.md heading should match the tag.
 
 on:
   push:
@@ -42,7 +42,7 @@ jobs:
           { tools/changelog-notes.sh "$v" || echo "Version $v."
             prev=$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | grep -vx "v$v" | head -n1)
             echo
-            echo "**Downloads:** the desktop app for Windows, Linux and macOS below; play in the browser at https://tunneler-online.onrender.com/"
+            echo "**Downloads:** the desktop app for Windows, Linux and macOS and the Android app below; play in the browser at https://tunneler-online.onrender.com/"
             [ -n "$prev" ] && echo "**All changes:** https://github.com/${{ github.repository }}/compare/$prev...v$v"
           } > "$RUNNER_TEMP/notes.md"
           cat "$RUNNER_TEMP/notes.md"
@@ -55,13 +55,13 @@ jobs:
           body_path: ${{ runner.temp }}/notes.md
           prerelease: ${{ contains(steps.version.outputs.version, '-') }}
 
-  # the desktop app for Windows, Linux and macOS, attached to the release (app-build.yml)
+  # the desktop app for Windows, Linux and macOS and the Android app, attached to the release (app-build.yml)
   app:
     needs: release
     uses: ./.github/workflows/app-build.yml
     with:
       tag: v${{ needs.release.outputs.version }}
-    secrets: inherit           # TAURI_SIGNING_PRIVATE_KEY: signed update packages
+    secrets: inherit           # TAURI_SIGNING_PRIVATE_KEY: signed update packages; ANDROID_KEYSTORE*: a signed APK / AAB
     permissions:
       contents: write
 
@@ -83,6 +83,44 @@ jobs:
     secrets: inherit           # REPO_GPG_PRIVATE_KEY, SITE_FTP_*
     permissions:
       contents: read
+
+  # the Flatpak manifest (flatpak/com.kaniansky.TunnelerOnline.yml) for this release, committed to main: both
+  # .deb urls + sha256 (they exist once app attached them) and the tag + its commit (tools/flatpak-update.js).
+  # The metainfo's <release> entry has to be in the tag already (test/update-check.js fails without it; `npm
+  # version X` adds it). Once the app is on Flathub, its bot opens the Flathub update by itself (the
+  # manifest's x-checker-data).
+  flatpak:
+    needs: [release, app]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: lts/*
+
+      - name: The metainfo lists this release
+        run: |
+          v="${{ needs.release.outputs.version }}"
+          git show "v$v:flatpak/com.kaniansky.TunnelerOnline.metainfo.xml" | grep -q "<release version=\"$v\"" ||
+            echo "::warning::the tag's metainfo has no <release version=\"$v\"> - Flathub will show the previous version's notes"
+
+      - name: Update the manifest
+        run: node tools/flatpak-update.js "${{ needs.release.outputs.version }}"
+
+      - name: Commit it to main
+        run: |
+          v="${{ needs.release.outputs.version }}"
+          if git diff --quiet -- flatpak/; then echo "the manifest is up to date"; exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Flatpak: the manifest for $v (both .deb sha256, the tag's commit)" -- flatpak/
+          git push origin HEAD:main
 
   # the homepage (site/) at https://kaniansky.com/tunneler/, uploaded by FTPS after every release: fresh
   # screenshots from screenshots/ (tools/site-images.py), the page itself reads the newest release's

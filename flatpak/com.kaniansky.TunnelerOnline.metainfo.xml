@@ -24,7 +24,7 @@
       <li>Game modes: gold rush, infection, survival, king of the hill, shrinking world, capture the flag, base siege, deathmatch</li>
       <li>Line of sight: see only around your tank, or only what dirt and rock don't hide</li>
       <li>Small, medium and large maps, rounds to win, a round time limit, friendly fire</li>
-      <li>English, Slovak, Czech, Ukrainian, Russian and Gen Z slang</li>
+      <li>English, Slovak, Czech, Ukrainian and Russian</li>
     </ul>
   </description>
   <launchable type="desktop-id">com.kaniansky.TunnelerOnline.desktop</launchable>
@@ -81,6 +81,9 @@
     <color type="primary" scheme_preference="dark">#550055</color>
   </branding>
   <releases>
+    <release version="5.0.0" date="2026-10-24">
+      <url type="details">https://github.com/kaniansky/tunneler-online/releases/tag/v5.0.0</url>
+    </release>
     <release version="4.0.1" date="2026-10-21">
       <url type="details">https://github.com/kaniansky/tunneler-online/releases/tag/v4.0.1</url>
     </release>
