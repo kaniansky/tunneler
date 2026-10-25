@@ -170,6 +170,11 @@ export function mount() {
       if (i >= 0) { engine.menuSel = i; clicks.push([13, 0x1C]); }
     } else clicks.push([13, 0x1C]);
   });
+  // a tap beside the canvas goes on too (a phone held upright: the world map at the top, the rest black)
+  window.addEventListener("click", ev => {
+    if (ev.target === canvas || engine.kbdInstalled || (ev.target.closest && ev.target.closest("button, a, input, textarea"))) return;
+    if (!(engine.screen === "text" && engine.menuPage === "menu")) clicks.push([13, 0x1C]);
+  });
 
   canvas.addEventListener("mousemove", ev => {
     const cell = !engine.kbdInstalled && engine.screen === "text" && engine.menuPage === "menu" ? views.cellAt(ev) : null;

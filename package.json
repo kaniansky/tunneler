@@ -33,7 +33,8 @@
     "test:local": "node test/local-check.js && node test/app-check.js",
     "test:input": "node test/input-check.js",
     "test:sound": "node test/sound-check.js",
-    "test:serial": "node test/run.js --serial"
+    "test:serial": "node test/run.js --serial",
+    "check:phone": "node build.js && node tools/phone-check.js"
   },
   "dependencies": {
     "ws": "^8.18.0"

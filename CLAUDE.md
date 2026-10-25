@@ -107,8 +107,9 @@ may be redesigned, but always in the original's DOS look.
     the countdown pixels, roundTime 0 = no option step for step, determinism with computer tanks.
   - `layout-check.js` - the menus' layout on a desktop, a phone upright (narrow) and sideways, in every
     language: every box placed and on the screen, boxes apart and above the info, every row fits its box,
-    every info fits (narrow: up to 7 rows) - 230 screens (home, split, skirmish + Game settings, Settings,
-    games list, create, join by link, name, replays).
+    every info fits (narrow: up to 7 rows) - 305 screens (home, split, skirmish + Game settings, Settings,
+    games list, create, join by link, name, replays, the online game's lobby as host / player / spectator +
+    its Game settings and kick page).
   - `local-check.js` - home.js settings screens (vm with a stub DOM: default classic link, slot editor
     keys, validation, localStorage), play.js links -> engine options / AI levels / listener, and
     `Speaker.attenuation`, views.js coloring / naming players by their slot (not their index), views.js
@@ -155,7 +156,11 @@ may be redesigned, but always in the original's DOS look.
 - `screenshots/` - README images (taken with headless Chromium via playwright-core).
 
 Browser testing used playwright-core with the Chromium at `~/.cache/ms-playwright/chromium-1234/` (not a
-project dependency; install playwright-core in a scratch dir when needed).
+project dependency; install playwright-core in a scratch dir when needed). `npm run check:phone`
+(`tools/phone-check.js`, by hand, not in CI; `NODE_PATH` to playwright-core's node_modules) = a skirmish on a
+phone upright / sideways in both graphics: touch controls shown, the canvas on the screen and off them, the
+joystick drives the tank, the end map / menu without them, a tap beside the map goes on; screenshots in
+`<tmp>/tunneler-phone-check`.
 
 ## Engine (`src/js/engine.js`) - the game
 

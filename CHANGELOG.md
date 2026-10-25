@@ -12,6 +12,9 @@ a release is made by pushing a version tag (see CONTRIBUTING.md).
   game's round without the score (the row was too wide); the online lobby's seat rows fit in Ukrainian and
   Russian (a narrower ping column).
 - The live server is kept awake (no ~15 s wait for the first visitor).
+- A slow device no longer freezes a local game (it runs slowly instead); a tap beside the canvas closes the
+  end-of-match world map (a phone held upright: the black half below it).
+- `npm run check:phone`: a phone check in a real browser, run by hand (CONTRIBUTING.md).
 
 ## 5.0.1
 

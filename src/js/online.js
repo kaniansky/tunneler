@@ -291,12 +291,17 @@ export function mount() {
   }
   setInterval(() => { if (!isPlayer()) keyboard.takeKeys(); }, 200);   // (nobody reads them then)
 
-  // mouse: a click on the world map goes on (the lobby's own DosUI handles its clicks)
-  canvas.addEventListener("click", () => {
+  // mouse: a click on the world map goes on (the lobby's own DosUI handles its clicks); a tap beside the canvas
+  // too (a phone held upright: the map at the top, the rest black)
+  function mapClick() {
     if (msgSnap || !mapPending) return;
     mapPending = false;
     if (isPlayer() && engine.screen === "map") send({ t: "k", a: 13, s: 0x1C });
     presentOverlay();
+  }
+  canvas.addEventListener("click", mapClick);
+  window.addEventListener("click", ev => {
+    if (ev.target !== canvas && !(ev.target.closest && ev.target.closest("button, a, input, textarea"))) mapClick();
   });
   canvas.addEventListener("mousemove", () => { if (mapPending && !msgSnap) canvas.style.cursor = "pointer"; });
 

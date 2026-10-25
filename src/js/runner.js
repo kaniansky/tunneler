@@ -70,7 +70,9 @@ class LocalClock {
   pump() {
     const now = performance.now();
     let due = Math.floor((now - this.start) / TICK_MS);
-    if (due - this.steps > 10) { this.start = now - this.steps * TICK_MS; due = this.steps; }  // tab was asleep
+    // (the tab was asleep - or every frame takes longer than 10 ticks on a slow device: one step, not none, so the
+    // game runs slowly instead of standing still)
+    if (due - this.steps > 10) { this.start = now - (this.steps + 1) * TICK_MS; due = this.steps + 1; }
     while (this.steps < due) {
       this.runner.runStep(this.inputFn(), this.start + (this.steps + 1) * TICK_MS);
       this.steps++;

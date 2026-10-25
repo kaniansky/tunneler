@@ -351,7 +351,9 @@ function loadPage(page, search, stored, version) {
     await waitFor(() => !lui.active() || e.screen === "map", "the map shown");
     assert.strictEqual(e.screen, "map", "the world map");
     assert(!lui.active(), "the map, not the lobby: " + JSON.stringify({ shift: e.menuShift, kbd: e.kbdInstalled, page: lui.spec && lui.spec.page }));
-    press(env, "Space");                                            // closed here (the player is still on it)
+    // a tap beside the canvas (a phone held upright: the map at the top, the rest black) closes it here; the
+    // player is still on it
+    for (const f of env.listeners.click || []) f({ target: { closest: () => null }, clientX: 10, clientY: 700 });
     await waitFor(() => lui.active() && lui.spec.page, "the statistics");
     assert(lui.active() && lui.spec.page, "the statistics at once: " + JSON.stringify(lui.spec && Object.keys(lui.spec)));
     press(env, "Escape");
@@ -362,7 +364,7 @@ function loadPage(page, search, stored, version) {
     await wait(200);
     assert(!env.win.tunnelerEngine() && lui.active() && !lui.spec.page, "the server's end: still the lobby, no statistics again");
     assert(lui.spec.items.some(it => it.key === "stats"), "Statistics in the lobby");
-    console.log("  ok  online.js end of a match: the statistics once this viewer closes the map, then the lobby");
+    console.log("  ok  online.js end of a match: a tap beside the map closes it, the statistics once, then the lobby");
   }
   {
     // no name yet: asked first, then connected with it
