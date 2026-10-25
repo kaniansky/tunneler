@@ -9,9 +9,13 @@
 // /lobby.html?room=<id> (old links) goes straight to that game's lobby.
 // Quick play (docs/v6/QUICKPLAY.md; the main menu goes to /games?quick=1, the list has the item too): the server
 // finds a quick-play game with a place for one more (or makes one) - POST /api/quickplay - and this page goes to it.
+// Accounts (docs/v6/ACCOUNTS.md): on a server that needs them, LOG IN (login.js) instead of the name prompt - before
+// the list or quick play -, and the session's token on creating a game / quick play.
+import { Account } from "./account.js";
 import { DosUI } from "./dosui.js";
 import { Endpoint, Links } from "./endpoint.js";
 import { Lang } from "./lang.js";
+import { Login } from "./login.js";
 import { NetProto } from "./netproto.js";
 import { Pads } from "./pads.js";
 import { UniText } from "./unitext.js";
@@ -33,7 +37,10 @@ export function mount() {
   if (old) { Nav.go(Links.game(old), true); return; }
   let quickStart = new URLSearchParams(location.search).get("quick") === "1";
 
-  let view = null;                                   // "name" | "list" | "create"
+  let view = null;                                   // "name" | "login" | "list" | "create" | "quick" | "link"
+  // online play needs an account on this server (it said so - remembered per server), else a name
+  const accountsOn = () => Account.required() === true;
+  const named = () => accountsOn() ? !!Account.session() : !!DosUI.playerName();
   let rooms = [];
   const form = { value: "", max: 26, width: 18, public: true, spectators: true, error: "" };
   const pass = { value: "", max: NetProto.MAX_PASSWORD, width: 18 };   // (shown as typed: the host gives it to the others)
@@ -183,8 +190,10 @@ export function mount() {
       password: NetProto.cleanPassword(pass.value) });
     body.version = myVersion || "dev";                 // (another version is refused; dev: not built)
     try {
-      const res = await fetch(Endpoint.api("/api/rooms"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const res = await fetch(Endpoint.api("/api/rooms"), { method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, Account.auth()), body: JSON.stringify(body) });
       const r = await res.json();
+      // (accounts: the session is gone - logged out elsewhere, a new password: log in again, then create it)
+      if (res.status === 401 && r.code === "session") { Account.logout(); return askLogin(() => create()); }
       // (another version: a browser page reloads itself once for it - docs/v6/RELIABILITY.md 2.7 -, else see the list)
       if (res.status === 409 && r.code === "version") { if (Reload.forVersion(String(r.version))) return; serverVersion = r.version; return list(); }
       if (!res.ok) throw new Error(r.error || "failed");
@@ -219,11 +228,12 @@ export function mount() {
     if (quickBusy) return;
     quickBusy = true;
     const failed = text => { quickBusy = false; if (view === "quick") { quickErr = { row: 9, text, color: 12 }; drawQuick(); } };
-    fetch(Endpoint.api("/api/quickplay"), { method: "POST", headers: { "Content-Type": "application/json" },
+    fetch(Endpoint.api("/api/quickplay"), { method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, Account.auth()),
       body: JSON.stringify({ version: myVersion || "dev", name: Lang.raw("qp.room") }) })
       .then(res => res.json().then(r => ({ res, r })))
       .then(({ res, r }) => {
         if (res.status === 409 && r && r.code === "version") { serverVersion = r.version; return failed(T("ver.server", { server: serverVersion, you: myVersion })); }
+        if (res.status === 401 && r && r.code === "session") { quickBusy = false; Account.logout(); if (view === "quick") askLogin(() => quick()); return; }
         if (!res.ok || !r || typeof r.id !== "string") return failed(T("qp.err", { msg: E(String(r && r.error || res.status)) }));
         quickBusy = false;
         if (view !== "quick") return;                  // (went back meanwhile)
@@ -262,15 +272,17 @@ export function mount() {
     }, keep);
   }
 
-  // the player's name (online play needs one)
+  // the player's name (online play needs one) - or, on a server with accounts, logging in (Back: the main menu)
   function askName(then) { view = "name"; ui.askName(then, () => (DosUI.playerName() ? list() : home())); }
+  function askLogin(then) { view = "login"; Login.ask(ui, { done: then, back: home }); }
+  const askFirst = then => accountsOn() ? askLogin(then) : askName(then);
 
   // ------------------------------------------------------------ polling
   // Until the server first answers (a server that was asleep - e.g. on a free host - can take up to a
   // minute to wake up): "Connecting to <server>...", <ESC> / Back to the main menu. One request at a time.
   let reached = false, busy = false, failed = false;
   function connecting() {
-    if (view === "name" || view === "quick") return;
+    if (view === "name" || view === "login" || view === "quick") return;
     const host = (Endpoint.base() || location.origin).replace(/^https?:\/\//, "");
     ui.show({
       lines: [{ row: 2, text: T("lobby.title"), color: 12 }, { row: 9, text: T("lobby.connecting"), color: 14 }, { row: 11, text: E(host), color: 7 },
@@ -307,14 +319,25 @@ export function mount() {
     } finally { busy = false; }
     const other = rooms.find(otherVersion);
     if (other) serverVersion = other.version;
-    if (view === "list" || (view === null && DosUI.playerName())) list(keep && view === "list");
+    if (view === "list" || (view === null && named())) list(keep && view === "list");
   }
 
-  setInterval(() => { if (view === "list" || (view === null && DosUI.playerName())) refreshList(true); }, 2000);
+  setInterval(() => { if (view === "list" || (view === null && named())) refreshList(true); }, 2000);
 
   setTimeout(() => { if (!reached) connecting(); }, 300);   // (until the server answers; no flash when it's quick)
   setTimeout(() => { if (!reached) { failed = true; connecting(); } }, 3000);   // (still waiting: the wake-up hint)
-  if (quickStart) { if (DosUI.playerName()) quick(); else askName(() => quick()); }
-  else if (!DosUI.playerName()) askName(() => { view = null; if (reached) list(); else connecting(); refreshList(false); });
+  const toList = () => { view = null; if (reached) list(); else connecting(); refreshList(false); };
+  if (quickStart) { if (named()) quick(); else askFirst(() => quick()); }
+  else if (!named()) askFirst(toList);
   refreshList(false);
+  // (what the server says about accounts - the remembered answer may be old, or there was none: LOG IN now if it
+  // needs one and there is no session; a session it doesn't take any more is dropped)
+  Account.config().then(async on => {
+    if (on === null) return;
+    const then = view === "quick" || quickStart ? () => quick() : toList;
+    if (on) {
+      if (Account.session()) await Account.check();
+      if (!Account.session() && view !== "login") askLogin(then);
+    } else if (view === "login") { if (DosUI.playerName()) then(); else askName(then); }   // (it had them once: not now)
+  });
 }

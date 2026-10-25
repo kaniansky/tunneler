@@ -171,7 +171,7 @@ Lang.register("cs", {
           "výhře a čas kola."],
         ["Potyčka:  ", "vlastní hra proti tankům počítače, sám nebo s druhým hráčem na téže klávesnici.  Každá z 8 barev je hráč 1, hráč 2, nikdo nebo tank počítače (lehký, střední, těžký) se svým týmem (1-8) - hráči mohou mít libovolnou barvu; pak režim, velikost mapy, vítězná kola, čas kola, palba do vlastních, pohled, co po smrti a dohled.  Hráč 1 řídí W A S D + SHIFT, hráč 2 šipkami + ENTER (jiné klávesy: Nastavení, Ovládání).  <ESC> během hry ukončí zápas; Odveta nebo <ESC> v menu hry se vrátí k nastavení."],
         ["Hra online:  ", "2 až 8 tanků na různých počítačích, některé z nich mohou být počítačové.  Hra online " +
-          "potřebuje jméno (zeptá se na něj poprvé, změníš ho v Nastavení).  Vytvoř hru - její " +
+          "potřebuje účet na serveru hry (vytvoříš si ho nebo se přihlásíš poprvé; server bez účtů chce jen jméno).  Vytvoř hru - její " +
           "jméno, nepovinné heslo (kdo se připojí nebo dívá, ho musí zadat; v seznamu má hra zámek), " +
           "veřejná nebo soukromá (připojuje se odkazem s pozvánkou), diváci povoleni nebo ne " +
           "- nebo se připoj ke hře ze seznamu.  Svůj tank řídíš kteroukoli sadou kláves.  Všechny " +
@@ -190,7 +190,7 @@ Lang.register("cs", {
         ["Zvuk:  ", "V Nastavení zvolíš jeho styl: původní (pípání PC " +
           "speakeru z roku 1991), realistický (zvuky tanků), nahraný (skutečné nahrávky), pohádkový (boing a puk) nebo vypnutý; i hlasitost, stereo a slábnutí se vzdáleností.  " +
           "Zvuky ostatních tanků slábnou se vzdáleností od tvého a znějí z jejich strany (stereo)."],
-        ["Nastavení:  ", "Obraz (celá obrazovka - i <ALT>+<ENTER> -, velikost obrazu, barvy tanků: běžné, pro barvoslepost nebo ty modrý / tým zelený / nepřátelé červení), Grafika (původní nebo moderní, pak nastavení toho vzhledu), Zvuk (styl, hlasitost, stereo, slábnutí se vzdáleností), Ovládání (klávesy obou tanků, dotykové ovládání), Online (tvé jméno, oblíbená barva, chat, zvuk chatu, ping; v desktopové aplikaci server) a Jazyk."],
+        ["Nastavení:  ", "Obraz (celá obrazovka - i <ALT>+<ENTER> -, velikost obrazu, barvy tanků: běžné, pro barvoslepost nebo ty modrý / tým zelený / nepřátelé červení), Grafika (původní nebo moderní, pak nastavení toho vzhledu), Zvuk (styl, hlasitost, stereo, slábnutí se vzdáleností), Ovládání (klávesy obou tanků, dotykové ovládání), Online (tvůj účet - nebo jméno -, oblíbená barva, chat, zvuk chatu, ping; v desktopové aplikaci server) a Jazyk."],
         ["Grafika:  ", "Nastavení vybírá původní (obrazovka DOSu z roku 1991) nebo moderní (výchozí): tatáž hra nakreslená v rozlišení tvé obrazovky - hladké tunely, texturovaná hlína a skála, tmavé tunely osvětlené světly tanků, zářící střely, prach, jiskry a oheň, nový panel a menu v moderním písmu.  Nastavení moderní grafiky: styl (čistý nebo retro), kvalita, terén, okraje tunelů, osvětlení, částice, záře, otřesy obrazu, kamera (plynulá: tanky kloužou mezi kroky) a rozhraní, a mlha války při výhledu.  Mění se jen vzhled, nikdy hra - ani online."],
       ],
     },

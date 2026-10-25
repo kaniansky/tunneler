@@ -1,5 +1,6 @@
 // This language's files (src/lang/index.js imports every language): main.js first, then the game modes.
 import "./main.js";
+import "./accounts.js";
 import "./reliability.js";
 import "./quickplay.js";
 import "./challenge.js";
