@@ -70,8 +70,11 @@ already do after a reconnect.
   connection or `GET /api/rooms/<id>` for an unknown room re-reads the store, at most once every
   `HANDOFF_POLL_MS` (2 s) and only during the first `HANDOFF_WINDOW_MS` (10 min) after start. A snapshot
   older than `HANDOFF_MAX_AGE_MS` (10 min) is ignored, as is one already restored (by its `at`), and a room
-  id that already exists is never overwritten. Restored rooms count as active (the idle sweep starts over),
-  and their cleanup timer is armed as usual.
+  id that already exists is never overwritten. The exception is a room this server restored from an older
+  snapshot that nobody has joined since. **The server that reads a snapshot deletes it.** Without that, the
+  next deploy's new instance, which starts while this one still runs the games, would bring back the rooms'
+  old state. Restored rooms count as active (the idle sweep starts over), and their cleanup timer is armed
+  as usual.
 - **Matches across versions**: a match is restored only when the snapshot's version is this server's.
   A new version may simulate differently, and the clients will be running the new code. Otherwise the room
   comes back in its lobby, with the match's score kept for the list.
@@ -192,14 +195,20 @@ and Render's health check can use it. Changing them is left to the owner.
 - Shutdown + handoff: a real extended match with fake clients running the engine. Server A shuts down
   (clients get `restart`, 1012), server B starts on the same store, the clients reconnect with
   `&match&have`, the match resumes and every client ends identical to a reference replay. The lazy restore
-  works when B started before A's snapshot. A different version restores the lobby only. Stale
-  snapshots are ignored.
+  works when B started before A's snapshot. A different version restores the lobby only. A snapshot that
+  was read is deleted, and stale snapshots are ignored (and deleted). Passwords and bans survive the
+  handoff. SIGTERM on the real program writes the snapshot and exits with 0.
 - Online page (vm, stub websocket): a dead connection (no answer to a ping) is dropped and reconnected.
   `restart` shows the restart screen and reconnects. `noroom` after hello retries, then shows the gone
   screen. A desync rebuilds without `&match` (at most twice). A version error reloads once per version.
   The `online` event reconnects at once.
 - app.js (app-check): a chunk that fails to load reloads the page once, and a second failure shows the
-  message.
+  message. A screen that throws in `mount()` shows its message, and a click goes to the main menu.
+- Checked in a real Chromium (playwright, built pages, desktop and a phone held upright, both Graphics
+  settings): a running match survives a server shutdown and a new server on the same port with no desync.
+  The restart and gone screens show, and the touch controls hide under status screens. A deleted chunk
+  reloads the page once and then shows the message (with the service worker blocked; with it, the cached
+  chunk is served). Another server version reloads the games list once.
 - layout-check: the online status screens (restart, gone, offline) in every language and screen size.
 
 ## 7. Out of scope

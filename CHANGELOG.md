@@ -3,6 +3,24 @@
 All notable changes to Tunneler Online. Versions follow [semantic versioning](https://semver.org/);
 a release is made by pushing a version tag (see CONTRIBUTING.md).
 
+## Unreleased
+
+- Running reliably (docs/v6/RELIABILITY.md):
+  - A server restart or deploy no longer ends online games. The server hands its games (lobbies and
+    running matches) over to the next one, and the players' pages reconnect and carry on where they were.
+    Meanwhile they show "The server is restarting...". A game that is really gone says so instead of "GAME
+    NOT FOUND".
+  - One bad message (too long, or broken) could take the whole server down with every game on it. Now it
+    only closes that one connection.
+  - A connection that died without closing (a phone switching networks, a laptop waking up) is noticed
+    within seconds, and the page reconnects with its tank and seat at once. The page also reconnects at
+    once when the network comes back, and it says so while there is none.
+  - A desync now repairs itself: the page rebuilds the match from its start (twice at most).
+  - When a new version goes live, an open page reloads itself, so nobody has to follow a "please update"
+    message in a browser. A screen whose code is gone after a deploy reloads the page too.
+  - A screen that crashes shows a message and a way back instead of a blank page. Errors that pages catch
+    are reported to the server's log. There is also a new `/api/health`.
+
 ## 5.0.4
 
 - Phones and tablets: a finger on a menu item highlights it, and the highlight follows the finger over the other
