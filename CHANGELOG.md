@@ -31,6 +31,11 @@ a release is made by pushing a version tag (see CONTRIBUTING.md).
   computer opponents. Play it as often as you like and send your result: the server plays the match's replay
   again with its own computer players, so only real results get on the week's leaderboard (won, rounds, kills,
   time). The leaderboard shows the week's best, and every entry's match can be watched.
+- Your own maps (main menu, Maps): paint a world - rock, dirt and tunnels - and place up to 8 bases, on a small,
+  medium or large map, starting from dirt everywhere or a random world. The editor works with the keyboard, the
+  mouse, a gamepad and on a phone (one finger paints, two move and zoom); maps are kept in the browser and can be
+  shared as links (`/map/<id>`). Play a map in a skirmish (Settings, Map) or choose it for an online game (the
+  room's Settings, Map) - every player gets the same map. Replays of map games carry their map. (docs/v6/MAPS.md)
 
 ## 5.0.4
 

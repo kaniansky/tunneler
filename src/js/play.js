@@ -10,6 +10,8 @@
 // Old links (?mode=cpu&level=...&opp=1..7&teams=0|1, hide=1 = self / hide=0 = everyone) still work.
 // ?challenge=<week> (docs/v6/CHALLENGE.md): that week's challenge - challenge.js's query for it, the week's seed, its
 // result remembered for the challenge screen (localStorage tunneler.challenge.last); after the match: back to it.
+// A custom map (docs/v6/MAPS.md): &lmap=<local id> (a map kept in this browser, mapstore.js) and / or &map=<shared id>
+// (fetched from the game's server and kept) - the engine gets its code (opts.map).
 import "./gfx-modern.js";
 import "./gfx-hud.js";
 import { TunnelerAI } from "./ai.js";
@@ -28,7 +30,30 @@ import { Speaker } from "./speaker.js";
 import { ViewModes } from "./views.js";
 import { Nav } from "./nav.js";
 import { GameScreen } from "./screen.js";
+import { DosUI } from "./dosui.js";
+import { MapStore } from "./mapstore.js";
+import { Scope } from "./scope.js";
 export function mount() {
+  const q = new URLSearchParams(location.search), lmap = q.get("lmap"), smap = q.get("map");
+  if (!lmap && !smap) return run(null);
+  // the map first (this browser's copy, else the shared one from the server), then the game
+  const scope = Scope.current;
+  (async () => {
+    let rec = lmap ? await MapStore.get(lmap) : null;
+    if (!rec && smap && /^[a-z2-9]{10}$/.test(smap)) rec = await MapStore.fetchShared(smap);
+    return rec;
+  })().then(rec => { if (Scope.current === scope) { if (rec) run(rec); else noMap("404"); } },
+    e => { if (Scope.current === scope) noMap(e && e.status === 404 ? "404" : String(e && e.message || e)); });
+}
+// the map of the link isn't here and the server doesn't have it (or can't be reached)
+function noMap(why) {
+  const ui = new DosUI(document.getElementById("screen")), T = Lang.t, back = () => Nav.go("/#cpu");
+  Pads.start({ menu: () => true });
+  ui.show({ lines: [{ row: 2, text: T("map.title"), color: 12 },
+    { row: 10, text: T("map.gone", { msg: why === "404" ? Lang.raw("map.gone.404") : why.slice(0, 50) }), color: 12 }],
+  box: { y: 13 }, infoRow: 18, back, items: [{ key: "back", label: T("back.main"), info: [T("back.main.i")], go: back }] });
+}
+function run(mapRec) {
   // a short link (?g=<code>, cpucode.js) stands for the long query it encodes
   const query = new URLSearchParams(location.search), code = query.get("g") ? CpuCode.decode(query.get("g")) : null;
   // the weekly challenge (?challenge=2026-W43, docs/v6/CHALLENGE.md): that week's skirmish, read from the query it stands for
@@ -102,7 +127,7 @@ export function mount() {
   // (escEnds: BLUE's Esc ends the match as in the original - the extended engine ignores Esc online)
   const opts = slots
     ? { slots: slots.map(s => ({ color: s.color, team: s.team })), size, winScore, roundTime, friendlyFire: ff, escEnds: true, escPlayer: me, autoStart: true, noInstructions: true,
-        sight, extended: true, mode: gmode, goal }   // (a skirmish always runs the extended engine - owner, 2026-10-24)
+        sight, extended: true, mode: gmode, goal, ...(mapRec ? { map: mapRec.code } : {}) }   // (a skirmish always runs the extended engine - owner, 2026-10-24)
     : { size, winScore, roundTime, autoStart: true, noInstructions: true };   // settings were chosen on the page: no menu before round 1
   const engine = new TunnelerEngine(seed, JSON.parse(JSON.stringify(opts)));
   const ext = engine.extended;
@@ -143,7 +168,7 @@ export function mount() {
       save("tunneler.cpu.slots", JSON.stringify(all)); save("tunneler.levels", "2");
       save("tunneler.cpu.size", size); save("tunneler.cpu.win", String(winScore)); save("tunneler.cpu.time", String(roundTime));
       save("tunneler.cpu.ff", ff ? "1" : "0"); save("tunneler.cpu.view", view); save("tunneler.cpu.watch", watchOut);
-      save("tunneler.cpu.sight", sight); save("tunneler.cpu.mode", gmode);
+      save("tunneler.cpu.sight", sight); save("tunneler.cpu.mode", gmode); save("tunneler.cpu.map", mapRec ? mapRec.id : "");
       if (gmode !== "standard" && goal) {
         let goals = {};
         try { goals = JSON.parse(localStorage.getItem("tunneler.cpu.goals") || "{}") || {}; } catch (e) { goals = {}; }

@@ -16,6 +16,7 @@ const { NetProto } = mod("netproto.js");
 const { Lang } = mod("lang.js");
 const { UniText, UniFont } = mod("unitext.js");
 const { CpuCode } = mod("cpucode.js");
+const { MapData } = mod("mapdata.js");
 const { Speaker } = mod("speaker.js");
 const { VGA_FONT } = mod("vgafont.js");
 const { CP437_CHARS, EXTRA_GLYPHS, unicodeGlyph } = mod("glyphs.js");
@@ -33,5 +34,5 @@ UniFont.loader = readBlock;
 const langFolders = () => fs.readdirSync(path.join(SRC, "lang")).filter(c => fs.statSync(path.join(SRC, "lang", c)).isDirectory()).sort();
 const jsIn = d => fs.existsSync(d) ? fs.readdirSync(d).filter(f => f.endsWith(".js") && f !== "index.js").sort() : [];
 
-module.exports = { SRC, TunnelerEngine, TunnelerAI, NetProto, Lang, UniText, UniFont, CpuCode, Speaker, VGA_FONT, CP437_CHARS,
+module.exports = { SRC, TunnelerEngine, TunnelerAI, NetProto, Lang, UniText, UniFont, CpuCode, MapData, Speaker, VGA_FONT, CP437_CHARS,
   EXTRA_GLYPHS, unicodeGlyph, UNI_DATA, STRINGS_EN, readBlock, langFolders, jsIn };

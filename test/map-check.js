@@ -1,0 +1,492 @@
+"use strict";
+// Custom maps (docs/v6/MAPS.md): mapdata.js's encoding (round trips - packed and runs, every size, names in any
+// letters -, junk refused, the rock frame forced), the engine with a map (the world painted as the map, the bases
+// dealt from the map's, a walled-in base opened, fewer bases than tanks, determinism with computer tanks, a bad
+// code ignored, everything without a map unchanged), a replay of a map game, NetProto's map handling, and the
+// pages: the maps screens and the editor (vm), a skirmish link with a map, the skirmish's Map row.
+const assert = require("assert"), path = require("path"), vm = require("vm");
+const { TunnelerEngine: E, TunnelerAI, NetProto, MapData } = require("./src.js");
+const { Replay } = require(path.join(__dirname, "..", "src", "js", "replay.js"));
+const { runPage } = require("./page-env.js");
+
+let failures = 0;
+const ok = (name, fn) => { try { fn(); console.log("  ok  " + name); } catch (e) { failures++; console.log("  FAIL " + name + ": " + (e && e.stack || e)); } };
+const okAsync = async (name, fn) => { try { await fn(); console.log("  ok  " + name); } catch (e) { failures++; console.log("  FAIL " + name + ": " + (e && e.stack || e)); } };
+
+// a test map: dirt, a tunnel, a rock wall, bases
+function testMap(size = "medium", nBases = 3) {
+  const m = MapData.blank(size);
+  for (let y = Math.floor(m.h * 0.3); y < Math.floor(m.h * 0.35); y++) for (let x = 12; x < m.w - 12; x++) m.cells[y * m.w + x] = MapData.TUNNEL;
+  for (let y = 12; y < m.h - 12; y++) m.cells[y * m.w + (m.w >> 1)] = MapData.ROCK;
+  const spots = [[0.2, 0.5], [0.8, 0.5], [0.5, 0.25], [0.5, 0.75], [0.2, 0.25], [0.8, 0.75], [0.2, 0.78], [0.8, 0.22]];
+  for (const [fx, fy] of spots.slice(0, nBases)) {
+    const x = Math.round(m.w * fx), y = Math.round(m.h * fy);
+    assert.strictEqual(MapData.baseProblem(m, x, y), null, "base spot " + fx + "," + fy + " on " + size);
+    m.bases.push({ x, y });
+  }
+  m.name = "Test map";
+  MapData.frame(m);                                       // (the frame: rock, as decoding makes it)
+  return m;
+}
+const sameMap = (a, b) => a.size === b.size && a.name === b.name && JSON.stringify(a.bases) === JSON.stringify(b.bases) && Buffer.compare(Buffer.from(a.cells), Buffer.from(b.cells)) === 0;
+// a deterministic pseudo-random sequence (tests only)
+const rng = s => () => { s = (Math.imul(s, 1103515245) + 12345) >>> 0; return s >>> 16; };
+
+console.log("encoding");
+ok("round trip: every size, runs (a few hundred bytes - a line of rock down every row: three runs a row) and packed (noise), the code string too", () => {
+  for (const size of MapData.SIZES) {
+    const m = testMap(size, 2), b = MapData.encode(m);
+    assert(b.length < 1600, size + ": " + b.length + " bytes");
+    assert(sameMap(MapData.decode(b), m) && sameMap(MapData.decode(MapData.code(m)), m), size + " round trip");
+    const r = rng(size.length), noise = MapData.blank(size);
+    for (let i = 0; i < noise.cells.length; i++) noise.cells[i] = r() % 3;
+    MapData.frame(noise);
+    const nb = MapData.encode(noise);
+    assert.strictEqual(nb[nb.length - Math.ceil(noise.cells.length / 4) - 1], 0, size + ": noise is packed");
+    assert(nb.length <= 5 + 1 + Math.ceil(noise.cells.length / 4) + 1, size + " packed size");
+    assert(sameMap(MapData.decode(nb), noise), size + " packed round trip");
+  }
+  const big = MapData.blank("large");
+  for (let i = 0; i < big.cells.length; i++) big.cells[i] = (i * 7 + (i >> 3)) % 3;
+  assert(MapData.encode(big).length < 33000, "a large map at most ~33 KB");
+});
+ok("names in any letters (Slovak, Cyrillic, CJK, emoji), cleaned and cut to 24 columns", () => {
+  for (const name of ["Čierna diera", "Тунелі", "地下トンネル", "Tank 🚀 party", "x".repeat(40), " a\u0007 b\u202e c "]) {
+    const m = testMap("small", 2);
+    m.name = name;
+    const d = MapData.decode(MapData.code(m));
+    assert(d && d.name === MapData.cleanName(name), JSON.stringify(name) + " -> " + JSON.stringify(d && d.name));
+  }
+  assert.strictEqual(MapData.cleanName("x".repeat(40)).length, 24);
+  assert.strictEqual(MapData.cleanName(" a\u0007 b\u202e c "), "a b c");
+});
+ok("the frame is always rock (decoding forces it)", () => {
+  const m = testMap("small", 2);
+  m.cells.fill(MapData.TUNNEL);
+  const d = MapData.decode(MapData.encode(m)), f = MapData.FRAME.small;
+  assert.strictEqual(d.cells[0], MapData.ROCK);
+  assert.strictEqual(d.cells[(f - 1) * d.w + 40], MapData.ROCK);
+  assert.strictEqual(d.cells[f * d.w + f], MapData.TUNNEL);
+  assert.strictEqual(d.cells[(d.h - 1) * d.w + d.w - 1], MapData.ROCK);
+});
+ok("junk refused: magic, version, size, truncated, trailing bytes, cell value 3, bases out of the map / touching / 9, a bad name", () => {
+  const m = testMap("small", 2), b = MapData.encode(m);
+  const bad = f => { const c = Uint8Array.from(b); f(c); return c; };
+  assert.strictEqual(MapData.decode(bad(c => { c[0] = 0x55; })), null, "magic");
+  assert.strictEqual(MapData.decode(bad(c => { c[2] = 2; })), null, "version");
+  assert.strictEqual(MapData.decode(bad(c => { c[3] = 3; })), null, "size");
+  assert.strictEqual(MapData.decode(b.subarray(0, b.length - 1)), null, "truncated");
+  assert.strictEqual(MapData.decode(Uint8Array.from([...b, 1])), null, "trailing byte");
+  assert.strictEqual(MapData.decode(new Uint8Array(0)), null, "empty");
+  assert.strictEqual(MapData.decode("not a code!"), null, "not base64url");
+  assert.strictEqual(MapData.decode(null), null, "null");
+  const packed = MapData.blank("small"); for (let i = 0; i < packed.cells.length; i++) packed.cells[i] = i % 3;
+  const pb = MapData.encode(packed); pb[pb.length - 10] = 0xFF;
+  assert.strictEqual(MapData.decode(pb), null, "cell value 3");
+  const edge = testMap("small", 0); edge.bases.push({ x: 2, y: 30 }, { x: 60, y: 30 });
+  assert.strictEqual(MapData.decode(MapData.encode(edge)), null, "a base in the frame");
+  const near = testMap("small", 0); near.bases.push({ x: 40, y: 30 }, { x: 45, y: 30 });
+  assert.strictEqual(MapData.decode(MapData.encode(near)), null, "bases touching");
+  const nine = MapData.encode(testMap("medium", 8)); nine[4] = 9;
+  assert.strictEqual(MapData.decode(nine), null, "9 bases");
+  const name = bad(c => { c[5 + 2 * 4 + 1] = 0x07; });
+  assert.strictEqual(MapData.decode(name), null, "a control character in the name");
+  assert.strictEqual(MapData.baseProblem(testMap("small", 0), 64, 32), null);
+  assert.strictEqual(MapData.baseProblem(testMap("small", 0), 5, 32), "edge");
+});
+ok("canonical: decode + encode, the same bytes again", () => {
+  const b = MapData.encode(testMap("medium", 4));
+  assert.deepStrictEqual(Array.from(MapData.canonical(b)), Array.from(b));
+  assert.deepStrictEqual(Array.from(MapData.canonical(MapData.canonical(b))), Array.from(b));
+  assert.strictEqual(MapData.canonical(Uint8Array.from([1, 2, 3])), null);
+});
+ok("a generated world as a map (fromWorld): rock where the world is rock", () => {
+  const g = new E(11, { size: "small" });
+  for (let k = 0; k < 2000 && g.worldStage !== -1; k++) g.step({ keyDown: new Uint8Array(128), keys: [] });
+  const m = MapData.fromWorld("small", g.world, g.ws);
+  const n = [0, 0, 0]; m.cells.forEach(v => n[v]++);
+  assert(n[2] > m.cells.length * 0.2 && n[1] > m.cells.length * 0.3, JSON.stringify(n));
+  assert(MapData.decode(MapData.code(m)), "it encodes");
+});
+
+console.log("engine");
+const idleExt = n => ({ bits: new Array(n).fill(0), keys: [] });
+const slots = n => Array.from({ length: n }, (x, i) => ({ color: i, team: i + 1 }));
+function toPlay(e, n) { for (let k = 0; k < 3000 && e.screen !== "play"; k++) e.step(idleExt(n)); assert.strictEqual(e.screen, "play"); }
+ok("the world is the map's, painted (no generator); forces the extended engine and the map's size", () => {
+  const m = testMap("small", 3), code = MapData.code(m);
+  const e = new E(5, { map: code, slots: [{ color: 0, team: 1 }, { color: 1, team: 2 }], size: "large" });
+  assert(e.extended && e.size === "small" && e.worldW === 512 && e.customMap, "extended, small");
+  const seed0 = e.randSeed;
+  for (let k = 0; k < 500 && e.worldStage !== -1; k++) e.step(idleExt(2));
+  assert.strictEqual(e.worldStage, -1, "painted");
+  const w = new Uint8Array(e.world.length);
+  MapData.paint(MapData.decode(code), w, e.ws);
+  assert(Buffer.compare(Buffer.from(w), Buffer.from(e.world)) === 0, "the world is the map");
+  assert.strictEqual(e.randSeed, seed0, "no Random() call while painting");
+  for (let y = 0; y < e.worldH; y += 4) for (let x = 0; x < e.worldW; x += 4) {
+    const v = m.cells[(y >> 2) * m.w + (x >> 2)], px = e.getPixel(x, y);
+    assert(v === 2 ? px === 7 : v === 0 ? px === 0 : px === 6 || px === 8, "pixel " + x + "," + y);
+  }
+});
+ok("the bases: dealt from the map's (every tank on its own base), the same for the same seed, new deals for others", () => {
+  const m = testMap("medium", 6), code = MapData.code(m), spots = m.bases.map(b => (b.x * 4 + 2) + "," + (b.y * 4 + 2));
+  const deals = new Set();
+  for (let seed = 1; seed <= 12; seed++) {
+    const e = new E(seed, { map: code, slots: slots(3), autoStart: true });
+    toPlay(e, 3);
+    const got = [1, 2, 3].map(p => e.baseX[p] + "," + e.baseY[p]);
+    assert(got.every(g => spots.includes(g)) && new Set(got).size === 3, "seed " + seed + ": " + got);
+    const again = new E(seed, { map: code, slots: slots(3), autoStart: true });
+    toPlay(again, 3);
+    assert.deepStrictEqual([1, 2, 3].map(p => again.baseX[p] + "," + again.baseY[p]), got, "the same for the same seed");
+    deals.add(got.join(" "));
+  }
+  assert(deals.size >= 6, "different deals: " + deals.size);
+});
+ok("a base walled in by rock gets a way out (openBase)", () => {
+  const m = MapData.blank("small", MapData.ROCK);
+  m.bases.push({ x: 40, y: 32 }, { x: 90, y: 32 });
+  const e = new E(3, { map: MapData.code(m), slots: slots(2), autoStart: true });
+  toPlay(e, 2);
+  assert(e.baseCarved > 0, "rock dug out: " + e.baseCarved);
+});
+ok("fewer bases than tanks: the missing ones placed in the map's interior, apart", () => {
+  const m = testMap("medium", 2);
+  const e = new E(9, { map: MapData.code(m), slots: slots(5), autoStart: true });
+  toPlay(e, 5);
+  const f = MapData.FRAME.medium * 4;
+  for (let p = 1; p <= 5; p++) {
+    assert(e.baseX[p] >= f + 17 && e.baseX[p] < e.worldW - f - 17 && e.baseY[p] >= f + 17 && e.baseY[p] < e.worldH - f - 17, "inside: " + p);
+    for (let q = 1; q < p; q++) assert(Math.max(Math.abs(e.baseX[p] - e.baseX[q]), Math.abs(e.baseY[p] - e.baseY[q])) >= 40, "apart " + p + " " + q);
+  }
+});
+ok("deterministic with computer tanks: two engines, the same game", () => {
+  const code = MapData.code(testMap("small", 4));
+  const run = () => {
+    const e = new E(77, { map: code, slots: [{ color: 0, team: 1 }, { color: 1, team: 2 }, { color: 2, team: 1 }, { color: 3, team: 2 }], autoStart: true, winScore: 2 });
+    const ais = [1, 2, 3, 4].map(p => new TunnelerAI(["easy", "normal", "hard", "normal"][p - 1], p));
+    const hashes = [];
+    for (let k = 0; k < 4000; k++) { e.step({ bits: ais.map(a => TunnelerAI.bitsFor(a, e)), keys: [] }); if (k % 200 === 0) hashes.push(NetProto.stateHash(e)); }
+    return hashes.concat([e.round, ...e.wins]);
+  };
+  assert.deepStrictEqual(run(), run());
+});
+ok("a code that doesn't decode is ignored: the same game as without it; no map = the generator as always", () => {
+  const a = new E(42, { slots: slots(3), autoStart: true }), b = new E(42, { slots: slots(3), autoStart: true, map: "AAAA" });
+  assert(!b.customMap);
+  for (let k = 0; k < 600; k++) { a.step(idleExt(3)); b.step(idleExt(3)); }
+  assert.strictEqual(NetProto.stateHash(a), NetProto.stateHash(b));
+  // the classic engine never sees a map: BLUE + GREEN with a map is extended, without one classic
+  assert(!new E(1, {}).extended && new E(1, { map: MapData.code(testMap("medium", 2)) }).extended);
+});
+ok("a replay of a map game plays back the same (the map travels in its options)", () => {
+  const opts = { slots: slots(2), map: MapData.code(testMap("small", 2)), winScore: 1, autoStart: true, extended: true };
+  const e = new E(8, JSON.parse(JSON.stringify(opts))), ais = [new TunnelerAI("hard", 1), new TunnelerAI("hard", 2)];
+  let rep = null;
+  const rec = Replay.recorder(e, { kind: "skirmish", seed: 8, opts }, r => { rep = r; });
+  for (let n = 0; n < 80000 && !rep; n++) { const inp = { bits: ais.map(a => TunnelerAI.bitsFor(a, e)), keys: [] }; rec.input(inp); e.step(inp); rec.stepped(); }
+  assert(rep, "the match ended");
+  const back = JSON.parse(JSON.stringify(rep)), p = Replay.player(back), e2 = Replay.engine(back, E);
+  let inp, bad = false;
+  while ((inp = p.next())) { e2.step(inp); if (p.check(e2) === false) bad = true; }
+  assert(!bad && p.done && e2.customMap, "it plays back the same");
+});
+
+console.log("protocol");
+ok("NetProto: the cfg's map checked, engine options with the map (extended), cantStart \"map\", a map is never classic", () => {
+  const code = MapData.code(testMap("medium", 2));
+  const cfg = NetProto.readCfg({ slots: slots(2), map: code });
+  assert.strictEqual(cfg.map, code);
+  assert.strictEqual(NetProto.readCfg({ slots: slots(2), map: "junk!" }).map, "");
+  const o = NetProto.engineOptions(cfg);
+  assert(o.map === code && o.extended);
+  assert.strictEqual(NetProto.engineOptions(NetProto.readCfg({ slots: slots(2) })).map, undefined);
+  const two = [{ color: 0, team: 1, bot: false }, { color: 1, team: 2, bot: false }];
+  assert(NetProto.isClassic(two, {}) && !NetProto.isClassic(two, { map: "abcdefghij" }));
+  assert.strictEqual(NetProto.startProblem(two.concat([{ color: 2, team: 1, bot: true }]), "standard", 2), "map");
+  assert.strictEqual(NetProto.startProblem(two, "standard", 2), null);
+  assert.strictEqual(NetProto.startProblem(two, "standard", null), null);
+  assert.strictEqual(NetProto.roomSettings({ map: "abcdefghij" }).map, "abcdefghij");
+  assert.strictEqual(NetProto.roomSettings({ map: "../etc" }).map, "");
+});
+
+// ---------------------------------------------------------------- the pages (vm, a stub DOM)
+function makeEnv(pathname, search, fetchMap) {
+  const listeners = {}, storage = new Map();
+  const mkEl = id => ({ id, width: 720, height: 400, style: {}, classList: { toggle() {}, contains: () => false }, ls: {}, hidden: false,
+    addEventListener(t, f) { (this.ls[t] = this.ls[t] || []).push(f); }, removeEventListener() {}, click() {}, appendChild() {}, remove() {}, focus() {}, blur() {}, setAttribute() {},
+    setPointerCapture() {}, fire(t, ev) { for (const f of this.ls[t] || []) f(Object.assign({ preventDefault() {} }, ev)); },
+    getBoundingClientRect: () => ({ left: 0, top: 0, width: 720, height: 400, right: 720, bottom: 400 }),
+    getContext: () => ({ createImageData: (w, h) => ({ data: new Uint8ClampedArray(w * h * 4) }), putImageData() {}, fillRect() {}, clearRect() {}, drawImage() {} }) });
+  const elements = {};
+  const fetches = [];
+  const win = {
+    document: { title: "", getElementById: id => elements[id] || (elements[id] = mkEl(id)), createElement: mkEl, querySelector: () => null, querySelectorAll: () => [],
+      body: Object.assign(mkEl("body"), { classList: { toggle() {}, contains: () => false, add() {}, remove() {} } }),
+      documentElement: { requestFullscreen: () => Promise.resolve(), style: { setProperty() {}, removeProperty() {} }, classList: { toggle() {} } } },
+    location: { search: search || "", pathname, hash: "", href: "http://x.test" + pathname + (search || ""), origin: "http://x.test" },
+    history: { replaceState() {}, pushState() {} },
+    localStorage: { getItem: k => storage.has(k) ? storage.get(k) : null, setItem: (k, v) => storage.set(k, String(v)), removeItem: k => storage.delete(k) },
+    addEventListener: (t, f, o) => { (listeners[t] = listeners[t] || []).push({ f, capture: o === true || !!(o && o.capture) }); }, removeEventListener() {},
+    requestAnimationFrame: () => 0, cancelAnimationFrame() {},
+    matchMedia: q => ({ matches: /fine/.test(q) }), innerWidth: 1280, innerHeight: 800, devicePixelRatio: 1, screen: { width: 1280, height: 800 },
+    fetch: async (url, o) => {
+      fetches.push([String(url), o && o.method || "GET"]);
+      const m = /\/api\/maps\/([a-z2-9]{10})$/.exec(url);
+      if (m && fetchMap && fetchMap[m[1]]) { const b = fetchMap[m[1]]; return { ok: true, status: 200, arrayBuffer: async () => b.buffer.slice(b.byteOffset, b.byteOffset + b.length) }; }
+      if (/\/api\/maps$/.test(url)) return { ok: true, status: 200, json: async () => ({ id: "sharedid22" }) };
+      return { ok: false, status: 404, json: async () => ({}) };
+    },
+    navigator: {}, performance, setTimeout, clearTimeout, setInterval: () => 0, clearInterval() {}, console, URLSearchParams, URL, Math, atob, btoa, Uint8Array,
+    TextEncoder, TextDecoder,
+  };
+  win.window = win; win.globalThis = win;
+  storage.set("tunneler.gfx", "original");
+  const ctx = vm.createContext(win);
+  const key = (code, k, extra) => {
+    let stop = false;
+    const ev = Object.assign({ code, key: k || code, repeat: false, target: {}, preventDefault() {}, stopPropagation() {}, stopImmediatePropagation() { stop = true; } }, extra);
+    const all = listeners.keydown || [];
+    for (const g of all.filter(x => x.capture).concat(all.filter(x => !x.capture))) { g.f(ev); if (stop) break; }
+  };
+  const keyup = code => { for (const g of listeners.keyup || []) g.f({ code, key: code, preventDefault() {} }); };
+  return { win, storage, fetches, key, keyup, page: f => runPage(ctx, f), el: id => win.document.getElementById(id) };
+}
+const tick = () => new Promise(r => setTimeout(r, 0));
+const ticks = async (n = 8) => { for (let i = 0; i < n; i++) await tick(); };
+
+(async () => {
+  console.log("pages");
+  await okAsync("the maps screens: the list, a new map (dirt / a random world), the editor: tools, brush, painting, bases, undo, the menu, saving", async () => {
+    const env = makeEnv("/maps");
+    env.page("maps.html");
+    await ticks();
+    const w = env.win, ui = w.tunnelerMapsUI(), api = w.tunnelerMapsApi;
+    assert(ui.spec.items.some(it => it.key === "none") && ui.spec.items.some(it => it.key === "new"), "an empty list");
+    ui.spec.items.find(it => it.key === "new").go();
+    const nameItem = ui.spec.items.find(it => it.key === "name");
+    nameItem.input.value = "Čierna diera";
+    ui.spec.items.find(it => it.key === "size").change(-1);           // small
+    ui.spec.items.find(it => it.key === "create").go();
+    await ticks();
+    let ed = w.tunnelerMapEditor();
+    assert(ed && ed.map.size === "small" && ed.map.name === "Čierna diera" && ed.map.bases.length === 2, "the editor on a new small map with 2 bases");
+    assert.strictEqual(env.el("status").style.display, "", "the tools on the status line");
+    // keys: tool 1 (tunnel), paint a line with Space held
+    env.key("Digit1"); assert.strictEqual(ed.tool, "tunnel");
+    const x0 = ed.cx, y0 = ed.cy;
+    env.key("Space", " ");
+    for (let i = 0; i < 6; i++) env.key("ArrowRight", "ArrowRight");
+    env.keyup("Space");
+    for (let x = x0; x <= x0 + 6; x++) assert.strictEqual(ed.map.cells[y0 * ed.map.w + x], MapData.TUNNEL, "painted at " + x);
+    assert.strictEqual(ed.undo.length, 1, "one stroke to undo");
+    env.key("BracketRight"); env.key("BracketRight"); assert.strictEqual(ed.brush, 3, "a wider brush");
+    env.key("Equal", "+"); assert.strictEqual(ed.zoom, 3, "zoomed in");
+    env.key("KeyU"); assert.strictEqual(ed.map.cells[y0 * ed.map.w + x0], MapData.DIRT, "undone");
+    // the frame is never painted
+    env.key("Digit3");
+    api.stamp(1, 1);
+    assert.strictEqual(ed.map.cells[1 * ed.map.w + 1], MapData.ROCK);
+    api.setTool("tunnel"); api.stamp(2, 2);
+    assert.strictEqual(ed.map.cells[2 * ed.map.w + 2], MapData.ROCK, "the frame stays rock");
+    // bases: one too close to the edge refused, one more placed, one removed
+    env.key("Digit4"); assert.strictEqual(ed.tool, "base");
+    api.stamp(3, 3);
+    assert(ed.map.bases.length === 2 && ed.msg, "too close to the edge: refused, said so");
+    api.stamp(64, 15);
+    assert.strictEqual(ed.map.bases.length, 3, "a third base");
+    api.stamp(64, 15);
+    assert.strictEqual(ed.map.bases.length, 2, "removed again");
+    // the mouse: a click on the canvas (pointer events) with the rock tool
+    api.setTool("rock"); api.setBrush(-9);
+    const cv = env.el("screen");
+    const at = (cx, cy) => { const [px, py] = [2 + (cx - ed.ox) * [0.25, 0.5, 1, 2, 4][ed.zoom], 1 + (cy - ed.oy) * [0.25, 0.5, 1, 2, 4][ed.zoom]]; return { clientX: (Math.floor(px / 2) * 9 + (px % 2 ? 6 : 1)) * 720 / 720, clientY: (py + 0.5) * 4 }; };
+    const target = [Math.round(ed.ox) + 20, Math.round(ed.oy) + 10];
+    cv.fire("pointerdown", Object.assign({ button: 0, pointerType: "mouse", pointerId: 1 }, at(target[0], target[1])));
+    cv.fire("pointerup", Object.assign({ button: 0, pointerType: "mouse", pointerId: 1 }, at(target[0], target[1])));
+    assert.strictEqual(ed.map.cells[target[1] * ed.map.w + target[0]], MapData.ROCK, "a click paints rock at " + target);
+    // Esc: the menu (the editor's key, not the DosUI's - it stays open); its items; Esc again: back to the map
+    env.key("Escape", "Escape");
+    assert(ed.menu && ui.spec.items.some(it => it.key === "save"), "the menu is open");
+    assert.strictEqual(ui.spec.items[0].info[0].text, w.Lang.t("map.ok", { n: 2 }), "2 bases - ready");
+    env.key("Escape", "Escape");
+    assert(!ed.menu, "Esc closes it");
+    env.key("Escape", "Escape");
+    ui.spec.items.find(it => it.key === "fill").change(1);           // rock
+    ui.spec.items.find(it => it.key === "fill").go();
+    ui.spec.items.find(it => it.key === "fill").go();
+    assert(!ed.menu && ed.map.cells.every(v => v === MapData.ROCK), "filled with rock (twice)");
+    env.key("KeyZ", "z", { ctrlKey: true });
+    assert(!ed.map.cells.every(v => v === MapData.ROCK), "Ctrl+Z");
+    env.key("Escape", "Escape");
+    await ui.spec.items.find(it => it.key === "save").go();
+    await ticks();
+    assert(!w.tunnelerMapEditor() && ui.spec.items.some(it => it.key === "edit"), "saved: the map's screen");
+    const list = await w.MapStore.list();
+    assert(list.length === 1 && list[0].name === "Čierna diera" && list[0].bases === 2 && MapData.decode(list[0].code), "kept in the store");
+    // share a link: POST /api/maps, the id kept with it
+    ui.spec.items.find(it => it.key === "share").go();
+    await ticks();
+    assert(env.fetches.some(f => /\/api\/maps$/.test(f[0]) && f[1] === "POST"), "POST /api/maps");
+    assert.strictEqual((await w.MapStore.list())[0].shared, "sharedid22", "the shared id kept");
+    // play in a skirmish: remembered, to the skirmish lobby
+    ui.spec.items.find(it => it.key === "play").go();
+    assert.strictEqual(env.storage.get("tunneler.cpu.map"), list[0].id);
+    // a random world
+    const env2 = makeEnv("/maps");
+    env2.page("maps.html");
+    await ticks();
+    const ui2 = env2.win.tunnelerMapsUI();
+    ui2.spec.items.find(it => it.key === "new").go();
+    ui2.spec.items.find(it => it.key === "from").change(1);
+    ui2.spec.items.find(it => it.key === "create").go();
+    await ticks();
+    const ed2 = env2.win.tunnelerMapEditor(), n = [0, 0, 0];
+    ed2.map.cells.forEach(v => n[v]++);
+    assert(ed2.map.size === "medium" && n[2] > ed2.map.cells.length * 0.2 && n[1] > 0, "a random world: " + JSON.stringify(n));
+  });
+
+  await okAsync("the editor by pointer: a base dragged to another spot (and back where it can't go), two fingers move the view and paint nothing", async () => {
+    const env = makeEnv("/maps");
+    env.page("maps.html");
+    await ticks();
+    const w = env.win, api = w.tunnelerMapsApi, cv = env.el("screen");
+    const m = MapData.blank("small"); m.bases.push({ x: 40, y: 32 }, { x: 90, y: 32 });
+    const rec = await w.MapStore.save(m);
+    api.edit(rec, MapData.decode(rec.code));
+    const ed = w.tunnelerMapEditor();
+    // a cell -> the pointer's client position (the canvas 720 x 400: a LORES pixel 4.5 x 4)
+    const at = (cx, cy) => { const z = [0.25, 0.5, 1, 2, 4][ed.zoom], px = Math.floor(2 + (cx - ed.ox + 0.5) * z), py = Math.floor(1 + (cy - ed.oy + 0.5) * z); return { clientX: px * 4.5 + 2, clientY: py * 4 + 2 }; };
+    const ptr = (t, cx, cy, extra) => cv.fire(t, Object.assign({ button: 0, pointerType: "mouse", pointerId: 1 }, at(cx, cy), extra));
+    api.setTool("base");
+    ptr("pointerdown", 40, 32);
+    for (let x = 41; x <= 60; x++) ptr("pointermove", x, 36);
+    ptr("pointerup", 60, 36);
+    assert.deepStrictEqual(ed.map.bases.map(b => [b.x, b.y]), [[60, 36], [90, 32]], "base 1 dragged: " + JSON.stringify(ed.map.bases));
+    assert.strictEqual(ed.undo.length, 1, "one step to undo");
+    ptr("pointerdown", 60, 36);
+    for (let x = 61; x <= 88; x++) ptr("pointermove", x, 33);
+    ptr("pointerup", 88, 33);
+    assert.deepStrictEqual(ed.map.bases.map(b => [b.x, b.y]), [[60, 36], [90, 32]], "onto the other base: stays");
+    assert(ed.msg, "and says why");
+    api.undo();
+    assert.deepStrictEqual(ed.map.bases.map(b => [b.x, b.y]), [[40, 32], [90, 32]], "undo: back");
+    // a tap on a base removes it, a tap on an empty spot places one
+    ptr("pointerdown", 90, 32); ptr("pointerup", 90, 32);
+    assert.strictEqual(ed.map.bases.length, 1, "tapped away");
+    // two fingers: the first one's stroke is taken back, the view moves, nothing is painted
+    api.setTool("rock"); api.setZoom(2);
+    const before = ed.map.cells.slice(), undos = ed.undo.length, o0 = [ed.ox, ed.oy];
+    const t = (type, id, cx, cy) => cv.fire(type, Object.assign({ button: 0, pointerType: "touch", pointerId: id }, at(cx, cy)));
+    t("pointerdown", 11, 50, 30); t("pointermove", 11, 52, 30);
+    t("pointerdown", 12, 60, 30);
+    for (let k = 1; k <= 5; k++) { t("pointermove", 11, 52 - k * 3, 30); t("pointermove", 12, 60 - k * 3, 30); }
+    t("pointerup", 12, 45, 30); t("pointermove", 11, 30, 30); t("pointerup", 11, 30, 30);
+    assert(Buffer.compare(Buffer.from(before), Buffer.from(ed.map.cells)) === 0, "nothing painted");
+    assert.strictEqual(ed.undo.length, undos, "no step to undo");
+    assert(ed.ox !== o0[0], "the view moved: " + o0 + " -> " + [ed.ox, ed.oy]);
+  });
+
+  await okAsync("a map shared on another server is sent again to this one (the ids are the content's hash)", async () => {
+    const env = makeEnv("/maps");
+    env.page("maps.html");
+    await ticks();
+    const w = env.win, MS = w.MapStore;
+    const rec = await MS.save(testMap("small", 2));
+    rec.shared = "otherid222"; rec.sharedAt = "https://elsewhere.test";
+    assert.strictEqual(MS.sharedHere(rec), "", "not shared here");
+    assert.strictEqual(await MS.share(rec), "sharedid22", "sent again");
+    assert(env.fetches.some(f => /\/api\/maps$/.test(f[0]) && f[1] === "POST"), "POST /api/maps");
+    assert.strictEqual(MS.sharedHere(rec), "sharedid22", "now shared here");
+    const n = env.fetches.length;
+    await MS.share(rec);
+    assert.strictEqual(env.fetches.length, n, "not twice");
+  });
+
+  await okAsync("the editor's status line in every language: what must stay (tools, Undo, Menu, bases, a message) fits - a phone 40 columns, a desktop 80 (with the keys)", async () => {
+    const env = makeEnv("/maps");
+    env.page("maps.html");
+    await ticks();
+    const w = env.win, api = w.tunnelerMapsApi, U = w.UniText;
+    const m = MapData.blank("small"); m.bases.push({ x: 40, y: 32 });
+    const rec = await w.MapStore.save(m);
+    api.edit(rec, MapData.decode(rec.code));
+    const width = segs => segs.reduce((n, s) => n + U.cols(s.text), 0) + 2 * Math.max(0, segs.length - 1);
+    for (const code of w.Lang.codes) {
+      w.Lang.set(code);
+      for (const msg of [null, "map.err.max", "map.err.edge", "map.err.near"]) {
+        api.say(msg ? w.Lang.t(msg) : null);
+        for (const [phone, cols] of [[true, 40], [false, 80]]) {
+          const rows = api.barRows(phone);
+          rows.forEach((r, i) => {
+            const keep = r.filter(s => (s.prio || 0) === 0 || (s.prio === 1 && !msg));
+            assert(width(keep) <= cols, code + (phone ? " phone" : " desktop") + " row " + (i + 1) + " (" + msg + "): " + width(keep) + " > " + cols + ": " +
+              keep.map(s => w.Lang.decode(s.text)).join("|"));
+            // (a desktop: the keys fit beside the tools - nothing of that row is dropped)
+            if (!phone && i === 0) assert(width(r) <= cols, code + " desktop: the keys beside the tools: " + width(r) + " > " + cols);
+          });
+        }
+      }
+    }
+    w.Lang.set("en");
+  });
+
+  await okAsync("a shared map's address (/map/<id>): fetched, kept, its screen; an unknown one: an error", async () => {
+    const b = MapData.encode(testMap("small", 2));
+    const env = makeEnv("/map/abcdefgh23", "", { abcdefgh23: b });
+    env.page("maps.html");
+    await ticks(12);
+    const w = env.win, ui = w.tunnelerMapsUI();
+    assert(ui.spec.items.some(it => it.key === "edit"), "its screen");
+    const l = await w.MapStore.list();
+    assert(l.length === 1 && l[0].shared === "abcdefgh23" && l[0].name === "Test map", "kept, with its shared id");
+    const env2 = makeEnv("/map/zzzzzzzz22");
+    env2.page("maps.html");
+    await ticks(12);
+    assert(env2.win.tunnelerMapsUI().spec.lines.some(x => /404|doesn't work/.test(env2.win.Lang.decode(x.text)) || /work/.test(x.text)), "an error screen");
+  });
+
+  await okAsync("a skirmish link with a map (&map=<shared id>): fetched, the engine plays it; a map that can't be had: a screen saying so", async () => {
+    const m = testMap("small", 3), b = MapData.encode(m);
+    const env = makeEnv("/skirmish", "?mode=cpu&slots=0:you:1,1:normal:2,2:easy:3&lmap=nothere123&map=abcdefgh23", { abcdefgh23: b });
+    env.page("play.html");
+    await ticks(12);
+    const e = env.win.tunnelerEngine && env.win.tunnelerEngine();
+    assert(e && e.customMap && e.size === "small" && e.nPlayers === 3, "the engine has the map");
+    assert.strictEqual(e.customMap.name, "Test map");
+    const env2 = makeEnv("/skirmish", "?mode=cpu&slots=0:you:1,1:normal:2&lmap=nothere123");
+    env2.page("play.html");
+    await ticks(12);
+    assert(!env2.win.tunnelerEngine, "no game");
+  });
+
+  await okAsync("the skirmish's Map row: random, then a map of this browser - its size, its bases, the link", async () => {
+    const env = makeEnv("/", "");
+    env.page("index.html");
+    const w = env.win, ui = w.tunnelerHomeUI();
+    const rec = await w.MapStore.save(Object.assign(testMap("large", 2), { name: "Big one" }));
+    await w.tunnelerHomeMaps();
+    ui.spec.items.find(it => it.key === "cpu").go();
+    const row = () => ui.spec.items.find(it => it.key === "map");
+    assert(w.Lang.decode(row().label).includes(w.Lang.raw("lc.map.random")), "random first");
+    row().change(1);
+    assert(w.Lang.decode(row().label).includes("Big one"), "then the map");
+    assert(ui.spec.items.find(it => it.key === "size").disabled && w.Lang.decode(ui.spec.items.find(it => it.key === "size").label).includes(w.Lang.raw("lc.size.large")), "its size, grayed");
+    assert.strictEqual(env.storage.get("tunneler.cpu.map"), rec.id, "remembered");
+    // 3 tanks on a 2-base map: Start says why not
+    const slot2 = ui.spec.items.find(it => it.key === "slot2");
+    while (!/computer/.test(w.Lang.decode(ui.spec.items.find(it => it.key === "slot2").label))) ui.spec.items.find(it => it.key === "slot2").change(1);
+    assert(slot2, "slot 2");
+    const play = ui.spec.items.find(it => it.key === "play");
+    assert.strictEqual(play.info[0].text, w.Lang.t("lc.err.bases", { n: 2 }), "too few bases: " + w.Lang.decode(String(play.info[0].text || play.info[0])));
+    play.go();
+    assert(!w.location.href.includes("lmap"), "not started");
+    while (!/nobody/.test(w.Lang.decode(ui.spec.items.find(it => it.key === "slot2").label))) ui.spec.items.find(it => it.key === "slot2").change(1);
+    ui.spec.items.find(it => it.key === "play").go();
+    assert(/[?&]lmap=/.test(w.location.href) && /[?&]g=/.test(w.location.href), "the link: " + w.location.href);
+  });
+
+  console.log(failures ? "map-check: " + failures + " FAILED" : "map-check: all passed");
+  process.exit(failures ? 1 : 0);
+})();

@@ -157,6 +157,7 @@ const STRINGS_EN = {
       ["Two looks:  ", "the original DOS screen, or modern graphics in high resolution with light, particles and a modern font (Settings, Graphics) - the same game either way."],
       ["Replays:  ", "every match you play or watch is kept (the newest 20, main menu, Replays): watch it again like a spectator - every view, the live map or one tank, paused, faster or slower - or send it to someone as a link or a file."],
       ["Weekly challenge:  ", "every week (Monday to Monday, UTC) everyone gets the same skirmish - the same world, mode and computer tanks (main menu, Weekly challenge).  Send your result: the server plays your match's replay again, and only what really happened goes on the week's leaderboard, where anyone can watch the best matches."],
+      ["Your own maps:  ", "paint a world - rock, dirt and tunnels - and place up to 8 bases (main menu, Maps); play it in a skirmish or an online game, or send it to someone as a link."],
       ["The desktop app:  ", "Tunneler Online also comes as a small program for Windows, Linux and " +
         "macOS - download it from the releases page on GitHub " +
         "(github.com/kaniansky/tunneler-online/releases).  It plays split screen and skirmish " +

@@ -9,6 +9,7 @@ import { Endpoint, Links } from "./endpoint.js";
 import { TunnelerEngine } from "./engine.js";
 import { Gfx } from "./gfx.js";
 import { Lang } from "./lang.js";
+import { MapStore } from "./mapstore.js";
 import { Pads } from "./pads.js";
 import { GameScreen } from "./screen.js";
 import { Speaker } from "./speaker.js";
@@ -35,6 +36,7 @@ export function mount() {
   const COLORS = TunnelerEngine.PLAYER_KEYS || ["blue", "green", "cyan", "yellow", "white", "pink", "violet", "teal"];
   const TEXT_COLORS = TunnelerEngine.PLAYER_TEXT_COLORS || [9, 10, 11, 13, 15, 12, 5, 3];
   const clampInt = (v, lo, hi, d) => { v = parseInt(v, 10); return v >= lo && v <= hi ? v : d; };
+  const MAP_COLS = 14;                                    // (a map's name in the Settings box: at most this wide)
   const step = (list, v, d) => list[(list.indexOf(v) + d + list.length) % list.length];
   // round time limit in minutes (engine option roundTime; 0 = no limit, the original)
   const TIMES = [0, 2, 3, 5, 10];
@@ -64,6 +66,16 @@ export function mount() {
   // line of sight (full / circle / walls): how much of the world around your tank you see live
   const SIGHTS = TunnelerEngine.SIGHTS || ["full"];
   let sight = SIGHTS.includes(load("tunneler.cpu.sight")) ? load("tunneler.cpu.sight") : "full";
+  // a custom map (docs/v6/MAPS.md): one of the maps kept in this browser (its local id; "" = a random world)
+  let cpuMap = load("tunneler.cpu.map", ""), cpuMaps = [], mapsLoaded = false;
+  const mapRec = () => cpuMaps.find(r => r.id === cpuMap) || null;
+  const loadMaps = () => MapStore.list().then(l => {
+    cpuMaps = l; mapsLoaded = true;
+    if (cpuMap && !mapRec()) cpuMap = "";                // (deleted meanwhile: random)
+    if (ui.spec && ui.spec.items && ui.spec.items.some(it => it.key === "map")) cpu(true);
+  }, () => { mapsLoaded = true; });
+  loadMaps();
+  window.tunnelerHomeMaps = loadMaps;                    // (tests: read the maps again)
   const slots = COLORS.map((c, i) => ({ kind: i ? "none" : "you", team: i + 1 }));
   {
     const oldLevel = today(load("tunneler.level"));
@@ -88,6 +100,7 @@ export function mount() {
     save("tunneler.cpu.view", view); save("tunneler.cpu.watch", watchOut); save("tunneler.cpu.time", String(cpuTime));
     save("tunneler.cpu.sight", sight);
     save("tunneler.cpu.mode", gmode); save("tunneler.cpu.goals", JSON.stringify(cpuGoals));
+    if (mapsLoaded) save("tunneler.cpu.map", cpuMap);
   };
 
   // ---- split-screen settings
@@ -176,6 +189,7 @@ export function mount() {
         go: () => { Nav.go(Links.games()); } },
       { key: "challenge", label: T("home.challenge"), info: [T("home.challenge.i")], go: () => { Nav.go(Links.challenge()); } },   // (docs/v6/CHALLENGE.md)
       { key: "replays", label: T("home.replays"), info: [T("home.replays.i")], go: () => { Nav.go(Links.replays()); } },
+      { key: "maps", label: T("home.maps"), info: [T("home.maps.i")], go: () => { Nav.go(Links.maps()); } },
       { key: "gap", label: "", disabled: true },
       { key: "instr", label: T("menu.instr"), info: [T("menu.instr.i")], go: () => ui.showPage("instructions", "hotseat", () => main("instr")) },
       { key: "info", label: T("menu.info"), info: [T("menu.info.i")], go: () => ui.showPage("information", "hotseat", () => main("info")) },
@@ -492,6 +506,9 @@ export function mount() {
   let cpuSetOpen = false;
   function cpu(keep, sel) {
     const S = cpuSetup();
+    // (a map with fewer bases than the skirmish has tanks can't be played)
+    const rec = mapRec();
+    if (!S.error && rec && rec.bases < Math.max(2, S.used.length)) S.error = "lc.err.bases";
     const redraw = () => { saveCpu(); cpu(true); };
     const start = () => {
       if (S.error) return;
@@ -499,7 +516,8 @@ export function mount() {
       const all = COLORS.map((c, i) => ({ kind: "none", team: slots[i].team }));
       for (const u of S.used) all[u.color] = { kind: u.kind, team: u.team };
       Nav.go(Links.cpu("g=" + CpuCode.encode({ slots: all, size: cpuSize, win: cpuWin, time: cpuTime, ff: ff && S.teamGame,
-        view, watch: watchOut, sight, mode: gmode, goal: GOALS[gmode] ? goalOf(gmode) : undefined })));
+        view, watch: watchOut, sight, mode: gmode, goal: GOALS[gmode] ? goalOf(gmode) : undefined }) +
+        (rec ? "&lmap=" + rec.id + (MapStore.sharedHere(rec) ? "&map=" + rec.shared : "") : "")));   // (the map: this browser's copy, else the shared one)
     };
     // slot rows: "you                team 1", the who column padded to the longest text in this language,
     // each row in its tank's color (which is all that tells the colors apart - no color name)
@@ -534,7 +552,7 @@ export function mount() {
         change: setKind,
       };
     });
-    const startInfo = S.error ? [{ text: T(S.error), color: 12 }]
+    const startInfo = S.error ? [{ text: T(S.error, { n: rec ? rec.bases : 0 }), color: 12 }]
       // (infection / survival make their own sides: the mode's description, not the slots' teams)
       : (TunnelerEngine.OWN_TEAMS || []).includes(gmode) ? [T("gm." + gmode + ".i"), T(view === "everyone" ? "cpu.all" : view === "team" ? "cpu.team" : "cpu.own")]
       : [S.p2 >= 0 ? (S.nCpu ? T(S.teamGame ? "lc.go.2t" : "lc.go.2n", { n: S.nCpu, t: S.nTeams }) : T("lc.go.2"))
@@ -543,9 +561,13 @@ export function mount() {
       T(view === "everyone" ? "cpu.all" : view === "team" && S.mates > 0 ? "cpu.team" : "cpu.own")];
     const setView = d => { view = step(VIEWS, view, d); redraw(); };
     const setMode = d => { gmode = step(MODE_LIST, gmode, d); redraw(); };
+    const setMap = d => { cpuMap = step([""].concat(cpuMaps.map(r => r.id)), cpuMap, d); redraw(); };
     const options = [
       { key: "mode", label: T("lc.mode") + T("gm." + gmode), info: [T("gm." + gmode + ".i"), T("lc.mode.i")], go: () => setMode(1), change: setMode },
-      sizeItem(cpuSize, v => { cpuSize = v; redraw(); }),
+      { key: "map", label: T("lc.map") + (rec ? UniText.slice(UniText.fromRaw(rec.name), MAP_COLS) : T("lc.map.random")), info: [T("lc.map.i1"), T("lc.map.i2")],
+        go: () => setMap(1), change: setMap },
+      // (a map has its own size: shown, grayed)
+      rec ? { key: "size", label: T("lc.size") + T("lc.size." + rec.size), info: [T("lc.size.map")], disabled: true } : sizeItem(cpuSize, v => { cpuSize = v; redraw(); }),
       GOALS[gmode]                                   // (a mode's goal instead of rounds to win)
         ? { key: "goal", label: T("goal." + gmode) + (gmode === "infection" ? T("time.n", { n: goalOf(gmode) }) : goalOf(gmode)), info: [T("goal." + gmode + ".i")],
           go: () => { cpuGoals[gmode] = step(GOALS[gmode].choices, goalOf(gmode), 1); redraw(); },
@@ -607,6 +629,7 @@ export function mount() {
     // (the settings box as wide as its widest possible value, so it doesn't jump when one changes)
     const noop = () => {}, labels = [
       ...MODE_LIST.map(m => T("lc.mode") + T("gm." + m)),
+      T("lc.map") + "W".repeat(MAP_COLS), T("lc.map") + T("lc.map.random"),
       ...SIZES.map(v => sizeItem(v, noop).label),
       ...Object.keys(GOALS).flatMap(m => GOALS[m].choices.map(n => T("goal." + m) + (m === "infection" ? T("time.n", { n }) : n))),
       ...[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => winItem(n, noop).label),

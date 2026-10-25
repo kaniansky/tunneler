@@ -24,7 +24,7 @@ const esbuild = require("esbuild");
 const SRC = path.join(__dirname, "src");
 const OUT = process.env.BUILD_OUT ? path.resolve(process.env.BUILD_OUT) : path.join(__dirname, "public");   // (BUILD_OUT: another folder, e.g. for a test server)
 const ENTRIES = ["app"];
-const OLD_PAGES = ["lobby.html", "online.html", "play.html", "replays.html", "challenge.html"];   // (copies of index.html: the desktop app's addresses)
+const OLD_PAGES = ["lobby.html", "online.html", "play.html", "replays.html", "challenge.html", "maps.html"];   // (copies of index.html: the desktop app's addresses)
 // not copied: the modules (bundled instead) and src/'s package.json
 const SKIP = new Set([path.join(SRC, "js"), path.join(SRC, "lang"), path.join(SRC, "package.json"), path.join(SRC, "sw.js")]);
 

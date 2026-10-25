@@ -111,7 +111,7 @@ function register(c, data) {
   data = Object.assign({}, data);
   ORDER[c] = typeof data.order === "number" ? data.order : Infinity;
   delete data.order;
-  L[c] = data;
+  L[c] = Object.assign(data, EXTRA[c]);
   if (!CODES.includes(c)) CODES.push(c);
   const sorted = CODES.slice().sort((a, b) => ORDER[a] - ORDER[b]);   // stable: ties keep load order
   CODES.splice(0, CODES.length, ...sorted);

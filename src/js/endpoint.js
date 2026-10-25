@@ -67,6 +67,23 @@ const Links = {
   replayLink: id => "/replay/" + enc(id),
   // the weekly challenge's screen (docs/v6/CHALLENGE.md); playing it: Links.cpu("challenge=<week>")
   challenge: () => isApp ? "/challenge.html" : "/challenge",
+  // the custom maps kept in this browser (mapstore.js, docs/v6/MAPS.md), one map's screen (its local id), a shared
+  // map (POST /api/maps: its page here, and the link to send)
+  maps: () => isApp ? "/maps.html" : "/maps",
+  map: id => isApp ? "/maps.html?id=" + enc(id) : "/maps/" + enc(id),
+  sharedMap: id => isApp ? "/maps.html?share=" + enc(id) : "/map/" + enc(id),
+  mapLink: id => "/map/" + enc(id),
+  // a pasted map link -> {origin, id} or null: https://host/map/<id>, without https://, the app's ?share=<id>
+  // form, or just the id (origin "" = this server)
+  parseMap(text) {
+    const t = String(text == null ? "" : text).trim();
+    if (/^[a-z2-9]{10}$/.test(t)) return { origin: "", id: t };
+    let u;
+    try { u = new URL(/^[a-z]+:\/\//i.test(t) ? t : (/^(localhost|127\.|192\.168\.|10\.)/i.test(t) ? "http://" : "https://") + t); } catch (e) { return null; }
+    if (u.protocol !== "http:" && u.protocol !== "https:") return null;
+    const m = /^\/map\/([a-z2-9]{10})\/?$/.exec(u.pathname), id = m ? m[1] : u.searchParams.get("share");
+    return id && /^[a-z2-9]{10}$/.test(id) ? { origin: u.origin, id } : null;
+  },
   // a pasted replay link -> {origin, id} or null: https://host/replay/<id>, "host/replay/<id>", the app's
   // ?share=<id> form, or just the id (origin "" = this server)
   parseReplay(text) {

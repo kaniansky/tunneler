@@ -5,12 +5,12 @@
 // match (own seed and log), classic (BLUE + GREEN players: pause while one is away) and extended
 // (computer tanks driven on every client by TunnelerAI, never paused), seats locked during a match
 // (only its players play, everybody else watches), late spectators / reloads identical, the match's end;
-// lobby chat; limits.
+// lobby chat; limits; a room with a custom map (docs/v6/MAPS.md).
 //   node test/net-sim.js
 process.env.STATIC_DIR = process.env.STATIC_DIR || "src";   // serve the sources: no build needed
 const assert = require("assert");
 const WebSocket = require("ws");
-const { TunnelerEngine, NetProto, TunnelerAI } = require("./src.js");
+const { TunnelerEngine, NetProto, TunnelerAI, MapData } = require("./src.js");
 const { createServer } = require("../server.js");
 const { FrameQueue, frameToInput, frameToInputExt, stateHash, HASH_EVERY, UP, RIGHT, FIRE, engineOptions } = NetProto;
 
@@ -172,7 +172,7 @@ const updated = (c, cond, what) => until(() => c.status && cond(c.status), what)
 
 async function main() {
   // (log parts of 7 entries: every (re)joining client gets its log in many parts - see sendLog)
-  const srv = createServer({ tickMs: TICK, quiet: true, cleanupMs: 5000, logChunk: 7, matchAloneMs: 1000 });
+  const srv = createServer({ tickMs: TICK, quiet: true, cleanupMs: 5000, logChunk: 7, matchAloneMs: 1000, mapDir: null });
   const port = await new Promise(r => srv.listen(0, r));
   console.log("server on port", port);
 
@@ -527,6 +527,68 @@ async function main() {
     check("gold: the mode's state the same everywhere", () => assert.strictEqual(JSON.stringify(g1.engine.GS), JSON.stringify(gs.engine.GS)));
     check("no desync (gold)", () => assert(![g1, g2, gs].some(c => c.desync) && gm.desyncs === 0));
     for (const c of [g1, g2, gs]) await c.close();
+  }
+
+  // ---------------------------------------------------------------- a custom map online (docs/v6/MAPS.md)
+  console.log("custom map online");
+  {
+    const map = MapData.blank("small");
+    for (let x = 10; x < 118; x++) map.cells[32 * map.w + x] = MapData.TUNNEL;
+    map.bases.push({ x: 25, y: 32 }, { x: 103, y: 32 }, { x: 64, y: 18 });
+    map.name = "Net map";
+    const up = await fetch(`http://127.0.0.1:${port}/api/maps`, { method: "POST", body: Buffer.from(MapData.encode(map)) });
+    const mapId = (await up.json()).id;
+    check("the map shared: an id", () => assert(NetProto.mapId(mapId)));
+    const mr = (await http(port, "POST", "/api/rooms", { name: "Map room", size: "large",
+      seats: [{ kind: "open", team: 1 }, { kind: "open", team: 2 }, { kind: "normal", team: 1 }, { kind: "hard", team: 2 }] })).json;
+    const m1 = await new FakeClient(port, mr.id, { name: "M1", host: mr.hostKey }).connect();
+    const m2 = await new FakeClient(port, mr.id, { name: "M2" }).connect();
+    const ms = await new FakeClient(port, mr.id, { name: "MS", role: "watch" }).connect();
+    await until(() => m1.status && m1.status.seats.filter(x => x.k).length === 2, "seated (map room)");
+    m2.send({ t: "set", map: mapId });                     // (not the host: ignored)
+    m1.send({ t: "set", map: "zzzzzzzz22" });              // (an unknown map: ignored)
+    await settle();
+    check("only the host sets the map, an unknown one is ignored", () => assert(m1.status.settings.map === "" && !m1.status.map));
+    m1.send({ t: "set", map: mapId });
+    await updated(m1, st => st.map && st.map.id === mapId, "the map set");
+    check("the room's map: its name, its size, its bases; the room's size follows it", () =>
+      assert(m1.status.settings.map === mapId && m1.status.map.name === "Net map" && m1.status.map.bases === 3 && m1.status.settings.size === "small"));
+    m1.send({ t: "set", size: "large" });
+    await settle();
+    check("the size can't change while a map is set", () => assert.strictEqual(m1.status.settings.size, "small"));
+    m2.send({ t: "ready", v: 1 });
+    await settle();
+    check("4 tanks on a map of 3 bases: can't start (\"map\")", () => assert.strictEqual(m1.status.cant, "map"));
+    m1.send({ t: "seatSet", i: 3, kind: "closed" });
+    m2.send({ t: "ready", v: 1 });
+    await updated(m1, st => st.cant === null, "can start (map room)");
+    const info = (await http(port, "GET", "/api/rooms/" + mr.id)).json;
+    check("roomInfo: the map's id and name", () => assert(info.map === mapId && info.mapName === "Net map"));
+    m1.send({ t: "start" });
+    await until(() => m1.match && m2.match && ms.match, "map match");
+    const code = MapData.code(MapData.decode(MapData.encode(map)));
+    check("the match cfg carries the map; every client's engine plays it (extended, small, the bases from the map)", () => {
+      for (const c of [m1, m2, ms]) {
+        assert.strictEqual(c.cfg.map, code, c.name + " cfg");
+        assert(c.engine.extended && c.engine.customMap && c.engine.size === "small", c.name + " engine");
+      }
+    });
+    m1.bits(UP | FIRE); m2.bits(RIGHT);
+    await until(() => m1.frames > 700, "map frames", 60000);
+    check("the bases are the map's", () => {
+      const spots = map.bases.map(b => (b.x * 4 + 2) + "," + (b.y * 4 + 2));
+      for (let p = 1; p <= 3; p++) assert(spots.includes(m1.engine.baseX[p] + "," + m1.engine.baseY[p]), "tank " + p);
+    });
+    m1.bits(0); m2.bits(0);
+    const mm = srv.rooms.get(mr.id).match, mn = mm.log.length;
+    await until(() => [m1, m2, ms].every(c => c.frames >= mn), "caught up (map)");
+    for (const c of [m1, m2, ms]) check(c.name + " matches the reference (map)", () =>
+      assert.deepStrictEqual(fingerprint(reference(mm, c.frames)), fingerprint(c.engine)));
+    check("no desync (map)", () => assert(![m1, m2, ms].some(c => c.desync) && mm.desyncs === 0));
+    m1.send({ t: "set", map: "" });
+    await settle();
+    check("the map can't change during the match", () => assert.strictEqual(m1.status.settings.map, mapId));
+    for (const c of [m1, m2, ms]) await c.close();
   }
 
   // ---------------------------------------------------------------- kick, host handover, no spectators

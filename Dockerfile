@@ -20,7 +20,8 @@ COPY src/js ./src/js
 COPY src/lang ./src/lang
 COPY --from=builder /app/public ./public
 ENV PORT=8050
-# shared replays (POST /api/replays): a folder the server may write - a volume keeps them across restarts
+# shared replays (POST /api/replays) and maps (POST /api/maps, in its maps/ folder): a folder the server may
+# write - a volume keeps them across restarts
 ENV REPLAY_DIR=/app/shared-replays
 RUN mkdir -p /app/shared-replays && chown node /app/shared-replays
 EXPOSE 8050

@@ -3,6 +3,7 @@ import "./main.js";
 import "./reliability.js";
 import "./quickplay.js";
 import "./challenge.js";
+import "./maps.js";
 import "./engine.js";
 import "./modes/ctf.js";
 import "./modes/deathmatch.js";
