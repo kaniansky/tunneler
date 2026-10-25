@@ -151,7 +151,7 @@ function makeEnv(href) {
     assert(env.elements.loading.hidden && typeof env.win.tunnelerHomeUI === "function", "the main menu still works");
     env.win.Nav.go("/games"); await wait(40);
     assert.strictEqual(env.location.reloads, 1, "not again within a minute");
-    assert(!env.elements.loading.hidden && /^Loading failed - check the connection\. Click, tap or press a key to try again\.$/.test(env.elements.loading.textContent),
+    assert(!env.elements.loading.hidden && /^Loading failed - check the connection\.\nClick, tap or press a key to try again\.$/.test(env.elements.loading.textContent),
       "the message: " + env.elements.loading.textContent);
     env.fire(env.win, "keydown", {});
     assert.strictEqual(env.location.reloads, 2, "a key: reload");
@@ -159,10 +159,10 @@ function makeEnv(href) {
     const err = console.error; console.error = () => {};
     env.win.Nav.go("/replays"); await wait(40);
     console.error = err;
-    assert(!env.elements.loading.hidden && /^Something went wrong/.test(env.elements.loading.textContent), "a crashed screen says so");
+    assert(!env.elements.loading.hidden && /^Something went wrong/.test(env.elements.loading.textContent) && env.elements.loading.classList.contains("failed"), "a crashed screen says so");
     env.fire(env.elements.loading, "click", {});
     await wait(40);
-    assert(env.location.pathname === "/" && env.elements.loading.hidden && env.elements.loading.style.pointerEvents === "", "a click: the main menu");
+    assert(env.location.pathname === "/" && env.elements.loading.hidden && !env.elements.loading.classList.contains("failed"), "a click: the main menu");
     ok("a chunk that fails to load: the page reloads (once a minute), then the message; a screen that crashes: the message, then the main menu");
   }
   console.log("app-check: " + n + " ok");

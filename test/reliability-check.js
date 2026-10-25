@@ -300,6 +300,8 @@ async function main() {
     const A = await start({ stateStore: store, version: "dev" });
     const room = A.s.createRoom("Locked", true, true, { password: "tunnels" });
     room.banned.add("cid-banned-xx");
+    // (another feature's room data this code doesn't know: plain JSON data goes along, runtime objects don't)
+    room.customMap = { w: 3, rows: ["#.#", "..."] }; room.someTimer = setTimeout(() => {}, 1); room.someSet = new Set([1]);
     await A.s.shutdown();
     const B = await start({ stateStore: store, version: "dev" });
     await until(() => B.s.rooms.has(room.id), "restored");
@@ -311,6 +313,10 @@ async function main() {
     check("a password and the bans survive the handoff", () => {
       assert.strictEqual(wrong.errCode, "password"); assert.strictEqual(banned.errCode, "kicked"); assert(right.hello && !right.errCode);
     });
+    check("a room's fields this code doesn't know (another feature's data) survive it when they are plain data", () => {
+      const rr = B.s.rooms.get(room.id);
+      assert.deepStrictEqual(rr.customMap, { w: 3, rows: ["#.#", "..."] }); assert(!("someTimer" in rr) && !("someSet" in rr));
+    });
     B.s.close();
   }
   {
@@ -321,6 +327,63 @@ async function main() {
     const r = await s.shutdown();
     await until(() => c.closed, "closed");
     check("without a store: {t:'restart', saved: false}, 1012", () => { assert(!r.saved); assert.strictEqual(c.restartSaved, false); assert.strictEqual(c.closeCode, 1012); });
+  }
+
+  {
+    // the bucket (Cloudflare R2 on Render: its disk is wiped by a deploy): a fake S3 that checks every request's
+    // Signature V4 - the snapshot PUT by the server going away, read (GET) and deleted (DELETE) by the next one
+    const { sigV4 } = require("../server.js");
+    const httpMod = require("http"), crypto = require("crypto");
+    const cfg = { accessKey: "TESTKEY", secretKey: "testsecret", region: "auto" }, objects = new Map(), seen = [];
+    const fake = httpMod.createServer((q, r) => {
+      const chunks = [];
+      q.on("data", c => chunks.push(c));
+      q.on("end", () => {
+        const body = Buffer.concat(chunks), payload = crypto.createHash("sha256").update(body).digest("hex");
+        const h = { host: q.headers.host, "x-amz-content-sha256": q.headers["x-amz-content-sha256"], "x-amz-date": q.headers["x-amz-date"] };
+        const good = q.headers["x-amz-content-sha256"] === payload && q.headers.authorization === sigV4(cfg, q.method, q.url, "", h, payload, q.headers["x-amz-date"]);
+        seen.push(q.method + " " + q.url + (good ? "" : " BAD SIGNATURE"));
+        if (!good) { r.writeHead(403); return r.end(); }
+        if (q.method === "PUT") { objects.set(q.url, body); r.writeHead(200); return r.end(); }
+        if (q.method === "DELETE") { objects.delete(q.url); r.writeHead(204); return r.end(); }
+        if (q.method === "GET" && objects.has(q.url)) { r.writeHead(200); return r.end(objects.get(q.url)); }
+        r.writeHead(404); r.end();
+      });
+    });
+    const fport = await new Promise(r => fake.listen(0, () => r(fake.address().port)));
+    const replayS3 = Object.assign({ endpoint: "http://127.0.0.1:" + fport, bucket: "tunneler-replays" }, cfg);
+    const A = await start({ handoff: true, replayS3, replayDir: null, version: "dev" });
+    const room = A.s.createRoom("Bucket night", true, true, {});
+    const r = await A.s.shutdown();
+    const key = "/tunneler-replays/handoff-state.json.gz";
+    check("with a bucket: the snapshot goes into it (a signed PUT)", () => {
+      assert(A.s.stateStore && /tunneler-replays/.test(A.s.stateStore), A.s.stateStore);
+      assert(r.saved && objects.has(key), seen.join(", "));
+    });
+    const B = await start({ handoff: true, replayS3, replayDir: null, version: "dev" });
+    await until(() => B.s.rooms.has(room.id) && !objects.has(key), "restored from the bucket", 5000);
+    check("the next server reads it from the bucket (GET) and deletes it there (DELETE); every request signed", () => {
+      assert(seen.includes("GET " + key) && seen.includes("DELETE " + key), seen.join(", "));
+      assert(seen.every(x => !/BAD/.test(x)), seen.join(", "));
+    });
+    const replayGet = await http(B.port, "GET", "/api/replays/handoff-state.json.gz");
+    check("the snapshot (host keys, password hashes) can't be fetched as a shared replay", () => assert.notStrictEqual(replayGet.status, 200));
+    B.s.close();
+    fake.close();
+  }
+  {
+    // the page told that nothing could be saved: the first "no such room" is the gone screen (no 30 s of trying)
+    const env = pageEnv("?room=room", { times: { ping: 5000 } });
+    env.load();
+    await until(() => env.sockets[0] && env.sockets[0].readyState === 1, "socket 0");
+    env.sockets[0].recv(hello(1)); env.sockets[0].recv(status(1));
+    env.sockets[0].recv({ t: "restart", saved: false }); env.sockets[0].serverClose(1012);
+    await until(() => env.sockets.length > 1 && env.sockets[1].readyState === 1, "reconnected", 3000);
+    env.sockets[1].recv({ t: "err", code: "noroom", msg: "No such room" }); env.sockets[1].serverClose(4000);
+    await sleep(50);
+    check("restart without a handoff (saved: false): the first 'no such room' says the game is gone", () => {
+      assert(/this game is gone/.test(statusText(env)), statusText(env)); assert.strictEqual(env.sockets.length, 2);
+    });
   }
 
   // ---------------------------------------------------------------- the real program: SIGTERM hands the rooms over

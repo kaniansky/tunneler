@@ -49,14 +49,14 @@ function failScreen(line1, line2, then) {
   if (!el) return;
   if (failing) failing();
   if (loadingHTML === null) loadingHTML = el.innerHTML || "";
-  el.textContent = Lang.raw(line1) + " " + Lang.raw(line2);
-  el.style.pointerEvents = "auto"; el.style.cursor = "pointer"; el.style.padding = "0 16px"; el.style.textAlign = "center";
-  el.style.lineHeight = "1.6"; el.style.flexWrap = "wrap";
+  // (style.css .loading.failed: over the whole screen - the screen before it may still be painted on the canvas)
+  el.textContent = Lang.raw(line1) + "\n" + Lang.raw(line2);
+  el.classList.add("failed");
   el.hidden = false;
   const go = e => { if (e && (e.ctrlKey || e.altKey || e.metaKey || e.repeat)) return; done(); then(); };
   const done = () => {
     Scope.free(() => { el.removeEventListener("click", go); removeEventListener("keydown", go); });
-    for (const k of ["pointerEvents", "cursor", "padding", "textAlign", "lineHeight", "flexWrap"]) el.style[k] = "";
+    el.classList.remove("failed");
     if (loadingHTML !== null) el.innerHTML = loadingHTML;
     if (failing === done) failing = null;
   };

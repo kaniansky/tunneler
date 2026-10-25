@@ -1021,6 +1021,9 @@ function createServer(opts = {}) {
               m.desyncs++;
               say("DESYNC room", room.id, "frame", n, "player", p, rec.h.toString(16), "!=", h.toString(16));
               broadcast(room, JSON.stringify({ t: "desync", n }));
+              // (every page told rebuilds the match from frame 0 and reports its hashes again - on the
+              // canonical run now: the hashes so far, the faulty ones among them, are forgotten)
+              m.hashes.clear();
             }
           }
           break;
@@ -1048,6 +1051,7 @@ function createServer(opts = {}) {
     if (ws.left) return;
     ws.left = true;
     room.sockets.delete(ws);
+    if (closing) return;                          // (shutting down: the snapshot is taken - no timers, nothing changes)
     if (ws.seat >= 0 && room.seats[ws.seat].occ === ws) room.seats[ws.seat].occ = null;   // (last: a reload gets it back)
     const m = room.match;
     if (m && ws.player >= 0 && m.socks[ws.player] === ws) {
@@ -1059,7 +1063,7 @@ function createServer(opts = {}) {
         if (m.aloneTimer.unref) m.aloneTimer.unref();
       }
     }
-    if (replaced || closing) return;
+    if (replaced) return;
     say("room", room.id, ws.name, "disconnected");
     ensureHost(room);                             // (the host left: somebody else hosts now)
     matchReport(room);                            // (the others may be most of the players now)
@@ -1114,14 +1118,31 @@ function createServer(opts = {}) {
   // hash and its match - seed, cfg, the run-length frame log. A shutting-down server writes them all to the
   // handoff store; the next one reads them back, and its clients resume as after any reconnect.
   const hex = b => Buffer.from(b).toString("hex");
+  // the fields of a room / match this code doesn't know (another feature's data - a custom map...): kept as they
+  // are when they are plain JSON data (no sockets, timers, sets); the known ones are written and checked below
+  const ROOM_KNOWN = new Set(["id", "name", "public", "allowSpec", "seats", "chat", "hostKey", "banned", "serial", "password", "admitted",
+    "created", "addr", "sockets", "match", "matches", "report", "stTimer", "cleanupTimer", "lastActive", "restoredFrom", ...Object.keys(settingsOf({}))]);
+  const MATCH_KNOWN = new Set(["room", "no", "seed", "ext", "slots", "cfg", "log", "socks", "held", "latch", "keys", "running", "timer", "startAt",
+    "startN", "hashes", "desyncs", "aloneTimer", "report", "waitAll", "resumeAt"]);
+  const plain = v => v === null || ["string", "number", "boolean"].includes(typeof v) ||
+    (typeof v === "object" && (Array.isArray(v) || Object.getPrototypeOf(v) === Object.prototype));
+  function extras(o, known) {
+    const out = {};
+    for (const k of Object.keys(o)) {
+      if (known.has(k) || !plain(o[k])) continue;
+      try { out[k] = JSON.parse(JSON.stringify(o[k])); } catch (e) { /* not data */ }
+    }
+    return out;
+  }
+  const addExtras = (o, x) => { if (x && typeof x === "object") for (const k of Object.keys(x)) if (!(k in o)) o[k] = x[k]; };
   function roomState(r) {
     const m = r.match;
     return { id: r.id, name: r.name, public: r.public, allowSpec: r.allowSpec, settings: settingsOf(r),
       seats: r.seats.map(s => ({ kind: s.kind, team: s.team, last: s.last })), chat: r.chat, hostKey: r.hostKey,
       banned: [...r.banned], serial: r.serial, password: r.password ? { salt: hex(r.password.salt), hash: hex(r.password.hash) } : null,
-      admitted: [...r.admitted], created: r.created, addr: r.addr, matches: r.matches, report: r.report,
+      admitted: [...r.admitted], created: r.created, addr: r.addr, matches: r.matches, report: r.report, extra: extras(r, ROOM_KNOWN),
       match: m ? { no: m.no, seed: m.seed, ext: m.ext, slots: m.slots, cfg: m.cfg, log: { entries: m.log.entries, length: m.log.length },
-        report: m.report, desyncs: m.desyncs } : null };
+        report: m.report, desyncs: m.desyncs, extra: extras(m, MATCH_KNOWN) } : null };
   }
   function snapshot() {
     return zlib.gzipSync(Buffer.from(JSON.stringify({ format: 1, version, at: Date.now(), rooms: [...rooms.values()].map(roomState) })));
@@ -1192,11 +1213,13 @@ function createServer(opts = {}) {
         report: sm.report || { screen: "text", playing: true, round: 0, wins: new Array(N).fill(0), teamWins: [] },
         waitAll: true, resumeAt: 0 };
       const m = room.match;
+      addExtras(m, sm.extra);
       m.aloneTimer = setTimeout(() => { if (room.match === m && !m.socks.some(Boolean)) endMatch(room, "gone"); }, matchAloneMs + resumeGraceMs);
       if (m.aloneTimer.unref) m.aloneTimer.unref();
     } else if (sm && sm.report) {                  // (another version: back in the lobby, the score kept for the list)
       room.report = { round: sm.report.round | 0, wins: sm.report.wins || [], teamWins: sm.report.teamWins || [], ext: !!sm.ext, players: (sm.slots || []).length };
     }
+    addExtras(room, s.extra);
     if (old) { clearTimeout(old.cleanupTimer); clearTimeout(old.stTimer); if (old.match) { stopClock(old.match); clearTimeout(old.match.aloneTimer); } }
     rooms.set(room.id, room);
     armCleanup(room);
@@ -1321,7 +1344,7 @@ if (require.main === module) {
   process.on("unhandledRejection", err => { processErrors.count++; log("UNHANDLED REJECTION", err && err.stack || err); });
   // a deploy / restart: the rooms handed over to the next server, the clients told (docs/v6/RELIABILITY.md 2.2)
   for (const sig of ["SIGTERM", "SIGINT"]) process.on(sig, () => {
-    if (srv.closing) return;
+    if (srv.closing) { log(sig + " again: quitting now"); process.exit(1); }   // (a second Ctrl+C doesn't wait)
     log(sig + ": shutting down");
     srv.shutdown().catch(e => log("shutdown:", e && e.message)).finally(() => process.exit(0));
   });

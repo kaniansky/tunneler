@@ -48,7 +48,8 @@ On `SIGTERM` / `SIGINT` (`srv.shutdown()`):
 3. The **handoff snapshot** is written (2.3), waiting at most `SHUTDOWN_SAVE_MS` (8 s).
 4. Only then is every client told `{t:"restart"}`, and each socket is closed with code 1012 ("service
    restart"). The order matters: a client that reconnects at once must find the snapshot already written.
-5. The process exits. Render waits 30 s after SIGTERM, which is more than enough.
+5. The process exits. Render waits 30 s after SIGTERM, which is more than enough. A second SIGTERM /
+   SIGINT (a second Ctrl+C) exits at once.
 
 ### 2.3 Room handoff: a deploy no longer ends the game (A3)
 
@@ -58,13 +59,17 @@ read back in, and the game continues *exactly*: clients resume with `&match=<no>
 already do after a reconnect.
 
 - **Store** (`stateStore`): the S3-compatible bucket of the shared replays when configured (object
-  `state/handoff.json.gz`, the only option that survives a Render deploy, whose disk is wiped). Otherwise a
+  `handoff-state.json.gz`, the only option that survives a Render deploy, whose disk is wiped). Otherwise a
   folder: `STATE_DIR`, by default the shared-replays folder, which is a volume in docker-compose. Otherwise
   none, and then the server just says so in its start-up log. Tests pass their own store.
 - **Snapshot** (gzip'd JSON): `{format: 1, version, at, rooms: [...]}`. Each room has its fields plus its
   match: `{no, seed, ext, slots (with client ids and names), cfg, log: {entries, length}, report}`. Password
   salt and hash are stored as hex, and the bans and admitted ids as lists. Sockets are not stored: clients
   come back by their client id (`seat.last`, `slot.cid`).
+  A room's or a match's fields this code doesn't know (another feature's data, such as a custom map) go
+  along in `extra` when they are plain JSON data (not sockets, timers or sets) and are put back as they
+  were. The settings go through `settingsOf` / `roomSettings`, so a new setting survives once it is there.
+  The snapshot can't be fetched through the shared replays' API (that only serves `<id>.replay` objects).
 - **Restore**: when the server starts, and also lazily. Render starts the new instance *before* it stops
   the old one, so the snapshot appears after the new server is already running. For that reason a
   connection or `GET /api/rooms/<id>` for an unknown room re-reads the store, at most once every
@@ -101,7 +106,9 @@ as another player, as before.
 - **Backoff with jitter**: 0.5 s, then x1.6 up to 10 s, plus up to 30% random. Many pages reconnecting
   after a restart don't arrive all at once.
 - **`{t:"restart"}` or close code 1012**: the status screen says "The server is restarting - your game
-  continues when it is back." and the page reconnects at once.
+  continues when it is back." and the page reconnects at once. `saved: false` (the
+  server had nowhere to hand the rooms over) means the next server won't have the game: the first `noroom`
+  shows the gone screen at once.
 - **The room is gone after a reconnect** (`noroom` after this page was already in it): the page keeps
   trying for `GONE_RETRY_MS` (30 s), because the snapshot may still be on its way. Then it shows a clear
   screen instead of GAME NOT FOUND: "The server was restarted and this game is gone." / "Create a new
@@ -117,7 +124,9 @@ does for a late spectator, and the page runs it on a fresh engine (the "Catching
 screen). It also takes over its tank again (2.4). A rebuild can fix the usual causes: a frame applied
 twice or lost locally, state left over from a reconnect, or a bug that only shows on an incremental
 path. Every client that was told about the desync rebuilds the same way, so they all end up on the
-canonical run. At most `MAX_REBUILDS` (2) per match. After that the desync must be genuinely different
+canonical run. The server forgets the hashes it had when it broadcasts the desync (`m.hashes.clear()`):
+the rebuilt pages report them again from the canonical run, so a faulty first report can't keep them out of
+step. At most `MAX_REBUILDS` (2) per match. After that the desync must be genuinely different
 code, and the status line shows "DESYNC at frame n" as before. Determinism argument: the rebuilt engine
 gets the same seed, cfg and frames as every other client and the same `TunnelerAI` instances (new, from
 the cfg), so it is exactly what a late spectator would compute. Nothing local enters the simulation.
@@ -197,9 +206,11 @@ and Render's health check can use it. Changing them is left to the owner.
   `&match&have`, the match resumes and every client ends identical to a reference replay. The lazy restore
   works when B started before A's snapshot. A different version restores the lobby only. A snapshot that
   was read is deleted, and stale snapshots are ignored (and deleted). Passwords and bans survive the
-  handoff. SIGTERM on the real program writes the snapshot and exits with 0.
+  handoff, and so does another feature's plain room data. The bucket store against a fake S3 that checks every
+  request's Signature V4: the snapshot PUT on shutdown, then GET and DELETE by the next server. SIGTERM on the
+  real program writes the snapshot and exits with 0.
 - Online page (vm, stub websocket): a dead connection (no answer to a ping) is dropped and reconnected.
-  `restart` shows the restart screen and reconnects. `noroom` after hello retries, then shows the gone
+  `restart` shows the restart screen and reconnects (`saved: false`: the first `noroom` is the gone screen). `noroom` after hello retries, then shows the gone
   screen. A desync rebuilds without `&match` (at most twice). A version error reloads once per version.
   The `online` event reconnects at once.
 - app.js (app-check): a chunk that fails to load reloads the page once, and a second failure shows the

@@ -965,7 +965,9 @@ export function mount() {
         if (lobby && lobby.page === "lobby") drawLobby(true);
         break;
       case "restart":                                      // the server is going away: reconnect soon, say so meanwhile
-        restarting = true; goneUntil = 0; retry = 0;
+        // (saved false: it had nowhere to hand the rooms over - the next server won't have this game, so the
+        // first "no such room" says so at once)
+        restarting = true; goneUntil = m.saved === false ? 1 : 0; retry = 0;
         updateOverlay();
         break;
       case "pong":

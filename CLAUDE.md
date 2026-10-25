@@ -901,12 +901,12 @@ none, i.e. a page from before 2.0 - is refused (POST 409 `{code:
   replays' folder; only with `opts.handoff` - the program - or `opts.stateStore`), then `{t:"restart", saved}` +
   close 1012; the next server restores it at `listen` and, for an unknown room during `HANDOFF_WINDOW_MS`, on demand
   (`refreshHandoff`; Render starts the new instance first); a restored match waits for its players (`waitAll`,
-  `RESUME_GRACE_MS`); another version: lobbies only. `&sid=` (a page's random id): a new connection with the cid +
+  `RESUME_GRACE_MS`); another version: lobbies only; a room's / match's unknown plain-data fields go along (`extra`). `&sid=` (a page's random id): a new connection with the cid +
   sid of one still in the room replaces it (`leaveRoom(room, ws, true)`; seat, tank, host role). `POST /api/errors`
   (`clientError`, 4 KB, 10/min/address, 120/min in all; logged), `GET /api/health`, `X-Tunneler-Version` on /api.
   online.js: dead connection = a ping answered by nothing for `DEAD_MS` (after a first pong) -> `dropSocket()`;
   `closed(code)` backs off with jitter; `online` / visibilitychange reconnect now; restart / 1012 -> `rel.restart`
-  screen; `noroom` after a hello -> retried `GONE_RETRY_MS`, then `rel.gone`; desync / an engine error -> `rebuild()`
+  screen; `noroom` after a hello -> retried `GONE_RETRY_MS` (`saved: false`: not at all), then `rel.gone`; desync / an engine error -> `rebuild()`
   (reconnect without &match: the whole log on a fresh engine; `MAX_REBUILDS` 2); `window.tunnelerNetTimes` (tests),
   `tunnelerStatusUI`. report.js: `Report.error(where, err)` / `install()` (built pages, 5 per load), `Reload.forVersion`
   (browser on its own site, once per version - online.js, lobby.js's 409 / list header), `Reload.afterChunkFailure`
