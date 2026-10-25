@@ -13,7 +13,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 COPY server.js challenge-worker.js ./
-# server.js shares the wire protocol helpers with the browser (ES modules: src/package.json says so); the weekly
+# server.js shares the wire protocol helpers with the browser (ES modules: src/package.json says so); the daily
 # challenge's replay check (challenge-worker.js) runs the game's engine, computer players, modes and English texts
 COPY src/package.json ./src/
 COPY src/js ./src/js

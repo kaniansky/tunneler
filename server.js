@@ -43,12 +43,12 @@
 //                                 S3-compatible bucket (REPLAY_S3_*: Cloudflare R2...), else REPLAY_DIR (the
 //                                 newest MAX_SHARED), else memory; {id, days} when REPLAY_KEEP_DAYS says how long
 //        GET  /api/replays/<id>   that replay (gzip'd JSON); the page address /replay/<id> plays it
-//        GET  /api/challenge[/<week>][?cid=]   the weekly challenge's leaderboard (docs/v6/CHALLENGE.md): {week, current,
+//        GET  /api/challenge[/<day>][?cid=]   the daily challenge's leaderboard (docs/v6/CHALLENGE.md): {day, current,
 //                                 ends, now, total, top: [{rank, name, rounds, won, kills, secs, replay}], you}
-//        POST /api/challenge/<week>?cid=&name=   a challenge match's replay (gzip'd or plain JSON): played again in a
+//        POST /api/challenge/<day>?cid=&name=   a challenge match's replay (gzip'd or plain JSON): played again in a
 //                                 worker thread with the server's own computer players -> {ok, result, best, rank, total,
 //                                 improved} or {error, code}: bad / name / config / differs / unfinished / long (400),
-//                                 week / taken / version (409), busy / storage (503)
+//                                 day / taken / version (409), busy / storage (503); <day> = "YYYY-MM-DD" (UTC)
 //        POST /api/maps           a custom map (src/js/mapdata.js bytes, docs/v6/MAPS.md) -> {id}: checked,
 //                                 kept in its canonical form under the hash of its content (the same store
 //                                 as the replays: the bucket (<id>.map), MAP_DIR - default REPLAY_DIR/maps -, memory)
@@ -109,7 +109,7 @@ const { WebSocketServer } = require("ws");
 // shared with the browser; the source copy, so the server never depends on a build (an ES module: node
 // >= 20.19 requires it as it is - package.json engines)
 const { NetProto } = require("./src/js/netproto.js");
-// the weekly challenge (docs/v6/CHALLENGE.md): the week's settings; its replays are checked in a worker thread
+// the daily challenge (docs/v6/CHALLENGE.md): the day's settings; its replays are checked in a worker thread
 // (challenge-worker.js runs the engine and the computer players)
 const { Challenge } = require("./src/js/challenge.js");
 const { Worker } = require("worker_threads");
@@ -137,11 +137,11 @@ const QP_HOLD_MS = 15 * 1000;          // ... a tank whose player lost the conne
 const MAX_SHARES_PER_MIN = 10;         // POST /api/replays per address
 const MAX_SHARED = 5000;               // shared replays kept (the oldest go)
 const MAX_REPLAY_BYTES = 512 * 1024;   // one shared replay, as sent (gzip'd: a long match is ~50 KB)
-const MAX_CHALLENGE_PER_MIN = 6;       // POST /api/challenge/<week> per address
-const MAX_BOARD = 5000;                // entries on a week's challenge leaderboard (the worst go)
+const MAX_CHALLENGE_PER_MIN = 6;       // POST /api/challenge/<day> per address
+const MAX_BOARD = 5000;                // entries on a day's challenge leaderboard (the worst go)
 const BOARD_TOP = 50;                  // entries GET /api/challenge sends
-const BOARD_WEEKS = 12;                // past weeks whose boards GET /api/challenge/<week> still answers
-const WEEK_GRACE_MS = Challenge.GRACE_MS; // the last week's challenge still takes results this long after it ended (2 h)
+const BOARD_DAYS = 30;                 // past days whose boards GET /api/challenge/<day> still answers (and the folder keeps)
+const DAY_GRACE_MS = Challenge.GRACE_MS; // the last day's challenge still takes results this long after midnight UTC (2 h)
 const CHALLENGE_TIME_MS = 60 * 1000;   // checking one challenge replay at most (then its worker is stopped)
 const CHALLENGE_QUEUE = 6;             // challenge replays waiting for a worker at most (then "busy")
 const MAX_MAP_SHARES_PER_MIN = 20;     // POST /api/maps per address
@@ -615,7 +615,7 @@ function createServer(opts = {}) {
     [/^\/(split|skirmish|vs-computer)\/?$/, "/index.html"], // split screen, a skirmish (/vs-computer: before 2.1)
     [/^\/replays(\/[^/]+)?\/?$/, "/index.html"],           // the replays kept in the browser, one of them played
     [/^\/replay\/[a-z2-9]{8}\/?$/, "/index.html"],          // a shared replay (POST /api/replays)
-    [/^\/challenge\/?$/, "/index.html"],                    // the weekly challenge
+    [/^\/challenge\/?$/, "/index.html"],                    // the daily challenge
     [/^\/maps(\/[^/]+)?\/?$/, "/index.html"],              // the maps kept in the browser, one of them edited
     [/^\/map\/[a-z2-9]{10}\/?$/, "/index.html"],            // a shared map (POST /api/maps)
     [/^\/(lobby|online|play|replays|challenge|maps)\.html$/, "/index.html"], // the pages before 5.0 (the desktop app's addresses)
@@ -764,62 +764,77 @@ function createServer(opts = {}) {
   }
   const replayId = () => { const a = crypto.randomBytes(8); let s = ""; for (const b of a) s += "abcdefghijkmnpqrstuvwxyz23456789"[b & 31]; return s; };
 
-  // ------------------------------------------------------------ the weekly challenge (docs/v6/CHALLENGE.md)
-  // A board per week {week, entries: [{cid, name, rounds, won, kills, secs, date, replay}]} (one entry per client id,
-  // its best), kept where the shared replays are: the bucket (challenge-<week>.json.gz), else the folder, else memory;
-  // cached here once read, written after every change (one write at a time per week). A result comes as its replay:
-  // a worker thread plays it again (challenge-worker.js) - the board only ever holds what the server's engine says.
+  // ------------------------------------------------------------ the daily challenge (docs/v6/CHALLENGE.md)
+  // A board per UTC day {day, entries: [{cid, name, rounds, won, kills, secs, date, replay}]} (one entry per client id,
+  // its best), kept where the shared replays are: the bucket (challenge-<day>.json.gz), else the folder (the last
+  // BOARD_DAYS days), else memory; cached here once read, written after every change (one write at a time per day).
+  // A result comes as its replay: a worker thread plays it again (challenge-worker.js) - the board only ever holds
+  // what the server's engine says.
   const now = opts.now || Date.now;
   const challengeTimeMs = opts.challengeTimeMs || CHALLENGE_TIME_MS;
   const challengeWorkers = opts.challengeWorkers || 1;
-  const boards = new Map();                              // week -> Promise of the board
-  const boardFile = week => path.join(replayDir, "challenge-" + week + ".json.gz");
-  const readBoardBytes = async week => {
+  const boards = new Map();                              // day -> Promise of the board
+  const boardFile = day => path.join(replayDir, "challenge-" + day + ".json.gz");
+  const readBoardBytes = async day => {
     if (s3) {
-      const r = await s3Request(s3, "GET", "challenge-" + week + ".json.gz");
+      const r = await s3Request(s3, "GET", "challenge-" + day + ".json.gz");
       if (r.status === 404) return null;
       if (r.status < 200 || r.status >= 300) throw new Error("storage " + r.status);
       return r.body;
     }
     if (!diskOk) return null;
-    try { return fs.readFileSync(boardFile(week)); } catch (e) { return null; }
+    try { return fs.readFileSync(boardFile(day)); } catch (e) { return null; }
   };
-  function loadBoard(week) {
-    if (!boards.has(week)) {
-      const p = readBoardBytes(week).then(gz => {
+  function loadBoard(day) {
+    if (!boards.has(day)) {
+      const p = readBoardBytes(day).then(gz => {
         let b = null;
         try { b = gz ? JSON.parse(zlib.gunzipSync(gz).toString("utf8")) : null; } catch (e) { b = null; }
         const entries = b && Array.isArray(b.entries) ? b.entries.filter(x => x && typeof x.cid === "string" && typeof x.name === "string") : [];
-        return { week, entries: entries.sort(Challenge.compare), saving: Promise.resolve() };
+        return { day, entries: entries.sort(Challenge.compare), saving: Promise.resolve() };
       });
-      p.catch(() => boards.delete(week));                // (the storage failed: asked again next time)
-      boards.set(week, p);
-      while (boards.size > 30) boards.delete(boards.keys().next().value);
+      p.catch(() => boards.delete(day));                 // (the storage failed: asked again next time)
+      boards.set(day, p);
+      while (boards.size > BOARD_DAYS + 2) boards.delete(boards.keys().next().value);
     }
-    return boards.get(week);
+    return boards.get(day);
+  }
+  // the folder: boards older than BOARD_DAYS go (and the weekly challenge's old ones, challenge-2026-W43.json.gz),
+  // looked at once a day (a bucket's own lifecycle rule deletes its old objects)
+  let swept = null;
+  function sweepBoards() {
+    const today = Challenge.dayOf(now());
+    if (s3 || !diskOk || swept === today) return;
+    swept = today;
+    try {
+      for (const f of fs.readdirSync(replayDir)) {
+        const m = /^challenge-(.+)\.json\.gz$/.exec(f);
+        if (m && (!Challenge.validDay(m[1]) || Challenge.dayEnd(m[1]) + BOARD_DAYS * Challenge.DAY <= now())) fs.unlinkSync(path.join(replayDir, f));
+      }
+    } catch (e) { /* later */ }
   }
   function saveBoard(board) {
-    const gz = zlib.gzipSync(Buffer.from(JSON.stringify({ week: board.week, entries: board.entries })));
+    const gz = zlib.gzipSync(Buffer.from(JSON.stringify({ day: board.day, entries: board.entries })));
     board.saving = board.saving.catch(() => {}).then(async () => {
       if (s3) {
-        const r = await s3Request(s3, "PUT", "challenge-" + board.week + ".json.gz", gz);
+        const r = await s3Request(s3, "PUT", "challenge-" + board.day + ".json.gz", gz);
         if (r.status < 200 || r.status >= 300) throw new Error("storage " + r.status);
-      } else if (diskOk) fs.writeFileSync(boardFile(board.week), gz);
+      } else if (diskOk) { fs.writeFileSync(boardFile(board.day), gz); sweepBoards(); }
     });
     return board.saving;
   }
-  // a week still taking results: the current one, the last one for WEEK_GRACE_MS after it ended
-  const weekOpen = week => { const t = now(); return week === Challenge.weekOf(t) || (Challenge.weekEnd(week) <= t && t < Challenge.weekEnd(week) + WEEK_GRACE_MS); };
+  // a day still taking results: today (UTC), yesterday for DAY_GRACE_MS after midnight
+  const dayOpen = day => { const t = now(); return day === Challenge.dayOf(t) || (Challenge.dayEnd(day) <= t && t < Challenge.dayEnd(day) + DAY_GRACE_MS); };
   const publicEntry = (x, i) => ({ rank: i + 1, name: x.name, rounds: x.rounds, won: !!x.won, kills: x.kills, secs: x.secs, replay: x.replay || null });
   function boardInfo(board, cid) {
     const t = now(), i = cid ? board.entries.findIndex(x => x.cid === cid) : -1;
-    return { week: board.week, current: board.week === Challenge.weekOf(t), ends: Challenge.weekEnd(board.week), now: t, total: board.entries.length,
+    return { day: board.day, current: board.day === Challenge.dayOf(t), ends: Challenge.dayEnd(board.day), now: t, total: board.entries.length,
       top: board.entries.slice(0, BOARD_TOP).map(publicEntry), you: i >= 0 ? publicEntry(board.entries[i], i) : null };
   }
   // the replay checks: at most challengeWorkers at a time, CHALLENGE_QUEUE waiting
   let checksRunning = 0;
   const checksWaiting = [], checkWorkers = new Set(), checking = new Set();   // (checking: addresses with a check now)
-  function runCheck(bytes, week, name) {
+  function runCheck(bytes, day, name) {
     return new Promise(resolve => {
       const job = () => {
         checksRunning++;
@@ -833,7 +848,7 @@ function createServer(opts = {}) {
         };
         let w;
         try {
-          w = new Worker(path.join(__dirname, "challenge-worker.js"), { workerData: { bytes, week, version, name },
+          w = new Worker(path.join(__dirname, "challenge-worker.js"), { workerData: { bytes, day, version, name },
             resourceLimits: { maxOldGenerationSizeMb: 256 } });
         } catch (e) { return finish({ code: "busy" }); }
         checkWorkers.add(w);
@@ -850,44 +865,45 @@ function createServer(opts = {}) {
       else resolve({ code: "busy" });
     });
   }
-  const STATUS = { bad: 400, name: 400, config: 400, differs: 400, unfinished: 400, long: 400, week: 409, taken: 409, version: 409, busy: 503, storage: 503 };
+  const STATUS = { bad: 400, name: 400, config: 400, differs: 400, unfinished: 400, long: 400, day: 409, taken: 409, version: 409, busy: 503, storage: 503 };
   const challengeError = (res, code, error) => json(res, STATUS[code] || 400, { error: error || code, code });
   async function challengeApi(req, res, p) {
-    const u = new URL(req.url, "http://x"), m = /^\/api\/challenge(?:\/(\d{4}-W\d{2}))?$/.exec(p);
-    const week = m[1] || Challenge.weekOf(now());
-    if (!Challenge.validWeek(week)) return challengeError(res, "bad", "no such week");
+    const u = new URL(req.url, "http://x"), m = /^\/api\/challenge(?:\/([^/]*))?$/.exec(p);
+    // (a day "YYYY-MM-DD", a real date - an old week id "2026-W43" or junk is refused here)
+    const day = m[1] !== undefined ? m[1] : Challenge.dayOf(now());
+    if (!Challenge.validDay(day)) return challengeError(res, "bad", "no such day (YYYY-MM-DD)");
     if (req.method === "GET") {
-      if (Challenge.weekStart(week) > now()) return json(res, 404, { error: "that week hasn't started" });
-      // (the last BOARD_WEEKS weeks only: they all fit the board cache, so asking for old weeks can't make the
+      if (Challenge.dayStart(day) > now()) return json(res, 404, { error: "that day hasn't started" });
+      // (the last BOARD_DAYS days only: they all fit the board cache, so asking for old days can't make the
       // server read its storage again and again)
-      if (Challenge.weekEnd(week) + BOARD_WEEKS * 7 * 86400000 <= now()) return json(res, 404, { error: "that week's board isn't kept" });
+      if (Challenge.dayEnd(day) + BOARD_DAYS * Challenge.DAY <= now()) return json(res, 404, { error: "that day's board isn't kept" });
       let board;
-      try { board = await loadBoard(week); } catch (e) { return challengeError(res, "storage", "storage unavailable, try later"); }
+      try { board = await loadBoard(day); } catch (e) { return challengeError(res, "storage", "storage unavailable, try later"); }
       return json(res, 200, boardInfo(board, u.searchParams.get("cid")));
     }
-    if (req.method !== "POST" || !m[1]) return json(res, 404, { error: "not found" });
+    if (req.method !== "POST" || m[1] === undefined) return json(res, 404, { error: "not found" });
     const cid = u.searchParams.get("cid") || "", name = cleanPlayerName(u.searchParams.get("name"));
     if (!/^[A-Za-z0-9_-]{8,64}$/.test(cid)) return challengeError(res, "bad", "bad client id");
     if (!name) return challengeError(res, "name", "a name is needed");
     let bytes;
     try { bytes = await readRaw(req, MAX_REPLAY_BYTES); } catch (e) { return json(res, 413, { error: "too large" }); }
     if (!allowChallenge(addressOf(req))) return json(res, 429, { error: "too many results, try again in a minute", code: "busy" });
-    if (!weekOpen(week)) return challengeError(res, "week", "that week's challenge is over");
+    if (!dayOpen(day)) return challengeError(res, "day", "that day's challenge is over");
     let board;
-    try { board = await loadBoard(week); } catch (e) { return challengeError(res, "storage", "storage unavailable, try later"); }
+    try { board = await loadBoard(day); } catch (e) { return challengeError(res, "storage", "storage unavailable, try later"); }
     const taken = () => board.entries.some(x => x.cid !== cid && x.name.toLowerCase() === name.toLowerCase());
-    if (taken()) return challengeError(res, "taken", "another player has that name on this week's board");
+    if (taken()) return challengeError(res, "taken", "another player has that name on this day's board");
     // one check at a time per address (a long replay keeps the worker up to CHALLENGE_TIME_MS: one address can't fill
     // the queue for everybody)
     const addr = addressOf(req);
     if (checking.has(addr)) return json(res, 429, { error: "your last result is still being checked", code: "busy" });
     checking.add(addr);
     let r;
-    try { r = await runCheck(new Uint8Array(bytes), week, name); } finally { checking.delete(addr); }
+    try { r = await runCheck(new Uint8Array(bytes), day, name); } finally { checking.delete(addr); }
     if (r && !r.code && !r.result) say("challenge check: an answer without a result:", JSON.stringify(r).slice(0, 300));
     if (!r || (!r.code && !r.result)) return challengeError(res, "bad", "the check failed");
     if (r.code) return challengeError(res, r.code, r.code === "version" ? "the replay is of another version than this server's " + version : null);
-    if (taken()) return challengeError(res, "taken", "another player has that name on this week's board");
+    if (taken()) return challengeError(res, "taken", "another player has that name on this day's board");
     const res0 = r.result;
     const entry = { cid, name, rounds: res0.rounds | 0, won: !!res0.won, kills: res0.kills | 0, secs: res0.secs | 0, date: now(), replay: null };
     const at = board.entries.findIndex(x => x.cid === cid);
@@ -911,7 +927,7 @@ function createServer(opts = {}) {
       try { await saveBoard(board); } catch (e) { say("challenge board not stored:", e.message); }
     }
     const k = board.entries.findIndex(x => x.cid === cid);
-    say("challenge", week, JSON.stringify(name), JSON.stringify(res0), improved ? "best" : "");
+    say("challenge", day, JSON.stringify(name), JSON.stringify(res0), improved ? "best" : "");
     return json(res, 200, { ok: true, result: res0, best: k >= 0 ? publicEntry(board.entries[k], k) : null, rank: k + 1, total: board.entries.length, improved });
   }
   // wrong passwords per address: pwBlocked before checking one, pwFailed after a wrong one
@@ -988,10 +1004,7 @@ function createServer(opts = {}) {
       try { await replays.keep(id, gz); } catch (e) { return json(res, 503, { error: "could not store it, try later" }); }
       return json(res, 200, keepDays ? { id, days: keepDays } : { id });
     }
-    if (/^\/api\/challenge(\/[^/]*)?$/.test(p)) {
-      if (!/^\/api\/challenge(\/\d{4}-W\d{2})?$/.test(p)) return json(res, 404, { error: "not found" });
-      return challengeApi(req, res, p);
-    }
+    if (/^\/api\/challenge(\/[^/]*)?$/.test(p)) return challengeApi(req, res, p);
     const rm = /^\/api\/replays\/([a-z2-9]{8})$/.exec(p);
     if (rm && req.method === "GET") {
       let gz;

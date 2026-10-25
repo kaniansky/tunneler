@@ -27,10 +27,12 @@ a release is made by pushing a version tag (see CONTRIBUTING.md).
   tank back within 15 s). The taken-over tank shows your name. Every
   client switches the tank at exactly the same frame (a marker in the game's frame log), so spectators, late
   joiners and replays see the same game. (docs/v6/QUICKPLAY.md)
-- Weekly challenge (main menu): every week the same skirmish for everyone - the same world, mode, map size and
-  computer opponents. Play it as often as you like and send your result: the server plays the match's replay
-  again with its own computer players, so only real results get on the week's leaderboard (won, rounds, kills,
-  time). The leaderboard shows the week's best, and every entry's match can be watched.
+- Daily challenge (main menu): every day (UTC) a new skirmish, the same for everyone - the same world, mode, map
+  size and computer opponents. Play it as often as you like and send your result: the server plays the match's
+  replay again with its own computer players, so only real results get on the day's leaderboard (won, rounds,
+  kills, time). The screen shows today's date and the time left until the next challenge; the leaderboard shows
+  the day's best, and every entry's match can be watched. A match finished just before midnight can still be sent
+  for two hours. (docs/v6/CHALLENGE.md)
 - Your own maps (main menu, Maps): paint a world - rock, dirt and tunnels - and place up to 8 bases, on a small,
   medium or large map, starting from dirt everywhere or a random world. The editor works with the keyboard, the
   mouse, a gamepad and on a phone (one finger paints, two move and zoom); maps are kept in the browser and can be

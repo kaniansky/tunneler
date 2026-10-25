@@ -22,7 +22,7 @@ const HIDE = new Set(["default", "Text", "Modern", "Hud", "VERSION"]);
 const cache = new Map();
 
 // the screens by their old page names: the route module app.js mounts for them
-const ROUTES = { "index.html": "js/home.js", "lobby.html": "js/lobby.js", "online.html": "js/online.js", "play.html": "js/play.js", "replays.html": "js/replays.js", "challenge.html": "js/weekly.js", "maps.html": "js/maps.js" };
+const ROUTES = { "index.html": "js/home.js", "lobby.html": "js/lobby.js", "online.html": "js/online.js", "play.html": "js/play.js", "replays.html": "js/replays.js", "challenge.html": "js/daily.js", "maps.html": "js/maps.js" };
 // what app.js imports for every screen (app-wide)
 const APP = ["lang/index.js", "js/modes/index.js", "js/screen.js", "js/gfx-text.js", "js/pads.js"];
 // the page's <script type="module" src="/js/x.js"> -> "js/x.js"

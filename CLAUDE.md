@@ -56,7 +56,7 @@ may be redesigned, but always in the original's DOS look.
 - `build.js` - `node build.js` once, `node build.js --watch` = rebuild on change + `node --watch server.js`
   (restart a running watcher after build.js itself changes: it keeps the old build in memory).
 - `Dockerfile` - two stages (build with esbuild, then prod deps + server.js + challenge-worker.js + src/package.json +
-  src/js + src/lang (netproto.js for the server, the engine / AI / modes / English texts for the weekly challenge's
+  src/js + src/lang (netproto.js for the server, the engine / AI / modes / English texts for the daily challenge's
   replay check) + public/), runs
   as `node`, port 8050. `.github/workflows`: ci (npm ci, build, test, docker build), **release** (only a pushed
   `vX.Y.Z` tag: a GitHub Release with that version's CHANGELOG.md section as notes
@@ -932,26 +932,31 @@ none, i.e. a page from before 2.0 - is refused (POST 409 `{code:
   a reload / dropped connection gets it back). No `kick` in quick-play rooms. Texts `src/lang/<code>/quickplay.js`
   (`Lang.extend`) + an Information section. Tests:
   test/quickplay-sim.js, net-page-smoke, layout-check.
-- **Weekly challenge** (docs/v6/CHALLENGE.md, v6): `src/js/challenge.js` (`Challenge`, shared by the pages and the
-  server) - the ISO week (UTC) -> one skirmish for everybody (`config(week)`: seed, mode - no infection -, size,
-  1-4 computer tanks with levels / teams, rounds, round time, sight, friendly fire; own PRNG on the week's name),
-  `query(cfg)` = the skirmish link play.js reads (`?challenge=<week>`: the week's seed, view self, "Back to the
-  challenge" instead of Rematch, the result in localStorage `tunneler.challenge.last` - a better unsent one of the
-  same week stays), `engineOptions(cfg)`,
+- **Daily challenge** (docs/v6/CHALLENGE.md, v6; weekly until 2026-10-25, never released so): `src/js/challenge.js`
+  (`Challenge`, shared by the pages and the server) - the UTC day "YYYY-MM-DD" (`dayOf`, `dayStart` / `dayEnd`,
+  `validDay`: a real calendar date only - an old week id "2026-W43" is none) -> one skirmish for everybody
+  (`config(day)`: seed, mode - no infection -, size, 1-4 computer tanks with levels / teams, rounds, round time,
+  sight, friendly fire; own PRNG on the day's date), `query(cfg)` = the skirmish link play.js reads
+  (`?challenge=<day>`: the day's seed, view self, "Back to the challenge" instead of Rematch, the result in
+  localStorage `tunneler.challenge.last` = {day, id, result, sent} - a better unsent one of the same day stays; one
+  without a valid day, e.g. the weekly {week}, is ignored), `engineOptions(cfg)`,
   `track(engine)` (kills, by wrapping the engine object's killTankExt - reads only), `result` {rounds, won, kills,
-  secs}, `compare` (the board's order), `verify(rep, {Engine, AI, week, name})` (-> also the cleaned replay the board
+  secs}, `compare` (the board's order), `verify(rep, {Engine, AI, day, name})` (-> also the cleaned replay the board
   keeps: only a replay's fields, frames up to the last step, the server's own state checks / summary, the name on
   BLUE). Route `/challenge` (`/challenge.html`)
-  = `src/js/weekly.js` (the week, time left, the description - `challengeLines` -, your place, Play, Send your
-  result - also last week's during the grace -, Leaderboard -> a row watches its shared replay); home.js main menu
-  item after Online game; an Information section. Server: `GET /api/challenge[/<week>][?cid=]` (the last
-  `BOARD_WEEKS` 12 weeks: they fit the board cache), `POST /api/challenge/<week>?cid=&name=` (the replay) -> `runCheck` in a
-  worker thread (`challenge-worker.js`: version, week, seed + options, the server's own TunnelerAIs must give the
-  recorded bits, the state hashes, the world map at the last step; `CHALLENGE_TIME_MS` 60 s, 1 worker, 6 waiting,
-  6 a minute and one at a time per address), the board per week (`challenge-<week>.json.gz` in the bucket / REPLAY_DIR / memory, one
-  entry per client id, a name taken by another client id refused, an improvement stored as a shared replay),
-  the current week + `WEEK_GRACE_MS` (2 h) after it; `opts.now` for tests. Dockerfile copies src/js + src/lang
-  and the worker. Texts `src/lang/<code>/challenge.js` via `Lang.extend`, keys `ch.*`,
+  = `src/js/daily.js` ("DAILY CHALLENGE", the date in the language's words - `Intl.DateTimeFormat` with timeZone UTC
+  and the locale `ch.locale`, through the Unicode plane -, the time left "3 h 57 min", the description -
+  `challengeLines` -, your place, Play, Send your result - also yesterday's during the grace -, Leaderboard -> a row
+  watches its shared replay; at midnight UTC it asks the server for the new day); home.js main menu item after Online
+  game; an Information section. Server: `GET /api/challenge[/<day>][?cid=]` (the last `BOARD_DAYS` 30 days: they
+  fit the board cache), `POST /api/challenge/<day>?cid=&name=` (the replay; a <day> that isn't one - an old week id -:
+  400 bad) -> `runCheck` in a worker thread (`challenge-worker.js`: version, day, seed + options, the server's own
+  TunnelerAIs must give the recorded bits, the state hashes, the world map at the last step; `CHALLENGE_TIME_MS`
+  60 s, 1 worker, 6 waiting, 6 a minute and one at a time per address), the board per day
+  (`challenge-<day>.json.gz` in the bucket / REPLAY_DIR / memory, one entry per client id, a name taken by another
+  client id refused, an improvement stored as a shared replay; the folder drops boards older than 30 days once a
+  day - `sweepBoards`), today + yesterday for `DAY_GRACE_MS` (2 h) after midnight; `opts.now` for tests. Dockerfile
+  copies src/js + src/lang and the worker. Texts `src/lang/<code>/challenge.js` via `Lang.extend`, keys `ch.*`,
   `home.challenge(.i)`. Tests: test/challenge-check.js, layout-check / app-check screens.
 - **Custom maps** (v6, docs/v6/MAPS.md): `src/js/mapdata.js` (`MapData`: 4 x 4 px cells tunnel / dirt / rock, a
   rock frame of `sc(40)` px, up to 8 bases at cells, name; a compact binary encoding - packed or runs - and its

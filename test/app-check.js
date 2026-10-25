@@ -120,7 +120,7 @@ function makeEnv(href) {
       await go("/replays");
       assert(typeof env.win.tunnelerReplayUI === "function" && env.location.pathname === "/replays", "the replays");
       await go("/challenge");
-      assert(typeof env.win.tunnelerChallengeUI === "function" && env.location.pathname === "/challenge", "the weekly challenge");
+      assert(typeof env.win.tunnelerChallengeUI === "function" && env.location.pathname === "/challenge", "the daily challenge");
       await go("/");
       assert(typeof env.win.tunnelerHomeUI === "function" && env.location.pathname === "/", "back on the main menu");
       return env.counts();

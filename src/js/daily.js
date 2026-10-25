@@ -1,9 +1,10 @@
-// The weekly challenge's screen (docs/v6/CHALLENGE.md): /challenge (the desktop app: /challenge.html). This week's
-// challenge (challenge.js: the same for everybody - drawn from the week's name), the time left, your place on the
-// leaderboard; Play the challenge (the skirmish /skirmish?challenge=<week>, play.js), Send your result (the last
-// challenge match's replay, POST /api/challenge/<week>: the server plays it again and puts it on the board),
-// Leaderboard (the week's best; Enter watches a player's replay - /replay/<id>). The week and the board come from
-// the game's server (Endpoint); without it the computer's own week is shown and played.
+// The daily challenge's screen (docs/v6/CHALLENGE.md): /challenge (the desktop app: /challenge.html). Today's
+// challenge (challenge.js: the same for everybody - drawn from the UTC date), the date in the language's own words,
+// the time left until the next one, your place on the leaderboard; Play the challenge (the skirmish
+// /skirmish?challenge=<day>, play.js), Send your result (the last challenge match's replay, POST /api/challenge/<day>:
+// the server plays it again and puts it on the board), Leaderboard (the day's best; Enter watches a player's replay -
+// /replay/<id>). The day and the board come from the game's server (Endpoint); without it the computer's own day
+// (UTC) is shown and played.
 import { Challenge } from "./challenge.js";
 import { DosUI } from "./dosui.js";
 import { Endpoint, Links } from "./endpoint.js";
@@ -14,7 +15,7 @@ import { Replay } from "./replay.js";
 import { GameScreen } from "./screen.js";
 import { UniText } from "./unitext.js";
 
-const LAST = "tunneler.challenge.last";                  // {week, id, result, sent}: the last challenge match (play.js)
+const LAST = "tunneler.challenge.last";                  // {day, id, result, sent}: the last challenge match (play.js)
 
 // the challenge in up to 4 lines (font text): the mode (+ its goal), the map / rounds / round time, the opponents,
 // line of sight / friendly fire (only when on)
@@ -51,40 +52,48 @@ export function mount() {
     cid = Array.from(a, b => b.toString(16).padStart(2, "0")).join("");
     store.set("tunneler.client", cid);
   }
-  const last = () => { try { const v = JSON.parse(store.get(LAST) || "null"); return v && typeof v === "object" && v.result ? v : null; } catch (e) { return null; } };
+  // (one remembered from the weekly challenge - {week: "2026-W43", ...} - is no day's: ignored)
+  const last = () => { try { const v = JSON.parse(store.get(LAST) || "null"); return v && typeof v === "object" && v.result && Challenge.validDay(v.day) ? v : null; } catch (e) { return null; } };
 
-  // what the server says (null: no answer yet / none): {week, current, ends, now, total, top, you}
+  // what the server says (null: no answer yet / none): {day, current, ends, now, total, top, you}
   let board = null, offline = false, skew = 0;
-  let week = Challenge.weekOf(Date.now());
+  let day = Challenge.dayOf(Date.now());
   let view = null, note = null;                          // view: "main" | "board" | "name"; note: {text, color} after sending
 
   // ------------------------------------------------------------ texts
-  const parts = w => Challenge.weekParts(w) || { year: 0, n: 0 };
-  function timeLeft() {
-    const ms = Math.max(0, (board && board.ends ? board.ends : Challenge.weekEnd(week)) - (Date.now() + skew));
-    const m = Math.floor(ms / 60000), h = Math.floor(m / 60), d = Math.floor(h / 24);
-    return d ? Lang.raw("ch.dh").replace("{d}", d).replace("{h}", h % 24) : Lang.raw("ch.hm").replace("{h}", h).replace("{m}", m % 60);   // (raw: a parameter)
+  // the day in the language's words (its locale, "ch.locale"; the date is UTC's): "Sunday, October 25, 2026" - raw
+  // Unicode (a parameter: Lang.t puts what the font lacks through the Unicode plane)
+  function dateText(d, o) {
+    try { return new Intl.DateTimeFormat(Lang.raw("ch.locale") || "en-US", Object.assign({ timeZone: "UTC" }, o)).format(new Date(Challenge.dayStart(d))); }
+    catch (e) { return d; }
   }
-  const weekLine = () => offline ? T("ch.week.off", { w: parts(week).n, y: parts(week).year }) : T("ch.week", { w: parts(week).n, y: parts(week).year, t: timeLeft() });
+  const longDate = d => dateText(d, { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+  const end = () => board && board.ends && board.day === day ? board.ends : Challenge.dayEnd(day);
+  function timeLeft() {
+    const ms = Math.max(0, end() - (Date.now() + skew));
+    const m = Math.ceil(ms / 60000), h = Math.floor(m / 60);
+    return h ? Lang.raw("ch.hm").replace("{h}", h).replace("{m}", m % 60) : Lang.raw("ch.m").replace("{m}", m);   // (raw: a parameter)
+  }
+  const dayLine = () => offline ? T("ch.day.off", { date: longDate(day) }) : T("ch.day", { date: longDate(day), t: timeLeft() });
   // the result in words: "won, rounds 3/3, kills 5, 4:12"
   const scoreText = (r, cfg) => [Lang.raw(r.won ? "ch.won" : "ch.lost"), Lang.raw("ch.rounds").replace("{n}", r.rounds).replace("{w}", cfg.winScore),
     Lang.raw("ch.kills").replace("{n}", r.kills), Challenge.clock(r.secs)].join(", ");
   // ------------------------------------------------------------ the challenge
   function main(keep) {
     view = "main";
-    const cfg = Challenge.config(week), L = last();
-    // a result not sent yet: this week's, or last week's while the server still takes it (a match begun on Sunday night)
-    const pending = L && !L.sent && Challenge.validWeek(L.week) &&
-      (L.week === week || Challenge.weekEnd(L.week) <= Challenge.weekStart(week) && Date.now() + skew < Challenge.weekEnd(L.week) + Challenge.GRACE_MS);
-    const lines = [{ row: 2, text: T("ch.title"), color: 12 }, { row: 4, text: weekLine(), color: 15 }];
+    const cfg = Challenge.config(day), L = last();
+    // a result not sent yet: today's, or yesterday's while the server still takes it (a match begun just before midnight UTC)
+    const pending = L && !L.sent &&
+      (L.day === day || Challenge.dayEnd(L.day) <= Challenge.dayStart(day) && Date.now() + skew < Challenge.dayEnd(L.day) + Challenge.GRACE_MS);
+    const lines = [{ row: 2, text: T("ch.title"), color: 12 }, { row: 4, text: dayLine(), color: 15 }];
     challengeLines(cfg).forEach((t, i) => lines.push({ row: 6 + i, text: t, color: 3 }));
-    const you = board && board.week === week ? board.you : null;
+    const you = board && board.day === day ? board.you : null;
     lines.push({ row: 11, color: 14, text: offline ? T("ch.best.off") : !board ? T("ch.best.wait")
       : you ? UniText.fromRaw(Lang.raw("ch.best").replace("{rank}", you.rank).replace("{total}", board.total).replace("{score}", scoreText(you, cfg))) : T("ch.best.none") });
     if (note) lines.push({ row: 12, text: note.text, color: note.color });
-    const items = [{ key: "play", label: T("ch.play"), info: [T("ch.play.i"), T("ch.play.i2")], go: () => Nav.go(Links.cpu("challenge=" + week)) }];
-    if (pending) items.push({ key: "send", label: T("ch.send"), go: send,
-      info: [UniText.fromRaw(Lang.raw("ch.send.i").replace("{score}", scoreText(L.result, Challenge.config(L.week)))), T("ch.send.i2")] });
+    const items = [{ key: "play", label: T("ch.play"), info: [T("ch.play.i"), T("ch.play.i2")], go: () => Nav.go(Links.cpu("challenge=" + day)) }];
+    if (pending) items.push({ key: "send", label: T("ch.send"), go: send,   // (yesterday's: said so)
+      info: [UniText.fromRaw(Lang.raw(L.day === day ? "ch.send.i" : "ch.send.prev").replace("{score}", scoreText(L.result, Challenge.config(L.day)))), T("ch.send.i2")] });
     items.push({ key: "board", label: T("ch.board"), info: [T("ch.board.i")], go: () => showBoard() },
       { key: "gap", label: "", disabled: true },
       { key: "back", label: T("back.main"), info: [T("back.main.i")], go: home });
@@ -106,9 +115,9 @@ export function mount() {
   }
   function showBoard(keep) {
     view = "board";
-    const cfg = Challenge.config(week), C = cols();
-    const top = board && board.week === week ? board.top || [] : [];
-    const you = board && board.week === week ? board.you : null;
+    const cfg = Challenge.config(day), C = cols();
+    const top = board && board.day === day ? board.top || [] : [];
+    const you = board && board.day === day ? board.you : null;
     const touch = GameScreen.mobile();
     const items = top.map(x => ({ key: "e:" + x.rank, label: rowText(x, cfg), align: "left", spans: rowSpans(you && you.rank === x.rank),
       info: [UniText.fromRaw(scoreText(x, cfg)), T(touch ? "ch.row.i.touch" : "ch.row.i")], go: () => { if (x.replay) Nav.go(Links.sharedReplay(x.replay)); } }));
@@ -118,7 +127,7 @@ export function mount() {
     const shown = Math.max(1, Math.min(items.length - 2, ROWS)), bottom = 3 + 3 + shown + 2;
     const head = (k, i) => UniText.padEnd(UniText.slice(T(k), C[i] - 1), C[i]);
     ui.show({
-      lines: [{ row: 2, text: T("ch.board.title", { w: parts(week).n, y: parts(week).year }), color: 12 }],
+      lines: [{ row: 2, text: T("ch.board.title", { date: dateText(day, { month: "long", day: "numeric" }).toLocaleUpperCase() }), color: 12 }],
       box: ui.isNarrow() ? { y: 3, rows: shown } : { x: 15, y: 3, w: 50, rows: shown }, fixed: 2,
       // (a phone: no room for the other headings - the selected row's info says it in words)
       header: " " + UniText.padEnd("#", C[0]) + head("ch.h.name", 1) + (ui.isNarrow() ? "" : head("ch.h.rounds", 2) + head("ch.h.kills", 3) + T("ch.h.time")),
@@ -126,7 +135,7 @@ export function mount() {
     }, keep);
   }
 
-  // ------------------------------------------------------------ the server: the week and the board, sending a result
+  // ------------------------------------------------------------ the server: the day and the board, sending a result
   let loading = false;
   async function load() {
     if (loading) return;
@@ -136,9 +145,9 @@ export function mount() {
       const res = await fetch(Endpoint.api("/api/challenge?cid=" + encodeURIComponent(cid)));
       if (!res.ok) throw new Error("HTTP " + res.status);
       const j = await res.json();
-      if (!j || !Challenge.validWeek(j.week)) throw new Error("no week");
-      fresh = week !== j.week;                           // (the server's week isn't this computer's: its screen anew)
-      board = j; offline = false; week = j.week;
+      if (!j || !Challenge.validDay(j.day)) throw new Error("no day");
+      fresh = day !== j.day;                             // (the server's day isn't this computer's: its screen anew)
+      board = j; offline = false; day = j.day;
       if (Number.isFinite(j.now)) skew = j.now - Date.now();
     } catch (e) { offline = true; }
     loading = false;
@@ -147,7 +156,7 @@ export function mount() {
   const redraw = fresh => { if (view === "main") main(!fresh); else if (view === "board") showBoard(!fresh); };
   const errText = (code, msg) => {
     if (code === "taken") return UniText.fromRaw(Lang.raw("ch.err.taken").replace("{name}", DosUI.playerName()));
-    if (["week", "name", "version", "differs", "config", "unfinished", "long", "busy", "gone"].includes(code)) return T("ch.err." + code);
+    if (["day", "name", "version", "differs", "config", "unfinished", "long", "busy", "gone"].includes(code)) return T("ch.err." + code);
     return T("ch.err.bad", { msg: String(msg || code || "?").slice(0, 50) });
   };
   let sending = false;
@@ -163,17 +172,17 @@ export function mount() {
       const body = new Uint8Array(await (await Replay.toBlob(rep)).arrayBuffer());
       let res;
       try {
-        res = await fetch(Endpoint.api("/api/challenge/" + L.week + "?cid=" + encodeURIComponent(cid) + "&name=" + encodeURIComponent(DosUI.playerName())),
+        res = await fetch(Endpoint.api("/api/challenge/" + L.day + "?cid=" + encodeURIComponent(cid) + "&name=" + encodeURIComponent(DosUI.playerName())),
           { method: "POST", headers: { "Content-Type": "application/octet-stream" }, body });
       } catch (e) { note = { text: T("ch.err.net", { msg: String(e.message || e).slice(0, 50) }), color: 12 }; return; }
       const j = await res.json().catch(() => ({}));
       if (!res.ok || !j.ok) {
         note = { text: errText(j.code || (res.status === 429 ? "busy" : ""), j.error || "HTTP " + res.status), color: 12 };
-        if (["week", "differs", "config", "unfinished", "long", "gone"].includes(j.code)) store.set(LAST, JSON.stringify(Object.assign(L, { sent: true })));   // (it never will be accepted)
+        if (["day", "differs", "config", "unfinished", "long", "gone"].includes(j.code)) store.set(LAST, JSON.stringify(Object.assign(L, { sent: true })));   // (it never will be accepted)
         return;
       }
       store.set(LAST, JSON.stringify(Object.assign(L, { sent: true })));
-      const cfg = Challenge.config(L.week);
+      const cfg = Challenge.config(L.day);
       note = j.improved ? { text: T("ch.sent", { rank: j.rank, total: j.total }), color: 10 }
         : { text: UniText.fromRaw(Lang.raw("ch.sent.same").replace("{score}", scoreText(j.best, cfg))), color: 14 };
       await load();
@@ -183,10 +192,17 @@ export function mount() {
     }
   }
 
-  // the time left: once a minute; the board: every 2 minutes
-  setInterval(() => { if (view === "main") main(true); }, 60000);
+  // the time left: once a minute (at midnight UTC: the next day - the server's, else this computer's); the board:
+  // every 2 minutes
+  setInterval(() => {
+    if (Date.now() + skew >= end()) {
+      if (offline || !board) { const d = Challenge.dayOf(Date.now() + skew); if (d !== day) { day = d; redraw(true); } }
+      load();
+    }
+    if (view === "main") main(true);
+  }, 60000);
   setInterval(load, 120000);
-  window.tunnelerChallenge = () => ({ week, board, offline, note, view, cid, send, load });
+  window.tunnelerChallenge = () => ({ day, board, offline, note, view, cid, send, load });
 
   const start = () => { main(); load(); };
   if (!DosUI.playerName()) { view = "name"; ui.askName(start, home); }

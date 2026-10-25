@@ -170,7 +170,7 @@ for (const c of Lang.codes) {
   }
   // every paragraph of the English Instructions / Information is there, translated
   const EN = E.STRINGS_EN;
-  for (const [k, n] of [["instr", 16], ["info", 7]]) {      // (info: + quick play - src/lang/<code>/quickplay.js -, the weekly challenge, custom maps)
+  for (const [k, n] of [["instr", 16], ["info", 7]]) {      // (info: + quick play - src/lang/<code>/quickplay.js -, the daily challenge, custom maps)
     const sec = S[k].sections, en = EN[k].sections;
     if (en.length !== n) fail(c, k + ".sections: English has " + en.length + ", the test expects " + n);
     if (!Array.isArray(sec) || sec.length !== en.length) { fail(c, k + ".sections: " + (sec ? sec.length : 0) + " paragraphs, English has " + en.length); continue; }

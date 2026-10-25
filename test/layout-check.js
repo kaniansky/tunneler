@@ -312,28 +312,35 @@ const tick = () => new Promise(r => setTimeout(r, 0));
         await win.tunnelerReplayList();
         const open = ui.spec.items.find(x => x.key === "link"); if (open) { open.go(); check(win, ui, W + ", open a replay link"); }
       }
-      // ---------------------------------------------------------------- the weekly challenge (docs/v6/CHALLENGE.md): the
-      // screen (a result to send, a note after sending), the leaderboard; the longest week's description
+      // ---------------------------------------------------------------- the daily challenge (docs/v6/CHALLENGE.md): the
+      // screen (yesterday's result to send, a note after sending), the leaderboard; a long day: 4 lines of description,
+      // a long date (a Wednesday in September), the most time left
       {
         const env = makeEnv("/challenge", size, touch);
         env.storage.set("tunneler.lang", code);
         const C = require(path.join(SRC, "js", "challenge.js")).Challenge;
-        // (a week with 4 lines of description: line of sight or friendly fire on)
-        let week = "2026-W44";
-        for (let t = Date.UTC(2026, 9, 26), i = 0; i < 200; i++, t += 7 * 86400000) { const w = C.weekOf(t), c = C.config(w); if (c.sight !== "full" && c.slots.length === 5) { week = w; break; } }
+        // (a day with 4 lines of description: line of sight or friendly fire on)
+        let day = "2026-09-30";
+        for (let t = Date.UTC(2026, 8, 30), i = 0; i < 600; i++, t += 7 * 86400000) {
+          const d = C.dayOf(t), c = C.config(d);
+          if (c.sight !== "full" && c.slots.length === 5 && /-09-/.test(d)) { day = d; break; }
+        }
+        const yesterday = C.dayOf(C.dayStart(day) - 1000);
         const long = "Александра".slice(0, 12);
-        const board = { week, current: true, ends: C.weekEnd(week), now: C.weekStart(week) + 86400000, total: 120,
+        const board = { day, current: true, ends: C.dayEnd(day), now: C.dayStart(day) + 60000, total: 120,
           top: Array.from({ length: 20 }, (_, i) => ({ rank: i + 1, name: i % 3 ? "Player " + i : long, rounds: 3 - (i % 4), won: i % 4 === 0, kills: 20 - i, secs: 600 + i * 7, replay: "abcdefgh" })),
           you: { rank: 7, name: "Norko", rounds: 2, won: false, kills: 13, secs: 1234, replay: "abcdefgh" } };
         env.win.fetch = async () => ({ ok: true, status: 200, json: async () => board });
-        env.storage.set("tunneler.challenge.last", JSON.stringify({ week, id: "r1", result: { rounds: 2, won: false, kills: 13, secs: 1234 }, sent: false }));
+        env.storage.set("tunneler.challenge.last", JSON.stringify({ day: yesterday, id: "r1", result: { rounds: 2, won: false, kills: 13, secs: 1234 }, sent: false }));
         env.page("challenge.html");
         await tick(); await tick(); await tick();
         const win = env.win, ui = win.tunnelerChallengeUI();
-        check(win, ui, W + ", weekly challenge");
-        if (!ui.spec.items.some(x => x.key === "send")) problems.push(W + ", weekly challenge: no Send item");
+        check(win, ui, W + ", daily challenge " + day);
+        if (!ui.spec.items.some(x => x.key === "send")) problems.push(W + ", daily challenge: no Send item for yesterday's result");
         const st = win.tunnelerChallenge();
-        if (st.week !== week) problems.push(W + ", weekly challenge: not the server's week");
+        if (st.day !== day) problems.push(W + ", daily challenge: not the server's day");
+        // (its lines: the date in the language's words + the time left, the description - on 80 columns)
+        if (!ui.isNarrow()) for (const l of ui.spec.lines) if (win.UniText.cols(l.text) > 78) problems.push(W + ", daily challenge: a line is " + win.UniText.cols(l.text) + " columns wide: " + win.Lang.decode(l.text));
         ui.spec.items.find(x => x.key === "board").go();
         check(win, ui, W + ", challenge leaderboard");
         const env2 = makeEnv("/challenge", size, touch);

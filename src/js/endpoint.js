@@ -65,7 +65,7 @@ const Links = {
   // a shared replay (POST /api/replays): its page here, and the link to send (always the server's address)
   sharedReplay: id => isApp ? "/replays.html?share=" + enc(id) : "/replay/" + enc(id),
   replayLink: id => "/replay/" + enc(id),
-  // the weekly challenge's screen (docs/v6/CHALLENGE.md); playing it: Links.cpu("challenge=<week>")
+  // the daily challenge's screen (docs/v6/CHALLENGE.md); playing it: Links.cpu("challenge=<day>")
   challenge: () => isApp ? "/challenge.html" : "/challenge",
   // the custom maps kept in this browser (mapstore.js, docs/v6/MAPS.md), one map's screen (its local id), a shared
   // map (POST /api/maps: its page here, and the link to send)

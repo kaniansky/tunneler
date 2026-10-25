@@ -8,7 +8,7 @@
 // self = only your view screen, team = your team's, everyone = all of them (yours first; classic: the full
 // split screen).
 // Old links (?mode=cpu&level=...&opp=1..7&teams=0|1, hide=1 = self / hide=0 = everyone) still work.
-// ?challenge=<week> (docs/v6/CHALLENGE.md): that week's challenge - challenge.js's query for it, the week's seed, its
+// ?challenge=<day> (docs/v6/CHALLENGE.md): that day's challenge - challenge.js's query for it, the day's seed, its
 // result remembered for the challenge screen (localStorage tunneler.challenge.last); after the match: back to it.
 // A custom map (docs/v6/MAPS.md): &lmap=<local id> (a map kept in this browser, mapstore.js) and / or &map=<shared id>
 // (fetched from the game's server and kept) - the engine gets its code (opts.map).
@@ -56,8 +56,8 @@ function noMap(why) {
 function run(mapRec) {
   // a short link (?g=<code>, cpucode.js) stands for the long query it encodes
   const query = new URLSearchParams(location.search), code = query.get("g") ? CpuCode.decode(query.get("g")) : null;
-  // the weekly challenge (?challenge=2026-W43, docs/v6/CHALLENGE.md): that week's skirmish, read from the query it stands for
-  const chWeek = Challenge.validWeek(query.get("challenge")) ? query.get("challenge") : null, ch = chWeek ? Challenge.config(chWeek) : null;
+  // the daily challenge (?challenge=2026-10-25, docs/v6/CHALLENGE.md): that day's skirmish, read from the query it stands for
+  const chDay = Challenge.validDay(query.get("challenge")) ? query.get("challenge") : null, ch = chDay ? Challenge.config(chDay) : null;
   const params = ch ? new URLSearchParams(Challenge.query(ch) + "&mode=cpu")
     : code ? new URLSearchParams(code + (query.get("mode") ? "&mode=" + query.get("mode") : "")) : query;
   // /skirmish?... (old: /vs-computer?...) or /split?... (play.html?mode=cpu|hotseat&... in the desktop app)
@@ -122,7 +122,7 @@ function run(mapRec) {
   const display = new Display(canvas);
   const speaker = new Speaker();
   const keyboard = new Keyboard(window);
-  const seed = ch ? ch.seed : (Math.random() * 0x100000000) >>> 0;   // (the challenge: the week's world)
+  const seed = ch ? ch.seed : (Math.random() * 0x100000000) >>> 0;   // (the challenge: the day's world)
   // the engine itself picks classic (BLUE + GREEN in different teams) or extended
   // (escEnds: BLUE's Esc ends the match as in the original - the extended engine ignores Esc online)
   const opts = slots
@@ -302,16 +302,16 @@ function run(mapRec) {
   runner.onStep = e => { if (e.halted) leave("/"); };
 
   // the match is recorded (replay.js): kept with the newest replays once it reaches its world map
-  // (the challenge: its week on the replay, and the result remembered as this week's last - the challenge screen sends it)
-  runner.recorder = Replay.recorder(engine, { kind: mode === "cpu" ? "skirmish" : "split", seed, opts, challenge: chWeek }, rep => {
+  // (the challenge: its day on the replay, and the result remembered as this day's last - the challenge screen sends it)
+  runner.recorder = Replay.recorder(engine, { kind: mode === "cpu" ? "skirmish" : "split", seed, opts, challenge: chDay }, rep => {
     Replay.save(rep).catch(e => console.warn("replay:", e));
-    // (a better unsent result of the same week stays: "Send your result" sends the best match since the last one sent)
+    // (a better unsent result of the same day stays: "Send your result" sends the best match since the last one sent)
     if (ch) try {
       const result = Challenge.result(engine, kills, rep.steps);
       let kept = null;
       try { kept = JSON.parse(localStorage.getItem("tunneler.challenge.last") || "null"); } catch (e) { kept = null; }
-      if (!(kept && kept.week === chWeek && !kept.sent && kept.result && Challenge.compare(kept.result, result) < 0))
-        localStorage.setItem("tunneler.challenge.last", JSON.stringify({ week: chWeek, id: rep.id, result, sent: false }));
+      if (!(kept && kept.day === chDay && !kept.sent && kept.result && Challenge.compare(kept.result, result) < 0))
+        localStorage.setItem("tunneler.challenge.last", JSON.stringify({ day: chDay, id: rep.id, result, sent: false }));
     } catch (e) { /* no storage */ }
   });
   const clock = new LocalClock(runner, ext ? extInput : classicInput);

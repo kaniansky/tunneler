@@ -197,7 +197,7 @@ export function mount() {
       ...updateItems(),
     ];
     if (typeof sel === "string") sel = Math.max(0, items.findIndex(it => it.key === sel));
-    ui.show({ lines: title(), box: { y: update ? 7 : 8 }, sel, infoRow: update ? 22 : 21,   // (Quick play + Weekly challenge; the update rows: a row higher)
+    ui.show({ lines: title(), box: { y: update ? 7 : 8 }, sel, infoRow: update ? 22 : 21,   // (Quick play + Daily challenge; the update rows: a row higher)
       footer: Lang.version(), home: true, items }, keep);
   }
 

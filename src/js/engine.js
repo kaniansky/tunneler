@@ -2414,7 +2414,7 @@ class TunnelerEngine {
       this.round = i16(this.round + 1);
       // round winner: the team whose tanks are the only ones left (free-for-all: the last tank); nobody if
       // all died, or Esc ended it (a match given up wins nothing - survival between two waves had only the players
-      // left: Esc won the round and the weekly challenge). Every member's wins go up with the team's.
+      // left: Esc won the round and the daily challenge). Every member's wins go up with the team's.
       const left = [];
       for (let p = 1; p <= N; p++) if (this.alive[p]) left.push(p);
       this.roundWinner = 0; this.roundWinnerTeam = -1;
