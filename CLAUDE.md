@@ -393,7 +393,9 @@ engine})` (`order`: place in `Lang.codes`, the Language: menu; none = last), `mo
 `Lang.modeTexts(mode, code, {stat, note, instr, score, ...})` (a game mode's texts, raw Unicode; the
 engine reads them as `TunnelerEngine.MODES[mode].strings[code]` - a getter on `Lang.modeData` - through
 `engine.mt`), and `en/engine.js` exports the engine's English text (`STRINGS_EN`, engine.js imports it).
-Every language file imports `Lang` from src/js/lang.js. No text in src/js/modes/ or engine.js. A new
+Every language file imports `Lang` from src/js/lang.js. No text in src/js/modes/ or engine.js. A feature may keep its
+texts in its own file per language: `src/lang/<code>/<feature>.js` calling `Lang.extend(code, {...})` (imported after
+main.js in that language's index.js). A new
 language = its folder, its `index.js` (imports main.js first, then its other files and modes/*.js) and a
 line in `src/lang/index.js` (English first); app.js (and test/src.js) import src/lang/index.js; lang-check
 fails when an index leaves a file out. Game modes the same way: `src/js/modes/index.js` (modes-check checks it).

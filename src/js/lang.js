@@ -120,6 +120,13 @@ function register(c, data) {
   if (L[target] && (target === c || active !== target)) { use(target); remember(target); }
 }
 
+// src/lang/<code>/<feature>.js: more texts for a language registered before it (its index.js imports main.js
+// first) - a feature keeps its texts in its own file (lang-check: every English key translated, everything fits)
+function extend(c, texts) {
+  if (!L[c]) throw new Error("Lang.extend(" + c + "): register the language first (main.js)");
+  Object.assign(L[c], texts);
+}
+
 const cur = () => L[code] || L.en || {};
 
 function fmt(s, p) { return s.replace(/\{(\w+)\}/g, (m, k) => p[k] !== undefined ? p[k] : m); }
@@ -195,7 +202,7 @@ function decode(text) {
 
 export const Lang = {
   decode, decodeByte: b => decode(String.fromCharCode(b)),
-  codes: CODES, get code() { return code; }, set, t, enc, apply, register, title, version, modeTexts, modeData: MODE_TEXTS,
+  codes: CODES, get code() { return code; }, set, t, enc, apply, register, extend, title, version, modeTexts, modeData: MODE_TEXTS,
   name: c => enc(L[c].name), next: () => CODES[(CODES.indexOf(code) + 1) % CODES.length],
   raw: (key, c) => (L[c || code] || {})[key] !== undefined ? L[c || code][key] : (L.en || {})[key], data: L,
   colorKeys: COLOR_KEYS,
