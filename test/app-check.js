@@ -91,14 +91,15 @@ function makeEnv(href) {
     for (const [href, has] of [["http://x.test/", "tunnelerHomeUI"], ["http://x.test/games", "tunnelerLobbyUI"], ["http://x.test/lobby.html", "tunnelerLobbyUI"],
       ["http://x.test/game/abc", "tunnelerFrames"], ["http://x.test/online.html?room=abc", "tunnelerFrames"], ["http://x.test/split", "tunnelerInput"],
       ["http://x.test/play.html?mode=hotseat", "tunnelerInput"], ["http://x.test/replays", "tunnelerReplayUI"],
-      ["http://x.test/replays.html", "tunnelerReplayUI"], ["http://x.test/nowhere", "tunnelerHomeUI"]]) {
+      ["http://x.test/replays.html", "tunnelerReplayUI"], ["http://x.test/challenge", "tunnelerChallengeUI"], ["http://x.test/challenge.html", "tunnelerChallengeUI"],
+      ["http://x.test/nowhere", "tunnelerHomeUI"]]) {
       const env = makeEnv(href);
       vm.runInContext(app, env.ctx, { filename: "app.js" });
       await wait(40);
       assert(typeof env.win[has] === "function", href + ": " + has);
       assert(env.elements.loading.hidden, href + ": the loading screen hidden once the screen runs");
     }
-    ok("the screen of the address: /, /games, /game/<id>, /split, /replays (and /lobby.html, /online.html, /play.html, /replays.html); unknown: the main menu");
+    ok("the screen of the address: /, /games, /game/<id>, /split, /replays, /challenge (and /lobby.html, /online.html, /play.html, /replays.html, /challenge.html); unknown: the main menu");
   }
   {
     const env = makeEnv("http://x.test/");
@@ -116,6 +117,8 @@ function makeEnv(href) {
       assert(env.win.tunnelerEngine() && env.win.tunnelerEngine().extended, "a skirmish runs");
       await go("/replays");
       assert(typeof env.win.tunnelerReplayUI === "function" && env.location.pathname === "/replays", "the replays");
+      await go("/challenge");
+      assert(typeof env.win.tunnelerChallengeUI === "function" && env.location.pathname === "/challenge", "the weekly challenge");
       await go("/");
       assert(typeof env.win.tunnelerHomeUI === "function" && env.location.pathname === "/", "back on the main menu");
       return env.counts();
@@ -124,7 +127,7 @@ function makeEnv(href) {
     assert.deepStrictEqual(second, first, "a second round through every screen leaves no more listeners / timers / elements");
     assert.deepStrictEqual(third, first, "nor a third");
     assert(env.sockets.every(s => s.closed), "every websocket closed");
-    assert.strictEqual(env.history.entries.length, 16, "every screen an entry in the history (no page loads)");
+    assert.strictEqual(env.history.entries.length, 19, "every screen an entry in the history (no page loads)");
     // Back: the previous screen again
     await go("/games");
     env.back();

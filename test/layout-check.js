@@ -228,6 +228,35 @@ const tick = () => new Promise(r => setTimeout(r, 0));
         await win.tunnelerReplayList();
         const open = ui.spec.items.find(x => x.key === "link"); if (open) { open.go(); check(win, ui, W + ", open a replay link"); }
       }
+      // ---------------------------------------------------------------- the weekly challenge (docs/v6/CHALLENGE.md): the
+      // screen (a result to send, a note after sending), the leaderboard; the longest week's description
+      {
+        const env = makeEnv("/challenge", size, touch);
+        env.storage.set("tunneler.lang", code);
+        const C = require(path.join(SRC, "js", "challenge.js")).Challenge;
+        // (a week with 4 lines of description: line of sight or friendly fire on)
+        let week = "2026-W44";
+        for (let t = Date.UTC(2026, 9, 26), i = 0; i < 200; i++, t += 7 * 86400000) { const w = C.weekOf(t), c = C.config(w); if (c.sight !== "full" && c.slots.length === 5) { week = w; break; } }
+        const long = "Александра".slice(0, 12);
+        const board = { week, current: true, ends: C.weekEnd(week), now: C.weekStart(week) + 86400000, total: 120,
+          top: Array.from({ length: 20 }, (_, i) => ({ rank: i + 1, name: i % 3 ? "Player " + i : long, rounds: 3 - (i % 4), won: i % 4 === 0, kills: 20 - i, secs: 600 + i * 7, replay: "abcdefgh" })),
+          you: { rank: 7, name: "Norko", rounds: 2, won: false, kills: 13, secs: 1234, replay: "abcdefgh" } };
+        env.win.fetch = async () => ({ ok: true, status: 200, json: async () => board });
+        env.storage.set("tunneler.challenge.last", JSON.stringify({ week, id: "r1", result: { rounds: 2, won: false, kills: 13, secs: 1234 }, sent: false }));
+        env.page("challenge.html");
+        await tick(); await tick(); await tick();
+        const win = env.win, ui = win.tunnelerChallengeUI();
+        check(win, ui, W + ", weekly challenge");
+        if (!ui.spec.items.some(x => x.key === "send")) problems.push(W + ", weekly challenge: no Send item");
+        const st = win.tunnelerChallenge();
+        if (st.week !== week) problems.push(W + ", weekly challenge: not the server's week");
+        ui.spec.items.find(x => x.key === "board").go();
+        check(win, ui, W + ", challenge leaderboard");
+        const env2 = makeEnv("/challenge", size, touch);
+        env2.storage.set("tunneler.lang", code); env2.storage.delete("tunneler.name");
+        env2.page("challenge.html");
+        check(env2.win, env2.win.tunnelerChallengeUI(), W + ", challenge: your name");
+      }
     }
   }
   const unique = [...new Set(problems)];
