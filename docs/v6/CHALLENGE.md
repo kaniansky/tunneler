@@ -28,15 +28,17 @@ Online play needs a name, and so does the leaderboard: without one it asks first
 
 ```
                               WEEKLY CHALLENGE
-                     Week 43 of 2026 - 3 days 5 hours left
-           Gold rush (10 gold to win), small map, round time 5 minutes
-              Against 3 computer tanks: hard, medium, easy (free-for-all)
+                       Week 43 of 2026 - 3 d 5 h left
+
+                   Mode: gold rush   Gold to win: 10
+                  Map size: small   Round time: 5 min
+             Opponents: hard, medium, easy - everyone for themselves
                            Line of sight: circle
 
-                  Your best: 4th of 37 - won, 1 round, 3 kills, 4:12
+                Your best: #4 of 37 - won, rounds 1/1, kills 3, 4:12
                 ┌──────────────────────────────────────────┐
                 │           Play the challenge             │
-                │  Send your result: won, 3 kills, 4:12    │
+                │            Send your result              │
                 │              Leaderboard                 │
                 │                                          │
                 │           Back to main menu              │
@@ -47,11 +49,13 @@ Online play needs a name, and so does the leaderboard: without one it asks first
   plays the server's week. Without an answer (offline, the server asleep) the computer's own week is shown and
   played; sending waits until the server answers.
 - **Play the challenge** starts the skirmish (`/skirmish?challenge=2026-W43`, section 3).
-- **Send your result** is there while the last challenge match of this week hasn't been sent. Its info line says
+- **Send your result** is there (and chosen) while the last challenge match of this week hasn't been sent. A line under
+  "Your best" says
   what happened after sending: your place, "your best stays ..." when it wasn't better, or why the server refused
   it (another version, the week is over, the name is taken this week, the replay plays differently).
 - **Leaderboard**: the week's best (up to 50) in a scrolling box like the replays list - place, name, rounds,
-  kills, time; your own row in yellow. Enter / a click / a tap on a row watches that player's replay (the server
+  kills, time (a phone: place and name, the rest in the row's info line); your own row in yellow. Enter / a click /
+  a tap on a row watches that player's replay (the server
   keeps every board entry's replay as a shared replay: `/replay/<id>`). Below the box: "Back to the challenge".
 - Keys, mouse, gamepad and touch work as in every DosUI menu; Esc goes back (board -> challenge -> main menu).
   The phone held upright gets DosUI's narrow layout (the lines re-wrapped, the boxes stacked).
@@ -119,6 +123,8 @@ POST /api/challenge/<week>?cid=<client id>&name=<player name>    body: the repla
   `MAX_BOARD` (5000) entries; the worst go.
 - An accepted result that beats the player's entry (or is the first) is stored as a shared replay
   (`keepShared`, the same ids as `/api/replays`) and its id goes on the entry: the board can show it.
+- A bucket lifecycle rule that deletes shared replays after N days (the live server: 90) also deletes old boards and
+  their entries' replays - only the current week matters, so that is fine.
 - Only the current week is accepted, and the previous one for `WEEK_GRACE_MS` (2 hours) after it ended (a match
   started on Sunday night). The server's clock decides (`opts.now` for tests).
 

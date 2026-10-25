@@ -3,6 +3,13 @@
 All notable changes to Tunneler Online. Versions follow [semantic versioning](https://semver.org/);
 a release is made by pushing a version tag (see CONTRIBUTING.md).
 
+## Unreleased
+
+- Weekly challenge (main menu): every week the same skirmish for everyone - the same world, mode, map size and
+  computer opponents. Play it as often as you like and send your result: the server plays the match's replay
+  again with its own computer players, so only real results get on the week's leaderboard (won, rounds, kills,
+  time). The leaderboard shows the week's best, and every entry's match can be watched.
+
 ## 5.0.4
 
 - Phones and tablets: a finger on a menu item highlights it, and the highlight follows the finger over the other

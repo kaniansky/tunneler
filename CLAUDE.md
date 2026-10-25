@@ -894,3 +894,20 @@ none, i.e. a page from before 2.0 - is refused (POST 409 `{code:
   folder store drops older files (and won't serve one not swept yet). test/replay-share-check.js (the API) + replay-check (the page). Texts `rp.*`,
   `home.replays`, `back.replays`, an Information section. Test hooks `tunnelerReplay / tunnelerReplayUI /
   tunnelerReplayList`. Test: replay-check.js.
+- **Weekly challenge** (docs/v6/CHALLENGE.md, v6): `src/js/challenge.js` (`Challenge`, shared by the pages and the
+  server) - the ISO week (UTC) -> one skirmish for everybody (`config(week)`: seed, mode - no infection -, size,
+  1-4 computer tanks with levels / teams, rounds, round time, sight, friendly fire; own PRNG on the week's name),
+  `query(cfg)` = the skirmish link play.js reads (`?challenge=<week>`: the week's seed, view self, "Back to the
+  challenge" instead of Rematch, the result in localStorage `tunneler.challenge.last`), `engineOptions(cfg)`,
+  `track(engine)` (kills, by wrapping the engine object's killTankExt - reads only), `result` {rounds, won, kills,
+  secs}, `compare` (the board's order), `verify(rep, {Engine, AI, week})`. Route `/challenge` (`/challenge.html`)
+  = `src/js/weekly.js` (the week, time left, the description - `challengeLines` -, your place, Play, Send your
+  result, Leaderboard -> a row watches its shared replay); home.js main menu item after Online game. Server:
+  `GET /api/challenge[/<week>][?cid=]`, `POST /api/challenge/<week>?cid=&name=` (the replay) -> `runCheck` in a
+  worker thread (`challenge-worker.js`: version, week, seed + options, the server's own TunnelerAIs must give the
+  recorded bits, the state hashes, the world map at the last step; `CHALLENGE_TIME_MS` 60 s, 1 worker, 6 waiting,
+  6 a minute per address), the board per week (`challenge-<week>.json.gz` in the bucket / REPLAY_DIR / memory, one
+  entry per client id, a name taken by another client id refused, an improvement stored as a shared replay),
+  the current week + `WEEK_GRACE_MS` (2 h) after it; `opts.now` for tests. Dockerfile copies src/js + src/lang
+  and the worker. Texts `src/lang/<code>/challenge.js` via `Lang.extend` (new in lang.js), keys `ch.*`,
+  `home.challenge(.i)`. Tests: test/challenge-check.js, layout-check / app-check screens.
