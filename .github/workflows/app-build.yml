@@ -22,6 +22,11 @@ name: Desktop and Android app
 # secret everything else is built the same, just without those.
 # release.yml calls it for every release and the files are attached to that GitHub release; a push to
 # an app/** branch (or a manual run) builds them as workflow artifacts only, to try a change.
+# Caches (owner, 2026-10-25: the Linux build took 10 minutes): the Rust build (rust-cache) and the Linux build
+# packages (cache-apt-pkgs-action). A release (a tag) can only restore caches made on main, so a push to main
+# that changes the Rust dependencies or this file builds once to fill them (the Rust caches are saved only
+# there - a tag's own caches can't be used by the next tag). The Rust version is pinned (RUST_TOOLCHAIN): a new
+# one would make every cached crate useless - raise it on purpose (it fills the caches again).
 
 on:
   workflow_call:
@@ -31,11 +36,15 @@ on:
         required: true
         type: string
   push:
-    branches: ["app/**"]
+    branches: ["app/**", "main"]
+    paths: ["src-tauri/Cargo.lock", "src-tauri/Cargo.toml", ".github/workflows/app-build.yml"]
   workflow_dispatch:
 
 permissions:
   contents: write
+
+env:
+  RUST_TOOLCHAIN: "1.99.1"
 
 jobs:
   build:
@@ -79,18 +88,21 @@ jobs:
 
       - name: Linux build dependencies
         if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential libssl-dev libxdo-dev librsvg2-dev rpm patchelf libfuse2
-
-      - uses: dtolnay/rust-toolchain@stable
+        uses: awalsh128/cache-apt-pkgs-action@v1
         with:
+          packages: libwebkit2gtk-4.1-dev build-essential libssl-dev libxdo-dev librsvg2-dev rpm patchelf libfuse2
+          version: "1"
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
           targets: ${{ matrix.target }}
 
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri -> target
           key: ${{ matrix.name }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Build the app
         shell: bash
@@ -169,6 +181,8 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
+          cache: gradle
+          cache-dependency-path: src-tauri/gen/android/**/*.gradle*
 
       # (the runner has the Android SDK in $ANDROID_HOME; Gradle fetches the platform / build tools it needs)
       - name: Android NDK
@@ -176,14 +190,16 @@ jobs:
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;27.2.12479018" > /dev/null
           echo "NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
           targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
 
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri -> target
           key: android
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Signing key
         env:
