@@ -159,7 +159,7 @@ const copy = rep => JSON.parse(JSON.stringify(rep));
   try {
     // ---- accepted, its score, the board
     let t = Date.now();
-    let r = await post(quick, "client-aaaa", "Norko", gz(rep));
+    let r = await post(quick, "client-aaaa", "Norko", gz(Object.assign(copy(rep), { junk: "x".repeat(100000), frames: rep.frames.concat([[50, "b1,2,3"]]) })));
     ok(r.status === 200 && r.j.ok && r.j.improved && r.j.rank === 1 && r.j.total === 1 && JSON.stringify(r.j.result) === JSON.stringify(result) && r.j.best.replay,
       "the replay is checked on the server and accepted with the right score: " + JSON.stringify(r.j && r.j.result) + " (" + (Date.now() - t) + " ms)");
     const replayId = r.j && r.j.best && r.j.best.replay;
@@ -168,8 +168,15 @@ const copy = rep => JSON.parse(JSON.stringify(rep));
       r.j.you && r.j.you.rank === 1 && !JSON.stringify(r.j).includes("client-aaaa"), "GET /api/challenge: the current week, the board, your entry - no client ids");
     r = await req(port, "GET", "/api/challenge/" + quick);
     ok(r.status === 200 && r.j.you === null && r.j.top.length === 1, "GET without a client id: no own entry");
-    r = await req(port, "GET", "/api/replays/" + replayId);
-    ok(r.status === 200, "the entry's replay is a shared replay (/replay/<id>)");
+    {
+      const res = await fetch("http://127.0.0.1:" + port + "/api/replays/" + replayId);
+      const kept = res.status === 200 ? JSON.parse(zlib.gunzipSync(Buffer.from(await res.arrayBuffer())).toString("utf8")) : null;
+      const again = kept && Challenge.verify(copy(kept), { Engine: E, AI: TunnelerAI, week: quick });
+      ok(kept && !("junk" in kept) && kept.names[0] === "Norko" && kept.meta.players[0].name === "Norko" && kept.you === 1 &&
+        kept.frames.reduce((n, f) => n + f[0], 0) === rep.steps && JSON.stringify(kept.end) === JSON.stringify(rep.end) &&
+        again && again.code === null && JSON.stringify(again.result) === JSON.stringify(result),
+        "the entry's replay is a shared replay (/replay/<id>): cleaned (no extra fields or frames, the name on BLUE), it plays the same match");
+    }
     // ---- the same again: the best stays; another player, the same name; another player
     r = await post(quick, "client-aaaa", "Norko", gz(rep));
     ok(r.status === 200 && r.j.ok && !r.j.improved && r.j.rank === 1 && r.j.total === 1, "the same result again: not better, the entry stays");
@@ -214,7 +221,10 @@ const copy = rep => JSON.parse(JSON.stringify(rep));
     ok(r.status === 400 && r.j.code === "bad" && r2.status === 400 && r2.j.code === "name", "a bad client id / no name: refused");
     r = await req(port, "GET", "/api/challenge/2026-W99");
     const r3 = await req(port, "GET", "/api/challenge/" + Challenge.weekOf(clock + 70 * DAY));
-    ok(r.status === 400 && r3.status === 404, "no such week / a week that hasn't started: refused");
+    const r4 = await req(port, "GET", "/api/challenge/" + Challenge.weekOf(clock - 14 * 7 * DAY));
+    const r5 = await req(port, "GET", "/api/challenge/" + Challenge.weekOf(clock - 7 * 7 * DAY));
+    ok(r.status === 400 && r3.status === 404 && r4.status === 404 && r5.status === 200 && r5.j.total === 0,
+      "no such week / a week that hasn't started / older than 12 weeks: refused; 7 weeks ago: its (empty) board");
     // ---- after the week: two hours of grace, then over
     clock = Challenge.weekEnd(quick) + 3600000;
     r = await post(quick, "client-dddd", "Late", gz(rep));
@@ -235,6 +245,13 @@ const copy = rep => JSON.parse(JSON.stringify(rep));
     port = await new Promise(r => srv.listen(0, r));
     r = await post(quick, "client-ffff", "Slow", gz(rep));
     ok(r.status === 400 && r.j.code === "long", "checking longer than the limit: stopped (long)");
+    // ---- one check at a time per address
+    await new Promise(r => srv.close(r));
+    srv = mk({ replayDir: null });
+    port = await new Promise(r => srv.listen(0, r));
+    const both = await Promise.all([post(quick, "client-gggg", "One", gz(rep)), post(quick, "client-hhhh", "Two", gz(rep))]);
+    ok(both.map(x => x.status).sort().join() === "200,429" && both.find(x => x.status === 429).j.code === "busy",
+      "a second result from the same address while the first is checked: refused (busy)");
   } finally {
     await new Promise(r => srv.close(r));
     fs.rmSync(dir, { recursive: true, force: true });
@@ -281,6 +298,18 @@ const copy = rep => JSON.parse(JSON.stringify(rep));
       for (const w of weeks) for (const l of win.challengeLines(Challenge.config(w))) if (win.UniText.cols(l) > 78) { fit = false; console.log("    too long (" + c + "):", win.Lang.decode(l)); }
     }
     ok(fit, "the challenge's description fits 78 columns: 300 weeks, every language");
+  }
+  // last week's result not sent yet: offered while the server still takes it (an hour into the new week), not after
+  for (const [later, offered] of [[3600000, true], [3 * 3600000, false]]) {
+    const prev = quick, week = Challenge.weekOf(Challenge.weekEnd(prev) + DAY);
+    const storage = new Map([["tunneler.name", "Norko"], ["tunneler.client", "client-zzzz"],
+      ["tunneler.challenge.last", JSON.stringify({ week: prev, id: rep.id, result, sent: false })]]);
+    const boardJson = { week, current: true, ends: Challenge.weekEnd(week), now: Challenge.weekStart(week) + later, total: 0, top: [], you: null };
+    const env = makeEnv("/challenge", "", { storage, fetch: async () => ({ ok: true, status: 200, json: async () => boardJson }) });
+    env.page("challenge.html");
+    await tick(20);
+    const items = env.win.tunnelerChallengeUI().spec.items.map(x => x.key);
+    ok(items.includes("send") === offered, "last week's unsent result " + (later / 3600000) + " h into the new week: " + (offered ? "Send offered" : "no Send"));
   }
 
   console.log(failures ? "challenge-check: " + failures + " FAILED" : "challenge-check: all passed");

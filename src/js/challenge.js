@@ -11,7 +11,7 @@
 //   const kills = Challenge.track(engine)           kills per player, counted from outside the engine
 //   Challenge.result(engine, kills, steps)          {rounds, won, kills, secs} - BLUE's (you are always BLUE)
 //   Challenge.compare(a, b)                         the leaderboard's order (< 0: a is better)
-//   Challenge.verify(rep, {Engine, AI, week})       {code: null, result} or {code: "config" | "differs" | ...}
+//   Challenge.verify(rep, {Engine, AI, week, name}) {code: null, result, replay (cleaned)} or {code: "config" | "differs" | ...}
 //
 // Nothing here runs inside the engine: the week's numbers come from integer maths on its name (never the engine's
 // Random()), the kill count wraps the engine object's killTankExt and only reads.
@@ -19,6 +19,7 @@ import { NetProto } from "./netproto.js";
 import { Replay } from "./replay.js";
 
 const DAY = 86400000, WEEK = 7 * DAY;
+const GRACE_MS = 2 * 3600 * 1000;                          // the last week's challenge still takes results this long after it ended
 const MAX_STEPS = Math.ceil(2 * 3600 * 1000 / NetProto.TICK_MS);   // a replay longer than 2 hours of play isn't checked
 const LEVELS = ["easy", "normal", "hard"];
 const z2 = n => String(n).padStart(2, "0");
@@ -142,7 +143,7 @@ const clock = secs => Math.floor(secs / 60) + ":" + z2(secs % 60);
 // ------------------------------------------------------------------ checking a replay (the server, in a worker thread)
 // Plays it on a new engine with its own computer players (as play.js creates them): every computer tank's bits must
 // be the recorded ones and the recorded state hashes must match; only BLUE's bits and the keystrokes come from the
-// replay. The result is the engine's own. deps: {Engine, AI, week, maxSteps?}
+// replay. The result is the engine's own. deps: {Engine, AI, week, name? (BLUE's on the kept replay), maxSteps?}
 function verify(rep, deps) {
   const { Engine, AI, week } = deps, maxSteps = deps.maxSteps || MAX_STEPS;
   if (!Replay.valid(rep)) return { code: "bad" };
@@ -154,7 +155,7 @@ function verify(rep, deps) {
   const kills = track(e), N = e.nPlayers;
   const ais = [];
   for (let p = 2; p <= N; p++) ais.push(new AI(cfg.slots[p - 1].level, p));
-  const player = Replay.player(rep);
+  const player = Replay.player(rep), checks = [];
   for (;;) {
     const rec = player.next();
     if (!rec) return { code: "unfinished" };
@@ -169,12 +170,32 @@ function verify(rep, deps) {
     if (rec.keys.length > 16 || !rec.keys.every(k => k.length === 2 && k.every(v => Number.isInteger(v) && v >= 0 && v <= 0xFFFF))) return { code: "bad" };
     e.step({ bits, keys: rec.keys });
     if (player.check(e) === false) return { code: "differs", step: player.n };
-    if (e.screen === "map") return player.n === rep.steps ? { code: null, result: result(e, kills, player.n) } : { code: "differs", step: player.n };
+    if (player.n % Replay.CHECK_EVERY === 0) checks.push([player.n, NetProto.stateHash(e)]);
+    if (e.screen === "map") return player.n === rep.steps ? { code: null, result: result(e, kills, player.n), replay: clean(rep, e, player, checks, deps.name) }
+      : { code: "differs", step: player.n };
     if (player.n >= rep.steps) return { code: "unfinished" };
   }
 }
 
+// the checked replay as the server keeps it for the board: only the fields a replay has, its frames up to the last
+// step, the state checks and the summary of the server's own play, the player's name on BLUE
+function clean(rep, e, player, checks, name) {
+  const frames = rep.frames.slice(0, player.i).map(f => [f[0], f[1]]);
+  if (player.left && frames.length) frames[frames.length - 1][0] -= player.left;
+  const N = e.nPlayers, names = new Array(N).fill(null);
+  if (name) names[0] = String(name);
+  const meta = Replay.summary(e);
+  if (name && meta.players[0]) meta.players[0].name = names[0];
+  return {
+    format: rep.format, id: String(rep.id).slice(0, 40), version: typeof rep.version === "string" ? rep.version.slice(0, 40) : "dev",
+    date: Number.isFinite(rep.date) ? rep.date : 0, kind: "skirmish", room: null, seed: rep.seed >>> 0, opts: rep.opts,
+    names: name ? names : null, you: 1, showSettings: { view: "self", visible: false, watchOut: "wreck" },
+    aiDriven: e.aiDriven ? Array.from(e.aiDriven, v => !!v) : null,
+    steps: player.n, frames, checks, end: [player.n, NetProto.stateHash(e)], meta, challenge: rep.challenge,
+  };
+}
+
 export const Challenge = {
-  MAX_STEPS, LEVELS, MODE_WEIGHTS, weekOf, weekStart, weekEnd, validWeek, weekParts, config, query, engineOptions, sameOptions,
+  MAX_STEPS, GRACE_MS, LEVELS, MODE_WEIGHTS, weekOf, weekStart, weekEnd, validWeek, weekParts, config, query, engineOptions, sameOptions,
   track, result, compare, clock, verify,
 };

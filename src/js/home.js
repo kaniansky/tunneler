@@ -181,7 +181,8 @@ export function mount() {
       ...updateItems(),
     ];
     if (typeof sel === "string") sel = Math.max(0, items.findIndex(it => it.key === sel));
-    ui.show({ lines: title(), box: { y: 9 }, sel, infoRow: update ? 22 : 21, footer: Lang.version(), home: true, items }, keep);
+    ui.show({ lines: title(), box: { y: update ? 8 : 9 }, sel, infoRow: update ? 22 : 21,   // (the update rows: the box a row higher)
+      footer: Lang.version(), home: true, items }, keep);
   }
 
   // ------------------------------------------------------------------ settings: language, sound

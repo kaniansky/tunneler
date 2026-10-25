@@ -49,7 +49,8 @@ Online play needs a name, and so does the leaderboard: without one it asks first
   plays the server's week. Without an answer (offline, the server asleep) the computer's own week is shown and
   played; sending waits until the server answers.
 - **Play the challenge** starts the skirmish (`/skirmish?challenge=2026-W43`, section 3).
-- **Send your result** is there (and chosen) while the last challenge match of this week hasn't been sent. A line under
+- **Send your result** is there (and chosen) while a challenge match of this week hasn't been sent - also last week's,
+  while the server still takes it (`GRACE_MS`, a match begun on Sunday night). A line under
   "Your best" says
   what happened after sending: your place, "your best stays ..." when it wasn't better, or why the server refused
   it (another version, the week is over, the name is taken this week, the replay plays differently).
@@ -69,7 +70,9 @@ views) are fixed: view = your own only, after death = your wreck. The usual end-
 settings are not touched.
 
 When the match reaches its world map, the replay is saved with the others (`/replays`, it has a `challenge` field)
-and remembered as this week's last result (localStorage `tunneler.challenge.last` = `{week, id, result, sent}`).
+and remembered as the result to send (localStorage `tunneler.challenge.last` = `{week, id, result, sent}`) - unless
+a better result of the same week is still waiting there unsent: "Send your result" always sends the best match since
+the last one sent (as long as its replay is among the newest 20 kept).
 
 ## 3. The challenge of a week (`src/js/challenge.js`)
 
@@ -100,7 +103,7 @@ and remembered as this week's last result (localStorage `tunneler.challenge.last
 - `compare(a, b)` - the board's order: won first, then more rounds, then more kills, then (both won) the faster
   time, then the earlier entry. A lost match's length doesn't count (a quick give-up would otherwise beat a long
   fight).
-- `verify(rep, {Engine, AI, week})` (section 5).
+- `verify(rep, {Engine, AI, week, name})` (section 5) -> `{code: null, result, replay}` (the cleaned replay the board keeps).
 
 ## 4. Protocol and storage (server.js)
 
@@ -122,11 +125,15 @@ POST /api/challenge/<week>?cid=<client id>&name=<player name>    body: the repla
   else memory - and cached in memory once read. Written after every change (one write at a time). At most
   `MAX_BOARD` (5000) entries; the worst go.
 - An accepted result that beats the player's entry (or is the first) is stored as a shared replay
-  (`keepShared`, the same ids as `/api/replays`) and its id goes on the entry: the board can show it.
+  (`keepShared`, the same ids as `/api/replays`) and its id goes on the entry: the board can show it. What is kept is
+  the cleaned replay `verify` returns: only a replay's own fields, its frames up to the last step, the server's own
+  state checks and summary, and the board's name on BLUE - nothing else the request carried.
+- `GET` answers for the current week and the `BOARD_WEEKS` (12) before it: they all fit the board cache (30), so
+  asking for many old weeks can't make the server read its storage again and again.
 - A bucket lifecycle rule that deletes shared replays after N days (the live server: 90) also deletes old boards and
   their entries' replays - only the current week matters, so that is fine.
-- Only the current week is accepted, and the previous one for `WEEK_GRACE_MS` (2 hours) after it ended (a match
-  started on Sunday night). The server's clock decides (`opts.now` for tests).
+- Only the current week is accepted, and the previous one for `WEEK_GRACE_MS` (= `Challenge.GRACE_MS`, 2 hours) after
+  it ended (a match started on Sunday night). The server's clock decides (`opts.now` for tests).
 
 ## 5. Checking a replay (anti-cheat)
 
@@ -147,7 +154,8 @@ challenge that is not enough - a forged replay could have the computer tanks sta
 
 So a result on the board is what those inputs really do in that week's game. Time limit: `CHALLENGE_TIME_MS`
 (60 s) per replay, then the worker is stopped (`long`); a typical match takes 1-5 s. One worker at a time
-(`opts.challengeWorkers`), at most 6 waiting (`busy`). Per address: 6 sends a minute.
+(`opts.challengeWorkers`), at most 6 waiting (`busy`). Per address: 6 sends a minute and one check at a time
+(a second one meanwhile: 429 `busy`).
 
 **Determinism**: nothing new runs inside the engine. The AI is a pure function of the engine's history (its own
 PRNG, no clocks - ai.js), and the challenge's numbers come from integer maths on the week's name. The kill count is
@@ -158,9 +166,10 @@ several client ids (each one a separate name).
 
 ## 6. Texts
 
-All in `src/lang/<code>/challenge.js` (en, sk, cs, uk, ru) through `Lang.extend(code, {...})` - a new small
-function in lang.js that adds texts to a registered language (the file is imported right after main.js). Keys
-`ch.*` and `home.challenge(.i)`. American English.
+All in `src/lang/<code>/challenge.js` (en, sk, cs, uk, ru) through `Lang.extend(code, {...})` (lang.js: adds texts
+to a registered language and loads the current language's letters again; the file is imported right after
+main.js). Keys `ch.*` and `home.challenge(.i)`. American English. The Information page has a "Weekly challenge"
+section (en/engine.js and every main.js: the page's sections live there).
 
 ## 7. Tests
 
@@ -170,12 +179,13 @@ function in lang.js that adds texts to a registered language (the file is import
   folder): a bot-played challenge replay accepted with the score computed locally, the board in order, GET with and
   without `cid`, a worse result keeps the best, the name taken by another client, a tampered replay refused (BLUE's
   inputs changed / the computer tanks' bits changed), the wrong week, the wrong seed, junk, too large, the board read
-  back after a restart; `compare` orders boards as section 3 says; the challenge screen in a vm (a fake server):
-  the screen, Play's link, Send and its answer, the leaderboard.
+  back after a restart, the kept replay cleaned and playing the same match, GET only for the last 12 weeks;
+  `compare` orders boards as section 3 says; the challenge screen in a vm (a fake server): the screen, Play's link,
+  Send and its answer, the leaderboard, last week's unsent result offered during the grace only.
 - `test/layout-check.js`: the challenge screen and the leaderboard on desktop / phone upright / sideways, every
   language. `test/lang-check.js`: the new texts fit. `test/app-check.js`: the new route.
 
 ## 8. Out of scope
 
-Prizes, accounts, history of past weeks' boards on the screen (the API answers for any stored week), a challenge
+Prizes, accounts, history of past weeks' boards on the screen (the API answers for the last 12 weeks), a challenge
 for split screen or online play, catching bots.

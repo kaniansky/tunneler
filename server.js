@@ -110,7 +110,8 @@ const MAX_REPLAY_BYTES = 512 * 1024;   // one shared replay, as sent (gzip'd: a 
 const MAX_CHALLENGE_PER_MIN = 6;       // POST /api/challenge/<week> per address
 const MAX_BOARD = 5000;                // entries on a week's challenge leaderboard (the worst go)
 const BOARD_TOP = 50;                  // entries GET /api/challenge sends
-const WEEK_GRACE_MS = 2 * 3600 * 1000; // the last week's challenge still takes results this long after it ended
+const BOARD_WEEKS = 12;                // past weeks whose boards GET /api/challenge/<week> still answers
+const WEEK_GRACE_MS = Challenge.GRACE_MS; // the last week's challenge still takes results this long after it ended (2 h)
 const CHALLENGE_TIME_MS = 60 * 1000;   // checking one challenge replay at most (then its worker is stopped)
 const CHALLENGE_QUEUE = 6;             // challenge replays waiting for a worker at most (then "busy")
 const MAX_ROOMS_PER_ADDR = 20;         // rooms created by one address that still exist
@@ -639,8 +640,8 @@ function createServer(opts = {}) {
   }
   // the replay checks: at most challengeWorkers at a time, CHALLENGE_QUEUE waiting
   let checksRunning = 0;
-  const checksWaiting = [], checkWorkers = new Set();
-  function runCheck(bytes, week) {
+  const checksWaiting = [], checkWorkers = new Set(), checking = new Set();   // (checking: addresses with a check now)
+  function runCheck(bytes, week, name) {
     return new Promise(resolve => {
       const job = () => {
         checksRunning++;
@@ -654,7 +655,7 @@ function createServer(opts = {}) {
         };
         let w;
         try {
-          w = new Worker(path.join(__dirname, "challenge-worker.js"), { workerData: { bytes, week, version },
+          w = new Worker(path.join(__dirname, "challenge-worker.js"), { workerData: { bytes, week, version, name },
             resourceLimits: { maxOldGenerationSizeMb: 256 } });
         } catch (e) { return finish({ code: "busy" }); }
         checkWorkers.add(w);
@@ -677,6 +678,9 @@ function createServer(opts = {}) {
     if (!Challenge.validWeek(week)) return challengeError(res, "bad", "no such week");
     if (req.method === "GET") {
       if (Challenge.weekStart(week) > now()) return json(res, 404, { error: "that week hasn't started" });
+      // (the last BOARD_WEEKS weeks only: they all fit the board cache, so asking for old weeks can't make the
+      // server read its storage again and again)
+      if (Challenge.weekEnd(week) + BOARD_WEEKS * 7 * 86400000 <= now()) return json(res, 404, { error: "that week's board isn't kept" });
       let board;
       try { board = await loadBoard(week); } catch (e) { return challengeError(res, "storage", "storage unavailable, try later"); }
       return json(res, 200, boardInfo(board, u.searchParams.get("cid")));
@@ -693,7 +697,13 @@ function createServer(opts = {}) {
     try { board = await loadBoard(week); } catch (e) { return challengeError(res, "storage", "storage unavailable, try later"); }
     const taken = () => board.entries.some(x => x.cid !== cid && x.name.toLowerCase() === name.toLowerCase());
     if (taken()) return challengeError(res, "taken", "another player has that name on this week's board");
-    const r = await runCheck(new Uint8Array(bytes), week);
+    // one check at a time per address (a long replay keeps the worker up to CHALLENGE_TIME_MS: one address can't fill
+    // the queue for everybody)
+    const addr = addressOf(req);
+    if (checking.has(addr)) return json(res, 429, { error: "your last result is still being checked", code: "busy" });
+    checking.add(addr);
+    let r;
+    try { r = await runCheck(new Uint8Array(bytes), week, name); } finally { checking.delete(addr); }
     if (r.code) return challengeError(res, r.code, r.code === "version" ? "the replay is of another version than this server's " + version : null);
     if (taken()) return challengeError(res, "taken", "another player has that name on this week's board");
     const res0 = r.result;

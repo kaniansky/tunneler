@@ -280,7 +280,14 @@ export function mount() {
   // (the challenge: its week on the replay, and the result remembered as this week's last - the challenge screen sends it)
   runner.recorder = Replay.recorder(engine, { kind: mode === "cpu" ? "skirmish" : "split", seed, opts, challenge: chWeek }, rep => {
     Replay.save(rep).catch(e => console.warn("replay:", e));
-    if (ch) try { localStorage.setItem("tunneler.challenge.last", JSON.stringify({ week: chWeek, id: rep.id, result: Challenge.result(engine, kills, rep.steps), sent: false })); } catch (e) { /* no storage */ }
+    // (a better unsent result of the same week stays: "Send your result" sends the best match since the last one sent)
+    if (ch) try {
+      const result = Challenge.result(engine, kills, rep.steps);
+      let kept = null;
+      try { kept = JSON.parse(localStorage.getItem("tunneler.challenge.last") || "null"); } catch (e) { kept = null; }
+      if (!(kept && kept.week === chWeek && !kept.sent && kept.result && Challenge.compare(kept.result, result) < 0))
+        localStorage.setItem("tunneler.challenge.last", JSON.stringify({ week: chWeek, id: rep.id, result, sent: false }));
+    } catch (e) { /* no storage */ }
   });
   const clock = new LocalClock(runner, ext ? extInput : classicInput);
   // gamepads / touch controls (pads.js) make the same keys as the keyboard: split screen - gamepad 1

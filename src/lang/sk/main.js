@@ -213,6 +213,7 @@ Lang.register("sk", {
       sections: [
         ["Dva vzhľady:  ", "pôvodná obrazovka DOS-u alebo moderná grafika vo vysokom rozlíšení so svetlom, časticami a moderným písmom (Nastavenia, Grafika) - hra je vždy tá istá."],
         ["Záznamy:  ", "každý zápas, ktorý hráš alebo sleduješ, sa uloží (20 najnovších, hlavné menu, Záznamy): pozri si ho znova ako divák - všetky pohľady, živú mapu alebo jeden tank, s pauzou, rýchlejšie či pomalšie - alebo ho niekomu pošli ako odkaz či súbor."],
+        ["Týždenná výzva:  ", "každý týždeň (od pondelka do pondelka, UTC) dostanú všetci tú istú šarvátku - ten istý svet, režim aj počítačové tanky (hlavné menu, Týždenná výzva).  Pošli svoj výsledok: server znova prehrá záznam tvojho zápasu a do rebríčka týždňa sa dostane len to, čo sa naozaj stalo - najlepšie zápasy si tam môže pozrieť každý."],
         ["Desktopová aplikácia:  ", "Tunneler Online je aj malý program pre Windows, Linux a macOS " +
           "- stiahneš ho zo stránky vydaní na GitHube (github.com/kaniansky/tunneler-online/releases).  " +
           "Delenú obrazovku a potýčku hrá bez siete, hry online na verejnom serveri alebo " +

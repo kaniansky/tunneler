@@ -73,7 +73,9 @@ export function mount() {
   function main(keep) {
     view = "main";
     const cfg = Challenge.config(week), L = last();
-    const pending = L && L.week === week && !L.sent;
+    // a result not sent yet: this week's, or last week's while the server still takes it (a match begun on Sunday night)
+    const pending = L && !L.sent && Challenge.validWeek(L.week) &&
+      (L.week === week || Challenge.weekEnd(L.week) <= Challenge.weekStart(week) && Date.now() + skew < Challenge.weekEnd(L.week) + Challenge.GRACE_MS);
     const lines = [{ row: 2, text: T("ch.title"), color: 12 }, { row: 4, text: weekLine(), color: 15 }];
     challengeLines(cfg).forEach((t, i) => lines.push({ row: 6 + i, text: t, color: 3 }));
     const you = board && board.week === week ? board.you : null;
@@ -82,7 +84,7 @@ export function mount() {
     if (note) lines.push({ row: 12, text: note.text, color: note.color });
     const items = [{ key: "play", label: T("ch.play"), info: [T("ch.play.i"), T("ch.play.i2")], go: () => Nav.go(Links.cpu("challenge=" + week)) }];
     if (pending) items.push({ key: "send", label: T("ch.send"), go: send,
-      info: [UniText.fromRaw(Lang.raw("ch.send.i").replace("{score}", scoreText(L.result, cfg))), T("ch.send.i2")] });
+      info: [UniText.fromRaw(Lang.raw("ch.send.i").replace("{score}", scoreText(L.result, Challenge.config(L.week)))), T("ch.send.i2")] });
     items.push({ key: "board", label: T("ch.board"), info: [T("ch.board.i")], go: () => showBoard() },
       { key: "gap", label: "", disabled: true },
       { key: "back", label: T("back.main"), info: [T("back.main.i")], go: home });
