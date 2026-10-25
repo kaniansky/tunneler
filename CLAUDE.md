@@ -968,7 +968,13 @@ none, i.e. a page from before 2.0 - is refused (POST 409 `{code:
   day - `sweepBoards`), today + yesterday for `DAY_GRACE_MS` (2 h) after midnight; `opts.now` for tests. Dockerfile
   copies src/js + src/lang and the worker. Texts `src/lang/<code>/challenge.js` via `Lang.extend`, keys `ch.*`,
   `home.challenge(.i)`. Tests: test/challenge-check.js, layout-check / app-check screens.
-- **Custom maps** (v6, docs/v6/MAPS.md): `src/js/mapdata.js` (`MapData`: 4 x 4 px cells tunnel / dirt / rock, a
+- **Custom maps** (v6, docs/v6/MAPS.md; a map is played only when a tank can drive between ALL its bases - owner:
+  `TunnelerEngine.mapReach(map)` -> {ok, groups, walled} on the world a match starts on (painted, openBase, bases
+  drawn), the game's own per-direction sprites, an integral image + a flood (large ~60 ms); used by the editor
+  (menu state `map.cut`, status-line bases red, `reachSoon`), MapStore records' `linked` (`fill`, `playable`), the
+  skirmish (home.js `lc.err.path`, play.js `noMap("path")`), the server (`loadMap` info.linked, cached per id;
+  NetProto.startProblem "path"); `.tmap` files = MapData.encode bytes (`MapData.fileName`; Save as a file - Android
+  `TunnelerAndroid.saveFile` -, Open a map file): `src/js/mapdata.js` (`MapData`: 4 x 4 px cells tunnel / dirt / rock, a
   rock frame of `sc(40)` px, up to 8 bases at cells, name; a compact binary encoding - packed or runs - and its
   base64url `code`; `decode` checks everything, `canonical`, `paint` / `paintRow` into a world, `fromWorld`). Engine
   option `map` (a code): `paintMapStep` instead of the generator (no Random()), forces the extended engine and the
@@ -980,7 +986,8 @@ none, i.e. a page from before 2.0 - is refused (POST 409 `{code:
   the editor's menu; leaving saves). Main menu "Maps". Skirmish: Settings row Map (`tunneler.cpu.map`, links
   `&lmap=<local id>[&map=<shared id>]`, play.js loads it first - `noMap` screen when it can't). Online: the room's
   Settings row Map (the host's maps, uploaded once), `{t:"set", map: id}` -> server `setMap` (loads from the store,
-  `st.map = {id, name, size, bases}`, size follows, `cantStart` "map" with too few bases), match cfg `map` = the
+  `st.map = {id, name, size, bases, linked}`, size follows, `cantStart` "path" while not every base is reachable,
+  "map" with too few bases), match cfg `map` = the
   code, `isClassic` false with a map. Server: `sharedStore` (replays and maps: bucket `<id>.map` / folder
   `MAP_DIR` default `REPLAY_DIR/maps` / memory), map ids = content hash (10 of a-z2-9), `MAX_MAP_BYTES` 40 KB, 20
   shares / min. `Lang.extend(code, {...})` (lang.js) for feature text files: `src/lang/<code>/maps.js`. Tests:

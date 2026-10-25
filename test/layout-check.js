@@ -281,6 +281,22 @@ const tick = () => new Promise(r => setTimeout(r, 0));
         api.openLink(); check(win, ui, W + ", open a map link");
         api.detail(rec); check(win, ui, W + ", a map");
         api.edit(rec, M.decode(rec.code)); api.openMenu(); check(win, ui, W + ", the map editor's menu");
+        await api.leaveEditor();
+        // a map whose bases aren't all connected (a rock wall across it): the list, its screen, the editor's menu
+        const cut = M.blank("medium");
+        cut.bases.push({ x: 60, y: 64 }, { x: 190, y: 64 }, { x: 60, y: 30 });
+        for (let y = 0; y < cut.h; y++) { cut.cells[y * cut.w + 127] = M.ROCK; cut.cells[y * cut.w + 128] = M.ROCK; }
+        cut.name = "Championship of rock walls";
+        const crec = await win.MapStore.save(cut);
+        await api.readFile({ size: 9, arrayBuffer: async () => new ArrayBuffer(9) });     // (a broken file: the list says so)
+        ui.sel = ui.spec.items.findIndex(x => x.key === "m:" + crec.id);
+        check(win, ui, W + ", maps with one not connected, a broken file");
+        api.detail(crec); check(win, ui, W + ", a map not connected");
+        win.TunnelerAndroid = { saveFile: name => "Download/" + name };
+        ui.spec.items.find(x => x.key === "save").go(); check(win, ui, W + ", a map saved as a file (Android)");
+        delete win.TunnelerAndroid;
+        api.edit(crec, M.decode(crec.code)); api.openMenu(); check(win, ui, W + ", the map editor's menu, not connected");
+        await api.leaveEditor();
         // the skirmish with that map chosen (its Map row, the size grayed)
         const h = makeEnv("/", size, touch);
         h.storage.set("tunneler.lang", code);
@@ -292,6 +308,26 @@ const tick = () => new Promise(r => setTimeout(r, 0));
         go("cpu");
         if (go("settings")) { const r = hui.spec.items.find(x => x.key === "map"); if (r) r.change(1); check(hw, hui, W + ", skirmish game settings with a map"); hui.spec.back(); }
         else { const r = hui.spec.items.find(x => x.key === "map"); if (r) r.change(1); check(hw, hui, W + ", skirmish with a map"); }
+        // a map whose bases aren't all connected: the Map row and Start say why
+        const cut2 = M.blank("small");
+        cut2.bases.push({ x: 30, y: 32 }, { x: 98, y: 32 });
+        for (let y = 0; y < cut2.h; y++) { cut2.cells[y * cut2.w + 63] = M.ROCK; cut2.cells[y * cut2.w + 64] = M.ROCK; }
+        cut2.name = "Cut";
+        await hw.MapStore.save(cut2);
+        await hw.tunnelerHomeMaps();
+        const pickCut = () => { const r = hui.spec.items.find(x => x.key === "map"); for (let k = 0; k < 4 && !hw.Lang.decode(r ? hui.spec.items.find(x => x.key === "map").label : "").includes("Cut"); k++) hui.spec.items.find(x => x.key === "map").change(1); };
+        if (go("settings")) {
+          pickCut();
+          check(hw, hui, W + ", skirmish game settings with a map not connected");
+          hui.spec.back();
+          hui.sel = hui.spec.items.findIndex(x => x.key === "play");
+          check(hw, hui, W + ", skirmish with a map not connected (Start)");
+        } else {
+          pickCut();
+          check(hw, hui, W + ", skirmish with a map not connected");
+          hui.sel = hui.spec.items.findIndex(x => x.key === "play");
+          check(hw, hui, W + ", skirmish with a map not connected (Start)");
+        }
       }
       // ---------------------------------------------------------------- the replays
       {

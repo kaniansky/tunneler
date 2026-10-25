@@ -43,16 +43,24 @@ export function mount() {
     let rec = lmap ? await MapStore.get(lmap) : null;
     if (!rec && smap && /^[a-z2-9]{10}$/.test(smap)) rec = await MapStore.fetchShared(smap);
     return rec;
-  })().then(rec => { if (Scope.current === scope) { if (rec) run(rec); else noMap("404"); } },
-    e => { if (Scope.current === scope) noMap(e && e.status === 404 ? "404" : String(e && e.message || e)); });
+  })().then(rec => {
+    if (Scope.current !== scope) return;
+    if (!rec) return noMap("404");
+    // (a map whose bases a tank can't all drive between isn't played - docs/v6/MAPS.md 6: checked here too, a link
+    // may bring any map)
+    const reach = TunnelerEngine.mapReach(rec.code);
+    if (!reach || !reach.ok) return noMap("path");
+    run(rec);
+  }, e => { if (Scope.current === scope) noMap(e && e.status === 404 ? "404" : String(e && e.message || e)); });
 }
-// the map of the link isn't here and the server doesn't have it (or can't be reached)
+// the map of the link isn't here and the server doesn't have it (or can't be reached) / its bases aren't all connected
 function noMap(why) {
   const ui = new DosUI(document.getElementById("screen")), T = Lang.t, back = () => Nav.go("/#cpu");
   Pads.start({ menu: () => true });
-  ui.show({ lines: [{ row: 2, text: T("map.title"), color: 12 },
-    { row: 10, text: T("map.gone", { msg: why === "404" ? Lang.raw("map.gone.404") : why.slice(0, 50) }), color: 12 }],
-  box: { y: 13 }, infoRow: 18, back, items: [{ key: "back", label: T("back.main"), info: [T("back.main.i")], go: back }] });
+  const text = why === "path" ? T("map.cut.play") : T("map.gone", { msg: why === "404" ? Lang.raw("map.gone.404") : why.slice(0, 50) });
+  window.tunnelerNoMap = () => ({ ui, why });                  // (tests)
+  ui.show({ lines: [{ row: 2, text: T("map.title"), color: 12 }, { row: 10, text, color: 12 }],
+    box: { y: 13 }, infoRow: 18, back, items: [{ key: "back", label: T("back.main"), info: [T("back.main.i")], go: back }] });
 }
 function run(mapRec) {
   // a short link (?g=<code>, cpucode.js) stands for the long query it encodes

@@ -2988,6 +2988,163 @@ TunnelerEngine.BITS = { UP: B_UP, DOWN: B_DOWN, LEFT: B_LEFT, RIGHT: B_RIGHT, FI
 TunnelerEngine.STRINGS_EN = STRINGS_EN;
 TunnelerEngine.PAGE_ROWS = PAGE_ROWS;               // Instructions / Information: text rows on screen
 TunnelerEngine.PAGE_W = PAGE_W;                     // ... and their width (column 80: the scroll bar)
+// Custom maps (docs/v6/MAPS.md 3a): can a tank drive between all of a map's bases? The world as a match starts on
+// it - the map painted, every base's way out dug (openBase, in the bases' order), every base's interior cleared and
+// its walls drawn (drawBases' geometry; all K bases, as a game with a tank on each has them) - and then a flood over
+// tank positions: a step (8 directions, 1 px) goes where the tank's sprite for that direction (tankBlocked's shape -
+// the game moves a tank with its new direction's sprite) has no rock and no wall under it; dirt counts as open (the
+// tank digs it). An integral image of the blocked pixels answers each test in O(1) (the sprite's bounding box; its
+// rows only where the box holds as few blocked pixels as the sprite has gaps). Not part of any match: no RNG, no
+// engine state. src: a map's code, its bytes or a decoded map -> null (not a map) or {ok (every base reaches every
+// other one - 0 or 1 base: true), groups ([[base indexes]] that reach each other; the first holds base 0), walled
+// ([base indexes] openBase dug out)}, plus way ([[x, y], ...] the flood's way from base 0 to base opts.way, when
+// asked for and there is one - tests drive it) and can / W (opts.can: the step table).
+let reachShapes = null;
+function mapReachShapes() {
+  if (reachShapes) return reachShapes;
+  const S = [0, 1, 2, 3, 4, 5, 6, 7].map(() => [0, 1, 2, 3, 4, 5, 6].map(() => new Array(7).fill(T)));
+  for (let b = 0; b <= 6; b++)                          // (initTables' rotations)
+    for (let a = 0; a <= 6; a++) {
+      let c = TankShapes[1][a][b];
+      S[0][a][b] = c; S[2][b][6 - a] = c; S[4][6 - a][b] = c; S[6][b][a] = c;
+      c = TankShapes[0][a][b];
+      S[1][a][b] = c; S[3][6 - a][b] = c; S[5][6 - a][6 - b] = c; S[7][a][6 - b] = c;
+    }
+  reachShapes = S.map(spr => {
+    const runs = [];
+    let n = 0, x0 = 9, x1 = -9, y0 = 9, y1 = -9;
+    for (let j = 0; j <= 6; j++)
+      for (let i = 0; i <= 6; i++) {
+        if (spr[j][i] === T) continue;
+        n++; x0 = Math.min(x0, i - 3); x1 = Math.max(x1, i - 3); y0 = Math.min(y0, j - 3); y1 = Math.max(y1, j - 3);
+        const r = runs[runs.length - 1];
+        if (r && r[0] === j - 3 && r[2] === i - 4) r[2] = i - 3; else runs.push([j - 3, i - 3, i - 3]);
+      }
+    return { x0, x1, y0, y1, gaps: (x1 - x0 + 1) * (y1 - y0 + 1) - n, runs };
+  });
+  return reachShapes;
+}
+TunnelerEngine.mapReach = (src, opts) => {
+  const map = src && src.cells ? src : MapData.decode(src);
+  if (!map) return null;
+  const e = new TunnelerEngine(1, { map: MapData.code(map) });
+  MapData.paint(map, e.world, e.ws);
+  const B = map.bases.map(MapData.basePx);
+  const walled = B.map((b, i) => e.openBase(b.x, b.y) > 0 ? i : -1).filter(i => i >= 0);
+  const W = e.worldW, H = e.worldH, W1 = W + 1, world = e.world, ws = e.ws, pc = PixelClassExt;
+  const blocked = new Uint8Array(W * H);
+  for (let y = 0; y < H; y++)
+    for (let x = 0; x < W; x += 2) {
+      const v = world[y * ws + (x >> 1)];
+      blocked[y * W + x] = pc[v & 15] >= 3 ? 1 : 0;
+      blocked[y * W + x + 1] = pc[v >> 4] >= 3 ? 1 : 0;
+    }
+  for (const { x: bx, y: by } of B) {                    // (drawBases)
+    for (let y = by - 16; y <= by + 16; y++) blocked.fill(0, y * W + bx - 16, y * W + bx + 17);
+    for (let x = bx - 17; x <= bx + 17; x++) if (Math.abs(x - bx) >= 4) { blocked[(by - 17) * W + x] = 1; blocked[(by + 17) * W + x] = 1; }
+    for (let y = by - 16; y <= by + 16; y++) { blocked[y * W + bx - 17] = 1; blocked[y * W + bx + 17] = 1; }
+  }
+  const I = new Int32Array(W1 * (H + 1));                // I[(y + 1) * W1 + x + 1] = blocked pixels in [0..x] x [0..y]
+  for (let y = 0; y < H; y++) {
+    let row = 0;
+    const o = (y + 1) * W1, p = y * W1;
+    for (let x = 0; x < W; x++) { row += blocked[y * W + x]; I[o + x + 1] = I[p + x + 1] + row; }
+  }
+  const rect = (x0, y0, x1, y1) => I[(y1 + 1) * W1 + x1 + 1] - I[y0 * W1 + x1 + 1] - I[(y1 + 1) * W1 + x0] + I[y0 * W1 + x0];
+  const SH = mapReachShapes();
+  // can[n]: bit d set = a tank can stand at position n having moved in direction d (its sprite for d clear); 0 on
+  // the outermost 3 px (no sprite fits there - the frame is rock anyway)
+  const can = new Uint8Array(W * H);
+  for (let y = 3; y < H - 3; y++) {
+    const top = (y - 3) * W1 - 3, bot = (y + 4) * W1 - 3;
+    for (let x = 3; x < W - 3; x++) {
+      const c = I[bot + x + 7] - I[top + x + 7] - I[bot + x] + I[top + x];   // (the 7 x 7 box: every sprite lies in it)
+      if (c === 0) { can[y * W + x] = 255; continue; }
+      if (c === 49) continue;
+      let bits = 0;
+      for (let d = 0; d < 8; d++) {
+        const s = SH[d], k = rect(x + s.x0, y + s.y0, x + s.x1, y + s.y1);
+        let free = k === 0;
+        if (!free && k <= s.gaps) {
+          free = true;
+          for (const r of s.runs) if (rect(x + r[1], y + r[0], x + r[2], y + r[0])) { free = false; break; }
+        }
+        if (free) bits |= 1 << d;
+      }
+      can[y * W + x] = bits;
+    }
+  }
+  const queue = new Int32Array(W * H), start = B.map(b => b.y * W + b.x), isStart = new Uint8Array(W * H);
+  for (const s of start) isStart[s] = 1;
+  const OFF = Int32Array.from(DirDX, (dx, d) => DirDY[d] * W + dx);
+  const [o0, o1, o2, o3, o4, o5, o6, o7] = OFF;
+  const K = B.length;
+  let found = 0;
+  // forward floods: every base not reached yet starts one - over the positions a tank at a marked one can step to,
+  // until every base is marked. lab = the flood's number (the base's index + 1) | the step's direction << 4 (the
+  // 8 directions written out: much quicker)
+  const lab = new Uint8Array(W * H);
+  for (let i = 0; i < K && found < K; i++) {
+    if (lab[start[i]]) continue;
+    let head = 0, tail = 0;
+    const v = i + 1;
+    lab[start[i]] = v; queue[tail++] = start[i]; found++;
+    while (head < tail && found < K) {
+      const n = queue[head++];
+      let m;
+      m = n + o0; if (!lab[m] && (can[m] & 1)) { lab[m] = v | 0; queue[tail++] = m; if (isStart[m] && ++found === K) break; }
+      m = n + o1; if (!lab[m] && (can[m] & 2)) { lab[m] = v | 16; queue[tail++] = m; if (isStart[m] && ++found === K) break; }
+      m = n + o2; if (!lab[m] && (can[m] & 4)) { lab[m] = v | 32; queue[tail++] = m; if (isStart[m] && ++found === K) break; }
+      m = n + o3; if (!lab[m] && (can[m] & 8)) { lab[m] = v | 48; queue[tail++] = m; if (isStart[m] && ++found === K) break; }
+      m = n + o4; if (!lab[m] && (can[m] & 16)) { lab[m] = v | 64; queue[tail++] = m; if (isStart[m] && ++found === K) break; }
+      m = n + o5; if (!lab[m] && (can[m] & 32)) { lab[m] = v | 80; queue[tail++] = m; if (isStart[m] && ++found === K) break; }
+      m = n + o6; if (!lab[m] && (can[m] & 64)) { lab[m] = v | 96; queue[tail++] = m; if (isStart[m] && ++found === K) break; }
+      m = n + o7; if (!lab[m] && (can[m] & 128)) { lab[m] = v | 112; queue[tail++] = m; if (isStart[m] && ++found === K) break; }
+    }
+  }
+  const groups = [];
+  B.forEach((b, i) => { const g = (lab[start[i]] & 15) - 1; (groups[g] = groups[g] || []).push(i); });
+  let out = groups.filter(Boolean);
+  // one group: can every base also get back to base 0? (a step is tested by the sprite at its end, so a step isn't
+  // always a step back.) Yes if every step of the flood's way from base 0 to each base can be taken back; else a
+  // flood backwards from base 0 tells (a tank came to n in direction d from n - o[d] when can[n] has bit d)
+  const stepBack = i => {
+    for (let m = start[i]; m !== start[0];) {
+      const d = lab[m] >> 4, n = m - OFF[d];
+      if (!(can[n] & (1 << (d ^ 4)))) return false;
+      m = n;
+    }
+    return true;
+  };
+  if (out.length === 1 && K > 1 && !out[0].every(stepBack)) {
+    const back = new Uint8Array(W * H);
+    let head = 0, tail = 0;
+    back[start[0]] = 1; queue[tail++] = start[0]; found = 1;
+    while (head < tail) {
+      const n = queue[head++], c = can[n];
+      let m;
+      if (!c) continue;
+      m = n - o0; if ((c & 1) && !back[m]) { back[m] = 1; queue[tail++] = m; if (isStart[m] && ++found === K) break; }
+      m = n - o1; if ((c & 2) && !back[m]) { back[m] = 1; queue[tail++] = m; if (isStart[m] && ++found === K) break; }
+      m = n - o2; if ((c & 4) && !back[m]) { back[m] = 1; queue[tail++] = m; if (isStart[m] && ++found === K) break; }
+      m = n - o3; if ((c & 8) && !back[m]) { back[m] = 1; queue[tail++] = m; if (isStart[m] && ++found === K) break; }
+      m = n - o4; if ((c & 16) && !back[m]) { back[m] = 1; queue[tail++] = m; if (isStart[m] && ++found === K) break; }
+      m = n - o5; if ((c & 32) && !back[m]) { back[m] = 1; queue[tail++] = m; if (isStart[m] && ++found === K) break; }
+      m = n - o6; if ((c & 64) && !back[m]) { back[m] = 1; queue[tail++] = m; if (isStart[m] && ++found === K) break; }
+      m = n - o7; if ((c & 128) && !back[m]) { back[m] = 1; queue[tail++] = m; if (isStart[m] && ++found === K) break; }
+    }
+    const home = out[0].filter(i => back[start[i]]), rest = out[0].filter(i => !back[start[i]]);
+    if (rest.length) out = [home, rest];
+  }
+  const res = { ok: out.length <= 1, groups: out, walled };
+  if (opts && opts.can) Object.assign(res, { can, W });   // (tests: the step table itself)
+  const j = opts && opts.way;
+  if (j >= 0 && j < K && (lab[start[j]] & 15) === 1) {
+    res.way = [];
+    for (let m = start[j]; ; m -= OFF[lab[m] >> 4]) { res.way.unshift([m % W, Math.floor(m / W)]); if (m === start[0]) break; }
+  }
+  return res;
+};
 // Game modes (docs/DESIGN-8P.md 27): src/js/modes/<name>.js registers each one's hooks; src/js/modes/index.js
 // imports them all (the game pages' entries and node tests import it).
 TunnelerEngine.MODES = {};

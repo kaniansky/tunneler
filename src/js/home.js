@@ -506,8 +506,9 @@ export function mount() {
   let cpuSetOpen = false;
   function cpu(keep, sel) {
     const S = cpuSetup();
-    // (a map with fewer bases than the skirmish has tanks can't be played)
+    // (a map whose bases a tank can't all drive between, or with fewer bases than the skirmish has tanks, can't be played)
     const rec = mapRec();
+    if (!S.error && rec && rec.linked === false) S.error = "lc.err.path";
     if (!S.error && rec && rec.bases < Math.max(2, S.used.length)) S.error = "lc.err.bases";
     const redraw = () => { saveCpu(); cpu(true); };
     const start = () => {
@@ -564,7 +565,8 @@ export function mount() {
     const setMap = d => { cpuMap = step([""].concat(cpuMaps.map(r => r.id)), cpuMap, d); redraw(); };
     const options = [
       { key: "mode", label: T("lc.mode") + T("gm." + gmode), info: [T("gm." + gmode + ".i"), T("lc.mode.i")], go: () => setMode(1), change: setMode },
-      { key: "map", label: T("lc.map") + (rec ? UniText.slice(UniText.fromRaw(rec.name), MAP_COLS) : T("lc.map.random")), info: [T("lc.map.i1"), T("lc.map.i2")],
+      { key: "map", label: T("lc.map") + (rec ? UniText.slice(UniText.fromRaw(rec.name), MAP_COLS) : T("lc.map.random")),
+        info: rec && rec.linked === false ? [{ text: T("lc.err.path"), color: 12 }, T("lc.map.i2")] : [T("lc.map.i1"), T("lc.map.i2")],
         go: () => setMap(1), change: setMap },
       // (a map has its own size: shown, grayed)
       rec ? { key: "size", label: T("lc.size") + T("lc.size." + rec.size), info: [T("lc.size.map")], disabled: true } : sizeItem(cpuSize, v => { cpuSize = v; redraw(); }),
