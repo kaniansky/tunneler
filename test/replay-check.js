@@ -237,6 +237,10 @@ async function viewer(classicRep, extRep) {
     const info = JSON.stringify(ui.spec.items.find(it => it.key === "share").info);
     ok(posts.length === 1 && posts[0][0] === "/api/replays" && posts[0][1] === "POST" && posts[0][2] > 100 && copied[0] === "http://x.test/replay/abcd2345" && info.includes("/replay/abcd2345"),
       "Share a link: uploaded (POST /api/replays), the link copied and shown: " + copied[0]);
+    ok(!info.includes("90"), "no time limit said when the server keeps it for good");
+    env.win.fetch = async () => ({ ok: true, status: 200, json: async () => ({ id: "abcd2346", days: 90 }) });
+    await ui.spec.items.find(it => it.key === "share").go();
+    ok(JSON.stringify(ui.spec.items.find(it => it.key === "share").info).includes("90 days"), "a server that keeps it 90 days: the link works for 90 days");
     env.win.fetch = async () => ({ ok: false, status: 503, json: async () => ({ error: "busy" }) });
     await ui.spec.items.find(it => it.key === "share").go();
     ok(JSON.stringify(ui.spec.items.find(it => it.key === "share").info).includes("busy"), "a failed share says why");

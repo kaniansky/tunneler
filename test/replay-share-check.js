@@ -61,6 +61,19 @@ const stop = s => new Promise(r => s.close(r));
   ok(later.status === 200 && (await Replay.fromBytes(new Uint8Array(later.bytes))).id === rep.id, "after a restart: still there");
   await stop(s);
 
+  // REPLAY_KEEP_DAYS: the sharer is told how long; an older file is gone
+  ({ s, port } = await start({ replayDir: dir, replayKeepDays: 90 }));
+  const kept = JSON.parse((await req(port, "POST", "/api/replays", gz)).bytes.toString());
+  ok(kept.id && kept.days === 90, "kept for 90 days: the answer says so ({id, days: 90})");
+  await stop(s);
+  const past = (Date.now() - 91 * 86400000) / 1000;
+  fs.utimesSync(path.join(dir, kept.id + ".replay"), past, past);
+  ({ s, port } = await start({ replayDir: dir, replayKeepDays: 90 }));
+  ok((await req(port, "GET", "/api/replays/" + kept.id)).status === 404 && (await req(port, "GET", "/api/replays/" + id)).status === 200,
+    "a file older than 90 days: 404 (a newer one still there)");
+  await stop(s);
+  ok(!("days" in JSON.parse(up.bytes.toString())), "without REPLAY_KEEP_DAYS: no days in the answer");
+
   // no folder: memory only
   ({ s, port } = await start({ replayDir: null }));
   const m = JSON.parse((await req(port, "POST", "/api/replays", gz)).bytes.toString()).id;

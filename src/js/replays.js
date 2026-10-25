@@ -140,7 +140,8 @@ export function mount() {
       items: [...who, { key: "gap0", label: "", disabled: true },
         { key: "watch", label: T("rp.watch"), info: [T("rp.watch.i")], go: () => Nav.go(Links.replay(r.id)) },
         { key: "share", label: T("rp.share"), go: () => shareReplay(r),
-          info: shareNote && shareNote.id === r.id ? [{ text: shareNote.text, color: shareNote.color }] : [T("rp.share.i1"), T("rp.share.i2")] },
+          info: shareNote && shareNote.id === r.id ? [{ text: shareNote.text, color: shareNote.color }].concat(shareNote.more ? [shareNote.more] : [])
+            : [T("rp.share.i1"), T("rp.share.i2")] },
         { key: "save", label: T("rp.save"), go: () => saveFile(r),
           info: saveNote && saveNote.id === r.id ? [{ text: saveNote.text, color: saveNote.color }, T("rp.version", { v: r.version })] : [T("rp.save.i"), T("rp.version", { v: r.version })] },
         { key: "delete", label: T("rp.delete"), info: [sure ? { text: T("rp.delete.sure"), color: 12 } : T("rp.delete.i")],
@@ -157,7 +158,7 @@ export function mount() {
   // its web view), then the screen says where it went; a browser: a download
   let saveNote = null;                                     // {id, text, color} under "Save as a file"
   // a link to it: the replay sent to the game's server (POST /api/replays), the link copied (and shown)
-  let shareNote = null;                                    // {id, text, color} under "Share a link"
+  let shareNote = null;                                    // {id, text, color, more} under "Share a link"
   async function shareReplay(r) {
     shareNote = { id: r.id, text: T("rp.sharing"), color: 7 };
     detail(r, true);
@@ -169,7 +170,9 @@ export function mount() {
       const link = Endpoint.web(Links.replayLink(j.id));
       let copied = false;
       try { if (navigator.clipboard) { await navigator.clipboard.writeText(link); copied = true; } } catch (e) { copied = false; }
-      shareNote = { id: r.id, text: T(copied ? "rp.shared" : "rp.shared.nocopy", { link }), color: 10 };
+      // (j.days: how long the server keeps it - REPLAY_KEEP_DAYS)
+      shareNote = { id: r.id, text: T(copied ? "rp.shared" : "rp.shared.nocopy", { link }), color: 10,
+        more: j.days > 0 ? T("rp.shared.days", { n: String(j.days) }) : null };
     } catch (e) {
       shareNote = { id: r.id, text: T("rp.share.err", { msg: String(e.message || e).slice(0, 60) }), color: 12 };
     }

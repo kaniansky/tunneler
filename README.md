@@ -244,14 +244,17 @@ Games live in the server's memory, so a restart ends running games.
   `REPLAY_S3_ENDPOINT` (R2: `https://<account id>.r2.cloudflarestorage.com`), `REPLAY_S3_BUCKET`,
   `REPLAY_S3_ACCESS_KEY`, `REPLAY_S3_SECRET_KEY`, `REPLAY_S3_REGION` (R2: `auto`, the default). For R2:
   create a bucket, then an R2 API token with "Object Read & Write" for that bucket - its Access Key ID and
-  Secret Access Key are the two keys. Replays stay until the bucket's own rules delete them (an R2 lifecycle
-  rule, if you want one);
+  Secret Access Key are the two keys. Replays stay until the bucket's own rules delete them: for R2, the
+  bucket's Settings -> Object lifecycle rules -> Add rule, "Delete objects" after N days (and set
+  `REPLAY_KEEP_DAYS` to the same N);
 - else a folder: `REPLAY_DIR` (default `shared-replays/` next to server.js; the Docker image uses
-  `/app/shared-replays`, docker-compose.yml mounts a volume there), the newest 5000 kept;
+  `/app/shared-replays`, docker-compose.yml mounts a volume there), the newest 5000 kept (and none older than
+  `REPLAY_KEEP_DAYS` days, when set);
 - else the server's memory (lost on a restart).
 
-The server's log says which one it uses at start (`shared replays: ...`). The live server uses R2: Render's
-free disk is wiped on every deploy.
+`REPLAY_KEEP_DAYS` (optional): how long shared replays are kept - whoever shares one is told how long the link
+works. The server's log says which store it uses at start (`shared replays: ...`). The live server uses R2:
+Render's free disk is wiped on every deploy.
 
 ### Docker
 

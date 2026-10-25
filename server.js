@@ -30,7 +30,7 @@
 //        GET /api/rooms/<id>      one room (also private ones: their ids carry a random suffix)
 //        POST /api/replays        a replay (src/js/replay.js: gzip'd or plain JSON) -> {id}: shared - kept in an
 //                                 S3-compatible bucket (REPLAY_S3_*: Cloudflare R2...), else REPLAY_DIR (the
-//                                 newest MAX_SHARED), else memory
+//                                 newest MAX_SHARED), else memory; {id, days} when REPLAY_KEEP_DAYS says how long
 //        GET  /api/replays/<id>   that replay (gzip'd JSON); the page address /replay/<id> plays it
 //        POST /api/rooms          {name, public, spectators, seats?: [{kind: open|closed|easy|normal|hard,
 //                                  team: 1..8} x 8 (index = colour)], size, winScore, friendlyFire, roundTime,
@@ -505,10 +505,13 @@ function createServer(opts = {}) {
   // whoever has the link. In the S3-compatible bucket when there is one (opts.replayS3 / REPLAY_S3_*: kept until
   // the bucket's own rules delete them - an R2 lifecycle rule, if wanted), else on disk in replayDir (opts.replayDir
   // / REPLAY_DIR, default shared-replays/ next to this file - null: memory only; the newest MAX_SHARED kept), else
-  // memory. Nothing else is kept with it.
+  // memory. Nothing else is kept with it. REPLAY_KEEP_DAYS (opts.replayKeepDays): how long a shared replay is
+  // kept - the sharer is told; the folder's older files go here, the bucket needs its own rule for it (R2: an
+  // object lifecycle rule "delete after N days" - docs in README.md, Hosting).
   const s3 = s3Config(opts.replayS3 !== undefined ? opts.replayS3 : { endpoint: process.env.REPLAY_S3_ENDPOINT, bucket: process.env.REPLAY_S3_BUCKET,
     accessKey: process.env.REPLAY_S3_ACCESS_KEY, secretKey: process.env.REPLAY_S3_SECRET_KEY, region: process.env.REPLAY_S3_REGION });
   const replayDir = opts.replayDir !== undefined ? opts.replayDir : process.env.REPLAY_DIR || path.join(__dirname, "shared-replays");
+  const keepDays = Math.max(0, Math.floor(+(opts.replayKeepDays !== undefined ? opts.replayKeepDays : process.env.REPLAY_KEEP_DAYS) || 0));
   const shared = new Map();                              // id -> gzip'd bytes (memory, or a cache of the disk)
   let diskOk = false;
   if (replayDir && !s3) { try { fs.mkdirSync(replayDir, { recursive: true }); fs.accessSync(replayDir, fs.constants.W_OK); diskOk = true; } catch (e) { diskOk = false; } }
@@ -534,11 +537,12 @@ function createServer(opts = {}) {
     shared.set(id, gz);
     if (diskOk) {
       try { fs.writeFileSync(replayFile(id), gz); } catch (e) { /* the memory copy stays */ }
-      if (Math.random() < 0.05 || shared.size > MAX_SHARED) {   // (now and then: the oldest files beyond the limit go)
-        try {
+      if (Math.random() < 0.05 || shared.size > MAX_SHARED) {   // (now and then: the oldest files beyond the limit go,
+        try {                                                     // and those older than keepDays)
           const files = fs.readdirSync(replayDir).filter(f => f.endsWith(".replay"))
             .map(f => ({ f, t: fs.statSync(path.join(replayDir, f)).mtimeMs })).sort((a, b) => b.t - a.t);
-          for (const { f } of files.slice(MAX_SHARED)) { fs.unlinkSync(path.join(replayDir, f)); shared.delete(f.slice(0, -7)); }
+          const old = keepDays ? Date.now() - keepDays * 86400000 : -Infinity;
+          for (const { f } of files.filter((x, i) => i >= MAX_SHARED || x.t < old)) { fs.unlinkSync(path.join(replayDir, f)); shared.delete(f.slice(0, -7)); }
         } catch (e) { /* later */ }
       }
     }
@@ -555,7 +559,11 @@ function createServer(opts = {}) {
       return r.body;
     }
     if (!diskOk) return null;
-    try { return fs.readFileSync(replayFile(id)); } catch (e) { return null; }
+    try {
+      const f = replayFile(id);
+      if (keepDays && fs.statSync(f).mtimeMs < Date.now() - keepDays * 86400000) return null;   // (expired, not swept yet)
+      return fs.readFileSync(f);
+    } catch (e) { return null; }
   }
   const replayId = () => { const a = crypto.randomBytes(8); let s = ""; for (const b of a) s += "abcdefghijkmnpqrstuvwxyz23456789"[b & 31]; return s; };
   // wrong passwords per address: pwBlocked before checking one, pwFailed after a wrong one
@@ -594,7 +602,7 @@ function createServer(opts = {}) {
       let id = replayId();
       while (shared.has(id) || (!s3 && await sharedReplay(id))) id = replayId();   // (a bucket: 32^8 ids - no lookup)
       try { await keepShared(id, gz); } catch (e) { return json(res, 503, { error: "could not store it, try later" }); }
-      return json(res, 200, { id });
+      return json(res, 200, keepDays ? { id, days: keepDays } : { id });
     }
     const rm = /^\/api\/replays\/([a-z2-9]{8})$/.exec(p);
     if (rm && req.method === "GET") {
