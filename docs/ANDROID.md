@@ -89,7 +89,7 @@ App Signing, Google holds the real app signing key). Make the upload keystore on
 passwords) safe - every later update must be signed with the same key:
 
 ```sh
-keytool -genkeypair -v -keystore ~/.tauri/tunneler-online-upload.jks -storetype JKS \
+keytool -genkeypair -v -keystore ~/.tauri/android-upload.jks -storetype JKS \
   -keyalg RSA -keysize 2048 -validity 10000 -alias upload
 ```
 
@@ -97,7 +97,7 @@ Local release builds sign when `src-tauri/gen/android/keystore.properties` exist
 commit it):
 
 ```properties
-storeFile=/home/<you>/.tauri/tunneler-online-upload.jks
+storeFile=/home/<you>/.tauri/android-upload.jks
 storePassword=...
 keyAlias=upload
 keyPassword=...
@@ -114,7 +114,7 @@ tag; a push to an `app/**` branch or a manual run builds workflow artifacts only
 
 - `tunneler-online-<v>-android.apk` and `tunneler-online-<v>-android.aab` - signed, with the repository
   secrets
-  - `ANDROID_KEYSTORE` - the keystore file as base64 (`base64 -w0 tunneler-online-upload.jks`)
+  - `ANDROID_KEYSTORE` - the keystore file as base64 (`base64 -w0 ~/.tauri/android-upload.jks | gh secret set ANDROID_KEYSTORE` - the file must exist: a wrong path sets an empty secret, and the release comes out unsigned)
   - `ANDROID_KEYSTORE_PASSWORD`
   - `ANDROID_KEY_ALIAS` (e.g. `upload`)
   - `ANDROID_KEY_PASSWORD` (optional; the keystore password when missing)
