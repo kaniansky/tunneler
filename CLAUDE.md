@@ -128,6 +128,9 @@ may be redesigned, but always in the original's DOS look.
     without / wrong, host and returning client ids, per-address limit), chat (relay, cleaning, rate
     limit, the last 50 for joiners), limits per address.
   - `input-check.js` - gamepads / touch controls (pads.js) -> the keyboard's keys, held bits online.
+  - `replay-share-check.js` - shared replays: the real server's POST / GET /api/replays (gzip / plain, junk /
+    too large / too many refused, 404, kept across a restart on disk, memory without a folder), the
+    /replay/<id> address, `Links.parseReplay`.
   - `replay-check.js` - replays (replay.js): the input encoding, bot matches recorded (classic keys held,
     extended bits, line of sight, every game mode - survival's `aiDriven`) and played again without the AIs
     (every state check and the end the same), a changed input noticed, storage (newest MAX kept), files (gzip /
@@ -273,7 +276,9 @@ project dependency; install playwright-core in a scratch dir when needed).
   (`playerColor(p)` / `playerTextColor(p)` / `playerName(p)`: slot colors, lobby names); the map's score
   table lists every team (`teamLines`, wrapped to fit). `setScope(own, "self"|"team"|"everyone")` (a
   player, DESIGN-8P 23): the grid of their own view first, then teammates' / everybody else's in slot
-  order (classic: own half / the full split screen); `setScope(null)` = the modes above.
+  order (classic: own half / the full split screen); `setScope(null)` = the modes above. A phone held upright
+  (`upright()`): `gridCols` 1 column for 2 views, 2 for 3 - 8; `fit` sizes the canvas to the room above the
+  touch controls (`.tpad-stick`'s top; in the size key, so it fits again when they appear).
 - route `/games` = `lobby.js` - the list of public games (columns NAME, MODE, PLAYERS "2/4" = seated / seated +
   free open seats - during a match: connected / its human tanks (roomInfo `players` / `places`) -, AI
   (`bots`), WATCHING (`spec`; 0 = blank), STATE (`COLS`); games scroll; separator + "Create a new game" +
@@ -838,6 +843,14 @@ none, i.e. a page from before 2.0 - is refused (POST 409 `{code:
   only at 1x), Space / Enter / a tap = pause, + / -, PgUp / PgDn = 30 s (back = a new engine + quiet steps),
   Home, Esc; `Player.check` false = "plays differently here" (recorded by version X) -> the end screen at once.
   The end: the world map, any key -> "End of replay" (Statistics: a private engine with `STATS` copied, as
-  online.js; Watch again; Back). Status line: REPLAY, time / length, speed, PAUSED, keys + the view. Texts `rp.*`,
+  online.js; Watch again; Back). Status line: REPLAY, time / length, speed, PAUSED, keys + the view.
+  Shared links (owner, 2026-10-25): "Share a link" POSTs `Replay.toBlob(r)` to `Endpoint.api("/api/replays")`
+  -> {id}, copies `Endpoint.web(Links.replayLink(id))` (= /replay/<id>); the route /replay/<id> (app:
+  `/replays.html?share=<id>`, `Links.sharedReplay`) runs `loadShared(origin, id)`: GET /api/replays/<id>,
+  `Replay.save`, watch; "Open a replay link" parses with `Links.parseReplay` (any server's link, the app form,
+  a bare id). Server: `validReplay` (gunzip, the replay's fields, re-gzip), `keepShared` / `sharedReplay`
+  (REPLAY_DIR - opts.replayDir, default shared-replays/, null = memory; the Docker image sets /app/shared-replays,
+  docker-compose a volume), `MAX_SHARES_PER_MIN` 10, `MAX_SHARED` 5000, `MAX_REPLAY_BYTES` 512 KB; PRETTY
+  /replay/<id>. test/replay-share-check.js (the API) + replay-check (the page). Texts `rp.*`,
   `home.replays`, `back.replays`, an Information section. Test hooks `tunnelerReplay / tunnelerReplayUI /
   tunnelerReplayList`. Test: replay-check.js.

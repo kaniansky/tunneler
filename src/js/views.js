@@ -40,6 +40,7 @@ import { Lang } from "./lang.js";
 import { UniFont, UniText } from "./unitext.js";
 import { VGA_FONT } from "./vgafont.js";
 import { Scope } from "./scope.js";
+import { GameScreen } from "./screen.js";
 
 const MODES = ["grid", "map", "follow"];
 const ASPECT = 1.35;               // vertical / horizontal pixel scale of the 720x400 screen at 4:3
@@ -54,6 +55,11 @@ const raw = k => Lang.raw(k);
 const enc = s => Lang.enc(s);
 // display columns of font text (unitext.js: CJK / emoji take 2)
 const visLen = s => UniText.cols(s.replace(/\{\d+\}/g, ""));
+// a phone held upright (owner, 2026-10-25): the views in a column (2) or two (3 - 8) - side by side they were
+// a thin strip at the top of a tall screen
+const root = typeof window !== "undefined" ? window : globalThis;
+const upright = () => GameScreen.mobile() && (root.innerHeight || 0) > (root.innerWidth || 0);
+const gridCols = c => upright() ? (c <= 2 ? 1 : 2) : c <= 4 ? c : Math.ceil(c / 2);
 const load = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
 const save = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* private mode */ } };
 
@@ -271,7 +277,7 @@ class ViewModes {
       const kept = out ? scope.filter(c => !e || !e.alive || e.alive[c + 1]) : scope;
       const cells = out ? kept.concat(out.filter(c => !kept.includes(c))) : scope;
       if (!s.views && !(labels && (cells.length > 1 || out))) return { kind: "display", crop: cells.length > 1 ? null : cells[0] === 1 ? "green" : "blue" };
-      const c = cells.length, cols = c <= 4 ? c : Math.ceil(c / 2);
+      const c = cells.length, cols = gridCols(c);
       return { kind: "grid", cells, cols, rows: Math.ceil(c / cols), labels: labels && (c > 1 || !!out) };
     }
     if (play && this.mode === "map" && this.engine()) return { kind: "map" };
@@ -281,7 +287,7 @@ class ViewModes {
     }
     if (this.mode === "follow") return { kind: "grid", cells: [follow], cols: 1, rows: 1, labels };
     // up to 4 per row; 5 and 6 players fill 3 + 3 rather than 4 + 1 / 4 + 2
-    const cols = n <= 4 ? n : Math.ceil(n / 2), rows = Math.ceil(n / cols);
+    const cols = gridCols(n), rows = Math.ceil(n / cols);
     return { kind: "grid", cells: Array.from({ length: n }, (_, i) => i), cols, rows, labels };
   }
 
@@ -411,14 +417,21 @@ class ViewModes {
 
   // on-screen size: like canvas.game (4:3) / canvas.game.half (2:3) in style.css, other shapes inline
   fit(kind) {
-    const c = this.canvas, key = kind + c.width + "x" + c.height;
+    const c = this.canvas;
+    // (a phone held upright: as tall as the room above the touch controls - they show on the first touch:
+    // part of the key, so the views fit again then)
+    const stick = upright() && kind !== "half" && kind !== "full" && root.document && root.document.querySelector(".tpad-stick");
+    const sr = stick ? stick.getBoundingClientRect() : null;   // (shown: it has a size - it is position: fixed, no offsetParent)
+    const room = sr && sr.height > 0 ? Math.round(sr.top - 8 - c.getBoundingClientRect().top) : 0;
+    const key = kind + c.width + "x" + c.height + "/" + room;
     if (key === this.aspectKey) return;
     this.aspectKey = key;
     c.classList.toggle("half", kind === "half");
     if (kind === "half" || kind === "full") { c.style.width = ""; c.style.aspectRatio = ""; return; }
     const a = c.width / (c.height * ASPECT);
     c.style.aspectRatio = String(a);
-    c.style.width = "min(calc(100vw - 16px), calc((100vh - 90px) * " + a.toFixed(4) + "))";
+    c.style.width = room > 100 ? "min(calc(100vw - 16px), " + Math.floor(room * a) + "px)"
+      : "min(calc(100vw - 16px), calc((100vh - 90px) * " + a.toFixed(4) + "))";
   }
 
   surface(W, H) {

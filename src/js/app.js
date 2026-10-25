@@ -22,7 +22,7 @@ const ROUTES = [
   { re: /^\/(games\/?|lobby\.html)$/, title: "Tunneler - online", load: () => import("./lobby.js") },
   { re: /^\/(game\/.+|online\.html)$/, title: "Tunneler - online", load: () => import("./online.js") },
   { re: /^\/(split|skirmish|vs-computer)\/?$|^\/play\.html$/, title: "Tunneler", load: () => import("./play.js") },
-  { re: /^\/(replays(\/[^/]+)?\/?|replays\.html)$/, title: "Tunneler - replays", load: () => import("./replays.js") },
+  { re: /^\/(replays(\/[^/]+)?\/?|replay\/[a-z2-9]{8}\/?|replays\.html)$/, title: "Tunneler - replays", load: () => import("./replays.js") },
   { re: /^/, title: "Tunneler", load: () => import("./home.js") },
 ];
 const LOADING_DELAY = 150;                 // ms before "Loading..." shows while a route's module arrives

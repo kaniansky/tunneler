@@ -152,12 +152,14 @@ async function get(id) {
   return valid(r) ? r : memory && memory.get(id) || null;
 }
 async function remove(id) {
+  await db();                                // (opened first: without IndexedDB that makes the memory store)
   if (memory) memory.delete(id);
   await req("readwrite", s => s.delete(id));
 }
 // kept: the newest MAX
 async function save(rep) {
   if (!valid(rep)) return null;
+  await db();
   if (memory) memory.set(rep.id, rep);
   await req("readwrite", s => s.put(rep));
   const all = await list();

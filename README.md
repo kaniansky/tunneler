@@ -55,7 +55,7 @@ play stay exactly the same, and every player chooses their own look. **Modern** 
   `/split`, `/skirmish`, `/replays`.
 - **Replays** - every match you play or watch is kept in the browser (the newest 20). Watch one again like a
   spectator (every view, the live map or one tank; pause, 1/2x to 8x, 30 s back / on), see its statistics,
-  or save it as a `.replay` file and send it to someone.
+  share it as a link (`/replay/<id>`: whoever opens it watches at once) or save it as a `.replay` file.
 
 Game modes (skirmish and online; every mode's AI plays it too):
 

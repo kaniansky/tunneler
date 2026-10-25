@@ -133,13 +133,13 @@ function makeEnv(pathname) {
   const elements = {}, storage = new Map();
   const win = {
     document: { title: "", getElementById: id => elements[id] || (elements[id] = mkEl(id)), createElement: mkEl },
-    location: { search: "", pathname, hash: "", href: "http://x.test" + pathname },
+    location: { search: "", pathname, hash: "", href: "http://x.test" + pathname, origin: "http://x.test" },
     history: { replaceState() {} },
     localStorage: { getItem: k => storage.has(k) ? storage.get(k) : null, setItem: (k, v) => storage.set(k, String(v)) },
     addEventListener: (t, f) => { (listeners[t] = listeners[t] || []).push(f); }, removeEventListener() {},
     requestAnimationFrame: () => 0, cancelAnimationFrame() {},
     performance, setTimeout, clearTimeout, setInterval: (f, ms) => { const t = setInterval(f, ms); timers.push(t); return t; },
-    clearInterval, console, URLSearchParams, Math, atob, btoa, Uint8Array, TextEncoder, TextDecoder, Blob, Response,
+    clearInterval, console, URLSearchParams, Math, atob, btoa, Uint8Array, TextEncoder, TextDecoder, Blob, Response, CompressionStream, DecompressionStream,
   };
   win.window = win; win.globalThis = win;
   const ctx = vm.createContext(win);
@@ -221,6 +221,42 @@ async function viewer(classicRep, extRep) {
     env.key("PageDown"); await tick(100); env.key("PageUp"); await tick(100);
     ok(R().steps < SEEK_STEPS(), "PgUp: 30 s back");
     env.stop();
+  }
+  // sharing: Share a link uploads it (POST /api/replays) and copies the link; /replay/<id> fetches and plays one
+  {
+    const env = makeEnv("/replays");
+    const posts = [], copied = [];
+    env.win.fetch = async (url, o) => { posts.push([url, o && o.method, o && o.body && o.body.length]); return { ok: true, status: 200, json: async () => ({ id: "abcd2345" }) }; };
+    env.win.navigator = { clipboard: { writeText: async t => { copied.push(t); } } };
+    env.page("replays.html");
+    await env.win.Replay.save(Object.assign({}, extRep, { id: "s1" }));
+    await env.win.tunnelerReplayList();
+    const ui = env.win.tunnelerReplayUI();
+    ui.spec.items.find(it => it.key === "r:s1").go();
+    await ui.spec.items.find(it => it.key === "share").go();
+    const info = JSON.stringify(ui.spec.items.find(it => it.key === "share").info);
+    ok(posts.length === 1 && posts[0][0] === "/api/replays" && posts[0][1] === "POST" && posts[0][2] > 100 && copied[0] === "http://x.test/replay/abcd2345" && info.includes("/replay/abcd2345"),
+      "Share a link: uploaded (POST /api/replays), the link copied and shown: " + copied[0]);
+    env.win.fetch = async () => ({ ok: false, status: 503, json: async () => ({ error: "busy" }) });
+    await ui.spec.items.find(it => it.key === "share").go();
+    ok(JSON.stringify(ui.spec.items.find(it => it.key === "share").info).includes("busy"), "a failed share says why");
+    env.stop();
+  }
+  {
+    const env = makeEnv("/replay/abcd2345"), gz = new Uint8Array(await (await Replay.toBlob(Object.assign({}, extRep, { id: "fromserver" }))).arrayBuffer());
+    const asked = [];
+    env.win.fetch = async url => { asked.push(url); return { ok: true, status: 200, arrayBuffer: async () => gz.buffer.slice(gz.byteOffset, gz.byteOffset + gz.byteLength) }; };
+    env.page("replays.html");
+    await until(() => env.win.tunnelerReplay().watching);
+    ok(asked[0] === "/api/replays/abcd2345" && env.win.tunnelerReplay().rep.id === "fromserver" && (await env.win.Replay.get("fromserver")),
+      "/replay/<id>: fetched from the server, kept with the others, played");
+    env.stop();
+    const env2 = makeEnv("/replay/zzzz2345");
+    env2.win.fetch = async () => ({ ok: false, status: 404 });
+    env2.page("replays.html");
+    await tick(50);
+    ok(JSON.stringify(env2.win.tunnelerReplayUI().spec.lines).includes("12") && !env2.win.tunnelerReplay().watching, "a link the server doesn't know: said (red), nothing plays");
+    env2.stop();
   }
   // a replay that plays differently here: noticed, said, no statistics
   {

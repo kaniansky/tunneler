@@ -3,6 +3,16 @@
 All notable changes to Tunneler Online. Versions follow [semantic versioning](https://semver.org/);
 a release is made by pushing a version tag (see CONTRIBUTING.md).
 
+## Unreleased
+
+- **Share a replay as a link**: a replay's screen has "Share a link" - the replay goes to the game's server
+  and the link (`/replay/<id>`) is copied; whoever opens it watches the match at once, in a browser or the
+  app ("Open a replay link" on the Replays screen takes a pasted one). Servers keep shared replays in
+  `REPLAY_DIR` (the Docker image: a volume).
+- On a phone held upright, several views (your team's, everyone's) stack in a column as big as the room above
+  the touch controls - side by side they were a thin strip.
+- Replays: the first one saved in a browser without IndexedDB (a private window) is no longer lost.
+
 ## 5.0.0
 
 - **Modern graphics** (Settings, Graphics: original / modern; modern is the default, without WebGL2 the original): the same game

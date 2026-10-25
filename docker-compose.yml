@@ -18,9 +18,15 @@ services:
       - "${TUNNELER_PORT:-8050}:8050"
     environment:
       PORT: "8050"
+    # shared replays (links people send): kept across restarts and updates in this volume
+    volumes:
+      - replays:/app/shared-replays
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:8050/"]
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 10s
+
+volumes:
+  replays:

@@ -62,6 +62,20 @@ const Links = {
   // the replays kept in this browser (replay.js), one of them played (its id)
   replays: () => isApp ? "/replays.html" : "/replays",
   replay: id => isApp ? "/replays.html?id=" + enc(id) : "/replays/" + enc(id),
+  // a shared replay (POST /api/replays): its page here, and the link to send (always the server's address)
+  sharedReplay: id => isApp ? "/replays.html?share=" + enc(id) : "/replay/" + enc(id),
+  replayLink: id => "/replay/" + enc(id),
+  // a pasted replay link -> {origin, id} or null: https://host/replay/<id>, "host/replay/<id>", the app's
+  // ?share=<id> form, or just the id (origin "" = this server)
+  parseReplay(text) {
+    const t = String(text == null ? "" : text).trim();
+    if (/^[a-z2-9]{8}$/.test(t)) return { origin: "", id: t };
+    let u;
+    try { u = new URL(/^[a-z]+:\/\//i.test(t) ? t : (/^(localhost|127\.|192\.168\.|10\.)/i.test(t) ? "http://" : "https://") + t); } catch (e) { return null; }
+    if (u.protocol !== "http:" && u.protocol !== "https:") return null;
+    const m = /^\/replay\/([a-z2-9]{8})\/?$/.exec(u.pathname), id = m ? m[1] : u.searchParams.get("share");
+    return id && /^[a-z2-9]{8}$/.test(id) ? { origin: u.origin, id } : null;
+  },
   // A pasted invite link -> {origin, room, role} or null: https://host/game/<id>[/<color|watch>], the
   // .html forms (?room=&role=), "host/game/<id>" without https://, or just a game's id (origin "" = this
   // server; role null = any free seat, "spectate" = watch)

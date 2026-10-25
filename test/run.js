@@ -24,6 +24,7 @@ const TESTS = [
   "app-check.js",
   "sound-check.js",
   "replay-check.js",
+  "replay-share-check.js",
   "lang-check.js",
   "unicode-check.js",
   "input-check.js",

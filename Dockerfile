@@ -18,6 +18,9 @@ COPY src/package.json ./src/
 COPY src/js/netproto.js src/js/unitext.js src/js/unidata.js src/js/glyphs.js src/js/vgafont.js ./src/js/
 COPY --from=builder /app/public ./public
 ENV PORT=8050
+# shared replays (POST /api/replays): a folder the server may write - a volume keeps them across restarts
+ENV REPLAY_DIR=/app/shared-replays
+RUN mkdir -p /app/shared-replays && chown node /app/shared-replays
 EXPOSE 8050
 USER node
 CMD ["node", "server.js"]

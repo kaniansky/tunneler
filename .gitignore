@@ -2,3 +2,4 @@ node_modules
 public
 .claude/worktrees/
 .flatpak-builder/
+shared-replays/

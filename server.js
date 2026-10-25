@@ -28,6 +28,9 @@
 //
 // HTTP:  GET /api/rooms           public rooms
 //        GET /api/rooms/<id>      one room (also private ones: their ids carry a random suffix)
+//        POST /api/replays        a replay (src/js/replay.js: gzip'd or plain JSON) -> {id}: shared - kept in
+//                                 REPLAY_DIR (memory when it can't be written), the newest MAX_SHARED
+//        GET  /api/replays/<id>   that replay (gzip'd JSON); the page address /replay/<id> plays it
 //        POST /api/rooms          {name, public, spectators, seats?: [{kind: open|closed|easy|normal|hard,
 //                                  team: 1..8} x 8 (index = colour)], size, winScore, friendlyFire, roundTime,
 //                                  visible, watchOut, sight, password?} -> roomInfo + hostKey (defaults for anything
@@ -69,7 +72,7 @@
 //                     match players: {t:"b", v} held bits, {t:"k", a, s} keystroke (relayed as ANY_KEY),
 //                     {t:"h", m, n, h} state hash, {t:"r", screen, playing, round, wins, teamWins} cosmetic
 //                     anybody: {t:"chat", text}, {t:"ping", c}, {t:"rtt", ms} (round-trip time 0..9999)
-const http = require("http"), fs = require("fs"), path = require("path"), crypto = require("crypto");
+const http = require("http"), fs = require("fs"), path = require("path"), crypto = require("crypto"), zlib = require("zlib");
 const { WebSocketServer } = require("ws");
 // shared with the browser; the source copy, so the server never depends on a build (an ES module: node
 // >= 20.19 requires it as it is - package.json engines)
@@ -90,6 +93,9 @@ const MAX_ENTRIES = 250000;            // frame log entries per room (busy play:
 const MAX_TOTAL_ENTRIES = 4000000;     // all rooms' logs together: no new rooms above this (~ 400 MB)
 const LOG_CHUNK = 2000;                // log entries per message while a (re)joining client catches up
 const MAX_CREATES_PER_MIN = 30;        // POST /api/rooms per address
+const MAX_SHARES_PER_MIN = 10;         // POST /api/replays per address
+const MAX_SHARED = 5000;               // shared replays kept (the oldest go)
+const MAX_REPLAY_BYTES = 512 * 1024;   // one shared replay, as sent (gzip'd: a long match is ~50 KB)
 const MAX_ROOMS_PER_ADDR = 20;         // rooms created by one address that still exist
 const MAX_CONNECTS_PER_MIN = 120;      // websocket connections per address
 const MAX_PW_FAILS = 10;               // wrong game passwords per address and minute (then refused unchecked)
@@ -417,6 +423,14 @@ function createServer(opts = {}) {
       req.on("error", reject);
     });
   }
+  function readRaw(req, limit) {
+    return new Promise((resolve, reject) => {
+      let size = 0; const chunks = [];
+      req.on("data", c => { size += c.length; if (size <= limit) chunks.push(c); });
+      req.on("end", () => size > limit ? reject(new Error("too large")) : resolve(Buffer.concat(chunks)));
+      req.on("error", reject);
+    });
+  }
   // every screen is a route of the one page (index.html, src/js/app.js; docs/DESIGN-8P.md 31): its addresses
   // and the old page files all answer with that page, which shows the screen of the address
   const PRETTY = [
@@ -424,6 +438,7 @@ function createServer(opts = {}) {
     [/^\/game\/[^/]+(\/[a-z]+)?\/?$/, "/index.html"],      // one game's lobby (/watch: as a spectator; /<colour>: that seat)
     [/^\/(split|skirmish|vs-computer)\/?$/, "/index.html"], // split screen, a skirmish (/vs-computer: before 2.1)
     [/^\/replays(\/[^/]+)?\/?$/, "/index.html"],           // the replays kept in the browser, one of them played
+    [/^\/replay\/[a-z2-9]{8}\/?$/, "/index.html"],          // a shared replay (POST /api/replays)
     [/^\/(lobby|online|play|replays)\.html$/, "/index.html"], // the pages before 5.0 (the desktop app's addresses)
   ];
   // the API answers any origin (CORS): the desktop app's pages come from tauri://localhost /
@@ -448,7 +463,47 @@ function createServer(opts = {}) {
       return true;
     };
   }
-  const allowCreate = rateLimiter(MAX_CREATES_PER_MIN), allowConnect = rateLimiter(maxConnectsPerMin);
+  const allowCreate = rateLimiter(MAX_CREATES_PER_MIN), allowConnect = rateLimiter(maxConnectsPerMin), allowShare = rateLimiter(MAX_SHARES_PER_MIN);
+
+  // ------------------------------------------------------------ shared replays (docs/DESIGN-8P.md 33)
+  // A replay someone shares: checked (a replay's fields), stored gzip'd under a random id, given back to
+  // whoever has the link. On disk in replayDir (opts.replayDir / REPLAY_DIR, default shared-replays/ next to
+  // this file - null: memory only), else memory; the newest MAX_SHARED kept. Nothing else is kept with it.
+  const replayDir = opts.replayDir !== undefined ? opts.replayDir : process.env.REPLAY_DIR || path.join(__dirname, "shared-replays");
+  const shared = new Map();                              // id -> gzip'd bytes (memory, or a cache of the disk)
+  let diskOk = false;
+  if (replayDir) { try { fs.mkdirSync(replayDir, { recursive: true }); fs.accessSync(replayDir, fs.constants.W_OK); diskOk = true; } catch (e) { diskOk = false; } }
+  const replayFile = id => path.join(replayDir, id + ".replay");
+  function validReplay(bytes) {
+    let raw = bytes;
+    try { if (raw[0] === 0x1F && raw[1] === 0x8B) raw = zlib.gunzipSync(raw, { maxOutputLength: 16 * 1024 * 1024 }); } catch (e) { return null; }
+    let rep;
+    try { rep = JSON.parse(raw.toString("utf8")); } catch (e) { return null; }
+    const ok = rep && typeof rep === "object" && rep.format === 1 && Number.isInteger(rep.steps) && rep.steps > 0 &&
+      Array.isArray(rep.frames) && rep.frames.length && rep.frames.every(f => Array.isArray(f) && Number.isInteger(f[0]) && f[0] > 0 && typeof f[1] === "string") &&
+      rep.opts && typeof rep.opts === "object" && Number.isFinite(rep.seed);
+    return ok ? zlib.gzipSync(Buffer.from(JSON.stringify(rep))) : null;
+  }
+  function keepShared(id, gz) {
+    shared.set(id, gz);
+    if (diskOk) {
+      try { fs.writeFileSync(replayFile(id), gz); } catch (e) { /* the memory copy stays */ }
+      if (Math.random() < 0.05 || shared.size > MAX_SHARED) {   // (now and then: the oldest files beyond the limit go)
+        try {
+          const files = fs.readdirSync(replayDir).filter(f => f.endsWith(".replay"))
+            .map(f => ({ f, t: fs.statSync(path.join(replayDir, f)).mtimeMs })).sort((a, b) => b.t - a.t);
+          for (const { f } of files.slice(MAX_SHARED)) { fs.unlinkSync(path.join(replayDir, f)); shared.delete(f.slice(0, -7)); }
+        } catch (e) { /* later */ }
+      }
+    }
+    while (shared.size > MAX_SHARED) shared.delete(shared.keys().next().value);
+  }
+  function sharedReplay(id) {
+    if (shared.has(id)) return shared.get(id);
+    if (!diskOk) return null;
+    try { return fs.readFileSync(replayFile(id)); } catch (e) { return null; }
+  }
+  const replayId = () => { const a = crypto.randomBytes(8); let s = ""; for (const b of a) s += "abcdefghijkmnpqrstuvwxyz23456789"[b & 31]; return s; };
   // wrong passwords per address: pwBlocked before checking one, pwFailed after a wrong one
   const pwFails = new Map();
   const pwRecent = addr => (pwFails.get(addr) || []).filter(t => Date.now() - t < 60000);
@@ -475,6 +530,24 @@ function createServer(opts = {}) {
       if (!allowCreate(addr)) return json(res, 429, { error: "too many new games, try again in a minute" });
       const room = createRoom(body.name, body.public !== false, body.spectators !== false, body, addr);
       return json(res, 200, Object.assign(roomInfo(room), { hostKey: room.hostKey }));
+    }
+    if (p === "/api/replays" && req.method === "POST") {
+      let bytes;
+      try { bytes = await readRaw(req, MAX_REPLAY_BYTES); } catch (e) { return json(res, 413, { error: "too large" }); }
+      if (!allowShare(addressOf(req))) return json(res, 429, { error: "too many shared replays, try again in a minute" });
+      const gz = validReplay(bytes);
+      if (!gz) return json(res, 400, { error: "not a replay" });
+      let id = replayId();
+      while (sharedReplay(id)) id = replayId();
+      keepShared(id, gz);
+      return json(res, 200, { id });
+    }
+    const rm = /^\/api\/replays\/([a-z2-9]{8})$/.exec(p);
+    if (rm && req.method === "GET") {
+      const gz = sharedReplay(rm[1]);
+      if (!gz) return json(res, 404, { error: "no such replay" });
+      res.writeHead(200, { "Content-Type": "application/gzip", "Cache-Control": "public, max-age=86400", ...CORS });
+      return res.end(gz);
     }
     const m = /^\/api\/rooms\/([a-z0-9-]{1,60})$/.exec(p);
     if (m && req.method === "GET") {

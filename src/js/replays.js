@@ -1,6 +1,7 @@
 // The replays (docs/DESIGN-8P.md 33): /replays = the matches kept in this browser (replay.js: every match
 // played or watched here, the newest Replay.MAX), newest first - one opens its screen (watch, save as a file,
-// delete); "Open a replay file" reads a .replay file (saved here or sent by someone). /replays/<id> plays one
+// share a link, delete); "Open a replay file" reads a .replay file, "Open a replay link" a link someone sent
+// (shared: POST /api/replays on the game's server; /replay/<id> - the app: ?share=<id> - fetches and plays it). /replays/<id> plays one
 // (the desktop app: /replays.html[?id=]): the match again on its own engine, watched like a spectator (every
 // view, the live map or one tank - Tab, 1 2 3, Left / Right) with Space / Enter (a tap) = pause, + / - =
 // speed (1/2x .. 8x; sound only at 1x), PgUp / PgDn = 30 s back / on, Home = from the start, Esc = back.
@@ -9,7 +10,7 @@ import "./gfx-modern.js";
 import "./gfx-hud.js";
 import { Display } from "./display.js";
 import { DosUI } from "./dosui.js";
-import { Links } from "./endpoint.js";
+import { Endpoint, Links } from "./endpoint.js";
 import { TunnelerEngine } from "./engine.js";
 import { Gfx } from "./gfx.js";
 import { Lang } from "./lang.js";
@@ -94,13 +95,14 @@ export function mount() {
     if (!list.length) items.push({ key: "none", label: T("rp.none"), disabled: true });
     items.push({ key: "sep", separator: true });
     items.push({ key: "file", label: T("rp.file"), info: fileError ? [{ text: T("rp.file.err"), color: 12 }] : [T("rp.file.i")], go: openFile });
+    items.push({ key: "link", label: T("rp.link"), info: [T("rp.link.i")], go: () => openLink() });
     items.push({ key: "gap", label: "", disabled: true });
     items.push({ key: "back", label: T("back.main"), info: [T("back.main.i")], go: home });
-    const shown = Math.max(1, Math.min(items.length - 4, ROWS)), bottom = 3 + 3 + shown + 4;
+    const shown = Math.max(1, Math.min(items.length - 5, ROWS)), bottom = 3 + 3 + shown + 5;
     const C = cols();
     ui.show({
       lines: [{ row: 2, text: T("rp.title"), color: 12 }],
-      box: { x: 2, y: 3, w: 76, rows: shown }, fixed: 4,
+      box: { x: 2, y: 3, w: 76, rows: shown }, fixed: 5,
       header: UniText.padEnd(" " + T("rp.h.date"), C[0] + 1) + (C[1] ? UniText.padEnd(T("rp.h.game"), C[1]) : "") + UniText.padEnd(T("rp.h.players"), C[2]) + T("rp.h.time"),
       items, infoRow: bottom + 2, back: home,
     }, keep);
@@ -137,6 +139,8 @@ export function mount() {
       lines, box: { y: 7 }, infoRow: 9 + who.length + 7, back: () => { armed = 0; showList(); },
       items: [...who, { key: "gap0", label: "", disabled: true },
         { key: "watch", label: T("rp.watch"), info: [T("rp.watch.i")], go: () => Nav.go(Links.replay(r.id)) },
+        { key: "share", label: T("rp.share"), go: () => shareReplay(r),
+          info: shareNote && shareNote.id === r.id ? [{ text: shareNote.text, color: shareNote.color }] : [T("rp.share.i1"), T("rp.share.i2")] },
         { key: "save", label: T("rp.save"), go: () => saveFile(r),
           info: saveNote && saveNote.id === r.id ? [{ text: saveNote.text, color: saveNote.color }, T("rp.version", { v: r.version })] : [T("rp.save.i"), T("rp.version", { v: r.version })] },
         { key: "delete", label: T("rp.delete"), info: [sure ? { text: T("rp.delete.sure"), color: 12 } : T("rp.delete.i")],
@@ -152,6 +156,65 @@ export function mount() {
   // the Android app: its own way into the Downloads folder (MainActivity.kt - a download does nothing in
   // its web view), then the screen says where it went; a browser: a download
   let saveNote = null;                                     // {id, text, color} under "Save as a file"
+  // a link to it: the replay sent to the game's server (POST /api/replays), the link copied (and shown)
+  let shareNote = null;                                    // {id, text, color} under "Share a link"
+  async function shareReplay(r) {
+    shareNote = { id: r.id, text: T("rp.sharing"), color: 7 };
+    detail(r, true);
+    try {
+      const res = await fetch(Endpoint.api("/api/replays"), { method: "POST", headers: { "Content-Type": "application/octet-stream" },
+        body: new Uint8Array(await (await Replay.toBlob(r)).arrayBuffer()) });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || !j.id) throw new Error(j.error || "HTTP " + res.status);
+      const link = Endpoint.web(Links.replayLink(j.id));
+      let copied = false;
+      try { if (navigator.clipboard) { await navigator.clipboard.writeText(link); copied = true; } } catch (e) { copied = false; }
+      shareNote = { id: r.id, text: T(copied ? "rp.shared" : "rp.shared.nocopy", { link }), color: 10 };
+    } catch (e) {
+      shareNote = { id: r.id, text: T("rp.share.err", { msg: String(e.message || e).slice(0, 60) }), color: 12 };
+    }
+    if (!watching && ui.spec && ui.spec.items.some(it => it.key === "share")) detail(r, true);
+  }
+  // a shared replay: fetched from the server it was shared on, kept with the others, played
+  async function loadShared(origin, id) {
+    watching = false;
+    ui.show({ lines: [{ row: 2, text: T("rp.title"), color: 12 }, { row: 10, text: T("rp.fetching"), color: 7 }],
+      box: { y: 13 }, infoRow: 18, back, items: [{ key: "back", label: T("back.replays"), info: [T("back.replays.i")], go: back }] });
+    try {
+      const res = await fetch((origin || Endpoint.base()) + "/api/replays/" + id);
+      if (!res.ok) throw new Error(res.status === 404 ? T("rp.gone.404") : "HTTP " + res.status);
+      const r = await Replay.fromBytes(new Uint8Array(await res.arrayBuffer()));
+      await Replay.save(r);
+      watch(r);
+    } catch (e) {
+      ui.show({ lines: [{ row: 2, text: T("rp.title"), color: 12 }, { row: 10, text: T("rp.gone", { msg: String(e.message || e).slice(0, 60) }), color: 12 }],
+        box: { y: 13 }, infoRow: 18, back, items: [{ key: "back", label: T("back.replays"), info: [T("back.replays.i")], go: back }] });
+    }
+  }
+  // "Open a replay link": a pasted link (or a replay's id)
+  const linkForm = { value: "", max: 300, width: 56, error: false };
+  function openLink(keep) {
+    linkForm.placeholder = T("rp.link.ph");
+    const go = () => {
+      const l = Links.parseReplay(linkForm.value);
+      if (!l) { linkForm.error = true; ui.sel = 0; return openLink(true); }
+      linkForm.value = ""; linkForm.error = false;
+      const here = (Endpoint.base() || location.origin).replace(/\/+$/, "");
+      if (!l.origin || l.origin === here) Nav.go(Links.sharedReplay(l.id));
+      else loadShared(l.origin, l.id);
+    };
+    const backL = () => { linkForm.error = false; showList(); };
+    ui.show({
+      lines: [{ row: 2, text: T("rp.link.title"), color: 12 }, { row: 6, text: T("rp.link.i"), color: 3 }],
+      box: { y: 9 }, infoRow: 16, back: backL,
+      items: [{ key: "link", label: T("link.label"), input: linkForm, align: "left",
+        info: linkForm.error ? [{ text: T("rp.link.err"), color: 12 }] : [T("rp.link.i2")], go },
+      { key: "go", label: T("rp.link.go"), info: [T("rp.link.i2")], go },
+      { key: "gap", label: "", disabled: true },
+      { key: "back", label: T("back.replays"), info: [T("back.replays.i")], go: backL }],
+    }, keep);
+  }
+
   async function saveFile(r) {
     const blob = await Replay.toBlob(r), A = window.TunnelerAndroid;
     if (A && A.saveFile) {
@@ -326,6 +389,8 @@ export function mount() {
   }
 
   // ------------------------------------------------------------ which screen: /replays/<id> (?id=) plays one
+  const sh = /^\/replay\/([a-z2-9]{8})\/?$/.exec(location.pathname), share = sh ? sh[1] : new URLSearchParams(location.search).get("share");
+  if (share && /^[a-z2-9]{8}$/.test(share)) { loadShared("", share); return; }
   const m = /^\/replays\/([^/]+)\/?$/.exec(location.pathname);
   let id = new URLSearchParams(location.search).get("id");
   if (m) { try { id = decodeURIComponent(m[1]); } catch (e) { id = m[1]; } }
