@@ -9,10 +9,14 @@
 // never remembered as the result to send; its end comes back to that day's board). /challenge?board=<day> opens the
 // leaderboard on that day. The day and the board come from the game's server (Endpoint); without it the computer's
 // own day (UTC) is shown and played.
+// Accounts (docs/v6/ACCOUNTS.md): on a server that needs them, sending needs a session (LOG IN first, then it sends) and
+// the board's entry is the account's - no name prompt then; looking at the challenge and the board needs nothing.
+import { Account } from "./account.js";
 import { Challenge } from "./challenge.js";
 import { DosUI } from "./dosui.js";
 import { Endpoint, Links } from "./endpoint.js";
 import { Lang } from "./lang.js";
+import { Login } from "./login.js";
 import { Nav } from "./nav.js";
 import { Pads } from "./pads.js";
 import { Replay } from "./replay.js";
@@ -99,7 +103,7 @@ export function mount() {
       : you ? UniText.fromRaw(Lang.raw("ch.best").replace("{rank}", you.rank).replace("{total}", board.total).replace("{score}", scoreText(you, cfg))) : T("ch.best.none") });
     if (note) lines.push({ row: 12, text: note.text, color: note.color });
     const items = [{ key: "play", label: T("ch.play"), info: [T("ch.play.i"), T("ch.play.i2")], go: () => Nav.go(Links.cpu("challenge=" + day)) }];
-    if (pending) items.push({ key: "send", label: T("ch.send"), go: send,   // (yesterday's: said so)
+    if (pending) items.push({ key: "send", label: T("ch.send"), go: () => send(),   // (yesterday's: said so)
       info: [UniText.fromRaw(Lang.raw(L.day === day ? "ch.send.i" : "ch.send.prev").replace("{score}", scoreText(L.result, Challenge.config(L.day)))), T("ch.send.i2")] });
     items.push({ key: "board", label: T("ch.board"), info: [T("ch.board.i")], go: () => showBoard() },
       { key: "gap", label: "", disabled: true },
@@ -244,7 +248,7 @@ export function mount() {
     loading = true;
     let fresh = false;
     try {
-      const res = await fetch(Endpoint.api("/api/challenge?cid=" + encodeURIComponent(cid)));
+      const res = await fetch(Endpoint.api("/api/challenge?cid=" + encodeURIComponent(cid)), { headers: Account.auth() });
       if (!res.ok) throw new Error("HTTP " + res.status);
       const j = await res.json();
       if (!j || !Challenge.validDay(j.day)) throw new Error("no day");
@@ -263,9 +267,14 @@ export function mount() {
     return T("ch.err.bad", { msg: String(msg || code || "?").slice(0, 50) });
   };
   let sending = false;
-  async function send() {
+  async function send(needLogin) {
     const L = last();
     if (sending || !L) return;
+    // (accounts: a session first - LOG IN, then this again; Back: the challenge)
+    if ((needLogin || Account.required() === true) && !Account.session()) {
+      view = "login";
+      return Login.ask(ui, { done: () => { main(); send(); }, back: () => main(), backKey: "ch.back" });
+    }
     sending = true;
     note = { text: T("ch.sending"), color: 7 };
     main(true);
@@ -276,9 +285,11 @@ export function mount() {
       let res;
       try {
         res = await fetch(Endpoint.api("/api/challenge/" + L.day + "?cid=" + encodeURIComponent(cid) + "&name=" + encodeURIComponent(DosUI.playerName())),
-          { method: "POST", headers: { "Content-Type": "application/octet-stream" }, body });
+          { method: "POST", headers: Object.assign({ "Content-Type": "application/octet-stream" }, Account.auth()), body });
       } catch (e) { note = { text: T("ch.err.net", { msg: String(e.message || e).slice(0, 50) }), color: 12 }; return; }
       const j = await res.json().catch(() => ({}));
+      // (accounts: no session / not any more - log in, then send it)
+      if (res.status === 401 && j.code === "session") { Account.logout(); Account.config(true); note = null; sending = false; return send(true); }
       if (!res.ok || !j.ok) {
         note = { text: errText(j.code || (res.status === 429 ? "busy" : ""), j.error || "HTTP " + res.status), color: 12 };
         if (["day", "differs", "config", "unfinished", "long", "gone"].includes(j.code)) store.set(LAST, JSON.stringify(Object.assign(L, { sent: true })));   // (it never will be accepted)
@@ -314,6 +325,8 @@ export function mount() {
     if (Challenge.validDay(boardDay)) { bday = boardDay; showBoard(); } else main();
     load();
   };
-  if (!DosUI.playerName()) { view = "name"; ui.askName(start, home); }
+  // (a name only for a server without accounts - asked as before; with them, sending asks to log in)
+  if (Account.required() !== true && !DosUI.playerName()) { view = "name"; ui.askName(start, home); }
   else start();
+  Account.config().then(on => { if (on && view === "name") start(); });
 }

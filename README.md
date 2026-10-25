@@ -261,6 +261,22 @@ rooms, matches, errors}`, and pages report the errors they catch to the server's
 works. The server's log says which store it uses at start (`shared replays: ...`). The live server uses R2:
 Render's free disk is wiped on every deploy.
 
+**Player accounts** (docs/v6/ACCOUNTS.md): online games and daily-challenge results need an account on the server
+(a username and a password - no e-mail; a recovery code is the way back in). Set by environment variables:
+
+- `ACCOUNTS=off` - no accounts: free player names as before (a LAN game, a server for friends). Default: on.
+- `ACCOUNT_SECRET` - the key that signs the players' login tokens (any long random string). Without it the server
+  makes one at its first start and keeps it with the accounts; set it to be independent of the store.
+- Where accounts are kept: the replays' bucket - or `ACCOUNT_S3_BUCKET`, a bucket of their own with the same
+  endpoint and keys -, else a folder (`ACCOUNT_DIR`, default `accounts/` in `REPLAY_DIR`), else memory (lost on a
+  restart: development only). **A bucket lifecycle rule that deletes old replays deletes accounts in the same
+  bucket too** (an account is refreshed once a day when it is used, so only accounts unused for that long would
+  go): with `REPLAY_KEEP_DAYS` / such a rule, give accounts their own bucket (`ACCOUNT_S3_BUCKET`) - the log warns.
+
+Behind a reverse proxy (Render, a CDN, nginx) set `TRUST_PROXY=1`, or the per-address limits of logins and sign-ups
+count every player as one address. The log says it at start (`accounts: on, kept in ...`). Passwords and recovery codes are kept only as scrypt
+hashes; players delete their accounts in the game (Settings, Online).
+
 ### Docker
 
 The easiest way is Docker Compose with the published image (`docker-compose.yml` in this repo):

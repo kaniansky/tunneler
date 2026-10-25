@@ -19,7 +19,12 @@ Data safety form whenever online play or replay sharing changes.
 
 ## App access
 
-- **All functionality is available without any special access.** No login, no account, no paywall.
+- **Up to 5.x: all functionality is available without any special access.** No login, no account, no paywall.
+- **From version 6 (player accounts, docs/v6/ACCOUNTS.md):** online games and sending daily-challenge results need
+  an account on the game server; choose **"All or some functionality is restricted"** and give the reviewers a
+  test login: create one on the public server first (main menu -> Online game -> Create an account, e.g. username
+  `PlayReview`) and enter its username / password, plus "or create your own in the app: no e-mail needed". No
+  paywall either way; split screen, skirmish, replays, maps and viewing the daily challenge need no login.
 - Optional note for the reviewers: "Online games use a public server
   (https://tunneler-online.onrender.com). It runs on a free tier and can take up to a minute to wake up the
   first time. Skirmish (main menu -> Skirmish -> Start a new game) works offline."
@@ -32,13 +37,14 @@ Overview answers:
 |---|---|
 | Does your app collect or share any of the required user data types? | **Yes** (only when the player uses online games - see below) |
 | Is all of the user data collected by your app encrypted in transit? | **Yes** (the default server is HTTPS / WSS; see the note on custom servers) |
-| Do you provide a way for users to request that their data is deleted? | **No** - nothing is kept: the data lives in the server's memory only while the game room exists and is deleted automatically (rooms go after about 10 minutes without players). Add that in the explanation field if the form offers one. |
-| Account creation | The app has **no accounts** (so no account deletion URL is needed). |
+| Do you provide a way for users to request that their data is deleted? | Up to 5.x: **No** - nothing is kept (the server's memory only while the game room exists). From version 6: **Yes** - Settings -> Online -> Delete account deletes the account and everything stored with it (its daily-challenge entries and their replays) at once. |
+| Account creation | Up to 5.x: no accounts. From version 6: **Yes - username and password** ("My app allows users to create an account", method: username and password, in the app). **Account deletion**: in the app (Settings -> Online -> Delete account, confirmed with the password - Google Play requires it in the app) and the **web link** the form asks for: `https://kaniansky.com/tunneler/privacy.html#delete` (it says how; the browser version at https://tunneler-online.onrender.com/ is the same game, so an account can be deleted there without the app). |
 | Independent security review | No |
 
 Data types to declare (everything else: not collected). For each: **Collected: yes, Shared: no**,
 **Optional** (users can play without it - skirmish never connects anywhere), **Purpose: App functionality**
-only (no analytics, no ads, no personalization, no fraud prevention, no account management).
+only (no analytics, no ads, no personalization, no fraud prevention) - from version 6 also **Account management**
+for Name and User IDs.
 
 | Category -> data type | What it is | Processed ephemerally? |
 |---|---|---|
@@ -46,6 +52,8 @@ only (no analytics, no ads, no personalization, no fraud prevention, no account 
 | Messages -> **Other in-app messages** | Lobby chat messages, relayed to everyone in the same game; the room keeps the last 50 in memory while it exists. | No (kept for joiners while the room lives) - declaring "No" is the safe answer |
 | App activity -> **App interactions** | The keys pressed during an online match (the lockstep game input), relayed to the other players and kept in the server's memory for the match. | Yes is defensible (memory only, for the running match), but **No** is the safer answer |
 | Device or other IDs -> **Device or other IDs** | A random id the game makes once (`tunneler.client` in local storage) - not an Android / hardware id; the server uses it to give a player their seat back after a lost connection and for kicks. | No |
+| Personal info -> **User IDs** (version 6) | The account: its username (also Personal info -> Name: stored, not ephemeral) and a random account id. The password and the recovery code are stored only as scrypt hashes (no Data safety type covers credentials; they serve Account management). Required for online play, optional for the app (everything else works without an account). | No |
+| App activity -> **Other user-generated content** (version 6) | Daily-challenge results sent with the account: the place on the day's leaderboard and the match's replay, public on the leaderboard for 30 days; deleted with the account. | No |
 
 Not declared, and why:
 
@@ -112,7 +120,7 @@ Violence), USK 6, with the interactive element **"Users Interact"**.
 | Government app | No |
 | Financial features | None |
 | Health | None (not a health app) |
-| Data deletion (account) | No accounts |
+| Data deletion (account) | Up to 5.x: no accounts. Version 6: in the app (Settings -> Online -> Delete account) and the web link `https://kaniansky.com/tunneler/privacy.html#delete` |
 | Photo and video permissions, all-files access, foreground services, exact alarms, accessibility | Not used (the app requests only `INTERNET`) |
 
 ## Store settings

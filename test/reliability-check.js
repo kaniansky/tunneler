@@ -390,7 +390,8 @@ async function main() {
   console.log("SIGTERM on the program");
   {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tunneler-state-"));
-    const env = Object.assign({}, process.env, { PORT: "0", STATE_DIR: dir, REPLAY_DIR: path.join(dir, "replays"), UPDATE_CHECK: "0", STATIC_DIR: "src" });
+    // (accounts off: an anonymous client - the program has them on by default, docs/v6/ACCOUNTS.md)
+    const env = Object.assign({}, process.env, { PORT: "0", STATE_DIR: dir, REPLAY_DIR: path.join(dir, "replays"), UPDATE_CHECK: "0", STATIC_DIR: "src", ACCOUNTS: "off" });
     for (const k of Object.keys(env)) if (k.startsWith("REPLAY_S3_")) delete env[k];
     const p = spawn(process.execPath, [path.join(__dirname, "..", "server.js")], { env, stdio: ["ignore", "pipe", "pipe"] });
     let out = "";

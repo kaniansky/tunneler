@@ -1,6 +1,7 @@
 // Homepage, in the look of TUNNELER's own main menu (see dosui.js). Texts from lang.js.
 // Screens: the main menu, the split-screen settings (/#split) and the vs computer slot editor (/#cpu,
 // docs/DESIGN-8P.md 20). Their settings are remembered in localStorage and passed to play.html.
+import { Account } from "./account.js";
 import { Controls } from "./controls.js";
 import { CpuCode } from "./cpucode.js";
 import { Display } from "./display.js";
@@ -9,6 +10,7 @@ import { Endpoint, Links } from "./endpoint.js";
 import { TunnelerEngine } from "./engine.js";
 import { Gfx } from "./gfx.js";
 import { Lang } from "./lang.js";
+import { Login } from "./login.js";
 import { MapStore } from "./mapstore.js";
 import { Pads } from "./pads.js";
 import { GameScreen } from "./screen.js";
@@ -205,10 +207,40 @@ export function mount() {
   // desktop app only: the online server (Endpoint, "tunneler.server"; empty = the public one), stored on
   // Enter and when leaving the screen
   const serverForm = { value: Endpoint.get(), max: 120, width: 36, placeholder: Endpoint.DEFAULT.replace(/^https:\/\//, "") };
-  const saveServer = () => { serverForm.value = Endpoint.set(serverForm.value); };
+  // (another server: its own accounts - asked whether it needs one)
+  const saveServer = () => { const was = Endpoint.get(); serverForm.value = Endpoint.set(serverForm.value); if (serverForm.value !== was) Account.config(true).then(() => { if (onOnline()) settings(true); }); };
   // the player's name for online games (DosUI.playerName, "tunneler.name"), stored on Enter and when leaving
   const nameForm = { value: DosUI.playerName(), max: DosUI.NAME_MAX, width: DosUI.NAME_MAX };
   const saveName = () => { nameForm.value = DosUI.setPlayerName(nameForm.value); };
+  // ---- the account on the game's server (docs/v6/ACCOUNTS.md): asked now whether it needs one (the next screen knows),
+  // Settings, Online shows it - Log in / Log out / Change password / Delete account (the screens: login.js)
+  const onOnline = () => !!(ui.spec && ui.spec.items && ui.spec.items.some(i => i.key === "account" || i.key === "name"));
+  Account.config().then(on => { if (on && onOnline()) settings(true); });
+  if (Account.session()) Account.check().then(() => { if (onOnline()) settings(true); });
+  let accNote = null;                                     // {text, color}: what just happened (logged out, deleted...)
+  // back to Settings, Online, on the account's row
+  function toAccount(note) {
+    accNote = note || null;
+    setCat = "online";
+    if (MOBILE) setOpen = "online";
+    settings();
+    const i = ui.spec.items.findIndex(it => it.key === "account");
+    if (i >= 0) { ui.sel = i; ui.draw(); }
+  }
+  const openLogin = () => { accNote = null; Login.ask(ui, { done: () => toAccount(), back: () => toAccount(), backKey: "set.back" }); };
+  function accountRows() {
+    const s = Account.session();
+    const rows = [{ key: "account", align: "left", label: pad("set.account") + (s ? Lang.enc(s.name) : T("set.account.none")),
+      info: [accNote || (s ? T("set.account.i1") : T("set.account.in.i")), T("set.account.i2")], go: () => { if (!s) openLogin(); } }];
+    if (!s) rows.push({ key: "login", label: T("acc.login.go"), info: [T("set.account.in.i"), T("set.account.i2")], go: openLogin });
+    else rows.push({ key: "logout", label: T("acc.logout"), info: [T("acc.logout.i")], go: () => { Account.logout(); toAccount({ text: T("acc.out"), color: 10 }); } },
+      { key: "chpw", label: T("acc.change"), info: [T("acc.change.i"), T("acc.change.i2")],
+        go: () => Login.change(ui, { done: () => toAccount({ text: T("acc.changed"), color: 10 }), back: () => toAccount() }) },
+      { key: "delacc", label: T("acc.delete"), info: [T("acc.delete.i")],
+        go: () => Login.remove(ui, { done: () => toAccount({ text: T("acc.deleted"), color: 10 }), back: () => toAccount() }) });
+    rows.push({ key: "gap-acc", label: "", disabled: true });   // (the account's group, then the rest)
+    return rows;
+  }
   // ------------------------------------------------------------------ Settings: two boxes - the categories
   // on the left (Back to main menu below them), the chosen one's settings on the right (owner, 2026-10-24).
   // The right box changes as the selection moves through the categories (DosUI onSel); Up / Down stay
@@ -234,7 +266,7 @@ export function mount() {
   const COLORS8 = ["blue", "green", "cyan", "yellow", "white", "pink", "violet", "teal"];
   // a key row's label: "BLUE up: "
   const keyLabel = (set, a) => Lang.raw(set) + " " + Lang.raw("ctl." + a) + ": ";
-  const rowLabels = () => ["set.name", "home.lang", "set.sound", "set.volume", "set.stereo", "set.fade", "set.gfx", "set.fullscreen",
+  const rowLabels = () => ["set.name", "set.account", "home.lang", "set.sound", "set.volume", "set.stereo", "set.fade", "set.gfx", "set.fullscreen",
     "set.scale", "set.tankcolors", "set.smooth", "set.ping", "set.prefer", "set.chatsound", "set.showchat", "touch.size", "touch.left"]
     .concat(isApp() ? ["set.server"] : [], Object.keys(Gfx.MODERN).map(k => "mod." + k))
     .map(k => Lang.raw(k) || "").concat(CTL() ? Controls.SETS.flatMap(st => Controls.ACTIONS.map(a => keyLabel(st, a))) : []);
@@ -367,11 +399,13 @@ export function mount() {
       return rows;
     }
     if (c === "online") {
+      // (a server with accounts: the account's rows instead of the name - docs/v6/ACCOUNTS.md)
+      const nameRows = Account.required() === true ? accountRows() : [{ key: "name", label: pad("set.name"), input: nameForm, align: "left", info: [T("set.name.i1"), T("set.name.i2")],
+        go: () => { saveName(); settings(true); } }];
       const prefer = COLORS8.includes(load("tunneler.online.color", "")) ? load("tunneler.online.color", "") : "";
       const shown = load("tunneler.chat.hide", "0") !== "1";          // (Show chat: the stored key says hidden)
       return [
-        { key: "name", label: pad("set.name"), input: nameForm, align: "left", info: [T("set.name.i1"), T("set.name.i2")],
-          go: () => { saveName(); settings(true); } },
+        ...nameRows,
         ...(isApp() ? [{ key: "server", label: pad("set.server"), input: serverForm, align: "left",
           info: [T("set.server.i1"), T("set.server.i2")], go: () => { saveServer(); settings(true); } }] : []),
         L("prefer", pad("set.prefer") + (prefer ? Lang.enc(Lang.raw(prefer)) : T("set.prefer.none")), [T("set.prefer.i1"), T("set.prefer.i2")],
@@ -395,9 +429,9 @@ export function mount() {
       ...["small", "medium", "large"].map(v => R("touch.size." + v)),
       ...Gfx.MODES.map(v => R("gfx." + v)),
       ...Object.keys(Gfx.MODERN).flatMap(k => Gfx.MODERN[k].map(v => modValue(k, v, c) || "")),
-      ...(CTL() ? ["W", "L Shift", "Num 8", "R Ctrl", "Space"] : [])];
+      ...(CTL() ? ["W", "L Shift", "Num 8", "R Ctrl", "Space"] : []), R("set.account.none")];
     const inputs = [nameForm.width + 1, ...(isApp() ? [serverForm.width + 1] : [])];
-    return Math.max(labelW() + Math.max(...values.map(v => cols(v)), ...inputs) + 2, cols(R("ctl.reset")) + 2);
+    return Math.max(labelW() + Math.max(...values.map(v => cols(v)), ...inputs) + 2, ...["ctl.reset", "acc.logout", "acc.change", "acc.delete", "acc.login.go"].map(k => cols(R(k)) + 2));
   };
   function settings(keep) {
     nameForm.placeholder = T("ph.online");

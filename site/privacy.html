@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Privacy policy - Tunneler Online</title>
-<meta name="description" content="Privacy policy of Tunneler Online (the browser game, the desktop app and the Android app): no accounts, no ads, no analytics, no tracking.">
+<meta name="description" content="Privacy policy of Tunneler Online (the browser game, the desktop app and the Android app): no ads, no analytics, no tracking; an account (a username and a password) only for online games.">
 <meta name="color-scheme" content="dark">
 <meta name="theme-color" content="#16130f">
 <!-- the look, like the homepage: modern (the default) or original - before anything is drawn -->
@@ -95,8 +95,9 @@
 
   <p>This policy covers <strong>Tunneler Online</strong>: the game in the browser, the desktop app and the
   Android app (<code>com.kaniansky.TunnelerOnline</code>), made by Norko Kaniansky. In short: the game has
-  <strong>no accounts, no ads, no analytics and no tracking</strong>, and it collects no personal data
-  about you.</p>
+  <strong>no ads, no analytics and no tracking</strong>. Online games and the daily challenge's leaderboard need
+  an <strong>account</strong> on the game server - a username and a password, nothing else (no e-mail, no real
+  name). Everything else (split screen, skirmish, replays, maps) works without one and sends nothing anywhere.</p>
 
   <h2>What stays on your device</h2>
   <p>The game keeps these only on your own device, in the browser's or the app's local storage
@@ -106,8 +107,10 @@
     <li>your settings (language, graphics, sound, controls and so on) and the player name you choose for
     online games;</li>
     <li>the replays of your last matches (the newest 20);</li>
-    <li>a random id for this browser or app (it lets the game server give you your seat back after a lost
-    connection) and the keys of the online games you created.</li>
+    <li>a random id for this browser or app (on a server without accounts it lets the game server give you your
+    seat back after a lost connection) and the keys of the online games you created;</li>
+    <li>when you are logged in, the login token (session) of your account for each game server - logging out
+    deletes it.</li>
   </ul>
   <p>The browser version can also keep the game's own files in the browser's cache so that it starts
   without a connection.</p>
@@ -117,7 +120,8 @@
   the game connect to a game server: by default <code>https://tunneler-online.onrender.com</code>, or another
   server you set in the app's Settings. That server receives:</p>
   <ul>
-    <li>the player name you chose, and the chat messages you write;</li>
+    <li>your account's username (on a server without accounts: the player name you chose), and the chat messages
+    you write;</li>
     <li>the random id mentioned above, and the version of the game;</li>
     <li>your moves during a match (the keys you press), the game's own checks and your ping;</li>
     <li>the name, settings and optional password of a game you create (the password is kept only as a
@@ -132,6 +136,26 @@
   to limit how many requests one address can make (against abuse), and does not store it. The hosting
   provider of the default server (Render) may keep standard technical access logs, as described in its own
   privacy policy. Connections to the default server are encrypted (HTTPS / secure WebSocket).</p>
+  <h2 id="accounts">Accounts</h2>
+  <p>Online games and sending a daily-challenge result need an account on the game server you play on (accounts
+  are per server; a server's operator may also run it without accounts). When you create one, the server stores:</p>
+  <ul>
+    <li>your <strong>username</strong> (the name everybody sees in online games and on the leaderboard);</li>
+    <li>your <strong>password</strong> and your <strong>recovery code</strong>, but only as salted one-way hashes
+    (scrypt) - nobody, including the server's operator, can read them back;</li>
+    <li>a random account id, and when the account was created and last used;</li>
+    <li>the <strong>daily-challenge results</strong> you send: your place, rounds, kills and time on that day's
+    leaderboard, and the replay of your best match of the day - shown to everyone who looks at the leaderboard.
+    Leaderboards are kept for 30 days.</li>
+  </ul>
+  <p>There is no e-mail address and nothing else about you. On the default server the accounts are kept in the
+  server's storage (a Cloudflare R2 bucket); they are used only to run the game.</p>
+  <p id="delete"><strong>Deleting your account:</strong> in the game (the browser version or the apps), log in, then
+  Settings &rarr; Online &rarr; Delete account, and confirm with your password. The account, its login, its
+  leaderboard entries and their replays are deleted from the server at once. Logging out only forgets the login on
+  that device. If you have lost both your password and your recovery code, the account can't be recovered and the
+  game can't tell that it is yours; ask on the issues page below and the server's operator deletes it by its
+  username.</p>
   <p><strong>Shared replays:</strong> if you choose to share a replay as a link, that replay (the match's
   moves, settings and player names) is uploaded to the game server and kept there, so that anyone with the
   link can watch it. It is never shared unless you ask for it.</p>
@@ -148,7 +172,8 @@
   privacy policies. Your choice of language and look is kept in your browser only.</p>
 
   <h2>Children</h2>
-  <p>The game is not directed at children under 13 and collects no personal data from anyone. Online chat
+  <p>The game is not directed at children under 13 and collects no personal data beyond an account's username
+  (see Accounts). Online chat
   is between the players of one game room; it is not moderated, and anyone can leave a room at any time.</p>
 
   <h2>Changes and contact</h2>

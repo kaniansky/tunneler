@@ -17,8 +17,12 @@
 // browser has none. Names and chat go through the Unicode plane (unitext.js), so every language shows.
 // A game with a password: the server refuses the connection ("password") until this page sends it -
 // askPassword asks (kept in memory only: the server lets this client id back in without it).
+// Accounts (docs/v6/ACCOUNTS.md): on a server that needs them every connection carries a one-time ticket (POST
+// /api/ticket with the session) instead of the name - LOG IN (login.js) first when there is no session, or when the
+// server refuses with "login"; the name prompt only on a server without accounts.
 import "./gfx-modern.js";
 import "./gfx-hud.js";
+import { Account } from "./account.js";
 import { TunnelerAI } from "./ai.js";
 import { Controls } from "./controls.js";
 import { Display } from "./display.js";
@@ -28,6 +32,7 @@ import { TunnelerEngine } from "./engine.js";
 import { Gfx } from "./gfx.js";
 import { Keyboard } from "./input.js";
 import { Lang } from "./lang.js";
+import { Login } from "./login.js";
 import { MapStore } from "./mapstore.js";
 import { NetProto } from "./netproto.js";
 import { Pads } from "./pads.js";
@@ -962,10 +967,22 @@ export function mount() {
     updateOverlay();
   }
 
+  // accounts: a ticket first (a server known to need them, or a session for it); none = the server has no accounts
+  let ticketSeq = 0, loginRetries = 0, wantTicket = false;
   function connect() {
     if (!roomId) { fatal = "No room given."; updateOverlay(); return; }
     hadTried = true;
     clearTimeout(retryTimer);
+    if (wantTicket || Account.required() === true || Account.session()) {
+      const my = ++ticketSeq;
+      setConn(retry ? "conn.reconnecting" : "conn.connecting");
+      Account.ticket().then(t => { if (my === ticketSeq && !leaving && !ws && !asking) open(t); },
+        e => { if (my !== ticketSeq || leaving || ws || asking) return; if (e && e.code === "login") askLogin(); else closed(0); });
+      return;
+    }
+    open(null);
+  }
+  function open(ticket) {
     let url = Endpoint.ws("/ws?room=" + encodeURIComponent(roomId)) + "&cid=" + encodeURIComponent(clientId) +
       "&name=" + encodeURIComponent(DosUI.playerName());
     url += "&v=" + encodeURIComponent(VERSION || "dev");   // (another version is refused; dev: not built)
@@ -980,6 +997,7 @@ export function mount() {
     if (password) url += "&pw=" + encodeURIComponent(password);
     if (engine && !ended) url += "&match=" + matchNo + "&have=" + (frames + queue.length);
     url += "&sid=" + sessionId;
+    if (ticket) url += "&ticket=" + encodeURIComponent(ticket);   // (accounts: who this is - used once)
     setConn(retry ? "conn.reconnecting" : "conn.connecting");
     const sock = ws = new WebSocket(url);
     awaitSince = null; gotPong = false;
@@ -1026,7 +1044,7 @@ export function mount() {
   function handle(m) {
     switch (m.t) {
       case "hello": {
-        hadHello = true; restarting = false; goneUntil = 0;
+        hadHello = true; restarting = false; goneUntil = 0; loginRetries = 0;
         roomName = m.name;
         document.title = "Tunneler - " + m.name;
         me = { k: m.you ? m.you.k | 0 : 0, host: !!(m.you && m.you.host), name: m.you && m.you.name || "" };
@@ -1099,6 +1117,14 @@ export function mount() {
         break;
       case "err":
         if (m.code === "password" || m.code === "pwlimit") { askPassword(m.code === "pwlimit" ? "pw.limit" : m.bad ? "pw.err" : null); break; }
+        // accounts: no / a used / an old ticket - a new one once (the close reconnects), else LOG IN
+        if (m.code === "login") {
+          wantTicket = true;
+          if (Account.session() && loginRetries++ < 1) { retry = 0; break; }
+          Account.logout();
+          askLogin();
+          break;
+        }
         // the game isn't on this server (any more) though this page was in it / the server restarted: the
         // next server may still be reading the rooms it was handed - try again for GONE_RETRY_MS, then say so
         if (m.code === "noroom" && (hadHello || restarting)) {
@@ -1221,10 +1247,19 @@ export function mount() {
       .then(r => { if (r && r.name && !roomName) { roomName = r.name; if (asking) draw(); } }).catch(() => {});
   }
 
-  // a name first (online play needs one)
-  if (DosUI.playerName()) connect();
-  else {
-    asking = true;
-    dos.askName(() => { asking = false; msgSnap = null; presentOverlay(); updateOverlay(); connect(); }, () => leave("/"));
+  // LOG IN (accounts): then connecting (Back: the main menu)
+  function askLogin() {
+    asking = "login";
+    Login.ask(dos, { done: () => { asking = false; loginRetries = 0; retry = 0; msgSnap = null; presentOverlay(); updateOverlay(); connect(); }, back: () => leave("/") });
   }
+  // a name first (online play needs one) - on a server with accounts, a session
+  const askName = () => {
+    asking = "name";
+    dos.askName(() => { asking = false; msgSnap = null; presentOverlay(); updateOverlay(); connect(); }, () => leave("/"));
+  };
+  if (Account.required() === true) { if (Account.session()) connect(); else askLogin(); }
+  else if (DosUI.playerName()) connect();
+  else askName();
+  // (the server's answer about accounts: never asked before, or changed - the name prompt becomes LOG IN)
+  Account.config().then(on => { if (on && asking === "name") { if (Account.session()) { asking = false; msgSnap = null; presentOverlay(); updateOverlay(); connect(); } else askLogin(); } });
 }

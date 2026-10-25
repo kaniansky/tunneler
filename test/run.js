@@ -17,6 +17,8 @@ const TESTS = [
   "ai-ext-sim.js quick",
   "net-sim.js",
   "quickplay-sim.js",
+  "accounts-check.js",
+  "accounts-page-check.js",
   "ai-sim.js quick",
   "compare-wasm.js",
   "time-sim.js",

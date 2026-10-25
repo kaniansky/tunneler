@@ -114,7 +114,7 @@ const STRINGS_EN = {
         "win and the round time."],
       ["Skirmish:  ", "your own game against computer tanks, alone or with a second player on the same keyboard.  Each of the 8 colors is player 1, player 2, nobody or a computer tank (easy, medium, hard), with its team (1-8) - the players can take any color; then the mode, map size, rounds to win, round time, friendly fire, view, after death and line of sight.  Player 1 drives with W A S D + SHIFT, player 2 with the arrows + ENTER (other keys: Settings, Controls).  <ESC> during play ends the match; Rematch or <ESC> on the game's menu goes back to the settings."],
       ["Online game:  ", "2 to 8 tanks on different computers, some of them may be computer tanks.  Online play " +
-        "needs a name (asked the first time, changed in Settings).  Create a game - its name, an " +
+        "needs an account on the game's server (you create one or log in the first time; a server without accounts asks only for a name).  Create a game - its name, an " +
         "optional password (whoever joins or watches has to type it; a lock marks the game in the list), " +
         "listed publicly or private (joined with its invite link), spectators allowed or not - or " +
         "join one from the list of games.  You drive your tank with either set of keys.  Every " +
@@ -133,7 +133,7 @@ const STRINGS_EN = {
       ["Sound:  ", "Settings chooses its style: original (the PC " +
         "speaker beeps of 1991), realistic (tank noises), recorded (real recordings), cartoony (boings and pops), or muted; volume, stereo and distance fade too.  " +
         "The sounds of the other tanks fade with their distance from yours and come from their side (stereo)."],
-      ["Settings:  ", "Display (fullscreen - also <ALT>+<ENTER> -, screen size, tank colors: normal, color-blind or you blue / team green / enemies red), Graphics (original or modern, then that look's settings), Sound (style, volume, stereo, distance fade), Controls (both tanks' keys, the touch controls), Online (your name, preferred color, show chat, chat sound, show ping; in the desktop app the server) and Language."],
+      ["Settings:  ", "Display (fullscreen - also <ALT>+<ENTER> -, screen size, tank colors: normal, color-blind or you blue / team green / enemies red), Graphics (original or modern, then that look's settings), Sound (style, volume, stereo, distance fade), Controls (both tanks' keys, the touch controls), Online (your account - or your name -, preferred color, show chat, chat sound, show ping; in the desktop app the server) and Language."],
       ["Graphics:  ", "Settings chooses original (the DOS screen of 1991) or modern (the default): the same game drawn at your screen's resolution - smooth tunnels, textured dirt and rock, dark tunnels lit by the tanks' lamps, glowing shots, dust, sparks and fire, a new panel and menus in a modern font.  Modern graphics settings: style (clean or retro), quality, terrain, tunnel edges, lighting, particles, glow, screen shake, camera (smooth: tanks glide between steps) and UI, and the fog of war of the line of sight.  Only the look changes, never the game - also online."],
     ],
   },
