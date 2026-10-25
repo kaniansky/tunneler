@@ -26,7 +26,16 @@
 // behind a reverse proxy set TRUST_PROXY=1 to use the address it appends to X-Forwarded-For): new rooms
 // per minute, live rooms, websocket connections per minute; per match: frames and log entries.
 //
-// HTTP:  GET /api/rooms           public rooms
+// Running reliably (docs/v6/RELIABILITY.md): a socket error never ends the process; on SIGTERM (a deploy, a
+// restart) the rooms - seats, settings, chat, host keys, matches with their frame logs - are written to the
+// handoff store (the replays' bucket, else STATE_DIR / the replays' folder) before every client is told
+// {t:"restart"} and closed with 1012; the next server reads them back (at its start, and for an unknown room
+// during its first minutes - it may have started before the old one stopped) and the pages resume.
+//
+// HTTP:  GET /api/health          {ok, version, uptime, rooms, matches, errors}
+//        POST /api/errors         a page's error report {where, msg, stack, url, version, ua} (max 4 KB; logged)
+//        every /api answer: X-Tunneler-Version (a page of another version reloads itself)
+//        GET /api/rooms           public rooms
 //        GET /api/rooms/<id>      one room (also private ones: their ids carry a random suffix)
 //        POST /api/replays        a replay (src/js/replay.js: gzip'd or plain JSON) -> {id}: shared - kept in an
 //                                 S3-compatible bucket (REPLAY_S3_*: Cloudflare R2...), else REPLAY_DIR (the
@@ -38,7 +47,9 @@
 //                                  missing: BLUE + GREEN open, the rest closed; the older slots form still works)
 //                                  password: optional ("" = none; NetProto.cleanPassword) - roomInfo `locked`
 // WS:    /ws?room=<id>&cid=<client id: 8-64 of A-Z a-z 0-9 _ ->&name=<player name>[&role=<colour>|watch]
-//            [&host=<hostKey>][&pw=<password>][&match=<no>&have=<frames>]&v=<client version | dev>
+//            [&host=<hostKey>][&pw=<password>][&match=<no>&have=<frames>][&sid=<the page's session id>]&v=<client version | dev>
+//        sid: random per page load; a connection with the cid and sid of one still in the room replaces it (the
+//        page found its old connection dead before the server did): seat, tank and host role go to the new one.
 //        A game with a password lets in (to play or to watch) a connection that sends it, the host (its key)
 //        and a client id that got in before (reconnects, reloads); else err code "password" (`bad`: a wrong
 //        one was sent). Wrong passwords per address: MAX_PW_FAILS a minute, then code "pwlimit".
@@ -62,6 +73,8 @@
 //                     {t:"pong", c}  {t:"desync", n}  {t:"err", msg, code?}   (code "kicked", "full", "busy", "noroom", "version",
 //                           "password", "pwlimit")
 //                     {t:"host", key}  this connection hosts the room now: the host key for its later reconnects
+//                     {t:"restart", saved}  the server is shutting down (then closed with 1012); saved: the rooms were
+//                           handed over to the next server - reconnect and go on
 //   client -> server  lobby (not during a match):
 //                     {t:"seat", i}  sit on open seat i (= that colour), -1 = stand up and spectate
 //                     {t:"me", name?, team?}  own name (any time) / own seat's team 1..8 (not while ready)
@@ -105,6 +118,16 @@ const MAX_ME_PER_SEC = 10;             // name / team changes per connection
 const CHAT_LOG = 50;                   // chat messages kept per room (sent to joiners)
 const CHAT_MAX = 5, CHAT_WINDOW_MS = 5000;   // chat messages per connection within this time
 const MATCH_ALONE_MS = 60 * 1000;      // a match none of whose players is connected ends after this long
+// running reliably (docs/v6/RELIABILITY.md)
+const MAX_ERROR_BYTES = 4096;          // one client error report (POST /api/errors)
+const MAX_ERRORS_PER_MIN = 10;         // client error reports per address
+const MAX_ERRORS_TOTAL_PER_MIN = 120;  // client error reports from everybody together
+const SHUTDOWN_SAVE_MS = 8000;         // the most a graceful shutdown waits for the handoff snapshot to be written
+const HANDOFF_WINDOW_MS = 10 * 60 * 1000;   // after a start: an unknown room makes the server look for a handoff snapshot
+const HANDOFF_POLL_MS = 2000;          // ... at most this often
+const HANDOFF_MAX_AGE_MS = 10 * 60 * 1000;  // an older snapshot is ignored
+const RESUME_GRACE_MS = 20 * 1000;     // a restored match waits this long (from the first connection) for all its players
+const HANDOFF_KEY = "handoff-state.json.gz";   // the snapshot's object in the bucket / file in the folder
 // The only keystroke a client may send: "any key" (the end-of-match world map waits for one). The menu's
 // own keys (arrows, Enter, F-keys, Esc) would let one player start the game or quit the program for
 // everybody; the server starts the game itself (F1, see "ready").
@@ -155,6 +178,35 @@ async function s3Request(cfg, method, key, body) {
   return { status: res.status, body: Buffer.from(await res.arrayBuffer()) };
 }
 
+// ------------------------------------------------------------ the handoff store (docs/v6/RELIABILITY.md 2.3)
+// Where a shutting-down server leaves its rooms for the next one: {name, get() -> Buffer | null, put(Buffer)}.
+// The bucket (survives a Render deploy, whose disk is wiped), else a folder (a docker-compose volume), else none.
+function s3StateStore(cfg) {
+  return {
+    name: "the bucket " + cfg.bucket,
+    async get() {
+      const r = await s3Request(cfg, "GET", HANDOFF_KEY);
+      if (r.status === 404) return null;
+      if (r.status < 200 || r.status >= 300) throw new Error("storage " + r.status);
+      return r.body;
+    },
+    async put(buf) {
+      const r = await s3Request(cfg, "PUT", HANDOFF_KEY, buf);
+      if (r.status < 200 || r.status >= 300) throw new Error("storage " + r.status);
+    },
+  };
+}
+function dirStateStore(dir) {
+  const f = path.join(dir, HANDOFF_KEY);
+  return {
+    name: "the folder " + dir,
+    async get() { try { return fs.readFileSync(f); } catch (e) { return null; } },
+    async put(buf) { fs.writeFileSync(f + ".tmp", buf); fs.renameSync(f + ".tmp", f); },
+  };
+}
+// errors that escaped every handler (counted for /api/health; the program logs them and keeps serving)
+const processErrors = { count: 0 };
+
 function createServer(opts = {}) {
   const tickMs = opts.tickMs || NetProto.TICK_MS;
   const cleanupMs = opts.cleanupMs != null ? opts.cleanupMs : 10 * 60 * 1000;
@@ -171,6 +223,13 @@ function createServer(opts = {}) {
   const maxRoomsPerAddr = opts.maxRoomsPerAddr || MAX_ROOMS_PER_ADDR;
   const maxConnectsPerMin = opts.maxConnectsPerMin || MAX_CONNECTS_PER_MIN;
   const logChunk = opts.logChunk || LOG_CHUNK;
+  // running reliably (docs/v6/RELIABILITY.md): shutting down, the handoff's timing
+  let closing = false;
+  const startedAt = Date.now();
+  const resumeGraceMs = opts.resumeGraceMs != null ? opts.resumeGraceMs : RESUME_GRACE_MS;
+  const handoffWindowMs = opts.handoffWindowMs != null ? opts.handoffWindowMs : HANDOFF_WINDOW_MS;
+  const handoffPollMs = opts.handoffPollMs != null ? opts.handoffPollMs : HANDOFF_POLL_MS;
+  const handoffMaxAgeMs = opts.handoffMaxAgeMs != null ? opts.handoffMaxAgeMs : HANDOFF_MAX_AGE_MS;
   // Behind a reverse proxy (TRUST_PROXY=1) the client's address is the last X-Forwarded-For entry - the
   // one the proxy itself appended (anything before it came from the client). Otherwise the socket's peer.
   const trustProxy = opts.trustProxy != null ? !!opts.trustProxy : /^(1|true|yes)$/i.test(process.env.TRUST_PROXY || "");
@@ -400,7 +459,14 @@ function createServer(opts = {}) {
   // classic: runs while both players are connected; extended: from the start on
   function updateClock(room) {
     const m = room.match;
-    if (!m) return;
+    if (!m || closing) return;
+    // a match restored from a handoff (docs/v6/RELIABILITY.md 2.3): paused until every player is back, or
+    // RESUME_GRACE_MS after the first connection
+    if (m.waitAll) {
+      if (!m.slots.every((s, i) => s.bot || m.socks[i]) && !(m.resumeAt && Date.now() >= m.resumeAt)) { stopClock(m); return; }
+      m.waitAll = false;
+      say("room", room.id, "match", m.no, "resumed at frame", m.log.length);
+    }
     if (m.ext || (m.socks[0] && m.socks[1])) startClock(m); else stopClock(m);
   }
 
@@ -478,8 +544,10 @@ function createServer(opts = {}) {
   ];
   // the API answers any origin (CORS): the desktop app's pages come from tauri://localhost /
   // tauri.localhost, not from this server; nothing here uses cookies or other credentials
+  // (X-Tunneler-Version on every answer: a page of another version reloads itself - docs/v6/RELIABILITY.md 2.7)
   const CORS = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type", "Access-Control-Max-Age": "86400" };
+    "Access-Control-Allow-Headers": "Content-Type", "Access-Control-Max-Age": "86400", "Access-Control-Expose-Headers": "X-Tunneler-Version",
+    ...(version ? { "X-Tunneler-Version": version } : {}) };
   function json(res, code, obj) {
     res.writeHead(code, { "Content-Type": "application/json", "Cache-Control": "no-store", ...CORS });
     res.end(JSON.stringify(obj));
@@ -499,6 +567,22 @@ function createServer(opts = {}) {
     };
   }
   const allowCreate = rateLimiter(MAX_CREATES_PER_MIN), allowConnect = rateLimiter(maxConnectsPerMin), allowShare = rateLimiter(MAX_SHARES_PER_MIN);
+  const allowError = rateLimiter(MAX_ERRORS_PER_MIN), allowErrorAll = rateLimiter(MAX_ERRORS_TOTAL_PER_MIN);
+
+  // ------------------------------------------------------------ client error reports (docs/v6/RELIABILITY.md 2.9)
+  // {where, msg, stack, url, version, ua} from a page that caught an error: each field cut and without control
+  // characters, logged as one line (+ the stack); nothing is kept
+  const errorText = (v, max) => String(v == null ? "" : v).replace(/[\u0000-\u0008\u000B-\u001F\u007F-\u009F\u2028\u2029]/g, " ").slice(0, max);
+  function clientError(body) {
+    if (!body || typeof body !== "object") return null;
+    const r = { where: errorText(body.where, 40).replace(/\s+/g, " ").trim() || "page", msg: errorText(body.msg, 300).replace(/\s+/g, " ").trim(),
+      version: errorText(body.version, 20).replace(/\s+/g, ""), ua: errorText(body.ua, 200).replace(/\s+/g, " ").trim(),
+      stack: errorText(body.stack, 1500).split("\n").map(l => l.trim()).filter(Boolean).slice(0, 12) };
+    let url = errorText(body.url, 200);
+    try { url = new URL(url, "http://x").pathname; } catch (e) { url = ""; }   // (only the path: no queries - passwords, ids)
+    r.url = url;
+    return r.msg ? r : null;
+  }
 
   // ------------------------------------------------------------ shared replays (docs/DESIGN-8P.md 33)
   // A replay someone shares: checked (a replay's fields), stored gzip'd under a random id, given back to
@@ -516,6 +600,16 @@ function createServer(opts = {}) {
   let diskOk = false;
   if (replayDir && !s3) { try { fs.mkdirSync(replayDir, { recursive: true }); fs.accessSync(replayDir, fs.constants.W_OK); diskOk = true; } catch (e) { diskOk = false; } }
   const replayFile = id => path.join(replayDir, id + ".replay");
+  // the handoff store (docs/v6/RELIABILITY.md 2.3): opts.stateStore (tests; null = none), else - for the server
+  // started as the program (opts.handoff) - the bucket, else STATE_DIR / opts.stateDir, else the shared replays' folder
+  const stateStore = (() => {
+    if (opts.stateStore !== undefined) return opts.stateStore;
+    if (!opts.handoff) return null;
+    if (s3) return s3StateStore(s3);
+    const dir = opts.stateDir !== undefined ? opts.stateDir : process.env.STATE_DIR || (diskOk ? replayDir : null);
+    if (!dir) return null;
+    try { fs.mkdirSync(dir, { recursive: true }); fs.accessSync(dir, fs.constants.W_OK); return dirStateStore(dir); } catch (e) { return null; }
+  })();
   function validReplay(bytes) {
     let raw = bytes;
     try { if (raw[0] === 0x1F && raw[1] === 0x8B) raw = zlib.gunzipSync(raw, { maxOutputLength: 16 * 1024 * 1024 }); } catch (e) { return null; }
@@ -576,6 +670,25 @@ function createServer(opts = {}) {
   }
 
   async function api(req, res, p) {
+    if (p === "/api/health" && (req.method === "GET" || req.method === "HEAD")) {
+      let matches = 0;
+      for (const r of rooms.values()) if (r.match) matches++;
+      return json(res, closing ? 503 : 200, { ok: !closing, version, uptime: Math.round((Date.now() - startedAt) / 1000), rooms: rooms.size, matches,
+        errors: processErrors.count });
+    }
+    if (p === "/api/errors" && req.method === "POST") {
+      let body;
+      try { body = JSON.parse(await readBody(req, MAX_ERROR_BYTES)); } catch (e) { return json(res, 400, { error: "bad request" }); }
+      const addr = addressOf(req);
+      if (!allowError(addr) || !allowErrorAll("*")) return json(res, 429, { error: "too many reports" });
+      const r = clientError(body);
+      if (!r) return json(res, 400, { error: "bad request" });
+      say("client error v" + (r.version || "?"), r.where + ":", r.msg, "|", r.url || "-", "|", r.ua || "-");
+      if (!quiet) for (const l of r.stack) log("    " + l);
+      if (opts.onClientError) opts.onClientError(r);   // (tests)
+      res.writeHead(204, CORS);
+      return res.end();
+    }
     if (p === "/api/rooms" && req.method === "GET") {
       return json(res, 200, [...rooms.values()].filter(r => r.public).sort((a, b) => b.created - a.created).map(roomInfo));
     }
@@ -614,6 +727,7 @@ function createServer(opts = {}) {
     }
     const m = /^\/api\/rooms\/([a-z0-9-]{1,60})$/.exec(p);
     if (m && req.method === "GET") {
+      if (!rooms.has(m[1])) await refreshHandoff();          // (just started: maybe it is in a handoff snapshot)
       const room = rooms.get(m[1]);
       return room ? json(res, 200, roomInfo(room)) : json(res, 404, { error: "no such room" });
     }
@@ -624,6 +738,7 @@ function createServer(opts = {}) {
     let p;
     try { p = decodeURIComponent(new URL(req.url, "http://x").pathname); } catch (e) { res.writeHead(400); return res.end(); }
     if (p.startsWith("/api/") && req.method === "OPTIONS") { res.writeHead(204, CORS); return res.end(); }   // (CORS preflight)
+    if (closing && p !== "/api/health") { res.writeHead(503, { "Retry-After": "2", ...CORS }); return res.end(); }   // (shutting down)
     if (p.startsWith("/api/")) return api(req, res, p).catch(() => json(res, 500, { error: "server error" }));
     if (req.method !== "GET" && req.method !== "HEAD") { res.writeHead(405); return res.end(); }
     // short addresses for the pages (src/js/endpoint.js Links): the page reads its room / role / mode
@@ -647,14 +762,24 @@ function createServer(opts = {}) {
   server.on("upgrade", (req, socket, head) => {
     let u;
     try { u = new URL(req.url, "http://x"); } catch (e) { return socket.destroy(); }
-    if (u.pathname !== "/ws") return socket.destroy();
+    if (u.pathname !== "/ws" || closing) return socket.destroy();
+    socket.on("error", () => { /* (the client went away while the upgrade waited) */ });
     const addr = addressOf(req), ok = allowConnect(addr);
-    wss.handleUpgrade(req, socket, head, ws => {
-      if (!ok) return ws.close(4029, "too many connections");   // (the page retries a bit later)
-      // a throw here would escape the 'upgrade' event and take the whole process down
-      try { onConnect(ws, u.searchParams, addr); }
-      catch (e) { say("ws connect error:", e && e.message); try { fail(ws, "Server error."); } catch (e2) { ws.terminate(); } }
-    });
+    const upgrade = () => {
+      if (closing || socket.destroyed) return socket.destroy();
+      wss.handleUpgrade(req, socket, head, ws => {
+        // a socket error (a message over maxPayload, a malformed frame, invalid UTF-8) with nobody listening
+        // would throw and end the whole process: listen first (docs/v6/RELIABILITY.md 2.1)
+        ws.on("error", e => { if (!ws.errored) { ws.errored = true; say("ws error:", e && (e.code || e.message)); } try { ws.terminate(); } catch (e2) { /* gone */ } });
+        if (!ok) return ws.close(4029, "too many connections");   // (the page retries a bit later)
+        // a throw here would escape the 'upgrade' event and take the whole process down
+        try { onConnect(ws, u.searchParams, addr); }
+        catch (e) { say("ws connect error:", e && e.message); try { fail(ws, "Server error."); } catch (e2) { ws.terminate(); } }
+      });
+    };
+    // an unknown room right after a start: maybe the previous server handed it over (docs/v6/RELIABILITY.md 2.3)
+    if (ok && !rooms.has(u.searchParams.get("room") || "") && handoffPending()) refreshHandoff().then(upgrade, upgrade);
+    else upgrade();
   });
 
   function fail(ws, msg, code, extra) {
@@ -692,6 +817,12 @@ function createServer(opts = {}) {
         return fail(ws, pw ? "Wrong password." : "This game needs a password.", "password", { bad: !!pw });
       }
     }
+    // the same page again (its client id and its page's random session id): its old connection is dead - the
+    // page noticed before this server did -, so it goes now and this one gets its seat, tank and host role
+    // (docs/v6/RELIABILITY.md 2.4); another tab has another sid
+    const sid = /^[A-Za-z0-9_-]{8,64}$/.test(q.get("sid") || "") ? q.get("sid") : null;
+    const stale = sid && [...room.sockets].find(s => s.cid === cid && s.sid === sid);
+    if (stale) { say("room", room.id, stale.name, "replaced by its page's new connection"); leaveRoom(room, stale, true); try { stale.terminate(); } catch (e) { /* gone */ } }
     if (room.sockets.size >= MAX_SPECTATORS + MAX_SLOTS) return fail(ws, "This game is full.", "full");
     // role: "watch" / "spectate" = only watch; a colour = the seat this page would like; else any seat
     const role = q.get("role") || "";
@@ -714,11 +845,13 @@ function createServer(opts = {}) {
 
     ws.alive = true;
     ws.on("pong", () => { ws.alive = true; });
-    ws.cid = cid; ws.serial = ++room.serial; ws.rtt = null; ws.seat = -1; ws.ready = false; ws.player = -1; ws.playing = null;
+    ws.cid = cid; ws.sid = sid; ws.serial = ++room.serial; ws.rtt = null; ws.seat = -1; ws.ready = false; ws.player = -1; ws.playing = null;
     ws.name = uniqueName(room, q.get("name") || "", ws);
     // the host key makes this connection the host - unless another one already is (a second tab of the
-    // same browser has the same key: it joins as a player; it hosts if the host leaves - ensureHost)
-    ws.host = hostKeyOk && ![...room.sockets].some(o => o.host && o.readyState === 1);
+    // same browser has the same key: it joins as a player; it hosts if the host leaves - ensureHost); a
+    // replaced connection's host role goes to its page's new one
+    ws.host = (!!(stale && stale.host) || hostKeyOk) && ![...room.sockets].some(o => o.host && o.readyState === 1);
+    if (stale && stale.host && !hostKeyOk) try { ws.send(JSON.stringify({ t: "host", key: room.hostKey })); } catch (e) { /* closing */ }
     room.sockets.add(ws);
     if (room.password && room.admitted.size < MAX_ADMITTED) room.admitted.add(cid);
     clearTimeout(room.cleanupTimer);
@@ -727,6 +860,12 @@ function createServer(opts = {}) {
     if (m && player >= 0) {
       ws.player = player; m.socks[player] = ws; m.held[player] = 0; m.latch[player] = 0;
       ws.playing = null;                           // (not known until it reports: see matchReport)
+    }
+    // a restored match: everybody gets RESUME_GRACE_MS from the first connection to come back
+    if (m && m.waitAll && !m.resumeAt) {
+      m.resumeAt = Date.now() + resumeGraceMs;
+      const t = setTimeout(() => { if (room.match === m && m.waitAll) { updateClock(room); sendStatus(room); } }, resumeGraceMs + 5);
+      if (t.unref) t.unref();
     }
 
     // a match: resumed from what the page already has if it is the same one (&match=<no>&have=<frames>)
@@ -747,7 +886,7 @@ function createServer(opts = {}) {
       const t = Date.now();
       if (t - msgWindow > 1000) { msgWindow = t; msgCount = 0; meCount = 0; }
       if (++msgCount > MAX_MSGS_PER_SEC) return ws.close(4008, "rate limit");
-      if (isBinary || ws.kicked) return;
+      if (isBinary || ws.kicked || closing) return;      // (shutting down: the snapshot is taken - nothing changes now)
       let msg;
       try { msg = JSON.parse(data.toString("utf8")); } catch (e) { return; }
       if (!msg || typeof msg !== "object") return;
@@ -893,26 +1032,33 @@ function createServer(opts = {}) {
       }
     });
 
-    ws.on("close", () => {
-      room.sockets.delete(ws);
-      if (ws.seat >= 0 && room.seats[ws.seat].occ === ws) room.seats[ws.seat].occ = null;   // (last: a reload gets it back)
-      const m = room.match;
-      if (m && ws.player >= 0 && m.socks[ws.player] === ws) {
-        m.socks[ws.player] = null;
-        m.held[ws.player] = 0; m.latch[ws.player] = 0;   // extended: the tank stands still from the next frame on
-        if (!m.socks.some(Boolean)) {               // no player left: the match ends unless one comes back soon
-          clearTimeout(m.aloneTimer);
-          m.aloneTimer = setTimeout(() => { if (room.match === m && !m.socks.some(Boolean)) endMatch(room, "gone"); }, matchAloneMs);
-          if (m.aloneTimer.unref) m.aloneTimer.unref();
-        }
+    ws.on("close", () => leaveRoom(room, ws, false));
+  }
+
+  // a connection leaves its room (closed - or replaced by its page's new one: then the new connection's
+  // arrival does the rest - host, clock, status); once only
+  function leaveRoom(room, ws, replaced) {
+    if (ws.left) return;
+    ws.left = true;
+    room.sockets.delete(ws);
+    if (ws.seat >= 0 && room.seats[ws.seat].occ === ws) room.seats[ws.seat].occ = null;   // (last: a reload gets it back)
+    const m = room.match;
+    if (m && ws.player >= 0 && m.socks[ws.player] === ws) {
+      m.socks[ws.player] = null;
+      m.held[ws.player] = 0; m.latch[ws.player] = 0;   // extended: the tank stands still from the next frame on
+      if (!m.socks.some(Boolean)) {               // no player left: the match ends unless one comes back soon
+        clearTimeout(m.aloneTimer);
+        m.aloneTimer = setTimeout(() => { if (room.match === m && !m.socks.some(Boolean)) endMatch(room, "gone"); }, matchAloneMs);
+        if (m.aloneTimer.unref) m.aloneTimer.unref();
       }
-      say("room", room.id, ws.name, "disconnected");
-      ensureHost(room);                             // (the host left: somebody else hosts now)
-      matchReport(room);                            // (the others may be most of the players now)
-      updateClock(room);                            // (classic: paused)
-      sendStatus(room);
-      if (room.sockets.size === 0) armCleanup(room);
-    });
+    }
+    if (replaced || closing) return;
+    say("room", room.id, ws.name, "disconnected");
+    ensureHost(room);                             // (the host left: somebody else hosts now)
+    matchReport(room);                            // (the others may be most of the players now)
+    updateClock(room);                            // (classic: paused)
+    sendStatus(room);
+    if (room.sockets.size === 0) armCleanup(room);
   }
 
   // A room always has a host while anybody is connected: when no connected socket is one (the host
@@ -956,10 +1102,135 @@ function createServer(opts = {}) {
   }, opts.idleCheckMs || 30000);
   idleSweep.unref();
 
+  // ------------------------------------------------------------ the handoff (docs/v6/RELIABILITY.md 2.3)
+  // A room is data only (the server never runs the game): its seats, settings, chat, host key, bans, password
+  // hash and its match - seed, cfg, the run-length frame log. A shutting-down server writes them all to the
+  // handoff store; the next one reads them back, and its clients resume as after any reconnect.
+  const hex = b => Buffer.from(b).toString("hex");
+  function roomState(r) {
+    const m = r.match;
+    return { id: r.id, name: r.name, public: r.public, allowSpec: r.allowSpec, settings: settingsOf(r),
+      seats: r.seats.map(s => ({ kind: s.kind, team: s.team, last: s.last })), chat: r.chat, hostKey: r.hostKey,
+      banned: [...r.banned], serial: r.serial, password: r.password ? { salt: hex(r.password.salt), hash: hex(r.password.hash) } : null,
+      admitted: [...r.admitted], created: r.created, addr: r.addr, matches: r.matches, report: r.report,
+      match: m ? { no: m.no, seed: m.seed, ext: m.ext, slots: m.slots, cfg: m.cfg, log: { entries: m.log.entries, length: m.log.length },
+        report: m.report, desyncs: m.desyncs } : null };
+  }
+  function snapshot() {
+    return zlib.gzipSync(Buffer.from(JSON.stringify({ format: 1, version, at: Date.now(), rooms: [...rooms.values()].map(roomState) })));
+  }
+  const restored = new Set();                     // the snapshots ("at") already read
+  let lastPoll = 0, polling = null;
+  const handoffPending = () => !!stateStore && !closing && Date.now() - startedAt < handoffWindowMs;
+  // reads the store's snapshot (at most every handoffPollMs; force: now) and restores its rooms
+  function refreshHandoff(force) {
+    if (!stateStore || closing) return Promise.resolve();
+    if (polling) return polling;
+    if (!force && (!handoffPending() || Date.now() - lastPoll < handoffPollMs)) return Promise.resolve();
+    lastPoll = Date.now();
+    polling = (async () => {
+      try { const buf = await stateStore.get(); if (buf) restoreSnapshot(buf); }
+      catch (e) { say("handoff: could not read", stateStore.name + ":", e && e.message); }
+      finally { polling = null; }
+    })();
+    return polling;
+  }
+  function restoreSnapshot(buf) {
+    let snap;
+    try { snap = JSON.parse(zlib.gunzipSync(buf, { maxOutputLength: 1 << 30 }).toString("utf8")); } catch (e) { say("handoff: unreadable snapshot"); return 0; }
+    if (!snap || snap.format !== 1 || !Array.isArray(snap.rooms) || !Number.isFinite(snap.at) || restored.has(snap.at)) return 0;
+    restored.add(snap.at);
+    if (Date.now() - snap.at > handoffMaxAgeMs) return 0;
+    const sameVersion = snap.version === version;
+    let n = 0;
+    for (const s of snap.rooms) {
+      try { if (restoreRoom(s, sameVersion, snap.at)) n++; }
+      catch (e) { say("handoff: room", s && s.id, "not restored:", e && e.message); }
+    }
+    if (n) say("handoff: restored", n, "room(s) from", stateStore.name, sameVersion ? "" : "(version " + snap.version + ": lobbies only)");
+    return n;
+  }
+  function restoreRoom(s, sameVersion, at) {
+    if (!s || typeof s.id !== "string" || !/^[a-z0-9-]{1,60}$/.test(s.id)) return null;
+    const old = rooms.get(s.id);
+    // (a room this server restored from an older snapshot that nobody joined since: the newer state wins)
+    if (old && !(old.restoredFrom && old.restoredFrom < at && old.sockets.size === 0)) return null;
+    if (!old && rooms.size >= MAX_ROOMS) return null;
+    const st = roomSettings(Object.assign({}, s.settings, { seats: (s.seats || []).map(x => ({ kind: x.kind, team: x.team })) }));
+    const room = {
+      id: s.id, name: cleanName(s.name) || "Tunneler", public: !!s.public, allowSpec: !!s.allowSpec, ...settingsOf(st),
+      seats: st.seats.map((x, i) => ({ kind: x.kind, team: x.team, occ: null,
+        last: s.seats && s.seats[i] && /^[A-Za-z0-9_-]{8,64}$/.test(s.seats[i].last || "") ? s.seats[i].last : null })),
+      chat: Array.isArray(s.chat) ? s.chat.slice(-CHAT_LOG) : [],
+      hostKey: typeof s.hostKey === "string" && s.hostKey ? s.hostKey : crypto.randomBytes(16).toString("hex"),
+      banned: new Set(Array.isArray(s.banned) ? s.banned : []), serial: s.serial | 0,
+      password: s.password && s.password.salt && s.password.hash ? { salt: Buffer.from(s.password.salt, "hex"), hash: Buffer.from(s.password.hash, "hex") } : null,
+      admitted: new Set(Array.isArray(s.admitted) ? s.admitted.slice(0, MAX_ADMITTED) : []),
+      created: Number.isFinite(s.created) ? s.created : Date.now(), addr: typeof s.addr === "string" ? s.addr : "", sockets: new Set(),
+      match: null, matches: s.matches | 0,
+      report: s.report && typeof s.report === "object" ? s.report : { round: 0, wins: [], teamWins: [], ext: false, players: 0 },
+      stTimer: null, cleanupTimer: null, lastActive: Date.now(), restoredFrom: at,
+    };
+    const sm = s.match;
+    if (sm && sameVersion && sm.log && Array.isArray(sm.log.entries) && Number.isInteger(sm.log.length) && Array.isArray(sm.slots) && sm.cfg) {
+      const N = sm.slots.length, log = new FrameLog();
+      log.entries = sm.log.entries; log.length = sm.log.length;
+      room.match = { room, no: sm.no | 0, seed: sm.seed >>> 0, ext: !!sm.ext, slots: sm.slots, cfg: sm.cfg, log,
+        socks: new Array(N).fill(null), held: new Array(N).fill(0), latch: new Array(N).fill(0), keys: [],
+        running: false, timer: null, startAt: 0, startN: 0, hashes: new Map(), desyncs: sm.desyncs | 0, aloneTimer: null,
+        report: sm.report || { screen: "text", playing: true, round: 0, wins: new Array(N).fill(0), teamWins: [] },
+        waitAll: true, resumeAt: 0 };
+      const m = room.match;
+      m.aloneTimer = setTimeout(() => { if (room.match === m && !m.socks.some(Boolean)) endMatch(room, "gone"); }, matchAloneMs + resumeGraceMs);
+      if (m.aloneTimer.unref) m.aloneTimer.unref();
+    } else if (sm && sm.report) {                  // (another version: back in the lobby, the score kept for the list)
+      room.report = { round: sm.report.round | 0, wins: sm.report.wins || [], teamWins: sm.report.teamWins || [], ext: !!sm.ext, players: (sm.slots || []).length };
+    }
+    if (old) { clearTimeout(old.cleanupTimer); clearTimeout(old.stTimer); if (old.match) { stopClock(old.match); clearTimeout(old.match.aloneTimer); } }
+    rooms.set(room.id, room);
+    armCleanup(room);
+    say("room restored", room.id, room.match ? "match " + room.match.no + " at frame " + room.match.log.length : "(lobby)");
+    return room;
+  }
+
+  // Graceful shutdown (SIGTERM: a deploy, a restart): no new connections, every clock stopped, the handoff
+  // snapshot written (at most saveMs), and only then every client told {t:"restart"} and closed with 1012 - a
+  // page that reconnects at once finds the snapshot already there. -> {saved, rooms}
+  async function shutdown(saveMs = SHUTDOWN_SAVE_MS) {
+    if (closing) return { saved: false, rooms: 0 };
+    closing = true;
+    server.close();
+    for (const r of rooms.values()) if (r.match) { stopClock(r.match); clearTimeout(r.match.aloneTimer); }
+    let saved = false;
+    if (stateStore && rooms.size) {
+      let timer;
+      try {
+        await Promise.race([stateStore.put(snapshot()), new Promise((res, rej) => { timer = setTimeout(() => rej(new Error("timed out")), saveMs); })]);
+        saved = true;
+        say("shutdown:", rooms.size, "room(s) handed over to", stateStore.name);
+      } catch (e) { say("shutdown: could not hand the rooms over:", e && e.message); }
+      clearTimeout(timer);
+    } else say("shutdown:", rooms.size ? "no handoff store - " + rooms.size + " room(s) lost" : "no rooms");
+    const msg = JSON.stringify({ t: "restart", saved });
+    for (const ws of wss.clients) { try { if (ws.readyState === 1) ws.send(msg); ws.close(1012, "server restart"); } catch (e) { /* gone */ } }
+    await new Promise(res => {                    // (the closing handshakes: a moment, then whatever is left goes)
+      const t0 = Date.now(), iv = setInterval(() => { if (!wss.clients.size || Date.now() - t0 > 1000) { clearInterval(iv); res(); } }, 20);
+    });
+    const n = rooms.size;
+    clearInterval(heartbeat); clearInterval(idleSweep);
+    for (const r of rooms.values()) { clearTimeout(r.cleanupTimer); clearTimeout(r.stTimer); }
+    for (const ws of wss.clients) ws.terminate();
+    if (server.closeAllConnections) server.closeAllConnections();
+    return { saved, rooms: n };
+  }
+
   return {
-    server, rooms, createRoom,
+    server, rooms, createRoom, shutdown, snapshot, refreshHandoff,
+    get closing() { return closing; },
+    stateStore: stateStore ? stateStore.name : null,
     replayStore: s3 ? "the bucket " + s3.bucket + " at " + s3.endpoint : diskOk ? "the folder " + replayDir : "memory (lost on a restart)",
-    listen(port, cb) { server.listen(port, () => cb && cb(server.address().port)); return this; },
+    // (a handoff snapshot the previous server left is read right away)
+    listen(port, cb) { server.listen(port, () => { refreshHandoff(true); if (cb) cb(server.address().port); }); return this; },
     close(cb) {
       clearInterval(heartbeat); clearInterval(idleSweep);
       for (const r of rooms.values()) { if (r.match) { stopClock(r.match); clearTimeout(r.match.aloneTimer); } clearTimeout(r.cleanupTimer); clearTimeout(r.stTimer); }
@@ -1031,11 +1302,22 @@ if (require.main === module) {
     console.error(`\nTUNNELER server could not start.\n\n  PORT=${raw} is not a valid port: use a whole number from 1 to 65535 (default 8050).\n`);
     process.exit(1);
   }
-  const srv = createServer();
-  srv.server.on("error", err => startupError(port, err));
+  const srv = createServer({ handoff: true });
+  srv.server.on("error", err => { if (!srv.closing) startupError(port, err); });
+  // an error no handler caught: logged, and the server goes on - ending the process would end every game
+  // on it (docs/v6/RELIABILITY.md 2.1)
+  process.on("uncaughtException", err => { processErrors.count++; log("UNCAUGHT", err && err.stack || err); });
+  process.on("unhandledRejection", err => { processErrors.count++; log("UNHANDLED REJECTION", err && err.stack || err); });
+  // a deploy / restart: the rooms handed over to the next server, the clients told (docs/v6/RELIABILITY.md 2.2)
+  for (const sig of ["SIGTERM", "SIGINT"]) process.on(sig, () => {
+    if (srv.closing) return;
+    log(sig + ": shutting down");
+    srv.shutdown().catch(e => log("shutdown:", e && e.message)).finally(() => process.exit(0));
+  });
   srv.listen(port, p => {
     log("TUNNELER server " + (VERSION || "") + " on http://localhost:" + p);
     log("shared replays: " + srv.replayStore);
+    log("rooms on a restart: " + (srv.stateStore ? "handed over through " + srv.stateStore : "lost (no bucket or writable folder)"));
     if (VERSION && !/^(0|false|no|off)$/i.test(process.env.UPDATE_CHECK || "")) watchReleases(VERSION);
   });
 }
