@@ -103,6 +103,7 @@ const MAX_CREATES_PER_MIN = 30;        // POST /api/rooms per address
 const MAX_QUICK_PER_MIN = 60;          // POST /api/quickplay per address (creating a room also counts as a create)
 const QP_START_MS = 10 * 1000;         // quick play: the first match starts this long after a player sat down
 const QP_AFTER_MS = 20 * 1000;         // ... and the next one this long after a match ended (statistics, chat)
+const QP_HOLD_MS = 15 * 1000;          // ... a tank whose player lost the connection waits this long for that player
 const MAX_SHARES_PER_MIN = 10;         // POST /api/replays per address
 const MAX_SHARED = 5000;               // shared replays kept (the oldest go)
 const MAX_REPLAY_BYTES = 512 * 1024;   // one shared replay, as sent (gzip'd: a long match is ~50 KB)
@@ -181,6 +182,7 @@ function createServer(opts = {}) {
   const maxConnectsPerMin = opts.maxConnectsPerMin || MAX_CONNECTS_PER_MIN;
   const logChunk = opts.logChunk || LOG_CHUNK;
   const qpStartMs = opts.qpStartMs != null ? opts.qpStartMs : QP_START_MS, qpAfterMs = opts.qpAfterMs != null ? opts.qpAfterMs : QP_AFTER_MS;
+  const qpHoldMs = opts.qpHoldMs != null ? opts.qpHoldMs : QP_HOLD_MS;
   // Behind a reverse proxy (TRUST_PROXY=1) the client's address is the last X-Forwarded-For entry - the
   // one the proxy itself appended (anything before it came from the client). Otherwise the socket's peer.
   const trustProxy = opts.trustProxy != null ? !!opts.trustProxy : /^(1|true|yes)$/i.test(process.env.TRUST_PROXY || "");
@@ -719,10 +721,12 @@ function createServer(opts = {}) {
     const s = room.qp && i >= 0 ? room.seats[i] : null;
     if (s && s.ai) s.kind = s.occ ? "open" : s.ai;
   }
-  // the tanks of a running quick-play match a human can take over now: driven by their computer player
-  const qpFreeTanks = m => m.slots.map((s, i) => s.bot && !m.socks[i] ? i : -1).filter(i => i >= 0);
+  // the tanks of a running quick-play match client id cid can take over now: driven by their computer player - and
+  // not kept for the player who drove it last (it lost the connection a moment ago: qpRelease) unless that is cid
+  const qpFreeTanks = (m, cid) => m.slots.map((s, i) => s.bot && !m.socks[i] && (!(s.holdUntil > Date.now()) || s.lastCid === cid) ? i : -1)
+    .filter(i => i >= 0);
   // places for one more human: seats nobody sits on (lobby), computer-driven tanks (a match; 0 once its log is full)
-  const qpPlaces = r => !r.qp ? 0 : r.match ? (logFull(r.match) ? 0 : qpFreeTanks(r.match).length) : r.seats.filter(s => s.ai && !s.occ).length;
+  const qpPlaces = r => !r.qp ? 0 : r.match ? (logFull(r.match) ? 0 : qpFreeTanks(r.match, null).length) : r.seats.filter(s => s.ai && !s.occ).length;
   // the public quick-play room to send one more player to: one with a place, the most humans first, then the oldest
   function quickRoom() {
     let best = null, bestN = -1;
@@ -739,7 +743,7 @@ function createServer(opts = {}) {
   function qpTake(room, ws, notify) {
     const m = room.match;
     if (!m || !m.qp || ws.player >= 0 || logFull(m)) return -1;
-    const freeTanks = qpFreeTanks(m);
+    const freeTanks = qpFreeTanks(m, ws.cid);
     if (!freeTanks.length) return -1;
     const p = freeTanks.find(i => m.slots[i].lastCid === ws.cid) ?? freeTanks[0];
     const sl = m.slots[p];
@@ -753,10 +757,16 @@ function createServer(opts = {}) {
     say("room", room.id, ws.name, "takes over", ROLES[sl.color], "at frame", m.log.length);
     return p;
   }
-  // tank p's player left: its computer player drives it again from the next frame on
+  // tank p's player left: its computer player drives it again from the next frame on; for qpHoldMs only that player
+  // can take it again (a reload, a dropped connection: back in the same tank), then anybody (a waiting spectator)
   function qpRelease(room, m, p) {
     const sl = m.slots[p];
     sl.bot = true; sl.lastCid = sl.cid; sl.cid = null; sl.name = null;
+    sl.holdUntil = Date.now() + qpHoldMs;
+    if (qpHoldMs > 0) {
+      const t = setTimeout(() => { if (room.match === m && rooms.get(room.id) === room) { qpFill(room); sendStatus(room); } }, qpHoldMs + 5);
+      if (t.unref) t.unref();
+    }
     m.drives.push([p, 0, ""]);
     say("room", room.id, "the computer drives", ROLES[sl.color], "again at frame", m.log.length);
   }
@@ -963,7 +973,9 @@ function createServer(opts = {}) {
           break;
         }
         case "kick": {                                     // host: remove a player / spectator (by its number k)
-          if (!ws.host || !lobby) break;
+          // (quick play: nobody chose that host - the first one in - and a ban would send its target back to the same
+          // room by /api/quickplay again and again: no kicks there)
+          if (!ws.host || !lobby || room.qp) break;
           let target = null;
           for (const s of room.sockets) if (s.serial === Number(msg.k)) target = s;
           if (!target || target === ws || target.host || target.kicked) break;
@@ -972,7 +984,6 @@ function createServer(opts = {}) {
           if (target.seat >= 0) { room.seats[target.seat].last = null; sit(room, target, -1); }
           say("room", room.id, "host removed", target.name);
           fail(target, KICKED, "kicked");
-          qpFill(room); qpSchedule(room);
           sendStatus(room);
           break;
         }

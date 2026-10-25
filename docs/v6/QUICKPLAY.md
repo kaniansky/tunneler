@@ -17,8 +17,9 @@ entries open the same screen:
 - "QUICK PLAY" in red, "Looking for a game..." in yellow, Back to the list of games.
 - The page asks the server (`POST /api/quickplay`). The server answers with a game: one that is
   already running with a computer tank to take over or a free seat, else a new one it just created.
-- The page then goes straight to that game (`/game/<id>`, history entry replaced: Back leads to the
-  list, not to the search again). A refusal (another version, too many games, no connection) is shown
+- The page then goes straight to that game (`/game/<id>`). From the main menu (`/games?quick=1`) that
+  history entry is replaced (Back leads to the main menu, not to another search); from the list it is a new
+  entry (Back leads to the list). Back on the search screen shows the list (its address without `?quick=1`). A refusal (another version, too many games, no connection) is shown
   on the same screen in red, with Try again and Back.
 
 **A quick-play game** (online.js, the room lobby of DESIGN-8P 26 with these differences):
@@ -43,8 +44,9 @@ entries open the same screen:
   now" for 4 s. The tank's name is the player's name from then on (round title, views' labels,
   statistics, the map's score table).
 - **Leaving**: when that player leaves or loses the connection, the tank is handed back to its computer
-  player at once and keeps fighting; a spectator of the room who came to play (quick play, not `/watch`)
-  gets it next.
+  player at once and keeps fighting. For 15 s (`QP_HOLD_MS`) it stays kept for that player (the same client
+  id: a reload or a dropped connection drives the same tank again); after that a spectator of the room who came
+  to play (quick play, not `/watch`) gets it, or the next player sent to the room.
 - When every human has left a running match, it ends after 60 s (as every online match); a room nobody
   plays in is closed after 10 minutes (as every room).
 - Spectators (`/watch`) watch as in any game.
@@ -65,7 +67,7 @@ lobby.js does after creating a game). 409 `{code: "version"}` for another versio
 Choice: the public quick-play rooms of the server's version that have a place for one more human:
 in the lobby a seat nobody sits on, during a match a tank driven by its computer player (not one
 waiting for its player's reconnect - see below). Of those, the one with the most humans connected
-(players meet), then the oldest. None: a new room (`createQuickRoom`), counted against the same limits
+(players meet), then the oldest. None: a new room (`createRoom(..., qp)`), counted against the same limits
 as `POST /api/rooms` (rooms per address, creates per minute, MAX_ROOMS, total log entries). Finding
 alone is limited to 60 requests per minute per address.
 
@@ -105,9 +107,11 @@ drives)`; `FrameQueue` returns `[bits, keys, drives]`; `NetProto.readDrives` che
 Server: `qpTake(room, ws)` - a tank driven by its computer player (the one this client id drove last
 if it is free, else the first) -> `m.socks[p] = ws`, `ws.player = p`, held / latched bits 0, the slot's
 `bot` false + client id + name, the seat taken (`sit`), and `[p, ws.serial, ws.name]` queued for the
-next frame (`m.drives`). `qpRelease(room, ws)` (the connection closes) -> `[p, 0, ""]`, the slot's `bot`
-true, held / latched bits 0, then `qpFill` offers freed tanks / seats to the room's spectators who came to
-play (`ws.wantsPlay`: no `role=watch`), oldest connection first. The tick puts the queued markers into
+next frame (`m.drives`). `qpRelease(room, m, p)` (the connection closes) -> `[p, 0, ""]`, the slot's `bot`
+true, held / latched bits 0, `slot.holdUntil` = now + `qpHoldMs` (until then `qpFreeTanks(m, cid)` offers the tank
+only to the client id that drove it, `lastCid`; a timer runs `qpFill` when the hold ends), then `qpFill` offers
+freed tanks / seats to the room's spectators who came to play (`ws.wantsPlay`: no `role=watch`), oldest
+connection first. The tick puts the queued markers into
 the frame it pushes. A take-over and a hand-back in the same tick both go into that frame, in order.
 
 The taking player learns its tank from `hello.match.you` (it connected) or from `{t:"you", m, p}` (a
@@ -157,7 +161,9 @@ names this page (`k === me.k`) shows the take-over notice.
 
 - `/api/quickplay`: 60 finds per minute per address; creating counts against the create limits.
 - A player can't choose a tank to take (the server picks); a quick-play room's settings and seats can't
-  be changed; the host can still remove people (kick + ban by client id, as in every room).
+  be changed. Nobody can remove people from a quick-play room (`kick` refused, no "Kick a player" item): its
+  host is just whoever came first, and a ban would make `/api/quickplay` send its target back to the same room
+  again and again. The host can still start the next match before the countdown ends.
 - Taking over only for connections that came to play (no `role=watch`), only for computer-driven tanks
   and only in quick-play rooms. A client that reconnects again and again gets a marker each time: one
   per connection, and connections are limited per address (120 / minute) - at most a few markers per
@@ -172,8 +178,7 @@ names this page (`k === me.k`) shows the take-over notice.
 `qp.next.i1/i2`, `qp.go.i`, `qp.sit.i1/i2`, `qp.mine.i`, `qp.took`, and a "Quick play" section on the
 Information page (inserted before "The desktop app"; test/lang-check.js now expects 5 sections there).
 
-`Lang.extend(code, texts)` (new in lang.js): adds texts to a registered language (re-picks the font
-slots when it is the current one).
+`Lang.extend(code, texts)` (lang.js) adds them to each registered language.
 
 ## 6. Tests
 
@@ -184,7 +189,8 @@ slots when it is the current one).
   in the log at the frame after it connected, its name); its bits drive the tank from that frame on;
   a spectator and the players stay identical (`stateHash`, every frame) and match a reference engine
   run over the server's log; leaving hands the tank back (marker `k = 0`) and a waiting spectator gets
-  it (`{t:"you"}`); a late spectator replays everything identically; a replay recorded by a client
+  it (`{t:"you"}`); a dropped connection's tank is kept for that client id for the hold (a waiting spectator
+  gets it only after it); a late spectator replays everything identically; a replay recorded by a client
   plays back to the same end hash without AIs; normal rooms and classic matches carry no markers.
 - `net-page-smoke.js`: online.js as a quick-play player: the lobby's countdown row, the read-only
   settings, sitting on a computer seat, a marker naming this page -> its tank and the notice.
@@ -199,6 +205,5 @@ slots when it is the current one).
 - Taking over in normal rooms (their seats stay locked during a match, as before), or a human taking a
   tank from another human.
 - Handing a tank over without a disconnect (a "give my tank to the computer" key) - leaving does it.
-- A grace period for a player's reconnect: the tank goes back to the computer at once, the returning
-  player takes a computer tank again (often the same one: the server prefers the tank that client id
-  drove last).
+- Keeping a tank standing still for a reconnecting player: the computer drives it meanwhile (the hold above
+  only decides who may take it next).

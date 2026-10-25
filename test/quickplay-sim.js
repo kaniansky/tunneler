@@ -65,7 +65,7 @@ class Client {
   constructor(port, room, opts) {
     this.port = port; this.room = room; this.opts = opts || {};
     this.name = this.opts.name || "P" + (++cidN);
-    this.cid = ("cid-" + this.name + "-" + (++cidN)).replace(/[^A-Za-z0-9_-]/g, "x");
+    this.cid = this.opts.cid || ("cid-" + this.name + "-" + (++cidN)).replace(/[^A-Za-z0-9_-]/g, "x");
     this.run = null; this.queue = new FrameQueue(); this.status = null; this.you = -1; this.yous = []; this.pongs = new Set();
     this.closed = false; this.err = null; this.matches = [];
     clients.add(this);
@@ -109,9 +109,16 @@ class Client {
 }
 const settle = () => Promise.all([...clients].filter(c => c.ws && c.ws.readyState === 1).map(c => c.sync()));
 
-async function http(port, method, path, body) {
-  const res = await fetch(`http://127.0.0.1:${port}${path}`, { method, headers: body ? { "Content-Type": "application/json" } : {},
+// (one retry: a kept-alive connection the server closed meanwhile resets - more likely on a busy machine)
+async function http(port, method, path, body, retry = 1) {
+  let res;
+  try {
+    res = await fetch(`http://127.0.0.1:${port}${path}`, { method, headers: body ? { "Content-Type": "application/json" } : {},
     body: body ? JSON.stringify(Object.assign({ version: "dev" }, body)) : undefined });
+  } catch (e) {
+    if (retry > 0) return http(port, method, path, body, retry - 1);
+    throw e;
+  }
   let json = null; try { json = await res.json(); } catch (e) { /* not json */ }
   return { status: res.status, json };
 }
@@ -172,9 +179,52 @@ function netprotoChecks() {
   });
 }
 
+// A player who loses the connection gets the same tank back: it waits qpHoldMs for that client id (a waiting spectator
+// doesn't get it meanwhile, /api/quickplay doesn't count it), then anybody may take it.
+async function holdChecks() {
+  console.log("a dropped connection");
+  const srv = createServer({ tickMs: 4, quiet: true, cleanupMs: 5000, matchAloneMs: 1500, qpStartMs: 100, qpAfterMs: 400, qpHoldMs: 2000 });
+  const port = await new Promise(r => srv.listen(0, r));
+  const q = await http(port, "POST", "/api/quickplay", { name: "Hold" });
+  const id = q.json.id, room = srv.rooms.get(id);
+  const A = await new Client(port, id, { name: "Ada", host: q.json.hostKey }).connect();
+  await until(() => A.run && A.run.frames > 50, "the match");
+  const B = await new Client(port, id, { name: "Ben" }).connect();
+  const C = await new Client(port, id, { name: "Cid" }).connect();
+  const D = await new Client(port, id, { name: "Dee" }).connect();
+  const W = await new Client(port, id, { name: "Wes" }).connect();
+  await settle();
+  check("four players drive the four tanks, the fifth waits", () => {
+    assert.deepStrictEqual([A.you, B.you, C.you, D.you, W.you], [0, 1, 2, 3, -1]);
+  });
+  const cidB = B.cid;
+  await B.close();
+  await sleep(50);
+  const info = await http(port, "GET", "/api/rooms/" + id);
+  check("Ben's connection drops: the computer drives tank 1, kept for him - not handed to the waiting spectator, no place offered", () => {
+    assert.strictEqual(room.match.slots[1].bot, true); assert.deepStrictEqual(W.yous, []); assert.strictEqual(info.json.open, 0);
+  });
+  const B2 = await new Client(port, id, { name: "Ben", cid: cidB }).connect();
+  await settle();
+  check("Ben comes back (the same client id) within the hold: tank 1 again", () => {
+    assert.strictEqual(B2.you, 1); assert.deepStrictEqual(W.yous, []);
+  });
+  await C.close();
+  await until(() => W.yous.length, "the hold runs out: the waiting spectator gets the tank", 15000);
+  check("Cid doesn't come back: after the hold the waiting spectator gets tank 2", () => assert.deepStrictEqual(W.yous, [2]));
+  await until(() => A.run.frames > 0 && A.run.drives.length >= 4 && W.run.frames >= A.run.frames - 5, "frames");
+  await settle();
+  check("everybody identical (a reference over the server's log)", () => {
+    const r = reference(room.match);
+    for (const c of [A, B2, D, W]) sameHashes(c.run, r, c.name);
+  });
+  for (const c of [A, B2, D, W]) await c.close();
+  srv.close();
+}
+
 async function main() {
   netprotoChecks();
-  const srv = createServer({ tickMs: 4, quiet: true, cleanupMs: 5000, logChunk: 7, matchAloneMs: 1500, qpStartMs: 1500, qpAfterMs: 400 });
+  const srv = createServer({ tickMs: 4, quiet: true, cleanupMs: 5000, logChunk: 7, matchAloneMs: 1500, qpStartMs: 1500, qpAfterMs: 400, qpHoldMs: 0 });
   const port = await new Promise(r => srv.listen(0, r));
 
   // ---------------------------------------------------------------- finding / creating a room
@@ -254,7 +304,8 @@ async function main() {
   await until(() => A.run.drives.length && C.run.drives.length && S.run.drives.length, "the marker everywhere");
   const N = A.run.drives[0][0];
   check("the marker: from frame N (the frame after the join), tank 1 is Cleo's - on every client; her name shown", () => {
-    assert(N >= atJoin && N <= atJoin + 50, N + " vs " + atJoin);
+    // (the server takes the tank while it answers the connection: the marker goes into the very next frame)
+    assert(N >= atJoin && N === C.hello.match.n, N + " vs " + atJoin + " / " + C.hello.match.n);
     for (const c of [A, C, S]) assert.deepStrictEqual(c.run.drives[0], [N, 1, C.k, "Cleo"], c.name);
     for (const c of [A, C, S]) assert.strictEqual(c.run.engine.names[1], "Cleo");
     const e = room.match.log.entries.find(x => x.length === 4);
@@ -353,6 +404,7 @@ async function main() {
   await H.close(); await late.close();
 
   srv.close();
+  await holdChecks();
   console.log(failures ? failures + " failure(s)" : "all ok");
   process.exit(failures ? 1 : 0);
 }

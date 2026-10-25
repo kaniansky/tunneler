@@ -8,7 +8,8 @@ a release is made by pushing a version tag (see CONTRIBUTING.md).
 - **Quick play** (main menu and the list of games): straight into an online game. The server finds a quick-play
   game with a place for you, or makes one - four tanks free-for-all, computer tanks in every seat nobody sits on,
   matches that start by themselves after a short countdown. Join a game that is already running and you take over
-  a computer tank at once; leave, and the computer drives it again. The taken-over tank shows your name. Every
+  a computer tank at once; leave, and the computer drives it again (a dropped connection or a reload gets the same
+  tank back within 15 s). The taken-over tank shows your name. Every
   client switches the tank at exactly the same frame (a marker in the game's frame log), so spectators, late
   joiners and replays see the same game. (docs/v6/QUICKPLAY.md)
 

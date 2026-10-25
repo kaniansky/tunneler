@@ -15,4 +15,4 @@ Lang.extend("cs", {
   "qp.took": "Teď řídíš tank {name}", "qp.again": "Zkusit znovu",
 });
 const S = Lang.data.cs.engine.info.sections;
-S.splice(S.length - 2, 0, ["Rychlá hra:  ", "Rychlá hra v hlavním menu (nebo v seznamu her) tě hned pustí do online hry: její čtyři místa zaplní počítačové tanky, zápasy začínají samy a ty převezmeš počítačový tank - i uprostřed zápasu.  Když odejdeš, tvůj tank znovu řídí počítač."]);
+S.splice(S.length - 2, 0, ["Rychlá hra:  ", "Rychlá hra v hlavním menu (nebo v seznamu her) tě hned pustí do online hry: její čtyři místa zaplní počítačové tanky, zápasy začínají samy a ty převezmeš počítačový tank - i uprostřed zápasu.  Když odejdeš, tvůj tank znovu řídí počítač - vrátíš-li se do 15 sekund, je zase tvůj."]);

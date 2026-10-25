@@ -558,7 +558,7 @@ export function mount() {
     }
     // the host: "Kick a player" (opens the list of whom it may remove), right below
     // (grayed while there is nobody to remove - the box doesn't jump)
-    if (isHost() && !locked) items.push({ key: "kick", label: T("pg.kick"), disabled: !kickTargets().length,
+    if (isHost() && !locked && !isQuick()) items.push({ key: "kick", label: T("pg.kick"), disabled: !kickTargets().length,
       info: [T("pg.kick.i1"), T("pg.kick.i2")], go: () => drawKick(false) });
     // the invite link (the server's own page: also from the desktop app); "Link copied" for 3 s
     const invite = Endpoint.web(Links.invite(roomId)), copy = () => copyLink(invite);

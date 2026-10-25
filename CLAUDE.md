@@ -907,5 +907,7 @@ none, i.e. a page from before 2.0 - is refused (POST 409 `{code:
   (FrameLog.pushN's 3rd argument; never merged; FrameQueue returns `[bits, keys, drives]`, `readDrives` checks them). Clients
   (online.js `drive`, `setPlayer`): markers first (`human[p]`, `engine.setNames`), then `NetProto.botInputs` - every computer
   player's `update()` runs every frame, a human-driven tank's AI bits are dropped. Engine untouched; replays record the bits
-  stepped. Texts `src/lang/<code>/quickplay.js` (`Lang.extend`, new in lang.js) + an Information section. Tests:
+  stepped. A released tank is kept `qpHoldMs` (15 s) for the client id that drove it (`slot.holdUntil`, `qpFreeTanks(m, cid)`:
+  a reload / dropped connection gets it back). No `kick` in quick-play rooms. Texts `src/lang/<code>/quickplay.js`
+  (`Lang.extend`) + an Information section. Tests:
   test/quickplay-sim.js, net-page-smoke, layout-check.
