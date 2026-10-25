@@ -27,6 +27,8 @@ Lang.extend("en", {
   "acc.code.i2": "Write it down now - it is shown only this once.",
   "acc.code.i3": "Lose both the password and the code, and the account is lost.",
   "acc.code.ok": "I have written it down", "acc.code.ok.i": "Go on - the code is not shown again.",
+  "acc.code.copy": "Copy the code", "acc.code.copy.i": "Puts the code on the clipboard - paste it somewhere safe.",
+  "acc.code.copied": "Copied - paste it somewhere safe (a password manager, a note).", "acc.code.nocopy": "It couldn't be copied here - write it down.",
   "acc.reset.title": "RESET PASSWORD",
   "acc.reset.i1": "Your username, your recovery code and a new password.",
   "acc.reset.i2": "Lost the code too? Then the account is lost - create a new one.",

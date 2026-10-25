@@ -25,6 +25,8 @@ Lang.extend("cs", {
   "acc.code.i2": "Zapiš si ho hned - ukáže se jen tentokrát.",
   "acc.code.i3": "Když ztratíš heslo i kód, účet je ztracený.",
   "acc.code.ok": "Zapsal jsem si ho", "acc.code.ok.i": "Pokračovat - kód se už neukáže.",
+  "acc.code.copy": "Zkopírovat kód", "acc.code.copy.i": "Dá kód do schránky - vlož si ho někam do bezpečí.",
+  "acc.code.copied": "Zkopírováno - vlož si ho někam do bezpečí (správce hesel, poznámka).", "acc.code.nocopy": "Tady se zkopírovat nedá - zapiš si ho.",
   "acc.reset.title": "NOVÉ HESLO",
   "acc.reset.i1": "Tvoje jméno, záchranný kód a nové heslo.",
   "acc.reset.i2": "Ztratil jsi i kód? Pak je účet ztracený - vytvoř si nový.",

@@ -133,6 +133,17 @@ const go = (ui, k) => { const it = item(ui, k); assert(it, "no item " + k + " in
     ok(/RECOVERY CODE/.test(linesOf(win, ui)) && /ABCDE-FGHJK-MNPQR-STUVW/.test(linesOf(win, ui)) && /Welcome, Norko/.test(linesOf(win, ui)),
       "created: the recovery code shown once, the welcome");
     ok(JSON.parse(env.storage.get(SESSION)).token === "tok-Norko-1", "the session kept for this server (tunneler.session.<origin>)");
+    // Copy the code: onto the clipboard, said so (and in red when it can't be copied)
+    const copied = [];
+    win.navigator.clipboard = { writeText: async t => { copied.push(t); } };
+    go(ui, "copy");
+    await waitFor(() => copied.length && /Copied/.test(JSON.stringify(item(ui, "copy").info)));
+    ok(copied[0] === "ABCDE-FGHJK-MNPQR-STUVW" && /Copied/.test(JSON.stringify(item(ui, "copy").info)) && /RECOVERY CODE/.test(linesOf(win, ui)),
+      "Copy the code: the code on the clipboard, said so, still on the code screen");
+    win.navigator.clipboard = { writeText: async () => { throw new Error("denied"); } };
+    go(ui, "copy");
+    await waitFor(() => /write it down/.test(JSON.stringify(item(ui, "copy").info)));
+    ok(/write it down/.test(JSON.stringify(item(ui, "copy").info)), "no clipboard: write it down (in red)");
     go(ui, "ok");
     await waitFor(() => item(ui, "create") && item(ui, "quick"));
     ok(!!item(ui, "quick") && !!item(ui, "create") && !/LOG IN/.test(linesOf(win, ui)), "I have written it down: the list of games");

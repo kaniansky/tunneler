@@ -49,7 +49,26 @@ function formScreen(ui, f, keep) {
 }
 
 // YOUR RECOVERY CODE: shown once (after creating an account, after a reset)
-function showCode(ui, name, code, isReset, done) {
+// text onto the clipboard: the Clipboard API, else a hidden text area and the old copy command (web views without
+// the API) -> true when it worked
+async function copyText(text) {
+  try { if (navigator.clipboard && navigator.clipboard.writeText) { await navigator.clipboard.writeText(text); return true; } } catch (e) { /* the fallback */ }
+  try {
+    const d = document, ta = d.createElement("textarea");
+    ta.value = text; ta.setAttribute("readonly", ""); Object.assign(ta.style, { position: "fixed", left: "-9999px", top: "0" });
+    d.body.appendChild(ta); ta.select();
+    const ok = d.execCommand && d.execCommand("copy");
+    ta.remove();
+    return !!ok;
+  } catch (e) { return false; }
+}
+
+function showCode(ui, name, code, isReset, done, note) {
+  // Copy the code (owner, 2026-10-25): onto the clipboard - said in green, or in red to write it down
+  const copy = async () => {
+    const ok = await copyText(code);
+    showCode(ui, name, code, isReset, done, ok ? { text: T("acc.code.copied"), color: 10 } : { text: T("acc.code.nocopy"), color: 12 });
+  };
   ui.show({
     lines: [{ row: 2, text: T("acc.code.title"), color: 12 },
       { row: 4, text: isReset ? T("acc.code.new", { name }) : T("acc.code.hi", { name }), color: 15 },
@@ -58,8 +77,9 @@ function showCode(ui, name, code, isReset, done) {
       { row: 10, text: T("acc.code.i2"), color: 15 },
       { row: 11, text: T("acc.code.i3"), color: 12 }],
     box: { y: 14 }, infoRow: 18, back: done,
-    items: [{ key: "ok", label: T("acc.code.ok"), info: [T("acc.code.ok.i")], go: done }],
-  });
+    items: [{ key: "copy", label: T("acc.code.copy"), info: [note || T("acc.code.copy.i")], go: copy },
+      { key: "ok", label: T("acc.code.ok"), info: [T("acc.code.ok.i")], go: done }],
+  }, !!note);
 }
 
 function ask(ui, opts) {
