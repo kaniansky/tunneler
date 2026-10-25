@@ -170,6 +170,8 @@ export function mount() {
     const items = [
       ...(MOBILE ? [] : [{ key: "split", label: T("home.split"), info: [T("home.split.i1"), T("home.split.i2")], go: () => split() }]),
       { key: "cpu", label: T("home.cpu"), info: [T(MOBILE ? "home.cpu.i1m" : "home.cpu.i1n"), T("home.cpu.i2")], go: () => cpu() },
+      // quick play (docs/v6/QUICKPLAY.md): the games list's page finds / makes a quick-play game and goes to it
+      { key: "quick", label: T("home.quick"), info: [T("home.quick.i1"), T("home.quick.i2")], go: () => { Nav.go(Links.games() + "?quick=1"); } },
       { key: "online", label: T("home.online"), info: [T("home.online.i1"), T("home.online.i2")],
         go: () => { Nav.go(Links.games()); } },
       { key: "replays", label: T("home.replays"), info: [T("home.replays.i")], go: () => { Nav.go(Links.replays()); } },
@@ -180,7 +182,7 @@ export function mount() {
       ...updateItems(),
     ];
     if (typeof sel === "string") sel = Math.max(0, items.findIndex(it => it.key === sel));
-    ui.show({ lines: title(), box: { y: 9 }, sel, infoRow: update ? 22 : 20, footer: Lang.version(), home: true, items }, keep);
+    ui.show({ lines: title(), box: { y: 8 }, sel, infoRow: update ? 22 : 20, footer: Lang.version(), home: true, items }, keep);   // (y 8: room for Quick play)
   }
 
   // ------------------------------------------------------------------ settings: language, sound

@@ -181,10 +181,19 @@ const tick = () => new Promise(r => setTimeout(r, 0));
         env2.page("lobby.html");
         await tick();
         check(env2.win, env2.win.tunnelerLobbyUI(), W + ", your name");
+        // quick play (docs/v6/QUICKPLAY.md): looking for a game, then the reason it failed (the test's server answers no game)
+        const env3 = makeEnv("/games", size, touch);
+        env3.storage.set("tunneler.lang", code); env3.win.location.search = "?quick=1";
+        env3.page("lobby.html");
+        check(env3.win, env3.win.tunnelerLobbyUI(), W + ", quick play: looking for a game");
+        await tick(); await tick(); await tick();
+        check(env3.win, env3.win.tunnelerLobbyUI(), W + ", quick play: no game");
       }
       // ---------------------------------------------------------------- the online game's lobby: the host (View shown,
       // a spectator, an AI seat), a seated player, a spectator; its Game settings (a phone) and the kick page
-      for (const who of ["host", "player", "spectator"]) {
+      // (and a quick-play game's lobby - docs/v6/QUICKPLAY.md: the countdown, computer seats to take, fixed settings)
+      for (const who0 of ["host", "player", "spectator", "qp host", "qp player", "qp spectator"]) {
+        const qp = /^qp /.test(who0), who = who0.replace(/^qp /, "");
         const env = makeEnv("/game/lob", size, touch, true);
         env.storage.set("tunneler.lang", code);
         if (who === "host") env.storage.set("tunneler.host.lob", "a".repeat(32));
@@ -192,6 +201,26 @@ const tick = () => new Promise(r => setTimeout(r, 0));
         await new Promise(r => setTimeout(r, 20));
         const ws = env.sockets[0], k = who === "host" ? 2 : who === "player" ? 1 : 5;
         ws.recv({ t: "hello", id: "lob", name: "Championship night", created: 1, you: { k, host: who === "host", name: "Norko" }, chat: [], match: null });
+        if (qp) {
+          const none = { k: null, name: "", ready: false, host: false, ping: null };
+          ws.recv({ t: "st", name: "Quick play", public: true, spectators: true, qp: { left: 9000 },
+            settings: { size: "medium", winScore: 3, friendlyFire: false, roundTime: 5, visible: "self", watchOut: "wreck", sight: "full", mode: "standard" },
+            seats: [{ kind: "open", team: 1, k: 1, name: k === 1 ? "Norko" : "Александра", ready: false, host: false, ping: 30 },
+              { kind: "open", team: 2, k: 2, name: k === 2 ? "Norko" : "Zoë", ready: false, host: true, ping: 120 },
+              ...[2, 3].map(i => Object.assign({ kind: "normal", team: i + 1 }, none)), ...[4, 5, 6, 7].map(i => Object.assign({ kind: "closed", team: i + 1 }, none))],
+            specs: [{ k: 5, name: k === 5 ? "Norko" : "Watcher", host: false, ping: 12 }], cant: null, match: null });
+          await new Promise(r => setTimeout(r, 250));
+          const ui = env.win.tunnelerLobbyUI();
+          if (!ui || !ui.spec) { problems.push(W + ", quick-play lobby (" + who + "): no lobby shown"); continue; }
+          check(env.win, ui, W + ", quick-play lobby (" + who + ")");
+          const it = key => ui.spec.items.find(x => x.key === key);
+          for (const key of ["qpnext", "start", "seat2"]) if (it(key) && !it(key).static) {
+            ui.sel = ui.spec.items.indexOf(it(key)); ui.draw(); check(env.win, ui, W + ", quick-play lobby (" + who + ") " + key);
+          }
+          if (it("gameset")) { it("gameset").go(); check(env.win, ui, W + ", quick-play game settings (" + who + ")"); ui.spec.back(); }
+          for (const t of env.sockets) t.close();
+          continue;
+        }
         ws.recv({ t: "st", name: "Championship night", public: true, spectators: true,
           settings: { size: "medium", winScore: 3, friendlyFire: false, roundTime: 0, visible: "everyone", watchOut: "wreck", sight: "full", mode: "standard" },
           seats: [{ kind: "open", team: 1, k: 1, name: k === 1 ? "Norko" : "Александра", ready: false, host: false, ping: 30 },

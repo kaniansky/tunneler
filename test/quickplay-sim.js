@@ -205,9 +205,10 @@ async function main() {
     assert(A.status.qp && A.status.qp.left > 0 && A.status.qp.left <= 1500, JSON.stringify(A.status.qp));
     assert.strictEqual(A.status.cant, null);
   });
-  A.send({ t: "set", size: "small", winScore: 9 }); A.send({ t: "seatSet", i: 2, kind: "closed" }); A.send({ t: "ready", v: 1 });
+  A.send({ t: "set", size: "small", winScore: 9 }); A.send({ t: "seatSet", i: 2, kind: "closed" }); A.send({ t: "ready", v: 1 }); A.send({ t: "me", team: 5 });
   await settle();
-  check("fixed: the host can't change settings / seats; nobody gets ready", () => {
+  check("fixed: the host can't change settings / seats, nobody their team; nobody gets ready", () => {
+    assert.strictEqual(A.status.seats[0].team, 1);
     assert.strictEqual(A.status.settings.size, "medium"); assert.strictEqual(A.status.settings.winScore, 3);
     assert.strictEqual(A.status.seats[2].kind, "normal"); assert.strictEqual(A.status.seats[0].ready, false);
   });
