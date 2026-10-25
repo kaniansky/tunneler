@@ -276,9 +276,10 @@ project dependency; install playwright-core in a scratch dir when needed).
   (`playerColor(p)` / `playerTextColor(p)` / `playerName(p)`: slot colors, lobby names); the map's score
   table lists every team (`teamLines`, wrapped to fit). `setScope(own, "self"|"team"|"everyone")` (a
   player, DESIGN-8P 23): the grid of their own view first, then teammates' / everybody else's in slot
-  order (classic: own half / the full split screen); `setScope(null)` = the modes above. A phone held upright
-  (`upright()`): `gridCols` 1 column for 2 views, 2 for 3 - 8; `fit` sizes the canvas to the room above the
-  touch controls (`.tpad-stick`'s top; in the size key, so it fits again when they appear).
+  order (classic: own half / the full split screen); `setScope(null)` = the modes above. A phone with the touch
+  controls shown: `controlsRoom(canvas)` = the room they leave ({w, h}: above them upright, between them sideways),
+  `gridCols(n, room)` the column count that makes the views biggest there, `fit` sizes the play screen to it
+  (every kind - half, full, grid, map; the room is in the size key, so it fits again when the controls appear).
 - route `/games` = `lobby.js` - the list of public games (columns NAME, MODE, PLAYERS "2/4" = seated / seated +
   free open seats - during a match: connected / its human tanks (roomInfo `players` / `places`) -, AI
   (`bots`), WATCHING (`spec`; 0 = blank), STATE (`COLS`); games scroll; separator + "Create a new game" +

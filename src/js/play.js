@@ -237,7 +237,8 @@ export function mount() {
   // gamepads / touch controls (pads.js) make the same keys as the keyboard: split screen - gamepad 1
   // BLUE (W A S D + Space), gamepad 2 GREEN (arrows + Enter); vs computer - any gamepad your tank;
   // the on-screen joystick + FIRE drive BLUE / your tank; menus: arrows, Enter, Esc
-  Pads.start({ menu: () => !engine.kbdInstalled, hideTouch: () => !!engine.menuShown,
+  // (the touch controls only during play: the world map's "press any key" is a tap)
+  Pads.start({ menu: () => !engine.kbdInstalled, hideTouch: () => !!engine.menuShown || engine.screen !== "play",
     gamepadSet: i => mode === "hotseat" || me2 >= 0 ? ["blue", "green"][i] || null : "blue", touchSet: "blue",
     namedSets: mode === "hotseat" || me2 >= 0 });            // ("Gamepad 1 connected: BLUE" in split screen)
   window.tunnelerEngine = () => engine;

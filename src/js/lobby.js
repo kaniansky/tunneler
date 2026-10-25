@@ -50,7 +50,7 @@ export function mount() {
   // connected / its players), AI (computer tanks), WATCHING (spectators); 0 = blank
   const WIDE = [22, 17, 8, 4, 9];                    // (name, mode, players, AI, watching; the state takes the rest)
   // the phone layout (DosUI narrow, DosUI.NARROW_W - 2 columns): name, players and the state (0 = the column left out)
-  const NARROW = [14, 0, 6, 0, 0];
+  const NARROW = [13, 0, 8, 0, 0];
   const cols = () => ui.isNarrow() ? NARROW : WIDE;
   const ROWS = 9;                                    // game rows shown at most (the box then ends on row 20, the info on rows 22-23)
   const places = r => r.places != null ? r.places : r.players + (r.open || 0);
@@ -103,11 +103,13 @@ export function mount() {
       label: rowText(r, stateText(r)), align: "left", key: "room:" + r.id, spans: rowSpans(r),   // (the games you host: first, no mark)
       // (the table says the rest: only whether you host it and the keys)
       info: [hosting(r) ? { text: T("lobby.host.i"), color: 14 } : r.locked ? { text: T("lobby.locked.i"), color: 14 } : null,
-        T(r.spectators ? (r.state === "lobby" && r.open ? "lobby.join2" : "lobby.watch") : r.state === "lobby" && r.open ? "lobby.join" : "lobby.closed")].filter(Boolean),
+        T((r.spectators ? (r.state === "lobby" && r.open ? "lobby.join2" : "lobby.watch") : r.state === "lobby" && r.open ? "lobby.join" : "lobby.closed")
+          + (GameScreen.mobile() && !(!r.spectators && !(r.state === "lobby" && r.open)) ? ".touch" : ""))].filter(Boolean),
       disabled: !r.spectators && !(r.state === "lobby" && r.open),
       go: () => join(r.id, !(r.state === "lobby" && r.open)),
-      // → or a right click (DosUI: change(-1)): watch it
+      // → or a right click (DosUI: change(-1)): watch it; a tap / click on its state column too (a phone has neither)
       change: d => { if (r.spectators && d !== 0) join(r.id, true); },
+      zones: r.spectators ? [{ from: cols().reduce((a, b) => a + b, 0), to: 200, click: () => join(r.id, true) }] : undefined,   // (the state column)
     }));
     if (!rooms.length) items.push({ key: "none", label: T("lobby.none"), disabled: true });
     items.push({ key: "sep", separator: true });
@@ -122,7 +124,8 @@ export function mount() {
       lines: [{ row: 2, text: T("lobby.title"), color: 12 },
         ...(serverVersion ? [{ row: 1, text: T("ver.server", { server: serverVersion, you: myVersion }), color: 12 }] : [])],
       box: { x: 2, y: 3, w: 76, rows: shown }, fixed: 5,
-      header: UniText.padEnd(" " + T("lobby.name"), cols()[0] + 1) + [T("lobby.mode"), T("lobby.players"), T("lobby.ai"), T("lobby.spec")].map((h, i) => cols()[i + 1] ? UniText.padEnd(h, cols()[i + 1]) : "").join("") +
+      // (each title cut to leave a space before the next: the phone's narrow columns)
+      header: UniText.padEnd(" " + UniText.slice(T("lobby.name"), cols()[0] - 1), cols()[0] + 1) + [T("lobby.mode"), T("lobby.players"), T("lobby.ai"), T("lobby.spec")].map((h, i) => cols()[i + 1] ? UniText.padEnd(UniText.slice(h, cols()[i + 1] - 1), cols()[i + 1]) : "").join("") +
         T("lobby.state"),
       items, infoRow: bottom + 2, back: home,
     }, keep);

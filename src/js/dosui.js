@@ -686,7 +686,9 @@ class DosUI {
     for (const [r, a, z] of centres.concat(itemCentres)) if (r >= 0 && r < height) this.centres.push([r, a, z]);
     const cursor = this.cursor && this.cursor.row >= 0 && this.cursor.row < height ? this.cursor : null;
     const it = items[this.sel];
-    let ir = height + 2;
+    // (the info below the window: 4 rows, 5 when it needs them - the empty row above it then takes the first)
+    const infoLines = (it && it.info || []).reduce((n, l) => n + wrapCols(typeof l === "string" ? l : l.text, NC - 2).length, 0);
+    let ir = infoLines > 4 ? height + 1 : height + 2;
     (it && it.info || []).forEach(l => {
       const text = typeof l === "string" ? l : l.text;
       for (const part of wrapCols(text, NC - 2)) {

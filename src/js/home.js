@@ -579,8 +579,13 @@ export function mount() {
       acts.splice(1, 0, { key: "settings", label: T("lc.gameset"), info: [T("lc.set.i"), T("lc.set.i2")],
         go: () => { cpuSetOpen = true; cpu(false, "mode"); } });
       const mItems = slotItems.concat(acts);
+      // (held sideways a phone shows the 80-column screen: the boxes need their places there - centred, the
+      // Game box below the slots)
+      const sw = DosUI.boxWidth(slotItems), aw = DosUI.boxWidth(acts);
       ui.show({
-        boxes: [{ title: T("cpu.title"), items: slotItems }, { title: T("box.game"), items: acts }],
+        boxes: [{ x: 41 - ((sw + 2) >> 1), y: 1, w: sw, title: T("cpu.title"), items: slotItems },
+          { x: 41 - ((aw + 2) >> 1), y: slotItems.length + 4, w: aw, title: T("box.game"), items: acts }],
+        infoRow: slotItems.length + acts.length + 7,
         sel: Math.max(0, mItems.findIndex(it => it.key === (typeof sel === "string" ? sel : "play"))),
         back: () => main("cpu"),
       }, keep);

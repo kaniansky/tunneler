@@ -9,8 +9,13 @@ a release is made by pushing a version tag (see CONTRIBUTING.md).
   and the link (`/replay/<id>`) is copied; whoever opens it watches the match at once, in a browser or the
   app ("Open a replay link" on the Replays screen takes a pasted one). Servers keep shared replays in
   `REPLAY_DIR` (the Docker image: a volume).
-- On a phone held upright, several views (your team's, everyone's) stack in a column as big as the room above
-  the touch controls - side by side they were a thin strip.
+- Phones: the game screen takes the room the touch controls leave - above them held upright, between them
+  sideways - with as many views to a row as makes them biggest (side by side on an upright phone they were a
+  thin strip; on a 16:9 phone the joystick covered the shield gauge, sideways with 3+ views FIRE covered the
+  outer panels). The touch controls hide off the play screen (the end-of-match world map). Skirmish held
+  sideways was blank; the games list's column titles ran together; a long info line in the online lobby was
+  cut off; the replay player's status line was unreadable; the lists say "tap" instead of "<ENTER>", and a
+  tap on a game's state watches it.
 - Replays: the first one saved in a browser without IndexedDB (a private window) is no longer lost.
 
 ## 5.0.0

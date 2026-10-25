@@ -55,11 +55,32 @@ const raw = k => Lang.raw(k);
 const enc = s => Lang.enc(s);
 // display columns of font text (unitext.js: CJK / emoji take 2)
 const visLen = s => UniText.cols(s.replace(/\{\d+\}/g, ""));
-// a phone held upright (owner, 2026-10-25): the views in a column (2) or two (3 - 8) - side by side they were
-// a thin strip at the top of a tall screen
 const root = typeof window !== "undefined" ? window : globalThis;
-const upright = () => GameScreen.mobile() && (root.innerHeight || 0) > (root.innerWidth || 0);
-const gridCols = c => upright() ? (c <= 2 ? 1 : 2) : c <= 4 ? c : Math.ceil(c / 2);
+// A phone / tablet with the touch controls shown (owner, 2026-10-25): the play screen gets the room they leave -
+// above them held upright, between them sideways ({w, h} in CSS pixels; null: no controls) - and the views as
+// many to a row as makes them biggest there (side by side on an upright phone they were a thin strip)
+function controlsRoom(canvas) {
+  const d = root.document;
+  if (!d || !d.querySelector || !GameScreen.mobile()) return null;
+  const rects = [".tpad-stick", ".tpad-fire"].map(q => d.querySelector(q)).filter(Boolean).map(e => e.getBoundingClientRect()).filter(r => r.height > 0);
+  if (!rects.length) return null;
+  const W = root.innerWidth || 0, H = root.innerHeight || 0, top = canvas ? Math.max(8, canvas.getBoundingClientRect().top) : 8;
+  if (H > W) return { w: W - 16, h: Math.round(Math.min(...rects.map(r => r.top)) - 8 - top) };
+  const left = Math.max(0, ...rects.filter(r => r.left < W / 2).map(r => r.right)), right = Math.min(W, ...rects.filter(r => r.left >= W / 2).map(r => r.left));
+  return { w: Math.round(2 * Math.min(W / 2 - left, right - W / 2) - 16), h: H - 16 };
+}
+const VIEW_W = 360, VIEW_H = 400;               // (one view and its panel on the play screen, in canvas pixels)
+function gridCols(c, room) {
+  if (room && room.w > 0 && room.h > 0) {
+    let best = 1, size = 0;
+    for (let cols = 1; cols <= c; cols++) {
+      const k = Math.min(room.w / (cols * VIEW_W), room.h / (Math.ceil(c / cols) * VIEW_H * ASPECT));
+      if (k > size + 1e-9) { size = k; best = cols; }
+    }
+    return best;
+  }
+  return c <= 4 ? c : Math.ceil(c / 2);
+}
 const load = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
 const save = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* private mode */ } };
 
@@ -277,7 +298,7 @@ class ViewModes {
       const kept = out ? scope.filter(c => !e || !e.alive || e.alive[c + 1]) : scope;
       const cells = out ? kept.concat(out.filter(c => !kept.includes(c))) : scope;
       if (!s.views && !(labels && (cells.length > 1 || out))) return { kind: "display", crop: cells.length > 1 ? null : cells[0] === 1 ? "green" : "blue" };
-      const c = cells.length, cols = gridCols(c);
+      const c = cells.length, cols = gridCols(c, controlsRoom(this.canvas));
       return { kind: "grid", cells, cols, rows: Math.ceil(c / cols), labels: labels && (c > 1 || !!out) };
     }
     if (play && this.mode === "map" && this.engine()) return { kind: "map" };
@@ -287,7 +308,7 @@ class ViewModes {
     }
     if (this.mode === "follow") return { kind: "grid", cells: [follow], cols: 1, rows: 1, labels };
     // up to 4 per row; 5 and 6 players fill 3 + 3 rather than 4 + 1 / 4 + 2
-    const cols = gridCols(n), rows = Math.ceil(n / cols);
+    const cols = gridCols(n, controlsRoom(this.canvas)), rows = Math.ceil(n / cols);
     return { kind: "grid", cells: Array.from({ length: n }, (_, i) => i), cols, rows, labels };
   }
 
@@ -417,20 +438,18 @@ class ViewModes {
 
   // on-screen size: like canvas.game (4:3) / canvas.game.half (2:3) in style.css, other shapes inline
   fit(kind) {
-    const c = this.canvas;
-    // (a phone held upright: as tall as the room above the touch controls - they show on the first touch:
-    // part of the key, so the views fit again then)
-    const stick = upright() && kind !== "half" && kind !== "full" && root.document && root.document.querySelector(".tpad-stick");
-    const sr = stick ? stick.getBoundingClientRect() : null;   // (shown: it has a size - it is position: fixed, no offsetParent)
-    const room = sr && sr.height > 0 ? Math.round(sr.top - 8 - c.getBoundingClientRect().top) : 0;
-    const key = kind + c.width + "x" + c.height + "/" + room;
+    const c = this.canvas, play = !!(this.snap && this.snap.screen === "play");
+    // (a phone: the room the touch controls leave - they show on the first touch: part of the key, so the
+    // screen fits again then)
+    const room = play ? controlsRoom(c) : null;
+    const key = kind + c.width + "x" + c.height + "/" + (room ? room.w + "x" + room.h : "");
     if (key === this.aspectKey) return;
     this.aspectKey = key;
     c.classList.toggle("half", kind === "half");
-    if (kind === "half" || kind === "full") { c.style.width = ""; c.style.aspectRatio = ""; return; }
-    const a = c.width / (c.height * ASPECT);
+    if ((kind === "half" || kind === "full") && !room) { c.style.width = ""; c.style.aspectRatio = ""; return; }
+    const a = kind === "half" ? 2 / 3 : kind === "full" ? 4 / 3 : c.width / (c.height * ASPECT);
     c.style.aspectRatio = String(a);
-    c.style.width = room > 100 ? "min(calc(100vw - 16px), " + Math.floor(room * a) + "px)"
+    c.style.width = room ? "min(" + Math.max(80, room.w) + "px, " + Math.max(80, Math.floor(room.h * a)) + "px)"
       : "min(calc(100vw - 16px), calc((100vh - 90px) * " + a.toFixed(4) + "))";
   }
 

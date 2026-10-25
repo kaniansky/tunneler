@@ -91,7 +91,7 @@ export function mount() {
     try { list = await Replay.list(); } catch (e) { list = []; }
     if (watching) return;
     const items = list.map(r => ({ key: "r:" + r.id, label: rowText(r), align: "left", spans: rowSpans(),
-      info: [winnerText(r), T("rp.open.row")], go: () => detail(r) }));
+      info: [winnerText(r), T(GameScreen.mobile() ? "rp.open.row.touch" : "rp.open.row")], go: () => detail(r) }));
     if (!list.length) items.push({ key: "none", label: T("rp.none"), disabled: true });
     items.push({ key: "sep", separator: true });
     items.push({ key: "file", label: T("rp.file"), info: fileError ? [{ text: T("rp.file.err"), color: 12 }] : [T("rp.file.i")], go: openFile });
@@ -235,7 +235,7 @@ export function mount() {
   }
 
   // ------------------------------------------------------------ watching
-  const statusLine = new StatusLine($("status"), canvas, () => (views ? views.statusColumns() : 80));
+  const statusLine = new StatusLine($("status"), canvas, () => (GameScreen.mobile() ? 40 : views ? views.statusColumns() : 80));   // (a phone: 40 columns - readable)
   function renderBar() {
     if (!views || !rep) return;
     const follow = views.mode === "follow";
