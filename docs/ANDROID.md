@@ -10,7 +10,7 @@ https://tunneler-online.onrender.com).
   from `tauri.conf.json` (changing that would change the desktop app's data directory).
 - Version: `package.json`'s; versionCode = major * 1000000 + minor * 1000 + patch (5.0.0 -> 5000000),
   computed by the Tauri CLI. Every Google Play upload needs a higher versionCode, i.e. a new version.
-- Android 7.0 (API 24) or newer; ABIs arm64-v8a, armeabi-v7a, x86_64, x86 (one universal APK / AAB).
+- Android 7.0 (API 24) or newer; ABIs arm64-v8a, armeabi-v7a, x86_64 (one universal APK / AAB; no 32-bit x86 since 5.0.4).
 
 ## Where things are
 
@@ -45,7 +45,7 @@ What differs from the desktop app:
 
 - Node.js >= 20.19 (e.g. 24), the repository's `npm ci`.
 - Rust (stable) with the Android targets:
-  `rustup target add aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android`
+  `rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android`
 - JDK 17 or newer (21 works) - `JAVA_HOME`.
 - Android SDK (`ANDROID_HOME`, e.g. `~/Android/Sdk`) with the command-line tools and the NDK
   27.2.12479018 (`sdkmanager --install "ndk;27.2.12479018"`; `NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018`).

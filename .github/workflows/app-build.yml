@@ -10,7 +10,7 @@ name: Desktop and Android app
 #            tunneler-online-linux-x64.AppImage      runs anywhere, updates itself - no version in its name:
 #                                                    the update writes over the same file (shortcuts keep working)
 #   macOS    tunneler-online-<v>-macos-arm64.dmg / -macos-x64.dmg  (unsigned: right click -> Open)
-#   Android  tunneler-online-<v>-android.apk         to install directly (arm64, armv7, x86_64, x86 in one)
+#   Android  tunneler-online-<v>-android.apk         to install directly (arm64, armv7, x86_64 in one)
 #            tunneler-online-<v>-android.aab         the same for Google Play
 #            (signed with the repository secrets ANDROID_KEYSTORE = the upload keystore as base64,
 #            ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD; without them unsigned,
@@ -159,7 +159,8 @@ jobs:
         # (gh finds a draft release too and leaves it a draft: release.yml publishes it once everything is attached)
         run: gh release upload "${{ inputs.tag }}" dist/* -R "${{ github.repository }}" --clobber
 
-  # Android (src-tauri/gen/android, docs/ANDROID.md): one universal APK + AAB with all four ABIs
+  # Android (src-tauri/gen/android, docs/ANDROID.md): one universal APK + AAB with arm64, armv7 and x86_64 (no 32-bit
+  # x86 - old emulators, next to no phones; owner, 2026-10-25: a minute less per release)
   android:
     runs-on: ubuntu-latest
     steps:
@@ -193,7 +194,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
-          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -219,7 +220,7 @@ jobs:
           } > src-tauri/gen/android/keystore.properties
 
       - name: Build the app
-        run: npx --yes @tauri-apps/cli@2 android build --apk --aab --ci
+        run: npx --yes @tauri-apps/cli@2 android build --apk --aab --ci --target aarch64 armv7 x86_64
 
       - name: Collect the files
         run: |

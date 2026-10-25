@@ -3,12 +3,13 @@
 All notable changes to Tunneler Online. Versions follow [semantic versioning](https://semver.org/);
 a release is made by pushing a version tag (see CONTRIBUTING.md).
 
-## Unreleased
+## 5.0.4
 
 - Phones and tablets: a finger on a menu item highlights it, and the highlight follows the finger over the other
   items; letting go chooses the item under it (a drag that starts beside the items still scrolls). The main menu
   shows the version at the bottom left instead of "Tap to choose".
-- App builds are cached (a pinned Rust version, the Linux build packages, Gradle).
+- App builds are cached (a pinned Rust version, the Linux build packages, Gradle) - a release takes about half
+  as long; the Android app no longer includes 32-bit x86 (old emulators, next to no phones).
 
 ## 5.0.3
 
