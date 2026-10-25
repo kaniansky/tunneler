@@ -97,6 +97,18 @@ function memoryAccountStore() {
   };
 }
 
+// the per-address limits' key: an IPv4 address as it is (also written as ::ffff:a.b.c.d), an IPv6 address by its /64 -
+// one connection's whole prefix (anybody with IPv6 has 2^64 addresses to rotate through)
+function addressKey(addr) {
+  let a = String(addr || "").trim().toLowerCase().replace(/^\[|\]$/g, "").replace(/%.*$/, "");
+  const v4 = /^(?:::ffff:)?(\d{1,3}(?:\.\d{1,3}){3})$/.exec(a);
+  if (v4) return v4[1];
+  if (!a.includes(":")) return a;
+  const [head, tail] = a.split("::"), h = head ? head.split(":") : [], t = tail !== undefined && tail ? tail.split(":") : [];
+  const groups = tail === undefined ? h : [...h, ...new Array(Math.max(0, 8 - h.length - t.length)).fill("0"), ...t];
+  return groups.slice(0, 4).map(g => (parseInt(g, 16) || 0).toString(16)).join(":") + "::/64";
+}
+
 // a list of the last window's times per key: false once max are in it
 function rateLimiter(max, windowMs, now) {
   const seen = new Map();
@@ -143,14 +155,16 @@ function createAccounts(opts) {
   const waiting = [];
   function scrypt(text, salt, p) {
     return new Promise((resolve, reject) => {
+      const done = () => { running--; const next = waiting.shift(); if (next) next(); };
       const job = () => {
         running++;
-        crypto.scrypt(String(text).normalize("NFC"), salt, KEYLEN, { N: p.N, r: p.r, p: p.p, maxmem: 256 * p.N * p.r + (1 << 20) }, (err, out) => {
-          running--;
-          const next = waiting.shift();
-          if (next) next();
-          if (err) reject(err); else resolve(out);
-        });
+        // (bad parameters - a damaged stored hash - throw at once: the slot is given back, never kept)
+        try {
+          crypto.scrypt(String(text).normalize("NFC"), salt, KEYLEN, { N: p.N, r: p.r, p: p.p, maxmem: 256 * p.N * p.r + (1 << 20) }, (err, out) => {
+            done();
+            if (err) reject(err); else resolve(out);
+          });
+        } catch (e) { done(); reject(e); }
       };
       if (running < MAX_SCRYPT) job();
       else if (waiting.length < MAX_SCRYPT_WAIT) waiting.push(job);
@@ -174,14 +188,15 @@ function createAccounts(opts) {
 
   // ---------------------------------------------------------- accounts: cached, written one at a time per account
   const cache = new Map();
-  const remember = a => { cache.delete(a.id); cache.set(a.id, a); while (cache.size > CACHE) cache.delete(cache.keys().next().value); return a; };
+  const gone = new Set();             // ids deleted while this server runs: never cached or written again
+  const remember = a => { if (gone.has(a.id)) return a; cache.delete(a.id); cache.set(a.id, a); while (cache.size > CACHE) cache.delete(cache.keys().next().value); return a; };
   const valid = a => a && a.format === 1 && typeof a.id === "string" && ID_RE.test(a.id) && typeof a.name === "string" && typeof a.key === "string" &&
     Number.isInteger(a.gen) && a.ids && typeof a.ids === "object";
   async function load(id) {
-    if (typeof id !== "string" || !ID_RE.test(id)) return null;
+    if (typeof id !== "string" || !ID_RE.test(id) || gone.has(id)) return null;
     if (cache.has(id)) return cache.get(id);
     const a = await store.get(id);
-    return valid(a) && a.id === id ? remember(a) : null;
+    return valid(a) && a.id === id && !gone.has(id) ? remember(a) : null;
   }
   async function byName(name) {
     const key = usernameKey(name);
@@ -204,7 +219,7 @@ function createAccounts(opts) {
   function touch(a) {
     if (now() - (a.touched || 0) < TOUCH_MS) return;
     a.touched = now();
-    serial("a:" + a.id, async () => { await store.put(a.id, a); await store.put(nameFile(a.key), { id: a.id }); }).catch(e => say("account not touched:", e && e.message));
+    serial("a:" + a.id, async () => { if (a.deleted || gone.has(a.id)) return; await store.put(a.id, a); await store.put(nameFile(a.key), { id: a.id }); }).catch(e => say("account not touched:", e && e.message));
   }
 
   // ---------------------------------------------------------- wrong tries per username (also unknown ones)
@@ -260,9 +275,12 @@ function createAccounts(opts) {
     const ok = a && a.recovery ? await hashOk(a.recovery, cleanRecovery(code)) : await dummyCheck(cleanRecovery(code));
     if (!ok) { wrong(key); fail(401, "wrong"); }
     fails.delete(key);
+    const used = a.recovery;
     const fresh = newRecovery();
     const pw = await makeHash(password), rec = await makeHash(fresh);
     await serial("a:" + a.id, async () => {
+      // (deleted meanwhile, or the code already used by a reset that came first: one use only)
+      if (a.deleted || gone.has(a.id) || a.recovery !== used) fail(401, "wrong");
       a.ids.password = pw; a.recovery = rec; a.gen++; a.touched = now();
       await save(a);
     });
@@ -275,15 +293,17 @@ function createAccounts(opts) {
     checkLock(a.key);
     if (typeof old !== "string" || !(a.ids.password && await hashOk(a.ids.password, old))) { wrong(a.key); fail(401, "wrong"); }
     const pw = await makeHash(password);
-    await serial("a:" + a.id, async () => { a.ids.password = pw; a.gen++; a.touched = now(); await save(a); });
+    await serial("a:" + a.id, async () => { if (a.deleted || gone.has(a.id)) fail(401, "session"); a.ids.password = pw; a.gen++; a.touched = now(); await save(a); });
     return a;
   }
   async function remove(a, password) {
     checkLock(a.key);
     if (typeof password !== "string" || !(a.ids.password && await hashOk(a.ids.password, password))) { wrong(a.key); fail(401, "wrong"); }
     await serial("a:" + a.id, async () => {
+      if (a.deleted || gone.has(a.id)) fail(401, "session");
       await store.del(nameFile(a.key));
       await store.del(a.id);
+      gone.add(a.id);                 // (after the deletes: a store that failed keeps the account usable)
       cache.delete(a.id);
       a.deleted = true;
     });
@@ -357,7 +377,7 @@ function createAccounts(opts) {
   const pwField = v => typeof v === "string" ? (v.length > 1000 ? "x".repeat(1001) : v) : null;
   async function api(req, res, p) {
     try {
-      const addr = addressOf(req);
+      const addr = addressKey(addressOf(req));
       if (p === "/api/account/signup" && req.method === "POST") {
         const b = await body(req);
         if (!allowSignup(addr)) fail(429, "busy");
@@ -419,4 +439,4 @@ function createAccounts(opts) {
     store, get storeName() { return store.name; }, get persistent() { return store.persistent; } };
 }
 
-module.exports = { createAccounts, s3AccountStore, dirAccountStore, memoryAccountStore, AccountError, TOKEN_MS, TICKET_MS };
+module.exports = { createAccounts, addressKey, s3AccountStore, dirAccountStore, memoryAccountStore, AccountError, TOKEN_MS, TICKET_MS };

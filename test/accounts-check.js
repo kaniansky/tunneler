@@ -268,6 +268,72 @@ function record(day) {
     fake.close();
   }
 
+  // ---------------------------------------------------------------- hardening (the security review)
+  console.log("hardening");
+  {
+    // usernames: the compatibility forms of letters are the same name (fullwidth, mathematical), reserved ones too
+    const { s, port } = await start({ accountLimits: { signups: 100, logins: 100 } });
+    await signup(port, "Norko", "correct horse");
+    const r = await Promise.all(["Ｎｏｒｋｏ", "𝐍𝐨𝐫𝐤𝐨"].map(n => signup(port, n, "long enough")));
+    const adm = await signup(port, "ＡＤＭＩＮ", "long enough");
+    ok(r.every(x => x.status === 409 && x.j.code === "taken") && adm.status === 400 && adm.j.code === "name",
+      "look-alike compatibility forms (fullwidth, mathematical letters) are the same username; a reserved name in them is refused: " + r.map(x => x.status) + "," + adm.status);
+    // a damaged stored hash (scrypt parameters that throw): an error, and the scrypt slots are given back (before: 4 such
+    // requests took every slot for good and every later login waited forever)
+    const bad = (await signup(port, "Damaged", "long enough")).j;
+    (await s.accounts.load(bad.account.id)).ids.password.N = 3;
+    const errs = [];
+    for (let i = 0; i < 6; i++) errs.push((await Promise.race([login(port, "Damaged", "long enough"), sleep(3000).then(() => ({ status: "hung" }))])).status);
+    const fine = await Promise.race([login(port, "Norko", "correct horse"), sleep(5000).then(() => ({ status: "hung" }))]);
+    ok(errs.every(c => c === 503) && fine.status === 200, "a damaged stored hash: 503, and logins still work afterwards (" + errs.join(",") + " then " + fine.status + ")");
+    // one recovery code, two resets at the same moment: only one of them gets in
+    const rc = (await signup(port, "Twice", "first password")).j;
+    const both = await Promise.all(["second password", "third password"].map(pw => api(port, "POST", "/api/account/reset", { name: "Twice", code: rc.recovery, password: pw })));
+    ok(both.filter(x => x.status === 200).length === 1 && both.filter(x => x.status === 401).length === 1, "a recovery code used by two resets at once: one succeeds (" + both.map(x => x.status) + ")");
+    s.close();
+  }
+  {
+    // a deleted account stays deleted: a "touch" (the daily rewrite) queued while the delete runs doesn't write it back
+    let clock = Date.UTC(2026, 9, 25, 12);
+    const mem = require("../accounts.js").memoryAccountStore();
+    let gate = null, inDel = false;
+    const store = Object.assign({}, mem, { name: mem.name, persistent: false,
+      get: k => mem.get(k), put: (k, v) => mem.put(k, v),
+      async del(k) { inDel = true; if (gate) await gate; return mem.del(k); } });
+    const { s, port } = await start({ now: () => clock, accountStore: store });
+    const a = (await signup(port, "Ghost", "long enough")).j;
+    clock += 2 * 86400000;                                   // (a day since the last write: the next use rewrites it)
+    const acc = await s.accounts.load(a.account.id);
+    const tk = (await s.accounts.ticket(acc)).ticket;
+    let open;
+    gate = new Promise(r => { open = r; });
+    const del = s.accounts.remove(acc, "long enough");
+    await until(() => inDel, "the delete under way");
+    const used = await s.accounts.useTicket(tk);              // (its ticket used right then: a touch is queued)
+    open();
+    await del;
+    await sleep(50);
+    ok(!(await mem.get(a.account.id)) && !(await s.accounts.load(a.account.id)) && (await login(port, "Ghost", "long enough")).status === 401,
+      "a use of the account while it is being deleted doesn't bring it back into the store (ticket " + (used ? "taken" : "refused") + ")");
+    ok((await api(port, "GET", "/api/account", null, a.token)).status === 401, "and its token is dead");
+    s.close();
+  }
+  {
+    // the per-address limits behind a proxy: an IPv6 address counts by its /64 (else every login from a new address)
+    const { s, port } = await start({ trustProxy: true });
+    const from = async (ip, name) => (await fetch("http://127.0.0.1:" + port + "/api/account/login", { method: "POST",
+      headers: { "Content-Type": "application/json", "X-Forwarded-For": "203.0.113.9, " + ip }, body: JSON.stringify({ name, password: "whatever" }) })).status;
+    const codes = [];
+    for (let i = 0; i < 21; i++) codes.push(await from("2001:db8:1:2:" + i.toString(16) + "::" + (i + 1), "Someone " + i));
+    const other = await from("2001:db8:1:3::1", "Someone else"), v4 = await from("198.51.100.7", "Someone else");
+    ok(codes.slice(0, 20).every(c => c === 401) && codes[20] === 429 && other === 401 && v4 === 401,
+      "21 logins from one IPv6 /64 (each from another address): the 21st is refused; another /64, an IPv4 address are not");
+    const { addressKey } = require("../accounts.js");
+    ok(addressKey("::ffff:198.51.100.7") === "198.51.100.7" && addressKey("2001:0db8:0001:0002::9") === addressKey("2001:db8:1:2:ffff:1:2:3") &&
+      addressKey("2001:db8:1:2::9") !== addressKey("2001:db8:1:3::9"), "addressKey: IPv4 (also mapped), IPv6 by its /64");
+    s.close();
+  }
+
   // ---------------------------------------------------------------- accounts off
   console.log("accounts off");
   {
@@ -280,6 +346,11 @@ function record(day) {
     const hello = await c.connect();
     ok(r.status === 200 && hello.t === "hello" && hello.you.name === "Free Name", "creating and joining without an account, any name (as before)");
     await c.close();
+    // an anonymous page can't use an account's key as its client id (a board / snapshot from a time with accounts on)
+    const fake = new Client(port, r.j.id, "&name=Faker");
+    fake.cid = "acc-abcdefghijkmnpqr";
+    const m = await fake.connect();
+    ok(m.t === "err" && !s.rooms.get(r.j.id).seats.some(x => x.last === fake.cid), "accounts off: a client id \"acc-...\" is refused: " + JSON.stringify(m));
     s.close();
   }
 

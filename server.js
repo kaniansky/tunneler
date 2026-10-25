@@ -771,6 +771,9 @@ function createServer(opts = {}) {
     return Accounts.memoryAccountStore();
   })();
   const accountKey = a => "acc-" + a.id;           // (a room's / board's key for an account: never a browser's client id)
+  // a client id a page sent: never an account's key - with accounts off too (a board / handoff snapshot from a time with
+  // them on still holds such keys: an anonymous page can't take those entries, seats or tanks over)
+  const clientId = v => /^[A-Za-z0-9_-]{8,64}$/.test(v || "") && !/^acc-/i.test(v) ? v : null;
   const accounts = !accountsOn ? null : Accounts.createAccounts({ store: accountStore,
     secret: opts.accountSecret !== undefined ? opts.accountSecret : process.env.ACCOUNT_SECRET || null,
     scryptN: opts.scryptN, now: opts.now, say, lockFails: opts.lockFails, lockMs: opts.lockMs, limits: opts.accountLimits, json, readBody, addressOf,
@@ -936,7 +939,7 @@ function createServer(opts = {}) {
       let board;
       try { board = await loadBoard(day); } catch (e) { return challengeError(res, "storage", "storage unavailable, try later"); }
       // ("you": with accounts the session's entry - a Bearer token, if any; else the client id - docs/v6/ACCOUNTS.md)
-      let you = u.searchParams.get("cid");
+      let you = clientId(u.searchParams.get("cid"));
       if (accounts) { let a = null; try { a = await accounts.sessionOf(req); } catch (e) { a = null; } you = a ? accountKey(a) : null; }
       return json(res, 200, boardInfo(board, you));
     }
@@ -944,7 +947,7 @@ function createServer(opts = {}) {
     // (accounts on: the session's account is the entry's key and name - ?cid=&name= don't count; docs/v6/ACCOUNTS.md)
     const acc = accounts ? await needSession(req, res) : null;
     if (accounts && !acc) return;
-    const cid = acc ? accountKey(acc) : u.searchParams.get("cid") || "", name = acc ? acc.name : cleanPlayerName(u.searchParams.get("name"));
+    const cid = acc ? accountKey(acc) : clientId(u.searchParams.get("cid")) || "", name = acc ? acc.name : cleanPlayerName(u.searchParams.get("name"));
     if (!/^[A-Za-z0-9_-]{8,64}$/.test(cid)) return challengeError(res, "bad", "bad client id");
     if (!name) return challengeError(res, "name", "a name is needed");
     let bytes;
@@ -1282,7 +1285,7 @@ function createServer(opts = {}) {
     if (accounts && !account) return fail(ws, "Log in to play online.", "login");
     // every page sends its browser's random client id: the host's ban, a player's seat and tank go by it - with
     // accounts, by the account instead ("acc-<id>": a seat / tank / ban / password follows the player to any device)
-    const cid = account ? accountKey(account) : /^[A-Za-z0-9_-]{8,64}$/.test(q.get("cid") || "") ? q.get("cid") : null;
+    const cid = account ? accountKey(account) : clientId(q.get("cid"));
     if (!cid) return fail(ws, "No client id.");
     if (room.banned.has(cid)) return fail(ws, KICKED, "kicked");
     if (wrongVersion(q.get("v"))) return fail(ws, versionMsg(q.get("v")), "version", { version });

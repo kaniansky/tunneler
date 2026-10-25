@@ -108,7 +108,7 @@ upright (the narrow layout re-wraps the lines and stacks the box); both Graphics
   but strict: the cleaned form must be what was typed (no characters silently dropped or cut), at least one
   letter or digit, and not a reserved name (player, computer, ai, admin, host, server, tunneler, nobody,
   spectator, guest, the 8 colour names, ... - case-insensitive). Unique per server, **case-insensitive**:
-  `NetProto.usernameKey` = NFC, lower case, single spaces.
+  `NetProto.usernameKey` = NFKC, lower case, single spaces.
 - **Password**: 8 to 200 characters (code points, after NFC), anything else allowed
   (`NetProto.passwordProblem` -> null | "short" | "long"). Never logged, never stored: **scrypt** (node's
   crypto, async - the libuv thread pool, so the game clocks never wait) with a 16-byte random salt per
@@ -228,6 +228,11 @@ deploy -, else a folder, else memory), as small JSON objects:
 | scrypt | 4 at a time, 64 waiting |
 | request bodies | 2 KB JSON |
 
+"Per address": the client's IPv4 address, an IPv6 address by its /64 (`addressKey` - one connection gets a whole
+prefix). Behind a reverse proxy (Render, a CDN, nginx) the server sees only the proxy unless `TRUST_PROXY=1` (the
+last `X-Forwarded-For` entry): without it every player shares one address, and 20 wrong logins a minute from anybody
+lock everybody out of logging in (10 sign-ups an hour for the whole server).
+
 ### HTTP API
 
 ```
@@ -313,7 +318,8 @@ Tokens, tickets, rooms and boards don't change: they only know the account id.
 - Two server instances (Render's deploy overlap, seconds) could create the same username at the same moment:
   the index has no conditional write. The second index write wins; the first account can't log in by name
   (its id is orphaned). Very unlikely; a conditional PUT (`If-None-Match: *`) would close it on R2 / S3.
-- Look-alike usernames (Latin "a" vs Cyrillic "а") are different names.
+- Look-alike usernames across scripts (Latin "a" vs Cyrillic "а") are different names (the key is NFKC: the
+  compatibility forms of one letter - fullwidth, mathematical - are the same name).
 - A per-name lockout lets anyone keep a known username locked by guessing wrong (5 minutes at a time); the
   account's sessions keep working meanwhile.
 - No e-mail, no "log out everywhere" button (change the password), no username change, no admin tools (an

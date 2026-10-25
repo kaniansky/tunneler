@@ -986,7 +986,8 @@ none, i.e. a page from before 2.0 - is refused (POST 409 `{code:
   `opts.scryptN` for tests), tokens `t1.<payload>.<HMAC>` {a: id, g: password generation, i, e: 90 days} (refreshed by
   GET /api/account after a day; a new password / reset bumps `gen`, deleting removes the account), one-time
   websocket tickets (POST /api/ticket -> `&ticket=`, 60 s, used once, checked before the upgrade), recovery codes
-  (20 of `NetProto.RECOVERY_ALPHABET`, scrypt-hashed, new on every reset), per-address limits + a per-username
+  (20 of `NetProto.RECOVERY_ALPHABET`, scrypt-hashed, new on every reset, used once also by two resets at a time),
+  per-address limits (`addressKey`: IPv4, IPv6 by its /64; behind a proxy only with TRUST_PROXY) + a per-username
   lockout (5 wrong in 15 min -> 5 min), the same answer for unknown names; `/api/account/signup | login | reset |
   password | delete`, GET `/api/account`). server.js: `createServer({accounts})` default **off** (tests); the
   program on unless `ACCOUNTS=off`; `ACCOUNT_SECRET` (else generated and stored); `GET /api/config` {version,
@@ -994,8 +995,11 @@ none, i.e. a page from before 2.0 - is refused (POST 409 `{code:
   admitted, quick play's lastCid, sid replacement, the handoff - unchanged code) and `ws.name` = the username (`&name`,
   `me {name}` ignored); `POST /api/rooms` / `/api/quickplay` / the daily challenge's POST need `Authorization: Bearer`
   (401 `session`); the board keyed "acc-" + id (GET's `you` by the token); deleting an account closes its sockets and
-  removes its board entries (+ their replays: `sharedStore.del`). NetProto: `cleanUsername` (strict
-  cleanPlayerName, a letter / digit, `RESERVED_NAMES`), `usernameKey`, `passwordProblem` (8..200), `cleanRecovery`.
+  removes its board entries (+ their replays: `sharedStore.del`); a deleted id is never cached / written again (`gone`:
+  a touch / reset queued behind the delete). Page client ids starting with "acc-" are refused (`clientId`), accounts
+  on or off. NetProto: `cleanUsername` (strict
+  cleanPlayerName, a letter / digit, `RESERVED_NAMES`), `usernameKey` (NFKC: fullwidth / mathematical letters = the
+  plain ones), `passwordProblem` (8..200), `cleanRecovery`.
   Pages: `src/js/account.js` (`Account`: session `tunneler.session.<origin>`, the server's answer
   `tunneler.accounts.<origin>` "1"/"0", `required()` / `config()` / `check()` / `ticket()` / `auth()`...),
   `src/js/login.js` (`Login.ask` LOG IN -> CREATE AN ACCOUNT / RESET PASSWORD -> YOUR RECOVERY CODE (`Login.code`),

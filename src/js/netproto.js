@@ -100,11 +100,13 @@ function cleanPassword(s) {
 
 // Player accounts (docs/v6/ACCOUNTS.md). A username: a player name's characters and width (cleanPlayerName), but
 // strict - what was typed (spaces collapsed) must survive the cleaning whole, at least one letter or digit, not a
-// reserved name -> the username, or "" (refused). usernameKey: its case-insensitive form (unique per server).
+// reserved name -> the username, or "" (refused). usernameKey: its case-insensitive form (unique per server) - NFKC, so
+// the compatibility forms of letters (fullwidth "Ｎｏｒｋｏ", mathematical "𝐍𝐨𝐫𝐤𝐨", ligatures, superscripts) are the same
+// name as the plain ones, and a reserved name can't come back in them ("ＡＤＭＩＮ").
 const RESERVED_NAMES = ["player", "players", "computer", "ai", "admin", "administrator", "moderator", "mod", "host", "server",
   "system", "root", "tunneler", "tunneler online", "nobody", "anonymous", "guest", "spectator", "you", "me", "open", "closed",
   "blue", "green", "cyan", "yellow", "white", "pink", "violet", "teal"];
-const usernameKey = s => String(s == null ? "" : s).normalize("NFC").replace(/\s+/g, " ").trim().toLowerCase();
+const usernameKey = s => String(s == null ? "" : s).normalize("NFKC").replace(/\s+/g, " ").trim().toLowerCase();
 function cleanUsername(s) {
   const typed = String(s == null ? "" : s).normalize("NFC").replace(/\s+/g, " ").trim();
   const name = cleanPlayerName(typed);
