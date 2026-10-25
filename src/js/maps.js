@@ -113,11 +113,7 @@ export function mount() {
   async function create() {
     const map = form.from === "random" ? randomWorld(form.size) : MapData.blank(form.size);
     map.name = MapData.cleanName(form.name.value) || Lang.raw("map.ph.name");
-    // two bases to start with (left and right of the middle) - moved or removed in the editor
-    for (const fx of [0.25, 0.75]) {
-      const x = Math.round(map.w * fx), y = map.h >> 1;
-      if (!MapData.baseProblem(map, x, y)) map.bases.push({ x, y });
-    }
+    // (no bases: the player places them - owner, 2026-10-25; a map needs MapData.MIN_BASES to be played)
     form.name.value = "";
     const rec = await MapStore.save(map);
     edit(rec, map);

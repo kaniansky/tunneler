@@ -271,7 +271,7 @@ const ticks = async (n = 8) => { for (let i = 0; i < n; i++) await tick(); };
     ui.spec.items.find(it => it.key === "create").go();
     await ticks();
     let ed = w.tunnelerMapEditor();
-    assert(ed && ed.map.size === "small" && ed.map.name === "Čierna diera" && ed.map.bases.length === 2, "the editor on a new small map with 2 bases");
+    assert(ed && ed.map.size === "small" && ed.map.name === "Čierna diera" && ed.map.bases.length === 0, "the editor on a new small map, no bases (the player places them)");
     assert.strictEqual(env.el("status").style.display, "", "the tools on the status line");
     // keys: tool 1 (tunnel), paint a line with Space held
     env.key("Digit1"); assert.strictEqual(ed.tool, "tunnel");
@@ -293,11 +293,13 @@ const ticks = async (n = 8) => { for (let i = 0; i < n; i++) await tick(); };
     // bases: one too close to the edge refused, one more placed, one removed
     env.key("Digit4"); assert.strictEqual(ed.tool, "base");
     api.stamp(3, 3);
-    assert(ed.map.bases.length === 2 && ed.msg, "too close to the edge: refused, said so");
+    assert(ed.map.bases.length === 0 && ed.msg, "too close to the edge: refused, said so");
     api.stamp(64, 15);
-    assert.strictEqual(ed.map.bases.length, 3, "a third base");
+    assert.strictEqual(ed.map.bases.length, 1, "a base placed");
     api.stamp(64, 15);
-    assert.strictEqual(ed.map.bases.length, 2, "removed again");
+    assert.strictEqual(ed.map.bases.length, 0, "removed again");
+    api.stamp(40, 32); api.stamp(90, 32);
+    assert.strictEqual(ed.map.bases.length, 2, "two bases placed (a playable map)");
     // the mouse: a click on the canvas (pointer events) with the rock tool
     api.setTool("rock"); api.setBrush(-9);
     const cv = env.el("screen");
