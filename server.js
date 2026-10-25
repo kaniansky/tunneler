@@ -839,7 +839,9 @@ function createServer(opts = {}) {
         checkWorkers.add(w);
         w.once("exit", () => checkWorkers.delete(w));
         const timer = setTimeout(() => { w.terminate(); finish({ code: "long" }); }, challengeTimeMs);
-        w.once("message", m => { finish(m || { code: "bad" }); w.terminate(); });
+        // (only the check's own answer {code, ...}: node --watch makes every worker send its required files first -
+        // {"watch:require": [...]})
+        w.on("message", m => { if (!m || typeof m !== "object" || !("code" in m)) return; finish(m); w.terminate(); });
         w.once("error", e => { say("challenge check failed:", e && e.message); finish({ code: "bad" }); });
         w.once("exit", () => finish({ code: "bad" }));
       };
