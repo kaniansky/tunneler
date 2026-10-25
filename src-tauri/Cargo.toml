@@ -7,15 +7,24 @@ edition = "2021"
 rust-version = "1.77"
 publish = false
 
+# the library is the whole app: main.rs (desktop) calls its run(), the Android project (gen/android)
+# loads it as libtunneler_online_lib.so (a name apart from the binary's: Windows can't have both the same)
+[lib]
+name = "tunneler_online_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
 tauri = { version = "2", features = [] }
-tauri-plugin-updater = "2"
-tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+
+# desktop only: the store / the APK channel updates the Android app
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-updater = "2"
+tauri-plugin-opener = "2"
 
 # as small as possible: size-optimized, link-time optimized, no unwinding, symbols stripped
 [profile.release]

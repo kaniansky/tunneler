@@ -1,4 +1,4 @@
-name: Desktop app
+name: Desktop and Android app
 
 # The desktop app (src-tauri/: the game's pages in the OS's own web view, online play on a server set
 # in the app) for Windows, Linux and macOS, built as small as possible:
@@ -10,7 +10,12 @@ name: Desktop app
 #            tunneler-online-linux-x64.AppImage      runs anywhere, updates itself - no version in its name:
 #                                                    the update writes over the same file (shortcuts keep working)
 #   macOS    tunneler-online-<v>-macos-arm64.dmg / -macos-x64.dmg  (unsigned: right click -> Open)
-# Updates (src-tauri/src/main.rs): with the repository secret TAURI_SIGNING_PRIVATE_KEY (the key whose
+#   Android  tunneler-online-<v>-android.apk         to install directly (arm64, armv7, x86_64, x86 in one)
+#            tunneler-online-<v>-android.aab         the same for Google Play
+#            (signed with the repository secrets ANDROID_KEYSTORE = the upload keystore as base64,
+#            ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD; without them unsigned,
+#            named ...-android-unsigned.apk / .aab - an unsigned APK doesn't install. docs/ANDROID.md)
+# Updates (src-tauri/src/lib.rs, desktop only - the store / the APK channel updates the Android app): with the repository secret TAURI_SIGNING_PRIVATE_KEY (the key whose
 # public half is in tauri.conf.json; TAURI_SIGNING_PRIVATE_KEY_PASSWORD if it has one) the setup.exe,
 # the AppImage, the .deb, the .rpm and the macOS app (.app.tar.gz) are signed (.sig); release.yml then adds latest.json
 # (updater-manifest.yml), which the apps of older versions read to update themselves. Without the
@@ -141,3 +146,87 @@ jobs:
           tag_name: ${{ inputs.tag }}
           files: dist/*
 
+  # Android (src-tauri/gen/android, docs/ANDROID.md): one universal APK + AAB with all four ABIs
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: lts/*
+          cache: npm
+
+      - name: Build the web pages (public/)
+        run: |
+          npm ci
+          npm run build
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      # (the runner has the Android SDK in $ANDROID_HOME; Gradle fetches the platform / build tools it needs)
+      - name: Android NDK
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;27.2.12479018" > /dev/null
+          echo "NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          key: android
+
+      - name: Signing key
+        env:
+          ANDROID_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$ANDROID_KEYSTORE" ]; then echo "no ANDROID_KEYSTORE secret: unsigned"; exit 0; fi
+          umask 077
+          echo "$ANDROID_KEYSTORE" | base64 -d > "$RUNNER_TEMP/upload.jks"
+          {
+            echo "storeFile=$RUNNER_TEMP/upload.jks"
+            echo "storePassword=$ANDROID_KEYSTORE_PASSWORD"
+            echo "keyAlias=$ANDROID_KEY_ALIAS"
+            echo "keyPassword=${ANDROID_KEY_PASSWORD:-$ANDROID_KEYSTORE_PASSWORD}"
+          } > src-tauri/gen/android/keystore.properties
+
+      - name: Build the app
+        run: npx --yes @tauri-apps/cli@2 android build --apk --aab --ci
+
+      - name: Collect the files
+        run: |
+          v=$(node -p "require('./package.json').version")
+          out=src-tauri/gen/android/app/build/outputs
+          mkdir dist
+          if [ -f src-tauri/gen/android/keystore.properties ]; then
+            cp "$out/apk/universal/release/app-universal-release.apk" "dist/tunneler-online-$v-android.apk"
+            cp "$out/bundle/universalRelease/app-universal-release.aab" "dist/tunneler-online-$v-android.aab"
+          else
+            cp "$out/apk/universal/release/app-universal-release-unsigned.apk" "dist/tunneler-online-$v-android-unsigned.apk"
+            cp "$out/bundle/universalRelease/app-universal-release.aab" "dist/tunneler-online-$v-android-unsigned.aab"
+          fi
+          rm -f src-tauri/gen/android/keystore.properties "$RUNNER_TEMP/upload.jks"
+          ls -la dist
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: android
+          path: dist/*
+
+      - name: Attach to the release
+        if: inputs.tag != ''
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ inputs.tag }}
+          files: dist/*

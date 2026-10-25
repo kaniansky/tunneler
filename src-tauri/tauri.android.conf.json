@@ -1,0 +1,9 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "identifier": "com.kaniansky.TunnelerOnline",
+  "bundle": {
+    "android": {
+      "minSdkVersion": 24
+    }
+  }
+}
