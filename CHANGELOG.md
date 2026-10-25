@@ -3,59 +3,60 @@
 All notable changes to Tunneler Online. Versions follow [semantic versioning](https://semver.org/);
 a release is made by pushing a version tag (see CONTRIBUTING.md).
 
-## Unreleased
+## 6.0.0
 
-- Sound: "realistic" is the default style now (was the original PC speaker); a style you chose stays.
+Online play changes in this version: games need an account, and 5.x pages can't join 6.0 servers (they are asked
+to update).
 
-- Maps: a map is played only when a tank can drive between all of its bases. The editor says which bases can't be
-  reached and that a way has to be dug (its "Bases" turn red), the list shows such maps in red, and the skirmish and
-  online games refuse them with the reason (the server checks too). Maps that aren't ready can still be saved and
-  shared. Maps can also be saved as a file (.tmap) and opened from one (the maps list, Open a map file).
-- **Player accounts** (docs/v6/ACCOUNTS.md): online games and the daily challenge's leaderboard now need an account
-  on the game's server - a username (the name everybody sees, unique on the server) and a password, no e-mail. The
-  games list, quick play, an invite link and "Send your result" ask to log in first (LOG IN / CREATE AN ACCOUNT)
-  and then go on where you were going. Creating an account shows a recovery code once: it is the only way to set a
-  new password (RESET PASSWORD). Settings, Online: your account, Log out, Change password (logs out every other
-  device), Delete account (also removes your leaderboard entries). Split screen, skirmish, replays, maps and
-  looking at the daily challenge need no account. In online rooms a player is their account: a seat or tank comes
-  back from any device, a kick keeps that account out. Server operators can switch accounts off (`ACCOUNTS=off`:
-  free names as before); `ACCOUNT_SECRET`, `ACCOUNT_S3_BUCKET`, `ACCOUNT_DIR` (README, Hosting). Passwords are
-  kept only as scrypt hashes; the websocket uses one-time tickets, so no login token ever appears in a URL.
-- Running reliably (docs/v6/RELIABILITY.md):
-  - A server restart or deploy no longer ends online games. The server hands its games (lobbies and
-    running matches) over to the next one, and the players' pages reconnect and carry on where they were.
-    Meanwhile they show "The server is restarting...". A game that is really gone says so instead of "GAME
-    NOT FOUND".
-  - One bad message (too long, or broken) could take the whole server down with every game on it. Now it
-    only closes that one connection.
-  - A connection that died without closing (a phone switching networks, a laptop waking up) is noticed
-    within seconds, and the page reconnects with its tank and seat at once. The page also reconnects at
-    once when the network comes back, and it says so while there is none.
-  - A desync now repairs itself: the page rebuilds the match from its start (twice at most).
-  - When a new version goes live, an open page reloads itself, so nobody has to follow a "please update"
-    message in a browser. A screen whose code is gone after a deploy reloads the page too.
-  - A screen that crashes shows a message and a way back instead of a blank page. Errors that pages catch
-    are reported to the server's log. There is also a new `/api/health`.
 - **Quick play** (main menu and the list of games): straight into an online game. The server finds a quick-play
   game with a place for you, or makes one - four tanks free-for-all, computer tanks in every seat nobody sits on,
   matches that start by themselves after a short countdown. Join a game that is already running and you take over
   a computer tank at once; leave, and the computer drives it again (a dropped connection or a reload gets the same
-  tank back within 15 s). The taken-over tank shows your name. Every
-  client switches the tank at exactly the same frame (a marker in the game's frame log), so spectators, late
-  joiners and replays see the same game. (docs/v6/QUICKPLAY.md)
-- Daily challenge (main menu): every day (UTC) a new skirmish, the same for everyone - the same world, mode, map
+  tank back within 15 s). The taken-over tank shows your name. Every client switches the tank at exactly the same
+  frame (a marker in the game's frame log), so spectators, late joiners and replays see the same game.
+  (docs/v6/QUICKPLAY.md)
+- **Daily challenge** (main menu): every day (UTC) a new skirmish, the same for everyone - the same world, mode, map
   size and computer opponents. Play it as often as you like and send your result: the server plays the match's
   replay again with its own computer players, so only real results get on the day's leaderboard (won, rounds,
   kills, time). The screen shows today's date and the time left until the next challenge; the leaderboard shows
   the day's best, and every entry's match can be watched. A match finished just before midnight can still be sent
   for two hours. The leaderboard also goes back through the 30 days before (Left / Right, or the arrows of its day
   row): each day's settings and board, the matches to watch (Back returns to that day's board), and "Play this day
-  again" - practice, whose results are never sent. (docs/v6/CHALLENGE.md)
-- Your own maps (main menu, Maps): paint a world - rock, dirt and tunnels - and place up to 8 bases, on a small,
+  again" - practice, whose results are never sent. A match given up with Esc wins nothing. (docs/v6/CHALLENGE.md)
+- **Your own maps** (main menu, Maps): paint a world - rock, dirt and tunnels - and place up to 8 bases, on a small,
   medium or large map, starting from dirt everywhere or a random world. The editor works with the keyboard, the
-  mouse, a gamepad and on a phone (one finger paints, two move and zoom); maps are kept in the browser and can be
-  shared as links (`/map/<id>`). Play a map in a skirmish (Settings, Map) or choose it for an online game (the
-  room's Settings, Map) - every player gets the same map. Replays of map games carry their map. (docs/v6/MAPS.md)
+  mouse, a gamepad and on a phone (one finger paints, two move and zoom); maps are kept in the browser, shared as
+  links (`/map/<id>`) and saved as / opened from files (.tmap). A map is played only when a tank can drive between
+  all of its bases: the editor says which bases can't be reached and that a way has to be dug, the list shows such
+  maps in red, and the skirmish and online games refuse them with the reason (the server checks too). Play a map
+  in a skirmish (Settings, Map) or choose it for an online game (the room's Settings, Map) - every player gets the
+  same map. (docs/v6/MAPS.md)
+- **Player accounts** (docs/v6/ACCOUNTS.md): online games and the daily challenge's leaderboard need an account on
+  the game's server - a username (the name everybody sees, unique on the server) and a password, no e-mail. The
+  games list, quick play, an invite link and "Send your result" ask to log in first (LOG IN / CREATE AN ACCOUNT)
+  and then go on where you were going. Creating an account shows a recovery code once (Copy the code puts it on
+  the clipboard): it is the only way to set a new password (RESET PASSWORD). Settings, Online: your account, Log
+  out, Change password (logs out every other device), Delete account (also removes your leaderboard entries).
+  Split screen, skirmish, replays, maps and looking at the daily challenge need no account. In online rooms a
+  player is their account: a seat or tank comes back from any device, a kick keeps that account out. Server
+  operators can switch accounts off (`ACCOUNTS=off`: free names as before); `ACCOUNT_SECRET`, `ACCOUNT_S3_BUCKET`,
+  `ACCOUNT_DIR`, `TRUST_PROXY` (README, Hosting). Passwords are kept only as scrypt hashes; the websocket uses
+  one-time tickets, so no login token ever appears in a URL.
+- **Running reliably** (docs/v6/RELIABILITY.md):
+  - A server restart or deploy no longer ends online games. The server hands its games (lobbies and running
+    matches) over to the next one, and the players' pages reconnect and carry on where they were. Meanwhile they
+    show "The server is restarting...". A game that is really gone says so instead of "GAME NOT FOUND".
+  - One bad message (too long, or broken) could take the whole server down with every game on it. Now it only
+    closes that one connection.
+  - A connection that died without closing (a phone switching networks, a laptop waking up) is noticed within
+    seconds, and the page reconnects with its tank and seat at once. The page also reconnects at once when the
+    network comes back, and it says so while there is none.
+  - A desync now repairs itself: the page rebuilds the match from its start (twice at most).
+  - When a new version goes live, an open page reloads itself, so nobody has to follow a "please update" message
+    in a browser. A screen whose code is gone after a deploy reloads the page too.
+  - A screen that crashes shows a message and a way back instead of a blank page. Errors that pages catch are
+    reported to the server's log. There is also a new `/api/health`.
+- Sound: "realistic" is the default style now (was the original PC speaker); a style you chose stays.
 
 ## 5.0.4
 
