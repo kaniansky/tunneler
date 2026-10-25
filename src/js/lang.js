@@ -120,11 +120,11 @@ function register(c, data) {
   if (L[target] && (target === c || active !== target)) { use(target); remember(target); }
 }
 
-// src/lang/<code>/<feature>.js: more texts for a registered language (its index.js imports the file after
-// main.js) - a feature's texts in a file of their own
-function extend(c, data) {
-  if (!L[c]) throw new Error("Lang.extend: " + c + " is not registered (import main.js first)");
-  Object.assign(L[c], data);
+// src/lang/<code>/<feature>.js: more texts for a language registered before it (its index.js imports main.js
+// first) - a feature keeps its texts in its own file (lang-check: every English key translated, everything fits)
+function extend(c, texts) {
+  if (!L[c]) throw new Error("Lang.extend(" + c + "): register the language first (main.js)");
+  Object.assign(L[c], texts);
 }
 
 const cur = () => L[code] || L.en || {};
