@@ -672,7 +672,12 @@ class DosUI {
     // the snapshot: every content row, then the info, the rule and the hint (7 rows); the renderer shows the
     // content in a window VIEW rows high from view.top (units: rows of the DOS screen's height - any fraction:
     // smooth scrolling), the rest below it - so the screen is always R rows high (owner, 2026-10-25)
-    const VIEW = R - 7, start = [0];
+    // the area below the window: an empty row, the info (4 rows; 5 - 7 when the selected item's info needs them:
+    // the window gets that much shorter, the screen stays as tall), the rule, the hint
+    const selInfo = items[this.sel] && items[this.sel].info || [];
+    const infoLines = Math.min(7, selInfo.reduce((n, l) => n + wrapCols(typeof l === "string" ? l : l.text, NC - 2).length, 0));
+    const BOTTOM = infoLines > 4 ? infoLines + 2 : 7;
+    const VIEW = R - BOTTOM, start = [0];
     for (let r = 1; r <= height; r++) start.push(start[r - 1] + H(r));   // (row r from start[r - 1] to start[r])
     const total = start[height], maxTop = Math.max(0, total - VIEW);
     const selRow = +Object.keys(rowItem).find(r => rowItem[r] === this.sel) || 0;
@@ -688,22 +693,20 @@ class DosUI {
       if (start[selRow] + 1 > target + VIEW) target = start[selRow] + 1 - VIEW;
       target = Math.max(0, Math.min(target, maxTop));
     }
-    const R2 = height + 7, o = this.t2 || (this.t2 = new TextBuf());
+    const R2 = height + BOTTOM, o = this.t2 || (this.t2 = new TextBuf());
     o.textMode(R2); o.window(1, 1, 80, R2); o.textBackground(0); o.clearScreen();
     o.vram.set(t.vram.subarray(0, height * 160), 0);
     if (t.uniUsed) { o.uni.set(t.uni.subarray(0, height * 80), 0); o.uniUsed = true; }
     const rowH = [];
     for (let r = 1; r <= height; r++) rowH.push(H(r));
-    for (let k = 0; k < 7; k++) rowH.push(1);
+    for (let k = 0; k < BOTTOM; k++) rowH.push(1);
     // (content row r - 1-based, as gotoXY - is the snapshot's row r - 1, as the centred rows and the cursor have it)
     const itemCentres = this.centres;
     this.centres = [];
     for (const [r, a, z] of centres.concat(itemCentres)) if (r >= 0 && r < height) this.centres.push([r, a, z]);
     const cursor = this.cursor && this.cursor.row >= 0 && this.cursor.row < height ? this.cursor : null;
     const it = items[this.sel];
-    // (the info below the window: 4 rows, 5 when it needs them - the empty row above it then takes the first)
-    const infoLines = (it && it.info || []).reduce((n, l) => n + wrapCols(typeof l === "string" ? l : l.text, NC - 2).length, 0);
-    let ir = infoLines > 4 ? height + 1 : height + 2;
+    let ir = infoLines > 4 ? height + 1 : height + 2;   // (a long info: no empty row above it)
     (it && it.info || []).forEach(l => {
       const text = typeof l === "string" ? l : l.text;
       for (const part of wrapCols(text, NC - 2)) {

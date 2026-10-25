@@ -62,7 +62,8 @@ may be redesigned, but always in the original's DOS look.
   (`tools/changelog-notes.sh`), the desktop app, the Docker image on ghcr.io as `latest` / `X.Y.Z` /
   `X.Y` / short sha, amd64 + arm64, the homepage upload; pushes to main only run CI; release-notes.yml
   rewrites an old release's notes by hand), docker-publish (manual image build
-  only), dependabot. So pushing to main publishes - another reason never to push unasked.
+  only), keep-awake (pings the live server every 10 minutes: Render's free plan sleeps after 15 idle
+  minutes), dependabot. So pushing to main publishes - another reason never to push unasked.
 - `docs/DESIGN-8P.md` - the design of everything beyond the original (extended mode, slots / teams,
   online lobby, views, sound, map sizes, languages...), in the owner's numbered requests; later sections
   win over earlier ones.
@@ -104,6 +105,10 @@ may be redesigned, but always in the original's DOS look.
   - `time-sim.js` - round time limit: damage to enemies counted (classic / extended, not teammates),
     time up -> top-damage side wins / tie = nobody (classic, free-for-all, teams, destroyed members),
     the countdown pixels, roundTime 0 = no option step for step, determinism with computer tanks.
+  - `layout-check.js` - the menus' layout on a desktop, a phone upright (narrow) and sideways, in every
+    language: every box placed and on the screen, boxes apart and above the info, every row fits its box,
+    every info fits (narrow: up to 7 rows) - 230 screens (home, split, skirmish + Game settings, Settings,
+    games list, create, join by link, name, replays).
   - `local-check.js` - home.js settings screens (vm with a stub DOM: default classic link, slot editor
     keys, validation, localStorage), play.js links -> engine options / AI levels / listener, and
     `Speaker.attenuation`, views.js coloring / naming players by their slot (not their index), views.js
@@ -813,7 +818,8 @@ none, i.e. a page from before 2.0 - is refused (POST 409 `{code:
   `TextBuf` (textbuf.js, 600 rows): lines re-wrapped (`wrapCols`, long words broken after a "/"), boxes stacked
   (`NB` / `DosUI.NARROW_W` 32 wide), item rows `LINE_H` (1.5) tall, the rest 1 (`snap.rowH`). The snapshot holds
   every content row plus the info, rule and hint (7 rows; pages: rule + hint); `snap.view = {rows, units, top}`
-  = the content shown in a window `units` high from `top` (any fraction) - the screen is always the same height.
+  = the content shown in a window `units` high from `top` (any fraction) - the screen is always the same height
+  (an info longer than 4 rows takes rows from the window: up to 7).
   Smooth scrolling: `presentNarrowAt(top)` re-presents with a new view (`nbase`), `scrollNarrow(to, animate)`
   glides (the selection moved out of view), a drag follows the finger (`ndrag`, units per px), a flick keeps
   gliding; a refresh of the same screen (`show(spec, true)` -> `nkeep`) keeps the scroll. The selected row wider

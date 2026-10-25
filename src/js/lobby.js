@@ -43,7 +43,7 @@ export function mount() {
   }
   function stateText(r) {
     if (r.state === "lobby") return T("state.lobby");
-    const score = r.round ? "  " + scoreText(r) : "";
+    const score = r.round && !ui.isNarrow() ? "  " + scoreText(r) : "";   // (a phone: the round only - the row is narrow)
     return (r.state === "paused" ? T("state.paused") : T("state.round", { n: r.round || 1 })) + score;
   }
   // the list's columns after the name: PLAYERS ("2/4": seated / seats they can take - during a match:

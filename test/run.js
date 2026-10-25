@@ -20,6 +20,7 @@ const TESTS = [
   "compare-wasm.js",
   "time-sim.js",
   "local-check.js",
+  "layout-check.js",
   "net-page-smoke.js",
   "app-check.js",
   "sound-check.js",
