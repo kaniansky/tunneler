@@ -28,7 +28,8 @@ A map is a grid of **cells of 4 x 4 world pixels** (the computer players' grid i
   and explosions can never leave the world, and a view near the edge shows rock, not the other side.
 - **Bases**: up to 8, each at a cell (its centre pixel `cx * 4 + 2, cy * 4 + 2`). A base (35 x 35 px) lies
   wholly inside the frame (its centre at least `frame + 18` px from every edge) and never touches another
-  (centres at least 40 px apart on either axis). A playable map has at least 2.
+  (centres at least 40 px apart on either axis). A playable map has at least 2, and a tank can drive between all
+  of them (section 3a).
 - A **name**: any letters (raw Unicode, cleaned like a room's name), at most 24 display columns.
 
 ### Encoding
@@ -68,6 +69,45 @@ returns null for anything else; `canonical(bytes)` = decode + encode (the server
   out dug as dirt - every tank can always leave its base.
 - Everything else (rounds, modes, the AI, line of sight, the world map) works on the world as it is.
 
+## 3a. A way between all the bases
+
+A map is played only when **a tank can drive from every base to every other one** (owner: "make sure each map has
+to have a path between all the bases"). `TunnelerEngine.mapReach(src)` (src: a code, bytes or a decoded map) ->
+`null` (not a map) or `{ok, groups, walled}`: `ok` = every base reaches every other (0 or 1 base: true), `groups` =
+the bases that reach each other (indexes; the first group holds base 0), `walled` = the bases `openBase` dug out.
+It is a static helper on the engine (the engine already imports MapData; server.js requires engine.js for it,
+lazily) and part of no match: no RNG, no engine state, no change to any game.
+
+How it matches the game exactly:
+
+- **The world a match starts on**: the map painted, `openBase` for every base (in the map's order) - a base walled
+  in by rock gets its way out dug, as in `newMatchExt` -, then every base's interior cleared and its walls drawn
+  (`drawBases`' geometry: side walls at dx 17, top / bottom walls at dy 17 with the 7 px doorway). All K bases are
+  drawn, as in a game with a tank on each.
+- **Blocked pixels**: rock and base walls (`PixelClassExt` >= 3); dirt is open (the tank digs it), so is tunnel.
+- **A step**: 1 px in one of 8 directions; the game moves a tank with its *new* direction's sprite and refuses the
+  step when that sprite (the original's 7 x 7 shapes, rotated as `initTables` does, `0x10` = transparent) has a
+  blocked pixel under it (`tankBlocked` > 2). The check tests exactly that sprite at the step's end - so an upright
+  tank is 5 px wide (a 4 px gap is too narrow, 8 px is enough), doorways are the only way into a base.
+- **Fast**: an integral image of the blocked pixels; per position one O(1) test of the 7 x 7 box (clear: every
+  direction; full: none), else each direction's sprite box and, only when it holds as few blocked pixels as the
+  sprite has gaps, its rows -> a byte of "can stand here having moved in direction d" bits per position. Then a
+  flood from each base not reached yet (stopping once every base is reached). A step's test is the sprite at its
+  end, so a step isn't always a step back: when a step of the flood's way from base 0 to some base can't be taken
+  back, a flood backwards from base 0 decides. Measured (node 24, the worst case - an open map with the bases in
+  opposite corners, the flood covers everything): small ~5 ms, medium ~15 ms, large ~60-70 ms (the first call,
+  before the JIT, up to ~140 ms).
+- **Proven against the engine** (test/map-check.js): the per-direction table equals `engine.tankBlocked(x, y, d) <=
+  2` at every position of a real match's world (bases drawn, ways dug), and a way the flood found is driven by a
+  tank in a real engine, step by step, to the other base.
+
+Where it is used: the editor (section 4), the store record's `linked`, the skirmish (home.js and play.js - also a
+map from a link), online rooms (the server's own check: `st.map.linked`, `cantStart` "path"). Sharing a map
+(`POST /api/maps`) still takes one that isn't connected - a map in the works -, it just isn't played.
+
+Note: `openBase` digs only within `sc(64)` px of the base - rock thicker than that leaves its way out ending in the
+rock, and the check says so.
+
 **Determinism**: the map is data in the options; painting it uses no random numbers, no time, no
 floating point; the base deal uses the engine's RNG at a fixed place (match start). Every client with the
 same seed and options computes the same game. Without `opts.map` no line of the generation or placement
@@ -77,9 +117,19 @@ changes (compare-wasm, ext-sim).
 
 Main menu: **Maps** (below Replays).
 
-**Your maps** (DosUI list): name, size, bases, newest first; Make a new map; Open a map link; Back to main
-menu. A map's row opens **its screen**: Edit, Play in a skirmish (the skirmish lobby with this map chosen),
-Share a link (uploads it, copies `/map/<id>`), Delete (twice to confirm), Back.
+**Your maps** (DosUI list): name, size, bases (green; red while the map can't be played - fewer than 2 bases or
+not all connected, the info says which), newest first; Make a new map; Open a map link; Open a map file; Back to
+main menu. A map's row opens **its screen**: Edit, Play in a skirmish (the skirmish lobby with this map chosen;
+refused with the reason while it can't be played), Share a link (uploads it, copies `/map/<id>`), Save as a file,
+Delete (twice to confirm), Back.
+
+**Map files**: a `.tmap` file is the map's `MapData.encode` bytes (the "TM" magic and the format byte make it
+self-describing and versioned; `MapData.fileName(map)` = its name's letters and digits + `.tmap`). Save as a file
+(a map's screen and the editor's menu): a download in a browser and the desktop app; in the Android app (a page's
+download does nothing in its web view) `window.TunnelerAndroid.saveFile(name, base64)` and "Saved: <where>". Open a
+map file (the list; a hidden file input, at most 64 KB): checked with `MapData.decode` - anything odd: "That file is
+not a map." in red and nothing kept -, then kept as a new map (a new local id, the file's name) and its screen
+opens; a map that can't be played yet opens too (it can be edited).
 
 **New map**: Name, Map size, Start from: dirt everywhere / a random world (the engine's own generator,
 sampled into cells: a cell with more than half of its pixels rock is rock), Create.
@@ -111,11 +161,16 @@ language).
 - Undo: the last 30 strokes.
 
 **The editor's menu** (Esc): Back to the map, Name, Tool, Brush size, Fill everything with dirt / rock /
-tunnel (twice to confirm), Undo, Save and back. The info says whether the map is playable ("2 bases - ready")
-and which bases are walled in ("a way out will be dug"). Leaving the editor always saves.
+tunnel (twice to confirm), Undo, Save as a file, Save and back. The info says whether the map is playable: too few
+bases; "No way for a tank to base 3 from the others." + "Rock and base walls stop tanks: dig a way (dirt or
+tunnel)." (the bases outside the biggest group that reach each other); or "2 bases - ready to play." and which
+bases are walled in ("the game digs a way out"). The status line's "Bases: n of 8" is red while the map can't be
+played (worked out 0.4 s after the last change - `reachSoon` - so painting stays smooth). Leaving the editor always
+saves; a map that isn't playable yet is saved too (a map in the works).
 
 **Storage**: IndexedDB database "tunneler-maps", store "maps" (keyPath id): `{id, name, size, bases,
-code, date, shared, sharedAt}` - `shared` = the server id once shared, `sharedAt` = that server's address (a map
+code, linked, date, shared, sharedAt}` - `linked` = mapReach's `ok` (records from before it get it the first time
+they are listed: `MapStore.fill`; `MapStore.playable(rec)` = "" / "bases" / "path") - - `shared` = the server id once shared, `sharedAt` = that server's address (a map
 shared on one server - a link from another site, the desktop app's Server setting - is sent again to the game's
 server before it is used there: `MapStore.sharedHere(rec)`; the id comes out the same, it is the content's hash).
 No IndexedDB: the page's memory.
@@ -139,8 +194,11 @@ No IndexedDB: the page's memory.
 
 **Skirmish** (home.js, `/#cpu`): a Settings row **Map: random / <name>** (Left / Right / a click step
 through random and your maps; on a phone in the Game settings screen). With a map the Map size row shows the
-map's size and can't be changed; a map with fewer bases than the skirmish has tanks turns Start red ("This
-map has 2 bases - fewer tanks or another map"). Stored as `tunneler.cpu.map` (the local id). The link:
+map's size and can't be changed; a map whose bases aren't all connected turns the Map row's info and Start red
+("A tank can't reach every base of this map: dig a way (Maps)."), a map with fewer bases than the skirmish has
+tanks turns Start red ("This map has 2 bases - fewer tanks or another map"). play.js checks the map again before a
+game (`mapReach` on its code - a link may bring any map) and shows "A tank can't reach every base: dig a way in the
+editor." instead (`noMap("path")`). Stored as `tunneler.cpu.map` (the local id). The link:
 `/skirmish?g=<code>&lmap=<local id>`, and `&map=<shared id>` once the map is shared on this server (that link works
 anywhere: play.js fetches it from the server and keeps it). Old links (no map) are unchanged; the short
 `g=` code stays 13 characters (the map is a parameter of its own). Rematch remembers the map.
@@ -148,8 +206,10 @@ anywhere: play.js fetches it from the server and keeps it). Old links (no map) a
 **Online** (online.js, the room's Settings box; the phone's Game settings): **Map: random / <name>**. The host
 steps through random and their own maps; choosing one uploads it (once per server - its shared id is kept with it) and
 sends `{t:"set", map: <id>}`. The server loads it from its store (async), keeps the canonical code with the
-room and shows `st.map = {id, name, size, bases}` (others see the name, read-only). The room's size follows
-the map. `cantStart` gives `"map"` while the map has fewer bases than the match would have tanks; a map
+room and shows `st.map = {id, name, size, bases, linked}` (others see the name, read-only; `linked` = the server's
+own mapReach, cached per id - the id is the content's hash). The room's size follows the map. `cantStart` gives
+`"path"` while its bases aren't all connected (the Map row's info says so too, Start shows `pg.cant.path`) and
+`"map"` while the map has fewer bases than the match would have tanks; a map
 makes the match extended (`isClassic` false). The match cfg carries `map: <code>` - every client builds its
 engine from the same bytes (`engineOptions` passes it, `readCfg` checks it decodes). `map: ""` = random.
 Creating a game with a remembered map id (tunneler.online) applies it once loaded.
@@ -171,8 +231,9 @@ Creating a game with a remembered map id (tunneler.online) applies it once loade
 
 New files `src/lang/<code>/maps.js` (en, sk, cs, uk, ru) with `Lang.extend(code, {...})` - added to
 lang.js (merges into a registered language; the chosen language's letters are loaded again). Keys `map.*`
-(editor, list, sharing), `home.maps`, `lc.map`, `os.map`, `pg.cant.map`, `lc.err.bases`; an Information
-section about maps.
+(editor, list, sharing, files: `map.file*`, `map.tofile*`, `map.saved`, `map.save.err`; the way between the bases:
+`map.cut`, `map.cut.dig`, `map.cut.play`), `home.maps`, `lc.map`, `os.map`, `os.map.cut`, `pg.cant.map`,
+`pg.cant.path`, `lc.err.bases`, `lc.err.path`; an Information section about maps.
 
 ## 9. Tests
 
@@ -182,11 +243,19 @@ section about maps.
   K < N fallback, the classic engine and random worlds unchanged (stateHash of reference games without a
   map); a skirmish link with `lmap` / `map` (play.js in the vm) builds the engine with the map; replays of a
   map game play back.
+- `test/map-check.js`, the way between the bases: open area / dirt connected, a rock wall splits the map (groups
+  right; a 4 px gap too narrow, 8 px or dirt enough), a base walled in by thin rock is dug out (connected, driven in
+  the game) but not by rock beyond openBase's reach, doorways the only way into a base, 4 bases with one in a closed
+  chamber, the step table equal to the engine's tankBlocked on a real match's world, a found way driven in the
+  engine, timing on every size; the editor's messages and status line, the list / map screen, old records filled;
+  map files (Android saveFile name and bytes, a download, a round trip, a broken / huge file refused); the
+  skirmish refusing such a map (Map row, Start, a play link).
 - `test/map-share-check.js`: the real server's POST / GET /api/maps (canonical bytes, the hash id, the same
   map twice = one id, junk / too large / rate limit, 404, kept across a restart on disk, memory without a
   folder), `/map/<id>` answers with the page, `Links.parseMap`.
-- `test/net-sim.js`: a room with a map - set by the host, `st.map`, `cant` "map" with too few bases, the
-  match cfg's map, identical clients (no desync).
+- `test/net-sim.js`: a room with a map - set by the host, `st.map`, `cant` "map" with too few bases, a shared map
+  whose bases aren't connected (`st.map.linked` false, `cant` "path", start refused), the match cfg's map,
+  identical clients (no desync).
 - `test/layout-check.js`: the maps list, a map's screen, new map, open a link, the editor's menu - desktop,
   phone upright and sideways, every language; and the skirmish with a map chosen.
 - `test/lang-check.js`: the new Information section in every language.
@@ -195,4 +264,7 @@ section about maps.
 
 - Team sides on a map (which bases a team gets); objects for game modes (gold spots, flags).
 - Changing a map's size after it was made (make a new one from a random world).
-- Map files (.map downloads) - links cover sharing; a browser of public maps; ratings.
+- A browser of public maps; ratings.
+- Which subset of bases a game with fewer tanks than bases gets is not checked separately: the check draws all K
+  bases (a base's interior cleared - a way through a base's spot painted as rock exists only when that base is
+  dealt).

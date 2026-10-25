@@ -5,6 +5,10 @@ a release is made by pushing a version tag (see CONTRIBUTING.md).
 
 ## Unreleased
 
+- Maps: a map is played only when a tank can drive between all of its bases. The editor says which bases can't be
+  reached and that a way has to be dug (its "Bases" turn red), the list shows such maps in red, and the skirmish and
+  online games refuse them with the reason (the server checks too). Maps that aren't ready can still be saved and
+  shared. Maps can also be saved as a file (.tmap) and opened from one (the maps list, Open a map file).
 - Running reliably (docs/v6/RELIABILITY.md):
   - A server restart or deploy no longer ends online games. The server hands its games (lobbies and
     running matches) over to the next one, and the players' pages reconnect and carry on where they were.
