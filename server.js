@@ -34,7 +34,7 @@
 //        GET  /api/replays/<id>   that replay (gzip'd JSON); the page address /replay/<id> plays it
 //        POST /api/maps           a custom map (src/js/mapdata.js bytes, docs/v6/MAPS.md) -> {id}: checked,
 //                                 kept in its canonical form under the hash of its content (the same store
-//                                 as the replays: the bucket's maps/, MAP_DIR - default REPLAY_DIR/maps -, memory)
+//                                 as the replays: the bucket (<id>.map), MAP_DIR - default REPLAY_DIR/maps -, memory)
 //        GET  /api/maps/<id>      that map's bytes; the page address /map/<id> opens it
 //        POST /api/rooms          {name, public, spectators, seats?: [{kind: open|closed|easy|normal|hard,
 //                                  team: 1..8} x 8 (index = colour)], size, winScore, friendlyFire, roundTime,
@@ -593,7 +593,7 @@ function createServer(opts = {}) {
   const replays = sharedStore({ prefix: "", ext: ".replay", dir: replayDir, max: MAX_SHARED, keepDays, type: "application/gzip" });
   // shared maps (docs/v6/MAPS.md): MAP_DIR (opts.mapDir; null: memory only), by default a folder in the replays' one
   const mapDir = opts.mapDir !== undefined ? opts.mapDir : process.env.MAP_DIR || (replayDir ? path.join(replayDir, "maps") : null);
-  const maps = sharedStore({ prefix: "maps/", ext: ".map", dir: mapDir, max: MAX_SHARED_MAPS, keepDays: 0, type: "application/octet-stream" });
+  const maps = sharedStore({ prefix: "", ext: ".map", dir: mapDir, max: MAX_SHARED_MAPS, keepDays: 0, type: "application/octet-stream" });
   function validReplay(bytes) {
     let raw = bytes;
     try { if (raw[0] === 0x1F && raw[1] === 0x8B) raw = zlib.gunzipSync(raw, { maxOutputLength: 16 * 1024 * 1024 }); } catch (e) { return null; }

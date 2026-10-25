@@ -28,6 +28,7 @@ import { TunnelerEngine } from "./engine.js";
 import { Gfx } from "./gfx.js";
 import { Keyboard } from "./input.js";
 import { Lang } from "./lang.js";
+import { MapStore } from "./mapstore.js";
 import { NetProto } from "./netproto.js";
 import { Pads } from "./pads.js";
 import { Replay } from "./replay.js";
@@ -347,6 +348,44 @@ export function mount() {
     drawLobby(true);
   }
 
+  // The room's map (docs/v6/MAPS.md): the host steps through a random world, its own maps (MapStore) and the
+  // room's map when it isn't one of them (after a handover). Choosing one of its maps sends it to the server
+  // first (once - its shared id is kept with it), then {t:"set", map: id}; the server loads it and shows st.map.
+  let myMaps = [], mapNote = null;
+  MapStore.list().then(l => { myMaps = l; if (lobby && st) drawLobby(true); }, () => {});
+  const MAP_COLS = 14;
+  function mapChoices() {
+    const id = st.settings.map || "", out = [{ id: "" }].concat(myMaps.map(r => ({ id: r.shared || null, rec: r })));
+    if (id && !out.some(o => o.id === id)) out.push({ id, room: true });
+    return out;
+  }
+  function mapName() {
+    const id = st.settings.map || "";
+    if (!id) return T("os.map.random");
+    const name = st.map && st.map.id === id ? st.map.name : (myMaps.find(r => r.shared === id) || {}).name;
+    return name ? UniText.slice(UniText.fromRaw(name), MAP_COLS) : "...";
+  }
+  function stepMap(d) {
+    if (!st || !isHost() || st.match) return;
+    const list = mapChoices(), id = st.settings.map || "";
+    let at = list.findIndex(o => o.id === id);
+    if (mapNote && mapNote.rec) at = list.findIndex(o => o.rec === mapNote.rec);   // (one being sent: on from it)
+    const next = list[((at < 0 ? 0 : at) + d + list.length) % list.length];
+    mapNote = null;
+    if (next.id !== null) return setSetting("map", next.id);
+    mapNote = { rec: next.rec, text: T("os.map.sending"), color: 7 };
+    drawLobby(true);
+    MapStore.share(next.rec).then(sid => {
+      if (!mapNote || mapNote.rec !== next.rec) return;
+      mapNote = null;
+      setSetting("map", sid);
+    }, e => {
+      if (!mapNote || mapNote.rec !== next.rec) return;
+      mapNote = { rec: next.rec, text: T("os.map.err", { msg: String(e.message || e).slice(0, 40) }), color: 12 };
+      if (lobby && st) drawLobby(true);
+    });
+  }
+
   function seatSet(i, change) {
     if (!st || !isHost() || st.match) return;
     Object.assign(st.seats[i], change);
@@ -463,7 +502,11 @@ export function mount() {
     return [
       // the game mode first (docs/DESIGN-8P.md 27); the modifiers at the end
       row("mode", T("lc.mode") + T("gm." + mode), [T("gm." + mode + ".i"), T("lc.mode.i")], d => setSetting("mode", cycle(ML, mode, d))),
-      row("size", T("os.size") + T("os.size." + s.size), [T("os.size.i1"), T("os.size.i2")], d => setSetting("size", cycle(SIZES, s.size, d))),
+      // the map (docs/v6/MAPS.md): random or a shared one - its own size then (grayed)
+      row("map", T("os.map") + (mapNote ? UniText.slice(UniText.fromRaw(mapNote.rec.name), MAP_COLS) : mapName()),
+        mapNote ? [{ text: mapNote.text, color: mapNote.color }] : [T("os.map.i1"), T("os.map.i2")], d => stepMap(d)),
+      s.map ? { key: "size", label: T("os.size") + T("os.size." + (st.map && st.map.id === s.map ? st.map.size : s.size)), align: "left", static: true, attr: 8 }
+        : row("size", T("os.size") + T("os.size." + s.size), [T("os.size.i1"), T("os.size.i2")], d => setSetting("size", cycle(SIZES, s.size, d))),
       // (a mode with a goal - gold, waves, kills...: the goal instead of rounds to win, one round decides it)
       NetProto.GOALS[mode]
         ? row("goal", T("goal." + mode) + goalText(mode, NetProto.goalOf(mode, s.goals)), [T("goal." + mode + ".i")],
