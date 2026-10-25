@@ -3,7 +3,7 @@
 All notable changes to Tunneler Online. Versions follow [semantic versioning](https://semver.org/);
 a release is made by pushing a version tag (see CONTRIBUTING.md).
 
-## Unreleased
+## 5.0.1
 
 - **Share a replay as a link**: a replay's screen has "Share a link" - the replay goes to the game's server
   and the link (`/replay/<id>`) is copied; whoever opens it watches the match at once, in a browser or the
@@ -16,6 +16,7 @@ a release is made by pushing a version tag (see CONTRIBUTING.md).
   sideways was blank; the games list's column titles ran together; a long info line in the online lobby was
   cut off; the replay player's status line was unreadable; the lists say "tap" instead of "<ENTER>", and a
   tap on a game's state watches it.
+- Settings: the volume meter slides - press on it and move (mouse or finger).
 - Fullscreen: the Settings row shows the browser's own fullscreen (F11) too, and says why when a browser refuses.
 - Replays: the first one saved in a browser without IndexedDB (a private window) is no longer lost.
 

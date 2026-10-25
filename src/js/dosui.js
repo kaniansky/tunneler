@@ -35,7 +35,8 @@
 //                digit(n): number keys 1..8 on this row (e.g. a slot's team)
 //                zones: [{from, to, click(dir)}] - parts of the label (display columns from..to-1 of the
 //                label text) a mouse click acts on: left button dir +1, right button -1 (no browser menu
-//                then); a click elsewhere on a row with zones only selects it (clickGo: true - it goes, as Enter)
+//                then); a click elsewhere on a row with zones only selects it (clickGo: true - it goes, as Enter);
+//                slide: true - press and slide across the zones (a meter)
 //                info lines may be {text, color, onClick} - clickable (e.g. the invite link)
 //                static: a read-only text row (never selected; attr, default light gray)
 //                dim: [from, to] - label columns from..to-1 drawn gray (a part that doesn't apply now)
@@ -137,6 +138,19 @@ class DosUI {
     window.addEventListener("paste", e => { if (this.active()) this.paste(e); });
     canvas.addEventListener("mousemove", e => { if (this.active()) this.hover(e); });
     canvas.addEventListener("click", e => { if (this.active()) this.click(e); });
+    // a row with zones and slide: true (the Settings' volume meter): press on it and slide - every zone the pointer
+    // passes is clicked, past its ends the first one's back / the last one's forward (owner, 2026-10-25)
+    canvas.addEventListener("pointerdown", e => {
+      if (!this.active() || e.button > 0 || !this.spec || this.spec.page) return;
+      const i = this.itemAt(e), it = i >= 0 ? this.spec.items[i] : null;
+      if (!it || !it.slide || !it.zones) return;
+      this.slide = { key: it.key, at: null };
+      this.sel = i;
+      this.slideTo(e);
+      try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* old browser */ }
+    });
+    canvas.addEventListener("pointermove", e => { if (this.slide && this.active()) this.slideTo(e); });
+    for (const t of ["pointerup", "pointercancel"]) canvas.addEventListener(t, () => { this.slide = null; });
     canvas.addEventListener("contextmenu", e => { if (this.active() && (this.zoneClick(e, -1) || this.backClick(e))) e.preventDefault(); });
     canvas.addEventListener("wheel", e => { if (this.active() && this.wheel(e)) e.preventDefault(); }, { passive: false });
     // touch screens: dragging a page scrolls it (a tap still goes back) - the engine's 80 x 25 page by rows; the
@@ -161,6 +175,7 @@ class DosUI {
     }, { passive: true });
     canvas.addEventListener("touchmove", e => {
       const d = this.ndrag;
+      if (this.slide) { e.preventDefault(); return; }    // (sliding a meter: no scrolling)
       if (!d || !this.active() || !this.narrow || e.touches.length !== 1) return;
       const y = e.touches[0].clientY, now = performance.now(), upp = this.narrow.units / (canvas.getBoundingClientRect().height || 400);
       if (Math.abs(y - d.y0) > 6) this.dragged = true;
@@ -894,6 +909,21 @@ class DosUI {
     return true;
   }
   // a click (dir +1) / right click (dir -1) on one of an item's zones: true when a zone took it
+  // the slide (pointerdown on a slide row): the zone under the pointer's column, once per zone
+  slideTo(ev) {
+    const s = this.slide, i = s ? this.spec.items.findIndex(x => x.key === s.key) : -1;
+    if (i < 0) return;
+    const it = this.spec.items[i], col = this.labelColAt(ev, i), zs = it.zones;
+    if (col < 0 && !this.display.cellAt(ev)) return;
+    let z = zs.find(q => col >= q.from && col < q.to), dir = 1;
+    if (!z) { const first = zs[0], last = zs[zs.length - 1]; if (col < first.from) { z = first; dir = -1; } else if (col >= last.to) z = last; }
+    const at = z ? zs.indexOf(z) + ":" + dir : null;
+    if (!z || at === s.at) return;
+    s.at = at;
+    this.sel = i;
+    z.click(dir);
+    if (this.spec.items[this.sel] && this.spec.items[this.sel].key === s.key) this.draw();
+  }
   zoneClick(ev, dir) {
     if (!this.spec || this.spec.page) return false;
     const i = this.itemAt(ev), it = i >= 0 ? this.spec.items[i] : null;

@@ -127,7 +127,7 @@ Violence), USK 6, with the interactive element **"Users Interact"**.
 
 ## Contact details (Store presence -> Store settings)
 
-- Email (required, shown publicly): `<your contact e-mail>`
+- Email (required, shown publicly): `tunneler@kaniansky.com`
 - Website: `https://kaniansky.com/tunneler/`
 - Phone (optional): leave empty
 - External marketing: your choice (off is fine).

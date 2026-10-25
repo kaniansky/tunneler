@@ -602,7 +602,8 @@ none, i.e. a page from before 2.0 - is refused (POST 409 `{code:
 - DosUI `wheel(ev)`: over a switch row (an item with `change`) the wheel steps its value - up forward, down
   back, one step per notch / ~50 px (every screen); elsewhere it moves the selection through a scrolling
   single box (more items than `box.rows`), one row per notch / ~50 px, no wrap-around. Settings' Volume is a
-  meter of 10 cells (█ / ░) whose cells are click zones (a click sets that level, a right click one less).
+  meter of 10 cells (█ / ░) whose cells are click zones (a click sets that level, a right click one less) and
+  `slide: true` (DosUI pointerdown / pointermove: every zone passed is clicked, past the ends 0 / 100; `slideTo`).
 - Kick: the host's single "Kick a player" item opens `drawKick()` (lobby.page "kick"): the kick
   targets (other players in their tank's colour, spectators gray; by connection number `k`), Enter arms
   (4 s, red "pg.kick.sure"), a second Enter sends `{t:"kick", k}` and returns to the lobby; Esc / Back

@@ -277,7 +277,7 @@ export function mount() {
         const setVol = v => { Speaker.setOption("volume", v); if (Speaker.preview) try { Speaker.preview(soundStyle()); } catch (e) { /* no audio */ } settings(true); };
         rows.push(L("volume", pad("set.volume") + "\xDB".repeat(vol / 10) + "\xB0".repeat(10 - vol / 10) + " " + vol + " %",
           [T("set.volume.i"), T("home.lang.i2")], d => opt("volume", d),
-          { zones: Array.from({ length: 10 }, (_, i) => ({ from: at + i, to: at + i + 1, click: dir => setVol(dir > 0 ? (i + 1) * 10 : i * 10) })) }),
+          { slide: true, zones: Array.from({ length: 10 }, (_, i) => ({ from: at + i, to: at + i + 1, click: dir => setVol(dir > 0 ? (i + 1) * 10 : i * 10) })) }),
           L("stereo", pad("set.stereo") + onOffT(Speaker.getOption("stereo") === "on"), [T("set.stereo.i"), T("home.lang.i2")], d => opt("stereo", d)),
           L("fade", pad("set.fade") + onOffT(Speaker.getOption("fade") === "on"), [T("set.fade.i"), T("home.lang.i2")], d => opt("fade", d)));
       }
