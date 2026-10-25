@@ -3,11 +3,10 @@
 All notable changes to Tunneler Online. Versions follow [semantic versioning](https://semver.org/);
 a release is made by pushing a version tag (see CONTRIBUTING.md).
 
-## Unreleased
+## 5.0.2
 
 - Shared replays can live in an S3-compatible bucket (Cloudflare R2, MinIO, AWS S3: `REPLAY_S3_*`, see
   README.md, Hosting) - the live server's links now survive restarts and deploys.
-
 - Phones: a long info is no longer cut off (the window gets shorter for it); the games list shows a running
   game's round without the score (the row was too wide); the online lobby's seat rows fit in Ukrainian and
   Russian (a narrower ping column).
