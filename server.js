@@ -114,6 +114,8 @@ const { NetProto } = require("./src/js/netproto.js");
 const { Challenge } = require("./src/js/challenge.js");
 const { Worker } = require("worker_threads");
 const { MapData } = require("./src/js/mapdata.js");
+// player accounts (docs/v6/ACCOUNTS.md): the store, tokens, tickets, /api/account*
+const Accounts = require("./accounts.js");
 // this server's version (package.json): clients of another version can't create or join its games
 const VERSION = (() => { try { return require("./package.json").version || null; } catch (e) { return null; } })();
 const { FrameLog, ALL_BITS, EXT_BITS, F10, HASH_EVERY, ROLES, MAX_SLOTS, MAX_PLAYER_NAME, SEAT_KINDS, SETTINGS, cleanPlayerName, cleanChat,
@@ -624,7 +626,7 @@ function createServer(opts = {}) {
   // tauri.localhost, not from this server; nothing here uses cookies or other credentials
   // (X-Tunneler-Version on every answer: a page of another version reloads itself - docs/v6/RELIABILITY.md 2.7)
   const CORS = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type", "Access-Control-Max-Age": "86400", "Access-Control-Expose-Headers": "X-Tunneler-Version",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization", "Access-Control-Max-Age": "86400", "Access-Control-Expose-Headers": "X-Tunneler-Version",
     ...(version ? { "X-Tunneler-Version": version } : {}) };
   function json(res, code, obj) {
     res.writeHead(code, { "Content-Type": "application/json", "Cache-Control": "no-store", ...CORS });
@@ -725,7 +727,15 @@ function createServer(opts = {}) {
         return fs.readFileSync(f);
       } catch (e) { return null; }
     }
-    return { keep, get, has: id => mem.has(id), get disk() { return disk; },
+    // (a deleted account's kept replays: docs/v6/ACCOUNTS.md)
+    async function del(id) {
+      mem.delete(id);
+      if (s3) {
+        const r = await s3Request(s3, "DELETE", prefix + id + ext);
+        if (r.status >= 300 && r.status !== 404) throw new Error("storage " + r.status);
+      } else if (disk) try { fs.unlinkSync(file(id)); } catch (e) { /* gone */ }
+    }
+    return { keep, get, del, has: id => mem.has(id), get disk() { return disk; },
       describe: () => s3 ? "the bucket " + s3.bucket + " at " + s3.endpoint + (prefix ? " (" + prefix + ")" : "") : disk ? "the folder " + dir : "memory (lost on a restart)" };
   }
   const replays = sharedStore({ prefix: "", ext: ".replay", dir: replayDir, max: MAX_SHARED, keepDays, type: "application/gzip" });
@@ -743,6 +753,52 @@ function createServer(opts = {}) {
     if (!dir) return null;
     try { fs.mkdirSync(dir, { recursive: true }); fs.accessSync(dir, fs.constants.W_OK); return dirStateStore(dir); } catch (e) { return null; }
   })();
+
+  // ------------------------------------------------------------ player accounts (docs/v6/ACCOUNTS.md)
+  // opts.accounts (default off: the tests' anonymous clients; the program: on unless ACCOUNTS=off). With them on, online
+  // play (joining, creating, quick play) and sending daily-challenge results need a session; a connection's identity
+  // key (ws.cid) is "acc-" + the account id and its name the username. The store: opts.accountStore (tests), else
+  // the bucket (ACCOUNT_S3_BUCKET: a bucket of its own with the replays' endpoint and keys - else the replays'
+  // bucket), else ACCOUNT_DIR / opts.accountDir (default REPLAY_DIR/accounts), else memory (development only).
+  const accountsOn = !!opts.accounts;
+  const accountStore = !accountsOn ? null : (() => {
+    if (opts.accountStore) return opts.accountStore;
+    const own = opts.accountS3 !== undefined ? s3Config(opts.accountS3)
+      : process.env.ACCOUNT_S3_BUCKET && s3 ? Object.assign({}, s3, { bucket: process.env.ACCOUNT_S3_BUCKET }) : null;
+    if (own || s3) return Accounts.s3AccountStore(own || s3, s3Request);
+    const dir = opts.accountDir !== undefined ? opts.accountDir : process.env.ACCOUNT_DIR || (diskOk ? path.join(replayDir, "accounts") : null);
+    if (dir) try { return Accounts.dirAccountStore(dir); } catch (e) { /* not writable: memory */ }
+    return Accounts.memoryAccountStore();
+  })();
+  const accountKey = a => "acc-" + a.id;           // (a room's / board's key for an account: never a browser's client id)
+  const accounts = !accountsOn ? null : Accounts.createAccounts({ store: accountStore,
+    secret: opts.accountSecret !== undefined ? opts.accountSecret : process.env.ACCOUNT_SECRET || null,
+    scryptN: opts.scryptN, now: opts.now, say, lockFails: opts.lockFails, lockMs: opts.lockMs, limits: opts.accountLimits, json, readBody, addressOf,
+    onDelete: a => accountDeleted(a) });
+  // the request's account (Bearer token) - or null after answering 401 {code: "session"} (503 when the store fails)
+  async function needSession(req, res) {
+    let a = null;
+    try { a = await accounts.sessionOf(req); } catch (e) { json(res, 503, { error: "storage unavailable, try later", code: "storage" }); return null; }
+    if (!a) json(res, 401, { error: "log in first", code: "session" });
+    return a;
+  }
+  // an account deleted: its connections closed, its daily-challenge entries (the boards still answered for) and their
+  // kept replays gone
+  async function accountDeleted(a) {
+    const key = accountKey(a);
+    for (const r of rooms.values()) for (const ws of r.sockets) if (ws.cid === key) try { fail(ws, "This account was deleted.", "login"); } catch (e) { /* gone */ }
+    const today = Challenge.dayOf(now());
+    for (let k = 0; k <= BOARD_DAYS; k++) {
+      const day = Challenge.dayOf(Challenge.dayStart(today) - k * Challenge.DAY);
+      let board;
+      try { board = await loadBoard(day); } catch (e) { continue; }
+      const gone = board.entries.filter(x => x.cid === key);
+      if (!gone.length) continue;
+      board.entries = board.entries.filter(x => x.cid !== key);
+      for (const x of gone) if (x.replay) await replays.del(x.replay).catch(() => {});
+      try { await saveBoard(board); } catch (e) { say("challenge board not stored:", e.message); }
+    }
+  }
   function validReplay(bytes) {
     let raw = bytes;
     try { if (raw[0] === 0x1F && raw[1] === 0x8B) raw = zlib.gunzipSync(raw, { maxOutputLength: 16 * 1024 * 1024 }); } catch (e) { return null; }
@@ -879,10 +935,16 @@ function createServer(opts = {}) {
       if (Challenge.dayEnd(day) + BOARD_DAYS * Challenge.DAY <= now()) return json(res, 404, { error: "that day's board isn't kept" });
       let board;
       try { board = await loadBoard(day); } catch (e) { return challengeError(res, "storage", "storage unavailable, try later"); }
-      return json(res, 200, boardInfo(board, u.searchParams.get("cid")));
+      // ("you": with accounts the session's entry - a Bearer token, if any; else the client id - docs/v6/ACCOUNTS.md)
+      let you = u.searchParams.get("cid");
+      if (accounts) { let a = null; try { a = await accounts.sessionOf(req); } catch (e) { a = null; } you = a ? accountKey(a) : null; }
+      return json(res, 200, boardInfo(board, you));
     }
     if (req.method !== "POST" || m[1] === undefined) return json(res, 404, { error: "not found" });
-    const cid = u.searchParams.get("cid") || "", name = cleanPlayerName(u.searchParams.get("name"));
+    // (accounts on: the session's account is the entry's key and name - ?cid=&name= don't count; docs/v6/ACCOUNTS.md)
+    const acc = accounts ? await needSession(req, res) : null;
+    if (accounts && !acc) return;
+    const cid = acc ? accountKey(acc) : u.searchParams.get("cid") || "", name = acc ? acc.name : cleanPlayerName(u.searchParams.get("name"));
     if (!/^[A-Za-z0-9_-]{8,64}$/.test(cid)) return challengeError(res, "bad", "bad client id");
     if (!name) return challengeError(res, "name", "a name is needed");
     let bytes;
@@ -891,7 +953,7 @@ function createServer(opts = {}) {
     if (!dayOpen(day)) return challengeError(res, "day", "that day's challenge is over");
     let board;
     try { board = await loadBoard(day); } catch (e) { return challengeError(res, "storage", "storage unavailable, try later"); }
-    const taken = () => board.entries.some(x => x.cid !== cid && x.name.toLowerCase() === name.toLowerCase());
+    const taken = () => !acc && board.entries.some(x => x.cid !== cid && x.name.toLowerCase() === name.toLowerCase());   // (usernames are unique)
     if (taken()) return challengeError(res, "taken", "another player has that name on this day's board");
     // one check at a time per address (a long replay keeps the worker up to CHALLENGE_TIME_MS: one address can't fill
     // the queue for everybody)
@@ -944,7 +1006,13 @@ function createServer(opts = {}) {
       let matches = 0;
       for (const r of rooms.values()) if (r.match) matches++;
       return json(res, closing ? 503 : 200, { ok: !closing, version, uptime: Math.round((Date.now() - startedAt) / 1000), rooms: rooms.size, matches,
-        errors: processErrors.count });
+        errors: processErrors.count, accounts: accountsOn });
+    }
+    // what pages need to know about this server: whether online play needs an account (docs/v6/ACCOUNTS.md)
+    if (p === "/api/config" && (req.method === "GET" || req.method === "HEAD")) return json(res, 200, { version, accounts: accountsOn });
+    if (p === "/api/ticket" || p === "/api/account" || p.startsWith("/api/account/")) {
+      if (!accounts) return json(res, 404, { error: "this server has no accounts", code: "off" });
+      return accounts.api(req, res, p);
     }
     if (p === "/api/errors" && req.method === "POST") {
       let body;
@@ -967,6 +1035,7 @@ function createServer(opts = {}) {
       try { body = JSON.parse(await readBody(req, 2048)); } catch (e) { return json(res, 400, { error: "bad request" }); }
       if (!body || typeof body !== "object") return json(res, 400, { error: "bad request" });
       if (wrongVersion(body.version)) return json(res, 409, { error: versionMsg(body.version), code: "version", version });
+      if (accounts && !await needSession(req, res)) return;   // (accounts on: creating a game needs a session)
       const addr = addressOf(req);
       if (rooms.size >= MAX_ROOMS || totalEntries() >= MAX_TOTAL_ENTRIES) return json(res, 503, { error: "too many rooms, try later" });
       let mine = 0;
@@ -981,6 +1050,7 @@ function createServer(opts = {}) {
       try { body = JSON.parse(await readBody(req, 1024)); } catch (e) { return json(res, 400, { error: "bad request" }); }
       if (!body || typeof body !== "object") return json(res, 400, { error: "bad request" });
       if (wrongVersion(body.version)) return json(res, 409, { error: versionMsg(body.version), code: "version", version });
+      if (accounts && !await needSession(req, res)) return;   // (accounts on: quick play needs a session)
       const addr = addressOf(req);
       if (!allowQuick(addr)) return json(res, 429, { error: "too many requests, try again in a minute" });
       const found = quickRoom();
@@ -1076,6 +1146,7 @@ function createServer(opts = {}) {
     if (u.pathname !== "/ws" || closing) return socket.destroy();
     socket.on("error", () => { /* (the client went away while the upgrade waited) */ });
     const addr = addressOf(req), ok = allowConnect(addr);
+    let account = null;                            // (accounts on: the ticket's account - docs/v6/ACCOUNTS.md)
     const upgrade = () => {
       if (closing || socket.destroyed) return socket.destroy();
       wss.handleUpgrade(req, socket, head, ws => {
@@ -1084,12 +1155,17 @@ function createServer(opts = {}) {
         ws.on("error", e => { if (!ws.errored) { ws.errored = true; say("ws error:", e && (e.code || e.message)); } try { ws.terminate(); } catch (e2) { /* gone */ } });
         if (!ok) return ws.close(4029, "too many connections");   // (the page retries a bit later)
         // a throw here would escape the 'upgrade' event and take the whole process down
-        try { onConnect(ws, u.searchParams, addr); }
+        try { onConnect(ws, u.searchParams, addr, account); }
         catch (e) { say("ws connect error:", e && e.message); try { fail(ws, "Server error."); } catch (e2) { ws.terminate(); } }
       });
     };
     // an unknown room right after a start: maybe the previous server handed it over (docs/v6/RELIABILITY.md 2.3)
-    if (ok && !rooms.has(u.searchParams.get("room") || "") && handoffPending()) refreshHandoff().then(upgrade, upgrade);
+    const ready = ok && !rooms.has(u.searchParams.get("room") || "") && handoffPending() ? refreshHandoff().catch(() => {}) : null;
+    // accounts on: the one-time ticket (POST /api/ticket) is checked first - signature, time, used once, the account and
+    // its password generation (async: the account may have to be read from the store)
+    if (ok && accounts && u.searchParams.get("ticket")) Promise.all([ready, accounts.useTicket(u.searchParams.get("ticket"))])
+      .then(([, a]) => { account = a; upgrade(); }, upgrade);
+    else if (ready) ready.then(upgrade, upgrade);
     else upgrade();
   });
 
@@ -1199,11 +1275,14 @@ function createServer(opts = {}) {
     if (room.qpTimer.unref) room.qpTimer.unref();
   }
 
-  function onConnect(ws, q, addr) {
+  function onConnect(ws, q, addr, account) {
     const room = rooms.get(q.get("room") || "");
     if (!room) return fail(ws, "No such room (it may have expired).", "noroom");
-    // every page sends its browser's random client id: the host's ban, a player's seat and tank go by it
-    const cid = /^[A-Za-z0-9_-]{8,64}$/.test(q.get("cid") || "") ? q.get("cid") : null;
+    // accounts on (docs/v6/ACCOUNTS.md): a connection needs a valid one-time ticket - its account is who this is
+    if (accounts && !account) return fail(ws, "Log in to play online.", "login");
+    // every page sends its browser's random client id: the host's ban, a player's seat and tank go by it - with
+    // accounts, by the account instead ("acc-<id>": a seat / tank / ban / password follows the player to any device)
+    const cid = account ? accountKey(account) : /^[A-Za-z0-9_-]{8,64}$/.test(q.get("cid") || "") ? q.get("cid") : null;
     if (!cid) return fail(ws, "No client id.");
     if (room.banned.has(cid)) return fail(ws, KICKED, "kicked");
     if (wrongVersion(q.get("v"))) return fail(ws, versionMsg(q.get("v")), "version", { version });
@@ -1248,7 +1327,9 @@ function createServer(opts = {}) {
     ws.on("pong", () => { ws.alive = true; });
     ws.cid = cid; ws.sid = sid; ws.serial = ++room.serial; ws.rtt = null; ws.seat = -1; ws.ready = false; ws.player = -1; ws.playing = null;
     ws.wantsPlay = room.qp && !watch;               // (quick play: came to play - gets a tank / seat when one is free)
-    ws.name = uniqueName(room, q.get("name") || "", ws);
+    // (accounts: the username - unique on this server; the same account in two tabs keeps its one name)
+    ws.acc = account ? account.id : null;
+    ws.name = account ? account.name : uniqueName(room, q.get("name") || "", ws);
     // the host key makes this connection the host - unless another one already is (a second tab of the
     // same browser has the same key: it joins as a player; it hosts if the host leaves - ensureHost); a
     // replaced connection's host role goes to its page's new one
@@ -1336,7 +1417,7 @@ function createServer(opts = {}) {
         case "me": {                                       // own name / team
           if (++meCount > MAX_ME_PER_SEC) break;
           let changed = false;
-          if (typeof msg.name === "string") {
+          if (typeof msg.name === "string" && !ws.acc) {   // (accounts: the name is the username)
             const n = uniqueName(room, msg.name, ws);
             if (n !== ws.name) { ws.name = n; changed = true; }
           }
@@ -1669,6 +1750,10 @@ function createServer(opts = {}) {
     get closing() { return closing; },
     stateStore: stateStore ? stateStore.name : null,
     replayStore: replays.describe(), mapStore: maps.describe(),
+    // (accounts: null = off; else where they are kept, and whether a bucket lifecycle rule may delete them)
+    accounts, accountStore: accounts ? accounts.storeName : null,
+    accountWarning: accounts && keepDays && s3 && !process.env.ACCOUNT_S3_BUCKET && opts.accountS3 === undefined && !opts.accountStore
+      ? "REPLAY_KEEP_DAYS is set and accounts share the replays' bucket: its lifecycle rule would delete accounts unused for " + keepDays + " days - set ACCOUNT_S3_BUCKET" : null,
     // (a handoff snapshot the previous server left is read right away)
     listen(port, cb) { server.listen(port, () => { refreshHandoff(true); if (cb) cb(server.address().port); }); return this; },
     close(cb) {
@@ -1743,7 +1828,8 @@ if (require.main === module) {
     console.error(`\nTUNNELER server could not start.\n\n  PORT=${raw} is not a valid port: use a whole number from 1 to 65535 (default 8050).\n`);
     process.exit(1);
   }
-  const srv = createServer({ handoff: true });
+  // accounts (docs/v6/ACCOUNTS.md): on, unless ACCOUNTS=off (a LAN / self-hosted server: free names as before)
+  const srv = createServer({ handoff: true, accounts: !/^(0|false|no|off)$/i.test(process.env.ACCOUNTS || "") });
   srv.server.on("error", err => { if (!srv.closing) startupError(port, err); });
   // an error no handler caught: logged, and the server goes on - ending the process would end every game
   // on it (docs/v6/RELIABILITY.md 2.1)
@@ -1760,6 +1846,8 @@ if (require.main === module) {
     log("shared replays: " + srv.replayStore);
     log("rooms on a restart: " + (srv.stateStore ? "handed over through " + srv.stateStore : "lost (no bucket or writable folder)"));
     log("shared maps: " + srv.mapStore);
+    log("accounts: " + (srv.accountStore ? "on, kept in " + srv.accountStore + (process.env.ACCOUNT_SECRET ? " (ACCOUNT_SECRET set)" : "") : "off (ACCOUNTS=off: free names)"));
+    if (srv.accountWarning) log("WARNING: " + srv.accountWarning);
     if (VERSION && !/^(0|false|no|off)$/i.test(process.env.UPDATE_CHECK || "")) watchReleases(VERSION);
   });
 }

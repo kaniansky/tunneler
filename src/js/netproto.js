@@ -98,6 +98,29 @@ function cleanPassword(s) {
   return Array.from(t).slice(0, MAX_PASSWORD).join("").trim();
 }
 
+// Player accounts (docs/v6/ACCOUNTS.md). A username: a player name's characters and width (cleanPlayerName), but
+// strict - what was typed (spaces collapsed) must survive the cleaning whole, at least one letter or digit, not a
+// reserved name -> the username, or "" (refused). usernameKey: its case-insensitive form (unique per server).
+const RESERVED_NAMES = ["player", "players", "computer", "ai", "admin", "administrator", "moderator", "mod", "host", "server",
+  "system", "root", "tunneler", "tunneler online", "nobody", "anonymous", "guest", "spectator", "you", "me", "open", "closed",
+  "blue", "green", "cyan", "yellow", "white", "pink", "violet", "teal"];
+const usernameKey = s => String(s == null ? "" : s).normalize("NFC").replace(/\s+/g, " ").trim().toLowerCase();
+function cleanUsername(s) {
+  const typed = String(s == null ? "" : s).normalize("NFC").replace(/\s+/g, " ").trim();
+  const name = cleanPlayerName(typed);
+  if (!name || name !== typed || !/[\p{L}\p{N}]/u.test(name) || RESERVED_NAMES.includes(usernameKey(name))) return "";
+  return name;
+}
+// An account's password: 8 to 200 characters (code points, NFC) - anything else goes. -> null (fine) | "short" | "long"
+const MIN_ACCOUNT_PASSWORD = 8, MAX_ACCOUNT_PASSWORD = 200;
+function passwordProblem(s) {
+  const n = typeof s === "string" ? Array.from(s.normalize("NFC")).length : 0;
+  return n < MIN_ACCOUNT_PASSWORD ? "short" : n > MAX_ACCOUNT_PASSWORD ? "long" : null;
+}
+// A recovery code as typed: upper case, without spaces / dashes (its alphabet has no 0 O 1 I L)
+const RECOVERY_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+const cleanRecovery = s => String(s == null ? "" : s).toUpperCase().replace(/[\s-]+/g, "").slice(0, 64);
+
 // "after death" values (watchOut): black / wreck / team / killer / others (= all); anything else = "wreck", true (old) = "others"
 const AFTER_DEATH = ["black", "wreck", "team", "killer", "others"];
 const afterDeath = v => v === true || v === "1" ? "others" : AFTER_DEATH.includes(v) ? v : "wreck";
@@ -383,7 +406,8 @@ function stateHash(e) {
 
 const NetProto = { TICK_MS, UP, DOWN, LEFT, RIGHT, FIRE, ESC, ALL_BITS, EXT_BITS, BLUE_SCAN, GREEN_SCAN, F10,
   AFTER_DEATH, afterDeath, ROLES, MAX_SLOTS, LEVELS, oldLevel, SEAT_KINDS, SIZES, MAX_PLAYER_NAME, MAX_CHAT, VISIBLE, SIGHTS, ROUND_TIMES, roundTime,
-  cleanPlayerName, cleanChat, cleanRoomName, MAX_PASSWORD, cleanPassword, SETTINGS, defaultSeats, roomSettings, matchSlots, startProblem, isClassic, engineOptions, readCfg,
+  cleanPlayerName, cleanChat, cleanRoomName, MAX_PASSWORD, cleanPassword,
+  RESERVED_NAMES, usernameKey, cleanUsername, MIN_ACCOUNT_PASSWORD, MAX_ACCOUNT_PASSWORD, passwordProblem, RECOVERY_ALPHABET, cleanRecovery, SETTINGS, defaultSeats, roomSettings, matchSlots, startProblem, isClassic, engineOptions, readCfg,
   MODES, OWN_TEAMS, GOALS, goalOf, QUICK_TANKS, QUICK_LEVEL, quickSettings, aiSlot, readDrives, botInputs, MAP_ID, mapId,
   frameToInput, frameToInputExt, FrameLog, FrameQueue, HASH_EVERY, stateHash };
 
