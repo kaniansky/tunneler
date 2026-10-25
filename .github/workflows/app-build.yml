@@ -141,10 +141,11 @@ jobs:
 
       - name: Attach to the release
         if: inputs.tag != ''
-        uses: softprops/action-gh-release@v3
-        with:
-          tag_name: ${{ inputs.tag }}
-          files: dist/*
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # (gh finds a draft release too and leaves it a draft: release.yml publishes it once everything is attached)
+        run: gh release upload "${{ inputs.tag }}" dist/* -R "${{ github.repository }}" --clobber
 
   # Android (src-tauri/gen/android, docs/ANDROID.md): one universal APK + AAB with all four ABIs
   android:
@@ -226,7 +227,8 @@ jobs:
 
       - name: Attach to the release
         if: inputs.tag != ''
-        uses: softprops/action-gh-release@v3
-        with:
-          tag_name: ${{ inputs.tag }}
-          files: dist/*
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # (gh finds a draft release too and leaves it a draft: release.yml publishes it once everything is attached)
+        run: gh release upload "${{ inputs.tag }}" dist/* -R "${{ github.repository }}" --clobber

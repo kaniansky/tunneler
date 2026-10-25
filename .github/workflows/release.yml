@@ -3,8 +3,12 @@ name: Release
 # A release is made by pushing a version tag (pushes to main only run CI):
 #   git tag -a v1.4.1 -m v1.4.1 && git push origin v1.4.1
 # It creates the GitHub release with that version's CHANGELOG.md section as its notes
-# (tools/changelog-notes.sh), builds the desktop and Android app (app-build.yml) and the Docker image, uploads
-# the homepage (site/) and commits the Flatpak manifest for it to main (job flatpak). package.json's version and the CHANGELOG.md heading should match the tag.
+# (tools/changelog-notes.sh) as a draft, builds the desktop and Android app (app-build.yml) and the Docker image,
+# attaches the apps and the updater's latest.json, and only then publishes the release (job publish) - until
+# then the homepage's downloads, the apps' updater and the Linux repositories keep offering the previous version.
+# After it: the homepage (site/) uploaded, the apt / dnf repositories, the Flatpak manifest committed to main
+# (job flatpak). A failed app build leaves the release a draft: run the failed jobs again (or publish it by hand
+# on GitHub). package.json's version and the CHANGELOG.md heading should match the tag.
 
 on:
   push:
@@ -54,6 +58,7 @@ jobs:
           name: v${{ steps.version.outputs.version }}
           body_path: ${{ runner.temp }}/notes.md
           prerelease: ${{ contains(steps.version.outputs.version, '-') }}
+          draft: true
 
   # the desktop app for Windows, Linux and macOS and the Android app, attached to the release (app-build.yml)
   app:
@@ -74,9 +79,25 @@ jobs:
     permissions:
       contents: write
 
+  # everything attached: the release goes public (the newest one - the homepage's downloads and the apps'
+  # updater, releases/latest/download/latest.json, now see it)
+  publish:
+    needs: [release, app, updater]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Publish the release
+        run: |
+          v="${{ needs.release.outputs.version }}"
+          case "$v" in *-*) latest=false ;; *) latest=true ;; esac
+          gh release edit "v$v" -R "${{ github.repository }}" --draft=false --latest="$latest"
+
   # the apt / dnf repositories at kaniansky.com/tunneler/apt and /rpm with this release's .deb / .rpm
   repos:
-    needs: [release, app]
+    needs: [release, publish]
     uses: ./.github/workflows/linux-repos.yml
     with:
       tag: v${{ needs.release.outputs.version }}
@@ -90,7 +111,7 @@ jobs:
   # version X` adds it). Once the app is on Flathub, its bot opens the Flathub update by itself (the
   # manifest's x-checker-data).
   flatpak:
-    needs: [release, app]
+    needs: [release, publish]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -122,13 +143,13 @@ jobs:
           git commit -m "Flatpak: the manifest for $v (both .deb sha256, the tag's commit)" -- flatpak/
           git push origin HEAD:main
 
-  # the homepage (site/) at https://kaniansky.com/tunneler/, uploaded by FTPS after every release: fresh
+  # the homepage (site/) at https://kaniansky.com/tunneler/, uploaded by FTPS once the release is public: fresh
   # screenshots from screenshots/ (tools/site-images.py), the page itself reads the newest release's
   # downloads when it opens. Needs the repository secrets SITE_FTP_USER and SITE_FTP_PASSWORD (and
   # optionally SITE_FTP_HOST: the FTP server's own name, which its TLS certificate is issued for);
   # skipped without them.
   site:
-    needs: release
+    needs: [release, publish]
     runs-on: ubuntu-latest
     env:
       FTP_HOST: ${{ secrets.SITE_FTP_HOST || 'ing.r4.websupport.sk' }}
