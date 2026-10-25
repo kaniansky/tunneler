@@ -918,7 +918,7 @@ function createServer(opts = {}) {
             const n = uniqueName(room, msg.name, ws);
             if (n !== ws.name) { ws.name = n; changed = true; }
           }
-          if (msg.team !== undefined && lobby && ws.seat >= 0 && !ws.ready && team8(msg.team) && room.seats[ws.seat].team !== msg.team) {
+          if (msg.team !== undefined && lobby && !room.qp && ws.seat >= 0 && !ws.ready && team8(msg.team) && room.seats[ws.seat].team !== msg.team) {
             room.seats[ws.seat].team = msg.team; changed = true;
           }
           if (changed) sendStatus(room);
