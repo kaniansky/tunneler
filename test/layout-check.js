@@ -1,7 +1,8 @@
 "use strict";
 // The menus' layout on every screen size (owner, 2026-10-25: most bugs of a week were phone layouts the tests
 // didn't see): the main menu, split screen, the skirmish and its Game settings, every Settings category, the
-// games list, creating a game, join by link, the name prompt, the replays - on a desktop, a phone held upright
+// games list, creating a game, join by link, the name prompt, the replays, the maps (docs/v6/MAPS.md: the list, a
+// new map, a map's screen, open a link, the editor's menu, a skirmish with a map) - on a desktop, a phone held upright
 // (the narrow layout) and sideways (a touch screen with the 80-column layout), in every language. Each screen:
 //   - every box has its place (a box without one drew nothing: the skirmish held sideways was blank),
 //   - boxes stay on the screen, don't overlap each other, end above the info (the online lobby's Game box ran
@@ -208,6 +209,35 @@ const tick = () => new Promise(r => setTimeout(r, 0));
         if (it("gameset")) { it("gameset").go(); check(win, ui, W + ", online game settings (" + who + ")"); ui.spec.back(); }
         if (who === "host" && it("kick")) { it("kick").go(); check(win, ui, W + ", kick a player"); }
         for (const t of env.sockets) t.close();
+      }
+      // ---------------------------------------------------------------- the maps (docs/v6/MAPS.md)
+      {
+        const env = makeEnv("/maps", size, touch);
+        env.storage.set("tunneler.lang", code);
+        env.page("maps.html");
+        const win = env.win, M = win.MapData;
+        const m = M.blank("medium");
+        m.bases.push({ x: 60, y: 64 }, { x: 190, y: 64 });
+        m.name = "Championship of tunnels";
+        const rec = await win.MapStore.save(m);
+        await win.tunnelerMapsList();
+        const ui = win.tunnelerMapsUI(), api = win.tunnelerMapsApi;
+        check(win, ui, W + ", maps");
+        api.newMap(); check(win, ui, W + ", a new map");
+        api.openLink(); check(win, ui, W + ", open a map link");
+        api.detail(rec); check(win, ui, W + ", a map");
+        api.edit(rec, M.decode(rec.code)); api.openMenu(); check(win, ui, W + ", the map editor's menu");
+        // the skirmish with that map chosen (its Map row, the size grayed)
+        const h = makeEnv("/", size, touch);
+        h.storage.set("tunneler.lang", code);
+        h.page("index.html");
+        const hw = h.win, hui = hw.tunnelerHomeUI();
+        await hw.MapStore.save(m);
+        await hw.tunnelerHomeMaps();
+        const go = k => { const it = hui.spec.items.find(x => x.key === k); if (it) it.go(); return !!it; };
+        go("cpu");
+        if (go("settings")) { const r = hui.spec.items.find(x => x.key === "map"); if (r) r.change(1); check(hw, hui, W + ", skirmish game settings with a map"); hui.spec.back(); }
+        else { const r = hui.spec.items.find(x => x.key === "map"); if (r) r.change(1); check(hw, hui, W + ", skirmish with a map"); }
       }
       // ---------------------------------------------------------------- the replays
       {

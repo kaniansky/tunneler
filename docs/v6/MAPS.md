@@ -122,7 +122,7 @@ code, date, shared}` - `shared` = the server id once shared. No IndexedDB: the p
 - Page address `/map/<id>` (the desktop app: `/maps.html?share=<id>`): fetches, keeps it in your maps,
   opens its screen.
 - Storage: the shared replays' store, generalised (`sharedStore(kind)` in server.js): the S3-compatible
-  bucket when configured (objects `maps/<id>.map`), else a folder (`MAP_DIR` / opts.mapDir, default
+  bucket when configured (objects `<id>.map` beside the replays' `<id>.replay`), else a folder (`MAP_DIR` / opts.mapDir, default
   `<REPLAY_DIR>/maps`, the newest `MAX_SHARED_MAPS` 5000 kept), else memory; a 500-entry memory cache in front
   of the bucket. Replays keep their own limits and their keep-days; maps are never expired by age.
 
