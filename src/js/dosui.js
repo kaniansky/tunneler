@@ -153,6 +153,35 @@ class DosUI {
     for (const t of ["pointerup", "pointercancel"]) canvas.addEventListener(t, () => { this.slide = null; });
     canvas.addEventListener("contextmenu", e => { if (this.active() && (this.zoneClick(e, -1) || this.backClick(e))) e.preventDefault(); });
     canvas.addEventListener("wheel", e => { if (this.active() && this.wheel(e)) e.preventDefault(); }, { passive: false });
+    // touch screens: a finger put down on an item highlights it, and the highlight follows the finger over the
+    // items (no scrolling - the view follows the highlight to the edges); let go on an item = a tap there, off them =
+    // nothing. Put down anywhere else, a drag scrolls (the phone layout, below). (owner, 2026-10-25)
+    canvas.addEventListener("touchstart", e => {
+      this.tpick = null;
+      if (!this.active() || !this.spec || this.spec.page || e.touches.length !== 1) return;
+      const f = e.touches[0], i = this.itemAt(f);
+      if (i < 0 || this.spec.items[i].slide) return;
+      this.tpick = { x: f.clientX, y: f.clientY, over: i, moved: false };
+      this.nanim = null; this.dragged = false;
+      if (i !== this.sel) { this.sel = i; this.draw(); }
+    }, { passive: true });
+    canvas.addEventListener("touchmove", e => {
+      const p = this.tpick;
+      if (!p || !this.active() || e.touches.length !== 1) return;
+      const f = e.touches[0];
+      if (Math.abs(f.clientX - p.x) > 6 || Math.abs(f.clientY - p.y) > 6) p.moved = true;
+      p.x = f.clientX; p.y = f.clientY;
+      p.over = this.itemAt(f);
+      if (p.over >= 0 && p.over !== this.sel) { this.sel = p.over; this.draw(); }
+      e.preventDefault();
+    }, { passive: false });
+    canvas.addEventListener("touchend", () => {
+      const p = this.tpick;
+      this.tpick = null;
+      if (!p || !p.moved || !this.active()) return;     // (not moved: the browser's own click - a tap)
+      this.noClickUntil = performance.now() + 500;      // (the browser's click after it, if any, is this one)
+      if (p.over >= 0) this.click({ clientX: p.x, clientY: p.y, pointerType: "touch", picked: true });
+    });
     // touch screens: dragging a page scrolls it (a tap still goes back) - the engine's 80 x 25 page by rows; the
     // phone layout's pages scroll smoothly like its menus (below)
     canvas.addEventListener("touchstart", e => {
@@ -169,7 +198,7 @@ class DosUI {
     window.addEventListener("resize", () => { if (this.active() && this.spec && !this.spec.page) this.draw(); });
     // (a drag moves the content with the finger - fractions of a row: smooth; let go while moving: it glides on)
     canvas.addEventListener("touchstart", e => {
-      if (!this.active() || !this.narrow || e.touches.length !== 1 || (this.spec && this.spec.page && !this.spec.nlines)) return;
+      if (this.tpick || !this.active() || !this.narrow || e.touches.length !== 1 || (this.spec && this.spec.page && !this.spec.nlines)) return;
       this.ndrag = { y0: e.touches[0].clientY, top0: this.ntopU || 0, y: e.touches[0].clientY, t: performance.now(), v: 0 };
       this.nanim = null; this.dragged = false;
     }, { passive: true });
@@ -553,8 +582,9 @@ class DosUI {
     t.drawBottomRule();
     const T = k => Lang.t(k);
     // (a phone / tablet: no keys to name - tap; GameScreen.mobile)
-    const hint = " " + (GameScreen.mobile() ? T("ui.hint.touch") : s.hint || T("ui.hint", "\x18\x19 and <ENTER>, or the mouse.") + (s.back ? "  " + T("ui.back", "<ESC> back.") : ""));
-    t.textColor(15); t.gotoXY(80 - U.cols(hint), 25); t.write(hint);
+    // (a phone: the footer - the main menu's version - instead of "Tap to choose"; owner, 2026-10-25)
+    const hint = GameScreen.mobile() && s.footer ? "" : " " + (GameScreen.mobile() ? T("ui.hint.touch") : s.hint || T("ui.hint", "\x18\x19 and <ENTER>, or the mouse.") + (s.back ? "  " + T("ui.back", "<ESC> back.") : ""));
+    if (hint) { t.textColor(15); t.gotoXY(80 - U.cols(hint), 25); t.write(hint); }
     if (s.footer) { t.textColor(8); t.gotoXY(2, 25); t.write(" " + U.slice(s.footer, 78 - U.cols(hint) - 2) + " "); }   // (bottom left)
     const snap = { t: 0, mode: "text", screen: "text", vram: t.vram.slice(0, 16000) };
     t.snapUni(snap);
@@ -720,8 +750,12 @@ class DosUI {
       }
     });
     o.drawBottomRule(R2 - 1, 1, NC);
-    const hint = " " + (GameScreen.mobile() ? Lang.t("ui.hint.touch") : Lang.t("ui.hint")) + " ";
-    o.textColor(15); o.gotoXY(Math.max(1, NC + 1 - U.cols(hint)), R2); o.write(U.slice(hint, NC));
+    const footer = this.spec.footer;
+    if (footer && GameScreen.mobile()) { o.textColor(8); o.gotoXY(2, R2); o.write(" " + U.slice(footer, NC - 4) + " "); }   // (the version, bottom left)
+    else {
+      const hint = " " + (GameScreen.mobile() ? Lang.t("ui.hint.touch") : Lang.t("ui.hint")) + " ";
+      o.textColor(15); o.gotoXY(Math.max(1, NC + 1 - U.cols(hint)), R2); o.write(U.slice(hint, NC));
+    }
     // (items: 0-based snapshot row + 1 -> item, as itemAt asks: the content row)
     const items1 = {};
     for (const r in rowItem) if (r <= height) items1[r] = rowItem[r];
@@ -875,6 +909,7 @@ class DosUI {
     if (i >= 0 && i !== this.sel) { this.sel = i; this.draw(); }
   }
   click(ev) {
+    if (!ev.picked && this.noClickUntil && performance.now() < this.noClickUntil) return;   // (a touch pick's own release did it)
     if (this.spec && this.spec.page) {
       if (this.dragged) { this.dragged = false; return; }      // (the end of a touch drag, not a tap)
       this.spec.back(); return;

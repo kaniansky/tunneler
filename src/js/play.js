@@ -161,14 +161,44 @@ export function mount() {
   // mouse: click a main menu item to choose it; click anywhere on a menu page / "press any key" screen
   // to go on (acts like Enter)
   const clicks = [];
+  const choose = i => {
+    if (i === 0 && engine.menuShift !== 0) { toLobby(); return; }         // ("Rematch")
+    if (i >= 0) { engine.menuSel = i; clicks.push([13, 0x1C]); }
+  };
+  let noClickUntil = 0;
   canvas.addEventListener("click", ev => {
     const cell = views.cellAt(ev);
-    if (!cell || engine.kbdInstalled) return;
-    if (engine.screen === "text" && engine.menuPage === "menu") {
-      const i = engine.menuItemAt(cell[0], cell[1]);
-      if (i === 0 && engine.menuShift !== 0) { toLobby(); return; }       // ("Rematch")
-      if (i >= 0) { engine.menuSel = i; clicks.push([13, 0x1C]); }
-    } else clicks.push([13, 0x1C]);
+    if (!cell || engine.kbdInstalled || performance.now() < noClickUntil) return;
+    if (engine.screen === "text" && engine.menuPage === "menu") choose(engine.menuItemAt(cell[0], cell[1]));
+    else clicks.push([13, 0x1C]);
+  });
+  // touch: a finger put down on a menu item highlights it, the highlight follows the finger over the items, let go
+  // on one = a tap there (as DosUI's menus)
+  let tpick = null;
+  const itemUnder = f => {
+    const cell = !engine.kbdInstalled && engine.screen === "text" && engine.menuPage === "menu" ? views.cellAt(f) : null;
+    return cell ? engine.menuItemAt(cell[0], cell[1]) : -1;
+  };
+  const pickOver = i => { if (i >= 0 && i !== engine.menuSel) { engine.menuSel = i; engine.drawMenuSel(); } };
+  canvas.addEventListener("touchstart", ev => {
+    const f = ev.touches[0], i = ev.touches.length === 1 ? itemUnder(f) : -1;
+    tpick = i >= 0 ? { x: f.clientX, y: f.clientY, over: i, moved: false } : null;
+    pickOver(i);
+  }, { passive: true });
+  canvas.addEventListener("touchmove", ev => {
+    if (!tpick || ev.touches.length !== 1) return;
+    const f = ev.touches[0];
+    if (Math.abs(f.clientX - tpick.x) > 6 || Math.abs(f.clientY - tpick.y) > 6) tpick.moved = true;
+    tpick.over = itemUnder(f);
+    pickOver(tpick.over);
+    ev.preventDefault();
+  }, { passive: false });
+  canvas.addEventListener("touchend", () => {
+    const p = tpick;
+    tpick = null;
+    if (!p || !p.moved) return;
+    noClickUntil = performance.now() + 500;
+    choose(p.over);
   });
   // a tap beside the canvas goes on too (a phone held upright: the world map at the top, the rest black)
   window.addEventListener("click", ev => {

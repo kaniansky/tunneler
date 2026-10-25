@@ -851,7 +851,12 @@ none, i.e. a page from before 2.0 - is refused (POST 409 `{code:
   `settingsMobile` (category list + Language -> a category screen ending in "back-cat" `set.back`). Text fields: a tap
   focuses a hidden `<input class="soft-input">` (`softFocus`) so the phone keyboard opens. Pads `hideTouch()`
   (play.js: while the engine's menu shows; online.js: lobby / spectator). Android Back on the main menu:
-  `window.tunnelerBackExits`. Tests: local-check "a phone / tablet..." and "the phone layout...".
+  `window.tunnelerBackExits`. Touch (every layout, DosUI `tpick`; play.js the engine's menu too): a finger put down
+  on an item highlights it and the highlight follows the finger over the items (no scrolling; the view follows the
+  highlight to the edges), let go on an item = a tap there (`click({picked})`, the browser's own click after it
+  ignored - `noClickUntil`), off the items = nothing; put down anywhere else, a drag scrolls. On a phone a screen
+  with `spec.footer` (the main menu: the version) shows it at the bottom left instead of the touch hint.
+  Tests: local-check "a phone / tablet..." and "the phone layout...".
 - **Replays** (DESIGN-8P 33, owner 2026-10-25): `src/js/replay.js` (`Replay`) - `Runner.recorder` gets every step's
   input before it runs (`input(inp)`) and a call after (`stepped()`); play.js and online.js (every match, player or
   spectator, catch-up included) set `Replay.recorder(engine, {kind, seed, opts, room}, rep => Replay.save(rep))`.

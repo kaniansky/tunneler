@@ -25,8 +25,10 @@ const longLink = href => decodeURIComponent(String(href).replace(/([?&])g=([^&]+
 
 function makeEnv(search, store) {
   const listeners = {};
-  const mkEl = id => ({ id, width: 720, height: 400, style: {}, classList: { toggle() {} },
-    addEventListener() {}, getBoundingClientRect: () => ({ left: 0, top: 0, width: 720, height: 400 }),
+  const mkEl = id => ({ id, width: 720, height: 400, style: {}, classList: { toggle() {} }, ls: {},
+    addEventListener(t, f) { (this.ls[t] = this.ls[t] || []).push(f); },
+    fire(t, ev) { for (const f of this.ls[t] || []) f(Object.assign({ preventDefault() {} }, ev)); },
+    getBoundingClientRect: () => ({ left: 0, top: 0, width: 720, height: 400 }),
     getContext: () => ({ createImageData: (w, h) => ({ data: new Uint8ClampedArray(w * h * 4) }), putImageData() {} }) });
   const elements = {};
   const storage = store || new Map();
@@ -905,6 +907,24 @@ function play(search) {
     return { clientX: 360, clientY: (above + h[r - 1] / 2) / total * 400 };
   };
   assert.strictEqual(ui.spec.items[ui.itemAt(tap("settings"))].key, "settings", "a tap on a row = its item");
+  // a finger on an item: highlighted; moved over another: the highlight follows (no scrolling); let go there: chosen.
+  // Put down beside the items: a drag scrolls (owner, 2026-10-25)
+  {
+    const cv = ui.canvas, finger = p => ({ touches: [p] }), keyAt = () => ui.spec.items[ui.sel].key;
+    cv.fire("touchstart", finger(tap("settings")));
+    assert(ui.tpick && keyAt() === "settings" && !ui.ndrag, "a finger on Settings: highlighted, no scroll drag");
+    const over = tap("info");
+    cv.fire("touchmove", finger(over));
+    assert.strictEqual(keyAt(), "info", "moved over Information: the highlight follows");
+    cv.fire("touchend", {});
+    assert(ui.spec.page, "let go there: Information opens");
+    ui.click({ clientX: over.clientX, clientY: over.clientY });
+    assert(ui.spec.page, "the browser's click after it doesn't count twice (the page stays)");
+    env.key("Escape");
+    cv.fire("touchstart", finger({ clientX: 2, clientY: tap("settings").clientY }));
+    assert(!ui.tpick && ui.ndrag, "put down beside the items: a drag scrolls");
+    cv.fire("touchend", {});
+  }
   // Settings: one column of categories; one opens its own screen with Back
   ui.sel = ui.spec.items.findIndex(i => i.key === "settings"); env.key("Enter");
   same(ui.spec.items.map(i => i.key), ["cat-display", "cat-graphics", "cat-sound", "cat-controls", "cat-online", "gap", "lang", "gap2", "back"], "the categories, Language, Back");
