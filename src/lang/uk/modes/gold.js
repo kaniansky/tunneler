@@ -1,5 +1,5 @@
-"use strict";
 // gold rush (src/js/modes/gold.js) in this language - the same keys as ../../en/modes/gold.js.
+import { Lang } from "../../../js/lang.js";
 Lang.modeTexts("gold", "uk", {
   stat: "зол.",
   note: "{n} золота",

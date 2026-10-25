@@ -10,14 +10,13 @@
 process.env.STATIC_DIR = process.env.STATIC_DIR || "src";   // serve the sources: no build needed
 const assert = require("assert");
 const WebSocket = require("ws");
-const TunnelerEngine = require("../src/js/engine.js");
-const NetProto = require("../src/js/netproto.js");
+const { TunnelerEngine, NetProto, TunnelerAI } = require("./src.js");
 const { createServer } = require("../server.js");
 const { FrameQueue, frameToInput, frameToInputExt, stateHash, HASH_EVERY, UP, RIGHT, FIRE, engineOptions } = NetProto;
 
 // computer players: the real ai.js when it has the N-player API, else a deterministic stand-in
 let AI = null, aiName = "ai.js";
-try { AI = require("../src/js/ai.js"); if (typeof AI.bitsFor !== "function") throw new Error("no bitsFor"); }
+try { AI = TunnelerAI; if (typeof AI.bitsFor !== "function") throw new Error("no bitsFor"); }
 catch (e) {
   aiName = "stand-in (" + e.message + ")";
   AI = class { constructor(level, p) { this.p = p; this.t = 0; }
@@ -54,8 +53,14 @@ function check(name, fn) {
 }
 
 let cidN = 0;
+const everyClient = new Set();
+// Waiting for the server instead of a fixed sleep (a loaded machine can be slow): every open client pings and
+// waits for its pong - the server handles a connection's messages in order and sends what they cause right
+// away, so after this it has handled everything sent before, and each client got what was sent to it before.
+const settle = () => Promise.all([...everyClient].filter(c => c.ws && c.ws.readyState === 1).map(c => c.sync()));
+let pingN = 0;
 class FakeClient {
-  // opts: name, role ("watch" / a colour), cid, host (key)
+  // opts: name, role ("watch" / a colour), cid, host (key), pw (the game's password)
   constructor(port, room, opts) {
     this.port = port; this.room = room; this.opts = opts || {};
     this.name = this.opts.name || "P" + (++cidN);
@@ -63,13 +68,20 @@ class FakeClient {
     this.engine = null; this.match = null; this.frames = 0; this.queue = new FrameQueue(); this.bots = null;
     this.received = [];            // the current match's frames, in order
     this.status = null; this.err = null; this.desync = false; this.hello = null; this.closed = false;
-    this.chat = []; this.ends = []; this.matches = [];
+    this.chat = []; this.ends = []; this.matches = []; this.pongs = new Set();
+    everyClient.add(this);
+  }
+  sync() {
+    const c = ++pingN;
+    this.send({ t: "ping", c });
+    return until(() => this.pongs.has(c) || this.closed, this.name + " pong");
   }
   connect(resume) {
     let url = `ws://127.0.0.1:${this.port}/ws?room=${this.room}&cid=${this.cid}&name=${encodeURIComponent(this.name)}`;
     if (!this.extra) url += "&v=dev";                          // (a development page; see the version checks)
     if (this.opts.role) url += "&role=" + this.opts.role;
     if (this.opts.host) url += "&host=" + this.opts.host;
+    if (this.opts.pw != null) url += "&pw=" + encodeURIComponent(this.opts.pw);
     if (resume && this.match) url += `&match=${this.match.no}&have=${this.frames}`;
     if (this.extra) url += this.extra;
     this.closed = false; this.err = null; this.errCode = null;
@@ -107,6 +119,7 @@ class FakeClient {
     else if (m.t === "desync") this.desync = true;
     else if (m.t === "chat") this.chat.push(m);
     else if (m.t === "host") this.hostKey = m.key;
+    else if (m.t === "pong") this.pongs.add(m.c);
   }
   run() {
     while (this.queue.length) {
@@ -159,7 +172,7 @@ const updated = (c, cond, what) => until(() => c.status && cond(c.status), what)
 
 async function main() {
   // (log parts of 7 entries: every (re)joining client gets its log in many parts - see sendLog)
-  const srv = createServer({ tickMs: TICK, quiet: true, cleanupMs: 400, logChunk: 7, matchAloneMs: 300 });
+  const srv = createServer({ tickMs: TICK, quiet: true, cleanupMs: 5000, logChunk: 7, matchAloneMs: 1000 });
   const port = await new Promise(r => srv.listen(0, r));
   console.log("server on port", port);
 
@@ -292,7 +305,7 @@ async function main() {
   two.send({ t: "seatSet", i: 2, kind: "open" });           // not the host
   two.send({ t: "set", size: "small" });
   two.send({ t: "start" });
-  await sleep(80);
+  await settle();
   check("only the host sets seats / settings / starts", () => {
     assert.strictEqual(host.status.seats[2].kind, "closed"); assert.strictEqual(host.status.settings.size, "medium"); assert(!host.status.match);
   });
@@ -303,20 +316,20 @@ async function main() {
   check("a spectator sits on an open seat (= picks CYAN)", () => assert.strictEqual(third.seat(), 2));
   third.send({ t: "seat", i: 0 });                           // taken
   third.send({ t: "seat", i: 3 });                           // closed
-  await sleep(60);
+  await settle();
   check("no sitting on a taken / closed seat", () => assert.strictEqual(third.seat(), 2));
   host.send({ t: "seatSet", i: 2, kind: "closed" });         // occupied: refused
-  await sleep(60);
+  await settle();
   check("the host can't close an occupied seat", () => assert.strictEqual(host.status.seats[2].kind, "open"));
   third.send({ t: "me", team: 2 });
   await updated(host, s => s.seats[2].team === 2, "team");
   third.send({ t: "me", team: 9 }); third.send({ t: "me", team: 1.5 });
-  await sleep(60);
+  await settle();
   check("own team 1..8 only", () => assert.strictEqual(host.status.seats[2].team, 2));
   third.send({ t: "ready", v: 1 });
   await updated(host, s => s.seats[2].ready, "third ready");
   third.send({ t: "me", team: 3 });
-  await sleep(60);
+  await settle();
   check("no team change while ready", () => assert.strictEqual(host.status.seats[2].team, 2));
   host.send({ t: "set", size: "small", winScore: 1, roundTime: 3, friendlyFire: true, visible: "everyone", watchOut: "killer", spectators: true, bogus: 1 });
   await updated(host, s => s.settings.size === "small", "settings");
@@ -326,7 +339,7 @@ async function main() {
     assert(!host.status.seats[2].ready);
   });
   host.send({ t: "set", size: "huge", winScore: 0, roundTime: 4, visible: "all" });
-  await sleep(60);
+  await settle();
   check("bad settings ignored", () => { const s = host.status.settings; assert(s.size === "small" && s.winScore === 1 && s.roundTime === 3 && s.visible === "everyone"); });
   host.send({ t: "set", size: "medium", winScore: 1, roundTime: 0, friendlyFire: false });
   third.send({ t: "seat", i: -1 });
@@ -339,7 +352,7 @@ async function main() {
   console.log("classic match");
   check("cant start: GREEN not ready", () => assert.strictEqual(host.status.cant, "ready"));
   host.send({ t: "start" });
-  await sleep(60);
+  await settle();
   check("no start while a player isn't ready", () => assert(!host.status.match && !host.match));
   two.send({ t: "ready", v: 1 });
   await updated(host, s => s.cant === null, "can start");
@@ -369,7 +382,7 @@ async function main() {
   });
   check("tanks moved", () => assert(host.engine.tankX[1] !== 0 && host.engine.tankX[2] !== 0));
   third.send({ t: "seat", i: 2 }); host.send({ t: "set", size: "large" }); host.send({ t: "kick", k: third.hello.you.k });
-  await sleep(60);
+  await settle();
   check("seats / settings / kicks locked during a match", () => {
     assert.strictEqual(third.seat(), -1); assert.strictEqual(host.status.settings.size, "medium"); assert(!third.closed);
   });
@@ -418,7 +431,7 @@ async function main() {
   check("log is run-length encoded", () => assert(m1.log.entries.length < n / 2));
   // the match's end: most players say they left the world map
   host.report(false);
-  await sleep(60);
+  await settle();
   check("one player of two can't end the match", () => assert(room.match === m1));
   two2.report(false);
   await until(() => host.ends.includes(m1.no) && !host.status.match, "match over");
@@ -427,7 +440,7 @@ async function main() {
     assert(host.seat() === 0 && two2.seat() === 1 && !host.status.seats.some(s => s.ready));
     assert.strictEqual(room.match, null);
   });
-  { const f = host.frames; await sleep(50); check("frames stop after the end", () => assert.strictEqual(host.frames, f)); }
+  { await settle(); const f = host.frames; await sleep(50); await settle(); check("frames stop after the end", () => assert.strictEqual(host.frames, f)); }
   for (const c of [stranger, intruder, spec2]) await c.close();
 
   // ---------------------------------------------------------------- an extended match
@@ -491,19 +504,19 @@ async function main() {
   // ---------------------------------------------------------------- a game mode online (docs/DESIGN-8P.md 27)
   console.log("game mode online");
   {
-    const gr = (await http(port, "POST", "/api/rooms", { name: "Gold room", mode: "gold", noRepair: true,
+    const gr = (await http(port, "POST", "/api/rooms", { name: "Gold room", mode: "gold",
       seats: [{ kind: "open", team: 1 }, { kind: "open", team: 2 }, { kind: "normal", team: 1 }, { kind: "hard", team: 2 }], size: "small" })).json;
     const g1 = await new FakeClient(port, gr.id, { name: "G1", host: gr.hostKey }).connect();
     const g2 = await new FakeClient(port, gr.id, { name: "G2" }).connect();
     const gs = await new FakeClient(port, gr.id, { name: "GS", role: "watch" }).connect();
     await until(() => g1.status && g1.status.seats.filter(x => x.k).length === 2, "seated");
-    check("the room's mode and modifiers", () => assert(g1.status.settings.mode === "gold" && g1.status.settings.noRepair === true));
+    check("the room's mode", () => assert(g1.status.settings.mode === "gold" && g1.status.settings.noRepair === undefined));
     g2.send({ t: "ready", v: 1 });
     await updated(g1, st => st.cant === null, "can start");
     g1.send({ t: "start" });
     await until(() => g1.match && g2.match && gs.match, "gold match");
-    check("a gold match: extended engine in the gold mode with no repairs, for every client", () =>
-      [g1, g2, gs].every(c => c.engine.extended && c.engine.gameMode === "gold" && c.engine.mods.noRepair));
+    check("a gold match: extended engine in the gold mode, for every client", () =>
+      [g1, g2, gs].every(c => c.engine.extended && c.engine.gameMode === "gold"));
     g1.bits(UP); g2.bits(RIGHT | FIRE);
     await until(() => g1.frames > 900, "gold frames", 60000);
     g1.bits(0); g2.bits(0);
@@ -519,12 +532,12 @@ async function main() {
   // ---------------------------------------------------------------- kick, host handover, no spectators
   console.log("host");
   await spec1.close();                                     // (the spectator who hosts leaves: the creator comes back as host)
-  await sleep(50);
+  await until(() => ![...srv.rooms.get(id).sockets].some(x => x.host), "the host gone");
   const a = await new FakeClient(port, id, { name: "A", host: hostKey }).connect();
   const a2 = await new FakeClient(port, id, { name: "A2", host: hostKey, role: "watch" }).connect();
   check("one host at a time: a second connection with the host key (another tab) is no host", () => assert(a.hello.you.host && !a2.hello.you.host));
   a2.send({ t: "set", size: "large" });
-  await sleep(60);
+  await settle();
   check("... and can't change the settings", () => assert.notStrictEqual(a.status && a.status.settings.size, "large"));
   await a2.close();
   const b = await new FakeClient(port, id, { name: "B" }).connect();
@@ -532,7 +545,7 @@ async function main() {
   await until(() => a.status && a.status.seats.filter(s => s.k).length === 2, "seated");
   check("a reload gets the seat this browser had (if free)", () => assert.strictEqual(a.seat(), 0));
   b.send({ t: "kick", k: w.hello.you.k });
-  await sleep(60);
+  await settle();
   check("only the host kicks", () => assert(!w.closed));
   a.send({ t: "kick", k: w.hello.you.k });
   await until(() => w.errCode === "kicked", "spectator kicked");
@@ -544,7 +557,7 @@ async function main() {
   await until(() => b.errCode === "kicked" && !a.status.seats[bSeat].k, "player kicked");
   check("a kicked player's seat is free again", () => assert.strictEqual(a.status.seats[bSeat].kind, "open"));
   a.send({ t: "set", spectators: false, public: false });
-  await sleep(60);
+  await settle();
   check("public / spectators can't be changed in the lobby (only when the game is created)", () => assert(a.status.spectators && a.status.public));
   await a.close();
   // a game created without spectators: no free seat -> turned away; no standing up
@@ -557,7 +570,7 @@ async function main() {
   await until(() => full.closed, "full");
   check("no free seat and no spectators: turned away", () => assert.strictEqual(full.errCode, "full"));
   o1.send({ t: "seat", i: -1 });
-  await sleep(60);
+  await settle();
   check("no standing up when the room allows no spectators", () => assert.strictEqual(o1.seat(), 0));
   await o1.close(); await o2.close();
 
@@ -575,7 +588,7 @@ async function main() {
     assert.deepStrictEqual(p1.chat[1].from, { spectator: true, name: "Bob" });
   });
   for (let i = 0; i < 8; i++) s1.send({ t: "chat", text: "spam " + i });
-  await sleep(100);
+  await settle();
   check("chat rate limit per connection (5 in 5 s)", () => assert.strictEqual(p1.chat.filter(m => /^spam/.test(m.text)).length, 4));
   {                                                          // (the room's history, filled in directly: the limit allows 1 a second)
     const chatRoom = srv.rooms.get(cr.id);
@@ -588,6 +601,46 @@ async function main() {
   });
   await p1.close(); await s1.close(); await late.close();
 
+  await new Promise(r => srv.close(r));
+}
+
+// ---------------------------------------------------------------- games with a password
+async function passwords() {
+  console.log("passwords");
+  const srv = createServer({ tickMs: TICK, quiet: true });
+  const port = await new Promise(r => srv.listen(0, r));
+  const made = await http(port, "POST", "/api/rooms", { name: "Locked", public: true, spectators: true, password: "  Tajné heslo  " });
+  const open = await http(port, "POST", "/api/rooms", { name: "Open", public: true, password: "   " });
+  const id = made.json.id, key = made.json.hostKey;
+  const listed = (await http(port, "GET", "/api/rooms")).json;
+  check("a password: roomInfo locked (an empty one = none), never the password itself", () => {
+    assert.strictEqual(made.json.locked, true); assert.strictEqual(open.json.locked, false);
+    assert.strictEqual(listed.find(r => r.id === id).locked, true);
+    assert(!JSON.stringify(listed).includes("Tajn"));
+  });
+  const tryJoin = async opts => { const c = new FakeClient(port, id, opts); await c.connect(); await until(() => c.hello || c.closed, "answer"); return c; };
+  const none = await tryJoin({ name: "Nopw" });
+  const watchNone = await tryJoin({ name: "Watchnopw", role: "watch" });
+  const wrong = await tryJoin({ name: "Wrong", pw: "tajné heslo" });
+  check("without the password: refused to play and to watch (code password); a wrong one too (bad)", () => {
+    assert.strictEqual(none.errCode, "password"); assert(!none.hello);
+    assert.strictEqual(watchNone.errCode, "password"); assert(!watchNone.hello);
+    assert.strictEqual(wrong.errCode, "password"); assert.strictEqual(wrong.err, "Wrong password.");
+  });
+  const host = await tryJoin({ name: "Host", host: key });
+  const right = await tryJoin({ name: "Right", pw: "Tajné heslo" });
+  const watcher = await tryJoin({ name: "Watcher", role: "watch", pw: " Tajné heslo " });
+  check("the host needs none; the right password (spaces at the ends dropped) plays / watches", () => {
+    assert(host.hello && host.hello.you.host); assert(right.hello); assert(watcher.hello);
+  });
+  await right.close();
+  const back = await tryJoin({ name: "Right", cid: right.cid });
+  check("a client id that got in before comes back without the password", () => assert(back.hello && !back.errCode));
+  // wrong passwords per address: MAX_PW_FAILS (10) a minute, then even the right one is refused unchecked
+  for (let i = 0; i < 9; i++) await tryJoin({ name: "Guess" + i, pw: "guess" + i });
+  const limited = await tryJoin({ name: "Late", pw: "Tajné heslo" });
+  check("too many wrong passwords from an address: refused (pwlimit), also with the right one", () => assert.strictEqual(limited.errCode, "pwlimit"));
+  await host.close(); await watcher.close(); await back.close();
   await new Promise(r => srv.close(r));
 }
 
@@ -610,7 +663,7 @@ async function limits() {
   b.close();
 }
 
-main().then(limits).then(() => {
+main().then(passwords).then(limits).then(() => {
   console.log(failures ? failures + " FAILED" : "all ok");
   process.exit(failures ? 1 : 0);
 }, e => { console.error(e); process.exit(1); });

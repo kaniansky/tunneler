@@ -1,5 +1,5 @@
-"use strict";
 // deathmatch (src/js/modes/deathmatch.js) in this language - the same keys as ../../en/modes/deathmatch.js.
+import { Lang } from "../../../js/lang.js";
 Lang.modeTexts("deathmatch", "cs", {
   stat: "zab.",
   note: "{n} zab.",

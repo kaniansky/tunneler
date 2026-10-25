@@ -1,27 +1,39 @@
-"use strict";
 // Online games in the look of TUNNELER's own menus (see dosui.js): the list of public games and the
-// "create a game" screen (name, public, spectators - everything else is set in the game's own lobby,
+// "create a game" screen (name, an optional password, public, spectators - everything else is set in the game's own lobby,
 // online.js; docs/DESIGN-8P.md 26). Online play needs a player name: asked first when this browser has
 // none (DosUI.askName, "tunneler.name").
 // Joining a game (Enter) opens its lobby (online.html), taking a free seat if there is one; Right
 // watches it. Creating a game stores its secret host key in localStorage (tunneler.host.<id>); online.js
-// presents it, which makes this browser the game's host.
+// presents it, which makes this browser the game's host. A game with a password has a lock before its
+// name; online.js asks for the password (the host never needs it).
 // /lobby.html?room=<id> (old links) goes straight to that game's lobby.
-(function () {
+import { DosUI } from "./dosui.js";
+import { Endpoint, Links } from "./endpoint.js";
+import { Lang } from "./lang.js";
+import { NetProto } from "./netproto.js";
+import { Pads } from "./pads.js";
+import { UniText } from "./unitext.js";
+import { VERSION } from "./version.js";
+import { Nav } from "./nav.js";
+import { GameScreen } from "./screen.js";
+export function mount() {
   const ui = new DosUI(document.getElementById("screen"));
+  Pads.start({ menu: () => true });                    // (a gamepad steers the menus)
   window.tunnelerLobbyUI = () => ui;                   // tests / debugging
   const T = Lang.t, E = Lang.enc;
   const store = {
     get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
     set(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* private mode */ } },
   };
-  const home = () => { location.href = "/"; };
+  const home = () => { Nav.go("/"); };
   const old = new URLSearchParams(location.search).get("room");
-  if (old) { location.replace(Links.game(old)); return; }
+  if (old) { Nav.go(Links.game(old), true); return; }
 
   let view = null;                                   // "name" | "list" | "create"
   let rooms = [];
   const form = { value: "", max: 26, width: 18, public: true, spectators: true, error: "" };
+  const pass = { value: "", max: NetProto.MAX_PASSWORD, width: 18 };   // (shown as typed: the host gives it to the others)
+  const LOCK = "\u{1F512} ";                          // (before a locked game's name: Unicode plane, 2 columns + a space)
 
 
   function scoreText(r) {
@@ -36,27 +48,30 @@
   }
   // the list's columns after the name: PLAYERS ("2/4": seated / seats they can take - during a match:
   // connected / its players), AI (computer tanks), WATCHING (spectators); 0 = blank
-  const COLS = [22, 17, 8, 4, 9];                    // (name, mode, players, AI, watching; the state takes the rest)
+  const WIDE = [22, 17, 8, 4, 9];                    // (name, mode, players, AI, watching; the state takes the rest)
+  // the phone layout (DosUI narrow, 36 columns): name, players and the state (0 = the column left out)
+  const NARROW = [17, 0, 8, 0, 0];
+  const cols = () => ui.isNarrow() ? NARROW : WIDE;
   const ROWS = 9;                                    // game rows shown at most (the box then ends on row 20, the info on rows 22-23)
   const places = r => r.places != null ? r.places : r.players + (r.open || 0);
   function rowText(r, state) {
-    const P = UniText.padEnd;
-    return P(UniText.slice(E(r.name), COLS[0] - 1), COLS[0]) + P(UniText.slice(T("gm." + (r.mode || "standard")), COLS[1] - 1), COLS[1]) +
-      P(r.players + "/" + places(r), COLS[2]) + P(r.bots ? String(r.bots) : "", COLS[3]) + P(r.spec ? String(r.spec) : "", COLS[4]) + state;
+    const C = cols(), cell = (t, k) => C[k] ? UniText.padEnd(UniText.slice(t, C[k] - 1), C[k]) : "";
+    return cell(E((r.locked ? LOCK : "") + r.name), 0) + cell(T("gm." + (r.mode || "standard")), 1) + cell(r.players + "/" + places(r), 2) +
+      cell(r.bots ? String(r.bots) : "", 3) + cell(r.spec ? String(r.spec) : "", 4) + state;
   }
   // its columns' colors (DosUI spans): the name white, the mode light cyan, the players light green, AI /
   // watching gray, the state yellow in the lobby (joinable), light magenta during a match
   function rowSpans(r) {
-    const at = [0]; for (const w of COLS) at.push(at[at.length - 1] + w);
+    const C = cols(), at = [0]; for (const w of C) at.push(at[at.length - 1] + w);
     const colors = [0x0F, 0x0B, 0x0A, 0x07, 0x07, r.state === "lobby" ? 0x0E : 0x0D];
-    return colors.map((a, i) => [at[i], i < COLS.length ? at[i + 1] : 200, a]);
+    return colors.map((a, i) => [at[i], i < C.length ? at[i + 1] : 200, a]);
   }
 
 
-  const join = (id, watch) => { location.href = Links.game(id, watch ? "watch" : null); };
+  const join = (id, watch) => { Nav.go(Links.game(id, watch ? "watch" : null)); };
   // this page's version (build.js's version.js; null on a development page: not checked) - the server
   // refuses games of another version, so they can't be joined or created here
-  const myVersion = window.TUNNELER_VERSION || null;
+  const myVersion = VERSION || null;
   const otherVersion = r => !!(myVersion && r && r.version && r.version !== myVersion);
   let serverVersion = null;                          // the server's, when it isn't ours (from the list / a refused POST)
   const versionInfo = () => [{ text: T("ver.server", { server: serverVersion, you: myVersion }), color: 12 }, T("ver.update")];
@@ -87,7 +102,7 @@
     } : ({
       label: rowText(r, stateText(r)), align: "left", key: "room:" + r.id, spans: rowSpans(r),   // (the games you host: first, no mark)
       // (the table says the rest: only whether you host it and the keys)
-      info: [hosting(r) ? { text: T("lobby.host.i"), color: 14 } : null,
+      info: [hosting(r) ? { text: T("lobby.host.i"), color: 14 } : r.locked ? { text: T("lobby.locked.i"), color: 14 } : null,
         T(r.spectators ? (r.state === "lobby" && r.open ? "lobby.join2" : "lobby.watch") : r.state === "lobby" && r.open ? "lobby.join" : "lobby.closed")].filter(Boolean),
       disabled: !r.spectators && !(r.state === "lobby" && r.open),
       go: () => join(r.id, !(r.state === "lobby" && r.open)),
@@ -107,7 +122,7 @@
       lines: [{ row: 2, text: T("lobby.title"), color: 12 },
         ...(serverVersion ? [{ row: 1, text: T("ver.server", { server: serverVersion, you: myVersion }), color: 12 }] : [])],
       box: { x: 2, y: 3, w: 76, rows: shown }, fixed: 5,
-      header: UniText.padEnd(" " + T("lobby.name"), COLS[0] + 1) + [T("lobby.mode"), T("lobby.players"), T("lobby.ai"), T("lobby.spec")].map((h, i) => UniText.padEnd(h, COLS[i + 1])).join("") +
+      header: UniText.padEnd(" " + T("lobby.name"), cols()[0] + 1) + [T("lobby.mode"), T("lobby.players"), T("lobby.ai"), T("lobby.spec")].map((h, i) => cols()[i + 1] ? UniText.padEnd(h, cols()[i + 1]) : "").join("") +
         T("lobby.state"),
       items, infoRow: bottom + 2, back: home,
     }, keep);
@@ -117,10 +132,12 @@
   function create(keep) {
     view = "create";
     form.placeholder = T("ph.game");
+    pass.placeholder = T("ph.pass");
     const yn = v => T(v ? "yes" : "no");
     const flip = k => () => { form[k] = !form[k]; form.error = ""; create(true); };
     const items = [
       { key: "name", label: T("create.name"), input: form, align: "left", info: [T("create.name.i")], go: () => ui.move(1) },
+      { key: "pass", label: T("create.pass"), input: pass, align: "left", info: [T("create.pass.i1"), T("create.pass.i2")], go: () => ui.move(1) },
       { key: "public", label: T("create.public") + yn(form.public), align: "left",
         info: [T("create.public.i1"), T("create.public.i2")], go: flip("public"), change: flip("public") },
       { key: "spectators", label: T("create.spect") + yn(form.spectators), align: "left",
@@ -141,7 +158,8 @@
     // (stored by version 3.2 or older - no levels: 2: the computer levels had the old names)
     if (last.levels !== 2 && Array.isArray(last.seats)) last.seats = last.seats.map(s => s ? Object.assign({}, s, { kind: NetProto.oldLevel(s.kind) }) : s);
     delete last.levels;
-    const body = Object.assign({}, last, { name: form.value.trim(), public: form.public, spectators: form.spectators });
+    const body = Object.assign({}, last, { name: form.value.trim(), public: form.public, spectators: form.spectators,
+      password: NetProto.cleanPassword(pass.value) });
     body.version = myVersion || "dev";                 // (another version is refused; dev: not built)
     try {
       const res = await fetch(Endpoint.api("/api/rooms"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -149,7 +167,7 @@
       if (res.status === 409 && r.code === "version") { serverVersion = r.version; return list(); }   // (another version: see the list)
       if (!res.ok) throw new Error(r.error || "failed");
       if (r.hostKey) store.set("tunneler.host." + r.id, r.hostKey);   // this browser is the game's host
-      location.href = Links.game(r.id);
+      Nav.go(Links.game(r.id));
     } catch (err) { form.error = T("create.err", { msg: err.message }); create(true); }
   }
 
@@ -165,13 +183,13 @@
       if (!l) { linkForm.error = true; ui.sel = 0; return joinLink(true); }
       const here = (Endpoint.base() || location.origin).replace(/\/+$/, "");
       linkForm.value = ""; linkForm.error = false;
-      if (!l.origin || l.origin === here) location.href = Links.game(l.room, l.role);
-      else if (Endpoint.isApp) { Endpoint.set(l.origin); location.href = Links.game(l.room, l.role); }
-      else location.href = l.origin + Links.invite(l.room) + (l.role ? "/" + (l.role === "spectate" ? "watch" : l.role) : "");
+      if (!l.origin || l.origin === here) Nav.go(Links.game(l.room, l.role));
+      else if (Endpoint.isApp) { Endpoint.set(l.origin); Nav.go(Links.game(l.room, l.role)); }
+      else Nav.go(l.origin + Links.invite(l.room) + (l.role ? "/" + (l.role === "spectate" ? "watch" : l.role) : ""));
     };
     const back = () => { linkForm.error = false; list(); };
     ui.show({
-      lines: [{ row: 2, text: T("link.title"), color: 12 }, { row: 6, text: T("link.i1"), color: 3 },
+      lines: [{ row: 2, text: T("link.title"), color: 12 }, { row: 6, text: T(GameScreen.mobile() ? "link.i1.touch" : "link.i1"), color: 3 },
         { row: 7, text: E(Endpoint.web(Links.invite("friday-night"))), color: 7 }],
       box: { y: 10 }, infoRow: 17, back,
       items: [{ key: "link", label: T("link.label"), input: linkForm, align: "left",
@@ -232,4 +250,4 @@
   setTimeout(() => { if (!reached) { failed = true; connecting(); } }, 3000);   // (still waiting: the wake-up hint)
   if (!DosUI.playerName()) askName(() => { view = null; if (reached) list(); else connecting(); refreshList(false); });
   refreshList(false);
-})();
+}

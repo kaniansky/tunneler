@@ -1,5 +1,5 @@
-"use strict";
 // infection (src/js/modes/infection.js) in this language - the same keys as ../../en/modes/infection.js.
+import { Lang } from "../../../js/lang.js";
 Lang.modeTexts("infection", "sk", {
   note: "{n} zdr.",
   stat: "nak.",

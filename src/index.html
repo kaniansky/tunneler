@@ -2,34 +2,25 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Tunneler</title>
 <link rel="icon" href="/favicon.ico">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+<meta name="theme-color" content="#16130f">
 <link rel="stylesheet" href="/css/style.css">
+<!-- the page's colors before the code arrives: the modern look unless the original was chosen (gfx.js) -->
+<script>try { if (localStorage.getItem("tunneler.gfx") !== "original") document.documentElement.classList.add("modern"); } catch (e) { document.documentElement.classList.add("modern"); }</script>
 </head>
 <body>
 <div class="screen">
-  <canvas id="screen" class="game" width="720" height="400" aria-label="Tunneler main menu"></canvas>
-  <noscript>
-    <p>TUNNELER needs JavaScript. <a href="/play.html?mode=hotseat">Split screen</a> ·
-      <a href="/play.html?mode=cpu">vs computer</a> · <a href="/lobby.html">online game</a></p>
-  </noscript>
+  <div class="stage">
+    <canvas id="screen" class="game" width="720" height="400" aria-label="Tunneler"></canvas>
+    <div id="loading" class="loading" role="status"><span>Loading</span><span class="cursor">_</span></div>
+  </div>
+  <canvas id="status" class="status" width="720" height="32" style="display: none"></canvas>
+  <noscript><p>TUNNELER needs JavaScript.</p></noscript>
 </div>
-<script src="/js/vgafont.js"></script>
-<script src="/js/glyphs.js"></script>
-<script src="/js/unidata.js"></script>
-<script src="/js/unitext.js"></script>
-<script src="/js/endpoint.js"></script>
-<script src="/js/version.js"></script>
-<script src="/js/lang.js"></script>
-<script src="/js/langs.js"></script>
-<script src="/js/engine.js"></script>
-<script src="/js/modes.js"></script>
-<script src="/js/display.js"></script>
-<script src="/js/dosui.js"></script>
-<script src="/js/speaker.js"></script>
-<script src="/js/pads.js" data-menu></script>
-<script src="/js/cpucode.js"></script>
-<script src="/js/home.js"></script>
+<script type="module" src="/js/app.js"></script>
 </body>
 </html>

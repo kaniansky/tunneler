@@ -1,4 +1,3 @@
-"use strict";
 // Online game page: /game/<id>[/watch | /<colour>] or /online.html?room=<id>[&role=watch|<colour>]
 // A room is a lobby with 8 seats (docs/DESIGN-8P.md 26, server.js): this page shows it - the seats
 // (players, open / closed seats, computer tanks, teams, ready, ping), the game settings, the chat - and
@@ -16,7 +15,30 @@
 // (Tab / 1 2 3, Left / Right choose the player).
 // Online play needs a player name (DosUI.askName, "tunneler.name"): asked before connecting when this
 // browser has none. Names and chat go through the Unicode plane (unitext.js), so every language shows.
-(function () {
+// A game with a password: the server refuses the connection ("password") until this page sends it -
+// askPassword asks (kept in memory only: the server lets this client id back in without it).
+import "./gfx-modern.js";
+import "./gfx-hud.js";
+import { TunnelerAI } from "./ai.js";
+import { Controls } from "./controls.js";
+import { Display } from "./display.js";
+import { DosUI } from "./dosui.js";
+import { Endpoint, Links } from "./endpoint.js";
+import { TunnelerEngine } from "./engine.js";
+import { Gfx } from "./gfx.js";
+import { Keyboard } from "./input.js";
+import { Lang } from "./lang.js";
+import { NetProto } from "./netproto.js";
+import { Pads } from "./pads.js";
+import { Replay } from "./replay.js";
+import { Runner } from "./runner.js";
+import { Speaker } from "./speaker.js";
+import { StatusLine } from "./statusline.js";
+import { UniText } from "./unitext.js";
+import { VERSION } from "./version.js";
+import { ViewModes } from "./views.js";
+import { Nav } from "./nav.js";
+export function mount() {
   const { TICK_MS, UP, DOWN, LEFT, RIGHT, FIRE, ESC, ROLES, MAX_CHAT, VISIBLE, SIGHTS, SIZES, ROUND_TIMES, AFTER_DEATH, SEAT_KINDS,
     frameToInput, frameToInputExt, FrameQueue, HASH_EVERY, stateHash, engineOptions, readCfg } = NetProto;
   const here = Links.here();                           // /game/<id>[/<colour|watch>] or ?room=&role=
@@ -86,7 +108,8 @@
     if (runner) runner.setOverlay(snap);
     else if (snap) display.setSnapshot(snap);
   }
-  let asking = false;                                  // the name screen (before connecting)
+  let asking = false;                                  // the name / password screen (before connecting)
+  let password = "";                                   // the game's password, once typed (askPassword)
   const dos = new DosUI(canvas, { display, active: () => !!msgSnap, present: snap => { msgSnap = snap; presentOverlay(); } });
   const idle = now => { if (!runner) display.draw(now); requestAnimationFrame(idle); };   // between matches
   requestAnimationFrame(idle);
@@ -96,7 +119,7 @@
   function leave(url) {
     leaving = true;
     if (ws) ws.close();
-    location.href = url;
+    Nav.go(url);
   }
   window.addEventListener("pagehide", () => { leaving = true; if (ws) ws.close(); });
   // coming back with the browser's Back button may restore this page from its cache: start fresh
@@ -105,6 +128,7 @@
   window.tunnelerEngine = () => engine;                    // for tests / debugging in the console
   window.tunnelerRunner = () => runner;
   window.tunnelerViews = () => views;
+  window.tunnelerFrames = () => ({ frames, queued: queue.length, catching });   // (tests: caught up?)
 
   // a new match ({no, seed, cfg, you} from "match" / "hello")
   function newMatch(m) {
@@ -112,14 +136,19 @@
     const c = readCfg(m.cfg);
     if (!c) { fatal = "Bad game settings."; updateOverlay(); return false; }
     cfg = c; matchNo = m.no; player = Number.isInteger(m.you) ? m.you : -1; ended = false;
-    engine = new TunnelerEngine(m.seed >>> 0, engineOptions(cfg));
+    const opts = engineOptions(cfg);
+    engine = new TunnelerEngine(m.seed >>> 0, JSON.parse(JSON.stringify(opts)));
     Lang.apply(engine);                                    // texts only: the simulation is the same
     engine.uiMode = "online";
     engine.setNames(cfg.names);                            // display only (raw Unicode)
-    engine.smoothScroll = store.get("tunneler.smooth") !== "0";   // display only: per player (homepage Settings; on by default)
+    // display only: per player (homepage Settings; on by default; always with graphics modern)
+    engine.smoothScroll = store.get("tunneler.smooth") !== "0" || Gfx.mode() === "modern";
     bots = cfg.ext ? cfg.slots.map((sl, i) => sl.bot ? new TunnelerAI(sl.level || "easy", i + 1) : null) : null;
     views = makeViews(player >= 0);
     runner = new Runner(engine, views, speaker);
+    // every match played or watched here is recorded (replay.js): kept once it reaches its world map
+    runner.recorder = Replay.recorder(engine, { kind: "online", seed: m.seed >>> 0, opts, room: roomName || roomId },
+      rep => { Replay.save(rep).catch(e => console.warn("replay:", e)); });
     // a player hears the other tanks quieter the farther they are from their own (docs/DESIGN-8P.md 8);
     // spectators hear everything at full volume
     runner.listener = e => player >= 0 && e.screen === "play" ? views.hearAt(player, e) : null;
@@ -198,14 +227,17 @@
   setInterval(pump, 4);
 
   // ------------------------------------------------------------ input
-  const CODES = {
-    [UP]: ["KeyW", "ArrowUp", "Numpad8"],
-    [DOWN]: ["KeyS", "ArrowDown", "Numpad2"],
-    [LEFT]: ["KeyA", "ArrowLeft", "Numpad4"],
-    [RIGHT]: ["KeyD", "ArrowRight", "Numpad6"],
-    [FIRE]: ["ShiftLeft", "ShiftRight", "Space", "Enter", "NumpadEnter"],   // no Ctrl: Ctrl+W closes the tab
-    [ESC]: ["Escape"],
-  };
+  // either tank's keys drive your tank (controls.js: remappable; defaults W A S D / arrows / keypad 8 2 4 6,
+  // fire Left Shift / Space / Enter / Right Shift / keypad Enter - no Ctrl: Ctrl+W closes the tab; Tab only if assigned)
+  let CODES = {};
+  function readCodes() {
+    // (Tab only when assigned on purpose: online it never was a default fire key)
+    const of = a => [].concat(...Controls.SETS.map(s => Controls.codesOf(s, a)))
+      .filter(c => c !== "Tab" || Controls.SETS.some(s => Controls.get(s, a) === "Tab"));
+    CODES = { [UP]: of("up"), [DOWN]: of("down"), [LEFT]: of("left"), [RIGHT]: of("right"), [FIRE]: of("fire"), [ESC]: ["Escape"] };
+  }
+  readCodes();
+  Controls.onChange(readCodes);
   let bits = 0;
   // Esc twice (within 3 s) leaves the game for the list of games - the first one only says so, across
   // the game (no accidental exits); not in the lobby, on a status screen or on the end-of-match map
@@ -242,7 +274,8 @@
   });
   // gamepads / touch controls (pads.js): turned into the same keys as the keyboard - a player's tank
   // during play (any gamepad, the on-screen joystick + FIRE), arrows / Enter / Esc everywhere else
-  if (window.Pads) Pads.start({ menu: () => !isPlayer() || !inPlay() || !!lobby, gamepadSet: () => "blue", touchSet: "blue" });
+  Pads.start({ menu: () => !isPlayer() || !inPlay() || !!lobby, gamepadSet: () => "blue", touchSet: "blue",
+    hideTouch: () => !!lobby || !isPlayer() });   // (the touch controls only while playing)
 
   function sendKeys() {
     const keys = keyboard.takeKeys();
@@ -352,42 +385,60 @@
     return mark + " " + P(name, c.nw) + " " + P(team, c.tw) + " " + UniText.padStart(ping, 7);
   }
 
-  // Seat rows: Enter or a (left) click on a free open seat sits there. The host on a seat nobody sits on:
-  // Left / Right or a right click change it (open / closed / AI levels; a left click on a closed / AI seat
-  // too), 1-8 or a click on the team its team (Enter too on closed / AI seats). Own seat: Left / Right,
-  // Enter, 1-8 or a click on the team = team.
+  // Seat rows. Everybody: Enter or a left click on a free open seat sits there. The host, on every seat
+  // no other player sits on (own seat included): Left / Right, a click or a right click step it through
+  // closed -> open -> the host sits there (only while seated nowhere else) -> AI easy -> medium -> hard ->
+  // closed (right click / Left: the other way - hostCycle); a click on the team column its next team (a
+  // right click the previous one), 1-8 its team, Enter on a closed / AI seat or the own one the next team.
+  // A player's own seat (not the host): Left / Right, Enter, 1-8 or a click on the team = team; a click on
+  // the own name stands up (watching; the seat stays open) - where the room allows spectators.
   function seatItems() {
     const c = seatColumns(), locked = !!st.match, mine = mySeat();
-    const teamZone = click => ({ from: 3 + c.nw, to: 3 + c.nw + c.tw, click });
+    const teamCols = { from: 3 + c.nw, to: 3 + c.nw + c.tw };
+    const teamZone = click => Object.assign({ click }, teamCols);
     return st.seats.map((s, i) => {
       const it = { key: "seat" + i, align: "left", label: seatText(s, i, c), attr: s.kind === "closed" && !s.k ? 8 : TEXT_COLORS[i],
-        dim: ownTeams() ? [3 + c.nw, 3 + c.nw + c.tw] : null };
+        dim: ownTeams() ? [teamCols.from, teamCols.to] : null };
       if (locked) return Object.assign(it, { static: true });
-      const host = isHost() && !s.k;                       // the host: a seat nobody sits on
-      const kind = d => seatSet(i, { kind: cycle(SEAT_KINDS, s.kind, d) }), team = d => seatSet(i, { team: (s.team - 1 + d + 8) % 8 + 1 });
       const own = ownTeams();
+      if (isHost() && (!s.k || i === mine)) {               // the host: a free seat or the own one
+        const cycleZone = { from: -9, to: 99, click: d => hostCycle(i, d) };
+        const team = i === mine ? d => setTeam(d) : d => seatSet(i, { team: (s.team - 1 + d + 8) % 8 + 1 });
+        const hasTeam = s.kind !== "closed" && !own;
+        Object.assign(it, { change: d => hostCycle(i, d),
+          // (zones: the first one a click falls in wins - the team column, then the rest of the row)
+          zones: hasTeam ? [teamZone(team), cycleZone] : [cycleZone],
+          digit: own ? undefined : i === mine ? n => setTeam(0, n) : n => seatSet(i, { team: n }) });
+        if (!s.k && s.kind === "open")
+          return Object.assign(it, { info: [T("seat.sit.host.i", { name: NAME(ROLES[i]) }), T("seat.kind.i")], go: () => sitOn(i) });
+        return Object.assign(it, { info: [T("seat.kind.i"), own ? T("gm." + st.settings.mode + ".i") : T("seat.team.i")],
+          go: hasTeam ? () => team(1) : () => hostCycle(i, 1) });
+      }
       if (i === mine) {
-        if (own) return Object.assign(it, { static: true });   // (no team to choose)
-        return Object.assign(it, { info: [T("seat.mine.i1"), T("seat.mine.i2")], change: d => setTeam(d), go: () => setTeam(1),
-          digit: n => setTeam(0, n), zones: [teamZone(d => setTeam(d))] });
+        const watch = st.spectators ? [{ from: -9, to: teamCols.from, click: d => { if (d > 0) sitOn(-1); } }] : [];
+        const first = st.spectators ? T("seat.mine.watch.i") : T("seat.mine.i1");
+        if (own) return Object.assign(it, watch.length ? { info: [first], zones: watch, go: () => {} } : { static: true });   // (no team to choose)
+        return Object.assign(it, { info: [first, T("seat.mine.i2")], change: d => setTeam(d), go: () => setTeam(1),
+          digit: n => setTeam(0, n), zones: [teamZone(d => setTeam(d)), ...watch] });
       }
-      // The host on a seat nobody sits on: a right click anywhere on the row = the next kind (closed ->
-      // open -> AI easy -> medium -> hard -> closed); a left click on the team = the next team; any other left
-      // click: on an open seat sits there, on a closed / AI seat = the next kind as well
-      const other = d => d < 0 || s.kind !== "open" ? kind(1) : sitOn(i);
-      const hostZones = [{ from: 0, to: 3 + c.nw, click: other },
-        { from: 3 + c.nw, to: 3 + c.nw + c.tw, click: d => d > 0 && s.kind !== "closed" && !own ? team(1) : kind(1) },
-        { from: 3 + c.nw + c.tw, to: 99, click: other }];
-      if (!s.k && s.kind === "open") {
-        return Object.assign(it, { info: [T("seat.sit.i", { name: NAME(ROLES[i]) }), host ? T("seat.open.i") : T("seat.sit.i2")], go: () => sitOn(i),
-          change: host ? kind : undefined, digit: host && !own ? n => seatSet(i, { team: n }) : undefined, zones: host ? hostZones : undefined });
-      }
-      if (host) {                                           // closed / AI: the host changes it
-        return Object.assign(it, { info: [T("seat.kind.i"), own ? T("gm." + st.settings.mode + ".i") : T("seat.team.i")], change: kind,
-          go: own ? () => kind(1) : () => team(1), digit: own ? undefined : n => seatSet(i, { team: n }), zones: hostZones });
-      }
+      if (!s.k && s.kind === "open")
+        return Object.assign(it, { info: [T("seat.sit.i", { name: NAME(ROLES[i]) }), T("seat.sit.i2")], go: () => sitOn(i) });
       return Object.assign(it, { static: true });          // somebody else's seat / nothing to do
     });
+  }
+  // the host steps seat i on (d = 1) / back (-1): closed, open, the host sitting there ("you" - only while
+  // the host sits nowhere else), AI easy, medium, hard. Standing up / opening the seat goes first (the
+  // server takes one connection's messages in order).
+  function hostCycle(i, d) {
+    if (!st || !isHost() || st.match) return;
+    const s = st.seats[i], mine = mySeat(), here = i === mine;
+    if ((s.k && !here) || (here && !st.spectators)) return;    // (no standing up in a room without spectators)
+    const states = ["closed", "open", ...(mine < 0 || here ? ["you"] : []), ...NetProto.LEVELS];
+    const now = here ? "you" : s.kind, next = cycle(states, now, d);
+    if (here) sitOn(-1);                                    // stand up (the seat is open)
+    if (next === "you") { if (s.kind !== "open") seatSet(i, { kind: "open" }); sitOn(i); }
+    else if (next !== s.kind) seatSet(i, { kind: next });
+    else drawLobby(true);
   }
 
   function settingItems() {
@@ -420,7 +471,6 @@
         d => setSetting("sight", cycle(SIGHTS, SIGHTS.includes(s.sight) ? s.sight : "full", d))),
       row("visible", T("os.visible") + T("view." + s.visible), [T("os.visible.i1"), T("os.visible.i2")], d => setSetting("visible", cycle(VISIBLE, s.visible, d))),
       row("watch", T("os.watch") + T("watch." + s.watchOut), [T("watch.i1"), T("watch.i2")], d => setSetting("watchOut", cycle(AFTER_DEATH, s.watchOut, d))),
-      row("noRepair", T("mod.noRepair") + onOff(!s.noRepair), [T("mod.noRepair.i")], () => setSetting("noRepair", !s.noRepair)),
     ];
   }
 
@@ -439,18 +489,17 @@
       items.push({ key: "ready", label: ready ? T("pg.cancel") : T("pg.start"), info: ready ? [T("pg.ready.i")] : [T("pg.start.i")],
         go: () => send({ t: "ready", v: ready ? 0 : 1 }) });
     }
-    if (!locked && seat >= 0 && st.spectators)
-      items.push({ key: "spec", label: T("pg.watch"), info: [T("pg.watch.i")], go: () => sitOn(-1) });
     // the host: "Kick a player" (opens the list of whom it may remove), right below
     // (grayed while there is nobody to remove - the box doesn't jump)
     if (isHost() && !locked) items.push({ key: "kick", label: T("pg.kick"), disabled: !kickTargets().length,
       info: [T("pg.kick.i1"), T("pg.kick.i2")], go: () => drawKick(false) });
     // the invite link (the server's own page: also from the desktop app); "Link copied" for 3 s
     const invite = Endpoint.web(Links.invite(roomId)), copy = () => copyLink(invite);
-    items.push({ key: "gap", label: "", disabled: true });
+    if (items.length) items.push({ key: "gap", label: "", disabled: true });   // (none on top of the box: a spectator)
     items.push({ key: "copy", label: T(copied ? "room.copied" : "room.copy"), go: copy,
       info: [T("room.copy.in"), { text: Lang.enc(UniText.truncRaw(invite, 78)), color: 11, onClick: copy }] });
     if (lastMatch) items.push({ key: "stats", label: T("pg.stats"), info: [T("pg.stats.i")], go: showStats });
+    items.push({ key: "gapBack", label: "", disabled: true });
     items.push({ key: "back", label: T("back.lobby"), info: [T("back.lobby.i")], go: () => leave(gamesHref) });
     return items;
   }
@@ -475,19 +524,31 @@
       lines.push({ row: 11, col: 2, text: T("pg.specs.who"), color: 8 });
       text.push({ row: 11, col: 2 + W(T("pg.specs.who")), text: UniText.truncRaw(specs.join(", "), end - 1 - W(T("pg.specs.who"))), color: 7 });
     }
-    chatPanel(lines, text, chatX, chatTop, 80, 21, 1);   // (its last row: the input below)
+    if (!chatHidden()) chatPanel(lines, text, chatX, chatTop, 80, 21, 1);   // (its last row: the input below)
     chatForm.width = Math.max(8, 80 - chatX - 1 - W(T("pg.say")) - 2);
     chatForm.placeholder = T("ph.say");
-    const say = [{ key: "say", label: T("pg.say"), input: chatForm, align: "left", info: [T("pg.say.i")], go: sendChat }];
+    const say = chatHidden() ? [] : [{ key: "say", label: T("pg.say"), input: chatForm, align: "left", info: [T("pg.say.i")], go: sendChat }];
     const boxes = [{ x: 1, y: 1, w: seatW, title, items: seats },
       { x: setX, y: 1, w: Math.max(setW, 79 - chatX), title: T("box.settings"), items: sets },   // (as wide as the chat below it)
       { x: 1, y: 12, w: actW, title: T("box.game"), items: acts },
-      { x: chatX, y: 19, w: 80 - chatX - 1, items: say, joinTop: true }];   // (row 20, the panel's border below)
-    const all = [].concat(seats, sets, acts, say), enabled = it => !it.static && !it.disabled;
+      ...(say.length ? [{ x: chatX, y: 19, w: 80 - chatX - 1, items: say, joinTop: true }] : [])];   // (row 20, the panel's border below)
+    // the phone layout (DosUI narrow): the boxes one below the other - the chat a box of its own, its last
+    // messages wrapped to the width (names in their tank colours), the Say input in it; the spectators on top
+    if (lobbyUI.isNarrow()) {
+      lines.length = 0; text.length = 0;
+      if (specs.length) lines.push({ row: 1, text: T("pg.specs.who") + Lang.enc(UniText.truncRaw(specs.join(", "), 30)), color: 8 });
+      boxes.length = 0;
+      boxes.push({ title, items: seats }, { title: T("box.settings"), items: sets }, { title: T("box.game"), items: acts });
+      if (!chatHidden()) {
+        chatForm.width = 34 - W(T("pg.say"));
+        boxes.push({ title: T("pg.chat"), items: chatRows(34).concat(say) });
+      }
+    }
+    const all = [].concat(...boxes.map(b => b.items)), enabled = it => !it.static && !it.disabled;
     // the selection: given, else (the first time) Start / Ready, else the first open seat, else Say
     let first = selKey;
     if (!first) first = ["start", "ready"].find(k => all.some(it => it.key === k)) ||
-      (all.find(it => /^seat/.test(it.key) && enabled(it)) || { key: "say" }).key;
+      (all.find(it => /^seat/.test(it.key) && enabled(it)) || all.find(enabled) || { key: "say" }).key;
     const spec = { lines, text, boxes, infoRow: 22, hint: T("create.hint"),
       back: () => { if (isReady()) send({ t: "ready", v: 0 }); else leave(gamesHref); } };   // Esc: unready, else out
     spec.sel = Math.max(0, all.findIndex(it => it.key === first));
@@ -523,6 +584,25 @@
       if (l.text) text.push({ row: y0 + 1 + k, col: x0 + 2 + UniText.rawCols(l.name), text: l.text, color: 7 });
     });
   }
+  // the phone layout's chat box: the last messages as read-only rows of at most w columns ("NAME: text",
+  // the name in its tank's colour)
+  function chatRows(w, max = 8) {
+    if (!chat.length) return [{ key: "chat-none", static: true, attr: 8, label: T("pg.chat.none"), align: "left" }];
+    const out = [];
+    for (const m of chat) {
+      const f = m.from || {};
+      const name = f.name || (f.spectator ? Lang.raw("pg.chat.spec") : Lang.raw(ROLES[f.color] || "blue"));
+      const nameColor = f.spectator ? 8 : TEXT_COLORS[f.color] || 7, nameLen = Array.from(name).length + 1;
+      let done = 0;
+      wrapChars(Array.from(name + ": " + m.text), w - 1).forEach(l => {
+        const n = Math.max(0, Math.min(l.length, nameLen - done));
+        done += l.length;
+        const label = Lang.enc(l.join("")), nw = UniText.cols(Lang.enc(l.slice(0, n).join("")));
+        out.push({ key: "chat-" + out.length, static: true, attr: 7, align: "left", label, spans: [[0, nw, nameColor], [nw, 99, 7]] });
+      });
+    }
+    return out.slice(-max);
+  }
   // characters -> lines of at most w display columns (CJK / emoji take 2), broken after a space where possible
   function wrapChars(ch, w) {
     const out = [], cw = c => UniText.charCols(c.codePointAt(0));
@@ -547,8 +627,26 @@
       copiedTimer = setTimeout(() => { copied = false; if (lobby && lobby.page === "lobby") drawLobby(true); }, 3000);
     }, () => {});
   }
+  // Settings - Online: "Show chat" ("tunneler.chat.hide" = "1": hidden) and "Chat sound" ("tunneler.chatsound",
+  // on unless "0"; nothing while the chat is hidden) - a short blip for a message from somebody else, two
+  // notes for somebody joining
+  let sentText = null, sentAt = -1e9;
+  const chatHidden = () => store.get("tunneler.chat.hide") === "1";
+  function chatBeep(kind) {
+    if (store.get("tunneler.chatsound") === "0" || chatHidden()) return;   // (the chat hidden: no chat sounds either)
+    const ctx = speaker.ctx;
+    if (!ctx || ctx.state !== "running" || !ctx.createOscillator) return;
+    const vol = (Speaker && Speaker.getOption ? Speaker.getOption("volume") : 100) / 100;
+    const notes = kind === "join" ? [[660, 0], [990, 0.09]] : [[880, 0]];
+    for (const [hz, dt] of notes) {
+      const t = ctx.currentTime + dt, o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = "sine"; o.frequency.setValueAtTime(hz, t);
+      g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.09 * vol, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
+      o.connect(g); g.connect(ctx.destination); o.start(t); o.stop(t + 0.18);
+    }
+  }
   function sendChat() {
-    if (chatForm.value.trim()) send({ t: "chat", text: chatForm.value });
+    if (chatForm.value.trim()) { sentText = chatForm.value; sentAt = performance.now(); send({ t: "chat", text: chatForm.value }); }
     chatForm.value = "";
     drawLobby(true);
   }
@@ -655,11 +753,16 @@
     if (!roomId) { fatal = "No room given."; updateOverlay(); return; }
     let url = Endpoint.ws("/ws?room=" + encodeURIComponent(roomId)) + "&cid=" + encodeURIComponent(clientId) +
       "&name=" + encodeURIComponent(DosUI.playerName());
-    url += "&v=" + encodeURIComponent(window.TUNNELER_VERSION || "dev");   // (another version is refused; dev: not built)
+    url += "&v=" + encodeURIComponent(VERSION || "dev");   // (another version is refused; dev: not built)
+    // (no seat in the link: the preferred colour, Settings - Online; the server still gives this browser's
+    // last seat in this game first when it is free)
+    const prefer = store.get("tunneler.online.color");
     if (wantRole === "spectate") url += "&role=watch";
     else if (ROLES.includes(wantRole)) url += "&role=" + wantRole;
+    else if (ROLES.includes(prefer)) url += "&role=" + prefer;
     const hostKey = store.get("tunneler.host." + roomId);   // (read now: it may have been handed over)
     if (hostKey) url += "&host=" + encodeURIComponent(hostKey);
+    if (password) url += "&pw=" + encodeURIComponent(password);
     if (engine && !ended) url += "&match=" + matchNo + "&have=" + (frames + queue.length);
     setConn(retry ? "conn.reconnecting" : "conn.connecting");
     ws = new WebSocket(url);
@@ -678,7 +781,7 @@
     ws.onclose = () => {
       ws = null;
       clearTimeout(pingTimer);
-      if (leaving) return;
+      if (leaving || asking) return;
       if (fatal) { setConn("conn.closed"); updateOverlay(); return; }
       const delay = Math.min(10000, 1000 * Math.pow(1.6, retry++));
       setConn("conn.retry", { s: Math.round(delay / 1000) });
@@ -729,19 +832,24 @@
         chat.push({ from: m.from, text: m.text });
         if (chat.length > 50) chat.shift();
         chatSeq++;
+        if (!(m.text === sentText && performance.now() - sentAt < 3000)) chatBeep("chat");   // (not the own message coming back)
         break;
       case "f":
         if (!engine || m.m !== matchNo) break;
         if (m.n !== frames + queue.length) { if (ws) ws.close(); return; }   // gap: reconnect resumes
         queue.pushEntries(m.f);
         break;
-      case "st":
+      case "st": {
+        // somebody new in the room (a seat taken or a spectator): the join sound
+        const people = x => x ? (x.seats || []).filter(q => q.k).length + (x.specs || []).length : 0;
+        if (st && !m.match && people(m) > people(st)) chatBeep("join");
         st = m;
         roomName = m.name || roomName;
         if (isHost() && !m.match) rememberSettings();
         renderBar();
         updateOverlay();
         break;
+      }
       case "host":                                         // the host left: this page hosts the room now
         if (typeof m.key === "string" && roomId) store.set("tunneler.host." + roomId, m.key);
         me.host = true;
@@ -761,9 +869,10 @@
         }
         break;
       case "err":
+        if (m.code === "password" || m.code === "pwlimit") { askPassword(m.code === "pwlimit" ? "pw.limit" : m.bad ? "pw.err" : null); break; }
         fatal = m.code === "kicked" ? T("pg.kicked") : m.code === "idle" ? T("on.idle") : m.code === "full" ? T("on.full")
           : m.code === "busy" ? T("on.busy") : m.code === "noroom" ? T("room.notfound")
-          : m.code === "version" ? T("ver.server", { server: String(m.version), you: window.TUNNELER_VERSION || "?" }) : Lang.enc(String(m.msg));
+          : m.code === "version" ? T("ver.server", { server: String(m.version), you: VERSION || "?" }) : Lang.enc(String(m.msg));
         if (m.code === "version") fatal2 = T("ver.update");
         updateOverlay();
         break;
@@ -844,10 +953,37 @@
     }, !!msgSnap);
   }
 
+  // "PASSWORD": the game has one - typed, then connecting again with it (err: the reason it was refused)
+  function askPassword(err) {
+    asking = true;
+    const form = { value: "", max: NetProto.MAX_PASSWORD, width: NetProto.MAX_PASSWORD, secret: true };
+    const back = () => leave(gamesHref);
+    const ok = () => {
+      const v = NetProto.cleanPassword(form.value);
+      if (!v) { dos.sel = 0; return draw(); }
+      password = v; asking = false; retry = 0;
+      msgSnap = null; presentOverlay(); updateOverlay(); connect();
+    };
+    const draw = () => dos.show({
+      lines: [{ row: 2, text: T("pw.title"), color: 12 }, { row: 4, text: Lang.enc(roomName || roomId), color: 15 },
+        { row: 6, text: T("lobby.locked.i"), color: 3 }, { row: 7, text: T("pw.i2"), color: 3 }],
+      box: { y: 10 }, infoRow: 17, back,
+      items: [{ key: "pw", label: T("pw.label"), input: form, align: "left",
+        info: err ? [{ text: T(err), color: 12 }] : [T("pw.go.i")], go: ok },
+      { key: "gap", label: "", disabled: true },
+      { key: "go", label: T("pw.go"), info: [T("pw.go.i")], go: ok },
+      { key: "back", label: T("back.lobby"), info: [T("back.lobby.i")], go: back }],
+    }, true);
+    draw();
+    // (refused before the hello: the game's name from the list API)
+    if (!roomName) fetch(Endpoint.api("/api/rooms/" + encodeURIComponent(roomId)), { cache: "no-store" }).then(r => r.ok ? r.json() : null)
+      .then(r => { if (r && r.name && !roomName) { roomName = r.name; if (asking) draw(); } }).catch(() => {});
+  }
+
   // a name first (online play needs one)
   if (DosUI.playerName()) connect();
   else {
     asking = true;
     dos.askName(() => { asking = false; msgSnap = null; presentOverlay(); updateOverlay(); connect(); }, () => leave("/"));
   }
-})();
+}

@@ -1,4 +1,3 @@
-"use strict";
 // Status lines under the game screen, drawn like DOS text (VGA font, text-mode colours) on their own
 // canvas. They follow the game canvas: same on-screen width, 80 columns, or 40 while the play view is
 // cropped to one player's half, and the same pixel aspect as the game screen.
@@ -9,7 +8,11 @@
 // docs/DESIGN-8P.md 22). Widths are display columns (CJK / emoji: 2).
 // Segments are joined with two spaces and centred; when a row is too long the segments with the
 // highest prio number are dropped first. attr = DOS attribute byte (background << 4 | foreground).
-(function (root) {
+import { Display } from "./display.js";
+import { Gfx } from "./gfx.js";
+import { UniFont, UniText } from "./unitext.js";
+import { VGA_FONT } from "./vgafont.js";
+import { Scope } from "./scope.js";
 
 const ASPECT = 1.35;   // vertical / horizontal pixel scale of the game canvas (720x400 shown at 4:3)
 
@@ -17,6 +20,7 @@ class StatusLine {
   constructor(canvas, gameCanvas, columnsFn) {
     this.canvas = canvas;
     this.ctx = canvas.getContext("2d");
+    Gfx.attach(canvas);
     this.game = gameCanvas;
     this.columnsFn = columnsFn || (() => 80);
     this.rows = [];
@@ -25,7 +29,7 @@ class StatusLine {
     canvas.addEventListener("click", e => { const s = this.segAt(e); if (s && s.onClick) s.onClick(); });
     canvas.addEventListener("mousemove", e => { const s = this.segAt(e); canvas.style.cursor = s && s.onClick ? "pointer" : ""; });
     window.addEventListener("resize", () => this.layout());
-    if (root.UniFont) root.UniFont.onLoad(() => { this.key = ""; this.draw(); });   // a glyph block arrived
+    Scope.onEnd(UniFont.onLoad(() => { this.key = ""; this.draw(); }));   // a glyph block arrived
     setInterval(() => this.layout(), 250);
   }
 
@@ -43,9 +47,9 @@ class StatusLine {
   // a segment's cells: the 16 font rows of each byte (+ whether column 9 repeats column 8), or a
   // Unicode character ({uni: code point}; a wide one is followed by a {cont: true} cell)
   glyphs(s) {
-    const font = root.VGA_FONT, U = root.UniText;
+    const font = VGA_FONT, U = UniText;
     return U.cells(s.raw ? U.fromRaw(s.text) : s.text).map(([ch, cp]) => cp === U.CONT ? { cont: true } : cp ? { uni: cp }
-      : { rows: font.subarray(ch * 16, ch * 16 + 16), dup: ch >= 0xC0 && ch <= 0xDF });
+      : { rows: font.subarray(ch * 16, ch * 16 + 16), dup: ch >= 0xC0 && ch <= 0xDF, ch });
   }
 
   fit(row, cols) {
@@ -67,9 +71,12 @@ class StatusLine {
     const W = cols * 9, H = lines * 16;
     if (this.canvas.width !== W || this.canvas.height !== H) { this.canvas.width = W; this.canvas.height = H; }
     const img = this.ctx.createImageData(W, H);
-    const px = new Uint32Array(img.data.buffer), pal = root.Display.TEXT_U32, space = this.glyphs({ text: " " })[0];
+    const px = new Uint32Array(img.data.buffer), pal = Display.TEXT_U32, space = this.glyphs({ text: " " })[0];
     px.fill(pal[0]);
     this.cells = [];
+    // (the same as a text buffer for graphics "modern": gfx-text.js draws it in its font)
+    const vram = new Uint8Array(lines * 160), uni = new Uint32Array(lines * 80);
+    for (let i = 0; i < vram.length; i += 2) { vram[i] = 0x20; vram[i + 1] = 0x07; }
     this.rows.forEach((row, r) => {
       const segs = this.fit(row, cols), cells = new Array(cols).fill(null);
       let text = [], attrs = [];
@@ -79,7 +86,7 @@ class StatusLine {
         text = text.concat(s.cells);
       });
       text = text.slice(0, cols);
-      if (text.length && text[text.length - 1].uni && root.UniText.charCols(text[text.length - 1].uni) === 2) text[text.length - 1] = space;
+      if (text.length && text[text.length - 1].uni && UniText.charCols(text[text.length - 1].uni) === 2) text[text.length - 1] = space;
       const x0 = (cols - text.length) >> 1;
       let pos = 0;
       segs.forEach((s, i) => {
@@ -92,8 +99,11 @@ class StatusLine {
         const g = text[c], a = attrs[c];
         const fg = pal[a & 15], bg = pal[(a >> 4) & 7];
         let p = r * 16 * W + (x0 + c) * 9;
-        if (g.cont) continue;                                    // (drawn with the cell before)
-        if (g.uni) { root.Display.uniCell(px, W, p, g.uni, fg, bg, (cols - x0 - c) * 9); continue; }
+        const o = r * 160 + (x0 + c) * 2;
+        vram[o + 1] = a & 0x7F;
+        if (g.cont) { uni[r * 80 + x0 + c] = UniText.CONT; continue; }
+        if (g.uni) uni[r * 80 + x0 + c] = g.uni; else vram[o] = g.ch;                                    // (drawn with the cell before)
+        if (g.uni) { Display.uniCell(px, W, p, g.uni, fg, bg, (cols - x0 - c) * 9); continue; }
         for (let l = 0; l < 16; l++, p += W) {
           const bits = g.rows ? g.rows[l] : 0;
           for (let b = 0; b < 8; b++) px[p + b] = (bits & (0x80 >> b)) ? fg : bg;
@@ -102,6 +112,7 @@ class StatusLine {
       }
     });
     this.ctx.putImageData(img, 0, 0);
+    Gfx.painted(this.canvas, { text: { vram, uni, rows: lines, c0: 0, c1: cols, blinkOn: true } });
     this.layout();
   }
 
@@ -114,5 +125,4 @@ class StatusLine {
   }
 }
 
-root.StatusLine = StatusLine;
-})(window);
+export { StatusLine };

@@ -1,4 +1,3 @@
-"use strict";
 // Where the online game lives. In a browser: the site the page came from. In the desktop app (Tauri:
 // the pages are served from tauri://localhost or http(s)://tauri.localhost) there is no game server
 // behind the page, so online play goes to a server chosen on the homepage Settings screen (localStorage
@@ -14,10 +13,10 @@
 //
 // Links: the pages' addresses - short ones on a server (/games, /game/<id> = its lobby, /game/<id>/watch,
 // /split, /skirmish (old: /vs-computer); server.js maps them to the pages), the plain files in the desktop app (no
-// server behind its pages: /lobby.html, /online.html?room=...[&role=watch], /play.html?mode=...).
+// server behind its pages: /lobby.html, /online.html?room=...[&role=watch], /play.html?mode=..., /replays.html[?id=]).
 // Links.room / game / here() read either form, Links.parse a pasted invite link. Invite links
 // (Endpoint.web) always use the short form.
-(function (root) {
+const root = globalThis;
 
 const DEFAULT = "https://tunneler-online.onrender.com";
 const KEY = "tunneler.server";
@@ -60,6 +59,9 @@ const Links = {
   split: query => (isApp ? "/play.html?mode=hotseat" + (query ? "&" + query : "") : "/split" + (query ? "?" + query : "")),
   cpu: query => (isApp ? "/play.html?mode=cpu" + (query ? "&" + query : "") : "/skirmish" + (query ? "?" + query : "")),
   invite: id => "/game/" + enc(id),              // (for Endpoint.web: always on a server)
+  // the replays kept in this browser (replay.js), one of them played (its id)
+  replays: () => isApp ? "/replays.html" : "/replays",
+  replay: id => isApp ? "/replays.html?id=" + enc(id) : "/replays/" + enc(id),
   // A pasted invite link -> {origin, room, role} or null: https://host/game/<id>[/<color|watch>], the
   // .html forms (?room=&role=), "host/game/<id>" without https://, or just a game's id (origin "" = this
   // server; role null = any free seat, "spectate" = watch)
@@ -86,9 +88,8 @@ const Links = {
     return { room: room || null, role: role === "watch" ? "spectate" : role };
   },
 };
-root.Links = Links;
 
-root.Endpoint = {
+export const Endpoint = {
   DEFAULT, isApp, normalize, get, set, base,
   api: path => base() + path,
   ws: path => {
@@ -98,4 +99,4 @@ root.Endpoint = {
   web: path => (base() || loc.origin) + path,
 };
 
-})(typeof window !== "undefined" ? window : globalThis);
+export { Links };

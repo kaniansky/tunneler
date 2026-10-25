@@ -7,8 +7,9 @@
 const assert = require("assert");
 const fs = require("fs"), path = require("path"), vm = require("vm");
 const SRC = path.join(__dirname, "..", "src");
-const { langBundle, cleanName } = require("../server.js");
-const NetProto = require(path.join(SRC, "js", "netproto.js"));
+const { cleanName } = require("../server.js");
+const { NetProto } = require("./src.js");
+const { run } = require("./page-env.js");
 
 let n = 0;
 const ok = msg => { n++; console.log("  ok  " + msg); };
@@ -32,9 +33,7 @@ function makeEnv() {
   };
   win.window = win; win.globalThis = win;
   const ctx = vm.createContext(win);
-  for (const f of ["vgafont.js", "glyphs.js", "unidata.js", "unitext.js", "lang.js", "langs.js", "engine.js", "display.js",
-    "views.js", "dosui.js", "statusline.js", "netproto.js"])
-    vm.runInContext(f === "langs.js" ? langBundle(path.join(SRC, "lang")) : fs.readFileSync(path.join(SRC, "js", f), "utf8"), ctx, { filename: f });
+  run(ctx, ["lang/index.js", ...["engine.js", "display.js", "views.js", "dosui.js", "statusline.js", "netproto.js"].map(f => "js/" + f)]);
   const loads = [];
   win.UniFont.loader = b => { loads.push(b); return fs.readFileSync(path.join(SRC, "fonts", "unifont", (b < 0x100 ? ("00" + b.toString(16)).slice(-3) : b.toString(16)) + ".bin")); };
   return { win, listeners, loads };
@@ -101,9 +100,8 @@ const snapScreen = s => screen(s.vram, s.uni);
   F.glyph("测".codePointAt(0)); F.glyph("浏".codePointAt(0));
   assert.strictEqual(env.loads.length, before, "a block is read once");
   assert(!env.loads.includes(0), "ASCII never loads a block");
-  // node without the page: read from disk directly
-  const UT = require(path.join(SRC, "js", "unitext.js"));
-  assert(UT.UniFont.glyph(0x1F680).wide, "node: blocks read from disk");
+  // node without the page: test/src.js's loader reads the blocks from disk
+  assert(require("./src.js").UniFont.glyph(0x1F680).wide, "node: blocks read from disk");
   ok("glyphs: ROM font, glyphs.js, then Unifont blocks (16x16 for CJK / emoji), loaded once on demand");
 }
 

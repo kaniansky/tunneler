@@ -118,45 +118,8 @@ for (const [name, teams, killer, winTeam] of [["free-for-all", [1, 2, 3], 2, 1],
     "every enemy destroyed: the AI keeps moving, to the enemy base where it comes back");
 }
 
-// ---- review fixes: the AI with noRepair doesn't park at home for its shield; its hunt goal doesn't outlive the match
+// ---- review fix: the hunt goal doesn't outlive the match
 {
-  // a retreating tank at home with full energy and no shield: with noRepair it leaves (the shield never comes back)
-  const e = startEngine(28, opts([1, 2], { noRepair: true }));
-  const ai = new H.TunnelerAI("normal", 1, { seed: 1 });
-  idle(e);
-  e.step({ bits: [H.TunnelerAI.bitsFor(ai, e), 0], keys: [] });
-  e.shield[1] = 1000; e.energy[1] = 12000; e.tankX[1] = e.baseX[1]; e.tankY[1] = e.baseY[1];
-  H.TunnelerAI.bitsFor(ai, e);
-  check(!ai.retreating && ai.mode !== "retreat", "noRepair: low shield, full energy at home - the AI goes hunting (" + ai.mode + ")");
-  const f = startEngine(28, opts([1, 2]));
-  const bi = new H.TunnelerAI("normal", 1, { seed: 1 });
-  idle(f);
-  f.step({ bits: [H.TunnelerAI.bitsFor(bi, f), 0], keys: [] });
-  f.shield[1] = 1000; f.energy[1] = 12000; f.tankX[1] = f.baseX[1]; f.tankY[1] = f.baseY[1];
-  H.TunnelerAI.bitsFor(bi, f);
-  check(bi.retreating, "repairs on: the same tank stays home to repair");
-  // low energy still sends it home with noRepair
-  e.tankX[1] = e.baseX[1] + 60; e.energy[1] = 1000; e.shield[1] = 1000;
-  H.TunnelerAI.bitsFor(ai, e);
-  check(ai.retreating, "noRepair: low energy still sends the AI home");
-
-  // 4 hard tanks, medium map, noRepair: longest stretch parked at home while retreating
-  const N = 4, g = startEngine(41, opts([1, 2, 3, 4], { size: "medium", noRepair: true, roundTime: 3 }));
-  const ais = [1, 2, 3, 4].map(p => new H.TunnelerAI("normal", p, { seed: 41 }));
-  const run = new Array(N + 1).fill(0);
-  let longest = 0, parked = 0, alive = 0;
-  for (let fr = 0; fr < 4000 && g.screen === "play"; fr++) {
-    g.step({ bits: ais.map(a => H.TunnelerAI.bitsFor(a, g)), keys: [] });
-    for (let p = 1; p <= N; p++) {
-      if (!g.alive[p]) { run[p] = 0; continue; }
-      alive++;
-      const home = g.distance(Math.abs(g.tankX[p] - g.baseX[p]), Math.abs(g.tankY[p] - g.baseY[p])) < 15;
-      if (home && ais[p - 1].retreating) { parked++; run[p]++; longest = Math.max(longest, run[p]); } else run[p] = 0;
-    }
-  }
-  check(longest < 400 && parked / alive < 0.15, "noRepair: no AI sits at home for its shield (longest " + longest + " frames, " +
-    Math.round(100 * parked / alive) + "% of the alive time)");
-
   // a rematch on the same engine with the same AIs (play.js vs computer): the old match's hunt goal is dropped
   const m = startEngine(29, opts([1, 2], { winScore: 1 }));
   const two = [new H.TunnelerAI("normal", 1, { seed: 2 }), new H.TunnelerAI("normal", 2, { seed: 2 })];
@@ -172,7 +135,7 @@ for (const [name, teams, killer, winTeam] of [["free-for-all", [1, 2, 3], 2, 1],
   check(rematch && m.round === 1 && stale.length === 0, "rematch with the same AIs: no hunt goal from the last match (rematch " + rematch + ")");
 }
 
-// ---- AI-only matches: 2 and 8 tanks, teams and free-for-all, small / large maps, round time, modifiers;
+// ---- AI-only matches: 2 and 8 tanks, teams and free-for-all, small / large maps, round time;
 // each finishes with a winner holding 10 kills (or the time decides), and the same match twice is identical
 const LV = ["easy", "normal", "hard"];
 const cases = [
@@ -181,8 +144,8 @@ const cases = [
   { name: "4 v 4, medium, friendly fire", teams: [1, 2, 1, 2, 1, 2, 1, 2], size: "medium", ff: true },
   { name: "3 teams, large", teams: [1, 2, 3, 1, 2, 3], size: "large" },
   { name: "2 v 2, small, round time 2", teams: [1, 2, 1, 2], size: "small", time: 2 },
-  { name: "4 free-for-all, small, no repairs", teams: [1, 2, 3, 4], size: "small", mods: { noRepair: true } },
-  { name: "1 v 1, large, round time 2, modifiers", teams: [1, 2], size: "large", time: 2, mods: { noRepair: true } },
+  { name: "4 free-for-all, small", teams: [1, 2, 3, 4], size: "small" },
+  { name: "1 v 1, large, round time 2", teams: [1, 2], size: "large", time: 2 },
 ];
 for (const c of cases) {
   const top = [];
@@ -198,7 +161,7 @@ for (const c of cases) {
 }
 
 // ---- texts
-for (const l of ["en", "sk", "cs", "uk", "ru", "genz"]) {
+for (const l of ["en", "sk", "cs", "uk", "ru"]) {
   const S = M.strings[l];
   check(S && S.instr && S.instr.length > 80 && S.score.includes("{n}"), "texts (" + l + "): instr + score");
 }

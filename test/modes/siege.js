@@ -4,7 +4,7 @@
 // base stands, the last team in wins the round and the match - one round, the round time), the goal (Base
 // strength: the hits a base takes, e.goal, default 30), the hud / score / drawing, and AI matches (the AI
 // shoots the bases down; 2 and 8 tanks, teams and free-for-all, small, medium and large maps, base strength
-// 10 and 80, round time, modifiers, determinism). Run by test/modes-check.js.
+// 10 and 80, round time, determinism). Run by test/modes-check.js.
 const H = require("../modes-harness.js");
 const { E, check, slots, runMatch, startEngine } = H;
 const GM = E.MODES.siege;
@@ -23,7 +23,7 @@ const wallClass = (e, q) => e.pixelClass[e.getPixel(e.baseX[q] - 17, e.baseY[q])
 
 check(!!GM, "siege: registered");
 check(GM && GM.eliminationEnds === false && GM.aiAlways === true, "siege: no elimination end, the AI plays with no enemy alive");
-for (const l of ["en", "sk", "cs", "uk", "ru", "genz"])
+for (const l of ["en", "sk", "cs", "uk", "ru"])
   check(GM.strings[l] && ["instr", "score", "fallen"].every(k => typeof GM.strings[l][k] === "string" && GM.strings[l][k]), "siege: texts in " + l);
 
 // ---- shots on base walls: an enemy wears a base down, it falls to rubble and gives nothing
@@ -169,7 +169,7 @@ for (const goal of [10, 80]) {
     "round time: a drawn round is played again, the match goes on with the bases whole");
   const tie2 = runMatch({ mode: "siege", slots: slots([1, 2]), levels: [null, null], seed: 5, size: "small", roundTime: 2, maxFrames: 5200 });
   check(!tie2.finished && tie2.rounds.length === 2 && tie2.rounds.every(r => r.winnerTeam === -1), "round time: a second draw - still no winner, the match goes on (" + JSON.stringify(tie2.rounds.map(r => r.winnerTeam)) + ")");
-  for (const [l, w] of [["en", "played again"], ["sk", "hrá znova"], ["cs", "hraje znovu"], ["uk", "грається знову"], ["ru", "переигрывается"], ["genz", "run it back"]])
+  for (const [l, w] of [["en", "played again"], ["sk", "hrá znova"], ["cs", "hraje znovu"], ["uk", "грається знову"], ["ru", "переигрывается"]])
     check(GM.strings[l].instr.includes(w), "siege: the " + l + " instructions say a drawn round is played again");
   const none = runMatch({ mode: "siege", slots: slots([1, 2]), levels: [null, null], seed: 5, size: "small", maxFrames: 4000 });
   check(none.rounds.length === 0, "no round time: idle tanks don't end the round in 4000 frames");
@@ -215,7 +215,7 @@ const setups = [
   { name: "8 tanks free-for-all, small", teams: [1, 2, 3, 4, 5, 6, 7, 8], levels: ["easy", "normal", "hard", "easy", "normal", "hard", "easy", "normal"], size: "small" },
   { name: "4 v 4, medium, friendly fire", teams: [1, 2, 1, 2, 1, 2, 1, 2], levels: ["normal", "hard", "easy", "normal", "hard", "easy", "normal", "normal"], size: "medium", friendlyFire: true },
   { name: "3 teams, small, round time 3", teams: [1, 2, 3, 1, 2, 3], levels: ["normal", "normal", "normal", "easy", "easy", "easy"], size: "small", roundTime: 3 },
-  { name: "2 v 2, small, no repairs", teams: [1, 2, 1, 2], levels: ["hard", "normal", "normal", "hard"], size: "small", mods: { noRepair: true } },
+  { name: "2 v 2, small", teams: [1, 2, 1, 2], levels: ["hard", "normal", "normal", "hard"], size: "small" },
   { name: "2 tanks, large", teams: [1, 2], levels: ["hard", "normal"], size: "large", maxFrames: 60000 },
   { name: "8 tanks in 4 teams, large", teams: [1, 2, 3, 4, 1, 2, 3, 4], levels: ["normal", "hard", "normal", "hard", "normal", "hard", "normal", "hard"], size: "large", maxFrames: 60000 },
 ];
@@ -291,7 +291,7 @@ for (const s of setups) {
 // repairs: it once waited there for a shield that never mends)
 {
   const o = { mode: "siege", slots: slots([1, 2, 3, 4, 5, 6, 7, 8]), levels: new Array(8).fill("hard"), seed: 9, size: "large", winScore: 1,
-    maxFrames: 13000, mods: { noRepair: true } };
+    maxFrames: 13000 };
   const run = new Array(9).fill(0), longest = new Array(9).fill(0);
   const a = runMatch(Object.assign({ onFrame: e => {
     if (e.screen !== "play") return;

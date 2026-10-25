@@ -1,4 +1,3 @@
-"use strict";
 // Game mode "survival" (docs/DESIGN-8P.md 27): the players (team 1) against waves of AI tanks (team 2).
 // Wave k brings k AI tanks (at most the number of AI seats, rotating through them). They come out of the
 // AI bases nearest the players that are still at least FAR px (Chebyshev) from every living player (no
@@ -21,8 +20,7 @@
 // on every client). With no human seat (AI-only matches) or no AI seat known yet, the seats of the lowest
 // team number are the players' side, the rest the waves.
 // All state lives in e.GS (reset at every match start) / e.modeScore (waves cleared, per player).
-(function (root) {
-const E = root.TunnelerEngine || require("../engine.js");
+import { TunnelerEngine as E } from "../engine.js";
 
 const WAVES = 5;                 // waves to clear to win (the default of e.goal, TunnelerEngine.GOALS.survival)
 const MAX_ARMOR = 6;             // wave tanks' armor at most this many halves of a hit (from wave 10 on)
@@ -288,4 +286,3 @@ E.registerMode("survival", {
     return { x, y, mode: "hunt", dig: cheb(mx, my, x, y) < 100 };
   },
 });
-})(typeof window !== "undefined" ? window : globalThis);

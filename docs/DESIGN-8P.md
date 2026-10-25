@@ -2,7 +2,8 @@
 
 Status: **implemented** (2026-10-14) - every section below (0-24) is in the code and covered by `npm test`.
 Where sections conflict the later one won: 15 / 18 / 20 replaced the Players / Mode / Computer tanks switches of
-4 and 6, 12 replaced Pirate (10) with Gen Z, 23 replaced the vs computer "View: all" of 6. CLAUDE.md
+4 and 6, 12 replaced Pirate (10) with Gen Z (removed
+again on 2026-10-24: five languages), 23 replaced the vs computer "View: all" of 6. CLAUDE.md
 describes the code as it is now.
 
 Owner's decisions (2026-10-14):
@@ -23,7 +24,7 @@ grid**, **live map + scores** and **follow one player**.
   no Math.random / Date / timing in simulation or computer players. Floating point is allowed only as
   +, -, *, /, Math.sqrt, Math.abs, Math.floor/round/trunc/min/max (identical in every browser) - never
   Math.sin/cos/atan2/exp/pow/hypot in anything that influences the game.
-- No F keys; menus in the DOS look (dosui.js); sentence case; all new texts in all 6 languages
+- No F keys; menus in the DOS look (dosui.js); sentence case; all new texts in all 5 languages
   (lang.js; `node test/lang-check.js` must pass).
 - Never `git push`. Never commit unless told.
 
@@ -457,7 +458,8 @@ Infection and survival make their own teams (`NetProto.OWN_TEAMS`: the seats' te
 "2 teams" check); survival needs at least one AI tank (`startProblem` -> "ai").
 
 Modifier (engine, done; "darkness" and "hard rock" were dropped - owner: not fun, hard rock confused the AI): **noRepair** - bases
-refuel but never repair shields.
+refuel but never repair shields. (Owner, 2026-10-23: the "Base repairs" setting and the noRepair modifier are gone - from the
+lobby, the skirmish screen, links, rooms, the engine and the AI; old `&norepair=1` links and short codes' bit are ignored.)
 
 ### The framework (src/js/engine.js, src/js/ai.js, done)
 One file per mode: `src/js/modes/<mode>.js` (joined into `/js/modes.js` by build.js / server.js
@@ -469,7 +471,7 @@ E.registerMode("gold", { strings: { en: {...}, sk: {...}, cs: {...}, uk: {...}, 
 })(typeof window !== "undefined" ? window : globalThis);
 ```
 The engine (`e`) of a match in that mode has `e.gameMode`, `e.GM` (the hooks), `e.GS` (the mode's own
-state: `{}` at every match start - everything the mode keeps goes there or in `e.modeScore`), `e.mods`.
+state: `{}` at every match start - everything the mode keeps goes there or in `e.modeScore`).
 Hooks (all optional; `e` = the engine; players are 1..e.nPlayers; teams are indexes 0..e.nTeams-1):
 - `init(e)` - match start, after the bases are placed (`e.modeScore` = zeros).
 - `round(e)` - round start, after every tank is reset at its base (`e.objs`, `e.hudShown` reset).
@@ -599,3 +601,96 @@ A game setting "Line of sight" (skirmish, the online lobby's Settings; engine op
   shown as easy / medium / hard); ai.js's unused weaker 4th level is gone. Old stored settings and links
   are converted once.
 - The live map (spectators) shows the whole world. Split screen has no such setting.
+
+## 29. Graphics: original / modern (owner, 2026-10-23) - implemented
+
+A local display-only setting for the game and every menu screen together: original (the default until
+5.0, the DOS look as now; since 5.0 modern is the default - owner, 2026-10-24) or modern (high resolution: smooth tunnels, textured terrain, light, particles, a smooth
+camera, a new panel, menus in a modern font; its own settings screen with the styles clean / retro). The
+planned "upscaled" mode and its CRT effect were dropped by the owner. The whole design is in
+`docs/GRAPHICS.md`.
+
+## 30. Password-protected online games (owner, 2026-10-24) - implemented
+
+"Add optional password protection to online games while creating a game and check when trying to join or
+spectate." The create screen has "Password:" right below the name (placeholder "none (optional)"; empty =
+none; shown as typed so the host can pass it on). The server keeps it salted and hashed and lists the game
+as `locked` (a lock before its name in the list, "This game is protected by a password." as its info).
+Joining or watching - from the list, an invite link or a game's address - asks for it on a "PASSWORD"
+screen (masked input, "Wrong password." / "Too many wrong passwords" in red); the host (host key) never
+needs it and a client id that got in once comes back without it (reconnects, reloads). Wrong passwords:
+10 a minute per address, then refused without checking. The password can't be changed after creating.
+
+## 31. One app with routes, ES modules, loading screens (owner, 2026-10-24) - implemented
+
+"Rewriting the whole app would be good - now there is just many JS scripts instead of a built bundle of JS
+modules"; "could it be a single JS app? with routes?"; "add loadings for the game (initial load, and
+everywhere there is some wait)"; "set to modern graphics as default".
+
+- The code is ES modules (src/package.json): explicit imports / exports instead of shared globals; esbuild
+  bundles them (build.js: one entry, app.js, the routes as lazy chunks). Node >= 20.19 requires them as they
+  are (server.js shares netproto.js; the tests: test/src.js, test/page-env.js). Languages and game modes are
+  listed by index modules (src/lang/index.js + one per language, src/js/modes/index.js); the checks fail
+  when one is left out. The engine is untouched - compare-wasm stays green.
+- One page (index.html) whose screens are routes (app.js): /, /games, /game/<id>[/<colour|watch>], /split,
+  /skirmish, and the pre-5.0 page addresses. Going to another screen changes the address without loading a
+  page (nav.js), Back works; fullscreen, the audio permission and the loaded fonts stay. A route's listeners,
+  timers, animation frames, websocket, sound and touch controls go with it (scope.js); the canvases and their
+  one WebGL overlay stay for the app's life. test/app-check.js goes through every screen three times and
+  checks that nothing is left behind.
+- Loading: the page shows "Loading_" (plain HTML / CSS, the modern or original colors) until the first screen
+  runs - in the modern look until its font is there (at most 600 ms) - and while a screen's code takes more
+  than 150 ms to arrive. The waits that already had their own screen keep it: connecting to the server (the
+  games list, a game), catching up with a running match, the world being created.
+- Graphics: modern is the default (no WebGL2: original); a stored choice stays.
+
+## 32. Phone layouts (owner, 2026-10-24) - implemented
+
+"We should probably add a mobile layout for the game and there should be no split screen and player 2";
+(chosen) "Phone layouts"; "on mobile, settings should be just one column and when clicking on lets say
+graphics, the settings for it open with back button".
+
+- Mobile = the Android app or a touch-only device (`pointer: coarse` without a fine pointer;
+  `GameScreen.mobile()`). There: no split screen (the main menu hides it), no player 2 (the skirmish's
+  "who" choices leave it out; a stored / linked p2 slot becomes a medium computer tank), touch texts instead
+  of keyboard hints ("Tap to choose.", "you" instead of the keys).
+- Held upright (portrait), DosUI draws its screens 40 columns wide and as many rows as the phone's shape
+  allows (25..100; text cells as tall for their width as on the 80 x 25 screen shown at 4:3): title lines,
+  then the boxes one below the other, each 36 columns, the selected item's info at the bottom; lines and
+  infos re-wrapped, a link wider than a line broken after a "/". Longer than the screen: the list scrolls
+  with the selection or a finger drag (a drag is no tap). A screen may give its own narrow version (the
+  games list: name and players only; the room lobby: seats, settings, game, chat one below the other).
+  Held sideways: the 80 x 25 screens as before.
+- Settings on a phone: the categories as one list; a category opens its settings on their own screen whose
+  last item is Back (Esc / the Android Back key too).
+- The engine's own text screens (round title, statistics, the menu after a match, Instructions) are
+  80 x 25: the display enlarges the part in use to the screen's width (at least 40 columns), and a screen
+  using both halves (rounds + menu left, statistics right) is stacked: the rounds, the statistics, then the menu
+  below them (owner, 2026-10-25: "the menu should be below statistics"). Taps
+  are mapped back to the 80 x 25 cell. Instructions on a phone are wrapped to 38 columns. Display only.
+- Text fields: a tap on an input row focuses a hidden real text field, so the phone's keyboard opens; what
+  is typed goes into the DOS input.
+- Touch controls (joystick, FIRE, ESC) only while the player drives a tank - not on menus, the room lobby
+  or while spectating.
+
+## 33. Replays (owner, 2026-10-25) - implemented
+
+"You can add replays" (after: "replays - the lockstep frame log already records every match's inputs, so saving
+and replaying a match is fairly cheap").
+
+- Every match played or watched in this browser is recorded and kept (the newest 20): split screen, skirmish,
+  online (players and spectators). Nothing to switch on; a recording never changes the game.
+- A recording is the match's seed and settings and the input of every engine step - every tank's keys or
+  bits, the computer tanks' included, and the keystrokes - from its start to the end-of-match world map. The
+  engine is deterministic, so that plays the same match again, without running the computer players (a
+  replay stays right when they change). State checks every 256 steps notice a replay that plays differently
+  (recorded by another version): it stops and says so.
+- Main menu: Replays (after Online game). The list: date, game (an online game's name), players, length; the
+  winner below. A replay's screen: its players (yours marked), Watch, Save as a file (.replay: gzip'd JSON - to
+  keep it or send it), Delete (twice), Back. "Open a replay file" reads one (saved here or from someone else).
+- Watching: like a spectator - every view, the live map or one tank (Tab, 1 2 3, Left / Right); Space / Enter
+  / a click = pause, + / - = speed (1/2x to 8x, sound only at 1x), PgUp / PgDn = 30 s back / on, Home = from
+  the start, Esc = back. A phone: one tank's view, a tap pauses, a tap near the left / right edge = the
+  previous / next tank. The status line: REPLAY, time / length, speed, PAUSED, the keys and the view.
+- At the end: the world map, then "End of replay": Statistics (the match's statistics page), Watch again,
+  Back to the replays.

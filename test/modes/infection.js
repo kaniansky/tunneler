@@ -9,7 +9,7 @@
 //   - the AI: the infected hunt the healthy (idle tanks all get infected, the round ends before the
 //     clock), the healthy hold their base
 //   - AI-only matches: 2 and 8 tanks, free-for-all and teams, small / medium / large, the smallest and the
-//     largest goal, the modifiers - finish, deterministic
+//     largest goal - finish, deterministic
 const path = require("path");
 const H = require(path.join(__dirname, "..", "modes-harness.js"));
 const { E, check, slots, startEngine, runMatch } = H;
@@ -51,8 +51,9 @@ check(!!M && M.eliminationEnds === false && M.aiAlways === true, "infection: reg
   check(zs.size >= 3, "infection: patient zero is random (" + [...zs].join(",") + " over 12 seeds)");
   check(M.hud(e, z).value === 3 && M.hud(e, z).color === 12 && M.hud(e, z === 1 ? 2 : 1).color === 15, "infection: hud = healthy tanks left (red for the infected)");
   check(e.modeScoreText(z) === "infected" && e.modeScoreText(z === 1 ? 2 : 1) === "healthy", "infection: score text infected / healthy");
-  e.lang = "genz";
-  check(e.mt("infected") === "zombie", "infection: texts in the engine's language");
+  const enText = e.mt("infected");
+  e.lang = "sk";
+  check(e.mt("infected") !== enText && /^naka/.test(e.mt("infected")), "infection: texts in the engine's language (sk: nakazený)");
 }
 
 // ---- a healthy tank destroyed by an infected one
@@ -235,7 +236,7 @@ for (const [n, size, lv] of [[4, "small", "hard"], [4, "small", "easy"], [3, "me
 }
 
 // ---- AI-only matches: 2 / 8 tanks, free-for-all / teams, small / medium / large, the smallest and the
-// largest goal (a round time and rounds to win set are ignored), modifiers
+// largest goal (a round time and rounds to win set are ignored)
 const LV = ["easy", "normal", "hard"];
 const gmin = Math.min(...GOAL.choices), gmax = Math.max(...GOAL.choices);
 const setups = [
@@ -243,10 +244,10 @@ const setups = [
   { n: 2, teams: [1, 2], size: "large", goal: gmin, rt: 5 },
   { n: 8, teams: [1, 2, 3, 4, 5, 6, 7, 8], size: "small", goal: gmax },
   { n: 8, teams: [1, 1, 1, 1, 2, 2, 2, 2], size: "small", goal: gmin, ff: true },
-  { n: 4, teams: [1, 2, 1, 2], size: "medium", goal: gmin, mods: { noRepair: true } },
+  { n: 4, teams: [1, 2, 1, 2], size: "medium", goal: gmin },
   { n: 4, teams: [1, 2, 3, 4], size: "medium", goal: gmax, seed: 3 },
   { n: 3, teams: [1, 2, 3], size: "small", goal: gmax, seed: 1 },
-  { n: 5, teams: [1, 2, 3, 4, 5], size: "small", mods: { noRepair: true } },
+  { n: 5, teams: [1, 2, 3, 4, 5], size: "small" },
 ];
 for (const s of setups) {
   const goal = s.goal || GOAL.def;

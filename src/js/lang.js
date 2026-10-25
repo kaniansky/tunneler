@@ -1,16 +1,18 @@
-"use strict";
 // Languages: the core. Every text is in src/lang/<code>/, one folder per language: main.js
 // (Lang.register(code, {...}): the menus, pages, the engine's translation), modes/<mode>.js (a game mode's
 // texts: Lang.modeTexts(mode, code, {...})), and en/engine.js (the engine's English text, STRINGS_EN).
-// build.js joins them into /js/langs.js (server.js serves the same join when it serves src/), which the
-// pages load right after this file. In node, requiring this file also loads them (docs/DESIGN-8P.md 24).
+// src/lang/index.js imports them all (each page's entry imports it; node tests too - docs/DESIGN-8P.md 24).
 // Lang.t(key, params) returns a text ready to write into the emulated text screen: one JS
 // char per byte of the VGA font. The font is code page 437, which has no Slovak / Czech letters with
 // carons and no Cyrillic, so when a language is chosen its extra letters (glyphs.js, taken from the
 // VGA-style Linux console font) are loaded into font slots this program never shows (accented Latin
 // letters, Greek, ...). Lang.engineStrings() is the same text for the game engine (engine.strings).
 // The choice is remembered in localStorage and applies to every page.
-(function (root) {
+import { CP437_CHARS, EXTRA_GLYPHS } from "./glyphs.js";
+import { UniText } from "./unitext.js";
+import { VERSION } from "./version.js";
+import { VGA_FONT } from "./vgafont.js";
+const root = globalThis;
 
 const L = {};
 // game modes' texts: MODE_TEXTS[mode][code] = {stat, note, instr, score, ...} (src/lang/<code>/modes/<mode>.js;
@@ -25,9 +27,9 @@ const ORDER = {};
 const COLOR_KEYS = ["blue", "green", "cyan", "yellow", "white", "pink", "violet", "teal"];
 
 // ------------------------------------------------------------------ encoding to the font
-const BASE_FONT = root.VGA_FONT ? root.VGA_FONT.slice() : null;
-const CP437 = root.CP437_CHARS;           // glyphs.js: CP437 byte -> Unicode char
-const GLYPHS = root.EXTRA_GLYPHS || {};    // glyphs.js: Unicode char -> 16 font rows
+const BASE_FONT = VGA_FONT.slice();
+const CP437 = CP437_CHARS;                // glyphs.js: CP437 byte -> Unicode char
+const GLYPHS = EXTRA_GLYPHS;              // glyphs.js: Unicode char -> 16 font rows
 const TO437 = new Map();
 if (CP437) for (let b = 0x20; b < 256; b++) if (b !== 0x7F) TO437.set(CP437[b], b);
 for (const [c, b] of [["↑", 0x18], ["↓", 0x19], ["→", 0x1A], ["←", 0x1B], ["►", 0x10], ["◄", 0x11], ["·", 0xFA], ["√", 0xFB]])
@@ -55,7 +57,7 @@ function allText(o, out) {
 // Unicode text -> font text (unitext.js): font bytes for what the font has (code page 437 + the current
 // language's letters), every other character as itself - drawn through the Unicode plane (player and
 // room names, chat: any language, docs/DESIGN-8P.md 22). Control characters are dropped.
-const UT = () => root.UniText;
+const UT = () => UniText;
 function enc(s) {
   let r = "";
   s = s == null ? "" : String(s);
@@ -78,7 +80,7 @@ function remember(c) {
 function use(c) {
   code = active = c;
   map = new Map(TO437);
-  const font = root.VGA_FONT;
+  const font = VGA_FONT;
   if (font && BASE_FONT) font.set(BASE_FONT);
   const need = new Set(), uses = new Set();
   for (const s of allText(L[c], [])) for (const ch of s) { uses.add(ch); if (!map.has(ch) && ch.charCodeAt(0) >= 128) need.add(ch); }
@@ -94,7 +96,7 @@ function use(c) {
   }
 }
 
-// choose a language (unknown codes, e.g. the removed "pirate", give English) and remember it
+// choose a language (unknown codes, e.g. the removed "pirate" / "genz", give English) and remember it
 function set(c) {
   if (!L[c]) c = "en";
   wanted = code = c;
@@ -156,7 +158,7 @@ function apply(engine) {
 // the menus' title; the version is shown in the main menu's bottom-left corner (version())
 function title() { return "TUNNELER"; }
 // "v1.4" / "v1.4.1" (build.js's version without a trailing ".0"), "" without one
-function version() { return root.TUNNELER_VERSION ? "v" + String(root.TUNNELER_VERSION).replace(/\.0$/, "") : ""; }
+function version() { return VERSION ? "v" + String(VERSION).replace(/\.0$/, "") : ""; }
 
 try { wanted = localStorage.getItem("tunneler.lang") || "en"; } catch (e) { /* private mode */ }
 // ?lang=sk in the address (e.g. from the homepage's Play link) chooses the language and remembers it
@@ -166,7 +168,33 @@ try {
 } catch (e) { /* no location */ }
 code = wanted;
 
-root.Lang = {
+// font text -> Unicode text (graphics "modern", gfx-text.js / gfx-hud.js draw it in a real font): font bytes
+// as the current language has them (its letters in their slots), the CP437 control-range pictures, the
+// Unicode plane's characters as themselves (U+F780..F7FF = U+0080..00FF, unitext.js)
+const LOW = " ☺☻♥♦♣♠•◘○◙♂♀♪♫☼►◄↕‼¶§▬↨↑↓→←∟↔▲▼";
+function decodeByte(b) {
+  for (const [ch, v] of map) if (v === b && ch.length === 1 && (b < 0x80 || ch.charCodeAt(0) >= 0x80)) return ch;
+  if (b < 0x20) return LOW[b];
+  if (b === 0x7F) return "⌂";
+  return CP437 ? CP437[b] : String.fromCharCode(b);
+}
+let decodeCache = null, decodeFor = null;
+function decode(text) {
+  if (decodeFor !== map) {                            // (rebuilt when the language - its slots - changes)
+    decodeFor = map;
+    decodeCache = [];
+    for (let b = 0; b < 256; b++) decodeCache.push(decodeByte(b));
+  }
+  let r = "";
+  for (const c of String(text)) {
+    const cp = c.codePointAt(0);
+    r += cp < 256 ? decodeCache[cp] : cp >= 0xF780 && cp <= 0xF7FF ? String.fromCodePoint(cp - 0xF700) : c;
+  }
+  return r;
+}
+
+export const Lang = {
+  decode, decodeByte: b => decode(String.fromCharCode(b)),
   codes: CODES, get code() { return code; }, set, t, enc, apply, register, title, version, modeTexts, modeData: MODE_TEXTS,
   name: c => enc(L[c].name), next: () => CODES[(CODES.indexOf(code) + 1) % CODES.length],
   raw: (key, c) => (L[c || code] || {})[key] !== undefined ? L[c || code][key] : (L.en || {})[key], data: L,
@@ -177,36 +205,7 @@ root.Lang = {
   roomSettings: (c, specs) => [t("pg.size." + (c.size || "medium")), t("pg.win", { n: c.winScore || 3 }),
     c.roundTime ? t("pg.time", { n: c.roundTime }) : t("pg.time.off"),
     t(c.friendlyFire ? "pg.ff.on" : "pg.ff.off"),
-    t("pg.visible", { v: root.Lang.raw("view." + (c.visible || "self")) }), t("pg.watch." + (c.watchOut === true ? "others" : ["black", "wreck", "team", "killer", "others"].includes(c.watchOut) ? c.watchOut : "wreck")),
+    t("pg.visible", { v: Lang.raw("view." + (c.visible || "self")) }), t("pg.watch." + (c.watchOut === true ? "others" : ["black", "wreck", "team", "killer", "others"].includes(c.watchOut) ? c.watchOut : "wreck")),
     ...(specs ? [t("pg.specs", { n: specs })] : [])],
 };
 
-// node: the language files of a src/lang/ folder in load order (build.js / server.js join them into
-// /js/langs.js the same way): the folders en/ first (the fallback), then alphabetically; in each main.js,
-// its other .js files, then modes/*.js, alphabetically (Lang.codes' order comes from `order`)
-function langFiles(dir) {
-  const fs = require("fs"), path = require("path"), byName = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
-  const js = d => fs.existsSync(d) ? fs.readdirSync(d).filter(f => f.endsWith(".js")).sort(byName).map(f => path.join(d, f)) : [];
-  const out = [];
-  for (const c of fs.readdirSync(dir).filter(c => fs.statSync(path.join(dir, c)).isDirectory())
-    .sort((a, b) => (a !== "en") - (b !== "en") || byName(a, b))) {
-    const d = path.join(dir, c), main = path.join(d, "main.js");
-    if (fs.existsSync(main)) out.push(main);
-    out.push(...js(d).filter(f => f !== main), ...js(path.join(d, "modes")));
-  }
-  return out;
-}
-
-// node (tests): load every language file, the same ones in the same order as /js/langs.js
-if (typeof module !== "undefined" && module.exports && typeof require === "function") {
-  const fs = require("fs"), path = require("path");
-  const dir = path.join(__dirname, "..", "lang");
-  if (fs.existsSync(dir))
-    for (const file of langFiles(dir)) {
-      delete require.cache[file];             // a fresh copy of this file registers them again
-      require(file);
-    }
-  root.Lang.files = langFiles;
-  module.exports = root.Lang;
-}
-})(typeof window !== "undefined" ? window : globalThis);

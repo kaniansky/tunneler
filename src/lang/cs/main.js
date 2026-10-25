@@ -1,9 +1,8 @@
-"use strict";
 // Czech texts (see lang.js): the menus, pages and the engine's translation; the game
-// modes' texts are in modes/<mode>.js beside this file. One folder per language (src/lang/<code>/):
-// build.js joins them all into /js/langs.js, which the pages load right after /js/lang.js; adding a
-// language is just a new folder.
+// modes' texts are in modes/<mode>.js beside this file. One folder per language (src/lang/<code>/,
+// its index.js imports its files; src/lang/index.js every language).
 // order: place in the language list (Language: on the main menu); a file without one goes last.
+import { Lang } from "../../js/lang.js";
 Lang.register("cs", {
   order: 2,
   name: "Česky",
@@ -16,26 +15,25 @@ Lang.register("cs", {
   "home.split": "Dělená obrazovka", "home.split.i1": "Dva hráči na jedné klávesnici, jako v originálu.",
   "home.split.i2": "{blue}: W A S D + SHIFT     {green}: šipky + ENTER",
   "home.cpu": "Potyčka",
-  "home.cpu.i2": "Obtížnost zvolíš na další obrazovce.",
+  "home.cpu.i2": "Barvy, týmy, režim a obtížnost na další obrazovce.",
   "home.online": "Hra online", "home.online.i1": "Hraj s ostatními na jejich počítačích (2 až 8 tanků)",
   "home.online.i2": "nebo se dívej jako divák.",
   "home.lang": "Jazyk: ", "home.lang.i1": "Jazyk menu a hry.", "home.lang.i2": "← →, <ENTER> nebo klik ho přepne.",
-  "home.settings": "Nastavení", "home.settings.i": "Jazyk a zvuk.", "home.update": "Aktualizovat na verzi {v}", "home.update.busy": "Aktualizuji na verzi {v}...", "ph.name": "tvoje jméno", "ph.online": "tvoje online jméno", "ph.game": "název hry", "ph.link": "vlož pozvánku nebo id hry", "ph.say": "napiš zprávu",
+  "home.settings": "Nastavení", "home.settings.i": "Obrazovka, grafika, zvuk, ovládání, hry online a jazyk.", "home.update": "Aktualizovat na verzi {v}", "home.update.busy": "Aktualizuji na verzi {v}...", "ph.name": "tvoje jméno", "ph.online": "tvoje online jméno", "ph.game": "název hry", "ph.link": "vlož pozvánku nebo id hry", "ph.say": "napiš zprávu",
   "home.update.admin.i": "Stáhne ji, nainstaluje (zeptá se na heslo správce) a restartuje hru.", "home.update.new": "Nová verze {v}", "home.update.i": "Stáhne ji, nainstaluje a restartuje hru.", "home.update.new.i": "Otevře stránku ke stažení v prohlížeči.", "set.title": "NASTAVENÍ", "set.sound": "Zvuk: ", "set.smooth": "Plynulé posouvání: ", "set.smooth.i1": "Do stran se pohled posouvá po 1 pixelu, ne po 2 jako v originále.", "set.smooth.i2": "Jen zobrazení: samotná hra se nemění, ani online.", "set.ping": "Zobrazit ping: ", "set.ping.on": "ano", "set.ping.off": "ne", "set.ping.i": "Online hry: odezva v ms, vlevo nahoře na okraji hry.",
-  "set.server": "Server: ", "set.server.i1": "Online hry: adresa serveru, např. example.com:8050.", "set.server.i2": "Prázdné = veřejný server. <ENTER> ji uloží.", "sound.muted": "vypnutý", "sound.original": "původní (PC speaker)", "sound.realistic": "realistický", "sound.cartoony": "pohádkový", "sound.i1": "Původní: pípání PC speakeru z roku 1991. Realistický: zvuky tanků.", "sound.i2": "Pohádkový: boingy a puky. ← → ho změní a přehraje ukázku.",
-  "cpu.title": "POTYČKA", "cpu.start": "Začít novou hru", "cpu.start.i1": "Začni hru proti počítači ({level}).",
-  "cpu.own": "Vidíš jen svou obrazovku.", "cpu.both": "Vidíš obě obrazovky.",
-  "cpu.level": "Obtížnost: ", "cpu.level.i1": "Jak dobře hraje počítač:", "cpu.level.i2": "{levels}.",
+  "set.gfx": "Grafika: ", "gfx.original": "původní", "gfx.modern": "moderní", "gfx.i1": "Původní: obrazovka DOSu jako kdysi. Moderní: ostrá, osvětlená, s efekty.", "gfx.i2": "Menu i hra společně. Jen zobrazení, i online.", "gfx.none": "Tady není k dispozici: prohlížeč nemá WebGL2.", "mod.style": "Styl: ", "mod.style.clean": "čistý", "mod.style.retro": "retro", "mod.style.custom": "vlastní", "mod.style.i1": "Čistý: hladký, osvětlený, jemný. Retro: hrubé pixely, barvy DOSu.", "mod.style.i2": "Nastaví řádky pod ním; změna některého z nich = vlastní.", "mod.quality": "Kvalita: ", "mod.quality.high": "vysoká", "mod.quality.medium": "střední", "mod.quality.low": "nízká", "mod.quality.i1": "Jak ostře se obraz kreslí. Nižší je rychlejší na pomalých počítačích.", "mod.terrain": "Terén: ", "mod.terrain.textured": "texturovaný", "mod.terrain.smooth": "hladký", "mod.terrain.flat": "plochý", "mod.terrain.i1": "Texturovaný: zrnitá hlína, popraskaná skála. Hladký: jemný. Plochý: barvy.", "mod.edges": "Okraje tunelů: ", "mod.edges.smooth": "hladké", "mod.edges.pixel": "pixely", "mod.edges.i1": "Hladké: oblé tunely. Pixely: hranaté pixely originálu.", "mod.light": "Osvětlení: ", "mod.light.i1": "Tmavé tunely osvětlují světla tanků, střely a výbuchy.", "mod.particles": "Částice: ", "mod.particles.high": "hodně", "mod.particles.low": "málo", "mod.particles.off": "žádné", "mod.particles.i1": "Prach při kopání, jiskry, oheň a trosky.", "mod.glow": "Záře: ", "mod.glow.i1": "Střely, žhavé úlomky a světla září.", "mod.shake": "Otřesy obrazu: ", "mod.shake.i1": "Pohled se otřese, když je tvůj tank zasažen nebo blízko vybuchne tank.", "mod.camera": "Kamera: ", "mod.camera.smooth": "plynulá", "mod.camera.exact": "přesná", "mod.camera.i1": "Plynulá: tanky a pohledy kloužou mezi kroky. Přesná: krok za krokem.", "mod.panel": "Rozhraní: ", "mod.panel.modern": "moderní", "mod.panel.classic": "původní", "mod.panel.i1": "Rozhraní: panel energie a štítu, rámeček a jména - nové nebo původní.", "mod.fog": "Mlha války: ", "mod.fog.blurred": "rozmazaná", "mod.fog.dark": "tmavá", "mod.fog.gray": "šedá", "mod.fog.i1": "Výhled: co si jen pamatuješ, je rozmazané, tmavé nebo šedé.", "mod.i2": "Jen zobrazení: samotná hra se nemění, ani online.", "set.cat.sound": "Zvuk", "set.cat.sound.i": "Jak hra zní.", "set.cat.graphics": "Grafika", "set.cat.graphics.i": "Původní nebo moderní grafika a nastavení každé z nich.", "set.cat.online": "Online", "set.cat.online.i": "Tvé jméno a co online hry ukazují a jak zní.", "set.cat.controls": "Ovládání", "set.cat.controls.i": "Klávesy obou tanků a dotykové ovládání.", "set.cat.language": "Jazyk", "set.cat.language.i": "Jazyk menu a hry.", "set.volume": "Hlasitost: ", "set.volume.i": "Jak nahlas zní každý zvuk.", "set.stereo": "Stereo: ", "set.stereo.i": "Zvuky přicházejí ze strany, na které je jejich zdroj.", "set.fade": "Slábnutí se vzdáleností: ", "set.fade.i": "Vzdálené zvuky jsou tišší. Vypnuto: každý tank naplno.", "set.fullscreen": "Celá obrazovka: ", "set.fullscreen.i1": "Celá obrazovka. <ALT>+<ENTER> ji přepne kdekoli.", "set.fullscreen.i2": "V prohlížeči se po obnovení stránky vrátí při první klávese nebo kliknutí.", "set.scale": "Velikost obrazu: ", "scale.fit": "podle okna", "scale.integer": "celé pixely", "set.scale.i1": "Podle okna: co největší. Celé pixely: stejné, ostré pixely.", "set.scale.i2": "Celé pixely mohou nechat kolem hry okraj.", "set.tankcolors": "Barvy tanků: ", "tc.normal": "běžné", "tc.colorblind": "pro barvoslepost", "tc.relation": "já/tým/nepřítel", "tc.normal.i": "Každý tank ve vlastní barvě.", "tc.colorblind.i": "Barvy, které jdou rozlišit i při červeno-zelené barvoslepostí.", "tc.relation.i": "Tvůj tank modrý, spoluhráči zelení, nepřátelé červení.", "set.tankcolors.i": "Jen herní obrazovka; jména si nechávají své barvy.", "ctl.up": "nahoru", "ctl.down": "dolů", "ctl.left": "vlevo", "ctl.right": "vpravo", "ctl.fire": "střelba", "ctl.press": "stiskni klávesu...", "ctl.bad": "Tuto klávesu nejde použít. Stiskni jinou.", "ctl.i1": "<ENTER> nebo kliknutí, pak stiskni novou klávesu. <ESC> zruší.", "ctl.i2": "Klávesa jiné akce se s ní vymění. Menu zůstávají na šipkách.", "ctl.reset": "Původní klávesy", "ctl.reset.i": "Zpět na W A S D + SHIFT a šipky + ENTER.", "touch.size": "Dotykové ovládání: ", "touch.size.small": "malé", "touch.size.medium": "střední", "touch.size.large": "velké", "touch.size.i": "Velikost joysticku a tlačítek na obrazovce.", "touch.left": "Pro leváky: ", "touch.left.i": "Joystick vpravo, FIRE vlevo.", "touch.i2": "Pro telefony a tablety.", "set.prefer": "Oblíbená barva: ", "set.prefer.none": "žádná", "set.prefer.i1": "Místo, které chceš při vstupu do hry, pokud je volné.", "set.prefer.i2": "Hra, ve které jsi už hrál, ti dá tvé poslední místo.", "set.chatsound": "Zvuk chatu: ", "set.chatsound.i": "Krátký zvuk při nových zprávách a příchodu hráčů.",
+  "set.back": "Zpět", "set.back.i": "Zpět na nastavení.",
+  "set.cat.display": "Obraz", "set.cat.display.i": "Celá obrazovka, velikost obrazu a barvy tanků.", "set.showchat": "Zobrazit chat: ", "set.showchat.i": "Chat v lobby hry.",
+  "set.server": "Server: ", "set.server.i1": "Online hry: adresa serveru, např. example.com:8050.", "set.server.i2": "Prázdné = veřejný server. <ENTER> ji uloží.", "sound.muted": "vypnutý", "sound.original": "původní (PC speaker)", "sound.realistic": "realistický", "sound.recorded": "nahraný", "sound.cartoony": "pohádkový", "sound.i1": "Původní: pípání PC speakeru z roku 1991. Realistický: syntéza zvuků tanků.", "sound.i2": "Nahrané: skutečné nahrávky. Pohádkový: boingy a puky. ← → změní a přehraje.",
+  "cpu.title": "POTYČKA", "cpu.start": "Začít novou hru",
+  "cpu.own": "Vidíš jen svou obrazovku.",
+  "cpu.level": "Obtížnost: ",
   "cpu.view": "Pohled: ", "cpu.view.own": "jen můj", "cpu.view.both": "oba",
-  "cpu.view.i1": "Ukaž jen svou obrazovku, nebo i obrazovku", "cpu.view.i2": "počítače (jako v původní dělené obrazovce).",
   "level.easy": "lehká", "level.normal": "střední", "level.hard": "těžká",
   // vs computers with 1-7 opponents / teams, spectator view modes (views.js)
-  "home.cpu.i1n": "Vlastní hra proti 1 až 7 AI tankům: barvu, týmy i režim si zvolíš.",
-  "cpu.start.n": "Začni hru proti {n} tankům počítače ({level}).", "cpu.start.t": "Začni týmovou hru proti {n} tankům počítače ({level}).",
-  "cpu.all": "Vidíš obrazovky všech tanků.", "cpu.view.all": "všechny", "cpu.view.i3": "tanků počítače, vedle sebe.",
-  "cpu.opp": "Soupeři: ", "cpu.opp.i1": "Proti kolika tankům počítače hraješ.", "cpu.opp.i2": "1 je původní hra dvou hráčů.",
-  "cpu.mode": "Režim: ",
-  "cpu.mode.i1": "Každý proti každému: každý tank sám za sebe.", "cpu.mode.i2": "Týmy (3+ soupeři): ty a každý druhý tank proti ostatním.",
+  "home.cpu.i1n": "Vlastní hra proti 1 až 7 počítačovým tankům - sám nebo ve dvou.", "home.cpu.i1m": "Vlastní hra proti 1 až 7 počítačovým tankům.",
+  "cpu.all": "Vidíš obrazovky všech tanků.",
+  "map.anykey": "STISKNI KLÁVESU",
   "vw.grid": "Všechny obrazovky", "vw.map": "Mapa a skóre", "vw.follow": "Sleduji: {name}", "vw.hint": "Tab nebo 1 2 3: pohled", "vw.destroyed": "ZNIČEN", "vw.hint2": "← →: tank",
   "vw.tank": "Tank", "vw.wins": "Výhry", "vw.energy": "Energie", "vw.shield": "Štít", "vw.alive": "žije", "vw.dead": "zničen",
   "back.main": "Do hlavního menu", "back.main.i": "Zpět do hlavního menu.",
@@ -48,6 +46,9 @@ Lang.register("cs", {
   "create.public": "Veřejná: ", "create.public.i1": "Veřejné hry jsou v seznamu her;",
   "create.public.i2": "k soukromým se připojuje přes zvací odkaz.",
   "create.spect": "Povolit diváky: ", "create.spect.i1": "Diváci vidí celou obrazovku,", "create.spect.i2": "ale nemohou hrát.",
+  "create.pass": "Heslo: ", "create.pass.i1": "Nepovinné: kdo se připojí nebo dívá,", "create.pass.i2": "ho musí zadat. Prázdné = bez hesla.", "ph.pass": "žádné (nepovinné)",
+  "lobby.locked.i": "Tato hra je chráněná heslem.", "pw.title": "HESLO", "pw.i2": "Zeptej se na něj hostitele hry.", "pw.label": "Heslo: ",
+  "pw.go": "Připojit se", "pw.go.i": "Zadej heslo a stiskni ENTER.", "pw.err": "Špatné heslo.", "pw.limit": "Příliš mnoho špatných hesel - zkus to za minutu.",
   yes: "ano", no: "ne",
   "create.go": "Vytvořit hru",
   "back.lobby": "Zpět na seznam her", "back.lobby.i": "Zpět na seznam her.",
@@ -93,7 +94,6 @@ Lang.register("cs", {
       ff: ["přátelská palba: vypnutá", "přátelská palba: zapnutá"], view: "pohled: {v}", visible: "limit pohledu: {v}",
       views: ["jen já", "tým", "všichni"], watch: ["po smrti: černá obrazovka", "po smrti: můj vrak", "po smrti: sledovat tým", "po smrti: sledovat vraha", "po smrti: sledovat všechny"], sight: ["dohled: kruh", "dohled: skutečný"],
       modes: {"standard": "standard", "gold": "zlatá horečka", "infection": "nákaza", "survival": "přežití", "hill": "král kopce", "shrink": "zmenšující se svět", "ctf": "ukradni vlajku", "siege": "obléhání základen", "deathmatch": "zápas na smrt"},
-      noRepair: "bez oprav",
       goals: {"gold": "zlata k výhře: {n}", "infection": "přežít {n} min", "survival": "vln k výhře: {n}", "hill": "sekund k výhře: {n}", "ctf": "vlajek k výhře: {n}", "siege": "odolnost základny: {n}", "deathmatch": "sestřely k výhře: {n}"},
       time: "čas kola: {n} min", timeShort: "čas: {n} min" },
     prompt: "<ENTER> - hlavní menu.",
@@ -116,7 +116,7 @@ Lang.register("cs", {
         hotseat: ["{9}MODRÝ{3} hráč:", "               {10}ZELENÝ{3} hráč:"],
         cpu: "řídíš {9}MODRÝ{3} tank (obě sady kláves), počítač {10}ZELENÝ{3}.",
         online: "řídíš svůj tank ({9}MODRÝ{3} nebo {10}ZELENÝ{3}) libovolnou sadou kláves.",
-        cpuExt: "řídíš {9}MODRÝ{3} tank (obě sady kláves), ostatní řídí počítač.",
+        cpuExt: "hráč 1 řídí W A S D + SHIFT, hráč 2 (pokud je) šipkami + ENTER, ostatní řídí počítač.",
         onlineExt: "řídíš tank své barvy libovolnou sadou kláves.",
       },
       table: [["        <W> nahoru", "             <↑> nahoru"],
@@ -169,21 +169,18 @@ Lang.register("cs", {
         ["Dělená obrazovka:  ", "původní hra - dva hráči na jedné klávesnici, {9}MODRÝ{3} na levé " +
           "polovině obrazovky a {10}ZELENÝ{3} na pravé.  Nejdřív si zvol velikost mapy, počet kol k " +
           "výhře a čas kola."],
-        ["Potyčka:  ", "vlastní hra proti 1 až 7 počítačovým tankům, řídíš kteroukoli sadou kláves.  Každá z 8 " +
-          "barev jsi ty, nikdo nebo počítačový tank (lehký, střední, těžký) s týmem (1-8) - hrát " +
-          "můžeš za jakoukoli barvu; pak režim, velikost mapy, kola k výhře, čas kola, přátelská " +
-          "palba, pohled, co po smrti, dohled a opravy v základně.  <ESC> během hry ukončí zápas; <ESC> v " +
-          "menu hry tě vrátí k nastavení."],
+        ["Potyčka:  ", "vlastní hra proti tankům počítače, sám nebo s druhým hráčem na téže klávesnici.  Každá z 8 barev je hráč 1, hráč 2, nikdo nebo tank počítače (lehký, střední, těžký) se svým týmem (1-8) - hráči mohou mít libovolnou barvu; pak režim, velikost mapy, vítězná kola, čas kola, palba do vlastních, pohled, co po smrti a dohled.  Hráč 1 řídí W A S D + SHIFT, hráč 2 šipkami + ENTER (jiné klávesy: Nastavení, Ovládání).  <ESC> během hry ukončí zápas; Odveta nebo <ESC> v menu hry se vrátí k nastavení."],
         ["Hra online:  ", "2 až 8 tanků na různých počítačích, některé z nich mohou být počítačové.  Hra online " +
           "potřebuje jméno (zeptá se na něj poprvé, změníš ho v Nastavení).  Vytvoř hru - její " +
-          "jméno, veřejná nebo soukromá (připojuje se odkazem s pozvánkou), diváci povoleni nebo ne " +
+          "jméno, nepovinné heslo (kdo se připojí nebo dívá, ho musí zadat; v seznamu má hra zámek), " +
+          "veřejná nebo soukromá (připojuje se odkazem s pozvánkou), diváci povoleni nebo ne " +
           "- nebo se připoj ke hře ze seznamu.  Svůj tank řídíš kteroukoli sadou kláves.  Všechny " +
           "počítače počítají tutéž hru krok za krokem; po síti jdou jen stisknuté klávesy."],
         ["Lobby hry:  ", "každá hra má 8 míst, jedno pro každou barvu.  Posaď se na volné místo a hraješ za tu " +
           "barvu (<ENTER> nebo klik), zvol si tým (<←> <→>, <1>-<8> nebo klik na něj), piš ostatním " +
-          "(Řekni:) a zvol \"Jsem připraven!\"; \"Raději sledovat\" uvolní místo.  Hostitel - ten, kdo " +
-          "hru vytvořil, nebo další hráč, když hostitel odejde - nastaví každé neobsazené místo na " +
-          "volné, zavřené nebo AI (lehký, střední, těžký) i s týmem, nastavení výše, může \"Vyhodit " +
+          "(Řekni:) a zvol \"Jsem připraven!\" (klik na tvé jméno uvolní místo a sleduješ).  Hostitel - ten, kdo hru vytvořil, nebo další hráč, když " +
+          "hostitel odejde - proklikává každé místo, kde nesedí nikdo jiný: zavřené, volné, jeho vlastní " +
+          "(pokud nesedí jinde) a AI (lehký, střední, těžký) - pravý klik jde zpět -, nastaví mu tým, nastavení výše, může \"Vyhodit " +
           "hráče\" a spustí hru, když jsou všichni, kdo sedí, připraveni.  Volné místo, které " +
           "nikdo nezabral, nemá tank.  Během zápasu hrají jen jeho hráči; kdo se tehdy připojí, " +
           "sleduje.  Po zápase lobby ukáže jeho statistiku.  Hru online opustíš dvojím stiskem " +
@@ -191,11 +188,10 @@ Lang.register("cs", {
         ["Diváci:  ", "sledují hru online bez hraní.  <TAB> nebo <1> <2> <3> přepíná mezi všemi " +
           "obrazovkami, mapou se skóre a sledováním jednoho tanku (<←> <→> vyberou kterého)."],
         ["Zvuk:  ", "V Nastavení zvolíš jeho styl: původní (pípání PC " +
-          "speakeru z roku 1991), realistický (zvuky tanků), pohádkový (boing a puk) nebo vypnutý.  " +
+          "speakeru z roku 1991), realistický (zvuky tanků), nahraný (skutečné nahrávky), pohádkový (boing a puk) nebo vypnutý; i hlasitost, stereo a slábnutí se vzdáleností.  " +
           "Zvuky ostatních tanků slábnou se vzdáleností od tvého a znějí z jejich strany (stereo)."],
-        ["Nastavení:  ", "jazyk menu a hry, zvuk a \"Zobrazit ping\" (hry online: doba odezvy v ms, " +
-          "vlevo nahoře na okraji hry).  V desktopové aplikaci i Server pro hry online (prázdný = " +
-          "veřejný server)."],
+        ["Nastavení:  ", "Obraz (celá obrazovka - i <ALT>+<ENTER> -, velikost obrazu, barvy tanků: běžné, pro barvoslepost nebo ty modrý / tým zelený / nepřátelé červení), Grafika (původní nebo moderní, pak nastavení toho vzhledu), Zvuk (styl, hlasitost, stereo, slábnutí se vzdáleností), Ovládání (klávesy obou tanků, dotykové ovládání), Online (tvé jméno, oblíbená barva, chat, zvuk chatu, ping; v desktopové aplikaci server) a Jazyk."],
+        ["Grafika:  ", "Nastavení vybírá původní (obrazovka DOSu z roku 1991) nebo moderní (výchozí): tatáž hra nakreslená v rozlišení tvé obrazovky - hladké tunely, texturovaná hlína a skála, tmavé tunely osvětlené světly tanků, zářící střely, prach, jiskry a oheň, nový panel a menu v moderním písmu.  Nastavení moderní grafiky: styl (čistý nebo retro), kvalita, terén, okraje tunelů, osvětlení, částice, záře, otřesy obrazu, kamera (plynulá: tanky kloužou mezi kroky) a rozhraní, a mlha války při výhledu.  Mění se jen vzhled, nikdy hra - ani online."],
       ],
     },
     info: {
@@ -214,10 +210,12 @@ Lang.register("cs", {
         "vyberou místa (barvy) a týmy, chatují a hostitel spustí hru.  Všechny",
         "počítače hrají tutéž hru synchronně; po síti jdou jen stisknuté klávesy."],
       sections: [
+        ["Dva vzhledy:  ", "původní obrazovka DOSu nebo moderní grafika ve vysokém rozlišení se světlem, částicemi a moderním písmem (Nastavení, Grafika) - hra je vždy stejná."],
+        ["Záznamy:  ", "každý zápas, který hraješ nebo sleduješ, se uloží (20 nejnovějších, hlavní menu, Záznamy): podívej se na něj znovu jako divák - všechny pohledy, živou mapu nebo jeden tank, s pauzou, rychleji či pomaleji - nebo ho ulož do souboru a pošli někomu."],
         ["Desktopová aplikace:  ", "Tunneler Online je i malý program pro Windows, Linux a macOS - " +
           "stáhneš ho ze stránky vydání na GitHubu (github.com/kaniansky/tunneler-online/releases).  " +
-          "Dělenou obrazovku a hru proti počítači hraje bez sítě, hry online na veřejném serveru nebo " +
-          "na jakémkoli jiném (Nastavení, Server)."],
+          "Dělenou obrazovku a potyčku hraje bez sítě, hry online na veřejném serveru nebo " +
+          "na jakémkoli jiném (Nastavení, Online, Server).  V prohlížeči se hra dá nainstalovat i jako aplikace (pak se spustí i bez sítě)."],
         ["Originál:  ", "TUNNELER 2.0 napsal Geoffrey Silverton v roce 1991 v Turbo Pascalu: dva " +
           "tanky se prokopávají podzemním světem na jednom PC, s jednou klávesnicí a dělenou " +
           "obrazovkou.  Tato verze z něj zachovává všechno a přidává zbytek."],
@@ -229,11 +227,13 @@ Lang.register("cs", {
 
   // local games' settings screens (home.js: the vs computer slot editor and the split-screen settings;
   // docs/DESIGN-8P.md 11, 13, 17, 20)
-  "lc.split.title": "DĚLENÁ OBRAZOVKA",
-  "lc.you": "ty", "lc.none": "nikdo", "lc.cpu": "počítač ({level})", "lc.team": "tým {n}",
-  "lc.slot.i1": "← →: nikdo, ty, nebo počítač: {levels}.",
+  "page.back.touch": "Ťukni pro návrat.",
+  "lc.me": "ty", "lc.you.touch": "Ty: joystick a {fire} na obrazovce.", "lc.slot.i1m": "← →: nikdo, ty nebo počítač: {levels}.", "ui.hint.touch": "Ťukni na položku.",
+  "lc.p1": "hráč 1", "lc.p2": "hráč 2", "lc.p2.i1": "Hráč 2: šipky + ENTER (jiné klávesy: Nastavení, Ovládání).", "lc.go.2": "Hráč 1 proti hráči 2 na jedné klávesnici.", "lc.go.2n": "Hráč 1 a hráč 2 proti {n} tankům počítače, každý tank sám za sebe.", "lc.go.2t": "{t} týmy: hráč 1, hráč 2 a {n} tanky počítače.",
+  "lc.split.title": "DĚLENÁ OBRAZOVKA", "lc.none": "nikdo", "lc.cpu": "počítač ({level})", "lc.team": "tým {n}",
+  "lc.slot.i1": "← →: nikdo, hráč 1, hráč 2 nebo počítač: {levels}.",
   "lc.slot.i2": "1-8, <ENTER> nebo klik: tým. Tanky se stejným číslem týmu jsou spoluhráči.",
-  "lc.you.i1": "Tohle je tvůj tank.", "lc.you.i2": "← →: přenech tento tank (vyber \"ty\" jinde). 1-8, <ENTER>: tvůj tým.",
+  "lc.you.i1": "Hráč 1: W A S D + SHIFT (jiné klávesy: Nastavení, Ovládání).", "lc.you.i2": "← →: dej tento tank pryč (vyber ho jinde). 1-8, <ENTER>: tým.",
   "lc.size": "Velikost mapy: ", "lc.size.small": "malá", "lc.size.medium": "střední", "lc.size.large": "velká",
   "lc.size.i1": "Jak velká je krajina. Střední je původní;", "lc.size.i2": "malá má čtvrtinu, velká je čtyřikrát větší.",
   "lc.win": "Kola k výhře: ", "lc.win.i1": "Kolik vyhraných kol je potřeba k výhře zápasu.", "lc.win.i2": "3 je původní hra.",
@@ -241,7 +241,7 @@ Lang.register("cs", {
   "lc.ff.i1": "Zapnutá: tvé střely zraňují i spoluhráče.", "lc.ff.i2": "Vypnutá: na spoluhráčích vybuchnou jako na zdi.",
   "lc.go.1": "Ty proti jednomu tanku počítače ({level}).", "lc.go.n": "Ty proti {n} tankům počítače, každý sám za sebe.",
   "lc.go.t": "Týmy: {t}, tanky počítače: {n}, z toho ve tvém týmu: {m}.",
-  "lc.err.you": "Nejdřív si vyber \"ty\" v některém slotu.", "lc.err.cpu": "Nejdřív vyber aspoň jeden tank počítače.", "lc.err.team": "Nejdřív dej aspoň jeden tank do jiného týmu.",
+  "lc.err.you": "Nejdřív vyber \"hráč 1\" v některém místě.", "lc.err.cpu": "Nejdřív vyber aspoň jeden tank počítače.", "lc.err.team": "Nejdřív dej aspoň jeden tank do jiného týmu.",
 
   // online: the create screen's slot editor (lobby.js, "os.") and the pre-game lobby (online.js,
   // "pg.") - docs/DESIGN-8P.md 15, 18, 19, 21
@@ -295,17 +295,16 @@ Lang.register("cs", {
   "lobby.join2": "<ENTER> - připojit se ke hře, → nebo pravý klik - sledovat ji", "lobby.watch": "<ENTER> - sledovat tuto hru",
   "lobby.closed": "V této hře není volné místo a diváci nejsou povoleni.", "state.lobby": "Lobby",
   "seat.cpu": "AI ({level})", "seat.open": "volné", "seat.closed": "zavřené",
-  "seat.kind.i": "← →, klik nebo pravý klik: volné, zavřené nebo AI (lehký, střední, těžký).", "seat.open.i": "← → nebo pravý klik: zavřít místo nebo ho dát AI.",
+  "seat.kind.i": "← → nebo (pravý) klik: zavřené, volné, ty, AI (lehký, střední, těžký).", "seat.sit.host.i": "<ENTER>: posaď se sem a hraj za {name}.",
   "seat.team.i": "1-8 nebo <ENTER>: jeho tým (stejné číslo = spoluhráči).",
-  "seat.mine.i1": "Tvoje místo: hraješ za tuto barvu.", "seat.mine.i2": "← → nebo 1-8: tvůj tým (stejné číslo = spoluhráči).",
+  "seat.mine.i1": "Tvoje místo: hraješ za tuto barvu.", "seat.mine.watch.i": "Tvoje místo.  Klik na tvé jméno: uvolníš ho a sleduješ.", "seat.mine.i2": "← → nebo 1-8: tvůj tým (stejné číslo = spoluhráči).",
   "seat.sit.i": "<ENTER> nebo klik: posaď se sem a hraj za {name}.", "seat.sit.i2": "Volné místo, které nikdo nezabere, nemá ve hře tank.",
   "pg.busy": "Právě se hraje", "pg.go": "Spustit hru", "pg.go.i": "Spustí hru pro všechny, kdo sedí.",
   "pg.cant.tanks": "Jsou potřeba aspoň 2 tanky: hráči a počítačové tanky.", "pg.cant.human": "Někdo si musí sednout a hrát.",
   "pg.cant.teams": "Jsou potřeba aspoň 2 různé týmy.", "pg.cant.ready": "Čeká se, až budou všichni hráči připraveni.",
   "pg.cant.match": "Právě se hraje.",
-  "pg.watch": "Raději sledovat", "pg.watch.i": "Uvolni své místo a sleduj hru jako divák.",
   "pg.specs.who": "Sledují: ",
-  "lobby.link": "Připojit se odkazem", "lobby.link.i1": "Vlož odkaz s pozvánkou, který ti poslal jiný hráč,", "lobby.link.i2": "a připoj se k té hře.", "link.title": "PŘIPOJIT SE ODKAZEM", "link.label": "Odkaz: ", "link.i1": "Vlož odkaz s pozvánkou (Ctrl+V), například:", "link.i2": "<ENTER> tě připojí ke hře (funguje i odkaz na jiný server).", "link.go": "Připojit se", "link.err": "Tohle není odkaz na hru.",
+  "lobby.link": "Připojit se odkazem", "lobby.link.i1": "Vlož odkaz s pozvánkou, který ti poslal jiný hráč,", "lobby.link.i2": "a připoj se k té hře.", "link.title": "PŘIPOJIT SE ODKAZEM", "link.label": "Odkaz: ", "link.i1": "Vlož odkaz s pozvánkou (Ctrl+V), například:", "link.i1.touch": "Vlož odkaz s pozvánkou, například:", "link.i2": "<ENTER> tě připojí ke hře (funguje i odkaz na jiný server).", "link.go": "Připojit se", "link.err": "Tohle není odkaz na hru.", "home.replays": "Záznamy", "home.replays.i": "Podívej se znovu na své poslední zápasy (uchovává se 20 nejnovějších).", "rp.title": "ZÁZNAMY", "rp.h.date": "DATUM", "rp.h.game": "HRA", "rp.h.players": "HRÁČI", "rp.h.time": "ČAS", "rp.kind.split": "Dělená obrazovka", "rp.kind.skirmish": "Šarvátka", "rp.kind.online": "Online hra", "rp.vs": "{a} proti {b}", "rp.tanks": "tanků: {n}", "rp.won": "Vítěz: {name}", "rp.won.team": "Vítěz: tým {n}", "rp.won.none": "Nikdo nevyhrál", "rp.open.row": "<ENTER> ho otevře: podívat se, uložit do souboru, smazat.", "rp.none": "Zatím žádné záznamy: ukládá se sem každý tvůj zápas.", "rp.file": "Otevřít soubor se záznamem", "rp.file.i": "Soubor .replay uložený tady nebo od někoho jiného.", "rp.file.err": "Tento soubor není záznam.", "rp.one.title": "ZÁZNAM", "rp.team": "tým {n}", "rp.watch": "Podívat se", "rp.watch.i": "Přehraje zápas znovu, jak ho vidí divák.", "rp.save": "Uložit do souboru", "rp.save.i": "Stáhne ho jako soubor .replay - na uschování nebo poslání.", "rp.version": "Nahráno verzí {v}.", "rp.delete": "Smazat", "rp.delete.i": "Odstraní ho z tohoto seznamu.", "rp.delete.sure": "Stiskni znovu a záznam se smaže.", "back.replays": "Zpět na záznamy", "back.replays.i": "Zpět na seznam záznamů.", "rp.status": "ZÁZNAM", "rp.paused": "PAUZA", "rp.keys": "MEZERNÍK: pauza  +/-: rychlost  PGUP/PGDN: 30 s", "rp.keys.touch": "Ťuknutí: pauza  okraje: jiný tank", "rp.end": "KONEC ZÁZNAMU", "rp.differs": "Tady se přehrává jinak: nahrála ho verze {v}.", "rp.stats": "Statistiky", "rp.stats.i": "Statistiky zápasu.", "rp.again": "Podívat se znovu", "rp.again.i": "Od začátku.",
   "lobby.host.i": "Jsi hostitelem této hry (vytvořil jsi ji, nebo ti ji předali).",
   // game modes and modifiers (docs/DESIGN-8P.md 27)
   "gm.standard": "standard",
@@ -335,8 +334,6 @@ Lang.register("cs", {
   "goal.deathmatch": "Sestřely k výhře: ", "goal.deathmatch.i": "Kolik sestřelů (tým: součet členů) vyhraje zápas - jedno kolo.",
   "lc.mode": "Režim: ",
   "lc.mode.i": "← →: herní režim.",
-  "mod.noRepair": "Opravy v základně: ",
-  "mod.noRepair.i": "Vypnuté: základny tankují, ale štít neopravují.",
   "pg.cant.ai": "Přežití potřebuje aspoň jeden AI tank (vlny).",
   "ver.server": "Tento server má verzi {server}; tvoje hra má verzi {you}.", "ver.update": "Aktualizuj hru (nebo v Nastavení vyber jiný server), chceš-li tu hrát.",
   "on.full": "V této hře není volné místo.", "on.busy": "Právě se hraje a tato hra nepovoluje diváky.",

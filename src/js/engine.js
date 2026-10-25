@@ -1,4 +1,3 @@
-"use strict";
 // TUNNELER 2.0 (1991, Geoffrey Silverton) - JavaScript port of the decompiled Turbo Pascal source
 // (decompiled/src/TUNNELER.PAS, LORES.PAS, KBD.PAS). Procedure names, order of operations, constants and
 // the order of Random() calls follow the original so that movement, digging, shots, explosions,
@@ -17,9 +16,9 @@
 // Text written to it is "font text" (unitext.js): code units 0..0xFF are font bytes, anything else is a
 // Unicode character (player names) that goes into the Unicode plane `uni` next to the buffer - display
 // only, never read by the game (snapshots carry a copy while it holds something).
-(function (root) {
-
-const UniText = root.UniText || (typeof require === "function" ? require("./unitext.js") : null);
+import { STRINGS_EN } from "../lang/en/engine.js";
+import { Lang } from "./lang.js";
+import { UniText } from "./unitext.js";
 
 const PIT_HZ = 1193182;
 const TICK = 65536;                       // PIT clocks per BIOS tick = one game frame
@@ -141,13 +140,12 @@ const MENU_ROWS = [0, 2, 4];                         // box row of each item (bl
 const MENU_ATTR = 0x05, MENU_SEL_ATTR = 0x5F;          // magenta text / white on magenta bar
 // Instructions / Information pages: rows 1-23 show the text, longer pages scroll (Up / Down, PgUp /
 // PgDn, Home / End: scan codes -> pageScroll), text up to PAGE_W columns (column 80: the scroll bar)
-const PAGE_ROWS = 23, PAGE_W = 78;
+const PAGE_ROWS = 23, PAGE_W = 78, PAGE_WIDTH = PAGE_W;
 const PAGE_KEYS = { 0x48: "up", 0x50: "down", 0x49: "pgup", 0x51: "pgdn", 0x47: "home", 0x4F: "end" };
 // All text the program shows. engine.strings can be replaced with a translation (lang.js builds one,
 // already encoded to the font's code page: one JS char per byte). "{n}" in a line switches the text
 // colour to n.
-const STRINGS_EN = root.TUNNELER_STRINGS_EN ||
-  (typeof require === "function" ? require("../lang/en/engine.js") : null);   // (src/lang/en/engine.js);
+// (STRINGS_EN: src/lang/en/engine.js)
 // display columns of font text (markup "{n}" excluded; wide Unicode characters count 2)
 const visLen = t => UniText.cols(t.replace(/\{\d+\}/g, ""));
 
@@ -186,8 +184,8 @@ class Explosion {
   }
 }
 
-// a game mode's raw Unicode text -> font text (as Lang.t gives every other text; node without Lang: as is)
-const modeEnc = s => (root.Lang && root.Lang.enc ? root.Lang.enc(s) : s);
+// a game mode's raw Unicode text -> font text (as Lang.t gives every other text)
+const modeEnc = s => Lang.enc(s);
 
 class TunnelerEngine {
   // seed: Turbo Pascal RandSeed (what Randomize would have put there)
@@ -211,15 +209,13 @@ class TunnelerEngine {
   //   mode: "standard" | a game mode         extended only (docs/DESIGN-8P.md 27): TunnelerEngine.MODES[mode]
   //                                           (src/js/modes/<mode>.js) hooks into the extended play loop;
   //                                           "standard" (default) = last team standing, as before
-  //   noRepair: bool                          modifier (extended only): no shield repair at bases
   // The classic engine (the original, byte for byte with size medium and winScore 3) runs for exactly
-  // BLUE + GREEN in different teams, the standard mode and no modifier; anything else is the extended
+  // BLUE + GREEN in different teams and the standard mode; anything else is the extended
   // engine (N tanks, own palette, input bits).
   constructor(seed, opts) {
     const o = opts || {};
     const gameMode = TunnelerEngine.MODES[o.mode] ? o.mode : "standard";
-    const mods = { noRepair: !!o.noRepair };
-    let slots, forceExt = !!o.extended || gameMode !== "standard" || mods.noRepair;
+    let slots, forceExt = !!o.extended || gameMode !== "standard";
     if (Array.isArray(o.slots) && o.slots.length)
       slots = o.slots.slice(0, EXT_MAX_PLAYERS).map((s, i) =>
         ({ color: clampInt(s && s.color, 0, 7, i), team: clampInt(s && s.team, 1, 8, i + 1) }));
@@ -237,11 +233,10 @@ class TunnelerEngine {
     this.nPlayers = this.extended ? slots.length : 2;
     this.slots = slots;
     // game mode (extended only): its name, its hooks (null = standard), its own state (GS: anything the
-    // mode keeps - part of the simulation, so only changed by the mode's hooks), the modifiers
+    // mode keeps - part of the simulation, so only changed by the mode's hooks)
     this.gameMode = this.extended ? gameMode : "standard";
     this.GM = this.gameMode !== "standard" ? TunnelerEngine.MODES[this.gameMode] : null;
     this.GS = {};
-    this.mods = this.extended ? mods : { noRepair: false };
     this.lang = "en";                              // the language of the texts (Lang.apply sets it; display only)
     this.names = new Array(this.nPlayers).fill(null);  // display names (setNames), null = color name
     this.computeTeams();
@@ -308,9 +303,9 @@ class TunnelerEngine {
     this.edgeVel = [0, 0, 0]; this.edgePos = [0, 0, 0];
     this.worldReady = false; this.quitProgram = false; this.menuShift = 0;
     this.menuSel = 0;                             // highlighted main menu item
+    this.menuShown = false;                       // its items are on the screen (display only: mouse / bar)
     this.menuTop = 11;                              // the menu box's top row (showMainMenu)
     this.statsLeft = 43; this.statsFull = false;    // where the statistics go (showStatsPage: centred)
-    this.statsCentred = false;                      // (centreStats draws the settings then)
     this.menuPage = "menu";                       // "menu", "instructions" or "information"
     this.strings = STRINGS_EN;                    // all visible text (see STRINGS_EN)
     this.menuX = 30; this.menuW = 20;              // main menu box (set by showMainMenu)
@@ -352,6 +347,9 @@ class TunnelerEngine {
     for (let i = 0; i <= MaxExplosions + 1; i++) this.explosions.push(new Explosion());
     this.numExplosions = 0;
     this.speakerHz = 0;
+    // display only (graphics "modern", gfx-modern.js): per player the world pixel at the top left of their
+    // view window and whether it shows the static - set by blitView, never read by the game
+    this.cams = arr(null);
 
     // extended mode
     this.pixelClass = this.extended ? PixelClassExt : PixelClass;
@@ -620,6 +618,10 @@ class TunnelerEngine {
   // byte + the left pixel of the next, so it scrolls sideways 1 pixel a frame like it does up and down
   // p: the player whose view it is (line of sight: blitSight)
   blitView(col, row, scrOfs, noise, x, p) {
+    if (p) {
+      const cam = this.cams[p] || (this.cams[p] = { x: 0, y: 0, noise: false });
+      cam.x = col * 2 + (!noise && this.smoothScroll && (x & 1) === 1 ? 1 : 0); cam.y = row; cam.noise = !!noise;
+    }
     if (p && this.sight !== "full") return this.blitSight(col, row, scrOfs, noise, x, p);
     let src, mem, skip;
     if (noise) { src = this.random(30000); mem = LOW_MEMORY; skip = 474; }
@@ -1194,7 +1196,6 @@ class TunnelerEngine {
     const goalText = this.goal && (S.goals || STRINGS_EN.settings.goals)[this.gameMode];
     const parts = [S.size[Math.max(0, sizes.indexOf(this.size))], goalText ? goalText.replace("{n}", String(this.goal)) : S.win.replace("{n}", String(this.winScore))];
     if (this.gameMode !== "standard") parts.unshift((S.modes || {})[this.gameMode] || this.gameMode);
-    if (this.mods.noRepair && S.noRepair) parts.push(S.noRepair);
     if (this.teams) parts.push(S.ff[this.friendlyFire ? 1 : 0]);
     if (this.sight !== "full" && time < 3) parts.push(S.sight[SIGHTS.indexOf(this.sight) - 1]);   // (short: it packs well here)
     const vi = ["self", "team", "everyone"].indexOf(o.view);
@@ -1565,7 +1566,7 @@ class TunnelerEngine {
   // ---- game mode helpers (docs/DESIGN-8P.md 27; src/js/modes/*.js)
   // A game mode's text in this engine's language: GM.strings[lang][key], else English; {name} params
   // (font text like every engine string: the modes' texts are raw Unicode - Lang.enc puts the language's
-  // letters into the font, anything else through the Unicode plane; without Lang (node) as they are)
+  // letters into the font, anything else through the Unicode plane)
   mt(key, params) {
     const S = this.GM && this.GM.strings || {}, t = (S[this.lang] && S[this.lang][key]) || (S.en && S.en[key]) || key;
     return modeEnc(params ? t.replace(/\{(\w+)\}/g, (m, k) => params[k] !== undefined ? String(params[k]) : m) : t);
@@ -2068,7 +2069,6 @@ class TunnelerEngine {
         this.num(this.metersDug[p], 6), this.num(modeStat ? modeStat(p) : this.metersMoved[p], 6));
     }
     // (no "The winner is ..." line: the winners' names blink in the table)
-    this.statsSettings();
   }
   // a round's end for the statistics (display only): winner (classic 1 / 2, 0 = none; extended a team
   // index, -1 = none), player = the one tank that won it (or 0)
@@ -2177,48 +2177,27 @@ class TunnelerEngine {
       this.textColor(6);
       this.writeLn(".");
     }
-    this.statsSettings();
   }
   // The statistics alone, full screen (the online lobby's Statistics page): centred, the settings below
   // them across the whole width, `prompt` on the bottom line
   showStatsPage(prompt) {
     this.window(1, 1, 80, 25);
     this.clearScreen();
-    this.statsLeft = 22; this.statsFull = true; this.statsCentred = true;
+    // (laid out as the vs computer statistics: the rounds in the left half, the table in the right one - owner,
+    // 2026-10-24: the left column was too narrow and stuck to the table)
+    this.statsLeft = 43; this.statsFull = false;
     if (this.extended) this.statsExt(); else this.statsClassic();
-    this.statsLeft = 43; this.statsFull = false; this.statsCentred = false;
-    this.matchExtrasAt(2, 19, 5, 20);                         // (the rounds left of the table)
-    this.centreStats(1, 80, 1, 23, 76, 41);                   // (all of it in the middle, above the bottom line)
+    this.matchExtrasAt(11, 18, 5, 20);                        // (the rounds, left of the table)
+    this.centreStats(1, 80, 1, 23);                           // (all of it in the middle, above the bottom line)
     this.window(1, 1, 80, 25);
     if (prompt) this.strings = Object.assign({}, this.strings, { prompt });
     this.showEscPrompt();
     this.menuPage = "stats";
   }
 
-  // the game's settings at the bottom of the right half, below the statistics (a blank row between when
-  // there is room, the last line on row 24, at most 4 lines of 37 columns; display only). The
-  // statistics end where the cursor is.
-  statsSettings() {
-    if (!this.showSettings || this.statsCentred) return;      // (centred pages: centreStats draws them)
-    const last = this.cx === this.wx1 ? this.cy : this.cy + 1;   // (1-based screen row of the last text)
-    // (the full-screen page: 76 columns centred, the bottom line row 24 is the prompt's rule)
-    const width = this.statsFull ? 76 : 37, mid = this.statsFull ? 41 : 61, bottom = this.statsFull ? 23 : 24;
-    let lines = this.settingsLines(width, 4);
-    if (lines.length > bottom - 1 - last) {               // (no room for the blank row: right below them)
-      const room = bottom - last;
-      if (room < 1) return;
-      lines = this.settingsLines(width, room).slice(0, room);
-    }
-    const w = [this.wx1, this.wy1, this.wx2, this.wy2, this.cx, this.cy, this.textAttr];
-    this.window(1, 1, 80, 25);
-    this.textColor(3);
-    lines.forEach((l, i) => { this.gotoXY(mid - (visLen(l) >> 1), bottom + 1 - lines.length + i); this.write(l); });
-    [this.wx1, this.wy1, this.wx2, this.wy2, this.cx, this.cy, this.textAttr] = w;
-  }
-
-  // Centre what is drawn in columns c0..c1, rows r0..r1 vertically, together with the settings (width
-  // columns centred on mid) one blank row below it: the vs computer statistics, the online page
-  centreStats(c0, c1, r0, r1, width, mid) {
+  // Centre what is drawn in columns c0..c1, rows r0..r1 vertically: the vs computer statistics, the online
+  // page (the game's settings are not repeated there any more - owner, 2026-10-24; the round title has them)
+  centreStats(c0, c1, r0, r1) {
     const used = r => {
       for (let c = c0; c <= c1; c++) { const b = this.vram[((r - 1) * 80 + c - 1) * 2]; if (b !== 0 && b !== 0x20) return true; }
       return false;
@@ -2226,18 +2205,8 @@ class TunnelerEngine {
     let first = 0, last = 0;
     for (let r = r0; r <= r1; r++) if (used(r)) { if (!first) first = r; last = r; }
     if (!first) return;
-    let lines = this.showSettings ? this.settingsLines(width, 4) : [];
-    const room = (r1 - r0 + 1) - (last - first + 1) - 1;     // (rows left for the settings, after a blank one)
-    if (lines.length > room) lines = room > 0 ? this.settingsLines(width, room).slice(0, room) : [];
-    const h = last - first + 1 + (lines.length ? lines.length + 1 : 0);
-    const delta = r0 + Math.max(0, (r1 - r0 + 1 - h) >> 1) - first;
+    const delta = r0 + Math.max(0, (r1 - r0 + 1 - (last - first + 1)) >> 1) - first;
     if (delta) this.shiftRows(c0, c1, first, last, delta);
-    if (!lines.length) return;
-    const keep = [this.wx1, this.wy1, this.wx2, this.wy2, this.cx, this.cy, this.textAttr];
-    this.window(1, 1, 80, 25);
-    this.textColor(3);
-    lines.forEach((l, i) => { this.gotoXY(mid - (visLen(l) >> 1), last + delta + 2 + i); this.write(l); });
-    [this.wx1, this.wy1, this.wx2, this.wy2, this.cx, this.cy, this.textAttr] = keep;
   }
   // move the cells of columns c0..c1, rows ra..rb (1-based) by d rows (the text and its Unicode plane)
   shiftRows(c0, c1, ra, rb, d) {
@@ -2333,21 +2302,19 @@ class TunnelerEngine {
                 this.moving[P] = true;
               } else this.moving[P] = false;
               // own base: refuel and repair; a teammate's base: refuel slower, repair at half speed;
-              // an enemy base: refuel only, slower (modifier noRepair: no repair at all; a game mode may
-              // switch a base off - GM.baseUsable)
+              // an enemy base: refuel only, slower (a game mode may switch a base off - GM.baseUsable)
               for (let q = 1; q <= N; q++)
                 if (this.distance(Math.abs(this.tankX[P] - this.baseX[q]), Math.abs(this.tankY[P] - this.baseY[q])) < 15 &&
                     !(this.GM && this.GM.baseUsable && !this.GM.baseUsable(this, q, P))) {
-                  const repair = !this.mods.noRepair;
                   if (q === P) {
                     this.energy[P] += 80;
                     if (this.energy[P] > MaxPower) this.energy[P] = MaxPower;
-                    if (repair) this.shield[P] += 40;
+                    this.shield[P] += 40;
                     if (this.shield[P] > MaxPower) this.shield[P] = MaxPower;
                   } else {
                     this.energy[P] += 30;
                     if (this.energy[P] > MaxPower) this.energy[P] = MaxPower;
-                    if (repair && this.team(q) === this.team(P)) {
+                    if (this.team(q) === this.team(P)) {
                       this.shield[P] += 20;
                       if (this.shield[P] > MaxPower) this.shield[P] = MaxPower;
                     }
@@ -2624,20 +2591,22 @@ class TunnelerEngine {
     this.write("\xC0", "\xC4".repeat(W)); this.writeLn("\xD9");
     this.window(1, 1, 80, 25);
     this.menuPage = "menu";
+    this.menuShown = !notice;                         // (display only: the menu's items are on the screen)
     if (!notice) this.drawMenuSel();
     if (this.menuShift !== 0) {
       this.textColor(8);
       for (let i = 1; i <= 25; i++) { this.gotoXY(40, i); this.write("\xB3"); }
       if (extras) this.matchExtrasAt(11, 18, top - 1 - extraH, top - 2);   // (vs computer: above the menu box)
-      this.statsCentred = extras;                     // (vs computer: the statistics + settings in the middle)
       if (this.extended) this.statsExt(); else this.statsClassic();
-      this.statsCentred = false;
-      if (extras) this.centreStats(42, 80, 1, 24, 37, 61);
+      if (extras) this.centreStats(42, 80, 1, 24);
     }
   }
 
   // highlight bar over the selected item (text rows 12..15, inside the box)
+  // (only while the menu is on the screen - e.g. not on an auto start's "(creating world)" screen, where
+  // the mouse or the arrows would paint bars on empty rows)
   drawMenuSel() {
+    if (!this.menuShown) return;
     for (let i = 0; i < this.menuScans.length; i++) {
       const o = (this.menuTop + this.menuRows[i]) * 160 + this.menuX * 2;
       for (let c = 0; c < this.menuW; c++) this.vram[o + c * 2 + 1] = i === this.menuSel ? MENU_SEL_ATTR : MENU_ATTR;
@@ -2646,6 +2615,7 @@ class TunnelerEngine {
   }
   // menu item under text cell (col, row), 0-based, or -1
   menuItemAt(col, row) {
+    if (!this.menuShown) return -1;
     const x = col - (this.menuX - 1);
     return x >= 0 && x <= this.menuW + 1 ? this.menuRows.indexOf(row - this.menuTop) : -1;
   }
@@ -2711,7 +2681,7 @@ class TunnelerEngine {
   // a paragraph (one string, or lines joined with spaces) wrapped to PAGE_W columns; every row starts
   // with the colour it continues in (only real spaces separate words - see winScoreText)
   wrapPage(text, color) {
-    const out = [], trim = t => t.replace(/ +$/, "");
+    const out = [], trim = t => t.replace(/ +$/, ""), PAGE_W = this.pageWidth || PAGE_WIDTH;   // (pageWidth: dosui.js's phone layout)
     let line = "", lineColor = color, cur = color;
     for (const tok of [].concat(text).join(" ").match(/[^ ]+ */g) || []) {
       if (visLen(line) && visLen(trim(line + tok)) > PAGE_W) { out.push("{" + lineColor + "}" + trim(line)); line = ""; lineColor = cur; }
@@ -2828,6 +2798,7 @@ class TunnelerEngine {
   }
 
   clearMenuWindow() {
+    this.menuShown = false;
     if (this.menuShift !== 0) {
       this.window(1, 1, 80, 25);
       this.gotoXY(40, 25);
@@ -2848,7 +2819,7 @@ class TunnelerEngine {
   }
 
   restartMenu() {
-    if (this.autoStartPending) { this.window(1, 1, 80, 24); this.clearScreen(); }   // no menu before an auto start
+    if (this.autoStartPending) { this.window(1, 1, 80, 24); this.clearScreen(); this.menuShown = false; }   // no menu before an auto start
     else this.showMainMenu();
     this.window(1, 1, 80, 25);
     this.worldStatus(this.strings.creating, this.menuShift, 1);
@@ -2882,7 +2853,8 @@ class TunnelerEngine {
             this.worldStatus("", this.menuShift, 0);     // world ready: the "(creating world)" line goes away
             this.worldReady = true;
           }
-          if (this.autoStartPending) { this.autoStartPending = false; this.keyStr = [0, MENU_SCANS[0]]; }   // "Start game"
+          // (an auto start: "Start game" - its "(creating world)" line stays as it is, see case 59)
+          if (this.autoStartPending) { this.autoStartPending = false; this.autoStarting = true; this.keyStr = [0, MENU_SCANS[0]]; }
           this.keyStr = this.menuKey(this.keyStr);
         } while (!((this.menuScans.includes(this.keyStr[1]) || this.keyStr[1] === 61) || this.keyStr[0] === 27));
         const key = this.keyStr;
@@ -2896,11 +2868,14 @@ class TunnelerEngine {
           case 59:
             this.window(1, 1, 80, 24);
             this.clearScreen();
-            if (this.worldStage > 0) {
+            // (the original: started before the world is ready - "(creating world)" again, blinking; an auto
+            // start - a key press can cut the world creation short - keeps the steady line it already shows)
+            if (this.worldStage > 0 && !this.autoStarting) {
               this.window(1, 1, 80, 25);
               this.clearScreen();
               this.worldStatus(this.strings.creating, 0, 129);
             }
+            this.autoStarting = false;
             while (this.worldStage !== -1) yield* this.createWorldStep();
             yield* (this.extended ? this.playGameExt() : this.playGame());
             this.menuShift = -20;
@@ -2942,6 +2917,7 @@ class TunnelerEngine {
 
 TunnelerEngine.TICK_MS = TICK * 1000 / PIT_HZ;
 TunnelerEngine.FX_KINDS = FX_KINDS;
+TunnelerEngine.MAX_POWER = MaxPower;           // (energy / shield gauges: gfx-hud.js)
 TunnelerEngine.KEYS = { KeyFire, KeyUp, KeyDown: PlayerKeys, KeyRight, KeyLeft };
 TunnelerEngine.DirDX = DirDX;
 TunnelerEngine.DirDY = DirDY;
@@ -2961,8 +2937,8 @@ TunnelerEngine.BITS = { UP: B_UP, DOWN: B_DOWN, LEFT: B_LEFT, RIGHT: B_RIGHT, FI
 TunnelerEngine.STRINGS_EN = STRINGS_EN;
 TunnelerEngine.PAGE_ROWS = PAGE_ROWS;               // Instructions / Information: text rows on screen
 TunnelerEngine.PAGE_W = PAGE_W;                     // ... and their width (column 80: the scroll bar)
-// Game modes (docs/DESIGN-8P.md 27): src/js/modes/<name>.js registers each one's hooks; the pages load them
-// all as /js/modes.js (build.js / server.js join them), node loads them below.
+// Game modes (docs/DESIGN-8P.md 27): src/js/modes/<name>.js registers each one's hooks; src/js/modes/index.js
+// imports them all (the game pages' entries and node tests import it).
 TunnelerEngine.MODES = {};
 // every mode in the order the menus offer them (the same as NetProto.MODES); modifiers
 TunnelerEngine.MODE_LIST = ["standard", "gold", "infection", "survival", "hill", "shrink", "ctf", "siege", "deathmatch"];
@@ -2972,24 +2948,12 @@ TunnelerEngine.GOALS = { gold: { choices: [5, 10, 15, 20, 30, 50], def: 10 }, in
   survival: { choices: [3, 5, 7, 10, 15, 20], def: 5 }, hill: { choices: [30, 45, 60, 90, 120, 180], def: 60 },
   ctf: { choices: [1, 2, 3, 5, 7, 10], def: 3 }, siege: { choices: [10, 20, 30, 50, 80], def: 30 },
   deathmatch: { choices: [5, 10, 15, 20, 30, 50], def: 10 } };
-TunnelerEngine.MODIFIERS = ["noRepair"];
 // (a mode's texts per language - strings[code] - come from src/lang/<code>/modes/<name>.js: Lang.modeTexts)
 TunnelerEngine.registerMode = (name, hooks) => {
   const m = Object.assign({ name }, hooks);
   Object.defineProperty(m, "strings", { enumerable: true,
-    get: () => (root.Lang && root.Lang.modeData && root.Lang.modeData[name]) || { en: {} } });
+    get: () => Lang.modeData[name] || { en: {} } });
   TunnelerEngine.MODES[name] = m;
 };
 
-root.TunnelerEngine = TunnelerEngine;
-if (typeof module !== "undefined") module.exports = TunnelerEngine;
-// node (tests, tools): every game mode file in src/js/modes/, alphabetically (the pages load /js/modes.js),
-// and the languages (lang.js: the modes' texts) unless they are loaded already
-if (typeof module !== "undefined" && module.exports && typeof require === "function" && typeof __dirname === "string") {
-  try {
-    if (!root.Lang) require("./lang.js");
-    const fs = require("fs"), path = require("path"), dir = path.join(__dirname, "modes");
-    if (fs.existsSync(dir)) for (const f of fs.readdirSync(dir).filter(f => f.endsWith(".js")).sort()) require(path.join(dir, f));
-  } catch (e) { /* no file system */ }
-}
-})(typeof window !== "undefined" ? window : globalThis);
+export { TunnelerEngine };

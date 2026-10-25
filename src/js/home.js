@@ -1,9 +1,23 @@
-"use strict";
 // Homepage, in the look of TUNNELER's own main menu (see dosui.js). Texts from lang.js.
 // Screens: the main menu, the split-screen settings (/#split) and the vs computer slot editor (/#cpu,
 // docs/DESIGN-8P.md 20). Their settings are remembered in localStorage and passed to play.html.
-(function () {
+import { Controls } from "./controls.js";
+import { CpuCode } from "./cpucode.js";
+import { Display } from "./display.js";
+import { DosUI } from "./dosui.js";
+import { Endpoint, Links } from "./endpoint.js";
+import { TunnelerEngine } from "./engine.js";
+import { Gfx } from "./gfx.js";
+import { Lang } from "./lang.js";
+import { Pads } from "./pads.js";
+import { GameScreen } from "./screen.js";
+import { Speaker } from "./speaker.js";
+import { UniText } from "./unitext.js";
+import { Nav } from "./nav.js";
+import { Scope } from "./scope.js";
+export function mount() {
   const ui = new DosUI(document.getElementById("screen"));
+  Pads.start({ menu: () => true });                    // (a gamepad steers the menus)
   window.tunnelerHomeUI = () => ui;                    // tests / debugging
   const T = Lang.t;
   const load = (k, d) => { try { const v = localStorage.getItem(k); return v == null ? d : v; } catch (e) { return d; } };
@@ -13,7 +27,10 @@
   // "tunneler.levels" = "2") is renamed once
   const OLD_LEVELS = { easy: "easy", normal: "easy", hard: "normal", expert: "hard" };
   const newNames = load("tunneler.levels") === "2", today = v => newNames ? v : OLD_LEVELS[v] || v;
-  const KINDS = ["none", "you"].concat(LEVELS);           // who drives a slot: you can sit in any color
+  // who drives a slot: player 1 ("you" in storage and links) - any color, exactly one -, player 2 (GREEN's
+  // keys; at most one), nobody or a computer level
+  const MOBILE = GameScreen.mobile();                     // (a phone / tablet: one player - no player 2, no split screen)
+  const KINDS = ["none"].concat(LEVELS, MOBILE ? ["you"] : ["you", "p2"]);
   const SIZES = TunnelerEngine.SIZES || ["small", "medium", "large"];
   const COLORS = TunnelerEngine.PLAYER_KEYS || ["blue", "green", "cyan", "yellow", "white", "pink", "violet", "teal"];
   const TEXT_COLORS = TunnelerEngine.PLAYER_TEXT_COLORS || [9, 10, 11, 13, 15, 12, 5, 3];
@@ -42,8 +59,6 @@
   let cpuGoals = {};
   try { cpuGoals = JSON.parse(load("tunneler.cpu.goals", "{}")) || {}; } catch (e) { cpuGoals = {}; }
   const goalOf = m => GOALS[m] && GOALS[m].choices.includes(cpuGoals[m]) ? cpuGoals[m] : GOALS[m] ? GOALS[m].def : 0;
-  const mods = {
-    noRepair: load("tunneler.cpu.noRepair", "0") === "1" };
   // after death (black / wreck / others): what you see once your tank is destroyed (views.js)
   let watchOut = TunnelerEngine.afterDeath(load("tunneler.cpu.watch", "wreck"));
   // line of sight (full / circle / walls): how much of the world around your tank you see live
@@ -73,7 +88,6 @@
     save("tunneler.cpu.view", view); save("tunneler.cpu.watch", watchOut); save("tunneler.cpu.time", String(cpuTime));
     save("tunneler.cpu.sight", sight);
     save("tunneler.cpu.mode", gmode); save("tunneler.cpu.goals", JSON.stringify(cpuGoals));
-    for (const k in mods) save("tunneler.cpu." + k, mods[k] ? "1" : "0");
   };
 
   // ---- split-screen settings
@@ -95,18 +109,23 @@
 
   // sound style: muted / original (the PC speaker) / realistic / cartoony - speaker.js keeps it
   // (localStorage "tunneler.sound"); a change plays a short sample
-  const SOUNDS = ["muted", "original", "realistic", "cartoony"];
+  const SOUNDS = Speaker && Speaker.STYLES ? Speaker.STYLES : ["muted", "original", "realistic", "recorded", "cartoony"];
   const soundStyle = () => {
-    const S = window.Speaker;
+    const S = Speaker;
     const v = S && S.loadStyle ? S.loadStyle() : load("tunneler.sound", "original");
     return SOUNDS.includes(v) ? v : "original";
   };
-  // smooth sideways scrolling: display only (play.js / online.js read "tunneler.smooth"; on by default; "0" = off, the original)
+  // smooth sideways scrolling: display only (play.js / online.js read "tunneler.smooth"; on by default; "0" = off, the original);
+  // only offered with graphics original - modern always scrolls smoothly
   function toggleSmooth() { save("tunneler.smooth", load("tunneler.smooth", "1") === "0" ? "1" : "0"); settings(true); }
   // online games: show the ping on the status line (online.js reads "tunneler.ping")
   function togglePing() { save("tunneler.ping", load("tunneler.ping", "0") === "1" ? "0" : "1"); settings(true); }
+  // graphics: original / modern (+ the modern settings, in the Graphics category) - gfx.js keeps them, display only
+  const G = () => Gfx;
+  const gfxMode = () => G() ? G().shown() : "original";
+  function setGfx(now, d) { if (G()) G().set("mode", step(G().choices(), now, d)); settings(true); }
   function setSound(d) {
-    const v = step(SOUNDS, soundStyle(), d), S = window.Speaker;
+    const v = step(SOUNDS, soundStyle(), d), S = Speaker;
     if (S && S.saveStyle) S.saveStyle(v); else save("tunneler.sound", v);
     if (S && S.preview) try { S.preview(v); } catch (e) { /* no audio */ }
     settings(true);
@@ -118,7 +137,10 @@
   let update = null;
   const tauri = () => window.__TAURI__ && window.__TAURI__.core;
   const onMain = () => ui.spec && ui.spec.home;
-  if (window.Endpoint && Endpoint.isApp && tauri()) {
+  // the Android app's Back button (MainActivity): on the main menu it leaves the app, elsewhere it is <ESC>
+  window.tunnelerBackExits = () => !!onMain();
+  Scope.onEnd(() => { delete window.tunnelerBackExits; });
+  if (Endpoint && Endpoint.isApp && tauri()) {
     tauri().invoke("update_check").then(u => {
       if (!u || !u.version) return;
       update = { version: String(u.version), install: !!u.install, admin: !!u.admin };
@@ -143,72 +165,246 @@
         : [T(!update.install ? "home.update.new.i" : update.admin ? "home.update.admin.i" : "home.update.i", { v: update.version })] },
   ];
 
+  // sel: an item's index or key (the screen came back from it)
   function main(sel, keep) {
-    ui.show({
-      lines: title(), box: { y: 9 }, sel, infoRow: update ? 21 : 20, footer: Lang.version(), home: true,
-      items: [
-        { key: "split", label: T("home.split"), info: [T("home.split.i1"), T("home.split.i2")], go: () => split() },
-        { key: "cpu", label: T("home.cpu"), info: [T("home.cpu.i1n"), T("home.cpu.i2")], go: () => cpu() },
-        { key: "online", label: T("home.online"), info: [T("home.online.i1"), T("home.online.i2")],
-          go: () => { location.href = Links.games(); } },
-        { key: "gap", label: "", disabled: true },
-        { key: "instr", label: T("menu.instr"), info: [T("menu.instr.i")], go: () => ui.showPage("instructions", "hotseat", () => main(4)) },
-        { key: "info", label: T("menu.info"), info: [T("menu.info.i")], go: () => ui.showPage("information", "hotseat", () => main(5)) },
-        { key: "settings", label: T("home.settings"), info: [T("home.settings.i")], go: () => settings() },
-        ...updateItems(),
-      ],
-    }, keep);
+    const items = [
+      ...(MOBILE ? [] : [{ key: "split", label: T("home.split"), info: [T("home.split.i1"), T("home.split.i2")], go: () => split() }]),
+      { key: "cpu", label: T("home.cpu"), info: [T(MOBILE ? "home.cpu.i1m" : "home.cpu.i1n"), T("home.cpu.i2")], go: () => cpu() },
+      { key: "online", label: T("home.online"), info: [T("home.online.i1"), T("home.online.i2")],
+        go: () => { Nav.go(Links.games()); } },
+      { key: "replays", label: T("home.replays"), info: [T("home.replays.i")], go: () => { Nav.go(Links.replays()); } },
+      { key: "gap", label: "", disabled: true },
+      { key: "instr", label: T("menu.instr"), info: [T("menu.instr.i")], go: () => ui.showPage("instructions", "hotseat", () => main("instr")) },
+      { key: "info", label: T("menu.info"), info: [T("menu.info.i")], go: () => ui.showPage("information", "hotseat", () => main("info")) },
+      { key: "settings", label: T("home.settings"), info: [T("home.settings.i")], go: () => settings() },
+      ...updateItems(),
+    ];
+    if (typeof sel === "string") sel = Math.max(0, items.findIndex(it => it.key === sel));
+    ui.show({ lines: title(), box: { y: 9 }, sel, infoRow: update ? 22 : 20, footer: Lang.version(), home: true, items }, keep);
   }
 
   // ------------------------------------------------------------------ settings: language, sound
   // desktop app only: the online server (Endpoint, "tunneler.server"; empty = the public one), stored on
   // Enter and when leaving the screen
-  const serverForm = { value: window.Endpoint ? Endpoint.get() : "", max: 120, width: 36,
-    placeholder: window.Endpoint ? Endpoint.DEFAULT.replace(/^https:\/\//, "") : "" };
+  const serverForm = { value: Endpoint.get(), max: 120, width: 36, placeholder: Endpoint.DEFAULT.replace(/^https:\/\//, "") };
   const saveServer = () => { serverForm.value = Endpoint.set(serverForm.value); };
   // the player's name for online games (DosUI.playerName, "tunneler.name"), stored on Enter and when leaving
   const nameForm = { value: DosUI.playerName(), max: DosUI.NAME_MAX, width: DosUI.NAME_MAX };
   const saveName = () => { nameForm.value = DosUI.setPlayerName(nameForm.value); };
-  // the settings box as wide as its widest row in any language with any value - it doesn't jump when the
-  // language (or a value) changes
-  const settingsWidth = () => {
-    const R = (k, c) => Lang.raw(k, c) || "", app = window.Endpoint && Endpoint.isApp;
-    const labels = [];
-    for (const c of Lang.codes) {
-      labels.push({ label: R("set.name", c), input: nameForm }, { label: R("back.main", c) });
-      for (const l of Lang.codes) labels.push({ label: R("home.lang", c) + ((Lang.data[l] || {}).name || l) });
-      for (const s of SOUNDS) labels.push({ label: R("set.sound", c) + R("sound." + s, c) });
-      for (const k of ["set.smooth", "set.ping"]) for (const v of ["set.ping.on", "set.ping.off"]) labels.push({ label: R(k, c) + R(v, c) });
-      if (app) labels.push({ label: R("set.server", c), input: serverForm });
+  // ------------------------------------------------------------------ Settings: two boxes - the categories
+  // on the left (Back to main menu below them), the chosen one's settings on the right (owner, 2026-10-24).
+  // The right box changes as the selection moves through the categories (DosUI onSel); Up / Down stay
+  // within a box, Enter / Right / Tab go into the settings, Esc back to the categories, then the main menu.
+  // The settings rows line up on their ": " (labels right-aligned to the longest of all categories), the
+  // right box is as wide as its widest row in any category - nothing moves when a value or the category changes.
+  // categories (owner, 2026-10-24): Display, Graphics (the original's or the modern's settings), Sound,
+  // Controls, Online, Language
+  const cats = () => ["display", "graphics", "sound", "controls", "online", "language"];
+  let setCat = "display";
+  const ONOFF = ["light", "glow", "shake"];
+  const modValue = (k, v, c) => ONOFF.includes(k) ? Lang.raw(v === "on" ? "set.ping.on" : "set.ping.off", c) : Lang.raw("mod." + k + "." + v, c);
+  const onOffT = v => T(v ? "set.ping.on" : "set.ping.off");
+  const isApp = () => Endpoint.isApp;
+  const modernOn = () => !!(G() && G().mode() === "modern");
+  const SP = () => Speaker && Speaker.getOption ? Speaker : null;      // (volume / stereo / fade)
+  const CTL = () => Controls && Controls.get ? Controls : null;        // (key remapping)
+  const PADS = () => Pads && Pads.getTouch ? Pads : null;              // (touch controls)
+  const SCR = () => GameScreen || null;                                 // (fullscreen, screen size: screen.js)
+  const COLORS8 = ["blue", "green", "cyan", "yellow", "white", "pink", "violet", "teal"];
+  // a key row's label: "BLUE up: "
+  const keyLabel = (set, a) => Lang.raw(set) + " " + Lang.raw("ctl." + a) + ": ";
+  const rowLabels = () => ["set.name", "home.lang", "set.sound", "set.volume", "set.stereo", "set.fade", "set.gfx", "set.fullscreen",
+    "set.scale", "set.tankcolors", "set.smooth", "set.ping", "set.prefer", "set.chatsound", "set.showchat", "touch.size", "touch.left"]
+    .concat(isApp() ? ["set.server"] : [], Object.keys(Gfx.MODERN).map(k => "mod." + k))
+    .map(k => Lang.raw(k) || "").concat(CTL() ? Controls.SETS.flatMap(st => Controls.ACTIONS.map(a => keyLabel(st, a))) : []);
+  const labelW = () => Math.max(...rowLabels().map(l => UniText.cols(l)));
+  const padRaw = raw => " ".repeat(Math.max(0, labelW() - UniText.cols(raw))) + Lang.enc(raw);
+  const pad = k => padRaw(Lang.raw(k) || "");
+  function setModern(k, d) {
+    const m = Gfx.modern(), list = k === "style" ? ["clean", "retro"] : Gfx.MODERN[k];
+    const v = list.includes(m[k]) ? step(list, m[k], d) : list[d > 0 ? 0 : list.length - 1];
+    Gfx.setModern(k, v);
+    settings(true);
+  }
+  const toggle = (key, def) => () => { save(key, load(key, def) === "1" ? "0" : "1"); settings(true); };
+  // ---- a key being chosen (Controls.capture: the next key press - caught before the page sees it, keys that
+  // can't be used ignored; Esc cancels)
+  let capture = null, cancelCapture = null;
+  const stopCapture = () => { if (cancelCapture) cancelCapture(); cancelCapture = null; capture = null; };
+  function startCapture(set, action) {
+    stopCapture();
+    capture = { set, action };
+    cancelCapture = Controls.capture(code => {
+      cancelCapture = null; capture = null;
+      if (code) Controls.set(set, action, code);
+      settings(true);
+    });
+    settings(true);
+  }
+  // (Alt+Enter, or leaving fullscreen with the browser's Esc: the Fullscreen row follows)
+  GameScreen.onChange(() => { if (ui.spec && ui.spec.items && ui.spec.items.some(i => i.key === "fullscreen")) settings(true); });
+  // the settings of category c
+  function catItems(c) {
+    const L = (key, label, info, change, extra) => Object.assign({ key, label, info, align: "left",
+      go: () => change(1), change }, extra || {});
+    if (c === "sound") {
+      const rows = [L("sound", pad("set.sound") + T("sound." + soundStyle()), [T("sound.i1"), T("sound.i2")], setSound)];
+      if (SP()) {
+        // (the volume stops at 0 and 100 - no wrapping round; the on / off ones switch)
+        const opt = (k, d) => { const list = Speaker.OPTIONS[k], i = list.indexOf(Speaker.getOption(k));
+          const v = k === "volume" ? list[Math.max(0, Math.min(list.length - 1, i + d))] : step(list, Speaker.getOption(k), d); Speaker.setOption(k, v); if (Speaker.preview) try { Speaker.preview(soundStyle()); } catch (e) { /* no audio */ } settings(true); };
+        // (the volume as a meter of 10 cells - a click on a cell sets it there, a right click one less)
+        const vol = Speaker.getOption("volume"), at = UniText.cols(pad("set.volume"));
+        const setVol = v => { Speaker.setOption("volume", v); if (Speaker.preview) try { Speaker.preview(soundStyle()); } catch (e) { /* no audio */ } settings(true); };
+        rows.push(L("volume", pad("set.volume") + "\xDB".repeat(vol / 10) + "\xB0".repeat(10 - vol / 10) + " " + vol + " %",
+          [T("set.volume.i"), T("home.lang.i2")], d => opt("volume", d),
+          { zones: Array.from({ length: 10 }, (_, i) => ({ from: at + i, to: at + i + 1, click: dir => setVol(dir > 0 ? (i + 1) * 10 : i * 10) })) }),
+          L("stereo", pad("set.stereo") + onOffT(Speaker.getOption("stereo") === "on"), [T("set.stereo.i"), T("home.lang.i2")], d => opt("stereo", d)),
+          L("fade", pad("set.fade") + onOffT(Speaker.getOption("fade") === "on"), [T("set.fade.i"), T("home.lang.i2")], d => opt("fade", d)));
+      }
+      return rows;
     }
-    return DosUI.boxWidth(labels);
+    if (c === "display") {
+      const rows = [];
+      if (SCR()) {
+        const sc = GameScreen;
+        if (!sc.android()) rows.push(L("fullscreen", pad("set.fullscreen") + onOffT(sc.fullscreen()), [T("set.fullscreen.i1"), T("set.fullscreen.i2")],
+          () => { sc.setFullscreen(!sc.fullscreen()); settings(true); }));
+        rows.push(L("scale", pad("set.scale") + T("scale." + sc.scale()), [T("set.scale.i1"), T("set.scale.i2")],
+            d => { sc.setScale(step(sc.SCALES, sc.scale(), d)); settings(true); }));
+      }
+      if (Display.TANK_COLOR_MODES) {
+        const now = Display.tankColorMode();
+        rows.push(L("tankcolors", pad("set.tankcolors") + T("tc." + now), [T("tc." + now + ".i"), T("set.tankcolors.i")],
+          d => { save("tunneler.tankcolors", step(Display.TANK_COLOR_MODES, now, d)); settings(true); }));
+      }
+      return rows;
+    }
+    if (c === "graphics") {
+      // Original / modern, a blank row, then that look's own settings
+      const rows = [];
+      if (G()) {
+        const mode = gfxMode(), ok = G().supported();
+        rows.push(L("gfx", pad("set.gfx") + T("gfx." + mode), [T("gfx.i1"), ok ? T("gfx.i2") : { text: T("gfx.none"), color: 12 }],
+          d => setGfx(mode, d)), { key: "gap-g", label: "", disabled: true });
+      }
+      if (!modernOn()) rows.push(L("smooth", pad("set.smooth") + onOffT(load("tunneler.smooth", "1") !== "0"),
+        [T("set.smooth.i1"), T("set.smooth.i2")], toggleSmooth));
+      else {
+        const m = Gfx.modern();
+        for (const k of Object.keys(Gfx.MODERN)) {
+          rows.push(L(k, pad("mod." + k) + Lang.enc(modValue(k, m[k])), [T("mod." + k + ".i1"), T(k === "style" ? "mod.style.i2" : "mod.i2")],
+            d => setModern(k, d)));
+          if (k === "style") rows.push({ key: "gap-m", label: "", disabled: true });
+        }
+      }
+      return rows;
+    }
+    if (c === "controls") {
+      const rows = [];
+      if (CTL()) {
+        for (const set of Controls.SETS) {
+          for (const a of Controls.ACTIONS) {
+            const on = capture && capture.set === set && capture.action === a;
+            rows.push({ key: "key-" + set + "-" + a, align: "left",
+              label: padRaw(keyLabel(set, a)) + (on ? T("ctl.press") : Lang.enc(Controls.label(Controls.get(set, a)))),
+              info: [T("ctl.i1"), T("ctl.i2")], go: () => startCapture(set, a) });
+          }
+          rows.push({ key: "gap-" + set, label: "", disabled: true });
+        }
+        rows.push({ key: "keys-reset", label: T("ctl.reset"), info: [T("ctl.reset.i")], go: () => { Controls.reset(); settings(true); } });
+      }
+      if (PADS()) {
+        const t = (k, d) => { Pads.setTouch(k, step(Pads.TOUCH[k], Pads.getTouch(k), d)); settings(true); };
+        rows.push({ key: "gap-t", label: "", disabled: true },
+          L("touchsize", pad("touch.size") + T("touch.size." + Pads.getTouch("size")), [T("touch.size.i"), T("touch.i2")], d => t("size", d)),
+          L("touchleft", pad("touch.left") + onOffT(Pads.getTouch("left") === "on"), [T("touch.left.i"), T("touch.i2")], d => t("left", d)));
+      }
+      return rows;
+    }
+    if (c === "online") {
+      const prefer = COLORS8.includes(load("tunneler.online.color", "")) ? load("tunneler.online.color", "") : "";
+      const shown = load("tunneler.chat.hide", "0") !== "1";          // (Show chat: the stored key says hidden)
+      return [
+        { key: "name", label: pad("set.name"), input: nameForm, align: "left", info: [T("set.name.i1"), T("set.name.i2")],
+          go: () => { saveName(); settings(true); } },
+        ...(isApp() ? [{ key: "server", label: pad("set.server"), input: serverForm, align: "left",
+          info: [T("set.server.i1"), T("set.server.i2")], go: () => { saveServer(); settings(true); } }] : []),
+        L("prefer", pad("set.prefer") + (prefer ? Lang.enc(Lang.raw(prefer)) : T("set.prefer.none")), [T("set.prefer.i1"), T("set.prefer.i2")],
+          d => { save("tunneler.online.color", step([""].concat(COLORS8), prefer, d)); settings(true); }),
+        L("showchat", pad("set.showchat") + onOffT(shown), [T("set.showchat.i"), T("home.lang.i2")],
+          () => { save("tunneler.chat.hide", shown ? "1" : "0"); settings(true); }),
+        // (the chat hidden: no chat sounds either - grayed out)
+        L("chatsound", pad("set.chatsound") + onOffT(shown && load("tunneler.chatsound", "1") !== "0"), [T("set.chatsound.i"), T("home.lang.i2")],
+          () => { save("tunneler.chatsound", load("tunneler.chatsound", "1") === "0" ? "1" : "0"); settings(true); }, { disabled: !shown }),
+        L("ping", pad("set.ping") + onOffT(load("tunneler.ping", "0") === "1"), [T("set.ping.i"), T("home.lang.i2")], togglePing),
+      ];
+    }
+    return [L("lang", pad("home.lang") + Lang.name(Lang.code), [T("home.lang.i1"), T("home.lang.i2")], setLang)];   // language
+  }
+  // the right box: as wide as the longest label + the widest value or input of any category (this language)
+  const settingsWidth = () => {
+    const c = Lang.code, R = k => Lang.raw(k, c) || "", cols = UniText.cols;
+    const values = [...Lang.codes.map(l => (Lang.data[l] || {}).name || l), ...SOUNDS.map(v => R("sound." + v)),
+      R("set.ping.on"), R("set.ping.off"), R("ctl.press"), R("set.prefer.none"), "x".repeat(10) + " 100 %",
+      ...COLORS8.map(k => R(k)), ...["fit", "integer"].map(v => R("scale." + v)), ...["normal", "colorblind", "relation"].map(v => R("tc." + v)),
+      ...["small", "medium", "large"].map(v => R("touch.size." + v)),
+      ...Gfx.MODES.map(v => R("gfx." + v)),
+      ...Object.keys(Gfx.MODERN).flatMap(k => Gfx.MODERN[k].map(v => modValue(k, v, c) || "")),
+      ...(CTL() ? ["W", "L Shift", "Num 8", "R Ctrl", "Space"] : [])];
+    const inputs = [nameForm.width + 1, ...(isApp() ? [serverForm.width + 1] : [])];
+    return Math.max(labelW() + Math.max(...values.map(v => cols(v)), ...inputs) + 2, cols(R("ctl.reset")) + 2);
   };
   function settings(keep) {
     nameForm.placeholder = T("ph.online");
     // (the input as wide as the placeholder in the longest language - names stay at most NAME_MAX)
     nameForm.width = Math.max(DosUI.NAME_MAX, ...Lang.codes.map(c => UniText.cols(Lang.raw("ph.online", c) || "")));
-    const w = settingsWidth();
-    const leave = () => { saveName(); if (window.Endpoint && Endpoint.isApp) saveServer(); main(6); };
+    const leave = () => { stopCapture(); saveName(); if (isApp()) saveServer(); main("settings"); };
+    const CATS = cats();
+    if (!CATS.includes(setCat)) setCat = CATS[0];
+    if (MOBILE) return settingsMobile(keep, leave, CATS);
+    // (the category shown on the right in white - it stays marked while the selection is in the settings)
+    const catRows = CATS.map(c => ({ key: "cat-" + c, label: T("set.cat." + c), info: [T("set.cat." + c + ".i")], attr: c === setCat ? 0x0F : 0,
+      go: () => ui.nextBox(1), change: d => { if (d > 0) ui.nextBox(1); } }));
+    const left = catRows.concat({ key: "gap", label: "", disabled: true },
+      { key: "back", label: T("back.main"), info: [T("back.main.i")], go: leave });
+    // (the desktop app's Server input: narrower when the two boxes would not fit 80 columns - a longer
+    // address scrolls inside it)
+    if (isApp()) serverForm.width = Math.max(16, Math.min(36, 80 - (DosUI.boxWidth(left) + 2) - 1 - 2 - labelW() - 3));
+    const right = catItems(setCat);
+    // (the tallest category fixes where the boxes and the info go: they don't jump between categories)
+    const rows = Math.max(left.length, ...CATS.map(c => catItems(c).length));
+    const y = Math.min(6, 18 - rows);
     ui.show({
-      lines: screenTitle("set.title"), box: { x: 41 - ((w + 2) >> 1), y: 8, w }, sel: 1, infoRow: window.Endpoint && Endpoint.isApp ? 20 : 19,
-      back: leave,
-      items: [
-        { key: "name", label: T("set.name"), input: nameForm, align: "left", info: [T("set.name.i1"), T("set.name.i2")],
-          go: () => { saveName(); settings(true); } },
-        { key: "gap0", label: "", disabled: true },
-        { key: "lang", label: T("home.lang") + Lang.name(Lang.code), info: [T("home.lang.i1"), T("home.lang.i2")],
-          go: () => setLang(1), change: setLang },
-        { key: "sound", label: T("set.sound") + T("sound." + soundStyle()), info: [T("sound.i1"), T("sound.i2")],
-          go: () => setSound(1), change: setSound },
-        { key: "smooth", label: T("set.smooth") + T(load("tunneler.smooth", "1") !== "0" ? "set.ping.on" : "set.ping.off"),
-          info: [T("set.smooth.i1"), T("set.smooth.i2")], go: toggleSmooth, change: toggleSmooth },
-        { key: "ping", label: T("set.ping") + T(load("tunneler.ping", "0") === "1" ? "set.ping.on" : "set.ping.off"),
-          info: [T("set.ping.i"), T("home.lang.i2")], go: togglePing, change: togglePing },
-        ...(window.Endpoint && Endpoint.isApp ? [{ key: "server", label: T("set.server"), input: serverForm, align: "left",
-          info: [T("set.server.i1"), T("set.server.i2")], go: () => { saveServer(); settings(true); } }] : []),
-        { key: "gap", label: "", disabled: true },
-        { key: "back", label: T("back.main"), info: [T("back.main.i")], go: leave },
-      ],
+      lines: [{ row: Math.max(1, y - 2), text: T("set.title"), color: 12 }],
+      boxes: [{ y, items: left, wrap: true }, { y, w: settingsWidth(), title: T("set.cat." + setCat), items: right, wrap: true }],
+      sel: CATS.indexOf(setCat), infoRow: y + rows + 3,
+      onSel: i => { if (i < CATS.length && CATS[i] !== setCat) { stopCapture(); setCat = CATS[i]; settings(true); } },
+      // (Esc: from the settings back to their category, from the categories to the main menu)
+      back: () => { stopCapture(); if (ui.sel >= left.length) { ui.sel = CATS.indexOf(setCat); ui.draw(); } else leave(); },
+    }, keep);
+  }
+
+  // A phone / tablet (owner, 2026-10-24): one column - the categories; one opens its settings on a screen
+  // of their own, with Back (and Esc) to the categories
+  let setOpen = null;
+  function settingsMobile(keep, leave, CATS) {
+    const backToList = () => { stopCapture(); setOpen = null; settings(); ui.sel = Math.max(0, CATS.indexOf(setCat)); ui.draw(); };
+    if (!setOpen) {
+      ui.show({
+        lines: [{ row: 2, text: T("set.title"), color: 12 }], box: { y: 5 }, sel: Math.max(0, CATS.indexOf(setCat)), infoRow: 19,
+        items: CATS.map(c => ({ key: "cat-" + c, label: T("set.cat." + c), info: [T("set.cat." + c + ".i")],
+          go: () => { setCat = c; setOpen = c; settings(); } }))
+          .concat({ key: "gap", label: "", disabled: true }, { key: "back", label: T("back.main"), info: [T("back.main.i")], go: leave }),
+        back: leave,
+      }, keep);
+      return;
+    }
+    ui.show({
+      lines: [{ row: 2, text: T("set.cat." + setOpen), color: 12 }], box: { y: 5 }, infoRow: 21,
+      items: catItems(setOpen).concat({ key: "gap-back", label: "", disabled: true },
+        { key: "back-cat", label: T("set.back"), info: [T("set.back.i")], go: backToList }),
+      back: backToList,
     }, keep);
   }
 
@@ -222,11 +418,11 @@
 
   // ------------------------------------------------------------------ split screen (DESIGN-8P 11, 17)
   function split(keep, sel) {
-    const start = () => { location.href = Links.split("size=" + splitSize + "&win=" + splitWin + timeArg(splitTime)); };
+    const start = () => { Nav.go(Links.split("size=" + splitSize + "&win=" + splitWin + timeArg(splitTime))); };
     const set = f => v => { f(v); saveSplit(); split(true); };
     ui.show({
       lines: screenTitle("lc.split.title"), box: { y: 9 }, sel: sel || 0, infoRow: 20,
-      back: () => main(0),
+      back: () => main("split"),
       items: [
         { key: "play", label: T("cpu.start"), info: [T("home.split.i1"), T("home.split.i2")], go: start },
         { key: "gap1", label: "", disabled: true },
@@ -234,7 +430,7 @@
         winItem(splitWin, set(v => { splitWin = v; })),
         timeItem(splitTime, set(v => { splitTime = v; })),
         { key: "gap2", label: "", disabled: true },
-        { key: "back", label: T("back.main"), info: [T("back.main.i")], go: () => main(0) },
+        { key: "back", label: T("back.main"), info: [T("back.main.i")], go: () => main("split") },
       ],
     }, keep);
   }
@@ -246,18 +442,18 @@
     slots.forEach((s, i) => { if (s.kind !== "none") used.push({ color: i, team: s.team, kind: s.kind }); });
     const perTeam = new Map();
     for (const u of used) perTeam.set(u.team, (perTeam.get(u.team) || 0) + 1);
-    const me = slots.findIndex(s => s.kind === "you");
-    const nCpu = used.length - (me >= 0 ? 1 : 0);
+    const me = slots.findIndex(s => s.kind === "you"), p2 = slots.findIndex(s => s.kind === "p2");
+    const nCpu = used.length - (me >= 0 ? 1 : 0) - (p2 >= 0 ? 1 : 0);
     const ownTeams = (TunnelerEngine.OWN_TEAMS || []).includes(gmode);   // (infection, survival: the mode makes the teams)
     return {
-      used, nCpu, me,
-      // the original engine: you as BLUE against one computer GREEN, in different teams
-      classic: used.length === 2 && used[0].color === 0 && used[0].kind === "you" && used[1].color === 1 && used[0].team !== used[1].team &&
-        gmode === "standard" && !mods.noRepair,
+      used, nCpu, me, p2,
+      // (a skirmish always runs the extended engine - owner, 2026-10-24; the classic one is split screen's)
+      one: used.length === 2 && nCpu === 1 && p2 < 0 && gmode === "standard",
       nTeams: perTeam.size,
       teamGame: [...perTeam.values()].some(n => n > 1) || ownTeams,
       mates: me >= 0 ? perTeam.get(slots[me].team) - 1 : 0,   // computer tanks on your team
-      error: me < 0 ? "lc.err.you" : nCpu < 1 ? "lc.err.cpu" : perTeam.size < 2 && !ownTeams ? "lc.err.team" : null,
+      // (two players need no computer tank)
+      error: me < 0 ? "lc.err.you" : nCpu < 1 && p2 < 0 ? "lc.err.cpu" : perTeam.size < 2 && !ownTeams ? "lc.err.team" : null,
     };
   }
 
@@ -269,20 +465,21 @@
       // the whole setup as a short code (cpucode.js: /skirmish?g=<13 characters>)
       const all = COLORS.map((c, i) => ({ kind: "none", team: slots[i].team }));
       for (const u of S.used) all[u.color] = { kind: u.kind, team: u.team };
-      location.href = Links.cpu("g=" + CpuCode.encode({ slots: all, size: cpuSize, win: cpuWin, time: cpuTime, ff: ff && S.teamGame,
-        view, watch: watchOut, sight, mode: gmode, goal: GOALS[gmode] ? goalOf(gmode) : undefined, noRepair: mods.noRepair }));
+      Nav.go(Links.cpu("g=" + CpuCode.encode({ slots: all, size: cpuSize, win: cpuWin, time: cpuTime, ff: ff && S.teamGame,
+        view, watch: watchOut, sight, mode: gmode, goal: GOALS[gmode] ? goalOf(gmode) : undefined })));
     };
     // slot rows: "you                team 1", the who column padded to the longest text in this language,
     // each row in its tank's color (which is all that tells the colors apart - no color name)
-    const who = k => k === "you" ? T("lc.you") : k === "none" ? T("lc.none") : T("lc.cpu", { level: Lang.raw("level." + k) });
-    const whoW = Math.max(...["you"].concat(KINDS).map(k => who(k).length)) + 2;
+    const youInfo = () => MOBILE ? T("lc.you.touch", { fire: Lang.raw("touch.fire") }) : T("lc.you.i1");
+    const who = k => k === "you" ? T(MOBILE ? "lc.me" : "lc.p1") : k === "p2" ? T("lc.p2") : k === "none" ? T("lc.none") : T("lc.cpu", { level: Lang.raw("level." + k) });
+    const whoW = Math.max(...KINDS.map(k => UniText.cols(who(k)))) + 2;
     const slotItems = slots.map((s, i) => {
       const setTeam = d => { s.team = (s.team - 1 + d + 8) % 8 + 1; redraw(); };
       // nobody / computer levels, plus "you" while no slot is yours: to change your color, set your
       // own slot to something else first, then pick "you" in the other one
       const setKind = d => {
-        const free = !slots.some(o => o.kind === "you");
-        s.kind = step(KINDS.filter(k => k !== "you" || free || s.kind === "you"), s.kind, d);
+        const free = k => !slots.some(o => o !== s && o.kind === k);   // (player 1 / player 2: one each)
+        s.kind = step(KINDS.filter(k => (k !== "you" && k !== "p2") || free(k)), s.kind, d);
         redraw();
       };
       // (infection / survival make their own teams: the team column gray, nothing to set - the mode's description instead)
@@ -291,13 +488,14 @@
       return {
         key: "slot" + i, align: "left", attr: TEXT_COLORS[i] & 0x0F,
         // (like the online lobby's seats: "►" in front of your own tank)
-        label: (s.kind === "you" ? "\x10" : " ") + " " + who(s.kind).padEnd(whoW) + teamText,
+        label: (s.kind === "you" || s.kind === "p2" ? "\x10" : " ") + " " + UniText.padEnd(who(s.kind), whoW) + teamText,
         // mouse: a click on the who column / the team cycles it (right click: back), elsewhere selects
         dim: own ? [2 + whoW, 2 + whoW + teamText.length] : null,
         zones: own ? [{ from: 2, to: 2 + whoW - 1, click: setKind }]
           : [{ from: 2, to: 2 + whoW - 1, click: setKind }, { from: 2 + whoW, to: 2 + whoW + teamText.length, click: setTeam }],
-        info: own ? [s.kind === "you" ? T("lc.you.i1") : T("lc.slot.i1", { levels: levelsText() }), T("gm." + gmode + ".i")]
-          : s.kind === "you" ? [T("lc.you.i1"), T("lc.you.i2")] : [T("lc.slot.i1", { levels: levelsText() }), T("lc.slot.i2")],
+        info: own ? [s.kind === "you" ? youInfo() : s.kind === "p2" ? T("lc.p2.i1") : T(MOBILE ? "lc.slot.i1m" : "lc.slot.i1", { levels: levelsText() }), T("gm." + gmode + ".i")]
+          : s.kind === "you" ? [youInfo(), T("lc.you.i2")] : s.kind === "p2" ? [T("lc.p2.i1"), T("lc.you.i2")]
+          : [T(MOBILE ? "lc.slot.i1m" : "lc.slot.i1", { levels: levelsText() }), T("lc.slot.i2")],
         go: own ? () => setKind(1) : () => setTeam(1),
         digit: own ? undefined : n => { s.team = n; redraw(); },   // 1..8: this slot's team
         change: setKind,
@@ -306,12 +504,12 @@
     const startInfo = S.error ? [{ text: T(S.error), color: 12 }]
       // (infection / survival make their own sides: the mode's description, not the slots' teams)
       : (TunnelerEngine.OWN_TEAMS || []).includes(gmode) ? [T("gm." + gmode + ".i"), T(view === "everyone" ? "cpu.all" : view === "team" ? "cpu.team" : "cpu.own")]
-      : [S.classic ? T("lc.go.1", { level: Lang.raw("level." + S.used[1].kind) })
+      : [S.p2 >= 0 ? (S.nCpu ? T(S.teamGame ? "lc.go.2t" : "lc.go.2n", { n: S.nCpu, t: S.nTeams }) : T("lc.go.2"))
+        : S.one ? T("lc.go.1", { level: Lang.raw("level." + S.used.find(u => u.kind !== "you").kind) })
         : S.teamGame ? T("lc.go.t", { t: S.nTeams, n: S.nCpu, m: S.mates }) : T("lc.go.n", { n: S.nCpu }),
-      T(view === "everyone" ? (S.classic ? "cpu.both" : "cpu.all") : view === "team" && S.mates > 0 ? "cpu.team" : "cpu.own")];
+      T(view === "everyone" ? "cpu.all" : view === "team" && S.mates > 0 ? "cpu.team" : "cpu.own")];
     const setView = d => { view = step(VIEWS, view, d); redraw(); };
     const setMode = d => { gmode = step(MODE_LIST, gmode, d); redraw(); };
-    const onOff = v => T(v ? "lc.on" : "lc.off"), flip = k => () => { mods[k] = !mods[k]; redraw(); };
     const options = [
       { key: "mode", label: T("lc.mode") + T("gm." + gmode), info: [T("gm." + gmode + ".i"), T("lc.mode.i")], go: () => setMode(1), change: setMode },
       sizeItem(cpuSize, v => { cpuSize = v; redraw(); }),
@@ -334,14 +532,13 @@
     const setWatch = d => { watchOut = step(TunnelerEngine.AFTER_DEATH, watchOut, d); redraw(); };
     options.push({ key: "watch", label: T("lc.watch") + T("watch." + watchOut),
       info: [T("watch.i1"), T("watch.i2")], go: () => setWatch(1), change: setWatch });
-    options.push({ key: "noRepair", label: T("mod.noRepair") + onOff(!mods.noRepair), info: [T("mod.noRepair.i")], go: flip("noRepair"), change: flip("noRepair") });
     // like the online game lobby (online.js), without the chat: the 8 slot rows (the screen's title in the
     // box's border) and the settings on top, Start / Back below them, the selected item's info under it
     const sets = options.map(o => Object.assign(o, { align: "left" }));
     const acts = [
       { key: "play", label: T("cpu.start"), info: startInfo, go: start },
       { key: "gap2", label: "", disabled: true },
-      { key: "back", label: T("back.main"), info: [T("back.main.i")], go: () => main(1) },
+      { key: "back", label: T("back.main"), info: [T("back.main.i")], go: () => main("cpu") },
     ];
     const items = slotItems.concat(sets, acts);
     const selKey = typeof sel === "string" ? sel : "play";
@@ -357,8 +554,7 @@
       T("lc.ff") + T("lc.on"), T("lc.ff") + T("lc.off"),
       ...SIGHTS.map(v => T("lc.sight") + T("sight." + v)),
       ...VIEWS.map(v => T("cpu.view") + T("view." + v)),
-      ...TunnelerEngine.AFTER_DEATH.map(w => T("lc.watch") + T("watch." + w)),
-      T("mod.noRepair") + onOff(true), T("mod.noRepair") + onOff(false)];
+      ...TunnelerEngine.AFTER_DEATH.map(w => T("lc.watch") + T("watch." + w))];
     const seatW = DosUI.boxWidth(slotItems), actW = DosUI.boxWidth(acts),
       setW = Math.max(DosUI.boxWidth(sets), DosUI.boxWidth(labels.map(label => ({ label, align: "left" }))));
     const x0 = Math.max(1, 1 + ((80 - (seatW + 2 + 3 + setW + 2)) >> 1));
@@ -370,11 +566,11 @@
         { x: 41 - ((actW + 2) >> 1), y: gameY, w: actW, title: T("box.game"), items: acts }],
       hint: T("create.hint"),
       sel: Math.max(0, items.findIndex(it => it.key === selKey)), infoRow: gameY + acts.length + 3,
-      back: () => main(1),
+      back: () => main("cpu"),
     }, keep);
   }
 
   if (location.hash === "#cpu") { history.replaceState(null, "", location.pathname); cpu(); }
   else if (location.hash === "#split") { history.replaceState(null, "", location.pathname); split(); }
   else main(0);
-})();
+}

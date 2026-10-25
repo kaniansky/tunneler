@@ -30,10 +30,14 @@
 //        GET /api/rooms/<id>      one room (also private ones: their ids carry a random suffix)
 //        POST /api/rooms          {name, public, spectators, seats?: [{kind: open|closed|easy|normal|hard,
 //                                  team: 1..8} x 8 (index = colour)], size, winScore, friendlyFire, roundTime,
-//                                  visible, watchOut, sight} -> roomInfo + hostKey (defaults for anything missing:
-//                                  BLUE + GREEN open, the rest closed; the older slots form still works)
+//                                  visible, watchOut, sight, password?} -> roomInfo + hostKey (defaults for anything
+//                                  missing: BLUE + GREEN open, the rest closed; the older slots form still works)
+//                                  password: optional ("" = none; NetProto.cleanPassword) - roomInfo `locked`
 // WS:    /ws?room=<id>&cid=<client id: 8-64 of A-Z a-z 0-9 _ ->&name=<player name>[&role=<colour>|watch]
-//            [&host=<hostKey>][&match=<no>&have=<frames>]&v=<client version | dev>
+//            [&host=<hostKey>][&pw=<password>][&match=<no>&have=<frames>]&v=<client version | dev>
+//        A game with a password lets in (to play or to watch) a connection that sends it, the host (its key)
+//        and a client id that got in before (reconnects, reloads); else err code "password" (`bad`: a wrong
+//        one was sent). Wrong passwords per address: MAX_PW_FAILS a minute, then code "pwlimit".
 //        A client of another version than the server's (package.json) is refused - also one that sends no
 //        version (pages from before 2.0); "dev" (pages served from src/) is never refused: POST 409
 //        {error, code: "version", version}, websocket err code "version" {version}. roomInfo has `version`.
@@ -51,14 +55,15 @@
 //                           host can't start (null | "tanks" | "human" | "teams" | "ready" | "match"),
 //                           match: null | {no, running, conn: [per tank], names}}
 //                     {t:"chat", from: {color, name} | {spectator: true, name}, text}
-//                     {t:"pong", c}  {t:"desync", n}  {t:"err", msg, code?}   (code "kicked", "full", "busy", "noroom", "version")
+//                     {t:"pong", c}  {t:"desync", n}  {t:"err", msg, code?}   (code "kicked", "full", "busy", "noroom", "version",
+//                           "password", "pwlimit")
 //                     {t:"host", key}  this connection hosts the room now: the host key for its later reconnects
 //   client -> server  lobby (not during a match):
 //                     {t:"seat", i}  sit on open seat i (= that colour), -1 = stand up and spectate
 //                     {t:"me", name?, team?}  own name (any time) / own seat's team 1..8 (not while ready)
 //                     {t:"ready", v}  seated players: ready (1) / not (0)
 //                     host: {t:"seatSet", i, kind?, team?} (a seat nobody sits on), {t:"set", size?, winScore?,
-//                     roundTime?, friendlyFire?, visible?, watchOut?, sight?, mode?, noRepair?, goals?} (public /
+//                     roundTime?, friendlyFire?, visible?, watchOut?, sight?, mode?, goals?} (public /
 //                     spectators only when the game is created; every player
 //                     unready after either), {t:"start"}, {t:"kick", k} (remove + ban by client id)
 //                     match players: {t:"b", v} held bits, {t:"k", a, s} keystroke (relayed as ANY_KEY),
@@ -66,16 +71,18 @@
 //                     anybody: {t:"chat", text}, {t:"ping", c}, {t:"rtt", ms} (round-trip time 0..9999)
 const http = require("http"), fs = require("fs"), path = require("path"), crypto = require("crypto");
 const { WebSocketServer } = require("ws");
-// shared with the browser; the source copy, so the server never depends on a build
-const NetProto = require("./src/js/netproto.js");
+// shared with the browser; the source copy, so the server never depends on a build (an ES module: node
+// >= 20.19 requires it as it is - package.json engines)
+const { NetProto } = require("./src/js/netproto.js");
 // this server's version (package.json): clients of another version can't create or join its games
 const VERSION = (() => { try { return require("./package.json").version || null; } catch (e) { return null; } })();
 const { FrameLog, ALL_BITS, EXT_BITS, F10, HASH_EVERY, ROLES, MAX_SLOTS, MAX_PLAYER_NAME, SEAT_KINDS, SETTINGS, cleanPlayerName, cleanChat,
   roomSettings, matchSlots, startProblem, isClassic } = NetProto;
 
 const PUB = path.join(__dirname, process.env.STATIC_DIR || "public");
-const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css",
+const TYPES = { ".webmanifest": "application/manifest+json", ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css",
   ".png": "image/png", ".ico": "image/x-icon", ".svg": "image/svg+xml", ".json": "application/json",
+  ".woff2": "font/woff2", ".ttf": "font/ttf", ".mp3": "audio/mpeg",
   ".txt": "text/plain; charset=utf-8", ".wasm": "application/wasm" };
 const MAX_ROOMS = 500, MAX_NAME = 40, MAX_KEYS_PER_TICK = 16, MAX_MSGS_PER_SEC = 120, MAX_SPECTATORS = 50;
 const MAX_FRAMES = Math.floor(8 * 3600 * 18.2);   // ~8 hours of play per room (then the room stops)
@@ -85,6 +92,8 @@ const LOG_CHUNK = 2000;                // log entries per message while a (re)jo
 const MAX_CREATES_PER_MIN = 30;        // POST /api/rooms per address
 const MAX_ROOMS_PER_ADDR = 20;         // rooms created by one address that still exist
 const MAX_CONNECTS_PER_MIN = 120;      // websocket connections per address
+const MAX_PW_FAILS = 10;               // wrong game passwords per address and minute (then refused unchecked)
+const MAX_ADMITTED = 500;              // client ids remembered per game with a password (they got in once)
 const MAX_ME_PER_SEC = 10;             // name / team changes per connection
 const CHAT_LOG = 50;                   // chat messages kept per room (sent to joiners)
 const CHAT_MAX = 5, CHAT_WINDOW_MS = 5000;   // chat messages per connection within this time
@@ -103,35 +112,6 @@ function slugify(s) {
 // MAX_NAME display columns (wide CJK / emoji count 2)
 function cleanName(s) {
   return NetProto.cleanRoomName(s, MAX_NAME);
-}
-
-// /js/langs.js: every file of the src/lang/<code>/ folders joined into one script - en/ first (the
-// fallback), then alphabetically; in each main.js, its other files, then modes/*.js. The order of the
-// language list comes from each main.js's `order` (lang.js). build.js writes the same join to
-// public/js/langs.js (its own copy of this, so the build never needs server.js); serving src/
-// (STATIC_DIR=src) this joins them on every request, so a new language needs no build.
-function langFiles(dir) {
-  const byName = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
-  const js = d => fs.existsSync(d) ? fs.readdirSync(d).filter(f => f.endsWith(".js")).sort(byName).map(f => path.join(d, f)) : [];
-  const out = [];
-  for (const c of fs.readdirSync(dir).filter(c => fs.statSync(path.join(dir, c)).isDirectory())
-    .sort((a, b) => (a !== "en") - (b !== "en") || byName(a, b))) {
-    const d = path.join(dir, c), main = path.join(d, "main.js");
-    if (fs.existsSync(main)) out.push(main);
-    out.push(...js(d).filter(f => f !== main), ...js(path.join(d, "modes")));
-  }
-  return out;
-}
-// /js/modes.js: every src/js/modes/<mode>.js joined (build.js writes public/js/modes.js; serving src/ this
-// joins them on every request)
-function modesBundle(dir) {
-  const names = fs.existsSync(dir) ? fs.readdirSync(dir).filter(f => f.endsWith(".js")).sort() : [];
-  return "// generated: src/js/modes/*.js joined (see server.js modesBundle / build.js)\n" +
-    names.map(f => fs.readFileSync(path.join(dir, f), "utf8")).join("\n");
-}
-function langBundle(dir) {
-  return "// generated: src/lang/<code>/*.js joined (see server.js langBundle / build.js)\n" +
-    langFiles(dir).map(f => fs.readFileSync(f, "utf8")).join("\n");
 }
 
 function createServer(opts = {}) {
@@ -169,6 +149,15 @@ function createServer(opts = {}) {
   // a computer level, a team, the connection sitting there (occ, open seats only) and the client id
   // that sat there last (a reload gets the seat back) - the game settings the host chooses, the chat,
   // and at most one match at a time.
+  // a game's password, kept salted and hashed (null = no password); passwordOk compares in constant time
+  function passwordHash(pw) {
+    if (!pw) return null;
+    const salt = crypto.randomBytes(16);
+    return { salt, hash: crypto.createHash("sha256").update(salt).update(pw, "utf8").digest() };
+  }
+  const passwordOk = (room, pw) => !!pw && crypto.timingSafeEqual(room.password.hash,
+    crypto.createHash("sha256").update(room.password.salt).update(NetProto.cleanPassword(pw), "utf8").digest());
+
   function createRoom(name, isPublic, allowSpec, settings, addr) {
     name = cleanName(name) || "Tunneler";
     const st = roomSettings(settings);
@@ -180,10 +169,12 @@ function createServer(opts = {}) {
     const room = {
       id, name, public: !!isPublic, allowSpec: !!allowSpec,
       size: st.size, winScore: st.winScore, friendlyFire: st.friendlyFire, roundTime: st.roundTime,
-      visible: st.visible, watchOut: st.watchOut, sight: st.sight, mode: st.mode, noRepair: st.noRepair, goals: st.goals,
+      visible: st.visible, watchOut: st.watchOut, sight: st.sight, mode: st.mode, goals: st.goals,
       seats: st.seats.map(s => ({ kind: s.kind, team: s.team, occ: null, last: null })),
       chat: [],                                    // the last CHAT_LOG chat messages [{from, text}]
       hostKey: crypto.randomBytes(16).toString("hex"), banned: new Set(), serial: 0,
+      password: passwordHash(NetProto.cleanPassword(settings && settings.password)),   // null = none
+      admitted: new Set(),                         // client ids that got past the password
       created: Date.now(), addr: addr || "", sockets: new Set(),
       match: null, matches: 0,                     // the match being played (see startMatch), matches started
       report: { round: 0, wins: [], teamWins: [], ext: false, players: 0 },   // the last match's score (the list)
@@ -195,7 +186,7 @@ function createServer(opts = {}) {
     return room;
   }
   const settingsOf = room => ({ size: room.size, winScore: room.winScore, friendlyFire: room.friendlyFire, roundTime: room.roundTime,
-    visible: room.visible, watchOut: room.watchOut, sight: room.sight, mode: room.mode, noRepair: room.noRepair, goals: room.goals });
+    visible: room.visible, watchOut: room.watchOut, sight: room.sight, mode: room.mode, goals: room.goals });
   const seated = room => room.seats.map((s, i) => s.occ ? i : -1).filter(i => i >= 0);
   // the tanks a match would have now
   const slotsNow = room => matchSlots(room.seats, i => !!room.seats[i].occ);
@@ -229,7 +220,7 @@ function createServer(opts = {}) {
     // the match's human tanks
     const players = m ? m.socks.filter(Boolean).length : seated(r).length;
     const places = m ? m.slots.filter(s => !s.bot).length : seated(r).length + r.seats.filter(s => s.kind === "open" && !s.occ).length;
-    return { id: r.id, name: r.name, public: r.public, spectators: r.allowSpec, version,
+    return { id: r.id, name: r.name, public: r.public, spectators: r.allowSpec, locked: !!r.password, version,
       state: m ? (m.running ? "playing" : "paused") : "lobby", round: m ? m.report.round : 0,
       wins: m ? m.report.wins : [], teamWins: m ? m.report.teamWins : [], ext: m ? m.ext : !isClassic(slots, r),
       created: r.created, ...settingsOf(r),
@@ -426,11 +417,14 @@ function createServer(opts = {}) {
       req.on("error", reject);
     });
   }
+  // every screen is a route of the one page (index.html, src/js/app.js; docs/DESIGN-8P.md 31): its addresses
+  // and the old page files all answer with that page, which shows the screen of the address
   const PRETTY = [
-    [/^\/games\/?$/, "/lobby.html"],                       // the games list
-    [/^\/game\/[^/]+(\/[a-z]+)?\/?$/, "/online.html"],      // one game's lobby (/watch: as a spectator; /<colour>: that seat)
-    [/^\/split\/?$/, "/play.html"],                         // split screen
-    [/^\/(skirmish|vs-computer)\/?$/, "/play.html"],       // a skirmish against AI tanks (/vs-computer: before 2.1)
+    [/^\/games\/?$/, "/index.html"],                       // the games list
+    [/^\/game\/[^/]+(\/[a-z]+)?\/?$/, "/index.html"],      // one game's lobby (/watch: as a spectator; /<colour>: that seat)
+    [/^\/(split|skirmish|vs-computer)\/?$/, "/index.html"], // split screen, a skirmish (/vs-computer: before 2.1)
+    [/^\/replays(\/[^/]+)?\/?$/, "/index.html"],           // the replays kept in the browser, one of them played
+    [/^\/(lobby|online|play|replays)\.html$/, "/index.html"], // the pages before 5.0 (the desktop app's addresses)
   ];
   // the API answers any origin (CORS): the desktop app's pages come from tauri://localhost /
   // tauri.localhost, not from this server; nothing here uses cookies or other credentials
@@ -455,6 +449,14 @@ function createServer(opts = {}) {
     };
   }
   const allowCreate = rateLimiter(MAX_CREATES_PER_MIN), allowConnect = rateLimiter(maxConnectsPerMin);
+  // wrong passwords per address: pwBlocked before checking one, pwFailed after a wrong one
+  const pwFails = new Map();
+  const pwRecent = addr => (pwFails.get(addr) || []).filter(t => Date.now() - t < 60000);
+  const pwBlocked = addr => pwRecent(addr).length >= MAX_PW_FAILS;
+  function pwFailed(addr) {
+    pwFails.set(addr, [...pwRecent(addr), Date.now()]);
+    if (pwFails.size > 5000) for (const k of pwFails.keys()) if (!pwRecent(k).length) pwFails.delete(k);
+  }
 
   async function api(req, res, p) {
     if (p === "/api/rooms" && req.method === "GET") {
@@ -494,19 +496,12 @@ function createServer(opts = {}) {
     if (p.endsWith("/")) p += "index.html";
     const f = path.join(PUB, path.normalize(p));
     if (!f.startsWith(PUB + path.sep) || p.includes("\0")) { res.writeHead(403); return res.end(); }
-    if (p === "/js/modes.js" && fs.existsSync(path.join(PUB, "js", "modes"))) {   // serving src/: join the game modes now
-      res.writeHead(200, { "Content-Type": TYPES[".js"], "Cache-Control": "no-cache" });
-      return res.end(req.method === "HEAD" ? undefined : modesBundle(path.join(PUB, "js", "modes")));
-    }
-    if (p === "/js/langs.js" && fs.existsSync(path.join(PUB, "lang"))) {   // serving src/: join the language files now
-      let js;
-      try { js = langBundle(path.join(PUB, "lang")); } catch (e) { res.writeHead(500); return res.end(); }
-      res.writeHead(200, { "Content-Type": TYPES[".js"], "Cache-Control": "no-cache" });
-      return res.end(req.method === "HEAD" ? undefined : js);
-    }
     fs.readFile(f, (err, data) => {
       if (err) { res.writeHead(404, { "Content-Type": "text/plain" }); return res.end("not found"); }
-      res.writeHead(200, { "Content-Type": TYPES[path.extname(f)] || "application/octet-stream", "Cache-Control": "no-cache" });
+      // (the bundles' names carry a hash: a new build has new names - kept for a year; everything else asks again)
+      const immutable = /^\/js\/(app|chunk)-[A-Z0-9]{8}\.js$/.test(p);
+      res.writeHead(200, { "Content-Type": TYPES[path.extname(f)] || "application/octet-stream",
+        "Cache-Control": immutable ? "public, max-age=31536000, immutable" : "no-cache" });
       res.end(req.method === "HEAD" ? undefined : data);
     });
   });
@@ -517,11 +512,11 @@ function createServer(opts = {}) {
     let u;
     try { u = new URL(req.url, "http://x"); } catch (e) { return socket.destroy(); }
     if (u.pathname !== "/ws") return socket.destroy();
-    const ok = allowConnect(addressOf(req));
+    const addr = addressOf(req), ok = allowConnect(addr);
     wss.handleUpgrade(req, socket, head, ws => {
       if (!ok) return ws.close(4029, "too many connections");   // (the page retries a bit later)
       // a throw here would escape the 'upgrade' event and take the whole process down
-      try { onConnect(ws, u.searchParams); }
+      try { onConnect(ws, u.searchParams, addr); }
       catch (e) { say("ws connect error:", e && e.message); try { fail(ws, "Server error."); } catch (e2) { ws.terminate(); } }
     });
   });
@@ -543,7 +538,7 @@ function createServer(opts = {}) {
   }
   const free = (room, i) => room.seats[i] && room.seats[i].kind === "open" && !room.seats[i].occ;
 
-  function onConnect(ws, q) {
+  function onConnect(ws, q, addr) {
     const room = rooms.get(q.get("room") || "");
     if (!room) return fail(ws, "No such room (it may have expired).", "noroom");
     // every page sends its browser's random client id: the host's ban, a player's seat and tank go by it
@@ -551,6 +546,16 @@ function createServer(opts = {}) {
     if (!cid) return fail(ws, "No client id.");
     if (room.banned.has(cid)) return fail(ws, KICKED, "kicked");
     if (wrongVersion(q.get("v"))) return fail(ws, versionMsg(q.get("v")), "version", { version });
+    // a password: the host and client ids that got in before don't need it again
+    const hostKeyOk = sameKey(q.get("host"), room.hostKey);
+    if (room.password && !hostKeyOk && !room.admitted.has(cid)) {
+      const pw = q.get("pw") || "";
+      if (pw && pwBlocked(addr)) return fail(ws, "Too many wrong passwords - try again in a minute.", "pwlimit");
+      if (!passwordOk(room, pw)) {
+        if (pw) pwFailed(addr);
+        return fail(ws, pw ? "Wrong password." : "This game needs a password.", "password", { bad: !!pw });
+      }
+    }
     if (room.sockets.size >= MAX_SPECTATORS + MAX_SLOTS) return fail(ws, "This game is full.", "full");
     // role: "watch" / "spectate" = only watch; a colour = the seat this page would like; else any seat
     const role = q.get("role") || "";
@@ -577,8 +582,9 @@ function createServer(opts = {}) {
     ws.name = uniqueName(room, q.get("name") || "", ws);
     // the host key makes this connection the host - unless another one already is (a second tab of the
     // same browser has the same key: it joins as a player; it hosts if the host leaves - ensureHost)
-    ws.host = sameKey(q.get("host"), room.hostKey) && ![...room.sockets].some(o => o.host && o.readyState === 1);
+    ws.host = hostKeyOk && ![...room.sockets].some(o => o.host && o.readyState === 1);
     room.sockets.add(ws);
+    if (room.password && room.admitted.size < MAX_ADMITTED) room.admitted.add(cid);
     clearTimeout(room.cleanupTimer);
     room.lastActive = Date.now();
     if (seat >= 0) sit(room, ws, seat);
@@ -864,7 +870,7 @@ function watchReleases(current, say = log) {
   setInterval(check, DAY_MS).unref();
 }
 
-module.exports = { createServer, slugify, cleanName, langBundle, modesBundle, newerVersion, latestRelease };
+module.exports = { createServer, slugify, cleanName, newerVersion, latestRelease };
 
 // Readable start-up errors instead of a Node stack trace (exit code 1).
 function startupError(port, err) {

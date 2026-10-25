@@ -1,4 +1,3 @@
-"use strict";
 // Game mode "gold" - gold rush (docs/DESIGN-8P.md 27).
 //
 // The match is ONE round (winScore 1): the first team to bring e.goal nuggets home ("Gold to win", default
@@ -26,8 +25,7 @@
 //   f              play frames of this round
 // e.modeScore[p]: the gold tank p brought home this round (reset every round: a drawn round's gold doesn't
 // count, so the statistics show the deciding round as the game did).
-(function (root) {
-const E = root.TunnelerEngine || require("../engine.js");
+import { TunnelerEngine as E } from "../engine.js";
 
 const GOAL = 10;                // gold to win (the default of TunnelerEngine.GOALS.gold)
 const MAX_CARRY = 5;
@@ -383,4 +381,3 @@ E.registerMode("gold", {
   SEE, HEAR, AI_KNOW,
   MAX_CARRY,
 });
-})(typeof window !== "undefined" ? window : globalThis);

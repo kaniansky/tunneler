@@ -229,8 +229,8 @@ const matches = [
   { name: "4 v 4, medium, goal 30", teams: [1, 2, 1, 2, 1, 2, 1, 2], levels: ["normal", "normal", "easy", "hard", "hard", "easy", "normal", "normal"], size: "medium", goal: 30 },
   { name: "free-for-all 8, medium, goal 180", teams: [1, 2, 3, 4, 5, 6, 7, 8], levels: new Array(8).fill("normal"), size: "medium", goal: 180 },
   { name: "2 v 2, medium, default goal", teams: [1, 2, 1, 2], levels: ["hard", "normal", "normal", "hard"], size: "medium" },
-  { name: "3 teams, round time 2, modifiers, goal 120", teams: [1, 2, 3, 1, 2, 3], levels: ["normal", "normal", "normal", "easy", "hard", "easy"], size: "small", roundTime: 2, mods: { noRepair: true }, goal: 120 },
-  { name: "1 v 1 large, round time 2, modifiers", teams: [1, 2], levels: ["hard", "hard"], size: "large", roundTime: 2, mods: { noRepair: true } },
+  { name: "3 teams, round time 2, goal 120", teams: [1, 2, 3, 1, 2, 3], levels: ["normal", "normal", "normal", "easy", "hard", "easy"], size: "small", roundTime: 2, goal: 120 },
+  { name: "1 v 1 large, round time 2", teams: [1, 2], levels: ["hard", "hard"], size: "large", roundTime: 2 },
 ];
 let byPoints = 0;
 for (const m of matches) {

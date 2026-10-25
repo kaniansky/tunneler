@@ -10,8 +10,7 @@
 //   node test/time-sim.js
 const path = require("path");
 const crypto = require("crypto");
-const E = require(path.join(__dirname, "../src/js/engine.js"));
-const TunnelerAI = require(path.join(__dirname, "../src/js/ai.js"));
+const { TunnelerEngine: E, TunnelerAI } = require("./src.js");
 
 const { UP, DOWN, LEFT, RIGHT, FIRE } = E.BITS;
 let bad = 0;

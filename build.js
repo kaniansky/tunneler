@@ -2,9 +2,16 @@
 // Builds src/ (the source) into public/ (what server.js serves). public/ is generated: it is wiped and
 // rebuilt on every run, never edit it by hand.
 //
-// .js / .css files are minified one by one with esbuild, NOT bundled: the pages load them as plain
-// <script src> files sharing globals (TunnelerEngine, Display, Lang, ...), not as ES modules.
-// Everything else (html, favicon) is copied unchanged.
+// The game is one page (index.html) whose screens are routes (src/js/app.js, docs/DESIGN-8P.md 31). Its code
+// is ES modules (src/js/*.js, src/lang/, src/js/modes/; src/package.json says so): esbuild bundles app.js
+// with everything it imports into public/js/app.js; each route's module (main menu, games list, online game,
+// local game) and the code only they need go into chunks loaded when a route first shows
+// (public/js/chunk-<hash>.js); app.js gets a hash in its name too (public/js/app-<hash>.js, the page's script
+// tag rewritten), so a cached old file never meets a new page. package.json's version is put in at bundle
+// time (version.js). The page is also written as lobby.html / online.html / play.html (the addresses before
+// 5.0, the desktop app's links). sw.js (the installable app's service worker) gets the version and the list
+// of files it keeps (PRECACHE).
+// .css files are minified; everything else (fonts, sounds, favicon) is copied unchanged.
 //
 //   node build.js           build once
 //   node build.js --watch   build, rebuild on every src/ change, and run server.js under node --watch
@@ -15,59 +22,51 @@ const { spawn } = require("node:child_process");
 const esbuild = require("esbuild");
 
 const SRC = path.join(__dirname, "src");
-const OUT = path.join(__dirname, "public");
+const OUT = process.env.BUILD_OUT ? path.resolve(process.env.BUILD_OUT) : path.join(__dirname, "public");   // (BUILD_OUT: another folder, e.g. for a test server)
+const ENTRIES = ["app"];
+const OLD_PAGES = ["lobby.html", "online.html", "play.html", "replays.html"];   // (copies of index.html: the desktop app's addresses)
+// not copied: the modules (bundled instead) and src/'s package.json
+const SKIP = new Set([path.join(SRC, "js"), path.join(SRC, "lang"), path.join(SRC, "package.json"), path.join(SRC, "sw.js")]);
 
 function files(dir, ext) {
+  if (!fs.existsSync(dir)) return [];
   return fs.readdirSync(dir, { recursive: true })
     .filter(f => f.endsWith(ext))
     .map(f => path.join(dir, f));
 }
 
-// src/lang/<code>/ (one folder per language: main.js, modes/<mode>.js, en/engine.js; docs/DESIGN-8P.md 24)
-// -> public/js/langs.js, one script the pages load after lang.js: the folder en/ first (the fallback), then
-// alphabetically; in each main.js, its other files, then modes/*.js. The language list's order comes from
-// each main.js's `order` (lang.js). The same join as server.js's langBundle (and lang.js in node).
-const LANG = path.join(SRC, "lang");
-function langFiles(dir) {
-  const byName = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
-  const js = d => fs.existsSync(d) ? fs.readdirSync(d).filter(f => f.endsWith(".js")).sort(byName).map(f => path.join(d, f)) : [];
-  const out = [];
-  for (const c of fs.readdirSync(dir).filter(c => fs.statSync(path.join(dir, c)).isDirectory())
-    .sort((a, b) => (a !== "en") - (b !== "en") || byName(a, b))) {
-    const d = path.join(dir, c), main = path.join(d, "main.js");
-    if (fs.existsSync(main)) out.push(main);
-    out.push(...js(d).filter(f => f !== main), ...js(path.join(d, "modes")));
-  }
-  return out;
-}
-function langBundle() {
-  return "// generated: src/lang/<code>/*.js joined (see build.js)\n" +
-    langFiles(LANG).map(f => fs.readFileSync(f, "utf8")).join("\n");
-}
-
-// src/js/modes/*.js (one file per game mode, docs/DESIGN-8P.md 27) -> public/js/modes.js, loaded by the game
-// pages after ai.js; alphabetically. server.js's modesBundle serves the same join for src/.
-const MODES = path.join(SRC, "js", "modes");
-function modesBundle() {
-  const names = fs.existsSync(MODES) ? fs.readdirSync(MODES).filter(f => f.endsWith(".js")).sort() : [];
-  return "// generated: src/js/modes/*.js joined (see build.js)\n" + names.map(f => fs.readFileSync(path.join(MODES, f), "utf8")).join("\n");
+// the esbuild options of the pages' bundles (tests build the same in memory: test/page-env.js)
+function bundleOptions(version) {
+  return {
+    entryPoints: ENTRIES.map(e => path.join(SRC, "js", e + ".js")),
+    outdir: path.join(OUT, "js"), bundle: true, splitting: true, format: "esm", entryNames: "[name]-[hash]", chunkNames: "chunk-[hash]",
+    metafile: true,
+    minify: true, target: "es2020", charset: "utf8", logLevel: "warning",
+    define: { TUNNELER_BUILD_VERSION: JSON.stringify(version) },
+  };
 }
 
 function build() {
   const t0 = Date.now();
   fs.rmSync(OUT, { recursive: true, force: true });
-  fs.cpSync(SRC, OUT, { recursive: true, filter: f => f !== LANG && f !== MODES });   // (joined below)
-  fs.writeFileSync(path.join(OUT, "js", "langs.js"), langBundle());
-  fs.writeFileSync(path.join(OUT, "js", "modes.js"), modesBundle());
-  // the version shown on the main menu ("TUNNELER 1.3.0")
+  fs.cpSync(SRC, OUT, { recursive: true, filter: f => !SKIP.has(f) });
+  // the version shown on the main menu ("TUNNELER v5"), sent to the server (another version is refused)
   const version = JSON.parse(fs.readFileSync(path.join(__dirname, "package.json"), "utf8")).version;
-  fs.writeFileSync(path.join(OUT, "js", "version.js"), "window.TUNNELER_VERSION = " + JSON.stringify(version) + ";\n");
-  for (const ext of [".js", ".css"]) {
-    const entryPoints = files(OUT, ext);
-    if (entryPoints.length)
-      esbuild.buildSync({ entryPoints, outdir: OUT, outbase: OUT, minify: true, bundle: false,
-        allowOverwrite: true, charset: "utf8", logLevel: "warning" });
-  }
+  const { metafile } = esbuild.buildSync(bundleOptions(version));
+  const url = f => "/" + path.relative(OUT, path.resolve(__dirname, f)).split(path.sep).join("/");
+  const app = Object.keys(metafile.outputs).find(f => metafile.outputs[f].entryPoint && /js\/app\.js$/.test(metafile.outputs[f].entryPoint));
+  const index = path.join(OUT, "index.html");
+  fs.writeFileSync(index, fs.readFileSync(index, "utf8").replace('src="/js/app.js"', 'src="' + url(app) + '"'));
+  for (const p of OLD_PAGES) fs.copyFileSync(index, path.join(OUT, p));
+  const css = files(OUT, ".css");
+  if (css.length)
+    esbuild.buildSync({ entryPoints: css, outdir: OUT, outbase: OUT, minify: true, allowOverwrite: true, charset: "utf8", logLevel: "warning" });
+  // the service worker: this version's files to keep (the page, code, styles, icons, the modern font)
+  const keep = ["/", "/index.html", "/manifest.webmanifest", "/favicon.ico", ...Object.keys(metafile.outputs).map(url),
+    ...files(path.join(OUT, "css"), ".css").concat(files(path.join(OUT, "icons"), ".png"), files(path.join(OUT, "fonts", "modern"), ".woff2"))
+      .map(f => "/" + path.relative(OUT, f).split(path.sep).join("/"))];
+  fs.writeFileSync(path.join(OUT, "sw.js"), fs.readFileSync(path.join(SRC, "sw.js"), "utf8")
+    .replace('"__VERSION__"', JSON.stringify(version)).replace("__PRECACHE__", JSON.stringify(keep)));
   console.log("built public/ in " + (Date.now() - t0) + " ms");
 }
 
@@ -81,5 +80,8 @@ function watch() {
   spawn(process.execPath, ["--watch", "server.js"], { cwd: __dirname, stdio: "inherit" });
 }
 
-if (process.argv.includes("--watch")) watch();
-else build();
+if (require.main === module) {
+  if (process.argv.includes("--watch")) watch();
+  else build();
+}
+module.exports = { bundleOptions, ENTRIES };

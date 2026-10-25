@@ -30,7 +30,7 @@ const path = require("path");
 const vm = require("vm");
 
 const ORIG = path.join(__dirname, "fixtures", "original");
-const TunnelerEngine = require(path.join(__dirname, "..", "src", "js", "engine.js"));
+const { TunnelerEngine } = require("./src.js");
 
 // ---------------------------------------------------------------- WASM loader (wasmapp.js in node)
 global.fetch = url => Promise.resolve({

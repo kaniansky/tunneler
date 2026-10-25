@@ -1,4 +1,3 @@
-"use strict";
 // Any Unicode text on the DOS screens (docs/DESIGN-8P.md 22): player names, room names, chat - in every
 // language at once, also wide characters (CJK, emoji: 16 pixels = two text cells).
 //
@@ -27,11 +26,11 @@
 // Glyphs come from (in this order): the VGA ROM font (code page 437, a pristine copy - glyphs.js
 // unicodeGlyph), glyphs.js's VGA-style letters (Latin, Greek, Cyrillic, ...), then GNU Unifont
 // (src/fonts/unifont/<block>.bin, 256 code points per file, tools/make-unifont.py), each block fetched the
-// first time one of its characters is drawn (node: read from disk). Which characters are wide is known
-// without the glyphs (unidata.js), so layouts never wait for a block.
-(function (root) {
+// first time one of its characters is drawn (node / tests: UniFont.loader reads the file). Which characters
+// are wide is known without the glyphs (unidata.js), so layouts never wait for a block.
+import { unicodeGlyph } from "./glyphs.js";
+import { UNI_DATA as DATA } from "./unidata.js";
 
-const DATA = root.UNI_DATA || (typeof require === "function" ? require("./unidata.js") : { wide: [], blocks: [] });
 const WIDE = DATA.wide, BLOCKS = new Set(DATA.blocks);
 const CONT = 0x110000;                 // plane value: right half of a wide character
 const LATIN1 = 0xF700;                 // U+0080..U+00FF in font text: U+F780..U+F7FF
@@ -132,27 +131,23 @@ function parseBlock(buf) {
   return { offs, wide, data: a };
 }
 const blockName = b => (b < 0x100 ? ("00" + b.toString(16)).slice(-3) : b.toString(16)) + ".bin";
-// node / tests: the block file's bytes, synchronously (null: none)
-function readFromDisk(b) {
-  try {
-    const fs = require("fs"), path = require("path");
-    return fs.readFileSync(path.join(__dirname, "..", "fonts", "unifont", blockName(b)));
-  } catch (e) { return null; }
-}
 const UniFont = {
   PENDING,
   base: "/fonts/unifont/",
-  // loader(block) -> bytes (sync), a Promise of bytes, or null; default: fetch in a browser, the file in node
+  // loader(block) -> bytes (sync), a Promise of bytes, or null; default: fetch in a browser (node / tests set
+  // one that reads the file: UniFont.blockName(b) in src/fonts/unifont/)
   loader: null,
-  onLoad(fn) { listeners.push(fn); },
+  blockName,
+  // (returns a function that stops it)
+  onLoad(fn) { listeners.push(fn); return () => { const i = listeners.indexOf(fn); if (i >= 0) listeners.splice(i, 1); }; },
   hasBlock: b => BLOCKS.has(b),
   loaded: () => Array.from(blocks.keys()).filter(b => blocks.get(b) && blocks.get(b) !== "loading"),
   glyph(cp) {
     const hit = cache.get(cp);
     if (hit !== undefined) return hit;
     let g = null;
-    if (cp >= 0x20 && cp < 0x30000 && root.unicodeGlyph) {
-      const rows = root.unicodeGlyph(String.fromCodePoint(cp));
+    if (cp >= 0x20 && cp < 0x30000) {
+      const rows = unicodeGlyph(String.fromCodePoint(cp));
       if (rows) g = { rows, wide: false };
     }
     if (!g) {
@@ -179,7 +174,6 @@ const UniFont = {
       if (this.loader) r = this.loader(b);
       else if (typeof window !== "undefined" && typeof fetch === "function" && window.location && /^https?:$/.test(window.location.protocol))
         r = fetch(this.base + blockName(b)).then(res => res.ok ? res.arrayBuffer() : null);
-      else if (typeof require === "function" && typeof __dirname === "string") r = readFromDisk(b);
     } catch (e) { r = null; }
     if (r && typeof r.then === "function") {
       blocks.set(b, "loading");
@@ -193,7 +187,5 @@ const UniFont = {
 
 const UniText = { CONT, LATIN1, cols, slice, padEnd, padStart, cells, each, fromRaw, passChar, rawCols, truncRaw,
   charCols, isWide, planeCp };
-root.UniText = UniText;
-root.UniFont = UniFont;
-if (typeof module !== "undefined" && module.exports) module.exports = Object.assign({ UniFont }, UniText);
-})(typeof window !== "undefined" ? window : globalThis);
+
+export { UniText, UniFont };

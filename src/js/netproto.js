@@ -1,4 +1,3 @@
-"use strict";
 // Online multiplayer: the parts shared by server.js, online.js and the tests (UMD).
 //
 // Server-clocked deterministic lockstep. The server ticks at the BIOS rate and emits one frame per
@@ -16,10 +15,8 @@
 //
 // roomSettings() reads a new room's settings (seats + game settings), SETTINGS checks the host's changes
 // and engineOptions() turns a match's cfg into TunnelerEngine options (every client the same).
-(function (root) {
-
 // display columns of user text (CJK / emoji take 2) - names are limited by columns, not characters
-const UniText = root.UniText || (typeof require === "function" ? require("./unitext.js") : null);
+import { UniText } from "./unitext.js";
 
 const TICK_MS = 65536 * 1000 / 1193182;
 
@@ -64,7 +61,6 @@ const goalsOf = v => {                                   // a goals object, chec
   return out;
 };
 const goalOf = (mode, goals) => !GOALS[mode] ? 0 : goals && GOALS[mode].choices.includes(goals[mode]) ? goals[mode] : GOALS[mode].def;
-const MODIFIERS = ["noRepair"];                          // no shield repair at bases
 const clampInt = (v, lo, hi, def) => { v = Math.trunc(Number(v)); return Number.isFinite(v) ? Math.max(lo, Math.min(hi, v)) : def; };
 
 // characters never kept in names / chat: control, bidi, zero-width, variation selectors, private use
@@ -72,7 +68,7 @@ const clampInt = (v, lo, hi, def) => { v = Math.trunc(Number(v)); return Number.
 const BAD_CHARS = /[\u0000-\u001f\u007f-\u009f<>\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff\ue000-\uf8ff\ufe00-\ufe0f]|[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/g;
 const BAD_CHAT = /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff\ue000-\uf8ff\ufe00-\ufe0f]|[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/g;
 // text cut to n display columns (whole characters)
-const cutCols = (t, n) => UniText ? UniText.truncRaw(t, n) : Array.from(t).slice(0, n).join("");
+const cutCols = (t, n) => UniText.truncRaw(t, n);
 // A player's display name: any letters (NFC), no control / bidi / zero-width characters or <>, spaces
 // collapsed, at most MAX_PLAYER_NAME display columns ("" = the tank's colour name).
 function cleanPlayerName(s) {
@@ -90,6 +86,14 @@ function cleanChat(s) {
 function cleanRoomName(s, n) {
   const t = String(s == null ? "" : s).normalize("NFC").replace(BAD_CHARS, "").replace(/\s+/g, " ").trim();
   return cutCols(t, n).trim();
+}
+
+// A game's password (optional, set when the game is created; "" = none): NFC, no control / bidi /
+// zero-width characters, spaces at the ends dropped, at most MAX_PASSWORD characters; case matters
+const MAX_PASSWORD = 20;
+function cleanPassword(s) {
+  const t = String(s == null ? "" : s).normalize("NFC").replace(BAD_CHAT, "").trim();
+  return Array.from(t).slice(0, MAX_PASSWORD).join("").trim();
 }
 
 // "after death" values (watchOut): black / wreck / team / killer / others (= all); anything else = "wreck", true (old) = "others"
@@ -125,7 +129,6 @@ const SETTINGS = {
   watchOut: v => AFTER_DEATH.includes(v) ? v : undefined,
   sight: v => SIGHTS.includes(v) ? v : undefined,
   mode: v => MODES.includes(v) ? v : undefined,
-  noRepair: v => typeof v === "boolean" ? v : undefined,
   goals: v => goalsOf(v) || undefined,
 };
 // A new room's settings from POST /api/rooms -> {seats: [8 x {kind, team}], size, winScore, friendlyFire,
@@ -138,7 +141,7 @@ function roomSettings(o) {
   return { seats, size: SIZES.includes(o.size) ? o.size : "medium", winScore: clampInt(o.winScore, 1, 9, 3),
     friendlyFire: o.friendlyFire === true, roundTime: roundTime(o.roundTime),
     visible: VISIBLE.includes(o.visible) ? o.visible : "self", watchOut: afterDeath(o.watchOut), sight: SIGHTS.includes(o.sight) ? o.sight : "full",
-    mode: MODES.includes(o.mode) ? o.mode : "standard", noRepair: o.noRepair === true, goals: goalsOf(o.goals) || {} };
+    mode: MODES.includes(o.mode) ? o.mode : "standard", goals: goalsOf(o.goals) || {} };
 }
 
 // The tanks of a match: the seats with a player (human) or a computer tank, in colour order ->
@@ -161,9 +164,9 @@ function startProblem(slots, mode) {
   if (!OWN_TEAMS.includes(mode) && new Set(slots.map(s => s.team)).size < 2) return "teams";
   return null;
 }
-// a game mode or a modifier: always the extended engine
-const special = st => !!st && ((st.mode && st.mode !== "standard") || MODIFIERS.some(k => st[k] === true));
-// the classic game: exactly BLUE + GREEN, both players, in different teams, the standard mode, no modifier -
+// a game mode: always the extended engine
+const special = st => !!st && !!st.mode && st.mode !== "standard";
+// the classic game: exactly BLUE + GREEN, both players, in different teams, the standard mode -
 // the original protocol and engine (st: the settings; none = standard)
 const isClassic = (slots, st) => slots.length === 2 && slots[0].color === 0 && slots[1].color === 1 && !slots[0].bot && !slots[1].bot &&
   slots[0].team !== slots[1].team && !special(st);
@@ -177,7 +180,6 @@ function engineOptions(cfg) {
   if (SIGHTS.includes(cfg.sight) && cfg.sight !== "full") o.sight = cfg.sight;
   if (cfg.ext) o.extended = true;
   if (MODES.includes(cfg.mode) && cfg.mode !== "standard") o.mode = cfg.mode;
-  for (const k of MODIFIERS) if (cfg[k] === true) o[k] = true;
   if (GOALS[cfg.mode]) o.goal = goalOf(cfg.mode, cfg.goals);
   return o;
 }
@@ -192,7 +194,7 @@ function readCfg(c) {
   return { ext: !!c.ext, players: slots.length, slots, names, size: SIZES.includes(c.size) ? c.size : "medium",
     winScore: clampInt(c.winScore, 1, 9, 3), friendlyFire: !!c.friendlyFire, roundTime: roundTime(c.roundTime),
     visible: VISIBLE.includes(c.visible) ? c.visible : "self", watchOut: afterDeath(c.watchOut), sight: SIGHTS.includes(c.sight) ? c.sight : "full",
-    mode: MODES.includes(c.mode) ? c.mode : "standard", noRepair: c.noRepair === true, goals: goalsOf(c.goals) || {} };
+    mode: MODES.includes(c.mode) ? c.mode : "standard", goals: goalsOf(c.goals) || {} };
 }
 
 // One frame -> engine input ({keyDown, keys}); identical on every client.
@@ -331,9 +333,8 @@ function stateHash(e) {
 
 const NetProto = { TICK_MS, UP, DOWN, LEFT, RIGHT, FIRE, ESC, ALL_BITS, EXT_BITS, BLUE_SCAN, GREEN_SCAN, F10,
   AFTER_DEATH, afterDeath, ROLES, MAX_SLOTS, LEVELS, oldLevel, SEAT_KINDS, SIZES, MAX_PLAYER_NAME, MAX_CHAT, VISIBLE, SIGHTS, ROUND_TIMES, roundTime,
-  cleanPlayerName, cleanChat, cleanRoomName, SETTINGS, defaultSeats, roomSettings, matchSlots, startProblem, isClassic, engineOptions, readCfg,
-  MODES, OWN_TEAMS, MODIFIERS, GOALS, goalOf,
+  cleanPlayerName, cleanChat, cleanRoomName, MAX_PASSWORD, cleanPassword, SETTINGS, defaultSeats, roomSettings, matchSlots, startProblem, isClassic, engineOptions, readCfg,
+  MODES, OWN_TEAMS, GOALS, goalOf,
   frameToInput, frameToInputExt, FrameLog, FrameQueue, HASH_EVERY, stateHash };
-root.NetProto = NetProto;
-if (typeof module !== "undefined") module.exports = NetProto;
-})(typeof window !== "undefined" ? window : globalThis);
+
+export { NetProto };

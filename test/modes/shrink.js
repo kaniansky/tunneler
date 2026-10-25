@@ -2,7 +2,7 @@
 // Game mode "shrink" (shrinking world, docs/DESIGN-8P.md 27): the safe circle's schedule, the shield drain
 // outside it, bases outside it, the rock of the final circle, the hud, the edge's dots, elimination, a
 // round time, the AI keeping inside the circle, determinism; 2 and 8 tanks, teams and free-for-all, small /
-// medium / large maps, the modifiers. Run by test/modes-check.js (or on its own: node test/modes/shrink.js).
+// medium / large maps. Run by test/modes-check.js (or on its own: node test/modes/shrink.js).
 const H = require("../modes-harness.js");
 const { E, check, slots, runMatch, startEngine } = H;
 const M = E.MODES.shrink;
@@ -177,16 +177,16 @@ const L8 = ["easy", "normal", "hard", "normal", "easy", "hard", "normal", "easy"
     "AI vs tanks that never move: the zone takes them, the AI wins every round (" + r.rounds.map(x => x.winnerTeam).join(",") + ")");
 }
 
-// ---- matches: 2 and 8 tanks, teams / free-for-all, small / large, a round time, the modifiers; determinism
+// ---- matches: 2 and 8 tanks, teams / free-for-all, small / large, a round time; determinism
 const setups = [
   { name: "2 tanks, small", slots: slots([1, 2]), levels: ["normal", "hard"], size: "small" },
   { name: "8 tanks free-for-all, small", slots: slots([1, 2, 3, 4, 5, 6, 7, 8]), levels: L8, size: "small" },
   { name: "8 tanks, 4 teams of 2, large", slots: slots([1, 2, 3, 4, 1, 2, 3, 4]), levels: L8, size: "large" },
   { name: "2 tanks, large, round time 3", slots: slots([1, 2]), levels: ["easy", "normal"], size: "large", roundTime: 3 },
-  { name: "3 v 3, medium, round time 2, no repairs", slots: slots([1, 2, 1, 2, 1, 2]), levels: L8.slice(0, 6),
-    size: "medium", roundTime: 2, mods: { noRepair: true }, outMax: 0.06 },
-  { name: "4 free-for-all, small, no repairs, friendly fire", slots: slots([1, 2, 3, 4]), levels: L8.slice(0, 4), size: "small",
-    mods: { noRepair: true }, friendlyFire: true },
+  { name: "3 v 3, medium, round time 2", slots: slots([1, 2, 1, 2, 1, 2]), levels: L8.slice(0, 6),
+    size: "medium", roundTime: 2, outMax: 0.06 },
+  { name: "4 free-for-all, small, friendly fire", slots: slots([1, 2, 3, 4]), levels: L8.slice(0, 4), size: "small",
+    friendlyFire: true },
 ];
 for (const s of (standalone || !process.argv.includes("quick")) ? setups : setups.slice(0, 3)) {
   const o = Object.assign({ seed: 7 }, s);

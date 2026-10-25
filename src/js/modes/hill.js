@@ -16,9 +16,7 @@
 // (frames held this round), tot[team] (frames held in the match), holder (team index holding the zone this
 // frame, -1 = nobody / contested), lastPts (the previous round's). e.modeScore[p]: frames p itself was in the
 // zone while its team held it (during the match; tests / debugging).
-(function (root) {
-"use strict";
-const E = root.TunnelerEngine || require("../engine.js");
+import { TunnelerEngine as E } from "../engine.js";
 
 const GOAL = 60;                      // seconds to win when no goal is given (TunnelerEngine.GOALS.hill.def)
 // seconds held -> frames (BIOS ticks: 1193182 / 65536 a second) and back (rounded: the goal shows as itself)
@@ -227,4 +225,3 @@ E.registerMode("hill", {
     return G.dots ? { x: G.cx, y: G.cy, mode: "hill", dig: true } : null;
   },
 });
-})(typeof window !== "undefined" ? window : globalThis);

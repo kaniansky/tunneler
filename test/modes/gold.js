@@ -280,7 +280,7 @@ for (const [size, teams, seed, goal] of [["small", [1, 2], 3], ["small", [1, 2, 
 
 // ---- texts
 {
-  for (const l of ["en", "sk", "cs", "uk", "ru", "genz"]) {
+  for (const l of ["en", "sk", "cs", "uk", "ru"]) {
     const s = G.strings[l];
     check(s && /\{n\}/.test(s.score) && /\{n\}/.test(s.scoreCarry) && /\{c\}/.test(s.scoreCarry) && s.instr.length > 80 && s.instr.split(/[.;!]\s/).length >= 2,
       "texts (" + l + "): instructions and the score");
@@ -290,7 +290,7 @@ for (const [size, teams, seed, goal] of [["small", [1, 2], 3], ["small", [1, 2, 
   check(/Gold rush/.test(rows) && /nugget/.test(rows), "the Instructions page explains the gold rush");
   e.lang = "sk";
   check(e.mt("score", { n: 4, g: 10 }) === "zlato 4/10", "mode texts in the engine's language (sk: " + e.mt("score", { n: 4, g: 10 }) + ")");
-  for (const l of ["en", "sk", "cs", "uk", "ru", "genz"]) check(/\{g\}/.test(G.strings[l].score) && /\{g\}/.test(G.strings[l].scoreCarry) && !/half|polovic|половин/i.test(G.strings[l].instr),
+  for (const l of ["en", "sk", "cs", "uk", "ru"]) check(/\{g\}/.test(G.strings[l].score) && /\{g\}/.test(G.strings[l].scoreCarry) && !/half|polovic|половин/i.test(G.strings[l].instr),
     "texts (" + l + "): the score shows the goal, no more \"more than half\"");
 }
 
@@ -346,14 +346,13 @@ for (const [size, teams, seed, goal] of [["small", [1, 2], 3], ["small", [1, 2, 
   check(picked * 4 >= tanks * 3, "AI-only matches: tanks that picked up gold " + picked + " of " + tanks);
 }
 
-// ---- 2..8 tanks, free-for-all and teams, map sizes, modifiers, round time: finish, deterministically
+// ---- 2..8 tanks, free-for-all and teams, map sizes, round time: finish, deterministically
 {
-  const all = { noRepair: true };
   const cases = [
     { name: "8 free-for-all, small", teams: [1, 2, 3, 4, 5, 6, 7, 8], levels: ["normal", "easy", "hard", "normal", "easy", "normal", "hard", "easy"], size: "small" },
     { name: "4 v 4, small, friendly fire", teams: [1, 2, 1, 2, 1, 2, 1, 2], levels: ["normal", "easy", "hard", "normal", "easy", "normal", "hard", "easy"], size: "small", ff: true },
-    { name: "2, medium, modifiers", teams: [1, 2], levels: ["normal", "hard"], size: "medium", mods: all },
-    { name: "3 v 1 v 2, small, round time 2, modifiers", teams: [1, 1, 1, 2, 3, 3], levels: ["easy", "normal", "easy", "hard", "normal", "normal"], size: "small", mods: all, roundTime: 2 },
+    { name: "2, medium", teams: [1, 2], levels: ["normal", "hard"], size: "medium" },
+    { name: "3 v 1 v 2, small, round time 2", teams: [1, 1, 1, 2, 3, 3], levels: ["easy", "normal", "easy", "hard", "normal", "normal"], size: "small", roundTime: 2 },
     { name: "5 free-for-all, medium, round time 3", teams: [1, 2, 3, 4, 5], levels: ["normal", "easy", "hard", "normal", "easy"], size: "medium", roundTime: 3 },
   ];
   for (const c of quick ? cases.slice(0, 2) : cases) {

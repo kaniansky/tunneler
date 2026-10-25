@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 "use strict";
-// latest.json for the desktop app's updater (tauri-plugin-updater, src-tauri/src/main.rs), from the
+// latest.json for the desktop app's updater (tauri-plugin-updater, src-tauri/src/lib.rs), from the
 // signed update packages app-build.yml collected:
 //   node tools/updater-manifest.js <dir> <tag> <owner/repo> [assets.txt]  > latest.json
 // <dir> holds tunneler-online-<v>-windows-x64-setup.exe(.sig), tunneler-online[-<v>]-linux-x64.AppImage(.sig),

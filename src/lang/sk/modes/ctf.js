@@ -1,5 +1,5 @@
-"use strict";
 // capture the flag (src/js/modes/ctf.js) in this language - the same keys as ../../en/modes/ctf.js.
+import { Lang } from "../../../js/lang.js";
 Lang.modeTexts("ctf", "sk", {
   stat: "vlaj.",
   note: "{n} vlaj.",

@@ -3,12 +3,9 @@
 // 80-column screen, the engine's instructions / information / statistics pages lay out without
 // wrapping (the scrolling pages: every row within PAGE_W columns, all paragraphs translated), the world-map banner is 5 (or 6) equal rows of at most 72 pixels, every English text is
 // translated, and a removed language (pirate) falls back to English.   node test/lang-check.js
+const fs = require("fs");
 const path = require("path");
-const PUB = path.join(__dirname, "..", "src", "js");
-require(path.join(PUB, "vgafont.js"));
-require(path.join(PUB, "glyphs.js"));
-const Lang = require(path.join(PUB, "lang.js"));
-const E = require(path.join(PUB, "engine.js"));
+const { TunnelerEngine: E, Lang, SRC, langFolders, jsIn } = require("./src.js");
 
 let bad = 0;
 const fail = (c, msg) => { bad++; console.log("  FAIL [" + c + "] " + msg); };
@@ -39,10 +36,10 @@ for (const c of Lang.codes) {
   walk(D, c);
   // menus (box widths)
   const t = (k, p) => Lang.t(k, p);
-  for (const k of ["home.split", "home.cpu", "home.online", "cpu.start", "back.main", "room.copy", "room.copied", "pg.watch", "pg.go", "pg.busy", "back.lobby", "create.go", "lobby.create"])
+  for (const k of ["home.split", "home.cpu", "home.online", "cpu.start", "back.main", "room.copy", "room.copied", "pg.go", "pg.busy", "back.lobby", "create.go", "lobby.create"])
     fits(c, k, t(k), k.startsWith("lobby") ? 66 : 34);      // menu boxes size themselves to their items
   for (const n of Lang.codes) fits(c, "home.lang", t("home.lang") + Lang.name(n), 34);
-  for (const v of ["muted", "original", "realistic", "cartoony"]) fits(c, "set.sound", t("set.sound") + t("sound." + v), 34);
+  for (const v of ["muted", "original", "realistic", "recorded", "cartoony"]) fits(c, "set.sound", t("set.sound") + t("sound." + v), 34);
   for (const k of ["sound.i1", "sound.i2", "home.settings.i", "set.ping.i", "set.server.i1", "set.server.i2", "room.copy.in", "pg.kick.i1", "pg.kick.i2", "pg.kick.back.i", "lobby.connecting", "lobby.wake"]) fits(c, k, t(k), 78);
   fits(c, "pg.kick.pick", t("pg.kick.pick", { name: "W".repeat(12) }), 78);
   // the room lobby (online.js): the seats box (who - name, open, closed, AI level -, team, ping) and the
@@ -58,8 +55,8 @@ for (const c of Lang.codes) {
       ...["black", "wreck", "team", "killer", "others"].map(v => vis(t("os.watch") + t("watch." + v))),
       ...["yes", "no"].map(v => vis(t("create.public") + t(v))), ...["yes", "no"].map(v => vis(t("create.spect") + t(v)))));
     if (seatsW + 1 + setsW > 80) fail(c, "room lobby: seats (" + seatsW + ") + settings (" + setsW + ") wider than 80 columns");
-    for (const k of ["seat.kind.i", "seat.open.i", "seat.team.i", "seat.mine.i1", "seat.mine.i2", "seat.sit.i2", "pg.go.i", "pg.cant.tanks", "pg.cant.human",
-      "pg.cant.teams", "pg.cant.ready", "pg.cant.match", "pg.watch.i", "name.i1", "name.i2", "name.i3", "set.name.i1", "set.name.i2",
+    for (const k of ["seat.kind.i", "seat.sit.host.i", "seat.team.i", "seat.mine.i1", "seat.mine.watch.i", "seat.mine.i2", "seat.sit.i2", "pg.go.i", "pg.cant.tanks", "pg.cant.human",
+      "pg.cant.teams", "pg.cant.ready", "pg.cant.match", "name.i1", "name.i2", "name.i3", "set.name.i1", "set.name.i2",
       "lobby.join2", "lobby.watch", "lobby.closed", "create.go.i1", "create.go.i2", "on.full", "on.busy", "ver.update", "lobby.link.i1", "lobby.link.i2", "link.i1", "link.i2", "link.err", "lobby.host.i"]) fits(c, k, t(k), 78);
     fits(c, "seat.sit.i", t("seat.sit.i", { name: Lang.raw("yellow") }), 78);
     fits(c, "lobby.link", t("lobby.link"), 66);
@@ -99,7 +96,7 @@ for (const c of Lang.codes) {
     const cpuL = [...["small", "medium", "large"].map(z => t("lc.size") + t("lc.size." + z)), t("lc.win") + "9", t("lc.time") + t("time.off"), t("lc.time") + t("time.n", { n: 10 }), t("lc.ff") + t("lc.on"), t("lc.ff") + t("lc.off"),
       ...["self", "team", "everyone"].map(v => t("cpu.view") + t("view." + v)), ...["black", "wreck", "team", "killer", "others"].map(v => t("lc.watch") + t("watch." + v)),
       t("cpu.start"), t("menu.instr"), t("back.main")];
-    const cpuR = 2 + mx([t("lc.you"), t("lc.none"), ...lv.map(l => t("lc.cpu", { level: Lang.raw("level." + l) }))]) + 2 + vis(t("lc.team", { n: 8 }));
+    const cpuR = 2 + mx([t("lc.p1"), t("lc.p2"), t("lc.none"), ...lv.map(l => t("lc.cpu", { level: Lang.raw("level." + l) }))]) + 2 + vis(t("lc.team", { n: 8 }));
     for (const [what, l, r] of [["vs computer", mx(cpuL), cpuR]]) {
       const total = bw(l) + 2 + 1 + bw(r) + 2;
       if (total > 80) fail(c, what + ": the two boxes are " + total + " columns wide (> 80)");
@@ -173,7 +170,7 @@ for (const c of Lang.codes) {
   }
   // every paragraph of the English Instructions / Information is there, translated
   const EN = E.STRINGS_EN;
-  for (const [k, n] of [["instr", 15], ["info", 2]]) {
+  for (const [k, n] of [["instr", 16], ["info", 4]]) {
     const sec = S[k].sections, en = EN[k].sections;
     if (en.length !== n) fail(c, k + ".sections: English has " + en.length + ", the test expects " + n);
     if (!Array.isArray(sec) || sec.length !== en.length) { fail(c, k + ".sections: " + (sec ? sec.length : 0) + " paragraphs, English has " + en.length); continue; }
@@ -208,23 +205,33 @@ for (const c of Lang.codes) {
   if (c !== "en") for (const k in Lang.data.en) if (!(k in D)) fail(c, "missing text " + k);
   console.log("  " + (bad ? "..." : "ok") + "  " + c);
 }
-// removed languages (Pirate was replaced by Gen Z) and unknown codes fall back to English, also when
-// remembered in localStorage
+// removed languages (Pirate, then Gen Z - owner, 2026-10-24) and unknown codes fall back to English, also
+// when remembered in localStorage
 if (Lang.codes.includes("pirate") || Lang.data.pirate) fail("pirate", "the Pirate language must be gone");
-if (!Lang.codes.includes("genz") || Lang.raw("name", "genz") !== "Gen Z") fail("genz", "Gen Z must be a language named \"Gen Z\"");
+if (Lang.codes.includes("genz") || Lang.data.genz) fail("genz", "the Gen Z language must be gone");
+Lang.set("genz");
+if (Lang.code !== "en") fail("genz", "Lang.set(\"genz\") gives " + Lang.code + ", not en");
 Lang.set("pirate");
 if (Lang.code !== "en") fail("pirate", "Lang.set(\"pirate\") gives " + Lang.code + ", not en");
 {
-  const file = require.resolve(path.join(PUB, "lang.js"));
-  const saved = globalThis.localStorage, saveLang = globalThis.Lang;
-  const font = globalThis.VGA_FONT.slice();
+  // (a fresh copy of the languages in a vm, as a page that finds "pirate" remembered)
   let written = null;
-  globalThis.localStorage = { getItem: k => k === "tunneler.lang" ? "pirate" : null, setItem: (k, v) => { written = v; } };
-  delete require.cache[file];
-  const L2 = require(file);
-  if (L2.code !== "en" || written !== "en") fail("pirate", "stored \"pirate\" gives " + L2.code + " (stored " + written + "), not en");
-  delete require.cache[file];
-  globalThis.localStorage = saved; globalThis.Lang = saveLang; globalThis.VGA_FONT.set(font);
+  const ctx = require("vm").createContext({ atob, localStorage: { getItem: k => k === "tunneler.lang" ? "pirate" : null, setItem: (k, v) => { written = v; } } });
+  require("./page-env.js").run(ctx, ["js/lang.js", "lang/index.js"]);
+  if (ctx.Lang.code !== "en" || written !== "en") fail("pirate", "stored \"pirate\" gives " + ctx.Lang.code + " (stored " + written + "), not en");
+}
+// the index modules import every language and every file of each (src/lang/index.js, src/lang/<code>/index.js)
+{
+  const imports = f => [...fs.readFileSync(f, "utf8").matchAll(/^import "\.\/([^"]+)";/gm)].map(m => m[1]);
+  const all = imports(path.join(SRC, "lang", "index.js"));
+  for (const c of langFolders()) {
+    if (!all.includes(c + "/index.js")) fail(c, "not imported by src/lang/index.js");
+    const own = imports(path.join(SRC, "lang", c, "index.js"));
+    for (const f of [...jsIn(path.join(SRC, "lang", c)), ...jsIn(path.join(SRC, "lang", c, "modes")).map(f => "modes/" + f)])
+      if (!own.includes(f)) fail(c, f + " is not imported by src/lang/" + c + "/index.js");
+    if (own[0] !== "main.js") fail(c, "src/lang/" + c + "/index.js must import main.js first");
+  }
+  if (all[0] !== "en/index.js") fail("en", "src/lang/index.js must import English first (the fallback)");
 }
 console.log(bad ? bad + " problem(s)" : "all languages fit");
 process.exit(bad ? 1 : 0);

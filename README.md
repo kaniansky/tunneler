@@ -20,21 +20,42 @@ everything with more tanks, teams or other settings is built on top of it with t
 
 The screen is the original's undocumented "low-res" text mode (160x100 pixels in 16 colors, made of
 80x100 text cells) on an emulated VGA with the IBM ROM font, and the sound is a simulated PC speaker.
-All menus, the lobby and the status lines use the same DOS text screen.
+All menus, the lobby and the status lines use the same DOS text screen (or, with modern graphics, the same
+screens drawn anew - see below).
 
 | Split screen | Skirmish: the slot editor |
 |---|---|
 | ![Split screen](screenshots/split-screen.png) | ![Skirmish](screenshots/vs-computer.png) |
+
+## Modern graphics
+
+Settings, **Graphics: modern** draws the same game at your screen's resolution: smooth tunnels, textured
+dirt and cracked rock, dark tunnels lit by the tanks' lamps and headlights, glowing shots, dust, sparks,
+fire and debris, a smooth camera that glides with your tank, a new energy and shield panel, and every menu
+in a modern font, flat and warm (no gradients, no glow). Its own settings screen picks a style (clean, or retro with chunky
+pixels and the DOS colors) and quality, terrain, tunnel edges, lighting, particles, glow, screen shake,
+camera, UI and the line of sight's fog of war. Only the look changes - the game, its rules and online
+play stay exactly the same, and every player chooses their own look. **Modern** is the default since 5.0; **Original** is one switch away.
+
+| Modern: the main menu | Modern: its settings |
+|---|---|
+| ![Modern main menu](screenshots/modern-home.png) | ![Modern settings](screenshots/modern-settings.png) |
+| **Modern: a skirmish of four** | **Modern, retro style: split screen** |
+| ![Modern skirmish](screenshots/modern-game.png) | ![Modern retro split screen](screenshots/modern-retro.png) |
 
 ## Modes
 
 - **Split screen** - two players on one keyboard, like the original.
 - **Skirmish** - you (in any color) against 1 to 7 computer tanks (easy, medium or hard),
   every tank for itself or in teams. See your own screen, your team's screens or everybody's.
-- **Online game** - create a game (public or private, with or without spectators), send the invite
+- **Online game** - create a game (public or private, with or without spectators, with an optional
+  password), send the invite
   link (`/game/<name>`), and play with 2 to 8 tanks from several computers; any seat can be an AI tank.
   Addresses: `/games` (the list), `/game/<name>` (the game's lobby), `/game/<name>/watch` (spectating),
-  `/split`, `/skirmish`.
+  `/split`, `/skirmish`, `/replays`.
+- **Replays** - every match you play or watch is kept in the browser (the newest 20). Watch one again like a
+  spectator (every view, the live map or one tank; pause, 1/2x to 8x, 30 s back / on), see its statistics,
+  or save it as a `.replay` file and send it to someone.
 
 Game modes (skirmish and online; every mode's AI plays it too):
 
@@ -52,7 +73,7 @@ Game modes (skirmish and online; every mode's AI plays it too):
 
 Every mode but standard and shrinking world is a single round with its own goal instead of "rounds to
 win": gold to win, minutes to survive, waves to win, seconds in the zone, captures, base strength (hits),
-kills to win. A modifier for any mode: **no base repairs** (bases refuel but don't repair shields).
+kills to win.
 
 Settings (split screen: map size, rounds to win and round time only):
 
@@ -92,15 +113,18 @@ Online play needs a name - asked the first time, changed any time on the Setting
 has a **lobby** with 8 seats, one per color, each row in its color: a player's name (a √ in front once
 ready), **open**, **closed** or **AI** (easy, medium, hard), the team and the ping. Joining a game takes
 a free open seat (else you watch); sit on another open seat to play that color, change your team with
-Left / Right, 1-8 or a click, chat with players and spectators (any alphabet), choose **I am ready!**
-or **Watch instead**. The creator of the game is its **host** (when the host leaves, the next player
-takes over): they set every free seat open, closed or AI (Left / Right or a right click) and its team, change
+Left / Right, 1-8 or a click, chat with players and spectators (any alphabet), choose **I am ready!** (a click on your
+name leaves the seat to watch).
+The creator of the game is its **host** (when the host leaves, the next player takes over): a click (or
+Left / Right) steps every seat nobody else sits on through closed, open, the host's own seat (while they
+sit nowhere else) and AI (easy, medium, hard), a right click goes back; they also set its team, change
 the game's settings, **Kick a player** (who then can't come back) and **Start game** once everybody
 seated is ready. Open seats nobody took get no tank. During a match only its players play - whoever
 joins then watches; afterwards everyone is back in the lobby, with the statistics of the last match.
 The list of games shows each game's mode, players, AI tanks, spectators and state; Enter joins, Right or
 a right click watches. Games you host come first (your private ones too).
-A private game is joined with its invite link: open it, or paste it into **Join by link** on the
+A game with a password (a lock in the list) asks for it before you join or watch; its host never needs
+it. A private game is joined with its invite link: open it, or paste it into **Join by link** on the
 list of games (the desktop app then also switches to that link's server). Only the same version of the
 game plays together: a page or desktop app of another version than the
 server's can't join or create games there (it says which versions differ).
@@ -119,8 +143,8 @@ the whole world with a score table (wins, energy, shield per tank and team), or 
 
 ![Game list](screenshots/lobby.png)
 
-Languages: English, Slovenčina, Čeština, Українська, Русский and Gen Z (on the Settings screen, or
-`?lang=sk` / `cs` / `uk` / `ru` / `genz` / `en` in the address). Each language is one file in `src/lang/`.
+Languages: English, Slovenčina, Čeština, Українська and Русский (on the Settings screen, or
+`?lang=sk` / `cs` / `uk` / `ru` / `en` in the address). Each language is one folder in `src/lang/`.
 The homepage, https://kaniansky.com/tunneler/, comes in the same languages.
 
 ## Controls
@@ -245,6 +269,10 @@ automatically when the page is served over HTTPS.
 
 ## How it works
 
+One page (`src/index.html`), its screens are routes (`src/js/app.js`: the main menu, the games list, an online
+game, a local game - each loaded when first shown); the code is ES modules, bundled by `node build.js`
+(esbuild) into `public/`. The server needs Node.js 20.19 or newer.
+
 - `src/js/engine.js` - the game: the whole DOS program as a deterministic state machine; one `step()` is
   one BIOS timer tick (54.9 ms, one game frame). The classic two-tank game runs the original code paths
   unchanged; 3-8 tanks, teams and the other settings run the engine's *extended mode* (design:
@@ -256,7 +284,7 @@ automatically when the page is served over HTTPS.
 - `src/js/views.js` - what a viewer sees during play: one view screen, a grid of several, or the live
   map with scores.
 - `src/js/lang.js` (core), `src/lang/<code>/` (one folder per language: `main.js`, a file per game mode in `modes/`, and
-  `en/engine.js` the engine's English text; all joined into `/js/langs.js`),
+  `en/engine.js` the engine's English text; `src/lang/index.js` imports them all),
   `glyphs.js` - translations; letters the VGA font lacks are loaded from a VGA-style console font into
   unused font slots, and names and chat in the lobby are drawn in any alphabet.
 - `src/js/ai.js` - the computer tanks: deterministic, so every browser runs the same ones.

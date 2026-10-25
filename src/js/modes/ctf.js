@@ -6,9 +6,7 @@
 // captures ("Captures to win", TunnelerEngine.GOALS.ctf, default CAPS) wins it; at the round time the most
 // captures (a tie: nobody). Destroyed tanks come back at their base after ~3 s.
 // All state lives in e.GS (round state) and e.modeScore (captures per player).
-(function (root) {
-"use strict";
-const E = root.TunnelerEngine || require("../engine.js");
+import { TunnelerEngine as E } from "../engine.js";
 
 const CAPS = 3;            // captures that win the match when no goal is set (the GOALS default)
 const TOUCH = 9;           // a tank this close to a flag (or a base's middle) touches it (tanks block at < 6)
@@ -252,4 +250,3 @@ E.registerMode("ctf", {
     return best ? go(best.x, best.y, "ctf-take") : null;
   },
 });
-})(typeof window !== "undefined" ? window : globalThis);

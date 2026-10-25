@@ -1,4 +1,3 @@
-"use strict";
 // Menu screens in the look of TUNNELER's own main menu: an 80x25 DOS text screen (VGA font and
 // colours, drawn by Display from the engine's emulated text buffer) with a magenta box of items and a
 // white-on-magenta highlight bar. Arrow keys + Enter or the mouse choose, Esc goes back.
@@ -11,11 +10,14 @@
 //                                                  interior width, max visible item rows (scrolls);
 //                                                  without w the box fits its longest item (boxWidth),
 //                                                  centred unless x is given
-//   spec.boxes:  [{x, y, w, title, items, joinTop}]  instead of box / items: boxes side by side (each
+//   spec.boxes:  [{x, y, w, title, items, joinTop, wrap}]  instead of box / items: boxes side by side (each
 //                                                  sized to its items, centred together, the title in
 //                                                  the top border), one selection over all of them:
-//                                                  Up / Down continue into the next / previous box,
+//                                                  Up / Down continue into the next / previous box
+//                                                  (wrap: stay in this box, round and round),
 //                                                  Tab jumps to the other box (in a text input: as Down)
+//   spec.onSel:  (i) => ...                        called when the selection moved to item i (keys,
+//                                                  mouse; e.g. a list of categories showing the chosen one)
 //   spec.fixed:  the last N items always stay visible below the scrolling ones
 //   spec.header: "text"                            non-selectable heading row inside the box (yellow)
 //   spec.text:   [{row, col, text, color}]         raw Unicode text (any language, not encoded for the
@@ -25,10 +27,11 @@
 //   (UniText.cols: CJK / emoji take 2).
 //   spec.items:  [{label, go, info: [..], disabled, attr, align: "left", input: {value, max, placeholder,
 //                width}}]   input.value: raw Unicode, any printable characters may be typed / pasted;
-//                input.max / input.width: display columns (the end of a value wider than width is shown)
+//                input.max / input.width: display columns (the end of a value wider than width is shown);
+//                input.secret: shown as one "*" per character (a password)
 //                {separator: true} draws a horizontal line across the box
 //                change(dir): a switch - Left / Right step its value back (-1) / forward (+1); with
-//                the mouse a click goes forward (go), a right click back
+//                the mouse a click goes forward (go), a right click back, the wheel up / down forward / back
 //                digit(n): number keys 1..8 on this row (e.g. a slot's team)
 //                zones: [{from, to, click(dir)}] - parts of the label (display columns from..to-1 of the
 //                label text) a mouse click acts on: left button dir +1, right button -1 (no browser menu
@@ -51,15 +54,70 @@
 // new DosUI(canvas) owns the canvas. new DosUI(canvas, {display, present, active}) draws over another
 // page's Display instead: present(snapshot) receives each drawn screen, and input is only handled
 // while active() returns true.
-(function (root) {
+import { Display } from "./display.js";
+import { TunnelerEngine } from "./engine.js";
+import { Gfx } from "./gfx.js";
+import { Lang } from "./lang.js";
+import { UniText } from "./unitext.js";
+import { GameScreen } from "./screen.js";
+import { TextBuf } from "./textbuf.js";
+const root = globalThis;
 
 const ATTR = 0x05, SEL = 0x5F, DISABLED = 0x08;
+// graphics "modern", style clean (gfx.js / gfx-text.js): item labels warm gray instead of magenta, frames
+// thin dark gray, box titles light gray - the highlight bar (SEL) stays: gfx-text.js draws it in its one
+// accent colour. Retro keeps the DOS colours.
+const modernUI = () => !!(Gfx && Gfx.mode && Gfx.mode() === "modern" && Gfx.menuStyle() !== "retro");
+const labelAttr = () => modernUI() ? 0x07 : ATTR;
+const frameColor = () => modernUI() ? 8 : 5;
+const titleColor = () => modernUI() ? 7 : 13;
 // keys that scroll an Instructions / Information page (KeyboardEvent.key; the numeric keypad with
 // NumLock off gives the same) -> engine.pageScroll
 const PAGE_KEYS = { ArrowUp: "up", ArrowDown: "down", PageUp: "pgup", PageDown: "pgdn", Home: "home", End: "end" };
-const U = root.UniText;
+const U = UniText;
 // characters an input never takes: control, bidi, zero-width, private use (see NetProto's cleaning)
 const BAD_INPUT = /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff\ue000-\uf8ff\ufe00-\ufe0f]/;
+// the phone layout (drawNarrow): the screen's columns, and every box's place (left border column, interior width)
+const NC = 40, NB = { x: 2, w: NC - 4 };
+// a page row's text without its {n} colour switches
+const visible = t => String(t).replace(/\{\d+\}/g, "");
+// font text wrapped to w display columns, at spaces where it can (a longer word is cut)
+function wrapCols(text, w) {
+  const out = [];
+  let line = "";
+  for (const word of String(text).split(" ")) {
+    const cand = line ? line + " " + word : word;
+    if (U.cols(cand) <= w) { line = cand; continue; }
+    if (line) out.push(line);
+    line = word;
+    // (a word wider than the line - a link - goes on over the next lines, after a "/" when there is one)
+    for (let head; U.cols(line) > w && (head = U.slice(line, w)); line = line.slice(head.length)) {
+      const k = head.lastIndexOf("/") + 1;
+      if (k > head.length >> 1) head = head.slice(0, k);
+      out.push(head);
+    }
+  }
+  if (line || !out.length) out.push(line);
+  return out;
+}
+// Touch screens have no keyboard until a real text field has the focus: a tap on an input row focuses this
+// hidden <input> (one for the page; docs/DESIGN-8P.md 32), whose text goes into the canvas input
+// (its "input" events; the canvas shows it). Keys it gets that DosUI would type itself are left to it.
+let soft = null;
+function softInput() {
+  if (soft || !root.document || !root.document.body || !root.document.createElement) return soft;
+  soft = root.document.createElement("input");
+  soft.className = "soft-input";
+  for (const [k, v] of [["autocomplete", "off"], ["autocorrect", "off"], ["autocapitalize", "off"], ["spellcheck", "false"],
+    ["enterkeyhint", "done"], ["aria-hidden", "true"], ["tabindex", "-1"]]) soft.setAttribute(k, v);
+  // (16 px: no zoom on iOS; transparent, in the page's top left corner - the canvas shows the text)
+  Object.assign(soft.style, { position: "fixed", left: "0", top: "0", width: "1px", height: "1px", opacity: "0", fontSize: "16px",
+    border: "0", padding: "0", pointerEvents: "none" });
+  root.document.body.appendChild(soft);
+  return soft;
+}
+const touchScreen = ev => (ev && ev.pointerType === "touch") || !!(root.document && root.document.body && root.document.body.classList &&
+  root.document.body.classList.contains("touch"));
 
 class DosUI {
   constructor(canvas, opts = {}) {
@@ -67,9 +125,11 @@ class DosUI {
     this.display = opts.display || new Display(canvas);
     this.present = opts.present || (snap => this.display.setSnapshot(snap));
     this.active = opts.active || (() => true);
-    this.t = new TunnelerEngine(0);          // only its Crt text routines and video buffer are used
+    this.t = new TextBuf();                  // the screen's text buffer (the engine's Crt calls, any number of rows)
     this.spec = null; this.sel = 0; this.top = 0;
     window.addEventListener("keydown", e => { if (this.active()) this.key(e); });
+    const si = softInput();
+    if (si) si.addEventListener("input", () => { if (this.active()) this.softTyped(); });
     window.addEventListener("paste", e => { if (this.active()) this.paste(e); });
     canvas.addEventListener("mousemove", e => { if (this.active()) this.hover(e); });
     canvas.addEventListener("click", e => { if (this.active()) this.click(e); });
@@ -77,15 +137,27 @@ class DosUI {
     canvas.addEventListener("wheel", e => { if (this.active() && this.wheel(e)) e.preventDefault(); }, { passive: false });
     // touch screens: dragging a page scrolls it (a tap still goes back)
     canvas.addEventListener("touchstart", e => {
-      if (this.active() && this.spec && this.spec.engine && e.touches.length === 1) { this.touchY = e.touches[0].clientY; this.dragged = false; }
+      if (this.active() && this.spec && (this.spec.engine || this.spec.nlines) && e.touches.length === 1) { this.touchY = e.touches[0].clientY; this.dragged = false; }
     }, { passive: true });
     canvas.addEventListener("touchmove", e => {
-      if (this.touchY == null || !this.active() || !this.spec || !this.spec.engine || e.touches.length !== 1) return;
-      const h = (canvas.getBoundingClientRect().height || 400) / 25, d = Math.trunc((this.touchY - e.touches[0].clientY) / h);
+      if (this.touchY == null || !this.active() || !this.spec || !(this.spec.engine || this.spec.nlines) || e.touches.length !== 1) return;
+      const h = (canvas.getBoundingClientRect().height || 400) / (this.spec.nlines ? this.narrowRows() : 25), d = Math.trunc((this.touchY - e.touches[0].clientY) / h);
       if (d) { this.touchY -= d * h; this.dragged = true; this.scrollPage(d); }
       e.preventDefault();
     }, { passive: false });
     canvas.addEventListener("touchend", () => { this.touchY = null; });
+    // the phone layout (narrow): turning the phone or resizing lays the screen out again; a drag scrolls it
+    window.addEventListener("resize", () => { if (this.active() && this.spec && !this.spec.page) this.draw(); });
+    canvas.addEventListener("touchstart", e => {
+      if (this.active() && this.narrow && e.touches.length === 1) { this.ndragY = e.touches[0].clientY; this.dragged = false; }
+    }, { passive: true });
+    canvas.addEventListener("touchmove", e => {
+      if (this.ndragY == null || !this.active() || !this.narrow || e.touches.length !== 1) return;
+      const h = (canvas.getBoundingClientRect().height || 400) / this.narrow.rows, d = Math.trunc((this.ndragY - e.touches[0].clientY) / h);
+      if (d) { this.ndragY -= d * h; this.dragged = true; this.ntop = (this.ntop || 0) + d; this.nfollow = false; this.draw(); }
+      e.preventDefault();
+    }, { passive: false });
+    canvas.addEventListener("touchend", () => { this.ndragY = null; });
     if (!opts.display) {
       const loop = now => { this.display.draw(now); requestAnimationFrame(loop); };
       requestAnimationFrame(loop);
@@ -96,11 +168,23 @@ class DosUI {
   // with fresh data
   showPage(kind, uiMode, back, engineOpts) {
     const e = new TunnelerEngine(0, engineOpts);      // (engineOpts: extended games' instructions)
-    if (root.Lang) {
-      root.Lang.apply(e);
-      e.strings = Object.assign({}, e.strings, { prompt: root.Lang.t("page.back") });
-    }
+    Lang.apply(e);
+    e.strings = Object.assign({}, e.strings, { prompt: Lang.t("page.back") });
     e.uiMode = uiMode || "hotseat";
+    if (this.isNarrow()) {                             // (the phone layout: the page's rows wrapped narrow, drawn here)
+      e.pageWidth = NC - 2;
+      if (e.uiMode === "hotseat") e.uiMode = "cpu";   // (no split screen on a phone: its keys table means nothing)
+      e.initTables();
+      const rows = kind === "instructions" ? e.instructionRows() : e.informationRows(), lines = [];
+      for (const r of rows) {
+        if (visible(r.text).length > NC - 2) for (const l of e.wrapPage(r.text, 7)) lines.push({ c: false, t: l });
+        else lines.push({ c: r.col > 1, t: r.text });
+      }
+      this.spec = { page: true, back, items: [], nlines: lines, ntop: 0 };
+      this.wheelAcc = 0; this.dragged = false;
+      this.presentPage();
+      return;
+    }
     e.initTables();
     e.textMode();
     e.window(1, 1, 80, 24);
@@ -112,6 +196,7 @@ class DosUI {
     this.presentPage();
   }
   presentPage() {
+    if (this.spec.nlines) return this.presentNarrowPage();
     const e = this.spec.engine, snap = { t: 0, mode: "text", screen: "text", vram: e.vram.slice(0, 16000) };
     e.snapUni(snap);
     this.present(snap);
@@ -119,6 +204,13 @@ class DosUI {
   // scroll the page shown by showPage: "up" / "down" / "pgup" / "pgdn" / "home" / "end" or a number of rows
   scrollPage(what) {
     const s = this.spec;
+    if (s && s.nlines) {
+      const view = this.narrowRows() - 3, max = Math.max(0, s.nlines.length - view);
+      const d = typeof what === "number" ? what : { up: -1, down: 1, pgup: 1 - view, pgdn: view - 1, home: -1e6, end: 1e6 }[what];
+      const top = Math.max(0, Math.min(max, s.ntop + (d || 0)));
+      if (top !== s.ntop) { s.ntop = top; this.presentPage(); }
+      return;
+    }
     if (s && s.engine && s.engine.pageScroll(what)) this.presentPage();
   }
 
@@ -138,6 +230,16 @@ class DosUI {
   enabled(i) { const it = this.spec.items[i]; return it && !it.disabled && !it.separator && !it.static; }
   move(d, quiet) {
     const n = this.spec.items.length;
+    const b = this.spec.boxes ? this.boxOf(this.sel) : null;
+    if (b && b.wrap) {                                   // (a box of its own: round and round within it)
+      const m = b.end - b.start;
+      for (let k = 1; k <= m; k++) {
+        const i = b.start + (this.sel - b.start + d * k + m * k) % m;
+        if (this.enabled(i)) { this.sel = i; break; }
+      }
+      if (!quiet) this.draw();
+      return;
+    }
     for (let k = 1; k <= n; k++) {
       const i = (this.sel + d * k + n * k) % n;
       if (this.enabled(i)) { this.sel = i; break; }
@@ -150,10 +252,24 @@ class DosUI {
   wheel(ev) {
     const s = this.spec;
     if (s && s.page) {                                   // a page: 3 rows per notch (trackpads: a row per ~33 pixels)
-      if (!s.engine) return false;
+      if (!s.engine && !s.nlines) return false;
       this.wheelAcc = (this.wheelAcc || 0) + ev.deltaY * (ev.deltaMode === 1 ? 33 : ev.deltaMode === 2 ? 700 : 1);
       const d = Math.trunc(this.wheelAcc / 33);
       if (d) { this.wheelAcc -= d * 33; this.scrollPage(d); }
+      return true;
+    }
+    // a switch under the mouse: the wheel steps its value - up forward, down back - one step a notch
+    // (trackpads: per ~50 pixels), like Left / Right
+    const wi = s ? this.itemAt(ev) : -1, wit = wi >= 0 ? s.items[wi] : null;
+    if (wit && wit.change && !wit.disabled && !wit.input) {
+      this.wheelAcc = (this.wheelAcc || 0) + ev.deltaY * (ev.deltaMode === 1 ? 40 : ev.deltaMode === 2 ? 400 : 1);
+      if (Math.abs(this.wheelAcc) >= 50) {
+        const d = Math.sign(this.wheelAcc);
+        this.wheelAcc = 0;
+        this.sel = wi;
+        wit.change(-d);
+        if (this.spec === s && s.items[this.sel] === wit) this.draw();
+      }
       return true;
     }
     if (!s || s.page || s.boxes || !s.box || !(this.scrollRows < this.scrollN)) return false;
@@ -207,21 +323,25 @@ class DosUI {
     // an empty input shows its placeholder (dimmed; the first key typed replaces it); a value wider
     // than the input's width shows its end
     const inp = it.input;
-    let value = !inp ? "" : inp.value ? U.fromRaw(inp.value) : inp.placeholder || "";
-    if (inp && inp.value && inp.width && U.cols(value) >= inp.width) {
+    let value = !inp ? "" : inp.value ? (inp.secret ? "*".repeat(Array.from(inp.value).length) : U.fromRaw(inp.value)) : inp.placeholder || "";
+    // (the room left of the box's edge after the label: the phone layout's narrow boxes have less than
+    // input.width - a placeholder that doesn't fit ends in "..")
+    const room = b.w - 1 - U.cols(it.label), width = inp ? Math.min(inp.width || room, room) : 0;
+    if (inp && inp.value && U.cols(value) >= width) {
       const ch = [];
       U.each(value, (bt, cp, w, a, z) => { ch.push([a, z, w]); });
       let n = 0, k = ch.length;
-      while (k > 0 && n + ch[k - 1][2] <= inp.width - 1) n += ch[--k][2];
+      while (k > 0 && n + ch[k - 1][2] <= width - 1) n += ch[--k][2];
       value = value.slice(k < ch.length ? ch[k][0] : value.length);
-    }
+    } else if (inp && !inp.value && room > 3 && U.cols(value) > room - 1) value = U.slice(value, room - 3) + "..";
     const labelW = U.cols(it.label), valueW = U.cols(value);
     let text = it.label + value;
+    if (it.align !== "left" && this.centres) this.centres.push([row - 1, b.x, b.x + b.w]);
     text = it.align === "left" ? U.padEnd(" " + text, b.w) : U.padEnd(" ".repeat(this.centreStart(i, b, U.cols(text))) + text, b.w);
     text = U.padEnd(U.slice(text, b.w), b.w);
     t.gotoXY(b.x, row); t.write("\xB3" + text + "\xB3");
     const o = (row - 1) * 160 + b.x * 2;
-    const attr = it.static ? it.attr || 0x07 : i === this.sel ? SEL : it.disabled ? DISABLED : it.attr || ATTR;
+    const attr = it.static ? it.attr || 0x07 : i === this.sel ? SEL : it.disabled ? DISABLED : it.attr || labelAttr();
     for (let c = 0; c < b.w; c++) t.vram[o + c * 2 + 1] = attr;
     const x0 = (it.align === "left" ? 1 : this.centreStart(i, b, labelW + valueW)) + labelW;
     // values in their own colors (not on the highlight bar, not when disabled): it.spans = [[from, to,
@@ -256,14 +376,14 @@ class DosUI {
     const t = this.t;
     let bottom = 0;
     for (const b of this.boxesGeom()) {
-      const line = (row, a, fill, z) => { t.textColor(5); t.gotoXY(b.x, row); t.write(a + fill.repeat(b.w) + z); };
+      const line = (row, a, fill, z) => { t.textColor(frameColor()); t.gotoXY(b.x, row); t.write(a + fill.repeat(b.w) + z); };
       // (joinTop: no top border - the box continues whatever is drawn above it, e.g. a panel's last rows)
       if (!b.joinTop) line(b.y, "\xDA", "\xC4", "\xBF");
-      if (b.title) { t.gotoXY(b.x + 2, b.y); t.textColor(13); t.write(" " + U.slice(b.title, b.w - 4) + " "); }
+      if (b.title) { t.gotoXY(b.x + 2, b.y); t.textColor(titleColor()); t.write(" " + U.slice(b.title, b.w - 4) + " "); }
       let row = b.y + 1;
       for (let i = b.start; i < b.end; i++, row++) {
         if (this.spec.items[i].separator) { line(row, "\xC3", "\xC4", "\xB4"); continue; }
-        t.textColor(5);
+        t.textColor(frameColor());
         this.drawItem(i, row, b);
       }
       line(row, "\xC0", "\xC4", "\xD9");
@@ -276,7 +396,7 @@ class DosUI {
   boxesGeom() {
     let start = 0;
     const g = this.spec.boxes.map(bx => {
-      const r = { x: bx.x, y: bx.y, w: bx.w || DosUI.boxWidth(bx.items), title: bx.title, joinTop: !!bx.joinTop, start, end: start + bx.items.length };
+      const r = { x: bx.x, y: bx.y, w: bx.w || DosUI.boxWidth(bx.items), title: bx.title, joinTop: !!bx.joinTop, wrap: !!bx.wrap, start, end: start + bx.items.length };
       start = r.end;
       return r;
     });
@@ -289,12 +409,27 @@ class DosUI {
 
   draw() {
     const t = this.t, s = this.spec;
+    if (this.softFor && !(s && !s.page && s.items[this.sel] && s.items[this.sel].input === this.softFor)) this.softBlur();   // (moved off it)
+    // (the page changed the input's value - a chat message sent clears it: the hidden input follows, or its
+    // old text would come back with the next letter typed)
+    if (this.softFor && soft && soft.value !== (this.softFor.value || "")) soft.value = this.softFor.value || "";
+    if (s && s.onSel && this.sel !== this.selShown) {    // (the selection moved: the page may show something else)
+      this.selShown = this.sel;
+      s.onSel(this.sel);
+      if (this.spec !== s) return;                       // (it showed a new spec: that one is drawn)
+    }
     this.cursor = null;                                  // (drawItem: an empty input's cursor cell)
+    if (this.isNarrow()) return this.drawNarrow();
+    this.narrow = null;
     t.textMode();
     t.window(1, 1, 80, 25);
     t.textBackground(0);
     t.clearScreen();
+    // (centred rows - [row, from, to): 0-based, the columns they are centred in - go with the snapshot:
+    // graphics modern clean centres them to the pixel, gfx-text.js)
+    this.centres = [];
     const put = (l, txt) => {
+      if (!l.col) this.centres.push([l.row - 1, 0, 80]);
       t.textColor(l.color == null ? 7 : l.color);
       t.gotoXY(l.col || Math.max(1, 41 - (U.cols(txt) >> 1)), l.row);
       t.write(U.slice(txt, (l.row >= 25 ? 80 : 81) - (l.col || 1)));   // (up to column 80; 79 on the last row: no scroll)
@@ -306,12 +441,12 @@ class DosUI {
     else {
       // box
       const b = this.geom(), shown = this.rowItems();
-      t.textColor(5);
+      t.textColor(frameColor());
       const line = (row, a, fill, z) => { t.gotoXY(b.x, row); t.write(a + fill.repeat(b.w) + z); };
       line(b.y, "\xDA", "\xC4", "\xBF");
       row = b.y + 1;
       if (s.header) {
-        t.gotoXY(b.x, row); t.write("\xB3"); t.textColor(14); t.write(U.padEnd(U.slice(s.header, b.w), b.w)); t.textColor(5); t.write("\xB3");
+        t.gotoXY(b.x, row); t.write("\xB3"); t.textColor(14); t.write(U.padEnd(U.slice(s.header, b.w), b.w)); t.textColor(frameColor()); t.write("\xB3");
         line(row + 1, "\xC3", "\xC4", "\xB4");
         row += 2;
       }
@@ -324,7 +459,7 @@ class DosUI {
       }
       line(row, "\xC0", "\xC4", "\xD9");
       // more items above / below the scrolling part
-      t.textColor(5);
+      t.textColor(frameColor());
       if (this.top > 0) { t.gotoXY(b.x + b.w - 1, b.y + (s.header ? 2 : 0)); t.write("\x18"); }
       if (this.top + this.scrollRows < this.scrollN) { t.gotoXY(b.x + b.w - 1, moreRow || row); t.write("\x19"); }
     }
@@ -335,19 +470,169 @@ class DosUI {
       t.textColor(l.color == null ? 3 : l.color);
       const text = typeof l === "string" ? l : l.text;
       const x = Math.max(1, 41 - (U.cols(text) >> 1)), y = (s.infoRow || row + 3) + i;
+      this.centres.push([y - 1, 0, 80]);
       t.gotoXY(x, y);
       t.write(U.slice(text, 79));
       if (l.onClick) this.links.push({ x, y, w: Math.min(U.cols(text), 79), onClick: l.onClick });
     });
     // bottom line, like the game's "Press <ENTER> for main menu."
     t.drawBottomRule();
-    const T = (k, d) => root.Lang ? root.Lang.t(k) : d;
-    const hint = " " + (s.hint || T("ui.hint", "\x18\x19 and <ENTER>, or the mouse.") + (s.back ? "  " + T("ui.back", "<ESC> back.") : ""));
+    const T = k => Lang.t(k);
+    // (a phone / tablet: no keys to name - tap; GameScreen.mobile)
+    const hint = " " + (GameScreen.mobile() ? T("ui.hint.touch") : s.hint || T("ui.hint", "\x18\x19 and <ENTER>, or the mouse.") + (s.back ? "  " + T("ui.back", "<ESC> back.") : ""));
     t.textColor(15); t.gotoXY(80 - U.cols(hint), 25); t.write(hint);
     if (s.footer) { t.textColor(8); t.gotoXY(2, 25); t.write(" " + U.slice(s.footer, 78 - U.cols(hint) - 2) + " "); }   // (bottom left)
     const snap = { t: 0, mode: "text", screen: "text", vram: t.vram.slice(0, 16000) };
     t.snapUni(snap);
     if (this.cursor) snap.cursor = this.cursor;
+    if (this.centres.length) snap.centres = this.centres;
+    this.present(snap);
+  }
+
+  // ---------------------------------------------------------------- the phone layout (docs/DESIGN-8P.md 32)
+  // A phone held upright (GameScreen.mobile, portrait): the same spec laid out on a text screen NC columns
+  // wide and as tall as the phone allows - twice the text size of the 80-column screen. The rows / columns
+  // given in the spec are left aside: its lines (wrapped, in their order), then every box full width, one
+  // below the other (titles in their borders, all items - no box scrolls), scrolling with the selection or
+  // a drag when taller than the screen; at the bottom the selected item's info (wrapped), the rule and the
+  // hint. A screen can make its own phone version (spec.narrow: replaces the spec there).
+  // a page (Instructions / Information) on the phone layout: its rows ({c: centred, t: text with {n} colour
+  // switches}) from ntop, the rule and "Tap to go back" at the bottom; up / down arrows while there is more
+  presentNarrowPage() {
+    const s = this.spec, R = this.narrowRows(), VIEW = R - 3, o = this.t2 || (this.t2 = new TextBuf());
+    o.textMode(R); o.window(1, 1, 80, R); o.textBackground(0); o.clearScreen();
+    const centres = [];
+    for (let k = 0; k < VIEW && s.ntop + k < s.nlines.length; k++) {
+      const l = s.nlines[s.ntop + k], w = U.cols(visible(l.t));
+      o.gotoXY(l.c ? Math.max(1, (NC >> 1) + 1 - (w >> 1)) : 2, k + 1);
+      if (l.c) centres.push([k, 0, NC]);
+      let color = 7;
+      for (const part of l.t.split(/(\{\d+\})/)) {
+        const m = /^\{(\d+)\}$/.exec(part);
+        if (m) { color = +m[1]; continue; }
+        o.textColor(color); o.write(part);
+      }
+    }
+    o.textColor(frameColor());
+    if (s.ntop > 0) { o.gotoXY(NC, 1); o.write("\x18"); }
+    if (s.ntop + VIEW < s.nlines.length) { o.gotoXY(NC, VIEW); o.write("\x19"); }
+    o.drawBottomRule(R - 1, 1, NC);
+    const hint = " " + Lang.t("page.back.touch") + " ";
+    o.textColor(15); o.gotoXY(Math.max(1, NC + 1 - U.cols(hint)), R); o.write(U.slice(hint, NC));
+    this.narrow = null;
+    const snap = { t: 0, mode: "text", screen: "text", vram: o.vram.slice(0, 16000), cols: NC, rows: R };
+    o.snapUni(snap);
+    if (centres.length) snap.centres = centres;
+    this.present(snap);
+  }
+
+  isNarrow() {
+    const w = root.innerWidth || 0, h = root.innerHeight || 0;
+    return GameScreen.mobile() && h > w && w > 0;
+  }
+  narrowRows() {
+    const w = Math.max(160, (root.innerWidth || 390) - 16), h = Math.max(200, (root.innerHeight || 844) - 16);
+    return Math.max(25, Math.min(100, Math.floor(h / (w / NC * 16 * 1.35 / 9))));   // (the cells' shape: display.js)
+  }
+  narrowBox(i) {
+    const g = this.spec.boxes ? this.boxOf(i) : { start: 0, end: this.spec.items.length };
+    return Object.assign({}, g, NB);
+  }
+  drawNarrow() {
+    const t = this.t, s = this.spec.narrow || this.spec, R = this.narrowRows(), VIEW = R - 7;
+    const items = this.spec.items;
+    t.textMode(100); t.window(1, 1, 80, 100); t.textBackground(0); t.clearScreen();
+    this.centres = [];
+    const rowItem = {}, links = [], centres = [];
+    let row = 2;
+    const centre = (txt, color, r) => {
+      t.textColor(color == null ? 7 : color);
+      t.gotoXY(Math.max(1, (NC >> 1) + 1 - (U.cols(txt) >> 1)), r); t.write(U.slice(txt, NC));
+      centres.push([r - 1, 0, NC]);
+    };
+    // the lines, in their order (a gap in the rows: one blank row), wrapped to the width
+    const lines = (s.lines || []).map(l => ({ row: l.row || 0, txt: l.text, color: l.color }))
+      .concat((s.text || []).map(l => ({ row: l.row || 0, txt: U.fromRaw(l.text), color: l.color })))
+      .filter(l => l.row < 24).sort((a, b) => a.row - b.row);
+    let last = null;
+    for (const l of lines) {
+      if (last != null && l.row - last > 1) row++;
+      for (const part of wrapCols(l.txt, NC - 2)) centre(part, l.color, row++);
+      last = l.row;
+    }
+    if (lines.length) row++;
+    // the boxes, full width, one below the other
+    const boxes = this.spec.boxes ? this.boxesGeom() : [{ start: 0, end: items.length, title: null }];
+    for (const g of boxes) {
+      const b = Object.assign({}, g, NB);
+      const line = (r, a, fill, z) => { t.textColor(frameColor()); t.gotoXY(b.x, r); t.write(a + fill.repeat(b.w) + z); };
+      line(row, "\xDA", "\xC4", "\xBF");
+      if (g.title) { t.gotoXY(b.x + 2, row); t.textColor(titleColor()); t.write(" " + U.slice(g.title, b.w - 4) + " "); }
+      row++;
+      if (!this.spec.boxes && this.spec.header) {
+        t.gotoXY(b.x, row); t.textColor(frameColor()); t.write("\xB3"); t.textColor(14); t.write(U.padEnd(U.slice(this.spec.header, b.w), b.w));
+        t.textColor(frameColor()); t.write("\xB3"); row++;
+        line(row++, "\xC3", "\xC4", "\xB4");
+      }
+      for (let i = g.start; i < g.end; i++, row++) {
+        if (items[i].separator) { line(row, "\xC3", "\xC4", "\xB4"); continue; }
+        t.textColor(frameColor());
+        this.drawItem(i, row, b);
+        rowItem[row] = i;
+      }
+      line(row, "\xC0", "\xC4", "\xD9");
+      row += 2;
+    }
+    const height = row - 1;
+    // the view: follows the selection (unless a drag moved it), within the content
+    const selRow = +Object.keys(rowItem).find(r => rowItem[r] === this.sel) || 1;
+    if (this.nsel !== this.sel || this.nspec !== this.spec) { this.nfollow = true; this.nsel = this.sel; }
+    if (this.nspec !== this.spec && !this.nkeep) this.ntop = 0;
+    this.nspec = this.spec;
+    let top = this.ntop || 0;
+    if (this.nfollow) {
+      if (selRow - 2 < top) top = selRow - 2;
+      if (selRow + 2 > top + VIEW) top = selRow + 2 - VIEW;
+    }
+    top = this.ntop = Math.max(0, Math.min(top, height - VIEW));
+    // the screen: the visible rows of the content, then the info, the rule and the hint at the bottom
+    const o = this.t2 || (this.t2 = new TextBuf());
+    o.textMode(R); o.window(1, 1, 80, R); o.textBackground(0); o.clearScreen();
+    for (let r = 0; r < VIEW; r++) {
+      const src = (top + r) * 160, dst = r * 160;
+      o.vram.set(t.vram.subarray(src, src + NC * 2), dst);
+      if (t.uniUsed) { o.uni.set(t.uni.subarray((top + r) * 80, (top + r) * 80 + NC), r * 80); o.uniUsed = true; }
+    }
+    const map = {}, itemCentres = this.centres;
+    this.centres = [];
+    for (const r in rowItem) if (r - 1 >= top && r - 1 < top + VIEW) map[r - top] = rowItem[r];
+    for (const [r, a, z] of centres.concat(itemCentres)) if (r >= top && r < top + VIEW) this.centres.push([r - top, a, z]);
+    const cursor = this.cursor && this.cursor.row >= top && this.cursor.row < top + VIEW ? { col: this.cursor.col, row: this.cursor.row - top } : null;
+    o.textColor(frameColor());
+    if (top > 0) { o.gotoXY(NC, 1); o.write("\x18"); }
+    if (top + VIEW < height) { o.gotoXY(NC, VIEW); o.write("\x19"); }
+    const it = items[this.sel];
+    let ir = VIEW + 2;
+    (it && it.info || []).forEach(l => {
+      const text = typeof l === "string" ? l : l.text;
+      for (const part of wrapCols(text, NC - 2)) {
+        if (ir > R - 2) return;
+        o.textColor(l.color == null ? 3 : l.color);
+        const x = Math.max(1, (NC >> 1) + 1 - (U.cols(part) >> 1));
+        o.gotoXY(x, ir); o.write(part);
+        this.centres.push([ir - 1, 0, NC]);
+        if (l.onClick) links.push({ x, y: ir, w: U.cols(part), onClick: l.onClick });
+        ir++;
+      }
+    });
+    o.drawBottomRule(R - 1, 1, NC);
+    const hint = " " + (GameScreen.mobile() ? Lang.t("ui.hint.touch") : Lang.t("ui.hint")) + " ";
+    o.textColor(15); o.gotoXY(Math.max(1, NC + 1 - U.cols(hint)), R); o.write(U.slice(hint, NC));
+    this.narrow = { rows: R, items: map, links, top, height };
+    const snap = { t: 0, mode: "text", screen: "text", vram: o.vram.slice(0, 16000), cols: NC, rows: R };
+    o.snapUni(snap);
+    if (cursor) snap.cursor = cursor;
+    if (this.centres.length) snap.centres = this.centres;
     this.present(snap);
   }
 
@@ -368,9 +653,11 @@ class DosUI {
   key(e) {
     const s = this.spec;
     if (!s) return;
+    // (from the hidden touch input: what it types arrives as its "input" event - only the other keys here)
+    if (soft && e.target === soft && (e.code === "Backspace" || e.key === "Unidentified" || (e.key && Array.from(e.key).length === 1))) return;
     if (s.page) {
       if (["Enter", "NumpadEnter", "Escape", "Space"].includes(e.code)) { e.preventDefault(); s.back(); }
-      else if (s.engine && PAGE_KEYS[e.key]) { e.preventDefault(); this.scrollPage(PAGE_KEYS[e.key]); }
+      else if ((s.engine || s.nlines) && PAGE_KEYS[e.key]) { e.preventDefault(); this.scrollPage(PAGE_KEYS[e.key]); }
       return;
     }
     const it = s.items[this.sel];
@@ -391,6 +678,28 @@ class DosUI {
       this.draw();
     } else return;
     e.preventDefault();
+  }
+
+  // touch: the hidden input's text into the selected input (checked as if typed), then back (what fits)
+  softTyped() {
+    const it = this.spec && !this.spec.page ? this.spec.items[this.sel] : null;
+    if (!it || !it.input || it.input !== this.softFor) return;
+    it.input.value = "";
+    this.typed(it.input, soft.value.replace(/\s+/g, " "));
+    if (soft.value !== it.input.value) soft.value = it.input.value;
+    this.draw();
+  }
+  // a tap on an input row (touch screen): the hidden input gets the focus - the device's keyboard opens
+  softFocus(input) {
+    const si = softInput();
+    if (!si) return;
+    this.softFor = input;
+    si.type = input.secret ? "password" : "text";
+    si.value = input.value || "";
+    try { si.focus({ preventScroll: true }); } catch (e) { si.focus(); }
+  }
+  softBlur() {
+    if (soft && this.softFor) { this.softFor = null; soft.blur(); }
   }
 
   // adds text to an input (any printable characters, as many as fit its max display columns); true when
@@ -419,12 +728,17 @@ class DosUI {
   linkAt(ev) {
     const c = this.display.cellAt(ev);
     if (!c || !this.spec || this.spec.page) return null;
+    if (this.narrow) return (this.narrow.links || []).find(l => c[1] + 1 === l.y && c[0] + 1 >= l.x && c[0] + 1 < l.x + l.w) || null;
     return (this.links || []).find(l => c[1] + 1 === l.y && c[0] + 1 >= l.x && c[0] + 1 < l.x + l.w) || null;
   }
 
   itemAt(ev) {
     const c = this.display.cellAt(ev);
     if (!c || !this.spec || this.spec.page) return -1;
+    if (this.narrow) {                                   // (the phone layout: the item on that screen row)
+      const i = this.narrow.items[c[1] + 1];
+      return i != null && c[0] + 1 >= NB.x && c[0] + 1 <= NB.x + NB.w + 1 && this.enabled(i) ? i : -1;
+    }
     if (this.spec.boxes) {
       for (const b of this.boxesGeom()) {
         const k = c[1] + 1 - (b.y + 1), x = c[0] + 1 - b.x;
@@ -450,14 +764,17 @@ class DosUI {
     const link = this.linkAt(ev);
     if (link) { link.onClick(); return; }
     if (this.zoneClick(ev, 1)) return;
+    if (this.narrow && this.dragged) { this.dragged = false; return; }   // (the end of a drag, not a tap)
     const i = this.itemAt(ev);
     if (i < 0) return;
     if (this.spec.items[i].zones) { if (i !== this.sel) { this.sel = i; this.draw(); } return; }   // (selects only)
-    this.sel = i; this.spec.items[i].go();
+    const it = this.spec.items[i];
+    if (it.input && !it.disabled && touchScreen(ev)) { this.sel = i; this.draw(); this.softFocus(it.input); return; }   // (touch: its keyboard)
+    this.sel = i; it.go();
   }
   // the label column (0-based display column of item i's label text) under the mouse, or -1
   labelColAt(ev, i) {
-    const c = this.display.cellAt(ev), it = this.spec.items[i], b = this.spec.boxes ? this.boxOf(i) : this.geom();
+    const c = this.display.cellAt(ev), it = this.spec.items[i], b = this.narrow ? this.narrowBox(i) : this.spec.boxes ? this.boxOf(i) : this.geom();
     if (!c) return -1;
     const x = c[0] + 1 - b.x - 1;                          // interior column, 0-based
     const labelW = U.cols(it.label);
@@ -512,7 +829,7 @@ DosUI.setPlayerName = v => {
 };
 // "YOUR NAME": one input; done(name) once it isn't empty (stored), back() on <ESC> / "Back to main menu"
 DosUI.prototype.askName = function (done, back) {
-  const T = k => root.Lang.t(k);
+  const T = k => Lang.t(k);
   const form = { value: DosUI.playerName(), max: DosUI.NAME_MAX, width: DosUI.NAME_MAX };
   let err = false;
   const ok = () => {
@@ -532,5 +849,4 @@ DosUI.prototype.askName = function (done, back) {
   draw();
 };
 
-root.DosUI = DosUI;
-})(window);
+export { DosUI };

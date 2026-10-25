@@ -1,6 +1,6 @@
 {
   "name": "tunneler-online",
-  "version": "4.0.1",
+  "version": "5.0.0",
   "description": "TUNNELER 2.0 (1991, Geoffrey Silverton) rewritten in JavaScript from the decompiled original: split screen, vs computer and online multiplayer in the browser",
   "license": "Unlicense",
   "author": "Norko Kaniansky",
@@ -13,12 +13,13 @@
     "url": "https://github.com/kaniansky/tunneler-online/issues"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=20.19"
   },
   "private": true,
   "main": "server.js",
   "scripts": {
     "build": "node build.js",
+    "version": "node tools/flatpak-update.js --metainfo $npm_package_version && git add flatpak/",
     "watch": "node build.js --watch",
     "start": "node server.js",
     "test": "node test/run.js",
@@ -29,7 +30,7 @@
     "test:modes": "node test/modes-check.js",
     "test:net": "node test/net-sim.js && node test/endpoint-check.js && node test/net-page-smoke.js",
     "test:lang": "node test/lang-check.js && node test/unicode-check.js",
-    "test:local": "node test/local-check.js",
+    "test:local": "node test/local-check.js && node test/app-check.js",
     "test:input": "node test/input-check.js",
     "test:sound": "node test/sound-check.js",
     "test:serial": "node test/run.js --serial"

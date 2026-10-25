@@ -1,9 +1,8 @@
-"use strict";
 // Glue between an engine and the browser: runs engine steps, presents the screen snapshots each step
 // produced at their proper times, plays the speaker events, and repaints every animation frame.
-(function (root) {
+import { TunnelerEngine } from "./engine.js";
 
-const TICK_MS = root.TunnelerEngine.TICK_MS;
+const TICK_MS = TunnelerEngine.TICK_MS;
 
 class Runner {
   constructor(engine, display, speaker) {
@@ -18,13 +17,17 @@ class Runner {
     // screen's two tanks (full volume, panned by the nearer). null / unset = full volume, centred.
     // Called once per presented step that has sound events or fx, after the step.
     this.listener = null;
+    // optional: a replay recorder (replay.js) - gets every step's input before it runs and a call after it
+    this.recorder = null;
     this.raf = requestAnimationFrame(t => this.frame(t));
   }
 
   // Runs one engine step whose virtual start is presented at real time `at`.
   // quiet: fast-forward (catching up / replaying), nothing is shown or played.
   runStep(input, at, quiet) {
+    if (this.recorder) this.recorder.input(input);
     this.engine.step(input);
+    if (this.recorder) this.recorder.stepped();
     if (!quiet) {
       for (const s of this.engine.snapshots) this.queue.push({ at: at + s.t, snap: s });
       // soundEvents: the PC speaker ("original" style); fx: semantic effects for the synthesized styles
@@ -76,6 +79,4 @@ class LocalClock {
   stop() { clearInterval(this.timer); }
 }
 
-root.Runner = Runner;
-root.LocalClock = LocalClock;
-})(window);
+export { Runner, LocalClock };

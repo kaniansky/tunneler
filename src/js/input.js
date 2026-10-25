@@ -1,10 +1,11 @@
-"use strict";
 // Browser keyboard -> PC keyboard. Tracks held keys as PC scan codes (Kbd.KeyDown) and queues
 // keystrokes as [ascii, scan] pairs for the BIOS keyboard buffer (menus, "press any key").
-(function (root) {
 
 // KeyboardEvent.code -> set-1 scan code. Function keys are deliberately not mapped: the menus use the
 // arrow keys + Enter (or the mouse), sound is toggled with M.
+import { Controls } from "./controls.js";
+const root = globalThis;
+
 const SCAN = {
   Escape: 0x01, Digit1: 0x02, Digit2: 0x03, Digit3: 0x04, Digit4: 0x05, Digit5: 0x06, Digit6: 0x07, Digit7: 0x08,
   Digit8: 0x09, Digit9: 0x0A, Digit0: 0x0B, Minus: 0x0C, Equal: 0x0D, Backspace: 0x0E, Tab: 0x0F,
@@ -22,12 +23,10 @@ const SCAN = {
   ArrowLeft: 0x4B, ArrowRight: 0x4D, End: 0x4F, ArrowDown: 0x50, PageDown: 0x51, Insert: 0x52, Delete: 0x53,
 };
 
-// Browser-friendly changes to the held keys (Kbd.KeyDown). Blue moves with W A S D: S drives the
-// original's "down" key (X, scan 0x2D) and X itself does nothing (null). Ctrl+W closes the browser tab
-// (and two players share the keyboard), so neither Ctrl fires: BLUE fires with Left Shift / Space
-// (Tab), GREEN with Enter / Right Shift.
-const HELD_ALIASES = { ShiftLeft: 0x1D, Space: 0x1D, Tab: 0x1D, KeyS: 0x2D, KeyX: null,
-  ControlLeft: null, ControlRight: null, ShiftRight: 0x1C };   // no Ctrl at all: Ctrl+W closes the tab
+// Browser-friendly changes to the held keys (Kbd.KeyDown) come from controls.js (Controls.scanOf): Blue moves
+// with W A S D (S drives the original's "down" key, X scan 0x2D; X itself does nothing), neither Ctrl fires
+// (Ctrl+W closes the browser tab), BLUE fires with Left Shift / Space (Tab), GREEN with Enter / Right Shift -
+// or the keys remapped in Settings.
 
 const NAMED_ASCII = { Enter: 13, NumpadEnter: 13, Escape: 27, Backspace: 8, Tab: 9, Space: 32 };
 
@@ -48,7 +47,7 @@ class Keyboard {
     if (scan === undefined) return;
     if (this.onKey && this.onKey(e.code, e)) { e.preventDefault(); return; }
     e.preventDefault();
-    const held = this.aliases && HELD_ALIASES[e.code] !== undefined ? HELD_ALIASES[e.code] : scan;
+    const held = !this.aliases ? scan : Controls.scanOf(e.code, scan);
     if (held !== null) this.down.set(e.code, held);
     let ascii = NAMED_ASCII[e.code];
     if (ascii === undefined) ascii = e.key.length === 1 && e.key.charCodeAt(0) < 128 && !e.ctrlKey && !e.altKey ? e.key.charCodeAt(0) : 0;
@@ -70,6 +69,4 @@ class Keyboard {
   takeKeys() { const k = this.keys; this.keys = []; return k; }
 }
 
-root.Keyboard = Keyboard;
-root.SCAN = SCAN;
-})(window);
+export { Keyboard, SCAN };

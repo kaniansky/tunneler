@@ -1,8 +1,8 @@
 "use strict";
 // src/js/endpoint.js: where online play goes - the page's own site in a browser, the stored server (else
 // the public one) in the desktop app; address normalizing; websocket / API / invite URLs
-const assert = require("assert"), fs = require("fs"), path = require("path"), vm = require("vm");
-const SRC = fs.readFileSync(path.join(__dirname, "..", "src", "js", "endpoint.js"), "utf8");
+const assert = require("assert"), vm = require("vm");
+const { run } = require("./page-env.js");
 
 function load(href, stored) {
   const store = new Map(stored ? [["tunneler.server", stored]] : []);
@@ -11,7 +11,7 @@ function load(href, stored) {
     localStorage: { getItem: k => store.has(k) ? store.get(k) : null, setItem: (k, v) => store.set(k, String(v)), removeItem: k => store.delete(k) }, URL };
   win.window = win; win.URLSearchParams = URLSearchParams;
   vm.createContext(win);
-  vm.runInContext(SRC, win);
+  run(win, ["js/endpoint.js"]);
   return { E: win.Endpoint, L: win.Links, store };
 }
 let n = 0;

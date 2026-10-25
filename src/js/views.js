@@ -1,4 +1,3 @@
-"use strict";
 // What a spectator (or a local "vs computers" player) sees of a running game - see docs/DESIGN-8P.md 5.
 // ViewModes stands in for the page's Display (Runner calls setSnapshot / draw on it) and decides how
 // the game screen is shown while it is being played:
@@ -34,7 +33,13 @@
 // the colour name) in the player's colour, plus "TEAM n" when teams are shared - in half-height VGA
 // letters (like 80x50 text mode) on black, never over the playfield. Classic games: the two halves of
 // the split screen are shown as two such views.
-(function (root) {
+import { Display } from "./display.js";
+import { TunnelerEngine } from "./engine.js";
+import { Gfx } from "./gfx.js";
+import { Lang } from "./lang.js";
+import { UniFont, UniText } from "./unitext.js";
+import { VGA_FONT } from "./vgafont.js";
+import { Scope } from "./scope.js";
 
 const MODES = ["grid", "map", "follow"];
 const ASPECT = 1.35;               // vertical / horizontal pixel scale of the 720x400 screen at 4:3
@@ -43,12 +48,12 @@ const MAP_TOP = 17;                // map box: text rows 0..MAP_TOP (border), ma
 const CLASSIC_COLORS = [9, 10];    // classic tanks / bases: LORES colours 9 (BLUE), 10 (GREEN)
 const GAP = 5;                     // columns between the teams on the map's team lines
 
-const afterDeath = v => root.TunnelerEngine ? root.TunnelerEngine.afterDeath(v) : "wreck";
-const T = (k, p) => root.Lang ? root.Lang.t(k, p) : k;
-const raw = k => root.Lang ? root.Lang.raw(k) : k.toUpperCase();
-const enc = s => root.Lang ? root.Lang.enc(s) : s;
+const afterDeath = v => TunnelerEngine.afterDeath(v);
+const T = (k, p) => Lang.t(k, p);
+const raw = k => Lang.raw(k);
+const enc = s => Lang.enc(s);
 // display columns of font text (unitext.js: CJK / emoji take 2)
-const visLen = s => root.UniText.cols(s.replace(/\{\d+\}/g, ""));
+const visLen = s => UniText.cols(s.replace(/\{\d+\}/g, ""));
 const load = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
 const save = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* private mode */ } };
 
@@ -75,7 +80,7 @@ class ViewModes {
     this.scope = null;             // {own, view} - a player's own view (setScope)
     this.watchOut = afterDeath(opts.watchOut);   // after the own tank is destroyed: "black" / "wreck" / "others"
     this.ghost = null;                 // "others": the player watched now (0-based)
-    if (root.UniFont) root.UniFont.onLoad(() => { this.key = ""; });   // a glyph block arrived: redraw
+    Scope.onEnd(UniFont.onLoad(() => { this.key = ""; }));   // a glyph block arrived: redraw
   }
 
   // ------------------------------------------------------------ Display interface (for Runner)
@@ -106,8 +111,10 @@ class ViewModes {
     this.changed();
   }
   // a player: own = their player index (0-based), view = "self" | "team" | "everyone"
-  setScope(own, view) {
-    const next = own == null || own < 0 ? null : { own: own | 0, view: ["self", "team", "everyone"].includes(view) ? view : "self" };
+  // (others: more players' own views on this screen - a skirmish's player 2: right after the own one)
+  setScope(own, view, others) {
+    const next = own == null || own < 0 ? null : { own: own | 0, view: ["self", "team", "everyone"].includes(view) ? view : "self",
+      others: (others || []).filter(i => i >= 0 && i !== own) };
     if (JSON.stringify(next) === JSON.stringify(this.scope)) return;
     this.scope = next;
     if (next) this.follow = next.own;
@@ -178,10 +185,11 @@ class ViewModes {
   // the players shown for the scope: own first, then teammates / everybody else in slot order
   scopeCells() {
     const e = this.engine(), n = this.nPlayers(), own = Math.min(this.scope.own, n - 1), v = this.scope.view;
-    const cells = [own];
+    const mine = [own].concat((this.scope.others || []).filter(i => i < n));
+    const cells = mine.slice();
     for (let i = 0; i < n; i++) {
-      if (i === own) continue;
-      if (v === "everyone" || (v === "team" && e && e.extended && e.team && e.team(i + 1) === e.team(own + 1))) cells.push(i);
+      if (mine.includes(i)) continue;
+      if (v === "everyone" || (v === "team" && e && e.extended && e.team && mine.some(m => e.team(i + 1) === e.team(m + 1)))) cells.push(i);
     }
     return cells;
   }
@@ -223,19 +231,19 @@ class ViewModes {
   // player i (0-based) as the engine has it: its slot's color (a room of BLUE, CYAN and TEAL keeps
   // those colors), its name from the pre-game lobby
   playerKey(i) {
-    const keys = root.TunnelerEngine && root.TunnelerEngine.PLAYER_KEYS || ["blue", "green"];
+    const keys = TunnelerEngine.PLAYER_KEYS;
     const e = this.engine();
     return keys[e && e.colorIndex ? e.colorIndex(i + 1) : i] || "blue";
   }
   playerColor(i) {
     const e = this.engine();
     if (e && e.playerColor) return e.playerColor(i + 1);
-    return this.isExtended() ? root.TunnelerEngine.PLAYER_COLORS[i] : CLASSIC_COLORS[i];
+    return this.isExtended() ? TunnelerEngine.PLAYER_COLORS[i] : CLASSIC_COLORS[i];
   }
   playerTextColor(i) {
     const e = this.engine();
     if (e && e.playerTextColor) return e.playerTextColor(i + 1);
-    return this.isExtended() ? root.TunnelerEngine.PLAYER_TEXT_COLORS[i] : CLASSIC_COLORS[i];
+    return this.isExtended() ? TunnelerEngine.PLAYER_TEXT_COLORS[i] : CLASSIC_COLORS[i];
   }
   // player i's name as font text (a display name from the pre-game lobby in any letters, else the color)
   playerName(i) {
@@ -278,8 +286,22 @@ class ViewModes {
   }
 
   // ------------------------------------------------------------ drawing
+  // tank colours (Display.tankPalette): whose view decides "you / team / enemy" - a player's own tank (the
+  // scope), else the view's own tank (v: player index 0..); null = nobody (the slots' colours)
+  viewerOf(v) {
+    if (this.scope && v != null && (this.scope.others || []).includes(v)) return v + 1;   // (player 2's view: theirs)
+    return this.scope ? this.scope.own + 1 : v == null ? null : v + 1;
+  }
   draw(now) {
     const L = this.layout();
+    if (!this.display.paletteFor) {                     // (the display path: split screen, the world map)
+      this.display.paletteFor = s => Display.tankPalette(s, this.engine(), this.viewerOf(this.isExtended() ? null : 0));
+    }
+    this.drawLayout(now, L);
+    // graphics "modern" (gfx.js): what the play screen / the world map shows - after the painting above
+    if (Gfx.mode() === "modern") Gfx.scene(this.canvas, this.sceneOf(L));
+  }
+  drawLayout(now, L) {
     if (L.kind === "display") {
       if (this.owned) { this.owned = false; this.display.lastKey = ""; }
       if (this.display.crop !== L.crop) this.display.setCrop(L.crop);
@@ -296,6 +318,46 @@ class ViewModes {
     this.drawNotice();
   }
 
+  // graphics "modern" (gfx-modern.js, gfx-hud.js): what the play screen shows - {engine, cells, windows,
+  // labels, ping, notice, cut, destroyed}: cells = every 40-column view on the canvas {x, y, p (player 1..N),
+  // black (after death: black with DESTROYED), name, team (Unicode), color (text color)}, windows = the
+  // cells whose world is drawn, cut = the notice band's rows [from, to) - or the end-of-match world map
+  // {engine, map}; null = nothing (Display / drawMap report their own)
+  sceneOf(L) {
+    const s = this.snap, e = this.engine();
+    if (!s || !e) return null;
+    if (s.screen === "map" && L.kind === "display")                 // (anykey: the modern look's text for the banner)
+      return { engine: e, viewer: this.viewerOf(null), map: { kind: "end", x: 36, y: 20, w: 648, h: 292 }, anykey: Lang.decode(T("map.anykey")) };
+    if (s.screen !== "play" || L.kind === "map") return null;
+    let cells;
+    if (L.kind === "display") {
+      if (e.extended) return null;
+      const [c0, c1] = this.display.columns();
+      cells = [0, 1].filter(h => h * 40 >= c0 && h * 40 < c1).map(h => ({ x: (h * 40 - c0) * 9, y: 0, p: h + 1 }));
+    } else cells = L.cells.map((v, k) => ({ x: (k % L.cols) * 360, y: Math.floor(k / L.cols) * 400, p: v + 1 }));
+    const D = Lang.decode;
+    const teams = e.extended && e.teams && e.teamName;
+    for (const c of cells) {
+      c.black = this.blackedOut(c.p - 1, e);
+      c.name = D(this.playerName(c.p - 1));
+      c.team = teams ? D(e.teamName(e.team(c.p))) : "";
+      c.color = this.playerTextColor(c.p - 1) & 15;
+      c.viewer = this.viewerOf(c.p - 1);
+    }
+    return { engine: e, cells, windows: cells.filter(c => !c.black), labels: L.kind === "grid" && !!L.labels,
+      ping: this.pingText || "", notice: this.noticeText ? D(this.noticeText) : "", cut: this.noticeText ? this.noticeBand() : null,
+      destroyed: D(T("vw.destroyed")) };
+  }
+  // the live map's colours (not tagged: the map is no LORES grid) - the slots' or the colour-blind ones
+  tankPaletteRaw(s, e) {
+    const D = Display, base = s.palette === "extended" ? D.EXT_PALETTE : D.LORES_PALETTE;
+    const pal8 = D.tankPalette8(base, e, this.viewerOf(null));
+    if (pal8 === base) return D.paletteOf(s, true);
+    return pal8.map(([r, g, b]) => ((255 << 24) | (b << 16) | (g << 8) | r) >>> 0);
+  }
+  // the notice band's rows on the canvas (drawNotice)
+  noticeBand() { const y = ((this.canvas.height - 16) >> 1) - 8; return [y, y + 32]; }
+
   // a one-line message across the middle of the game (font text, null = none), e.g. "Press <ESC> again
   // to leave the game": yellow on a black band the whole width of the canvas
   setNotice(text) {
@@ -307,15 +369,15 @@ class ViewModes {
   }
   drawNotice() {
     if (!this.noticeText) return;
-    const U = root.UniText, D = root.Display, c = this.canvas;
+    const U = UniText, D = Display, c = this.canvas;
     const cols = Math.floor(c.width / 9), W = cols * 9;
     const vram = new Uint8Array(cols * 2), uni = new Uint32Array(cols);
     for (let k = 0; k < cols; k++) { vram[k * 2] = 0x20; vram[k * 2 + 1] = 0x0E; }
     const cells = U.cells(U.slice(this.noticeText, cols - 2)), c0 = (cols - cells.length) >> 1;
     cells.forEach(([b, cp], k) => { vram[(c0 + k) * 2] = b; uni[c0 + k] = cp; });
     const tmp = new Uint32Array(W * 16);
-    D.paint(tmp, W, 0, 0, vram, 0, cols, 1, true, D.TEXT_U32, true, root.VGA_FONT, uni);
-    const y = ((c.height - 16) >> 1) - 8, img = this.ctx.createImageData(W, 32), out = new Uint32Array(img.data.buffer);
+    D.paint(tmp, W, 0, 0, vram, 0, cols, 1, true, D.TEXT_U32, true, VGA_FONT, uni);
+    const y = this.noticeBand()[0], img = this.ctx.createImageData(W, 32), out = new Uint32Array(img.data.buffer);
     out.fill(D.TEXT_U32[0]);                            // (a black band: 8 lines above and below the text)
     out.set(tmp, W * 8);
     this.ctx.putImageData(img, (c.width - W) >> 1, y);
@@ -331,13 +393,13 @@ class ViewModes {
   }
   drawPing() {
     if (!this.pingText || !this.snap || this.snap.screen !== "play") return;
-    const U = root.UniText, D = root.Display;
+    const U = UniText, D = Display;
     const vram = new Uint8Array(80);
     for (let c = 0; c < 80; c += 2) { vram[c] = 0x20; vram[c + 1] = 0x07; }
     const cells = U.cells(" " + this.pingText + " "), c0 = 1, w = (c0 + cells.length) * 9;
     cells.forEach(([b], k) => { vram[(c0 + k) * 2] = b; });
     const tmp = new Uint32Array(360 * 16);
-    D.paint(tmp, 360, 0, 0, vram, 0, 40, 1, true, D.TEXT_U32, true, root.VGA_FONT);
+    D.paint(tmp, 360, 0, 0, vram, 0, 40, 1, true, D.TEXT_U32, true, VGA_FONT);
     const img = this.ctx.getImageData(0, 0, w, 8), out = new Uint32Array(img.data.buffer), bg = D.TEXT_U32[0] >>> 0;
     for (let l = 0; l < 8; l++)                         // (half height: each pair of font lines merged)
       for (let d = c0 * 9; d < w; d++) {
@@ -375,12 +437,12 @@ class ViewModes {
     const top = 0, CH = 400;
     const W = L.cols * 360, H = L.rows * CH;
     const px = this.surface(W, H);
-    const D = root.Display, pal = D.paletteOf(s);
-    px.fill(pal[0]);
+    const D = Display, pal0 = D.paletteOf(s);
+    px.fill(pal0[0]);
     L.cells.forEach((v, k) => {
-      const x = (k % L.cols) * 360, y = Math.floor(k / L.cols) * CH;
-      if (s.views) { if (s.views[v]) D.paint(px, W, x, y + top, s.views[v], 0, 40, 100, false, pal, true, root.VGA_FONT, null, s.dims ? s.dims[v] : null); }
-      else D.paint(px, W, x, y + top, s.vram, v * 40, v * 40 + 40, 100, false, pal, true, root.VGA_FONT, null, s.dim);
+      const x = (k % L.cols) * 360, y = Math.floor(k / L.cols) * CH, pal = D.tankPalette(s, e, this.viewerOf(v));
+      if (s.views) { if (s.views[v]) this.paintView(px, W, x, y + top, s.views[v], 0, pal, pal0, s.dims ? s.dims[v] : null); }
+      else this.paintView(px, W, x, y + top, s.vram, v * 40, pal, pal0, s.dim);
       // after death "black": the view window (cells 1-38 x 2-72, 9 x 4 pixels each) black with DESTROYED;
       // the frame and the instrument panel stay
       if (this.blackedOut(v, e)) {
@@ -393,6 +455,19 @@ class ViewModes {
     this.fit(L.cols === 1 && L.rows === 1 && !L.labels ? "half" : "grid");
   }
 
+  // one 40-column view (columns c0..c0+39 of a LORES buffer) at (x, y): with the tank colours' palette, but
+  // the instrument panel (cells 3-36 x rows 74-98) with the normal one - its gauges share palette entries
+  // with some tanks' colours (the shield's 3 = CYAN)
+  paintView(px, W, x, y, vram, c0, pal, normal, dim) {
+    const D = Display, F = VGA_FONT;
+    if (pal === normal) { D.paint(px, W, x, y, vram, c0, c0 + 40, 100, false, pal, true, F, null, dim); return; }
+    const part = (r0, r1, a, b, p) => D.paint(px, W, x + a * 9, y + r0 * 4, vram.subarray(r0 * 160), c0 + a, c0 + b, r1 - r0, false, p, true, F, null,
+      dim ? dim.subarray(r0 * 80) : null);
+    part(0, 74, 0, 40, pal);
+    part(74, 99, 0, 3, pal); part(74, 99, 3, 37, normal); part(74, 99, 37, 40, pal);
+    part(99, 100, 0, 40, pal);
+  }
+
   // a player's own scope: a destroyed tank's view (own or a teammate's) is black with "DESTROYED" until
   // the next round - with every after death setting but "wreck" (which keeps showing the wrecks)
   blackedOut(i, e) {
@@ -400,27 +475,27 @@ class ViewModes {
   }
   // one line of font text centred in a 40-column view at pixel row y, in DOS attribute `attr`
   paintText(px, W, x, y, text, attr) {
-    const U = root.UniText, D = root.Display;
+    const U = UniText, D = Display;
     const vram = new Uint8Array(80), uni = new Uint32Array(40);
     for (let c = 0; c < 80; c += 2) { vram[c] = 0x20; vram[c + 1] = 0x00; }
     const cells = U.cells(U.slice(text, 40)), c0 = (40 - cells.length) >> 1;
     cells.forEach(([b, cp], k) => { vram[(c0 + k) * 2] = b; vram[(c0 + k) * 2 + 1] = attr; uni[c0 + k] = cp; });
     // (drawn aside, then only the letters' pixels copied: what is under the text stays)
     const tmp = new Uint32Array(360 * 16), bg = D.TEXT_U32[0] >>> 0;
-    D.paint(tmp, 360, 0, 0, vram, 0, 40, 1, true, D.TEXT_U32, true, root.VGA_FONT, uni);
+    D.paint(tmp, 360, 0, 0, vram, 0, 40, 1, true, D.TEXT_U32, true, VGA_FONT, uni);
     for (let l = 0; l < 16; l++)
       for (let d = c0 * 9; d < (c0 + cells.length) * 9; d++) if ((tmp[l * 360 + d] >>> 0) !== bg) px[(y + l) * W + x + d] = tmp[l * 360 + d];
   }
   // view label: "NAME" (+ "  TEAM n" when teams are shared), font text, at most 38 columns
   viewLabel(i) {
-    const e = this.engine(), U = root.UniText;
+    const e = this.engine(), U = UniText;
     const team = e && e.extended && e.teams && e.teamName ? "  " + e.teamName(e.team(i + 1)) : "";
     return U.slice(this.playerName(i), 38 - U.cols(team)) + team;
   }
   // the label on the view's top border at (x, y): one text row (40 cells) drawn at half height (8 lines:
   // each pair of font lines merged), centred with a blank cell either side, the name in the player's colour
   paintLabel(px, W, x, y, i, e) {
-    const U = root.UniText, D = root.Display;
+    const U = UniText, D = Display;
     const vram = new Uint8Array(160), uni = new Uint32Array(80);
     for (let c = 0; c < 80; c += 2) { vram[c] = 0x20; vram[c + 1] = 0x07; }
     const label = this.viewLabel(i), name = U.slice(this.playerName(i), U.cols(label));
@@ -430,7 +505,7 @@ class ViewModes {
       vram[(c0 + k) * 2 + 1] = k < nameCells ? this.playerTextColor(i) & 15 : 0x07;
     });
     const tmp = new Uint32Array(360 * 16), bg = D.TEXT_U32[0] >>> 0;
-    D.paint(tmp, 360, 0, 0, vram, 0, 40, 1, true, D.TEXT_U32, true, root.VGA_FONT, uni);
+    D.paint(tmp, 360, 0, 0, vram, 0, 40, 1, true, D.TEXT_U32, true, VGA_FONT, uni);
     for (let l = 0; l < 8; l++)
       for (let d = c0 * 9; d < (c0 + cells.length) * 9; d++) {
         const a = tmp[2 * l * 360 + d], b = tmp[(2 * l + 1) * 360 + d];
@@ -445,18 +520,18 @@ class ViewModes {
     const e = this.engine(), s = this.snap;
     const n = e.nPlayers || 2;
     const rows = Math.max(25, MAP_TOP + 4 + n + this.teamLines(e).length);
-    const key = "map" + e.tick + "," + rows + "," + (root.Lang ? root.Lang.code : "");
+    const key = "map" + e.tick + "," + rows + "," + Lang.code;
     if (this.key === key) return;
     this.key = key;
     const W = 720, H = rows * 16;
     const px = this.surface(W, H);
-    const D = root.Display;
+    const D = Display;
     // text part
     const vram = new Uint8Array(rows * 160), uni = new Uint32Array(rows * 80);
     for (let i = 0; i < vram.length; i += 2) { vram[i] = 0x20; vram[i + 1] = 0x07; }
     // font text (names: Unicode characters through the plane `uni`)
     const put = (col, row, text, attr) => {
-      root.UniText.cells(text).forEach(([b, cp], i) => {
+      UniText.cells(text).forEach(([b, cp], i) => {
         if (col + i < 0 || col + i >= 80) return;
         vram[row * 160 + (col + i) * 2] = b;
         vram[row * 160 + (col + i) * 2 + 1] = attr;
@@ -470,10 +545,10 @@ class ViewModes {
     const title = " " + ((e.strings && e.strings.round) || "ROUND") + " " + Math.max(1, e.round) + " ";
     put(40 - (title.length >> 1), 0, title, 0x0E);
     this.scoreTable(e, put, MAP_TOP + 1);
-    D.paint(px, W, 0, 0, vram, 0, 80, rows, true, D.TEXT_U32, Math.floor(now / D.BLINK_MS) % 2 === 0, root.VGA_FONT, uni);
+    D.paint(px, W, 0, 0, vram, 0, 80, rows, true, D.TEXT_U32, Math.floor(now / D.BLINK_MS) % 2 === 0, VGA_FONT, uni);
     // the world
     const MX = 9, MY = 16, MW = 702, MH = (MAP_TOP - 1) * 16;
-    const pal = D.paletteOf(s);
+    const pal = this.tankPaletteRaw(s, e);
     // world: 2 pixels per byte, odd x in the high nibble (1024x512 unless the engine says otherwise)
     const world = e.world, ww = e.worldW || 1024, stride = ww >> 1, wh = e.worldH || world.length / stride;
     for (let y = 0; y < MH; y++) {
@@ -511,6 +586,9 @@ class ViewModes {
       }
     }
     this.ctx.putImageData(this.img, 0, 0);
+    if (Gfx.mode() === "modern")
+      Gfx.painted(this.canvas, { scene: { engine: e, viewer: this.viewerOf(null), text: { vram, uni, rows, c0: 0, c1: 80, blinkOn: Math.floor(now / D.BLINK_MS) % 2 === 0 },
+        map: { kind: "live", x: MX, y: MY, w: MW, h: MH } } });
     this.fit("map");
   }
 
@@ -585,5 +663,5 @@ class ViewModes {
 }
 
 ViewModes.MODES = MODES;
-root.ViewModes = ViewModes;
-})(window);
+
+export { ViewModes };

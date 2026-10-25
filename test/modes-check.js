@@ -1,12 +1,11 @@
 "use strict";
-// Game modes and modifiers (docs/DESIGN-8P.md 27): the framework and every registered mode.
+// Game modes (docs/DESIGN-8P.md 27): the framework and every registered mode.
 //   - every mode in TunnelerEngine.MODE_LIST but "standard" is registered (src/js/modes/<mode>.js)
 //   - every mode: AI-only matches (free-for-all and teams, small map, 1 round to win) finish, and the same
 //     match twice is identical (bits every frame, the final state hash) - online every client must agree
-//   - the modifier: no repairs stops shield repair at bases
 //   - then each mode's own test, test/modes/<mode>.js, if there is one
 //   node test/modes-check.js [quick] [only=core|<mode>]
-//   only=core: registration, translations and the modifiers; only=<mode>: that mode's matches and its own
+//   only=core: registration and translations; only=<mode>: that mode's matches and its own
 //   test (test/run.js runs each part as its own process, in parallel); neither: everything
 const fs = require("fs"), path = require("path");
 const H = require("./modes-harness.js");
@@ -22,10 +21,17 @@ if (only && only !== "core" && !E.MODES[only]) { console.log("modes-check: no mo
 if (core) {
 const missing = E.MODE_LIST.filter(m => m !== "standard" && !E.MODES[m]);
 check(!missing.length || process.env.MODES_PARTIAL, "every game mode registered" + (missing.length ? " (missing: " + missing.join(", ") + ")" : ""));
+{
+  // src/js/modes/index.js imports every mode file
+  const dir = path.join(__dirname, "..", "src", "js", "modes");
+  const listed = [...fs.readFileSync(path.join(dir, "index.js"), "utf8").matchAll(/^import "\.\/([^"]+)";/gm)].map(m => m[1]);
+  const files = fs.readdirSync(dir).filter(f => f.endsWith(".js") && f !== "index.js");
+  check(files.every(f => listed.includes(f)), "src/js/modes/index.js imports every mode (" + files.filter(f => !listed.includes(f)).join(", ") + ")");
+}
 for (const m of Object.keys(E.MODES)) {
   const M = E.MODES[m];
   check(E.MODE_LIST.includes(m), m + ": a known mode name");
-  for (const l of ["en", "sk", "cs", "uk", "ru", "genz"])
+  for (const l of ["en", "sk", "cs", "uk", "ru"])
     check(!M.strings || !M.strings.en || (M.strings[l] && Object.keys(M.strings.en).every(k => typeof M.strings[l][k] === "string")),
       m + ": every in-game text translated (" + l + ")");
 }
@@ -45,36 +51,12 @@ for (const m of Object.keys(E.MODES).filter(modeOn)) {
   }
 }
 
-// ---- modifiers
 if (core) {
-  // no repairs: a damaged tank at its own base gets energy back, but no shield
-  const rep = mods => {
-    const e = H.startEngine(4, Object.assign({ slots: slots([1, 2]), size: "small", extended: true }, mods));
-    e.shield[1] = 5000; e.energy[1] = 5000;
-    for (let f = 0; f < 50; f++) e.step({ bits: [0, 0], keys: [] });
-    return { shield: e.shield[1], energy: e.energy[1] };
-  };
-  const on = rep({}), off = rep({ noRepair: true });
-  check(on.shield > 5000 && off.shield <= 5000 && off.energy > 5000, "no repairs: the base refuels but doesn't repair (shield " + off.shield + " vs " + on.shield + ")");
-  // the standard mode's AI with no repairs: low shield, full energy at home - it goes on (the shield never
-  // comes back); with repairs it stays to repair
-  const home = mods => {
-    const e = H.startEngine(28, Object.assign({ slots: slots([1, 2]), size: "small", extended: true }, mods));
-    const ai = new H.TunnelerAI("normal", 1, { seed: 1 });
-    for (let f = 0; f < 3000 && e.screen !== "play"; f++) e.step({ bits: [0, 0], keys: [] });
-    e.step({ bits: [H.TunnelerAI.bitsFor(ai, e), 0], keys: [] });
-    e.shield[1] = 1000; e.energy[1] = 12000; e.tankX[1] = e.baseX[1]; e.tankY[1] = e.baseY[1];
-    H.TunnelerAI.bitsFor(ai, e);
-    return ai.retreating;
-  };
-  check(!home({ noRepair: true }) && home({}), "no repairs: the AI doesn't wait at home for a shield that never comes back");
-}
-if (core) {
-  // the classic engine never runs a mode or a modifier
+  // the classic engine never runs a mode
   const e = new E(1, { slots: slots([1, 2]), mode: "gold" });
   check(e.extended || !E.MODES.gold, "a game mode always runs the extended engine");
   const c = new E(1, { slots: slots([1, 2]) });
-  check(!c.extended && c.gameMode === "standard" && !c.GM, "BLUE + GREEN, standard, no modifier: the classic engine");
+  check(!c.extended && c.gameMode === "standard" && !c.GM, "BLUE + GREEN, standard: the classic engine");
 }
 
 // ---- each mode's own test

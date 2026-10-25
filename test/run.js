@@ -9,8 +9,8 @@
 const { spawn } = require("child_process"), os = require("os"), path = require("path");
 
 // every game mode's matches + its own test (test/modes/<mode>.js) in a process of its own, then the rest
-// of modes-check (registration, translations, modifiers): together the same as "modes-check.js quick"
-const MODES = Object.keys(require("../src/js/engine.js").MODES).sort();
+// of modes-check (registration, translations): together the same as "modes-check.js quick"
+const MODES = require("./src.js").jsIn(path.join(__dirname, "..", "src", "js", "modes")).map(f => f.replace(/\.js$/, ""));
 const TESTS = [
   ...MODES.map(m => "modes-check.js quick only=" + m),
   "ext-sim.js quick",
@@ -21,13 +21,17 @@ const TESTS = [
   "time-sim.js",
   "local-check.js",
   "net-page-smoke.js",
+  "app-check.js",
   "sound-check.js",
+  "replay-check.js",
   "lang-check.js",
   "unicode-check.js",
   "input-check.js",
   "idle-sim.js",
   "update-check.js",
   "endpoint-check.js",
+  "gfx-check.js",
+  "gfx-text-check.js",
   "modes-check.js quick only=core",
 ];
 

@@ -14,13 +14,20 @@
 //     cartoony pan each effect; without StereoPannerNode everything plays as before, centred
 //   - Speaker.preview: no AudioContext -> false, no throw; with one it plays every style; the original
 //     preview sequence starts with the shot (5000 Hz) and ends silent
+//   - options (Speaker.OPTIONS / getOption / setOption): volume / stereo / fade stored, defaults, invalid
+//     values, throwing storage; new Speakers read them, live ones (and the preview) pick changes up at once;
+//     the volume is one master gain everything goes through (the PC speaker too); stereo off = centred in
+//     every style; fade off = full volume far away (a mute listener stays silent, attenuation unchanged)
+//   - the recorded style: a sample for every fx kind on disk, fetched only once the style is used (one
+//     fetch per file for all speakers), the realistic synth until decoded, then random variants, faded /
+//     panned like the others, dig / bump rate-limited, voices per kind capped, missing files = the synth,
+//     callback-only decodeAudioData (older Safari), the preview
 //   node test/sound-check.js
 const path = require("path");
 const JS = path.join(__dirname, "..", "src", "js");
-const E = require(path.join(JS, "engine.js"));
-const TunnelerAI = require(path.join(JS, "ai.js"));
-const { stateHash } = require(path.join(JS, "netproto.js"));
-const Speaker = require(path.join(JS, "speaker.js"));
+const { TunnelerEngine: E, TunnelerAI, NetProto: { stateHash }, Speaker } = require("./src.js");
+// a fresh copy of speaker.js (its own sample cache) in this context: its bundle run again
+const freshSpeaker = () => { require("vm").runInThisContext(require("./page-env.js").bundle(["js/speaker.js"])); return globalThis.Speaker; };
 const K = E.KEYS;
 
 let bad = 0;
@@ -129,7 +136,7 @@ class Store {
   removeItem(k) { this.m.delete(k); }
 }
 {
-  check(JSON.stringify(Speaker.STYLES) === JSON.stringify(["muted", "original", "realistic", "cartoony"]), "STYLES");
+  check(JSON.stringify(Speaker.STYLES) === JSON.stringify(["muted", "original", "realistic", "recorded", "cartoony"]), "STYLES");
   check(Speaker.DEFAULT_STYLE === "original", "default style");
   delete globalThis.localStorage;
   check(Speaker.loadStyle() === "original", "no storage: original");
@@ -176,7 +183,17 @@ class Store {
 }
 
 // ------------------------------------------------------------------ 3. play() with a mock AudioContext
-const made = { osc: 0, noise: 0, gain: 0, pans: [] };
+const made = { osc: 0, noise: 0, gain: 0, pans: [], samples: [] };
+// the recorded samples from disk (the "mp3" handed to decodeAudioData is the file's name, see MockCtx)
+const fs = require("fs");
+const SOUNDS = path.join(__dirname, "..", "src", "sounds", "recorded");
+const diskLoader = url => {
+  const f = path.join(SOUNDS, path.basename(url));
+  fs.accessSync(f);
+  const b = Buffer.from(path.basename(url));
+  return Promise.resolve(b.buffer.slice(b.byteOffset, b.byteOffset + b.length));
+};
+Speaker.loadSample = diskLoader;
 class Param {
   constructor(v) { this.value = v || 0; this.calls = []; }
   setValueAtTime(v, t) { this.calls.push(["set", v, t]); this.value = v; return this; }
@@ -184,13 +201,24 @@ class Param {
   exponentialRampToValueAtTime(v, t) { if (!(v > 0) || !(t >= 0)) throw new Error("bad exp ramp " + v); this.calls.push(["exp", v, t]); return this; }
   cancelScheduledValues() { return this; }
 }
-class Node { connect(n) { return n; } disconnect() {} }
+class Node { connect(n) { (n.ins = n.ins || []).push(this); (this.outs = this.outs || []).push(n); return n; } disconnect() {} }
+const reaches = (a, b) => a === b || (a.outs || []).some(n => reaches(n, b));
+const ctxs = [];                 // every MockCtx made
+const decodeName = ab => Buffer.from(ab).toString();   // (the test loaders' "mp3" is the file's name)
 class MockCtx {
-  constructor() { this.currentTime = 1; this.state = "running"; this.sampleRate = 8000; this.destination = new Node(); }
+  constructor() { this.currentTime = 1; this.state = "running"; this.sampleRate = 8000; this.destination = new Node(); ctxs.push(this); }
   resume() { this.state = "running"; }
   createOscillator() { made.osc++; const n = new Node(); n.frequency = new Param(440); n.start = n.stop = () => {}; return n; }
   createGain() { made.gain++; const n = new Node(); n.gain = new Param(1); return n; }
-  createBufferSource() { made.noise++; const n = new Node(); n.start = n.stop = () => {}; return n; }
+  createBufferSource() {
+    const n = new Node();
+    n.playbackRate = new Param(1);
+    n.stops = [];
+    n.start = t => { if (n.buffer && n.buffer.name) made.samples.push({ name: n.buffer.name, t, node: n }); else made.noise++; };
+    n.stop = t => n.stops.push(t);
+    return n;
+  }
+  decodeAudioData(ab) { return Promise.resolve({ duration: 0.5, name: decodeName(ab) }); }
   createBiquadFilter() { const n = new Node(); n.frequency = new Param(1000); n.Q = new Param(1); return n; }
   createDynamicsCompressor() { return new Node(); }
   createStereoPanner() { const n = new Node(); n.pan = new Param(0); made.pans.push(n); return n; }
@@ -249,7 +277,8 @@ class MockCtx {
   for (const s of Speaker.STYLES) {
     made.osc = made.noise = 0;
     const r = Speaker.preview(s);
-    check(r === (s !== "muted") && (s === "muted" ? made.osc + made.noise === 0 : made.osc + made.noise > 0), "preview " + s);
+    // (recorded: played once its samples are decoded - checked below)
+    check(r === (s !== "muted") && (s === "muted" ? made.osc + made.noise === 0 : s === "recorded" || made.osc + made.noise > 0), "preview " + s);
   }
   delete globalThis.AudioContext;
   delete globalThis.localStorage;
@@ -257,10 +286,10 @@ class MockCtx {
 }
 {
   // a fresh copy of speaker.js in a context without AudioContext / localStorage (the homepage before a gesture)
-  const vm = require("vm"), fs = require("fs");
+  const vm = require("vm");
   const ctx = { performance };
   vm.createContext(ctx);
-  vm.runInContext(fs.readFileSync(path.join(JS, "speaker.js"), "utf8"), ctx);
+  require("./page-env.js").run(ctx, ["js/speaker.js"]);
   const S = ctx.Speaker;
   check(S.loadStyle() === "original" && S.preview("cartoony") === false && S.saveStyle("muted") === "muted", "standalone without AudioContext / storage");
   const sp = new S();
@@ -362,11 +391,270 @@ class MockCtx {
 
 // a {mute: true} listener (after death "black"): every sound at volume 0
 {
-  const S = require(path.join(JS, "speaker.js"));
+  const S = Speaker;
   check(S.attenuation({ t: 0, x: 10, y: 10 }, { mute: true }) === 0 && S.attenuation({ t: 0 }, { mute: true }) === 0
     && S.attenuation({ t: 0, x: 10, y: 10 }, { x: 10, y: 10 }) === 1, "mute listener: volume 0");
   ok("a {mute: true} listener hears nothing");
 }
 
-if (bad) { console.log(bad + " check(s) failed"); process.exit(1); }
-console.log("all passed");
+// ------------------------------------------------------------------ 5. options: volume, stereo, fade
+const tick = () => new Promise(r => setTimeout(r, 0));
+(async () => {
+  const S = Speaker;
+  {
+    check(JSON.stringify(S.OPTIONS) === JSON.stringify({ volume: [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100], stereo: ["on", "off"], fade: ["on", "off"] }), "OPTIONS");
+    delete globalThis.localStorage;
+    check(S.getOption("volume") === 100 && S.getOption("stereo") === "on" && S.getOption("fade") === "on", "no storage: defaults");
+    check(S.setOption("volume", 30) === 30 && S.setOption("stereo", "off") === "off", "no storage: setOption does not throw");
+    const st = new Store();
+    globalThis.localStorage = st;
+    check(S.getOption("volume") === 100 && S.getOption("stereo") === "on" && S.getOption("fade") === "on", "empty storage: defaults");
+    check(S.setOption("volume", 30) === 30 && st.getItem("tunneler.volume") === "30" && S.getOption("volume") === 30, "volume stored");
+    check(S.setOption("volume", 47) === 50 && st.getItem("tunneler.volume") === "50", "volume: steps of 10");
+    check(S.setOption("volume", 150) === 100 && S.setOption("volume", -5) === 0 && S.getOption("volume") === 0, "volume clamped 0..100");
+    check(S.setOption("volume", "abc") === 100 && S.setOption("volume", "70") === 70, "volume: invalid = 100, a numeric string works");
+    st.setItem("tunneler.volume", "35"); check(S.getOption("volume") === 40, "stored 35 reads as 40");
+    st.setItem("tunneler.volume", "x"); check(S.getOption("volume") === 100, "stored garbage: 100");
+    for (const name of ["stereo", "fade"]) {
+      const key = "tunneler." + name;
+      check(S.setOption(name, "off") === "off" && st.getItem(key) === "0" && S.getOption(name) === "off", name + ": off stored as 0");
+      check(S.setOption(name, "on") === "on" && st.getItem(key) === "1" && S.getOption(name) === "on", name + ": on stored as 1");
+      check(S.setOption(name, false) === "off" && S.setOption(name, "1") === "on" && S.setOption(name, "loud") === "on", name + ": booleans, 0 / 1, invalid = on");
+      st.setItem(key, "0"); check(S.getOption(name) === "off", name + ": stored 0 = off");
+      st.setItem(key, "maybe"); check(S.getOption(name) === "on", name + ": stored garbage = on");
+      st.removeItem(key);
+    }
+    check(S.getOption("bass") === undefined && S.setOption("bass", 5) === undefined && st.getItem("tunneler.bass") === null, "unknown option: nothing");
+    globalThis.localStorage = { getItem() { throw new Error("no"); }, setItem() { throw new Error("no"); }, removeItem() { throw new Error("no"); } };
+    check(S.getOption("volume") === 100 && S.setOption("fade", "off") === "off" && S.getOption("fade") === "on", "throwing storage: defaults, no throw");
+    ok("options: OPTIONS, defaults, round trips, steps / clamping, invalid values, throwing storage");
+  }
+
+  globalThis.AudioContext = MockCtx;
+  const st = new Store();
+  globalThis.localStorage = st;
+  const L = { x: 100, y: 50 }, FAR_L = { x: 1000, y: 400 };
+  {
+    st.setItem("tunneler.volume", "30");
+    const sp = new S();
+    check(sp.masterVolume === 30 && sp.stereo && sp.fade, "a new Speaker reads the options");
+    sp.unlock();
+    const ctx = sp.ctx;
+    check(Math.abs(sp.master.gain.value - S.volumeGain(30)) < 1e-12 && Math.abs(S.volumeGain(30) - 0.09) < 1e-12 && S.volumeGain(100) === 1 && S.volumeGain(0) === 0,
+      "master gain = volumeGain(30) = 0.09 (" + sp.master.gain.value + ")");
+    // everything reaches the speakers through the master gain only
+    check(ctx.destination.ins.length === 1 && ctx.destination.ins[0] === sp.master, "only the master gain feeds the destination");
+    check(sp.panner.ins.includes(sp.gain) && sp.master.ins.includes(sp.panner), "the PC speaker goes through the master gain");
+    check(reaches(sp.bus, sp.master) && reaches(sp.recBus, sp.master) && reaches(sp.osc, sp.master), "the synth and recorded buses and the PC speaker go through the master gain");
+    const sp2 = new S();
+    S.setOption("volume", 50);
+    check(Math.abs(sp.master.gain.value - 0.25) < 1e-12 && sp2.masterVolume === 50, "setOption: live speakers follow at once");
+    sp2.unlock();
+    check(Math.abs(sp2.master.gain.value - 0.25) < 1e-12, "unlocked later: the current volume");
+    sp.setStyle("original", true);
+    sp.gain.gain.calls = [];
+    sp.play([{ t: 0, hz: 1000, x: 100, y: 50 }], performance.now(), L, []);
+    check(sp.gain.gain.calls[0][1] === 0.07, "the PC speaker's own amplitude stays 0.07 (the master gain does the volume)");
+    sp.cutSynth();
+    check(ctx.destination.ins.length === 1 && reaches(sp.bus, sp.master) && reaches(sp.recBus, sp.master), "cut: the new buses go through the master gain too");
+    S.setOption("volume", 0);
+    check(sp.master.gain.value === 0 && sp2.master.gain.value === 0, "volume 0 = silent");
+    S.setOption("volume", 100);
+    ok("volume: one master gain over every style, live updates");
+
+    // stereo off: centred everywhere
+    S.setOption("stereo", "off");
+    check(!sp.stereo && !sp2.stereo, "stereo off reaches live speakers");
+    const ev = [{ t: 0, hz: 4970, x: 138, y: 50 }];
+    sp.panner.pan.calls = [];
+    sp.play(ev, performance.now(), L, []);
+    check(sp.panner.pan.calls.length === 1 && sp.panner.pan.calls[0][1] === 0, "stereo off: original centred");
+    for (const style of ["realistic", "cartoony"]) {
+      sp.setStyle(style, true);
+      made.pans = []; made.osc = made.noise = 0; sp.lastFx = {};
+      sp.play([], performance.now(), L, [{ t: 0, kind: "fire", x: 145, y: 50 }]);
+      check(made.pans.length === 0 && made.osc + made.noise > 0, "stereo off: " + style + " plays, no panner");
+    }
+    check(S.pan({ t: 0, x: 145, y: 50 }, L) === 0.9, "Speaker.pan itself unchanged");
+    S.setOption("stereo", "on");
+    made.pans = []; sp.lastFx = {};
+    sp.play([], performance.now(), L, [{ t: 0, kind: "fire", x: 145, y: 50 }]);
+    check(made.pans.length === 1 && made.pans[0].pan.value === 0.9, "stereo back on: panned again");
+
+    // fade off: full volume however far
+    S.setOption("fade", "off");
+    for (const style of ["realistic", "cartoony"]) {
+      sp.setStyle(style, true);
+      made.osc = made.noise = 0; sp.lastFx = {};
+      sp.play([], performance.now(), FAR_L, [{ t: 0, kind: "destroy", x: 10, y: 10 }]);
+      check(made.osc + made.noise > 0, "fade off: " + style + " heard far away");
+      made.osc = made.noise = 0; sp.lastFx = {};
+      sp.play([], performance.now(), { mute: true }, [{ t: 0, kind: "destroy", x: 10, y: 10 }]);
+      check(made.osc + made.noise === 0, "fade off: " + style + " still silent for a mute listener");
+    }
+    sp.setStyle("original", true);
+    sp.gain.gain.calls = [];
+    sp.play([{ t: 0, hz: 1000, x: 10, y: 10 }], performance.now(), FAR_L, []);
+    check(sp.gain.gain.calls[0][1] === 0.07, "fade off: original at full volume far away");
+    check(S.attenuation({ t: 0, x: 10, y: 10 }, FAR_L) === 0, "Speaker.attenuation itself unchanged (pure)");
+    S.setOption("fade", "on");
+    sp.gain.gain.calls = [];
+    sp.play([{ t: 0, hz: 1000, x: 10, y: 10 }], performance.now(), FAR_L, []);
+    check(sp.gain.gain.calls[0][1] === 0, "fade back on: silent far away");
+    ok("stereo off = centred, fade off = full volume far away (mute still silent), live");
+
+    // the preview follows the volume
+    S.setOption("volume", 20);
+    S.preview("realistic");
+    const pctx = ctxs.find(c => c !== sp.ctx && c !== sp2.ctx && c.destination.ins && c.destination.ins.length === 1 && c.destination.ins[0].gain);
+    const pm = pctx && pctx.destination.ins[0];
+    check(pm && Math.abs(pm.gain.value - 0.04) < 1e-12, "preview at the stored volume (" + (pm && pm.gain.value) + ")");
+    S.setOption("volume", 60);
+    check(pm && Math.abs(pm.gain.value - 0.36) < 1e-12, "preview volume follows setOption");
+    S.setOption("volume", 100);
+    sp.silence(); sp2.silence();
+    ok("Speaker.preview at the stored volume");
+  }
+
+  // ------------------------------------------------------------------ 6. the recorded style
+  {
+    check(S.STYLES.indexOf("recorded") === S.STYLES.indexOf("realistic") + 1, "recorded right after realistic");
+    let files = 0;
+    for (const k of E.FX_KINDS) {
+      const list = S.RECORDED[k] || [];
+      check(list.length > 0, "recorded: no sample for " + k);
+      for (const f of list) {
+        const p = path.join(SOUNDS, f);
+        const ok = check(fs.existsSync(p), "missing " + p);
+        if (ok) {
+          const b = fs.readFileSync(p);
+          check(b.length > 1000 && b.length < 60000 && b[0] === 0xFF && (b[1] & 0xE0) === 0xE0, f + ": an MP3 of sensible size");
+          files++;
+        }
+      }
+    }
+    check(fs.readFileSync(path.join(SOUNDS, "CREDITS.md"), "utf8").includes("CC0"), "CREDITS.md");
+    ok("recorded: " + files + " samples for " + E.FX_KINDS.length + " kinds, on disk, credited");
+
+    // a fresh copy of speaker.js: nothing fetched yet
+    const R = freshSpeaker();
+    const loads = [];
+    let hold = null;                         // a promise the loader waits for (null: answer at once)
+    R.loadSample = url => { loads.push(url); return (hold || Promise.resolve()).then(() => diskLoader(url)); };
+    st.setItem("tunneler.sound", "original");
+    const so = new R();
+    so.unlock();
+    so.play([{ t: 0, hz: 100, x: 1, y: 1 }], performance.now(), null, E.FX_KINDS.map(k => ({ t: 0, kind: k, x: 1, y: 1 })));
+    so.setStyle("realistic", true);
+    so.play([], performance.now(), null, E.FX_KINDS.map(k => ({ t: 0, kind: k, x: 1, y: 1 })));
+    await tick();
+    check(loads.length === 0, "original / realistic fetch no samples");
+
+    // recorded: fetching starts; meanwhile the realistic synth
+    let release;
+    hold = new Promise(r => { release = r; });
+    so.setStyle("recorded", true);
+    const all = Object.values(R.RECORDED).reduce((n, l) => n + l.length, 0);
+    await tick();
+    check(loads.length === all && new Set(loads).size === all && loads.every(u => u.startsWith("/sounds/recorded/")), "recorded: every sample fetched once (" + loads.length + ")");
+    made.osc = made.noise = 0; made.samples = []; so.lastFx = {};
+    so.play([], performance.now(), null, [{ t: 0, kind: "fire", x: 1, y: 1 }]);
+    check(made.osc + made.noise > 0 && made.samples.length === 0, "while loading: the realistic synth");
+    release(); hold = null;
+    for (let i = 0; i < 5; i++) await tick();
+    for (const k of E.FX_KINDS) {
+      made.osc = made.noise = 0; made.samples = []; so.lastFx = {}; so.nextFx = {}; so.voices = {};
+      so.play([], performance.now(), null, [{ t: 0, kind: k, x: 1, y: 1 }]);
+      check(made.samples.length === 1 && made.osc + made.noise === 0 && R.RECORDED[k].includes(made.samples[0].name), "decoded: a " + k + " sample (" + JSON.stringify(made.samples.map(x => x.name)) + ")");
+      const rate = made.samples[0] && made.samples[0].node.playbackRate.value;
+      check(rate >= 0.94 && rate <= 1.06, k + ": playback rate near 1 (" + rate + ")");
+    }
+    // variants at random
+    const seen = new Set();
+    for (let i = 0; i < 60; i++) { made.samples = []; so.voices = {}; so.play([], performance.now(), null, [{ t: 0, kind: "fire", x: 1, y: 1 }]); seen.add(made.samples[0].name); }
+    check(seen.size === R.RECORDED.fire.length, "fire: every variant comes up (" + [...seen] + ")");
+    // a second speaker (its own AudioContext): decodes again, fetches nothing
+    const s2 = new R();
+    s2.setStyle("recorded", true);
+    s2.unlock();
+    for (let i = 0; i < 5; i++) await tick();
+    made.samples = [];
+    s2.play([], performance.now(), null, [{ t: 0, kind: "hit", x: 1, y: 1 }]);
+    check(loads.length === all && made.samples.length === 1, "a second speaker: decoded from the fetched files, no new fetch");
+    ok("recorded: fetched only when used, once; realistic synth until decoded; every kind; random variants");
+
+    // distance, pan, options
+    made.samples = []; made.pans = []; so.voices = {};
+    so.play([], performance.now(), FAR_L, [{ t: 0, kind: "destroy", x: 10, y: 10 }]);
+    check(made.samples.length === 0, "recorded: out of earshot = nothing");
+    so.play([], performance.now(), L, [{ t: 0, kind: "fire", x: 145, y: 50 }]);
+    check(made.samples.length === 1 && made.pans.length === 1 && made.pans[0].pan.value === 0.9, "recorded: panned like the others");
+    made.samples = []; so.voices = {};
+    const mid = { x: 100 + 140, y: 50 }, hev = { t: 0, kind: "hit", x: 100, y: 50 };
+    so.play([], performance.now(), mid, [hev]);
+    const vg = made.samples[0] && made.samples[0].node.outs[0].gain.value;   // (the source feeds a gain = the attenuation)
+    check(made.samples.length === 1 && vg > 0 && vg < 1 && Math.abs(vg - R.attenuation(hev, mid)) < 1e-12, "recorded: faded with distance (" + vg + ")");
+    R.setOption("fade", "off"); R.setOption("stereo", "off");
+    made.samples = []; made.pans = []; so.voices = {};
+    so.play([], performance.now(), FAR_L, [{ t: 0, kind: "destroy", x: 10, y: 10 }, { t: 1, kind: "fire", x: 1010, y: 400 }]);
+    check(made.samples.length === 2 && made.pans.length === 0, "recorded: fade off = heard far away, stereo off = no panner");
+    R.setOption("fade", "on"); R.setOption("stereo", "on");
+
+    // dig / bump rate limit, voice caps
+    made.samples = []; so.nextFx = {}; so.voices = {};
+    so.play([], performance.now(), null, [0, 10, 50, 100].map(t => ({ t, kind: "dig", x: 1, y: 1 })));
+    check(made.samples.length === 1, "dig: at most one per 0.12 s (" + made.samples.length + ")");
+    made.samples = []; so.nextFx = {}; so.voices = {};
+    so.play([], performance.now(), null, [0, 210, 420, 630].map(t => ({ t, kind: "dig", x: 1, y: 1 })));
+    check(made.samples.length === 4, "dig: every 0.21 s all play (" + made.samples.length + ")");
+    made.samples = []; so.nextFx = {}; so.voices = {};
+    so.play([], performance.now(), null, [0, 150, 280].map(t => ({ t, kind: "bump", x: 1, y: 1 })));
+    check(made.samples.length === 1, "bump: at most one per 0.3 s");
+    made.samples = []; so.voices = {};
+    so.play([], performance.now(), null, [0, 5, 10, 15, 20, 25].map(t => ({ t, kind: "fire", x: 1, y: 1 })));
+    const stopped = made.samples.filter(x => x.node.stops.length).length;
+    check(made.samples.length === 6 && stopped === 2 && made.samples[0].node.stops.length && made.samples[1].node.stops.length,
+      "fire: at most " + R.RECORDED_VOICES.fire + " at once, the oldest cut (" + stopped + " cut)");
+    so.silence();
+    check(Object.keys(so.voices).length === 0, "silence forgets the voices");
+    ok("recorded: distance / pan / options apply, dig and bump rate-limited, voices capped");
+
+    // a sample that can't be had (offline / missing): that kind stays on the synth; the preview
+    const F = freshSpeaker();
+    F.loadSample = url => url.includes("/hit-") ? Promise.reject(new Error("404")) : diskLoader(url);
+    const sf = new F();
+    sf.setStyle("recorded", true);
+    sf.unlock();
+    for (let i = 0; i < 5; i++) await tick();
+    made.samples = []; made.osc = made.noise = 0;
+    sf.play([], performance.now(), null, [{ t: 0, kind: "hit", x: 1, y: 1 }, { t: 5, kind: "fire", x: 1, y: 1 }]);
+    check(made.samples.length === 1 && made.samples[0].name.startsWith("fire") && made.osc + made.noise > 0, "missing hit samples: hit synthesized, fire recorded");
+    made.samples = []; made.osc = made.noise = 0;
+    check(F.preview("recorded") === true, "preview recorded");
+    await new Promise(r => setTimeout(r, 120));
+    check(made.samples.some(x => x.name.startsWith("fire")) && made.samples.some(x => x.name.startsWith("destroy")), "preview recorded: a recorded shot and explosion (" + made.samples.map(x => x.name) + ")");
+    made.samples = [];
+    F.preview("recorded");
+    check(made.samples.length === 2, "preview recorded, decoded: at once");
+    sf.silence();
+
+    // older Safari: decodeAudioData with callbacks only
+    class CallbackCtx extends MockCtx { decodeAudioData(ab, ok) { setTimeout(() => ok({ duration: 0.3, name: decodeName(ab) }), 0); } }
+    globalThis.AudioContext = CallbackCtx;
+    const sc = new F();
+    sc.setStyle("recorded", true);
+    sc.unlock();
+    for (let i = 0; i < 5; i++) await tick();
+    made.samples = [];
+    sc.play([], performance.now(), null, [{ t: 0, kind: "destroy", x: 1, y: 1 }]);
+    check(made.samples.length === 1 && made.samples[0].name.startsWith("destroy"), "callback-only decodeAudioData");
+    sc.silence();
+    ok("recorded: missing samples = synth for that kind, the preview, callback decodeAudioData");
+  }
+  delete globalThis.AudioContext;
+  delete globalThis.localStorage;
+})().catch(e => { bad++; console.log("  FAIL " + (e && e.stack || e)); }).then(() => {
+  if (bad) { console.log(bad + " check(s) failed"); process.exit(1); }
+  console.log("all passed");
+  process.exit(0);
+});

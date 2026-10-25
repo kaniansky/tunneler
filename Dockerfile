@@ -13,8 +13,9 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 COPY server.js ./
-# server.js shares the wire protocol helpers with the browser
-COPY src/js/netproto.js src/js/unitext.js src/js/unidata.js ./src/js/
+# server.js shares the wire protocol helpers with the browser (ES modules: src/package.json says so)
+COPY src/package.json ./src/
+COPY src/js/netproto.js src/js/unitext.js src/js/unidata.js src/js/glyphs.js src/js/vgafont.js ./src/js/
 COPY --from=builder /app/public ./public
 ENV PORT=8050
 EXPOSE 8050

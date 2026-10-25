@@ -20,12 +20,7 @@
 //     Instructions / Information pages scroll (keys, scroll bar, Enter / Esc back)
 //   - the statistics and round title lay out without wrapping in every language, for many team setups
 //   node test/ext-sim.js [quick]
-const path = require("path");
-const JS = path.join(__dirname, "..", "src", "js");
-require(path.join(JS, "vgafont.js"));
-require(path.join(JS, "glyphs.js"));
-const Lang = require(path.join(JS, "lang.js"));
-const E = require(path.join(JS, "engine.js"));
+const { TunnelerEngine: E, Lang } = require("./src.js");
 
 const quick = process.argv.includes("quick");
 const { UP, DOWN, LEFT, RIGHT, FIRE } = E.BITS;
@@ -703,7 +698,8 @@ ok("extended texts lay out in every language (" + LAYOUTS.length + " team setups
 }
 
 // display only (docs/DESIGN-8P.md 25): the you marker ("►" / "◄", CP437 0x10 / 0x11) next to the local
-// player's own tank only, the game's settings on the round title (rows 3..) and above the statistics;
+// player's own tank only, the game's settings on the round title (rows 3..) - not on the statistics (owner,
+// 2026-10-24);
 // none of it without the options (the classic screens stay the original's)
 {
   const title = e => { e.window(1, 1, 80, 25); e.textMode(); e.showRoundTitle().next(); return screenText(e.vram).split("\n"); };
@@ -727,9 +723,7 @@ ok("extended texts lay out in every language (" + LAYOUTS.length + " team setups
       "classic round title settings at the bottom (no friendly fire without teams): " + bottom);
     const st = stats(e);
     check(/GREEN\x11/.test(st[8]) && !/\x10/.test(st[8]), "classic statistics: GREEN\u25c4 only: " + st[8]);
-    const stBottom = st.slice(19, 24).map(l => l.slice(40).trim()).join(" ");
-    check(stBottom.includes("rounds to win: 3") && !st.slice(0, 4).join("").slice(40).includes("rounds"),
-      "classic statistics: settings at the bottom: " + stBottom);
+    check(!/rounds to win/.test(st.join("\n")), "classic statistics: no settings lines");
     e.youPlayer = 1;
     check(/\x10BLUE/.test(stats(e)[8]), "classic statistics: \u25baBLUE");
   }
@@ -744,7 +738,7 @@ ok("extended texts lay out in every language (" + LAYOUTS.length + " team setups
     check(bottom.includes("map size: large, rounds to win: 5, friendly fire: on, view: team, after death: black screen"), "extended settings at the bottom: " + bottom);
     const st = stats(e), r = st.findIndex(l => /CYAN/.test(l) && /\d/.test(l));
     check(marks(st) === 1 && /CYAN\x11/.test(st[r]), "extended statistics: CYAN\u25c4 only");
-    check(st.slice(19, 24).map(l => l.slice(40).trim()).join(" ").includes("friendly fire: on"), "extended statistics settings at the bottom");
+    check(!/friendly fire|rounds to win/.test(st.join("\n")), "extended statistics: no settings lines");
     // free-for-all list, 6 players, you = 6
     const f = new E(5, { players: 6 }); f.initTables(); f.initTablesExt(); f.round = 1; f.youPlayer = 6;
     const ft = title(f);
@@ -752,7 +746,7 @@ ok("extended texts lay out in every language (" + LAYOUTS.length + " team setups
     f.showSettings = { view: "self", visible: false, watchOut: "wreck" };
     check(!/friendly fire/.test(title(f).join("")), "free-for-all: no friendly fire line");
   }
-  ok("you marker on the local player's tank only; settings on the round title / statistics (display only)");
+  ok("you marker on the local player's tank only; settings on the round title, not the statistics (display only)");
 }
 
 console.log(bad ? bad + " problem(s)" : "extended mode ok (worst average " + worstAvg.toFixed(3) + " ms/frame, worst frame " + worst.toFixed(1) + " ms)");

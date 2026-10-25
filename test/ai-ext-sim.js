@@ -13,12 +13,15 @@
 //     start of a round (a late joiner) compute the same bits as bots that ran from the start
 //   - time per frame for 7 bots, on the medium and the large map
 //   - no bot hangs around its own base while it wants to be elsewhere (a base walled in by rock)
-//   node test/ai-ext-sim.js [quick]
+//   node test/ai-ext-sim.js [quick]   (the time per frame runs in a fresh process of its own: "time")
 const path = require("path");
-const E = require(path.join(__dirname, "../src/js/engine.js"));
-const TunnelerAI = require(path.join(__dirname, "../src/js/ai.js"));
+const { TunnelerEngine: E, TunnelerAI } = require("./src.js");
 
 const quick = process.argv.includes("quick");
+// only the time per frame (in its own process: after the matches above, with their Proxy-watched arrays and
+// many configurations, the JIT's code is slower than a page's ever is - the worst frame measured 40 ms there,
+// 15 ms fresh)
+const timeOnly = process.argv.includes("time");
 const FRAME_CAP = 150000;                 // frames per match before giving up (~2.3 h of game time)
 let failures = 0;
 const check = (ok, msg) => { if (!ok) { failures++; console.log("  FAIL: " + msg); } return ok; };
@@ -54,7 +57,7 @@ function runMatch(seed, engOpts, levels, opts) {
   const mk = () => levels.map((l, i) => (l ? new TunnelerAI(l, i + 1, { seed }) : null));
   let ais = opts.ais || mk();
   const res = { frames: 0, rounds: [], finished: false, bitsHash: 0x811C9DC5, ms: 0, worst: 0, calls: 0,
-    friendly: 0, hits: 0, mateFocus: 0, retreatHome: 0, firstSight: 0, holds: 0, playFrames: 0, stuck: 0, e, ais };
+    friendly: 0, hits: 0, mateFocus: 0, retreatHome: 0, firstSight: 0, holds: 0, playFrames: 0, stuck: 0, e, ais, times: opts.times ? [] : null };
   if (!opts.engine) watchHits(e, (p, q) => { e.hitLog.hits++; if (e.team(p) === e.team(q) && p !== q) e.hitLog.friendly++; });
   e.hitLog = { hits: 0, friendly: 0 };
   const holds0 = ais.map(ai => (ai ? ai.friendlyHolds : 0)), stuck0 = ais.map(ai => (ai ? ai.stuckFrames : 0));
@@ -75,6 +78,7 @@ function runMatch(seed, engOpts, levels, opts) {
     const dt = Number(process.hrtime.bigint() - t0) / 1e6;
     if (e.screen === "play") {
       res.ms += dt; res.calls++; if (dt > res.worst) res.worst = dt;
+      if (res.times) res.times.push(dt);
       if (e.endTimer < 0) { cur.frames++; res.playFrames++; }
       for (let i = 0; i < N; i++) {
         const ai = ais[i];
@@ -109,6 +113,7 @@ function runMatch(seed, engOpts, levels, opts) {
   return res;
 }
 
+if (!timeOnly) {
 const LV = ["hard", "normal", "easy", "easy"];
 const lv = n => Array.from({ length: n }, (_, i) => LV[i % 4]);
 const configs = [
@@ -458,14 +463,29 @@ function borderMatch(seed, engOpts, levels, maxFrames) {
     check((perLevel[l] || 0) <= 36, l + ": a bot spun in place for " + perLevel[l] + " frames");
 }
 
+}
+
 // ------------------------------------------------------------------ 7 bots + an idle BLUE: time per frame
-for (const size of ["medium", "large"]) {
+if (!timeOnly) {
+  const r = require("child_process").spawnSync(process.execPath, [__filename, "time", ...(quick ? ["quick"] : [])], { stdio: "inherit" });
+  if (r.status !== 0) failures++;
+} else for (const size of ["medium", "large"]) {
   console.log("\nTime: 7 bots (every level) + idle BLUE, 8 players free-for-all, " + size + " map");
+  // Wall-clock time per frame is noisy (another process taking the CPU, a garbage collection): the match is
+  // deterministic, so it runs RUNS times and each frame counts with its fastest time - a frame that is
+  // really slow is slow every time, a hiccup only once. The average is taken the same way.
+  const RUNS = 3;
   let ms = 0, calls = 0, worst = 0, frames = 0;
   for (const seed of quick ? [11] : [11, 22, 33]) {
-    const r = runMatch(seed, { players: 8, size }, [null, "hard", "normal", "easy", "easy", "hard", "normal", "easy"],
-      { maxFrames: quick ? 4000 : 8000 });
-    ms += r.ms; calls += r.calls; worst = Math.max(worst, r.worst); frames += r.frames;
+    let best = null;
+    for (let k = 0; k < RUNS; k++) {
+      const r = runMatch(seed, { players: 8, size }, [null, "hard", "normal", "easy", "easy", "hard", "normal", "easy"],
+        { maxFrames: quick ? 4000 : 8000, times: true });
+      if (best && r.times.length !== best.length) throw new Error("timing runs differ (not deterministic)");
+      best = best ? best.map((t, i) => Math.min(t, r.times[i])) : r.times;
+      if (k === 0) frames += r.frames;
+    }
+    for (const t of best) { ms += t; calls++; worst = Math.max(worst, t); }
   }
   const avg = ms / calls;
   console.log("  " + frames + " frames: " + avg.toFixed(3) + " ms per frame for 7 bots (worst frame " + worst.toFixed(1) + " ms)");

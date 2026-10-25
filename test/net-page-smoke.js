@@ -9,10 +9,8 @@ const keyOf = code => /^(Arrow|Enter|Escape|Tab|Backspace)/.test(code) ? code.re
 const assert = require("assert");
 const fs = require("fs"), path = require("path"), vm = require("vm");
 const PUB = path.join(__dirname, "..", "src");
-// a page script's source; /js/langs.js is generated (src/lang/<code>/*.js joined, as server.js serves it for src/)
-const { langBundle, modesBundle } = require("../server.js");
-const script = f => f.replace(/^\//, "") === "js/langs.js" ? langBundle(path.join(PUB, "lang"))
-  : f.replace(/^\//, "") === "js/modes.js" ? modesBundle(path.join(PUB, "js", "modes")) : fs.readFileSync(path.join(PUB, f), "utf8");
+// a page's code: its entry module bundled in memory (test/page-env.js)
+const { runPage, bundle, entryOf } = require("./page-env.js");
 
 function makeEnv(search) {
   const elements = {};
@@ -22,6 +20,7 @@ function makeEnv(search) {
       classList: { toggle() {} }, style: {},
       appendChild(c) { this.children.push(c); return c; }, append(...c) { this.children.push(...c); },
       setAttribute() {}, getBoundingClientRect: () => ({ left: 0, top: 0, width: 0, height: 0 }), addEventListener(t, f) { (this["on_" + t] = this["on_" + t] || []).push(f); },
+      focus() { this.focused = true; }, blur() { this.focused = false; },
       getContext: () => ({ createImageData: (w, h) => ({ data: new Uint8ClampedArray(w * h * 4) }), putImageData() {} }) };
     return e;
   };
@@ -30,6 +29,8 @@ function makeEnv(search) {
     getElementById: id => elements[id] || (elements[id] = mkEl(id)),
     createElement: t => mkEl(t), createDocumentFragment: () => mkEl("frag"),
   };
+  document.body = mkEl("body");
+  document.body.classList = { toggle() {}, add() {}, remove() {}, contains: () => false };
   const sockets = [];
   class FakeWS {
     constructor(url) { this.url = url; this.readyState = 0; this.sent = []; sockets.push(this); setTimeout(() => { this.readyState = 1; this.onopen && this.onopen(); }, 0); }
@@ -59,8 +60,7 @@ function makeEnv(search) {
   };
   win.window = win; win.globalThis = win;
   const ctx = vm.createContext(win);
-  return { ctx, win, elements, listeners, sockets, ls, fetches, rooms, byId,
-    load(f) { vm.runInContext(script(f), ctx, { filename: f }); } };
+  return { ctx, win, elements, listeners, sockets, ls, fetches, rooms, byId };
 }
 
 function key(env, type, code, key) {
@@ -85,27 +85,26 @@ function screenText(win, snap) {
 const press = (env, code, k) => { key(env, "keydown", code, k); key(env, "keyup", code, k); };
 const type = (env, text) => { for (const ch of text) press(env, /[a-z]/i.test(ch) ? "Key" + ch.toUpperCase() : "Space", ch); };
 const wait = ms => new Promise(r => setTimeout(r, ms));
+// waiting for a condition, not a fixed time (a loaded machine runs the pages' timers late)
+async function waitFor(cond, what, ms = 20000) {
+  for (const end = Date.now() + ms; !cond();) {
+    if (Date.now() > end) throw new Error("timed out: " + what);
+    await wait(10);
+  }
+}
 // version: what build.js would write into version.js (none: a development page)
 function loadPage(page, search, stored, version) {
   const env = makeEnv(search);
   for (const k in stored || {}) env.ls.set(k, stored[k]);
-  for (const [, f] of fs.readFileSync(path.join(PUB, page), "utf8").matchAll(/<script src="\/([^"]+)"/g)) {
-    env.load(f);
-    if (f === "js/version.js" && version) env.win.TUNNELER_VERSION = version;
-  }
+  runPage(env.ctx, page, { version });
   return env;
 }
 
 (async () => {
-  // every script referenced by the pages must exist and parse
-  for (const page of ["online.html", "lobby.html", "index.html", "play.html"]) {
-    const html = fs.readFileSync(path.join(PUB, page), "utf8");
-    for (const [, src] of html.matchAll(/<script src="([^"]+)"/g)) {
-      const code = script(src);
-      new vm.Script(code, { filename: src });
-    }
-  }
-  console.log("  ok  page scripts parse");
+  // the page's entry module (app.js: the router, every route) bundles - everything it imports exists - into
+  // a script that parses
+  new vm.Script(bundle([entryOf(fs.readFileSync(path.join(PUB, "index.html"), "utf8"))]), { filename: "index.html" });
+  console.log("  ok  the app bundles and parses");
 
   // the room lobby (docs/DESIGN-8P.md 26): the host on GREEN; seats, settings, ready / start, chat, kick
   const SETTINGS = { size: "medium", winScore: 3, friendlyFire: false, roundTime: 0, visible: "team", watchOut: "wreck" };
@@ -142,9 +141,9 @@ function loadPage(page, search, stored, version) {
       assert.strictEqual(lui.centreStart(at("back"), b, 14), back + 1, "3 narrower: one column later");
       assert.strictEqual(lui.centreStart(at("back"), b, 13), back + 2, "4 narrower: two columns later");
     }
-    // the own seat: team with Left / Right and the digits
+    // the host's own seat: team with Enter and the digits (Left / Right step the seat: see below)
     sel(lui, "seat1");
-    press(env, "ArrowRight");
+    press(env, "Enter");
     assert(ws.sent.some(m => m.t === "me" && m.team === 3), "team + 1 sent");
     press(env, "Digit6", "6");
     assert(ws.sent.some(m => m.t === "me" && m.team === 6), "digit 6: team 6");
@@ -161,6 +160,47 @@ function loadPage(page, search, stored, version) {
     press(env, "ArrowRight"); press(env, "Digit4", "4");
     assert(ws.sent.some(m => m.t === "seatSet" && m.i === 3 && m.kind === "hard") && ws.sent.some(m => m.t === "seatSet" && m.i === 3 && m.team === 4), "host: computer seat");
     assert(!lui.spec.items.find(it => it.key === "seat0").digit && lui.spec.items.find(it => it.key === "seat0").static, "somebody else's seat: read-only");
+    // the host's mouse: closed -> open -> you (only while seated nowhere else) -> AI easy -> medium -> hard; a
+    // right click back; the team column: next / previous team
+    {
+      const zone = (k, z, d) => { const it = lui.spec.items.find(x => x.key === k); it.zones[z === "team" ? 0 : it.zones.length - 1].click(d); };
+      const after = n => ws.sent.slice(n);
+      const free = mkSt().seats.map((x, i) => i === 1 ? Object.assign({}, x, { k: null, name: "", ping: null }) : x);
+      ws.recv(mkSt({ seats: free, specs: [{ k: 2, name: "Zed", host: true, ping: 20 }] }));   // (the host watching)
+      await wait(150);
+      let n = ws.sent.length;
+      zone("seat2", "row", 1);
+      assert.deepStrictEqual(after(n), [{ t: "seat", i: 2 }], "open -> you: the host sits there");
+      n = ws.sent.length; zone("seat2", "row", -1);
+      assert.deepStrictEqual(after(n), [{ t: "seatSet", i: 2, kind: "closed" }], "open <- right click: closed");
+      ws.recv(mkSt({ seats: free, specs: [{ k: 2, name: "Zed", host: true, ping: 20 }] }));
+      await wait(150);
+      n = ws.sent.length; zone("seat3", "row", -1);
+      assert.deepStrictEqual(after(n), [{ t: "seatSet", i: 3, kind: "easy" }], "AI medium <- right click: easy");
+      n = ws.sent.length; zone("seat3", "row", -1);
+      assert.deepStrictEqual(after(n), [{ t: "seatSet", i: 3, kind: "open" }, { t: "seat", i: 3 }], "AI easy <- right click: you (opened, then sat on)");
+      ws.recv(mkSt({ seats: free, specs: [{ k: 2, name: "Zed", host: true, ping: 20 }] }));
+      await wait(150);
+      n = ws.sent.length; zone("seat3", "team", -1);
+      assert.deepStrictEqual(after(n), [{ t: "seatSet", i: 3, team: 1 }], "team column, right click: the previous team");
+      n = ws.sent.length; zone("seat4", "row", 1);
+      assert.deepStrictEqual(after(n), [{ t: "seatSet", i: 4, kind: "open" }], "closed -> open");
+      // seated (GREEN): no "you" step elsewhere; the own seat steps on to AI easy (standing up first) or back to open
+      ws.recv(mkSt());
+      await wait(150);
+      n = ws.sent.length; zone("seat2", "row", 1);
+      assert.deepStrictEqual(after(n), [{ t: "seatSet", i: 2, kind: "easy" }], "seated elsewhere: open -> AI easy");
+      ws.recv(mkSt());
+      await wait(150);
+      n = ws.sent.length; zone("seat1", "row", 1);
+      assert.deepStrictEqual(after(n), [{ t: "seat", i: -1 }, { t: "seatSet", i: 1, kind: "easy" }], "own seat -> AI easy");
+      ws.recv(mkSt());
+      await wait(150);
+      n = ws.sent.length; sel(lui, "seat1"); press(env, "ArrowLeft");
+      assert.deepStrictEqual(after(n), [{ t: "seat", i: -1 }], "own seat <- Left: open (stand up)");
+      ws.recv(mkSt());
+      await wait(150);
+    }
     // friendly fire: selectable while a team has 2+ seats (GREEN and the AI share team 2), grayed out otherwise
     ws.recv(mkSt());
     await wait(150);
@@ -174,8 +214,9 @@ function loadPage(page, search, stored, version) {
     // survival / infection make their own teams: no team column, no team to change
     ws.recv(mkSt({ settings: Object.assign({}, SETTINGS, { mode: "survival" }) }));
     await wait(150);
-    assert(/team \d/.test(shown()) && lui.spec.items.find(it => it.key === "seat1").static && lui.spec.items.find(it => it.key === "seat1").dim,
-      "survival: the team column stays (gray), your seat read-only: " + shown());
+    const own1 = lui.spec.items.find(it => it.key === "seat1");
+    assert(/team \d/.test(shown()) && !own1.digit && own1.zones.length === 1 && own1.dim,
+      "survival: the team column stays (gray), no team to choose on your seat: " + shown());
     ws.recv(mkSt());
     await wait(150);
     // settings (host): Left / Right
@@ -258,6 +299,20 @@ function loadPage(page, search, stored, version) {
     assert(!ws.sent.some(m => m.t === "seatSet"), "no seat switching");
     press(env, "Enter");
     assert(ws.sent.some(m => m.t === "seat" && m.i === 2), "sits down");
+    // seated (not the host): a click on the own name stands up (the seat stays open), on the team = team
+    ws.recv(mkSt({ seats: mkSt().seats.map((x, i) => i === 2 ? Object.assign({}, x, { k: 5, name: "Watcher", ping: 9 }) : x), specs: [] }));
+    await wait(150);
+    {
+      const own = ui.spec.items.find(it => it.key === "seat2"), n = ws.sent.length;
+      own.zones[0].click(1);
+      own.zones[1].click(1);
+      assert.deepStrictEqual(ws.sent.slice(n), [{ t: "me", team: 4 }, { t: "seat", i: -1 }], "team + 1, then standing up");
+    }
+    ws.recv(mkSt({ spectators: false, seats: mkSt().seats.map((x, i) => i === 2 ? Object.assign({}, x, { k: 5, name: "Watcher", ping: 9 }) : x), specs: [] }));
+    await wait(150);
+    assert.strictEqual(ui.spec.items.find(it => it.key === "seat2").zones.length, 1, "no spectators allowed: no standing up");
+    ws.recv(mkSt());
+    await wait(150);
     sel(ui, "say");
     type(env, "Hello all");
     press(env, "Enter");
@@ -288,21 +343,23 @@ function loadPage(page, search, stored, version) {
       match: { no: 1, seed: 77, cfg, you: -1, n: 900, from: 0, f: [[[0, 0, 0], 900]] } });
     ws.recv(mkSt({ seats, specs: [{ k: 9, name: "Host", host: true, ping: 5 }], cant: "match", match: playing }));
     const e = env.win.tunnelerEngine(), lui = env.win.tunnelerLobbyUI();
-    await wait(1500);                                              // (caught up)
+    const caught = () => { const f = env.win.tunnelerFrames(); return !f.catching && f.queued === 0; };
+    await waitFor(() => caught() && e.screen !== "map" || e.screen === "map", "caught up");
     assert.notStrictEqual(e.screen, "map", "not at the map yet");
-    for (let n = 900; e.screen !== "map" && n < 1100; n++) { ws.recv({ t: "f", m: 1, n, f: [[[0, 0, 0], 1]] }); await wait(70); }
-    await wait(200);
+    // (one frame at a time, each run before the next: never caught up silently - see online.js pump)
+    for (let n = 900; e.screen !== "map" && n < 1100; n++) { ws.recv({ t: "f", m: 1, n, f: [[[0, 0, 0], 1]] }); await waitFor(caught, "frame " + n); }
+    await waitFor(() => !lui.active() || e.screen === "map", "the map shown");
     assert.strictEqual(e.screen, "map", "the world map");
     assert(!lui.active(), "the map, not the lobby: " + JSON.stringify({ shift: e.menuShift, kbd: e.kbdInstalled, page: lui.spec && lui.spec.page }));
     press(env, "Space");                                            // closed here (the player is still on it)
-    await wait(250);
+    await waitFor(() => lui.active() && lui.spec.page, "the statistics");
     assert(lui.active() && lui.spec.page, "the statistics at once: " + JSON.stringify(lui.spec && Object.keys(lui.spec)));
     press(env, "Escape");
-    await wait(150);
-    assert(lui.active() && !lui.spec.page && lui.spec.boxes, "Back: the lobby");
+    await waitFor(() => lui.active() && !lui.spec.page && lui.spec.boxes, "back in the lobby");
     ws.recv({ t: "end", no: 1 });
     ws.recv(mkSt({ seats, specs: [{ k: 9, name: "Host", host: true, ping: 5 }], cant: null }));
-    await wait(400);
+    await waitFor(() => !env.win.tunnelerEngine(), "the match dropped");
+    await wait(200);
     assert(!env.win.tunnelerEngine() && lui.active() && !lui.spec.page, "the server's end: still the lobby, no statistics again");
     assert(lui.spec.items.some(it => it.key === "stats"), "Statistics in the lobby");
     console.log("  ok  online.js end of a match: the statistics once this viewer closes the map, then the lobby");
@@ -319,6 +376,36 @@ function loadPage(page, search, stored, version) {
     assert.strictEqual(env.ls.get("tunneler.name"), "Ann");
     assert(env.sockets.length === 1 && env.sockets[0].url.includes("&name=Ann"), "connected with the name");
     console.log("  ok  online.js asks for a name first");
+  }
+  {
+    // a touch screen: a tap on an input row focuses the hidden <input> (the device's keyboard opens); its
+    // text goes into the canvas input, checked as typed; keys it gets that DosUI would type are left to it
+    const env = loadPage("lobby.html", "");                 // (no name yet: "YOUR NAME", an input)
+    await wait(50);
+    const ui = env.win.tunnelerLobbyUI(), body = env.win.document.body;
+    body.classList.contains = c => c === "touch";
+    const at = ui.spec.items.findIndex(it => it.input);
+    ui.itemAt = () => at; ui.linkAt = () => null;
+    ui.click({ pointerType: "touch" });
+    const si = body.children.find(c => c.className === "soft-input");
+    assert(si && si.focused, "the hidden input has the focus");
+    si.value = "Žofia\u0007 Novák";
+    for (const f of si.on_input) f({});
+    assert.strictEqual(ui.spec.items[at].input.value, "Žofia Novák", "its text in the canvas input (control characters dropped)");
+    si.value = "x".repeat(40);
+    for (const f of si.on_input) f({});
+    assert.strictEqual(ui.spec.items[at].input.value.length, 12, "as much as fits (12)");
+    assert.strictEqual(si.value.length, 12, "and the hidden input holds the same");
+    const before = ui.spec.items[at].input.value;
+    for (const f of env.listeners.keydown || []) f({ code: "KeyA", key: "a", target: si, preventDefault() {} });
+    assert.strictEqual(ui.spec.items[at].input.value, before, "a key from the hidden input isn't typed twice");
+    // the page empties the input (a chat message sent): the hidden input too - the next letter starts anew
+    ui.spec.items[at].input.value = ""; ui.draw();
+    assert.strictEqual(si.value, "", "the hidden input emptied with it");
+    si.value = "b";
+    for (const f of si.on_input) f({});
+    assert.strictEqual(ui.spec.items[at].input.value, "b", "the next letter starts a new text");
+    console.log("  ok  touch screens: a tap on an input focuses a hidden <input>; its text goes into the canvas input");
   }
 
   // a server that doesn't answer yet (asleep): "Connecting to the server..." with the server's address,
@@ -356,20 +443,23 @@ function loadPage(page, search, stored, version) {
     assert.strictEqual(key(), "room:r9");
     console.log("  ok  lobby.js games list: mouse wheel scrolls it");
   }
-  // create a game: name, public, spectators (+ the host's last settings) -> straight into its lobby
+  // create a game: name, a password, public, spectators (+ the host's last settings) -> straight into its lobby
   {
     const env = loadPage("lobby.html", "", { "tunneler.name": "Zed", "tunneler.online": JSON.stringify({ size: "large", winScore: 5 }) });
     await wait(30);
+    { const ui = env.win.tunnelerLobbyUI(); ui.sel = ui.spec.items.findIndex(it => it.key === "create"); }
     press(env, "Enter");                                   // "Create a new game"
     type(env, "My game");
+    press(env, "ArrowDown"); type(env, " s3cret ");       // the password (below the name)
     press(env, "ArrowDown"); press(env, "Enter");          // public: no
-    press(env, "ArrowDown"); press(env, "ArrowDown");      // (the gap is skipped) "Create the game"
+    press(env, "ArrowDown"); press(env, "ArrowDown");      // spectators, (the gap is skipped) "Create the game"
     press(env, "Enter");
     await wait(50);
     const post = env.fetches.find(f => f.o && f.o.method === "POST");
     assert(post, "POST sent");
     const body = JSON.parse(post.o.body);
-    assert(body.name === "My game" && body.public === false && body.spectators === true && body.size === "large" && body.winScore === 5, JSON.stringify(body));
+    assert(body.name === "My game" && body.public === false && body.spectators === true && body.size === "large" && body.winScore === 5 &&
+      body.password === "s3cret", JSON.stringify(body));
     assert.strictEqual(env.ls.get("tunneler.host.new-game"), "f".repeat(32));
     assert.strictEqual(env.win.location.href, "/game/new-game", "into the new game's lobby");
     console.log("  ok  lobby.js creates a game, keeps its host key, opens its lobby");
@@ -394,6 +484,43 @@ function loadPage(page, search, stored, version) {
     press(env, "Enter");
     assert.strictEqual(env.win.location.href, "/game/r1", "Enter: join");
     console.log("  ok  lobby.js asks for a name, then joins / watches games");
+  }
+
+  {
+    // a game with a password: a lock in the list; online.js asks for it (masked), connects again with it
+    const env = loadPage("lobby.html", "", { "tunneler.name": "Zed" });
+    env.rooms.push({ id: "pw1", name: "Secret", locked: true, public: true, spectators: true, state: "lobby", round: 0, wins: [], teamWins: [], ext: false,
+      tanks: 2, players: 1, open: 1, spec: 0, teams: false, size: "medium", winScore: 3, seats: [] });
+    await wait(80);
+    const ui = env.win.tunnelerLobbyUI();
+    ui.sel = ui.spec.items.findIndex(it => it.key === "room:pw1"); ui.draw();
+    const listText = screenText(env.win, ui.display.snap);
+    assert(/Secret/.test(listText) && /protected by a password/.test(listText), "locked game in the list: " + listText);
+    assert([...ui.display.snap.uni || []].includes(0x1F512), "the lock before its name");
+    const on = loadPage("online.html", "?room=pw1&role=spectate", { "tunneler.name": "Zed" });
+    await wait(30);
+    const ws1 = on.sockets[0], text = () => screenText(on.win, on.win.tunnelerLobbyUI().display.snap);
+    assert(!/&pw=/.test(ws1.url), ws1.url);
+    ws1.recv({ t: "err", code: "password", bad: false, msg: "This game needs a password." }); ws1.close();
+    await wait(30);
+    assert(/PASSWORD/.test(text()) && /protected by a password/.test(text()) && !/Wrong/.test(text()), "asked: " + text());
+    type(on, "Tajné");
+    assert(/\*\*\*\*\*/.test(text()) && !/Tajn/.test(text()), "masked: " + text());
+    press(on, "Enter");
+    await wait(30);
+    assert.strictEqual(on.sockets.length, 2, "connecting again");
+    const ws2 = on.sockets[1];
+    assert(ws2.url.includes("&pw=" + encodeURIComponent("Tajné")) && ws2.url.includes("&role=watch"), ws2.url);
+    ws2.recv({ t: "err", code: "password", bad: true, msg: "Wrong password." }); ws2.close();
+    await wait(30);
+    assert(/Wrong password/.test(text()), "wrong: " + text());
+    assert.strictEqual(on.sockets.length, 2, "no retrying on its own");
+    type(on, "x"); press(on, "Enter");
+    await wait(30);
+    on.sockets[2].recv({ t: "err", code: "pwlimit", msg: "x" }); on.sockets[2].close();
+    await wait(30);
+    assert(/Too many wrong passwords/.test(text()), "limit: " + text());
+    console.log("  ok  a password: the lock in the list, online.js asks (masked), sends it, says wrong / too many");
   }
 
   {
@@ -461,11 +588,10 @@ function loadPage(page, search, stored, version) {
     console.log("  ok  lobby.js marks the games this browser hosts, lists its private ones, drops stale keys");
   }
 
-  // the DOS-style menu pages: load their scripts in page order and press a few keys
+  // the DOS-style menu pages: load each page's code and press a few keys
   for (const [page, search] of [["lobby.html", ""], ["lobby.html", "?room=nope"], ["index.html", ""]]) {
     const env = makeEnv(search);
-    const html = fs.readFileSync(path.join(PUB, page), "utf8");
-    for (const [, src] of html.matchAll(/<script src="\/([^"]+)"/g)) env.load(src);
+    runPage(env.ctx, page);
     await new Promise(r => setTimeout(r, 30));
     for (const c of ["ArrowDown", "ArrowUp", "ArrowDown"]) key(env, "keydown", c);
     assert(env.win.DosUI, page + ": DosUI loaded");

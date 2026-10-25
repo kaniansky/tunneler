@@ -5,7 +5,8 @@
 const assert = require("assert");
 const fs = require("fs"), os = require("os"), path = require("path"), vm = require("vm");
 const SRC = path.join(__dirname, "..", "src");
-const { newerVersion, latestRelease, langBundle, modesBundle } = require("../server.js");
+const { newerVersion, latestRelease } = require("../server.js");
+const { runPage } = require("./page-env.js");
 const { manifest } = require("../tools/updater-manifest.js");
 
 let n = 0;
@@ -90,9 +91,7 @@ const ok = msg => { n++; console.log("  ok  " + msg); };
     };
     win.window = win; win.globalThis = win;
     const ctx = vm.createContext(win);
-    for (const [, src] of fs.readFileSync(path.join(SRC, "index.html"), "utf8").matchAll(/<script src="\/([^"]+)"/g))
-      vm.runInContext(src === "js/langs.js" ? langBundle(path.join(SRC, "lang")) : src === "js/modes.js" ? modesBundle(path.join(SRC, "js", "modes"))
-        : fs.readFileSync(path.join(SRC, src), "utf8"), ctx, { filename: src });
+    runPage(ctx, "index.html");
     await new Promise(r => setTimeout(r, 0));
     return { ui: win.tunnelerHomeUI(), calls };
   }
@@ -103,22 +102,37 @@ const ok = msg => { n++; console.log("  ok  " + msg); };
   }
   {
     const { ui, calls } = await home("tauri:", null);
-    assert.deepStrictEqual(calls, ["update_check"]); assert(!item(ui), "no update: no item");
+    // (screen.js asks the app's window whether it is fullscreen - Settings, Graphics)
+    assert.deepStrictEqual(calls.filter(c => c !== "is_fullscreen"), ["update_check"]); assert(!item(ui), "no update: no item");
   }
   {
     const { ui, calls } = await home("tauri:", { version: "9.0.0", install: true });
     const it = item(ui);
-    assert(it && ui.spec.home && ui.spec.infoRow === 21, "the item below Settings, the info lower");
+    assert(it && ui.spec.home && ui.spec.infoRow === 22, "the item below Settings, the info lower");
     assert(/9\.0\.0/.test(it.label));
     it.go();
-    assert.deepStrictEqual(calls, ["update_check", "update_install"]);
+    assert.deepStrictEqual(calls.filter(c => c !== "is_fullscreen"), ["update_check", "update_install"]);
     await new Promise(r => setTimeout(r, 0));
     assert(item(ui).info[0].text.includes("no network"), "a failed update shows why");
     const p = await home("tauri:", { version: "9.0.0", install: false });
     item(p.ui).go();
-    assert.deepStrictEqual(p.calls, ["update_check", "update_page"], "can't replace itself: the download page");
+    assert.deepStrictEqual(p.calls.filter(c => c !== "is_fullscreen"), ["update_check", "update_page"], "can't replace itself: the download page");
   }
   ok("desktop app main menu: 'Update to version X' installs, else opens the download page; browsers never ask");
+
+  {
+    // the Flatpak installs its metainfo from the release's tag: it lists package.json's version before tagging
+    // (npm version X adds it: tools/flatpak-update.js --metainfo); the manifest's sources tell Flathub's bot
+    // where new versions come from
+    const v = require("../package.json").version, dir = path.join(__dirname, "..", "flatpak");
+    const meta = fs.readFileSync(path.join(dir, "com.kaniansky.TunnelerOnline.metainfo.xml"), "utf8");
+    assert(meta.includes('<release version="' + v + '"'), "the Flatpak metainfo has no <release> for " + v + ": node tools/flatpak-update.js --metainfo " + v);
+    const man = fs.readFileSync(path.join(dir, "com.kaniansky.TunnelerOnline.yml"), "utf8");
+    assert.strictEqual((man.match(/x-checker-data:/g) || []).length, 3, "x-checker-data on both .deb sources and the git source");
+    assert(/url: \S+_amd64\.deb\n\s+sha256: [0-9a-f]{64}/.test(man) && /url: \S+_arm64\.deb\n\s+sha256: [0-9a-f]{64}/.test(man) && /tag: v\S+\n\s+commit: [0-9a-f]{40}/.test(man),
+      "the lines tools/flatpak-update.js rewrites are there");
+  }
+  ok("the Flatpak: the metainfo lists this version, the manifest's sources (x-checker-data, the lines the release job rewrites)");
 
   console.log(`update-check: ${n} ok`);
 })().catch(e => { console.error(e); process.exit(1); });

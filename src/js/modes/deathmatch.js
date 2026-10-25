@@ -5,9 +5,8 @@
 // The round never ends by elimination. hud: own kills; scoreText: "kills n".
 // State: e.GS = {f: play frames this round, back: [frame a destroyed tank comes back, per player; 0 = none]},
 // e.modeScore[p] = p's kills this round (reset at every round start).
-(function (root) {
-"use strict";
-const E = root.TunnelerEngine || require("../engine.js");
+import { TunnelerEngine as E } from "../engine.js";
+import { Lang } from "../lang.js";
 
 const KILLS_TO_WIN = 10;
 const RESPAWN_FRAMES = 55;                // ~3 s (18.2 frames a second)
@@ -16,7 +15,7 @@ const HUD_COLOR = 12;                     // red
 // tank is 7x7): the first spot no other tank alive is near (tanks closer than 6 px could never move apart)
 const SPOTS = [[0, 0], [-9, 0], [9, 0], [0, -9], [0, 9], [-9, -9], [9, -9], [-9, 9], [9, 9]];
 
-const enc = s => (root.Lang && root.Lang.enc ? root.Lang.enc(s) : s);   // font text (display only)
+const enc = s => Lang.enc(s);   // font text (display only)
 
 function teamKills(e, t) {
   let n = 0;
@@ -94,18 +93,6 @@ E.registerMode("deathmatch", {
   // ---- AI: deathmatch is about kills - always hunting. When no enemy is in reach it heads for the
   // nearest enemy alive (every tank has a rough "radar" here: the better levels a closer guess, renewed
   // every ~2 s), else for the doorway of the nearest enemy base (destroyed tanks come back there).
-  // modifier noRepair: the shield never comes back at a base, so a tank retreating for its shield would
-  // sit at home until something destroys it (and dying only costs a kill here). Only low energy is a
-  // reason to go home: the retreat is called off while the energy is fine (away from home: above the
-  // AI's own energy threshold for that distance; at home: refueled to leaveAt).
-  aiOverride(ai, e, mx, my, ctx) {
-    if (!ai.retreating || !e.mods.noRepair) return null;
-    const me = ai.me, cfg = ai.cfg;
-    const enough = ctx.atHome ? e.energy[me] >= cfg.leaveAt
-      : e.energy[me] >= cfg.retreatE + cheb(mx, my, e.baseX[me], e.baseY[me]) * 4;
-    if (enough) { ai.retreating = false; ai.path = null; ai.waypoint = null; }
-    return null;
-  },
 
   aiGoal(ai, e, mx, my) {
     const me = ai.me;
@@ -142,4 +129,3 @@ E.registerMode("deathmatch", {
     return { x: mx, y: my, mode: "wait", dig: false };
   },
 });
-})(typeof window !== "undefined" ? window : globalThis);

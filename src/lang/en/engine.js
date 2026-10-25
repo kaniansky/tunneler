@@ -1,8 +1,6 @@
-"use strict";
 // All text the game engine shows, in English (engine.js: STRINGS_EN; engine.strings). The other languages
 // translate it in their main.js (`engine: {...}`, lang.js engineStrings); "{n}" in a line switches the text
-// colour to n. Loaded before engine.js (/js/langs.js); node: engine.js requires it.
-(function (root) {
+// colour to n. engine.js imports it.
 const STRINGS_EN = {
   title: "TUNNELER ONLINE", by: "by Norko Kaniansky",
   menu: ["Start game", "Instructions", "Back to main menu"],
@@ -32,7 +30,6 @@ const STRINGS_EN = {
     sight: ["sight: circle", "sight: true"],
     // game modes (the round title / statistics settings: the mode's name first) and modifiers
     modes: {"standard": "standard", "gold": "gold rush", "infection": "infection", "survival": "survival", "hill": "king of the hill", "shrink": "shrinking world", "ctf": "capture the flag", "siege": "base siege", "deathmatch": "deathmatch"},
-    noRepair: "no repairs",
     goals: { gold: "gold to win: {n}", infection: "survive {n} min", survival: "waves to win: {n}", hill: "seconds to win: {n}",
       ctf: "captures to win: {n}", siege: "base strength: {n}", deathmatch: "kills to win: {n}" } },
   // the world map's "PRESS ANY KEY" pixel-art banner (5 rows of '*' / ' ', all the same length); a
@@ -63,7 +60,7 @@ const STRINGS_EN = {
       hotseat: ["{9}BLUE{3} player:", "               {10}GREEN{3} player:"],
       cpu: "you drive {9}BLUE{3} (either set of keys), the computer drives {10}GREEN{3}.",
       online: "you drive your own tank ({9}BLUE{3} or {10}GREEN{3}) with either set of keys.",
-      cpuExt: "you drive {9}BLUE{3} (either set of keys), computers drive the rest.",
+      cpuExt: "player 1 drives with W A S D + SHIFT, player 2 (if any) with the arrows + ENTER, computers drive the rest.",
       onlineExt: "you drive the tank of your color with either set of keys.",
     },
     table: [["        <W> up", "             <\x18> up"],
@@ -115,21 +112,18 @@ const STRINGS_EN = {
       ["Split screen:  ", "the original game - two players on one keyboard, {9}BLUE{3} on the left " +
         "half of the screen and {10}GREEN{3} on the right.  First choose the map size, the rounds to " +
         "win and the round time."],
-      ["Skirmish:  ", "your own game against 1 to 7 computer tanks, driven with either set of keys.  Each of " +
-        "the 8 colors is you, nobody or a computer tank (easy, medium, hard), with its team (1-8) " +
-        "- you can play any color; then the mode, map size, rounds to win, round time, friendly " +
-        "fire, view, after death, line of sight and base repairs.  <ESC> during play ends the match; <ESC> on " +
-        "the game's menu goes back to the settings."],
+      ["Skirmish:  ", "your own game against computer tanks, alone or with a second player on the same keyboard.  Each of the 8 colors is player 1, player 2, nobody or a computer tank (easy, medium, hard), with its team (1-8) - the players can take any color; then the mode, map size, rounds to win, round time, friendly fire, view, after death and line of sight.  Player 1 drives with W A S D + SHIFT, player 2 with the arrows + ENTER (other keys: Settings, Controls).  <ESC> during play ends the match; Rematch or <ESC> on the game's menu goes back to the settings."],
       ["Online game:  ", "2 to 8 tanks on different computers, some of them may be computer tanks.  Online play " +
-        "needs a name (asked the first time, changed in Settings).  Create a game - its name, " +
+        "needs a name (asked the first time, changed in Settings).  Create a game - its name, an " +
+        "optional password (whoever joins or watches has to type it; a lock marks the game in the list), " +
         "listed publicly or private (joined with its invite link), spectators allowed or not - or " +
         "join one from the list of games.  You drive your tank with either set of keys.  Every " +
         "computer runs the same game in lockstep; only key presses go over the network."],
       ["The game lobby:  ", "every game has 8 seats, one per color.  Sit on an open seat to play that color (<ENTER> " +
         "or a click), choose your team (<\x1B> <\x1A>, <1>-<8> or a click on it), chat (Say:) and " +
-        "choose \"I am ready!\"; \"Watch instead\" leaves the seat.  The host - who created the game, " +
-        "or the next player when the host leaves - sets every free seat open, closed or AI (easy, " +
-        "medium, hard) and its team, the settings above, can \"Kick a player\" and starts the " +
+        "choose \"I am ready!\" (a click on your name leaves the seat to watch).  The host - who created the game, or the next player when the host " +
+        "leaves - clicks every seat nobody else sits on through closed, open, the host's own seat (while " +
+        "seated nowhere else) and AI (easy, medium, hard) - a right click goes back -, sets its team, the settings above, can \"Kick a player\" and starts the " +
         "game once everybody seated is ready.  An open seat nobody took gets no tank.  During a " +
         "match only its players play; whoever joins then watches.  After a match the lobby shows " +
         "its Statistics.  Press <ESC> twice to leave an online game."],
@@ -137,11 +131,10 @@ const STRINGS_EN = {
         "all the view screens, the map with the scores, and following one tank (<\x1B> <\x1A> choose " +
         "which one)."],
       ["Sound:  ", "Settings chooses its style: original (the PC " +
-        "speaker beeps of 1991), realistic (tank noises) or cartoony (boings and pops), or muted.  " +
+        "speaker beeps of 1991), realistic (tank noises), recorded (real recordings), cartoony (boings and pops), or muted; volume, stereo and distance fade too.  " +
         "The sounds of the other tanks fade with their distance from yours and come from their side (stereo)."],
-      ["Settings:  ", "the language of the menus and the game, the sound, and \"Show ping\" (online " +
-        "games: your round-trip time in ms, top left on the game's border).  In the desktop app also " +
-        "the Server for online games (empty = the public server)."],
+      ["Settings:  ", "Display (fullscreen - also <ALT>+<ENTER> -, screen size, tank colors: normal, color-blind or you blue / team green / enemies red), Graphics (original or modern, then that look's settings), Sound (style, volume, stereo, distance fade), Controls (both tanks' keys, the touch controls), Online (your name, preferred color, show chat, chat sound, show ping; in the desktop app the server) and Language."],
+      ["Graphics:  ", "Settings chooses original (the DOS screen of 1991) or modern (the default): the same game drawn at your screen's resolution - smooth tunnels, textured dirt and rock, dark tunnels lit by the tanks' lamps, glowing shots, dust, sparks and fire, a new panel and menus in a modern font.  Modern graphics settings: style (clean or retro), quality, terrain, tunnel edges, lighting, particles, glow, screen shake, camera (smooth: tanks glide between steps) and UI, and the fog of war of the line of sight.  Only the look changes, never the game - also online."],
     ],
   },
   info: {
@@ -161,11 +154,13 @@ const STRINGS_EN = {
       "computer runs the same game in lockstep; only key presses go over the network."],
     // more paragraphs, one [head, text] each (wrapped to the page's width)
     sections: [
+      ["Two looks:  ", "the original DOS screen, or modern graphics in high resolution with light, particles and a modern font (Settings, Graphics) - the same game either way."],
+      ["Replays:  ", "every match you play or watch is kept (the newest 20, main menu, Replays): watch it again like a spectator - every view, the live map or one tank, paused, faster or slower - or save it as a file and send it to someone."],
       ["The desktop app:  ", "Tunneler Online also comes as a small program for Windows, Linux and " +
         "macOS - download it from the releases page on GitHub " +
-        "(github.com/kaniansky/tunneler-online/releases).  It plays split screen and vs computer " +
+        "(github.com/kaniansky/tunneler-online/releases).  It plays split screen and skirmish " +
         "without a network, and online games on the public server or any other one (Settings, " +
-        "Server)."],
+        "Online, Server).  In a browser the game can be installed as an app too (it then also starts offline)."],
       ["The original:  ", "TUNNELER 2.0 was written by Geoffrey Silverton in 1991 in Turbo Pascal: " +
         "two tanks dig through an underground world on one PC, one keyboard and one split screen.  " +
         "This version keeps all of it and adds the rest."],
@@ -174,6 +169,4 @@ const STRINGS_EN = {
     credits: ["Norko Kaniansky, 2026", "original TUNNELER 2.0:", "Geoffrey Silverton, 1991"],
   },
 };
-root.TUNNELER_STRINGS_EN = STRINGS_EN;
-if (typeof module !== "undefined" && module.exports) module.exports = STRINGS_EN;
-})(typeof window !== "undefined" ? window : globalThis);
+export { STRINGS_EN };

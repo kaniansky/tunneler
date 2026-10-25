@@ -10,7 +10,7 @@
 //     time: the players win if alive; tougher waves beyond wave 5, but bounded (full shield, MAX_ARMOR)
 //   - hud / scoreText; the AI hunts the players (waves) / the wave (players), goes home between waves
 //   - AI-only matches finish, deterministic: 2 and 8 tanks, teams / free-for-all, small / medium / large,
-//     round time on / off, modifiers, the smallest and largest goal
+//     round time on / off, the smallest and largest goal
 //   node test/modes/survival.js (also run by test/modes-check.js)
 const path = require("path");
 const H = require(path.join(__dirname, "../modes-harness.js"));
@@ -377,9 +377,9 @@ for (const goal of [GMIN, 7, GMAX]) {
 const setups = [
   { name: "2 tanks, small", teams: [1, 2], levels: ["hard", "normal"], size: "small" },
   { name: "2 tanks, large, round time 2", teams: [1, 2], levels: ["normal", "easy"], size: "large", roundTime: 2 },
-  { name: "8 tanks free-for-all, small, modifiers", teams: [1, 2, 3, 4, 5, 6, 7, 8], levels: ["hard", "normal", "easy", "normal", "hard", "easy", "normal", "easy"], size: "small", mods: { noRepair: true } },
+  { name: "8 tanks free-for-all, small", teams: [1, 2, 3, 4, 5, 6, 7, 8], levels: ["hard", "normal", "easy", "normal", "hard", "easy", "normal", "easy"], size: "small" },
   { name: "8 tanks 3 v 5 teams, medium, round time 3, friendly fire", teams: [1, 1, 1, 2, 2, 2, 2, 2], levels: ["hard", "hard", "normal", "easy", "easy", "normal", "normal", "easy"], size: "medium", roundTime: 3, friendlyFire: true },
-  { name: "4 tanks 2 v 2, large, no repairs", teams: [1, 2, 1, 2], levels: ["hard", "normal", "normal", "easy"], size: "large", mods: { noRepair: true } },
+  { name: "4 tanks 2 v 2, large", teams: [1, 2, 1, 2], levels: ["hard", "normal", "normal", "easy"], size: "large" },
   { name: "3 tanks, small, goal " + GMIN, teams: [1, 2, 3], levels: ["hard", "normal", "easy"], size: "small", goal: GMIN },
   { name: "3 tanks, small, goal " + GMAX, teams: [1, 2, 3], levels: ["hard", "normal", "easy"], size: "small", goal: GMAX },
   { name: "4 tanks, medium, goal " + GMIN, teams: [1, 1, 2, 2], levels: ["hard", "normal", "easy", "normal"], size: "medium", goal: GMIN },

@@ -16,8 +16,8 @@
 // e.modeScore[p]: hits player p landed on enemy bases this match (kept, not shown).
 // Deterministic: only engine state and plain arrays; the AI keeps its own per-round notes on the AI object
 // (ai.siege, rebuilt identically by every client from the same history) and uses only ai.rng().
-(function (root) {
-const E = root.TunnelerEngine || require("../engine.js");
+import { TunnelerEngine as E } from "../engine.js";
+import { Lang } from "../lang.js";
 
 const BASE_HP = 30;            // hits a base takes (the default; e.goal = the Base strength setting)
 const BACK_FRAMES = 55;        // ~3 s (18.2 frames a second) before a destroyed tank comes back
@@ -264,7 +264,7 @@ E.registerMode("siege", {
   scoreText(e, p) {
     const hp = e.GS.hp ? e.GS.hp[p] : maxHp(e);
     const t = hp > 0 ? e.mt("score", { n: hp }) : e.mt("fallen");
-    return root.Lang && root.Lang.enc ? root.Lang.enc(t) : t;     // (font text; display only)
+    return Lang.enc(t);     // (font text; display only)
   },
 
   // AI retreats (ai.js GM.aiRetreat): its base fallen - home is rubble, no retreat (aiOverride finds a
@@ -284,12 +284,12 @@ E.registerMode("siege", {
   },
   // AI: when no enemy is near (and it needn't refuel), go to a firing spot at an enemy base and shoot
   aiOverride(ai, e, mx, my, ctx) {
-    const me = ai.me, s = aiState(ai, e), fix = !e.mods.noRepair;
+    const me = ai.me, s = aiState(ai, e);
     if (!standing(e, me)) {
       // own base fallen (no retreats, see aiRetreat): a teammate's standing base refuels (and repairs)
-      const low = e.energy[me] < ai.cfg.retreatE + 1000 || (fix && e.shield[me] < ai.cfg.retreatS);
+      const low = e.energy[me] < ai.cfg.retreatE + 1000 || e.shield[me] < ai.cfg.retreatS;
       if (low) s.refuel = true;
-      else if (e.energy[me] >= ai.cfg.leaveAt - 1000 && (!fix || e.shield[me] >= ai.cfg.leaveAt - 1000)) s.refuel = false;
+      else if (e.energy[me] >= ai.cfg.leaveAt - 1000 && e.shield[me] >= ai.cfg.leaveAt - 1000) s.refuel = false;
       if (s.refuel) {
         let mb = 0, best = 1e9;
         for (const m of ai.mates) if (standing(e, m)) { const d = cheb(mx, my, e.baseX[m], e.baseY[m]); if (d < best) { best = d; mb = m; } }
@@ -339,4 +339,3 @@ E.registerMode("siege", {
     return false;
   },
 });
-})(typeof window !== "undefined" ? window : globalThis);

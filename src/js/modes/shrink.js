@@ -12,9 +12,7 @@
 // Everything is a function of e.tick - e.roundStart (steps since the round's first play frame), so it is
 // the same on every client. The rock of the final circle (and a margin) turns to dirt at match start:
 // the last tanks can always get in.
-(function (root) {
-"use strict";
-const E = root.TunnelerEngine || require("../engine.js");
+import { TunnelerEngine as E } from "../engine.js";
 
 const TPS = 1193182 / 65536;                     // engine steps (BIOS ticks) a second
 const ticks = s => Math.round(s * TPS);
@@ -189,4 +187,3 @@ E.registerMode("shrink", {
     return zoneWaypoint(ai, e, mx, my, rT);
   },
 });
-})(typeof window !== "undefined" ? window : globalThis);

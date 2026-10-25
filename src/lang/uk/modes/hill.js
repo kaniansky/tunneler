@@ -1,5 +1,5 @@
-"use strict";
 // king of the hill (src/js/modes/hill.js) in this language - the same keys as ../../en/modes/hill.js.
+import { Lang } from "../../../js/lang.js";
 Lang.modeTexts("hill", "uk", {
   stat: "сек.",
   note: "{n} с",

@@ -1,4 +1,3 @@
-"use strict";
 // Computer opponent for TUNNELER.
 //
 //   const ai = new TunnelerAI(level, player[, {seed}]); // level: "easy" | "normal" | "hard" (shown as easy /
@@ -61,8 +60,6 @@
 //     non-empty pixel within distance < 4 of its centre; they explode on dirt / rock / walls.
 //   - firing while digging is ~2.7x faster (the shots' explosions clear the dirt ahead) but costs energy.
 //   - movement is blocked within distance 6 of another tank alive.
-(function (root) {
-
 const DX = [0, 1, 1, 1, 0, -1, -1, -1];
 const DY = [-1, -1, 0, 1, 1, 1, 0, -1];
 // colour -> 0 free, 1 dirt, 2 shot / explosion, 3 tank / base wall, 4 rock (same as engine PixelClass;
@@ -213,16 +210,21 @@ class Grid {
     i = Math.max(0, Math.min(this.w - 1, i)); j = Math.max(0, Math.min(this.h - 1, j));
     return j * this.w + i;
   }
+  // (the world bytes read directly - engine.getPixel inlined: a round's first plans fill thousands of nodes)
   compute(n) {
     const x0 = this.cx(n) - 3, y0 = this.cy(n) - 3, e = this.e, pc = this.pc, W = this.W;
+    const world = e.world, ws = e.ws, len = world.length, outside = pc[7];
     let dirt = 0;
-    for (let y = y0; y < y0 + 7; y++)
+    for (let y = y0; y < y0 + 7; y++) {
+      const row = y * ws;
       for (let x = x0; x < x0 + 7; x++) {
         if (x < 0 || x > W - 1) return BLOCK;
-        const c = pc[e.getPixel(x, y)];
+        const i = row + (x >> 1);
+        const c = y < 0 || i >= len ? outside : pc[(x & 1) ? world[i] >> 4 : world[i] & 0x0F];
         if (c >= 3) return BLOCK;
         if (c === 1) dirt++;
       }
+    }
     return dirt;
   }
   value(n) {
@@ -651,10 +653,7 @@ class TunnelerAI {
     // "energy" (only low energy sends it home and holds it there - e.g. no base repairs shields, or a
     // destroyed tank comes back at once anyway), false (no retreat now; one under way ends). The mode keeps
     // its answer steady (a retreat started / ended every other frame would replan the path every frame).
-    // Without base repairs (modifier noRepair) and no word from the mode: "energy" - the shield never comes
-    // back at a base, so a tank going home for it would wait there for the rest of the round.
-    let rp = e.GM && e.GM.aiRetreat ? e.GM.aiRetreat(this, e) : null;
-    if (rp == null && e.mods && e.mods.noRepair) rp = "energy";
+    const rp = e.GM && e.GM.aiRetreat ? e.GM.aiRetreat(this, e) : null;
     if (rp === false) {
       if (this.retreating) { this.retreating = false; this.path = null; this.waypoint = null; }
     } else if (rp === "energy") {
@@ -1238,6 +1237,5 @@ class TunnelerAI {
 }
 
 TunnelerAI.LEVELS = LEVELS;
-root.TunnelerAI = TunnelerAI;
-if (typeof module !== "undefined") module.exports = TunnelerAI;
-})(typeof window !== "undefined" ? window : globalThis);
+
+export { TunnelerAI };

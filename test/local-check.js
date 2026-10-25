@@ -11,15 +11,16 @@ const keyOf = code => /^(Arrow|Enter|Escape|Tab|Backspace)/.test(code) ? code.re
 const assert = require("assert");
 const fs = require("fs"), path = require("path"), vm = require("vm");
 const SRC = path.join(__dirname, "..", "src");
-// /js/langs.js is generated: src/lang/<code>/*.js joined, as server.js serves it for src/
-const { langBundle, modesBundle } = require("../server.js");
+// the pages' modules: bundled in memory (test/page-env.js); node's own instances (test/src.js)
+const { runPage } = require("./page-env.js");
+const NODE = require("./src.js");
 
 let n = 0;
 const ok = msg => { n++; console.log("  ok  " + msg); };
 // (values made inside the page vm have other prototypes: compare as JSON)
 const same = (a, b, msg) => assert.strictEqual(JSON.stringify(a), JSON.stringify(b), msg);
 // a skirmish link with its short code (cpucode.js) as the long query it stands for
-const CpuCode = require(path.join(SRC, "js", "cpucode.js"));
+const CpuCode = NODE.CpuCode;
 const longLink = href => decodeURIComponent(String(href).replace(/([?&])g=([^&]+)/, (m, s, c) => s + CpuCode.decode(c)));
 
 function makeEnv(search, store) {
@@ -34,18 +35,24 @@ function makeEnv(search, store) {
     location: { search, pathname: "/", hash: "", href: "" },
     history: { replaceState() {} },
     localStorage: { getItem: k => storage.has(k) ? storage.get(k) : null, setItem: (k, v) => storage.set(k, String(v)) },
-    addEventListener: (t, f) => (listeners[t] = listeners[t] || []).push(f),
+    // (capture-phase listeners first, as in a browser; stopImmediatePropagation ends the dispatch)
+    addEventListener: (t, f, o) => { const c = o === true || !!(o && o.capture); (listeners[t] = listeners[t] || []).push(Object.assign(ev => f(ev), { capture: c, f })); },
+    removeEventListener: (t, f, o) => { const c = o === true || !!(o && o.capture); listeners[t] = (listeners[t] || []).filter(g => !(g.f === f && g.capture === c)); },
     requestAnimationFrame: () => 0, cancelAnimationFrame() {},
     performance, setTimeout, clearTimeout, setInterval: () => 0, clearInterval() {}, console, URLSearchParams, Math, atob, Uint8Array,
   };
   win.window = win; win.globalThis = win;
   const ctx = vm.createContext(win);
-  const page = f => {
-    for (const [, src] of fs.readFileSync(path.join(SRC, f), "utf8").matchAll(/<script src="\/([^"]+)"/g))
-      vm.runInContext(src === "js/langs.js" ? langBundle(path.join(SRC, "lang")) : src === "js/modes.js" ? modesBundle(path.join(SRC, "js", "modes"))
-        : fs.readFileSync(path.join(SRC, src), "utf8"), ctx, { filename: src });
+  const page = f => runPage(ctx, f);
+  const key = code => {
+    let stop = false;
+    const ev = { code, key: keyOf(code), target: {}, preventDefault() {}, stopPropagation() {}, stopImmediatePropagation() { stop = true; } };
+    const all = listeners.keydown || [];
+    for (const f of all.filter(g => g.capture).concat(all.filter(g => !g.capture))) {
+      if (!(listeners.keydown || []).includes(f)) continue;     // (removed by an earlier listener)
+      f(ev); if (stop) break;
+    }
   };
-  const key = code => { for (const f of listeners.keydown || []) f({ code, key: keyOf(code), target: {}, preventDefault() {} }); };
   return { win, page, key, storage };
 }
 
@@ -54,7 +61,7 @@ function makeEnv(search, store) {
   // the same game with and without smoothScroll: identical simulation; the views differ only on frames
   // where the tank is on an odd x, then by exactly one pixel (screen byte = right pixel of one world byte +
   // left pixel of the next)
-  const E = require(path.join(SRC, "js", "engine.js"));
+  const E = NODE.TunnelerEngine;
   const a = new E(5, { autoStart: true, smoothScroll: true }), b = new E(5, { autoStart: true });
   let odd = 0, even = 0;
   for (let i = 0; i < 2600; i++) {
@@ -83,8 +90,8 @@ function makeEnv(search, store) {
   // the same game with sight full / circle / walls: identical simulation; with line of sight the views
   // show the world live only within the ellipse around the tank (walls: less), the rest remembered (dim
   // plane); the snapshots carry the dim plane(s) only then
-  const E = require(path.join(SRC, "js", "engine.js"));
-  const NP = require(path.join(SRC, "js", "netproto.js"));
+  const E = NODE.TunnelerEngine;
+  const NP = NODE.NetProto;
   const run = (opts, steps, input, check) => {
     const es = ["full", "circle", "walls"].map(sight => new E(9, Object.assign({ autoStart: true, sight }, opts)));
     const dimmed = [0, 0, 0];
@@ -171,7 +178,7 @@ function makeEnv(search, store) {
 
 // ---------------------------------------------------------------- sound attenuation
 {
-  const Speaker = require(path.join(SRC, "js", "speaker.js"));
+  const Speaker = NODE.Speaker;
   const at = (d, l = { x: 500, y: 300 }) => Speaker.attenuation({ t: 0, hz: 440, x: 500 + d, y: 300 }, l);
   assert.strictEqual(at(0), 1); assert.strictEqual(at(Speaker.NEAR), 1);
   assert.strictEqual(at(Speaker.FAR), 0); assert.strictEqual(at(5000), 0);
@@ -194,7 +201,8 @@ function play(search) {
 {
   const w = play("?mode=cpu&slots=0:you:1,1:normal:2&size=medium&win=3&ff=0&hide=1");
   const e = w.tunnelerEngine();
-  assert(!e.extended && e.nPlayers === 2 && e.size === "medium" && e.winScore === 3, "classic vs computer");
+  // (a skirmish always runs the extended engine - owner, 2026-10-24; the classic one is split screen's)
+  assert(e.extended && e.nPlayers === 2 && e.size === "medium" && e.winScore === 3, "BLUE vs a computer GREEN: the extended engine");
   // the classic engine with these options plays exactly like the plain classic engine
   const E = w.TunnelerEngine, a = new E(77, { slots: [{ color: 0, team: 1 }, { color: 1, team: 2 }], size: "medium", winScore: 3, escEnds: true }), b = new E(77);
   for (let i = 0; i < 400; i++) {
@@ -204,7 +212,7 @@ function play(search) {
     a.step({ keyDown: kd.slice(), keys: keys.slice() }); b.step({ keyDown: kd.slice(), keys: keys.slice() });
   }
   assert.strictEqual(a.randSeed, b.randSeed); same(Array.from(a.world), Array.from(b.world));
-  ok("vs computer BLUE + GREEN = classic engine, identical to new TunnelerEngine(seed)");
+  ok("skirmish: always the extended engine; the classic engine with these options = new TunnelerEngine(seed)");
 
   // the listener is BLUE's tank during play, null elsewhere
   const r = { screen: "play", tankX: [0, 123, 9], tankY: [0, 45, 9] };
@@ -229,14 +237,14 @@ function play(search) {
 }
 {
   // the short link (?g=<13 characters>, cpucode.js): the same game as the long one
-  const E = require(path.join(SRC, "js", "engine.js"));
+  const E = NODE.TunnelerEngine;
   const s = { slots: [{ kind: "you", team: 1 }, { kind: "normal", team: 2 }, { kind: "none", team: 3 }, { kind: "hard", team: 2 },
     { kind: "none", team: 5 }, { kind: "none", team: 6 }, { kind: "easy", team: 1 }, { kind: "none", team: 8 }],
-    size: "large", win: 5, time: 3, ff: true, view: "team", watch: "killer", sight: "walls", mode: "standard", noRepair: true };
+    size: "large", win: 5, time: 3, ff: true, view: "team", watch: "killer", sight: "walls", mode: "standard" };
   const code = CpuCode.encode(s);
   assert.strictEqual(code.length, 13, "13 characters");
   const w = play("?mode=cpu&g=" + code), e = w.tunnelerEngine();
-  assert(e.extended && e.size === "large" && e.winScore === 5 && e.roundTime === 3 && e.friendlyFire && e.sight === "walls" && e.mods.noRepair);
+  assert(e.extended && e.size === "large" && e.winScore === 5 && e.roundTime === 3 && e.friendlyFire && e.sight === "walls");
   same(Array.from(e.slots, x => [x.color, x.team]), [[0, 1], [1, 2], [3, 2], [6, 1]]);
   same(w.tunnelerAIs().map(a => [a.me, a.levelName]), [[2, "normal"], [3, "hard"], [4, "easy"]]);
   same([w.tunnelerViews().watchOut, e.showSettings.view], ["killer", "team"]);
@@ -250,9 +258,13 @@ function play(search) {
       const p = back(CpuCode.encode(Object.assign({}, s, { mode: m, goal: g })));
       assert(p.get("gm") === m && (g === undefined ? !p.has("goal") : p.get("goal") === String(g)), m + " goal " + g);
     }
-  // a broken code: the defaults (the classic game)
+  // a broken code: the defaults (BLUE against a computer GREEN)
   assert.strictEqual(CpuCode.decode("1xyz"), null);
-  assert(!play("?mode=cpu&g=bogus").tunnelerEngine().extended, "a broken code: the default game");
+  const bogus = play("?mode=cpu&g=bogus").tunnelerEngine();
+  same(Array.from(bogus.slots, x => x.color), [0, 1], "a broken code: the default game");
+  // player 2 (p2) round trips
+  const s2 = Object.assign({}, s, { slots: s.slots.map((x, i) => i === 3 ? { kind: "p2", team: 2 } : x) });
+  assert(back(CpuCode.encode(s2)).get("slots").includes("3:p2:2"), "player 2 in the short link");
   ok("short skirmish links: " + code + " = the long query, every value round trips, a broken one = the default game");
 }
 {
@@ -310,7 +322,7 @@ function play(search) {
   env.key("ArrowDown"); env.key("Enter");
   // (rows are chosen by their key - the screen's order changes with its options)
   const pick = (en, key) => { const ui = en.win.tunnelerHomeUI(); ui.sel = ui.spec.items.findIndex(it => it.key === key); assert(ui.sel >= 0, key); ui.draw(); };
-  pick(env, "slot7"); env.key("ArrowLeft");                // TEAL: nobody -> expert
+  pick(env, "slot7"); env.key("ArrowLeft"); env.key("ArrowLeft");   // TEAL: nobody -> player 2 -> (player 1 taken) expert
   pick(env, "slot2"); env.key("ArrowRight");               // CYAN: nobody -> normal (shown as easy)
   for (let i = 0; i < 6; i++) env.key("Enter");             // team 3 -> 8, then wraps to 1
   env.key("Enter");                                        // team 2
@@ -342,11 +354,10 @@ function play(search) {
     const st = new Map(), en = makeEnv("", st);
     en.page("index.html"); en.key("ArrowDown"); en.key("Enter");
     pick(en, "mode"); en.key("ArrowRight");                 // standard -> gold
-    pick(en, "noRepair"); en.key("Enter");
     pick(en, "play"); en.key("Enter");
-    assert(/&gm=gold&goal=10&norepair=1&lv=2$/.test(longLink(en.win.location.href)), en.win.location.href);
-    assert(st.get("tunneler.cpu.mode") === "gold" && st.get("tunneler.cpu.noRepair") === "1");
-    ok("vs computer: Mode and the modifier go into the link and are remembered");
+    assert(/&gm=gold&goal=10&lv=2$/.test(longLink(en.win.location.href)), en.win.location.href);
+    assert(st.get("tunneler.cpu.mode") === "gold");
+    ok("vs computer: Mode goes into the link and is remembered");
     // deathmatch: "Kills to win" instead of "Rounds to win", into the link
     const sd = new Map(), ed = makeEnv("", sd);
     ed.page("index.html"); ed.key("ArrowDown"); ed.key("Enter");
@@ -454,26 +465,94 @@ function play(search) {
   ok("split-screen settings: default classic, map size, rounds to win and round time, remembered");
 }
 
-// ---------------------------------------------------------------- home.js Settings: language, sound
+// ---------------------------------------------------------------- home.js Settings: categories + their settings
 {
-  const store = new Map();
-  const env = makeEnv("", store);
+  const store = new Map([["tunneler.gfx", "original"]]);  // (chosen before: modern is the default since 5.0)
+  const env = makeEnv("", store), ui = () => env.win.tunnelerHomeUI();
   env.page("index.html");
   env.key("ArrowUp"); env.key("Enter");                    // (wraps to the last item) Settings
-  env.key("ArrowDown"); env.key("ArrowRight");             // Sound: original -> realistic
-  assert.strictEqual(store.get("tunneler.sound"), "realistic", "sound style remembered");
-  env.key("ArrowLeft"); env.key("ArrowLeft");              // -> muted
-  assert.strictEqual(store.get("tunneler.sound"), "muted");
+  const keys = () => ui().spec.items.map(i => i.key), sel = () => ui().spec.items[ui().sel].key;
+  const right = () => keys().slice(keys().indexOf("back") + 1);
+  same(keys().filter(k => /^cat-/.test(k)), ["cat-display", "cat-graphics", "cat-sound", "cat-controls", "cat-online", "cat-language"], "categories");
+  assert.strictEqual(sel(), "cat-display", "on the first category");
+  same(right(), ["fullscreen", "scale", "tankcolors"], "Display: fullscreen, screen size, tank colors");
+  env.key("Enter"); assert.strictEqual(sel(), "fullscreen", "Enter: into the settings");
+  // Alt+Enter (GameScreen.toggle) while the row is on screen: it follows
+  const fsRow = () => ui().spec.items.find(i => i.key === "fullscreen").label;
+  assert.ok(fsRow().endsWith(env.win.Lang.t("set.ping.off")), "fullscreen off");
+  env.win.GameScreen.toggle();
+  assert.ok(fsRow().endsWith(env.win.Lang.t("set.ping.on")), "Alt+Enter: the row says on");
+  env.win.GameScreen.toggle();
+  env.key("ArrowDown"); env.key("ArrowRight");             // Screen size: whole pixels
+  assert.strictEqual(store.get("tunneler.scale"), "integer");
+  env.key("ArrowDown"); env.key("ArrowRight");             // Tank colors: color-blind
+  assert.strictEqual(store.get("tunneler.tankcolors"), "colorblind");
+  env.key("ArrowDown"); assert.strictEqual(sel(), "fullscreen", "Up / Down stay in the box");
+  env.key("Escape"); assert.strictEqual(sel(), "cat-display", "Esc: back to the category");
+  env.key("ArrowDown"); env.key("ArrowRight");             // Graphics; Right: into its settings
+  same(right(), ["gfx", "gap-g", "smooth"], "Graphics (original): graphics, a blank row, smooth scrolling");
+  env.key("ArrowRight");                                   // original -> modern (no WebGL2 here: drawn as the original)
+  assert.strictEqual(store.get("tunneler.gfx"), "modern");
+  assert.strictEqual(env.win.Gfx.mode(), "original", "no WebGL2: drawn as the original");
+  env.key("ArrowLeft");
   env.key("ArrowDown"); env.key("Enter");                  // Smooth scrolling: on (the default) -> off
-  assert.strictEqual(store.get("tunneler.smooth"), "0", "smooth scrolling (on by default) turned off, remembered");
-  env.key("ArrowDown"); env.key("Enter");                  // Show ping: off -> on
-  assert.strictEqual(store.get("tunneler.ping"), "1", "show ping remembered");
-  env.key("ArrowUp"); env.key("ArrowUp");
-  env.key("ArrowUp"); env.key("ArrowRight");               // Language: the next one
+  assert.strictEqual(store.get("tunneler.smooth"), "0");
+  env.key("Escape"); env.key("ArrowDown");                 // Sound
+  assert.ok(right()[0] === "sound", "Sound: the style first");
+  env.key("Enter"); env.key("ArrowRight");                 // original -> realistic
+  assert.strictEqual(store.get("tunneler.sound"), "realistic", "sound style remembered");
+  // the mouse wheel over a switch steps it (up: forward), as Left / Right
+  const u = ui(), at = key => u.spec.items.findIndex(i => i.key === key);
+  u.itemAt = () => at("sound");
+  u.wheel({ deltaY: -120, deltaMode: 0 });
+  assert.strictEqual(store.get("tunneler.sound"), env.win.Speaker.STYLES[env.win.Speaker.STYLES.indexOf("realistic") + 1], "wheel up: the next style");
+  u.wheel({ deltaY: 120, deltaMode: 0 });
+  assert.strictEqual(store.get("tunneler.sound"), "realistic", "wheel down: back");
+  // the volume: a meter of 10 cells; a click on a cell sets it there; it stops at 100 and 0
+  const vol = ui().spec.items[at("volume")];
+  assert.strictEqual((vol.label.match(/\xDB/g) || []).length, 10, "100 %: ten full cells");
+  vol.zones[3].click(1);
+  assert.strictEqual(store.get("tunneler.volume"), "40", "a click on the 4th cell: 40 %");
+  vol.zones[9].click(1); u.itemAt = () => at("volume");
+  u.wheel({ deltaY: -120, deltaMode: 0 });
+  assert.strictEqual(store.get("tunneler.volume"), "100", "100 %: up stays");
+  vol.zones[0].click(-1);
+  u.wheel({ deltaY: 120, deltaMode: 0 });
+  assert.strictEqual(store.get("tunneler.volume"), "0", "0 %: down stays");
+  delete u.itemAt;
+  env.key("Escape"); env.key("ArrowDown"); env.key("ArrowDown");      // Controls, Online
+  same(right(), ["name", "prefer", "showchat", "chatsound", "ping"], "Online: name, preferred color, show chat, chat sound, show ping");
+  env.key("Tab"); assert.strictEqual(sel(), "name");
+  env.key("ArrowDown"); env.key("ArrowRight");             // Preferred color: BLUE
+  env.key("ArrowDown"); env.key("Enter");                  // Show chat: on -> off (hidden)
+  assert.strictEqual(store.get("tunneler.chat.hide"), "1");
+  assert.ok(ui().spec.items.find(i => i.key === "chatsound").disabled, "no chat: Chat sound grayed out");
+  env.key("ArrowDown"); assert.strictEqual(sel(), "ping", "(skipped)");
+  env.key("Enter");                                        // Show ping on
+  same(["tunneler.ping", "tunneler.online.color"].map(k => store.get(k)), ["1", "blue"]);
+  env.key("Escape"); env.key("ArrowDown");                 // Language
+  same(right(), ["lang"]);
+  env.key("Enter"); env.key("ArrowRight");
   assert.notStrictEqual(store.get("tunneler.lang") || "en", "en", "language switched");
   env.key("ArrowLeft");
-  env.key("Escape"); env.key("ArrowDown"); env.key("Enter");   // back on the main menu: split screen ...
-  ok("homepage Settings: language, sound style (muted / original / realistic / cartoony), show ping - remembered");
+  env.key("Escape"); env.key("ArrowDown"); assert.strictEqual(sel(), "back", "the categories wrap: Language, then Back");
+  // Controls: a key row takes the next key press (Esc cancels), the page doesn't see it
+  if (env.win.Controls && env.win.Controls.get) {
+    env.key("ArrowUp"); env.key("ArrowUp"); env.key("ArrowUp");   // Controls
+    assert.strictEqual(sel(), "cat-controls");
+    env.key("Enter"); assert.strictEqual(sel(), "key-blue-up");
+    env.key("Enter");
+    assert.ok(ui().spec.items[ui().sel].label.includes(env.win.Lang.t("ctl.press")), "waiting for a key");
+    env.key("Escape");
+    assert.strictEqual(env.win.Controls.get("blue", "up"), "KeyW", "Esc: unchanged");
+    assert.strictEqual(sel(), "key-blue-up", "Esc: still on the row (not back to the category)");
+    env.key("Enter"); env.key("KeyI");
+    assert.strictEqual(env.win.Controls.get("blue", "up"), "KeyI", "BLUE up = I");
+    env.key("Escape");
+  }
+  env.key("Escape"); env.key("Escape");
+  assert.ok(ui().spec.home, "Esc on the categories: the main menu");
+  ok("homepage Settings: Display, Graphics, Sound, Controls, Online, Language and their settings - remembered");
 }
 
 // ---------------------------------------------------------------- views.js: players by their slot's color
@@ -495,7 +574,7 @@ function play(search) {
   for (const l of lines) assert(l.reduce((a, [t]) => a + t.length, 0) + 5 * (l.length - 1) <= 78, "team line fits");
   assert.strictEqual(lines[0][1][1], E.PLAYER_TEXT_COLORS[3], "team 2 in its first tank's color (YELLOW)");
   // classic: BLUE / GREEN as the original
-  const c = play("?mode=cpu&slots=0:you:1,1:normal:2").tunnelerViews();
+  const c = play("?mode=hotseat").tunnelerViews();             // (the classic engine: split screen only)
   same([c.playerColor(0), c.playerColor(1), c.teamLines(c.engine()).length], [9, 10, 0], "classic colors");
   ok("views.js: players colored / named by their slot (BLUE, YELLOW, TEAL...), all teams on the map");
 }
@@ -536,6 +615,124 @@ function play(search) {
   const hs = play("?mode=hotseat").tunnelerViews(); hs.snap = { screen: "play", mode: "lores" };
   same([hs.layout().kind, hs.layout().crop], ["display", null], "hotseat: the original screen");
   ok("views.js: self / team / everyone - own view first, teammates / others in slot order; classic halves");
+}
+
+// ---------------------------------------------------------------- Settings: Graphics - the original's or the modern's settings
+{
+  const keys = modern => {
+    const env = makeEnv("", new Map([["tunneler.gfx", "modern"]]));
+    env.page("index.html");
+    if (modern) { env.win.Gfx.mode = () => "modern"; env.win.Gfx.supported = () => true; }   // (no WebGL2 in the test: pretend)
+    env.key("ArrowUp"); env.key("Enter"); env.key("ArrowDown");          // Settings, Graphics
+    return env.win.tunnelerHomeUI().spec.items.map(i => i.key);
+  };
+  const orig = keys(false), mod = keys(true);
+  assert(orig.includes("smooth") && !orig.includes("style"), "original: Smooth scrolling, no modern settings");
+  assert(!mod.includes("smooth") && ["style", "quality", "terrain", "edges", "light", "particles", "glow", "shake", "camera", "panel", "fog"]
+    .every(k => mod.includes(k)), "modern: the modern settings (no Smooth scrolling: always on)");
+  ok("Settings: Graphics shows the original's (Smooth scrolling) or the modern's settings");
+}
+
+// ---------------------------------------------------------------- play.js: Rematch / Esc after a match -> the lobby
+{
+  // the game's settings are stored where home.js reads them (a game from a link comes back as it was)
+  const st = new Map(), env = makeEnv("?mode=cpu&slots=" + encodeURIComponent("0:normal:1,2:you:2,5:hard:1") +
+    "&size=small&win=5&time=3&ff=1&view=team&watch=killer&sight=circle&lv=2", st);
+  env.page("play.html");
+  const e = env.win.tunnelerEngine();
+  Object.assign(e, { screen: "text", menuPage: "menu", kbdInstalled: false, menuShift: 1, menuSel: 1 });
+  env.key("Enter");
+  assert.strictEqual(env.win.location.href, "", "Enter on Back to main menu: the engine's own item");
+  e.menuSel = 0;
+  env.key("Enter");
+  assert.strictEqual(env.win.location.href, "/#cpu", "Rematch: the skirmish lobby");
+  same(JSON.parse(st.get("tunneler.cpu.slots")).map(s => s.kind + s.team),
+    ["normal1", "none2", "you2", "none4", "none5", "hard1", "none7", "none8"], "the slots");
+  same(["size", "win", "time", "ff", "view", "watch", "sight", "mode"].map(k => st.get("tunneler.cpu." + k)),
+    ["small", "5", "3", "1", "team", "killer", "circle", "standard"], "the settings");
+  // two players: player 2 comes back as player 2
+  const s3 = new Map(), p2 = makeEnv("?mode=cpu&slots=" + encodeURIComponent("0:you:1,1:p2:2,2:easy:1") + "&lv=2", s3);
+  p2.page("play.html");
+  Object.assign(p2.win.tunnelerEngine(), { screen: "text", menuPage: "menu", kbdInstalled: false, menuShift: 1, menuSel: 0 });
+  p2.key("Enter");
+  same(JSON.parse(s3.get("tunneler.cpu.slots")).slice(0, 3).map(x => x.kind + x.team), ["you1", "p22", "easy1"], "player 2 kept");
+  // split screen: its settings, its screen; Esc on the menu does the same
+  const s2 = new Map(), sp = makeEnv("?mode=hotseat&size=large&win=2&time=5", s2);
+  sp.page("play.html");
+  Object.assign(sp.win.tunnelerEngine(), { screen: "text", menuPage: "menu", kbdInstalled: false, menuShift: 1, menuSel: 1 });
+  sp.key("Escape");
+  assert.strictEqual(sp.win.location.href, "/#split");
+  same(["size", "win", "time"].map(k => s2.get("tunneler.split." + k)), ["large", "2", "5"]);
+  ok("play.js: Rematch / Esc after a match go to the lobby with the game's settings (skirmish, split screen)");
+}
+
+// ---------------------------------------------------------------- the engine's menu only acts while it is on the screen
+{
+  // an auto start (local games): "(creating world)" with no menu - the mouse finds no item there and the
+  // arrows paint no bar on the empty rows
+  const E = NODE.TunnelerEngine;
+  const e = new E(3, { autoStart: true, slots: [{ color: 0, team: 1 }, { color: 1, team: 2 }], extended: true });
+  for (let i = 0; i < 3 && e.screen !== "play"; i++) e.step({ bits: [0, 0], keys: [] });
+  assert.strictEqual(e.screen, "text", "creating the world");
+  const before = e.vram.slice();
+  for (let r = 0; r < 25; r++) for (let c = 0; c < 80; c++) assert.strictEqual(e.menuItemAt(c, r), -1, "no item at " + c + "," + r);
+  e.step({ bits: [0, 0], keys: [[0, 0x50], [0, 0x48]] });          // (Down, Up)
+  let bars = 0;
+  for (let i = 1; i < 4000; i += 2) if (e.vram[i] === 0x5F && before[i] !== 0x5F) bars++;
+  assert.strictEqual(bars, 0, "no highlight bar drawn");
+  // a key cuts the world creation short, the auto start runs early - its "(creating world)" line stays steady
+  // (no clearing, no blinking: that is the original's "started before the world is ready" for its menu)
+  const f = new E(3, { autoStart: true, slots: [{ color: 0, team: 1 }, { color: 1, team: 2 }], extended: true });
+  const attr = () => { for (let r = 0; r < 25; r++) { let t = ""; for (let c = 0; c < 80; c++) t += String.fromCharCode(f.vram[r * 160 + c * 2]); const c0 = t.indexOf("(creating"); if (c0 >= 0) return f.vram[r * 160 + c0 * 2 + 1]; } return -1; };
+  for (let i = 0; i < 10; i++) { f.step({ bits: [0, 0], keys: i === 1 ? [[0, 0x48]] : [] }); assert.strictEqual(attr(), 1, "steady at step " + i); }
+  ok("the engine's menu: no items / bar while it isn't on the screen; an auto start's \"(creating world)\" stays steady");
+}
+
+// ---------------------------------------------------------------- skirmish: two players
+{
+  // player 1 = BLUE's keys, player 2 = GREEN's keys; computer tanks for the rest; both views first; the
+  // sound split like the split screen (panned by the nearer of the two tanks)
+  const w = play("?mode=cpu&slots=" + encodeURIComponent("0:easy:1,2:you:1,4:p2:2,6:hard:2") + "&view=self&lv=2");
+  const e = w.tunnelerEngine(), v = w.tunnelerViews();
+  assert(e.extended && e.nPlayers === 4, "the extended engine, 4 tanks");
+  same(w.tunnelerAIs().map(a => [a.me, a.levelName]), [[1, "easy"], [4, "hard"]], "computer tanks only for the others");
+  v.snap = { screen: "play", mode: "lores", views: e.views || [] };
+  same(v.layout().cells, [1, 2], "view self: player 1's and player 2's views");
+  assert.strictEqual(v.viewerOf(2), 3, "player 2's view: seen as player 2's");
+  const L = w.tunnelerRunner().listener({ screen: "play", tankX: [0, 1, 20, 40, 3], tankY: [0, 1, 21, 41, 3] });   // (players in colour order: 2 = you, 3 = player 2)
+  same(L, { left: { x: 20, y: 21 }, right: { x: 40, y: 41 } }, "sound: between the two players' tanks");
+  // without a computer tank: two players in different teams are a game
+  const w2 = play("?mode=cpu&slots=" + encodeURIComponent("0:you:1,1:p2:2") + "&lv=2");
+  assert(w2.tunnelerEngine().extended && w2.tunnelerAIs().length === 0, "player 1 vs player 2: no computer tank");
+  ok("skirmish: two players (BLUE's / GREEN's keys), computer tanks for the rest, both views, split sound");
+}
+
+// ---------------------------------------------------------------- views.js: the scene for graphics "modern"
+{
+  const link = "?mode=cpu&slots=" + encodeURIComponent("0:you:1,1:normal:3,2:normal:2,3:normal:1,7:normal:2");
+  const w = play(link + "&view=everyone"), v = w.tunnelerViews(), e = w.tunnelerEngine();
+  e.setNames(["Žofia"]);
+  v.snap = { screen: "play", mode: "lores", views: e.views || [] };
+  const sc = v.sceneOf(v.layout());
+  same(sc.cells.map(c => [c.x, c.y, c.p]), [[0, 0, 1], [360, 0, 2], [720, 0, 3], [0, 400, 4], [360, 400, 5]], "grid cells, players 1..N");
+  assert.strictEqual(sc.engine, e);
+  assert.strictEqual(sc.cells[0].name, "Žofia", "names as Unicode");
+  assert.ok(sc.cells[1].team.length > 0, "team names when teams are shared");
+  same(sc.cells.map(c => c.color), [0, 1, 2, 3, 4].map(i => v.playerTextColor(i) & 15));
+  assert.strictEqual(sc.labels, true);
+  assert.strictEqual(sc.windows.length, 5, "every window drawn");
+  v.setNotice(w.Lang.t("on.escagain"));
+  const n = v.sceneOf(v.layout());
+  assert.ok(n.notice.length > 0 && n.cut[1] - n.cut[0] === 32, "the notice band, cut out of the windows");
+  // classic: the display's halves; the end-of-match world map; text screens: none
+  const c = play("?mode=hotseat").tunnelerViews();
+  c.snap = { screen: "play", mode: "lores" };
+  same(c.sceneOf(c.layout()).cells.map(x => [x.x, x.p]), [[0, 1], [360, 2]], "hotseat halves");
+  c.snap = { screen: "map", mode: "lores" };
+  same(c.sceneOf(c.layout()).map, { kind: "end", x: 36, y: 20, w: 648, h: 292 }, "the end-of-match map");
+  c.snap = { screen: "text", mode: "text" };
+  assert.strictEqual(c.sceneOf(c.layout()), null, "text screens: the Display reports them");
+  ok("views.js sceneOf (graphics modern): cells, names, labels, notice cut, classic halves, the world map");
 }
 
 // ---------------------------------------------------------------- ghost mode, you marker, settings (DESIGN-8P 25)
@@ -643,6 +840,88 @@ function play(search) {
   const h = play("?mode=hotseat&size=small"), he = h.tunnelerEngine();
   assert(he.youPlayer === null && h.tunnelerViews().watchOut === "wreck" && he.showSettings && he.showSettings.watchOut === undefined, "split screen");
   ok("after death: black = DESTROYED, wreck, others = the killer (chained, else the first alive), back next round; you marker / settings set by play.js");
+}
+
+// ---------------------------------------------------------------- a phone / tablet (touch screen without a mouse)
+{
+  // no split screen, no skirmish player 2 (your slot: "you"), the touch hint; a link's player 2 = a computer tank
+  const touch = q => ({ matches: /coarse/.test(q) });          // (pointer: coarse, no fine pointer)
+  const env = makeEnv("");
+  env.win.matchMedia = touch;
+  env.page("index.html");
+  const ui = env.win.tunnelerHomeUI(), keys = () => ui.spec.items.map(i => i.key);
+  assert(!keys().includes("split") && keys().includes("cpu"), "no split screen: " + keys());
+  ui.sel = keys().indexOf("cpu"); env.key("Enter");
+  const row = () => ui.spec.items.find(i => i.key === "slot1");
+  const seen = new Set();
+  for (let i = 0; i < 8; i++) { seen.add(row().label); row().change(1); }
+  const L = env.win.Lang;
+  assert(![...seen].some(l => l.includes(L.t("lc.p2"))), "no player 2: " + [...seen].join(" | "));
+  assert(ui.spec.items.find(i => i.key === "slot0").label.includes(L.t("lc.me")), "your slot: you");
+  const snap = ui.display.snap, bottom = Array.from({ length: 80 }, (_, c) => String.fromCharCode(snap.vram[24 * 160 + c * 2])).join("");
+  assert(bottom.includes(L.t("ui.hint.touch")), "the touch hint: " + bottom);
+  const pe = makeEnv("?mode=cpu&slots=0:you:1,1:p2:2,2:easy:2");
+  pe.win.matchMedia = touch;
+  pe.page("play.html");
+  const e = pe.win.tunnelerEngine();
+  assert(e.nPlayers === 3 && pe.win.tunnelerAIs().filter(Boolean).length === 2, "player 2 in a link: a computer tank");
+  ok("a phone / tablet: no split screen, no player 2, the touch hint; a link's player 2 plays as a computer tank");
+}
+
+// ---------------------------------------------------------------- the phone layout (DosUI narrow, Display zoom)
+{
+  const touch = q => ({ matches: /coarse/.test(q) });
+  const phone = () => { const env = makeEnv(""); Object.assign(env.win, { matchMedia: touch, innerWidth: 390, innerHeight: 844 }); return env; };
+  const env = phone();
+  env.page("index.html");
+  const ui = env.win.tunnelerHomeUI(), snap = () => ui.display.snap;
+  assert(snap().cols === 40 && snap().rows > 25 && snap().rows < 50, "a narrow, tall screen: " + snap().cols + " x " + snap().rows);
+  const rowOf = key => +Object.keys(ui.narrow.items).find(r => ui.spec.items[ui.narrow.items[r]].key === key);
+  // a tap on a row (the canvas 720 x 400 here): that item
+  const tap = key => { const r = rowOf(key); return { clientX: 360, clientY: (r - 0.5) / snap().rows * 400 }; };
+  assert.strictEqual(ui.spec.items[ui.itemAt(tap("settings"))].key, "settings", "a tap on a row = its item");
+  // Settings: one column of categories; one opens its own screen with Back
+  ui.sel = ui.spec.items.findIndex(i => i.key === "settings"); env.key("Enter");
+  same(ui.spec.items.map(i => i.key), ["cat-display", "cat-graphics", "cat-sound", "cat-controls", "cat-online", "cat-language", "gap", "back"], "the categories");
+  ui.sel = 1; env.key("Enter");
+  assert(ui.spec.items.some(i => i.key === "gfx") && ui.spec.items[ui.spec.items.length - 1].key === "back-cat", "Graphics, with Back");
+  env.key("Escape");
+  assert(ui.spec.items[0].key === "cat-display" && ui.spec.items[ui.sel].key === "cat-graphics", "Esc: back to the categories, on Graphics");
+  // the Instructions: re-wrapped to 38 columns, scrolled by a drag (scrollPage)
+  ui.sel = ui.spec.items.findIndex(i => i.key === "back"); env.key("Enter");
+  ui.sel = ui.spec.items.findIndex(i => i.key === "instr"); env.key("Enter");
+  assert(ui.spec.nlines && ui.spec.nlines.length > 60, "the page's rows");
+  assert(ui.spec.nlines.every(l => l.t.replace(/\{\d+\}/g, "").length <= 38), "every row fits 38 columns");
+  ui.scrollPage(5);
+  assert.strictEqual(ui.spec.ntop, 5, "scrolls");
+  env.key("Escape");
+  // the Display's zoom: an engine screen's left and right halves (a divider between) stacked 40 wide; taps map back
+  const D = env.win.Display, d = new D(env.win.document.createElement("canvas"));
+  const vram = new Uint8Array(16000);
+  for (let i = 0; i < 4000; i++) { vram[i * 2] = 0x20; vram[i * 2 + 1] = 7; }
+  const put = (c, r, t) => { for (let k = 0; k < t.length; k++) vram[r * 160 + (c + k) * 2] = t.charCodeAt(k); };
+  put(4, 3, "Rematch"); put(60, 10, "Statistics");
+  for (let r = 0; r < 25; r++) vram[r * 160 + 39 * 2] = 0xB3;
+  d.setSnapshot({ mode: "text", screen: "text", vram });
+  const z = d.zoom();
+  assert(z && z.c1 - z.c0 === 40 && z.rows === 6, "stacked: " + JSON.stringify(z && { c0: z.c0, c1: z.c1, rows: z.rows }));
+  same(z.at(4, 1), [4, 3], "the left half's cell"); same(z.at(20, 4), [60, 10], "the right half's cell");
+  // the end of a match: the rounds, then the statistics, then the menu box (a block with a box corner) below them
+  put(4, 1, "Rounds"); put(3, 5, "\xC9\xCD\xCD\xBB"); put(3, 6, "\xBAGo\xBA"); put(3, 7, "\xC8\xCD\xCD\xBC");
+  d.setSnapshot({ mode: "text", screen: "text", vram: vram.slice() });
+  const m = d.zoom(), zRow = txt => { for (let r = 0; r < m.rows; r++) if (String.fromCharCode(...Array.from({ length: 40 }, (_, k) => m.vram[r * 160 + k * 2])).includes(txt)) return r; return -1; };
+  assert(zRow("Rounds") >= 0 && zRow("Rounds") < zRow("Statistics") && zRow("Statistics") < zRow("Go"),
+    "rounds, statistics, menu: " + ["Rounds", "Statistics", "Go"].map(zRow));
+  same(m.at(4, zRow("Go")), [4, 6], "a tap on the menu");
+  // a centred screen (a line across the middle, no gutter): cropped to its rows, not stacked
+  const w = new Uint8Array(16000);
+  for (let i = 0; i < 4000; i++) { w[i * 2] = 0x20; w[i * 2 + 1] = 7; }
+  const t = "ROUND 1 - a settings line across the middle of the whole screen";
+  for (let k = 0; k < t.length; k++) w[12 * 160 + (8 + k) * 2] = t.charCodeAt(k);
+  d.setSnapshot({ mode: "text", screen: "text", vram: w });
+  const c = d.zoom();
+  assert(c && c.rows === 3 && c.c0 === 7 && c.c1 === 8 + t.length + 1, "a centred screen: cropped - " + JSON.stringify(c && { c0: c.c0, c1: c.c1, rows: c.rows }));
+  ok("the phone layout: a narrow tall screen, taps on its rows, Settings one column + Back, the Instructions re-wrapped, engine screens zoomed (crop / halves stacked)");
 }
 
 console.log("all " + n + " passed");

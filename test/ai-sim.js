@@ -4,8 +4,7 @@
 //   node test/ai-sim.js quick      fewer seeds
 // Exit code 1 if one of the checks fails.
 const path = require("path");
-const TunnelerEngine = require(path.join(__dirname, "../src/js/engine.js"));
-const TunnelerAI = require(path.join(__dirname, "../src/js/ai.js"));
+const { TunnelerEngine, TunnelerAI } = require("./src.js");
 const K = TunnelerEngine.KEYS;
 
 const quick = process.argv.includes("quick");

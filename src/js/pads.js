@@ -1,4 +1,3 @@
-"use strict";
 // Gamepads (browser Gamepad API) and touch controls (an on-screen joystick + FIRE / ESC buttons) for
 // play.html and online.html (and gamepad menu navigation on index.html / lobby.html).
 // Nothing here reaches the game directly: every controller is turned into the keystrokes a keyboard
@@ -6,20 +5,38 @@
 // own key handlers take exactly like real keys. So the engine, the held bits sent online and the
 // determinism are the same as with the keyboard.
 //   play (the tank):  stick / d-pad = 8 directions -> the tank's keys (BLUE W A S D, GREEN arrows),
-//                     A B X Y / shoulders / triggers = fire (BLUE Space, GREEN Enter), Start = Esc
+//                     A B X Y / shoulders / triggers = fire (BLUE Left Shift, GREEN Enter), Start = Esc
+//                     (controls.js: the keys as remapped on the Settings screen)
 //   menus:            stick / d-pad = arrow keys (held: repeats), A / X = Enter, B / Start = Esc
 // Buttons still held when the screen changes between play and a menu don't act again until released
 // (holding fire at the end of a round never "presses Enter" on the next screen).
-// Pads.start({menu: () => bool, gamepadSet: i => "blue" | "green" | null, touchSet: "blue" | null})
-(function (root) {
+// Pads.start({menu: () => bool, gamepadSet: i => "blue" | "green" | null, touchSet: "blue" | null, hideTouch: () => bool})
+// Touch controls' options (the homepage's Settings): Pads.getTouch / setTouch("size" | "left", value).
+
+// the tanks' keys (updated in place from controls.js: when a pad session starts and on every change)
+import { Controls } from "./controls.js";
+import { Lang } from "./lang.js";
+import { Scope } from "./scope.js";
+const root = globalThis;
 
 const SETS = {
-  blue: { up: "KeyW", down: "KeyS", left: "KeyA", right: "KeyD", fire: "Space" },
+  blue: { up: "KeyW", down: "KeyS", left: "KeyA", right: "KeyD", fire: "ShiftLeft" },
   green: { up: "ArrowUp", down: "ArrowDown", left: "ArrowLeft", right: "ArrowRight", fire: "Enter" },
 };
+function syncSets() {
+  const C = Controls;
+  if (!C) return;
+  for (const set of Object.keys(SETS)) for (const a of Object.keys(SETS[set])) SETS[set][a] = C.get(set, a) || SETS[set][a];
+}
+Controls.onChange(syncSets);
 const MENU = { up: "ArrowUp", down: "ArrowDown", left: "ArrowLeft", right: "ArrowRight" };
 const DIRS = ["up", "down", "left", "right"];
-const KEY_OF = { KeyW: "w", KeyA: "a", KeyS: "s", KeyD: "d", Space: " " };   // KeyboardEvent.key (else = code)
+// KeyboardEvent.key for a code (letters / digits as typed, the modifiers by name; else = the code)
+const KEY_OF = { Space: " ", ShiftLeft: "Shift", ShiftRight: "Shift", ControlLeft: "Control", ControlRight: "Control",
+  AltLeft: "Alt", AltRight: "Alt", NumpadEnter: "Enter", Minus: "-", Equal: "=", BracketLeft: "[", BracketRight: "]",
+  Semicolon: ";", Quote: "'", Backquote: "`", Backslash: "\\", Comma: ",", Period: ".", Slash: "/",
+  NumpadMultiply: "*", NumpadSubtract: "-", NumpadAdd: "+", NumpadDecimal: "." };
+const keyOf = code => KEY_OF[code] || (/^Key[A-Z]$/.test(code) ? code.slice(3).toLowerCase() : /^(Digit|Numpad)\d$/.test(code) ? code.slice(-1) : code);
 const MIN_HOLD = 120;              // ms: a tap stays held for 2+ game ticks (54.9 ms each), so a step sees it
 const REPEAT_DELAY = 400, REPEAT_EVERY = 150;   // menus: a held direction repeats like a held key
 const STICK_DEAD = 0.35, TOUCH_DEAD = 0.3;      // dead zones (fraction of the full deflection)
@@ -56,7 +73,7 @@ function readGamepad(gp) {
 
 function dispatchKey(type, code, repeat) {
   if (typeof root.dispatchEvent !== "function" || typeof root.KeyboardEvent !== "function") return;
-  root.dispatchEvent(new root.KeyboardEvent(type, { code, key: KEY_OF[code] || code, repeat: !!repeat, bubbles: true, cancelable: true }));
+  root.dispatchEvent(new root.KeyboardEvent(type, { code, key: keyOf(code), repeat: !!repeat, bubbles: true, cancelable: true }));
 }
 
 // one controller's state -> held keys (keydown / keyup through emit(type, code, repeat))
@@ -167,13 +184,14 @@ class TouchControls {
 // gamepads + touch -> keys; one requestAnimationFrame loop polls the gamepads and lets taps time out
 function start(opts) {
   opts = opts || {};
+  syncSets();
   const nav = root.navigator || {};
   const doc = root.document;
   const emit = opts.emit || dispatchKey;
   const menu = opts.menu || (() => true);
   const gamepadSet = opts.gamepadSet || (() => null);
   const pads = new Map();                    // gamepad index -> VirtualPad
-  const T = k => root.Lang && root.Lang.raw ? root.Lang.raw(k) || "" : "";
+  const T = k => Lang && Lang.raw ? Lang.raw(k) || "" : "";
   let touch = null, touchPad = null;
 
   // "Gamepad 1 connected" (split screen: + its tank) / "... disconnected": a few seconds at the bottom
@@ -213,6 +231,11 @@ function start(opts) {
     });
     for (const [k, p] of pads) if (!seen.has(k)) { p.releaseAll(); pads.delete(k); say("pad.off", k + 1); }
     if (touchPad) touchPad.update(touch.state(), menu(), opts.touchSet, now);
+    // (opts.hideTouch(): no joystick / FIRE now - e.g. the online game's lobby, a spectator, a menu)
+    if (touch && opts.hideTouch) {
+      const h = !!opts.hideTouch();
+      if (h !== touch.menuHidden) { touch.menuHidden = h; touch.root.style.display = h ? "none" : ""; if (h && touchPad) touchPad.releaseAll(); }
+    }
   }
 
   // touch: the controls appear on the first touch (or right away on a touch-only device)
@@ -225,6 +248,7 @@ function start(opts) {
     touch = new TouchControls(doc, { fire: T("touch.fire") || "FIRE", esc: T("touch.esc") || "ESC" });
     touch.root.hidden = true;
     doc.body.appendChild(touch.root);
+    applyTouch(doc);
     touchPad = new VirtualPad(emit);
     touch.onChange = () => poll();
   }
@@ -239,7 +263,44 @@ function start(opts) {
     const loop = t => { poll(t); root.requestAnimationFrame(loop); };
     root.requestAnimationFrame(loop);
   }
+  // (a route's controls go with the route: scope.js)
+  Scope.onEnd(() => {
+    for (const p of pads.values()) p.releaseAll();
+    if (touchPad) touchPad.releaseAll();
+    if (touch && touch.root.remove) touch.root.remove();
+    if (toastEl && toastEl.remove) toastEl.remove();
+  });
   return { poll, pads, touch, showTouch };
+}
+
+// touch controls' options: their size ("tunneler.touch.size": small / medium = the original / large - the
+// joystick and the buttons scaled, style.css --tpad-k) and sides ("tunneler.touch.left" "1": the joystick
+// on the right, FIRE on the left); body classes tpad-small / tpad-large / tpad-left
+const TOUCH = { size: ["small", "medium", "large"], left: ["off", "on"] };
+const TOUCH_KEYS = { size: "tunneler.touch.size", left: "tunneler.touch.left" };
+function getTouch(name) {
+  if (!TOUCH[name]) return null;
+  let v = null;
+  try { v = root.localStorage ? root.localStorage.getItem(TOUCH_KEYS[name]) : null; } catch (e) { v = null; }
+  if (name === "left") return v === "1" ? "on" : "off";
+  return TOUCH.size.includes(v) ? v : "medium";
+}
+function setTouch(name, value) {
+  if (name === "left" && (value === true || value === "1" || value === 1)) value = "on";
+  if (name === "left" && (value === false || value === "0" || value === 0)) value = "off";
+  if (!TOUCH[name] || !TOUCH[name].includes(value)) return false;
+  try { root.localStorage.setItem(TOUCH_KEYS[name], name === "left" ? (value === "on" ? "1" : "0") : value); } catch (e) { /* no storage */ }
+  applyTouch(root.document);
+  return true;
+}
+function applyTouch(doc) {
+  const cl = doc && doc.body && doc.body.classList;
+  if (!cl) return;
+  const size = getTouch("size"), left = getTouch("left") === "on";
+  const put = (c, on) => { if (on) cl.add(c); else cl.remove(c); };
+  put("tpad-small", size === "small");
+  put("tpad-large", size === "large");
+  put("tpad-left", left);
 }
 
 // every page (all of them load this file): no browser menu on a right click / long press - unless
@@ -248,9 +309,6 @@ function start(opts) {
 const textField = t => !!t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName || ""));
 if (root.addEventListener) root.addEventListener("contextmenu", e => { if (!e.defaultPrevented && !textField(e.target)) e.preventDefault(); });
 
-// index.html / lobby.html: <script src="/js/pads.js" data-menu> - a gamepad steers the menus
-const me = root.document && root.document.currentScript;
-if (me && me.hasAttribute && me.hasAttribute("data-menu")) start({ menu: () => true });
 
-root.Pads = { start, dirOf, readGamepad, VirtualPad, TouchStick, TouchControls, SETS, MIN_HOLD, STICK_DEAD, TOUCH_DEAD };
-})(typeof window !== "undefined" ? window : globalThis);
+export const Pads = { start, dirOf, readGamepad, VirtualPad, TouchStick, TouchControls, SETS, MIN_HOLD, STICK_DEAD, TOUCH_DEAD,
+  TOUCH, getTouch, setTouch };

@@ -1,5 +1,5 @@
-"use strict";
 // survival (src/js/modes/survival.js) in this language - the same keys as ../../en/modes/survival.js.
+import { Lang } from "../../../js/lang.js";
 Lang.modeTexts("survival", "ru", {
   stat: "волны",
   note: "{n}/{g}",

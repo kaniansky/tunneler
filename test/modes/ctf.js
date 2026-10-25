@@ -290,8 +290,8 @@ const setups = [
   { name: "3 teams of 2 small, friendly fire", teams: [1, 2, 3, 1, 2, 3], levels: ["normal", "normal", "hard", "easy", "hard", "normal"], size: "small", friendlyFire: true },
   { name: "1 v 1 medium", teams: [1, 2], levels: ["hard", "normal"], size: "medium" },
   { name: "2 v 2 large, round time 3", teams: [1, 2, 1, 2], levels: ["hard", "hard", "normal", "normal"], size: "large", roundTime: 3 },
-  { name: "1 v 1 small, round time 2, all modifiers", teams: [1, 2], levels: ["normal", "hard"], size: "small", roundTime: 2, mods: { noRepair: true } },
-  { name: "4 free-for-all small, no repairs", teams: [1, 2, 3, 4], levels: ["hard", "normal", "easy", "normal"], size: "small", mods: { noRepair: true } },
+  { name: "1 v 1 small, round time 2", teams: [1, 2], levels: ["normal", "hard"], size: "small", roundTime: 2 },
+  { name: "4 free-for-all small", teams: [1, 2, 3, 4], levels: ["hard", "normal", "easy", "normal"], size: "small" },
   { name: "8 free-for-all large, round time 5", teams: [1, 2, 3, 4, 5, 6, 7, 8], levels: Array(8).fill("normal"), size: "large", roundTime: 5 },
 ];
 for (const s of quick ? setups.slice(0, 4) : setups) {

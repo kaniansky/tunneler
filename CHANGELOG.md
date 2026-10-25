@@ -3,6 +3,66 @@
 All notable changes to Tunneler Online. Versions follow [semantic versioning](https://semver.org/);
 a release is made by pushing a version tag (see CONTRIBUTING.md).
 
+## 5.0.0
+
+- **Modern graphics** (Settings, Graphics: original / modern; modern is the default, without WebGL2 the original): the same game
+  drawn at your screen's resolution - smooth tunnels, textured dirt and cracked rock, dark tunnels lit by
+  the tanks' lamps and headlights, glowing shots, dust, sparks, fire and debris, screen shake, a smooth
+  camera that glides with your tank, the line of sight's fog of war, a new energy and shield panel, and
+  every menu, the round title, the statistics and the status line in a modern font (Noto Sans Mono),
+  flat and warm (solid colors, thin lines, one accent - no gradients, no glow). Its own settings screen: style (clean or retro - chunky pixels
+  and the DOS colors), quality, terrain, tunnel edges, lighting, particles, glow, screen shake, camera,
+  UI, fog of war. Display only - the game and online play are unchanged, each player picks their look.
+- **Rematch** after a match (skirmish, split screen) goes back to the setup screen with the same settings
+  (also for a game opened from a link) instead of starting at once; the statistics no longer repeat the
+  game's settings (the round title still shows them).
+- **Smooth scrolling** is only a setting for the original graphics; modern always scrolls smoothly.
+- **Settings** in two boxes: categories on the left (Sound, Graphics, Modern, Controls, Online, Language,
+  Back to main menu), the chosen category's settings on the right. New settings: volume, stereo, distance
+  fade; fullscreen (also Alt+Enter everywhere) and screen size (fit the window / whole pixels); tank colors
+  (normal, color-blind, or you blue / team green / enemies red); key remapping for both tanks and touch
+  control size / left-handed; preferred color, chat sound and hide chat for online games.
+- Modern clean graphics: centered menu items and lines are centered to the pixel.
+- **Skirmish for two players**: instead of "you" a slot is player 1 (W A S D + SHIFT) or player 2 (the
+  arrows + ENTER) - two players on one keyboard, with or against computer tanks (or just each other); both
+  players' views come first. A skirmish always runs the extended engine now (the classic one is split
+  screen's).
+- The **Base repairs** setting is gone (skirmish, online lobby): bases always repair shields again; old
+  links with it are ignored.
+- **Password-protected online games**: an optional password when creating a game (below its name);
+  whoever joins or watches has to type it (the host never does, and a player who got in once comes back
+  without it), a lock marks the game in the list. Wrong passwords are limited per address.
+- **Online lobby seats**: the host's click steps a seat through closed, open, the host's own seat (while
+  they sit nowhere else) and AI easy / medium / hard; a right click goes back (Left / Right the same). A
+  click on the team column changes the team. Other players' left click only sits on an open seat, and a
+  click on their own name leaves the seat to watch. The "Watch instead" item is gone; "Back to the lobby" has a blank row above it.
+- **One app**: every screen (main menu, games list, online game, skirmish, split screen) is part of one page -
+  going from one to another no longer loads a page, so fullscreen stays on and switching is instant; Back
+  works as before, and every old address still leads to its screen. A **loading screen** shows while the
+  game's code (and, in the modern look, its font) arrives.
+- **Modern graphics are the default** (a remembered choice stays; without WebGL2 the original).
+- **Recorded sounds**: a new sound style with real recordings (CC0 / public domain), besides original,
+  realistic and cartoony; volume, stereo and distance fade in Settings.
+- **Android app** (APK on the release page): fullscreen with the on-screen controls, the screen stays on,
+  Back works as <ESC> (on the main menu it leaves the app); online games on the public server or your own.
+- **Replays**: every match you play or watch is kept (the newest 20, main menu, Replays). Watch it again like
+  a spectator - every view, the live map or one tank, paused, 1/2x to 8x, 30 seconds back or on - see its
+  statistics, or save it as a .replay file and send it to someone (Open a replay file plays it).
+- **Phones**: held upright, every menu is laid out for the narrow screen - one column, 40 characters wide
+  and as tall as the phone, boxes one below the other, scrolled with a finger; the Settings are a list of
+  categories, each opening on its own screen with a Back item. The round title, the statistics and the menu
+  after a match are enlarged to the screen's width (after a match the menu comes below the statistics). Tapping a text field opens the phone's keyboard; the
+  on-screen controls show only while you drive a tank. Phones and tablets have no split screen and no
+  player 2 (one player per device). Held sideways, a phone shows the usual 80-column screens.
+- **Install the game from the browser** (an installable web app): it then starts like an app and plays split
+  screen and skirmish without a connection.
+- The homepage (kaniansky.com/tunneler) is redesigned for 5.0, in the game's two looks: modern (the default)
+  and original, with a switch at the top (remembered).
+- Self-hosting: the server needs Node.js 20.19 or newer (the Docker image has it). The code is now ES
+  modules bundled with esbuild.
+- The **Gen Z** language is gone (game and homepage): five languages now; a remembered Gen Z choice
+  falls back to English.
+
 ## 4.0.1
 
 - **Flatpak** (`flatpak/`, `com.kaniansky.TunnelerOnline`) for Flathub - and so for software managers

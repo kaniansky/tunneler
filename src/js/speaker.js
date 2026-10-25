@@ -1,8 +1,11 @@
-"use strict";
-// Game sound, in one of four styles (Speaker.STYLES, remembered in localStorage "tunneler.sound"):
+// Game sound, in one of five styles (Speaker.STYLES, remembered in localStorage "tunneler.sound"):
 //   muted     - silent
 //   original  - the PC speaker: one square wave whose frequency the game sets with Crt.Sound / NoSound
 //   realistic - synthesized effects: cannon thump, digging crunch, metallic clank, deep explosion
+//   recorded  - real recordings (src/sounds/recorded/<kind>-<n>.mp3, CC0 / public domain, see CREDITS.md
+//               there; made by tools/make-sounds.sh): a few variants per effect, picked at random. Fetched
+//               and decoded on first use of the style (nobody else downloads them); an effect whose
+//               samples aren't decoded yet plays the "realistic" synth instead
 //   cartoony  - synthesized effects: pops, munches, boings, a comic bonk, slide whistle + kaboom
 //
 // Engine sound events are {t: ms offset inside the step, hz: frequency or 0, x, y: world pixel of the
@@ -25,15 +28,29 @@
 // and GREEN's tanks) pans by which tank the sound is nearer: at the left one -SPLIT_PAN, at the right one
 // +SPLIT_PAN, in between in between, always at full volume. No listener / no source: centred.
 //
+// Options (every style; localStorage, read by every new Speaker and applied at once to every Speaker on
+// the page when changed through Speaker.setOption - or by another tab, via the storage event):
+//   volume - "tunneler.volume" 0..100 in steps of 10 (default 100): a master gain over everything (the PC
+//            speaker too), (volume / 100)^2 (Speaker.volumeGain: halving the setting is about -12 dB,
+//            which sounds like half as loud)
+//   stereo - "tunneler.stereo" "1" / "0" (default "1"): "0" = every sound centred (no panning)
+//   fade   - "tunneler.fade" "1" / "0" (default "1"): "0" = no distance fading (full volume however far;
+//            Speaker.attenuation itself stays as it is, play() skips it; a {mute: true} listener is
+//            still silent - that is a dead player's black view, not distance)
+//
 // Settings page API (works without engine / runner; no AudioContext until a sound is played):
 //   Speaker.STYLES, Speaker.DEFAULT_STYLE, Speaker.loadStyle(), Speaker.saveStyle(style),
-//   Speaker.preview(style) (a shot + an explosion; call from a user gesture)
-(function (root) {
+//   Speaker.preview(style) (a shot + an explosion at the stored volume; call from a user gesture),
+//   Speaker.OPTIONS ({volume: [0, 10, .., 100], stereo: ["on", "off"], fade: ["on", "off"]}),
+//   Speaker.getOption(name) (volume a number, the others "on" / "off"), Speaker.setOption(name, value)
+//   (stores it, applies it to every live Speaker and the preview; returns the value set)
+import { Scope } from "./scope.js";
+const root = globalThis;
 
 const NEAR = 40, FAR = 240;
 const VIEW_W = 76;                         // a view screen's width in world pixels (engine blitView: 38 bytes)
 const EDGE_PAN = 0.8, MAX_PAN = 0.9, SPLIT_PAN = 0.6;
-const STYLES = ["muted", "original", "realistic", "cartoony"];
+const STYLES = ["muted", "original", "realistic", "recorded", "cartoony"];
 const DEFAULT_STYLE = "original";
 const STORE_KEY = "tunneler.sound";
 const OLD_MUTE_KEYS = ["tunneler.muted", "tunneler.mute"];   // a stored "1" / "true" migrates to "muted"
@@ -103,6 +120,54 @@ function saveStyle(style) {
   try { if (ls) ls.setItem(STORE_KEY, style); } catch (e) { /* private mode */ }
   return style;
 }
+
+// ------------------------------------------------------------ options: volume, stereo, distance fade
+const OPTIONS = { volume: [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100], stereo: ["on", "off"], fade: ["on", "off"] };
+const OPTION_KEYS = { volume: "tunneler.volume", stereo: "tunneler.stereo", fade: "tunneler.fade" };
+const OPTION_DEFAULTS = { volume: 100, stereo: "on", fade: "on" };
+// any value -> the option's value (volume: 0..100 rounded to a step of 10; on / off: "on", "1", true, 1 /
+// "off", "0", false, 0); anything else: the default
+function normOption(name, v) {
+  if (name === "volume") {
+    const n = typeof v === "number" ? v : typeof v === "string" && v.trim() !== "" ? Number(v) : NaN;
+    return isFinite(n) ? Math.max(0, Math.min(100, Math.round(n / 10) * 10)) : OPTION_DEFAULTS.volume;
+  }
+  if (v === "on" || v === "1" || v === true || v === 1) return "on";
+  if (v === "off" || v === "0" || v === false || v === 0) return "off";
+  return OPTION_DEFAULTS[name];
+}
+function getOption(name) {
+  if (!(name in OPTIONS)) return undefined;
+  const ls = storage();
+  let v = null;
+  try { if (ls) v = ls.getItem(OPTION_KEYS[name]); } catch (e) { /* private mode */ }
+  return v == null ? OPTION_DEFAULTS[name] : normOption(name, v);
+}
+function setOption(name, value) {
+  if (!(name in OPTIONS)) return undefined;
+  const v = normOption(name, value);
+  const ls = storage();
+  try { if (ls) ls.setItem(OPTION_KEYS[name], name === "volume" ? String(v) : v === "on" ? "1" : "0"); } catch (e) { /* private mode */ }
+  applyOptions();
+  return v;
+}
+const volumeGain = v => (v / 100) * (v / 100);
+// every Speaker made on this page (they pick up option changes at once)
+const live = new Set();
+function applyOptions() {
+  for (const sp of live) sp.readOptions();
+  if (previewMaster) setGain(previewMaster, volumeGain(getOption("volume")));
+}
+function setGain(node, v) {
+  const t = node.context ? node.context.currentTime : 0;
+  node.gain.cancelScheduledValues(t);
+  node.gain.setValueAtTime(v, t);
+  node.gain.value = v;
+}
+try {
+  if (typeof root.addEventListener === "function")
+    root.addEventListener("storage", e => { if (!e || Object.values(OPTION_KEYS).includes(e.key)) applyOptions(); });
+} catch (e) { /* no window */ }
 
 // ------------------------------------------------------------ synthesized effects
 const noiseBuffers = new WeakMap();
@@ -226,12 +291,12 @@ const MIN_GAP = { dig: 0.06, bump: 0.16 };
 const SYNTH_VOLUME = 0.32;
 const STYLE_GAIN = { realistic: 0.7, cartoony: 1.1 };   // about as loud as the PC speaker
 
-// a master bus for the synthesized styles: gain -> compressor -> destination
-function makeBus(ctx) {
+// a bus for the synthesized styles: gain -> compressor -> out (the master volume)
+function makeBus(ctx, out) {
   const g = ctx.createGain();
   g.gain.value = SYNTH_VOLUME;
   const comp = ctx.createDynamicsCompressor();
-  g.connect(comp).connect(ctx.destination);
+  g.connect(comp).connect(out || ctx.destination);
   return g;
 }
 function synth(ctx, bus, style, kind, t, v, p) {
@@ -239,15 +304,104 @@ function synth(ctx, bus, style, kind, t, v, p) {
   if (s && v > 0) s(ctx, panTo(ctx, bus, p), Math.max(t, ctx.currentTime), v * STYLE_GAIN[style]);
 }
 
+// ------------------------------------------------------------ recorded samples
+// kind -> its files in RECORDED_BASE (tools/make-sounds.sh; levels baked in: destroy loudest, dig quietest)
+const RECORDED = {
+  fire: ["fire-1.mp3", "fire-2.mp3", "fire-3.mp3"],
+  impact: ["impact-1.mp3", "impact-2.mp3"],
+  hit: ["hit-1.mp3", "hit-2.mp3", "hit-3.mp3"],
+  destroy: ["destroy-1.mp3", "destroy-2.mp3"],
+  dig: ["dig-1.mp3", "dig-2.mp3", "dig-3.mp3", "dig-4.mp3", "dig-5.mp3"],
+  bump: ["bump-1.mp3", "bump-2.mp3"],
+};
+const RECORDED_GAIN = 0.25;                // about as loud as the other styles (rendered: destroy ~ -21 LUFS, like the PC speaker)
+// effects that repeat while a key is held: the next one at least this many seconds later, [min, max] (a
+// random gap: steady digging sounds like scraping, not like a machine gun)
+const RECORDED_GAP = { dig: [0.12, 0.2], bump: [0.3, 0.3] };
+// at most this many voices of one kind at a time (more: the oldest is cut)
+const RECORDED_VOICES = { fire: 4, impact: 4, hit: 3, destroy: 3, dig: 2, bump: 2 };
+const RATE_SPREAD = 0.06;                  // playback rate 1 +- this, at random (no two shots quite alike)
+
+// the recorded style's bus: gain -> a gentle compressor (only several loud samples at once reach it) -> out
+function makeRecordedBus(ctx, out) {
+  const g = ctx.createGain();
+  g.gain.value = RECORDED_GAIN;
+  const comp = ctx.createDynamicsCompressor();
+  const set = (k, v) => { if (comp[k] && "value" in comp[k]) comp[k].value = v; };
+  set("threshold", -10); set("knee", 6); set("ratio", 8); set("attack", 0.002); set("release", 0.2);
+  g.connect(comp).connect(out || ctx.destination);
+  return g;
+}
+
+// (url) -> Promise<ArrayBuffer>; replaceable (tests)
+function fetchSample(url) {
+  if (typeof root.fetch !== "function") return Promise.reject(new Error("no fetch"));
+  return root.fetch(url).then(r => r.ok ? r.arrayBuffer() : Promise.reject(new Error(url + ": " + r.status)));
+}
+const fetched = new Map();                 // url -> Promise<ArrayBuffer> (shared by every AudioContext)
+const banks = new WeakMap();               // AudioContext -> {kind: [AudioBuffer]} (filled as they decode)
+function decode(ctx, ab) {
+  return new Promise((res, rej) => {
+    const p = ctx.decodeAudioData(ab.slice(0), res, rej);   // (older Safari: callbacks only)
+    if (p && typeof p.then === "function") p.then(res, rej);
+  });
+}
+// the decoded samples of `ctx` so far; the first call starts fetching + decoding all of them
+function recordedBank(ctx) {
+  let bank = banks.get(ctx);
+  if (bank) return bank;
+  bank = {};
+  banks.set(ctx, bank);
+  for (const kind in RECORDED) {
+    for (const file of RECORDED[kind]) {
+      const url = Speaker.RECORDED_BASE + file;
+      if (!fetched.has(url)) fetched.set(url, Promise.resolve().then(() => Speaker.loadSample(url)));
+      fetched.get(url)
+        .then(ab => decode(ctx, ab))
+        .then(buf => { (bank[kind] = bank[kind] || []).push(buf); })
+        .catch(() => { fetched.delete(url); });   // (missing / offline: that variant stays out, a later bank retries)
+    }
+  }
+  return bank;
+}
+// one sample at AudioContext time t, volume factor v, pan p, into `out`; returns its voice
+function playSample(ctx, out, buf, t, v, p) {
+  const src = ctx.createBufferSource();
+  src.buffer = buf;
+  const rate = 1 + (Math.random() * 2 - 1) * RATE_SPREAD;
+  if (src.playbackRate) src.playbackRate.value = rate;
+  const g = ctx.createGain();
+  g.gain.value = v;
+  src.connect(g).connect(panTo(ctx, out, p));
+  src.start(t);
+  return { src, gain: g, start: t, end: t + (buf.duration || 0) / rate };
+}
+
 class Speaker {
   constructor() {
     this.ctx = null;
     this.style = loadStyle();
     this.lastStyle = this.style === "muted" ? DEFAULT_STYLE : this.style;   // what un-muting returns to
-    this.volume = 0.07;
+    this.volume = 0.07;          // the PC speaker's square wave amplitude (the master volume comes after it)
     this.offset = null;          // performance.now() -> AudioContext time
-    this.bus = null;
+    this.bus = null;             // synthesized styles
+    this.recBus = null;          // recorded
+    this.master = null;          // every style -> master volume -> destination
     this.lastFx = {};            // kind -> AudioContext time of the last one played (MIN_GAP)
+    this.nextFx = {};            // kind -> AudioContext time the next recorded one may start (RECORDED_GAP)
+    this.voices = {};            // kind -> [{src, gain, start, end}] recorded voices playing (RECORDED_VOICES)
+    this.readOptions();
+    live.add(this);
+    // (a route's speaker goes with the route: scope.js)
+    Scope.onEnd(() => { live.delete(this); if (this.ctx && this.ctx.close) this.ctx.close().catch(() => {}); this.ctx = null; });
+  }
+
+  // volume / stereo / fade from storage (Speaker.setOption calls it on every live Speaker)
+  readOptions() {
+    this.masterVolume = getOption("volume");
+    this.stereo = getOption("stereo") === "on";
+    this.fade = getOption("fade") === "on";
+    if (this.master) setGain(this.master, volumeGain(this.masterVolume));
   }
 
   // compatibility: muted <=> style "muted"
@@ -260,28 +414,38 @@ class Speaker {
       const AC = root.AudioContext || root.webkitAudioContext;
       if (!AC) return;
       this.ctx = new AC();
+      this.master = this.ctx.createGain();
+      this.master.gain.value = volumeGain(this.masterVolume);
+      this.master.connect(this.ctx.destination);
       this.osc = this.ctx.createOscillator();
       this.osc.type = "square";
       this.gain = this.ctx.createGain();
       this.gain.gain.value = 0;
       // the one PC speaker voice, panned per event where the browser can (StereoPannerNode)
       this.panner = typeof this.ctx.createStereoPanner === "function" ? this.ctx.createStereoPanner() : null;
-      if (this.panner) this.panner.connect(this.ctx.destination);
-      this.osc.connect(this.gain).connect(this.panner || this.ctx.destination);
+      if (this.panner) this.panner.connect(this.master);
+      this.osc.connect(this.gain).connect(this.panner || this.master);
       this.osc.start();
-      this.bus = makeBus(this.ctx);
+      this.makeBuses();
+      if (this.style === "recorded") recordedBank(this.ctx);
     }
     if (this.ctx.state === "suspended") this.ctx.resume();
   }
 
-  // "muted" | "original" | "realistic" | "cartoony" (anything else: the default); stored for every
-  // page unless noSave. Returns the style set.
+  makeBuses() {
+    this.bus = makeBus(this.ctx, this.master);
+    this.recBus = makeRecordedBus(this.ctx, this.master);
+  }
+
+  // "muted" | "original" | "realistic" | "recorded" | "cartoony" (anything else: the default); stored for
+  // every page unless noSave. Returns the style set.
   setStyle(style, noSave) {
     style = normStyle(style);
     if (style !== this.style && this.ctx) {
       this.gain.gain.setValueAtTime(0, this.ctx.currentTime);
       this.cutSynth();
     }
+    if (style === "recorded" && this.ctx) recordedBank(this.ctx);   // (a head start)
     this.style = style;
     if (style !== "muted") this.lastStyle = style;
     if (!noSave) saveStyle(style);
@@ -298,6 +462,10 @@ class Speaker {
   // null = full volume, centred)
   play(events, at, listener, fx) {
     if (!this.ctx || this.style === "muted" || this.ctx.state !== "running") return;
+    // the options: fade off = full volume at any distance (a {mute: true} listener stays silent), stereo
+    // off = centred
+    const vol = e => this.fade ? attenuation(e, listener) : listener && listener.mute ? 0 : 1;
+    const pn = e => this.stereo ? pan(e, listener) : 0;
     if (this.style === "original") {
       if (!events.length) return;
       const now = performance.now();
@@ -306,35 +474,72 @@ class Speaker {
         const t = base + e.t / 1000;
         if (e.hz > 0) {
           this.osc.frequency.setValueAtTime(e.hz, t);
-          this.gain.gain.setValueAtTime(this.volume * attenuation(e, listener), t);
-          if (this.panner) this.panner.pan.setValueAtTime(pan(e, listener), t);
+          this.gain.gain.setValueAtTime(this.volume * vol(e), t);
+          if (this.panner) this.panner.pan.setValueAtTime(pn(e), t);
         } else this.gain.gain.setValueAtTime(0, t);
       }
       return;
     }
     if (!fx || !fx.length) return;
     const base = this.ctx.currentTime + 0.03 + Math.max(0, at - performance.now()) / 1000;
+    const bank = this.style === "recorded" ? recordedBank(this.ctx) : null;
     for (const e of fx) {
       const t = base + e.t / 1000;
+      const bufs = bank && bank[e.kind];
+      if (bufs && bufs.length) {                    // recorded, decoded
+        const next = this.nextFx[e.kind];
+        if (next !== undefined && t < next && next - t < 1) continue;   // (a jump back in time: play)
+        const v = vol(e);
+        if (v <= 0) continue;
+        const gap = RECORDED_GAP[e.kind];
+        if (gap) this.nextFx[e.kind] = t + gap[0] + Math.random() * (gap[1] - gap[0]);
+        this.addVoice(e.kind, playSample(this.ctx, this.recBus, bufs[Math.floor(Math.random() * bufs.length)],
+          Math.max(t, this.ctx.currentTime), v, pn(e)));
+        continue;
+      }
       const gap = MIN_GAP[e.kind], last = this.lastFx[e.kind];
       if (gap && last !== undefined && t >= last && t - last < gap) continue;
-      const v = attenuation(e, listener);
+      const v = vol(e);
       if (v <= 0) continue;
       this.lastFx[e.kind] = t;
-      synth(this.ctx, this.bus, this.style, e.kind, t, v, pan(e, listener));
+      // (recorded: this kind's samples aren't decoded yet - the realistic synth meanwhile)
+      synth(this.ctx, this.bus, bank ? "realistic" : this.style, e.kind, t, v, pn(e));
     }
   }
 
-  // cut every scheduled synthesized sound: a fresh bus, the old one faded out and dropped
+  // a recorded voice started: forget the finished ones of its kind, fade out the oldest beyond
+  // RECORDED_VOICES (in 30 ms as the new one starts - no click)
+  addVoice(kind, voice) {
+    const now = this.ctx.currentTime;
+    const list = (this.voices[kind] || []).filter(x => x.end > now);
+    const max = RECORDED_VOICES[kind] || 4;
+    while (list.length >= max) {
+      const old = list.shift(), t = Math.max(now, voice.start);
+      try {
+        old.gain.gain.setValueAtTime(old.gain.gain.value, t);
+        old.gain.gain.linearRampToValueAtTime(0, t + 0.03);
+        old.src.stop(t + 0.03);
+      } catch (e) { /* done */ }
+    }
+    list.push(voice);
+    this.voices[kind] = list;
+  }
+
+  // cut every scheduled synthesized / recorded sound: fresh buses, the old ones faded out and dropped
   cutSynth() {
     if (!this.bus) return;
-    const old = this.bus, t = this.ctx.currentTime;
-    old.gain.cancelScheduledValues(t);
-    old.gain.setValueAtTime(old.gain.value, t);
-    old.gain.linearRampToValueAtTime(0, t + 0.02);
-    setTimeout(() => { try { old.disconnect(); } catch (e) { /* gone */ } }, 100);
-    this.bus = makeBus(this.ctx);
+    const t = this.ctx.currentTime;
+    for (const old of [this.bus, this.recBus]) {
+      if (!old) continue;
+      old.gain.cancelScheduledValues(t);
+      old.gain.setValueAtTime(old.gain.value, t);
+      old.gain.linearRampToValueAtTime(0, t + 0.02);
+      setTimeout(() => { try { old.disconnect(); } catch (e) { /* gone */ } }, 100);
+    }
+    this.makeBuses();
     this.lastFx = {};
+    this.nextFx = {};
+    this.voices = {};
   }
 
   silence() {
@@ -373,25 +578,33 @@ function originalPreview() {
   return out;
 }
 
-let previewCtx = null, previewStop = null;
-// plays a short sample of `style` (a shot, then an explosion), cutting a preview still playing; call
-// from a user gesture. Returns true if something is playing.
+let previewCtx = null, previewStop = null, previewMaster = null, previewNo = 0;
+// plays a short sample of `style` (a shot, then an explosion) at the stored volume, cutting a preview
+// still playing; call from a user gesture. Returns true if something is playing. "recorded" the first
+// time: the two samples are fetched first (played once decoded, unless another preview came meanwhile;
+// the realistic synth if they can't be had).
 function preview(style) {
   style = normStyle(style);
   if (previewStop) { previewStop(); previewStop = null; }
+  const no = ++previewNo;
   if (style === "muted") return false;
   const AC = root.AudioContext || root.webkitAudioContext;
   if (!AC) return false;
   try {
-    if (!previewCtx) previewCtx = new AC();
+    if (!previewCtx) {
+      previewCtx = new AC();
+      previewMaster = previewCtx.createGain();
+      previewMaster.connect(previewCtx.destination);
+    }
     const ctx = previewCtx;
+    setGain(previewMaster, volumeGain(getOption("volume")));
     if (ctx.state === "suspended") ctx.resume();
     const t0 = ctx.currentTime + 0.05;
     if (style === "original") {
       const osc = ctx.createOscillator(), g = ctx.createGain();
       osc.type = "square";
       g.gain.value = 0;
-      osc.connect(g).connect(ctx.destination);
+      osc.connect(g).connect(previewMaster);
       const seq = originalPreview();
       for (const e of seq) {
         if (e.hz > 0) { osc.frequency.setValueAtTime(e.hz, t0 + e.t); g.gain.setValueAtTime(0.07, t0 + e.t); }
@@ -400,8 +613,31 @@ function preview(style) {
       osc.start(t0);
       osc.stop(t0 + seq[seq.length - 1].t + 0.05);
       previewStop = () => { try { osc.stop(); g.disconnect(); } catch (e) { /* done */ } };
+    } else if (style === "recorded") {
+      const bus = makeRecordedBus(ctx, previewMaster), sbus = makeBus(ctx, previewMaster);
+      previewStop = () => { try { bus.disconnect(); sbus.disconnect(); } catch (e) { /* done */ } };
+      const bank = recordedBank(ctx);
+      const ready = () => bank.fire && bank.fire.length && bank.destroy && bank.destroy.length;
+      const play = t => {
+        for (const [kind, dt] of [["fire", 0], ["destroy", 0.45]]) {
+          const bufs = bank[kind];
+          if (bufs && bufs.length) playSample(ctx, bus, bufs[Math.floor(Math.random() * bufs.length)], t + dt, 1, 0);
+          else synth(ctx, sbus, "realistic", kind, t + dt, 1);
+        }
+      };
+      if (ready()) play(t0);
+      else {
+        // wait for both (at most 3 s), then play what there is
+        let tries = 0;
+        const wait = () => {
+          if (no !== previewNo) return;
+          if (ready() || ++tries > 60) play(ctx.currentTime + 0.02);
+          else setTimeout(wait, 50);
+        };
+        wait();
+      }
     } else {
-      const bus = makeBus(ctx);
+      const bus = makeBus(ctx, previewMaster);
       synth(ctx, bus, style, "fire", t0, 1);
       synth(ctx, bus, style, "destroy", t0 + 0.45, 1);
       previewStop = () => { try { bus.disconnect(); } catch (e) { /* done */ } };
@@ -426,6 +662,16 @@ Speaker.saveStyle = saveStyle;
 Speaker.preview = preview;
 Speaker.originalPreview = originalPreview;
 Speaker.SYNTH_KINDS = Object.keys(SYNTH.realistic);
-root.Speaker = Speaker;
-if (typeof module !== "undefined") module.exports = Speaker;
-})(typeof window !== "undefined" ? window : globalThis);
+Speaker.OPTIONS = OPTIONS;
+Speaker.OPTION_KEYS = OPTION_KEYS;
+Speaker.getOption = getOption;
+Speaker.setOption = setOption;
+Speaker.volumeGain = volumeGain;
+Speaker.RECORDED = RECORDED;
+Speaker.RECORDED_GAP = RECORDED_GAP;
+Speaker.RECORDED_VOICES = RECORDED_VOICES;
+Speaker.RECORDED_BASE = "/sounds/recorded/";
+Speaker.loadSample = fetchSample;          // (url) -> Promise<ArrayBuffer>; tests replace it
+Speaker.live = live;
+
+export { Speaker };

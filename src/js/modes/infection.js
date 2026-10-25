@@ -1,4 +1,3 @@
-"use strict";
 // Game mode "infection" (docs/DESIGN-8P.md 27).
 //
 // The match is ONE round (a goal mode: winScore 1). At its start one random tank is infected (team number 1),
@@ -21,8 +20,7 @@
 // State (e.GS, reset at every match start): inf[p] (infected), back[p] (the frame counter value from which
 // a destroyed tank comes back, -1 = none), now[p] (it was just infected: back at once, wherever),
 // f (play frames this round). e.modeScore[p]: healthy tanks p infected in this match (the statistics).
-(function (root) {
-const E = root.TunnelerEngine || require("../engine.js");
+import { TunnelerEngine as E } from "../engine.js";
 
 const RESPAWN = 55;                                   // frames (~3 s) before a destroyed infected tank is back
 const MINUTES = 3;                                    // the goal's default (TunnelerEngine.GOALS.infection.def)
@@ -202,7 +200,7 @@ E.registerMode("infection", {
       }
       if (!b) return null;
       const lv = ai.cfg.leaveAt;
-      if (e.distance(Math.abs(mx - e.baseX[b]), Math.abs(my - e.baseY[b])) < 15 && e.energy[me] >= lv && (e.shield[me] >= lv || e.mods.noRepair)) {
+      if (e.distance(Math.abs(mx - e.baseX[b]), Math.abs(my - e.baseY[b])) < 15 && e.energy[me] >= lv && e.shield[me] >= lv) {
         ai.retreating = false; ai.path = null; ai.waypoint = null;
         return null;
       }
@@ -264,4 +262,3 @@ E.registerMode("infection", {
     return { x: s.x, y: s.y, mode: "infect", dig: cheb(mx, my, s.x, s.y) < 100 };
   },
 });
-})(typeof window !== "undefined" ? window : globalThis);
