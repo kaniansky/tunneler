@@ -169,6 +169,38 @@ const tick = () => new Promise(r => setTimeout(r, 0));
           }
         }
       }
+      // ---------------------------------------------------------------- the account screens (docs/v6/ACCOUNTS.md): Settings,
+      // Online with an account (a long username), LOG IN (and with a refusal shown), CREATE AN ACCOUNT, RESET PASSWORD, YOUR
+      // RECOVERY CODE (after creating, after a reset), CHANGE PASSWORD, DELETE ACCOUNT (and armed)
+      {
+        const env = makeEnv("/", size, touch);
+        env.storage.set("tunneler.lang", code);
+        env.storage.set("tunneler.accounts.http://x.test", "1");
+        env.storage.set("tunneler.session.http://x.test", JSON.stringify({ token: "t1.x.y", id: "abcdefghijkmnpqr", name: "Александра" }));
+        env.page("index.html");
+        const win = env.win, ui = win.tunnelerHomeUI(), L = win.Login;
+        const goKey = k => { const i = ui.spec.items.findIndex(x => x.key === k); if (i < 0) return false; ui.sel = i; ui.spec.items[i].go(); return true; };
+        // (the lines of these screens fit 78 columns on a wide screen; the narrow layout re-wraps them)
+        const lines = what => { if (!ui.isNarrow()) for (const l of ui.spec.lines || []) if (win.UniText.cols(String(l.text).replace(/\{\d+\}/g, "")) > 78) problems.push(W + ", " + what + ": a line is too wide: " + win.Lang.decode(l.text)); };
+        const at = what => { check(win, ui, W + ", " + what); lines(what); };
+        goKey("settings");
+        if (touch) { goKey("cat-online"); at("settings online with an account"); }
+        else { ui.sel = ui.spec.items.findIndex(x => x.key === "cat-online"); ui.draw(); at("settings online with an account"); }
+        if (!ui.spec.items.some(x => x.key === "account") || !ui.spec.items.some(x => x.key === "delacc")) problems.push(W + ", settings online: no account rows");
+        const none = () => {};
+        L.ask(ui, { done: none, back: none });
+        at("log in");
+        const it = k => ui.spec.items.find(x => x.key === k);
+        it("go").go();                                     // (nothing typed: the refusal line)
+        at("log in, refused");
+        goKey("create"); at("create an account");
+        ui.spec.back(); goKey("forgot"); at("reset password");
+        L.code(ui, "Александра", "ABCDE-FGHJK-MNPQR-STUVW", false, none); at("recovery code");
+        L.code(ui, "Александра", "ABCDE-FGHJK-MNPQR-STUVW", true, none); at("recovery code after a reset");
+        L.change(ui, { done: none, back: none }); at("change password");
+        L.remove(ui, { done: none, back: none }); at("delete account");
+        it("pass").input.value = "password"; it("go").go(); at("delete account, armed");
+      }
       // ---------------------------------------------------------------- the games list, create, join by link, the name prompt
       {
         const env = makeEnv("/games", size, touch);

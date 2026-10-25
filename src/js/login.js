@@ -186,4 +186,4 @@ function remove(ui, opts) {
   draw();
 }
 
-export const Login = { ask, change, remove, errText };
+export const Login = { ask, change, remove, code: showCode, errText };
