@@ -64,7 +64,8 @@ export function mount() {
   // the day in the language's words (its locale, "ch.locale"; the date is UTC's): "Sunday, October 25, 2026" - raw
   // Unicode (a parameter: Lang.t puts what the font lacks through the Unicode plane)
   function dateText(d, o) {
-    try { return new Intl.DateTimeFormat(Lang.raw("ch.locale") || "en-US", Object.assign({ timeZone: "UTC" }, o)).format(new Date(Challenge.dayStart(d))); }
+    // (a year's short word - "2026 г." - stays with the year when a phone re-wraps the line)
+    try { return new Intl.DateTimeFormat(Lang.raw("ch.locale") || "en-US", Object.assign({ timeZone: "UTC" }, o)).format(new Date(Challenge.dayStart(d))).replace(/ (\S{1,2}\.)$/, "\u00A0$1"); }
     catch (e) { return d; }
   }
   const longDate = d => dateText(d, { weekday: "long", year: "numeric", month: "long", day: "numeric" });
@@ -72,7 +73,8 @@ export function mount() {
   function timeLeft() {
     const ms = Math.max(0, end() - (Date.now() + skew));
     const m = Math.ceil(ms / 60000), h = Math.floor(m / 60);
-    return h ? Lang.raw("ch.hm").replace("{h}", h).replace("{m}", m % 60) : Lang.raw("ch.m").replace("{m}", m);   // (raw: a parameter)
+    // (raw: a parameter; no-break spaces - "3 h 57 min" stays on one line when a phone re-wraps it)
+    return (h ? Lang.raw("ch.hm").replace("{h}", h).replace("{m}", m % 60) : Lang.raw("ch.m").replace("{m}", m)).replace(/ /g, "\u00A0");
   }
   const dayLine = () => offline ? T("ch.day.off", { date: longDate(day) }) : T("ch.day", { date: longDate(day), t: timeLeft() });
   // the result in words: "won, rounds 3/3, kills 5, 4:12"

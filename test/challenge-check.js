@@ -311,7 +311,7 @@ const copy = rep => JSON.parse(JSON.stringify(rep));
     await win.Replay.save(copy(rep));
     await tick(20);
     const keys = () => ui.spec.items.map(x => x.key).join();
-    const lines = ui.spec.lines.map(l => win.Lang.decode(l.text)).join(" | ");
+    const lines = ui.spec.lines.map(l => win.Lang.decode(l.text).replace(/\u00A0/g, " ")).join(" | ");
     if (process.env.DEBUG) console.log(keys(), lines, ui.sel);
     const dateEn = new Intl.DateTimeFormat("en-US", { timeZone: "UTC", weekday: "long", year: "numeric", month: "long", day: "numeric" }).format(new Date(Challenge.dayStart(day)));
     ok(keys() === "play,send,board,gap,back" && lines.includes("DAILY CHALLENGE") && lines.includes(dateEn + " - 3 h 57 min left") && lines.includes("#2 of 2") &&
@@ -319,10 +319,10 @@ const copy = rep => JSON.parse(JSON.stringify(rep));
       "the challenge screen: the title, the date (" + dateEn + ") and the time left, Play, Send your result, Leaderboard, Back; your place from the server");
     {
       const L = [];
-      for (const c of ["sk", "ru"]) { win.Lang.set(c); win.tunnelerChallenge().load(); await tick(10); L.push(ui.spec.lines.map(l => win.Lang.decode(l.text)).join(" | ")); }
+      for (const c of ["sk", "ru"]) { win.Lang.set(c); win.tunnelerChallenge().load(); await tick(10); L.push(ui.spec.lines.map(l => win.Lang.decode(l.text).replace(/\u00A0/g, " ")).join(" | ")); }
       win.Lang.set("en"); win.tunnelerChallenge().load(); await tick(10);
-      const sk = new Intl.DateTimeFormat("sk", { timeZone: "UTC", weekday: "long", year: "numeric", month: "long", day: "numeric" }).format(new Date(Challenge.dayStart(day)));
-      const ru = new Intl.DateTimeFormat("ru", { timeZone: "UTC", weekday: "long", year: "numeric", month: "long", day: "numeric" }).format(new Date(Challenge.dayStart(day)));
+      const sk = new Intl.DateTimeFormat("sk", { timeZone: "UTC", weekday: "long", year: "numeric", month: "long", day: "numeric" }).format(new Date(Challenge.dayStart(day))).replace(/\u00A0/g, " ");
+      const ru = new Intl.DateTimeFormat("ru", { timeZone: "UTC", weekday: "long", year: "numeric", month: "long", day: "numeric" }).format(new Date(Challenge.dayStart(day))).replace(/\u00A0/g, " ");
       ok(L[0].includes("DENNÁ VÝZVA") && L[0].includes(sk + " - zostáva 3 h 57 min") && L[1].includes(ru + " - осталось 3 ч 57 мин"),
         "the date in the language's own words: " + sk + " / " + ru);
     }
