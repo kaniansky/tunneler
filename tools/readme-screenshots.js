@@ -1,6 +1,8 @@
-// The README's screenshots (1000x820, screenshots/*.png) from a running server:
+// The README's screenshots (1000x820, screenshots/*.png; modern-*.png: graphics "modern") from a running server:
 //   PORT=8102 node server.js &      (a fresh one: it gets a few public test games)
-//   node tools/readme-screenshots.js 8102 screenshots
+//   node tools/readme-screenshots.js 8102 screenshots           (graphics "original" + a few modern ones)
+//   node tools/readme-screenshots.js 8103 screenshots modern    (on another fresh server: the same session in
+//                                                                 the modern look, modern-<name>.png - the homepage's modern theme)
 // Needs playwright-core (not a dependency: npm i --no-save playwright-core) and a Chromium - set CHROME
 // to its executable (default: playwright's download in ~/.cache/ms-playwright). The browser runs with
 // the GPU off (software rendering).
@@ -11,6 +13,8 @@ const CHROME = process.env.CHROME || (() => {
   return dir + '/' + d + '/chrome-linux64/chrome';
 })();
 const PORT = process.argv[2], OUT = process.argv[3], B = 'http://localhost:' + PORT;
+const MODERN = process.argv[4] === 'modern';                   // (the whole session in the modern look)
+const GFX = { 'tunneler.gfx': MODERN ? 'modern' : 'original' };   // (modern is the game's default since 5.0: say which)
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const api = async (body) => (await fetch(B + '/api/rooms', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.assign({ version: require('../package.json').version }, body)) })).json();
 const S = (kind, team) => ({ kind, team });
@@ -20,11 +24,11 @@ const fill = a => { while (a.length < 8) a.push(S('closed', a.length + 1)); retu
   const errs = [];
   const page = async (ls, url) => {
     const ctx = await b.newContext({ viewport: { width: 1000, height: 820 } });
-    await ctx.addInitScript(o => { for (const k in o) localStorage.setItem(k, o[k]); }, ls || {});
+    await ctx.addInitScript(o => { for (const k in o) localStorage.setItem(k, o[k]); }, Object.assign({}, GFX, ls || {}));
     const p = await ctx.newPage(); p.on('pageerror', e => errs.push(url + ': ' + e.message));
     await p.goto(B + url); return p;
   };
-  const shot = (p, f) => p.screenshot({ path: OUT + '/' + f });
+  const shot = (p, f) => p.screenshot({ path: OUT + '/' + (MODERN && !f.startsWith('modern-') ? 'modern-' : '') + f });
   const until = async (p, fn, ms = 30000) => { const t = Date.now(); while (Date.now() - t < ms) { if (await p.evaluate(fn).catch(() => false)) return true; await sleep(200); } return false; };
   const hold = async (p, keys, ms) => { for (const k of keys) await p.keyboard.down(k); await sleep(ms); for (const k of keys) await p.keyboard.up(k); };
   try {
@@ -75,8 +79,24 @@ const fill = a => { while (a.length < 8) a.push(S('closed', a.length + 1)); retu
     await Promise.all([hold(blue, ['KeyD', 'Space'], 2500), hold(cyan, ['ArrowRight', 'ArrowDown'], 2500), hold(green, ['KeyS'], 2000)]);
     await Promise.all([hold(blue, ['KeyS', 'KeyD'], 1500), hold(cyan, ['ArrowRight'], 1500)]);
     await sleep(500); await shot(blue, 'online-team.png');
+    // (the players' windows closed - the match runs on - so the spectator's catches up: software rendering is slow)
+    for (const pg of [blue, green, cyan]) await pg.close();
+    await until(spec, () => window.tunnelerFrames && !tunnelerFrames().catching && tunnelerFrames().queued < 4);   // (caught up)
     await spec.keyboard.press('Digit1'); await sleep(800); await shot(spec, 'spectator-grid.png');
-    await spec.keyboard.press('Digit2'); await sleep(1200); await shot(spec, 'spectator-map.png');
-    console.log('errors', JSON.stringify(errs));
-  } finally { await b.close(); }
+    await spec.keyboard.press('Digit2'); await sleep(1500); await shot(spec, 'spectator-map.png');
+    // graphics "modern" (docs/GRAPHICS.md): the main menu, its settings, a skirmish of 4 (clean), the split screen (retro)
+    if (MODERN) return;                                          // (the modern session has its own of all the above)
+    const M = { 'tunneler.gfx': 'modern' };
+    p = await page(M, '/'); await sleep(1500); await shot(p, 'modern-home.png');
+    for (const k of ['ArrowUp', 'Enter', 'ArrowDown', 'Enter', 'ArrowDown', 'ArrowDown', 'ArrowDown']) { await p.keyboard.press(k); await sleep(150); }   // (Settings, Graphics, Terrain)
+    await sleep(600); await shot(p, 'modern-settings.png'); await p.close();
+    p = await page(M, '/skirmish?mode=cpu&slots=' + encodeURIComponent('0:you:1,1:hard:2,2:hard:3,3:hard:4') + '&size=small&view=everyone');
+    await until(p, () => window.tunnelerEngine && window.tunnelerEngine().screen === 'play');
+    await hold(p, ['ShiftLeft'], 100); await hold(p, ['KeyW'], 2500); await hold(p, ['KeyW', 'Space'], 600);
+    await sleep(2000); await shot(p, 'modern-game.png'); await p.close();
+    p = await page(Object.assign({ 'tunneler.gfx.modern': JSON.stringify({ style: 'retro' }) }, M), '/split?size=small');
+    await until(p, () => window.tunnelerEngine && window.tunnelerEngine().screen === 'play');
+    await hold(p, ['KeyW', 'ArrowUp'], 3000); await hold(p, ['Space'], 300);
+    await sleep(500); await shot(p, 'modern-retro.png'); await p.close();
+  } finally { console.log('errors', JSON.stringify(errs)); await b.close(); }
 })();
