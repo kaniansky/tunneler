@@ -746,7 +746,7 @@ function createServer(opts = {}) {
     sl.bot = false; sl.cid = ws.cid; sl.name = ws.name;
     m.socks[p] = ws; ws.player = p; ws.playing = null;
     m.held[p] = 0; m.latch[p] = 0;
-    sit(room, ws, sl.color);
+    if (!room.seats[sl.color].occ) sit(room, ws, sl.color);   // (its seat: nobody sits there while the computer drives)
     m.drives.push([p, ws.serial, ws.name]);
     clearTimeout(m.aloneTimer);
     if (notify && ws.readyState === 1) ws.send(JSON.stringify({ t: "you", m: m.no, p }));

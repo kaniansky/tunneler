@@ -19,7 +19,7 @@ entries open the same screen:
   already running with a computer tank to take over or a free seat, else a new one it just created.
 - The page then goes straight to that game (`/game/<id>`, history entry replaced: Back leads to the
   list, not to the search again). A refusal (another version, too many games, no connection) is shown
-  on the same screen in red, with Back.
+  on the same screen in red, with Try again and Back.
 
 **A quick-play game** (online.js, the room lobby of DESIGN-8P 26 with these differences):
 
@@ -27,14 +27,16 @@ entries open the same screen:
   3 rounds to win, rounds of at most 5 minutes, no friendly fire, view: self, after death: wreck, line of
   sight full, standard mode. These settings are fixed - the Settings box is read-only for everybody,
   the host included (the game is what quick play promised; nobody can turn it into a 1-vs-7).
-- The seats: every seat nobody sits on is a computer tank ("AI (medium)"). Anybody who isn't seated
-  can sit on one (Enter / a click: "take this seat from the computer"); standing up / leaving turns the
-  seat back into a computer tank. Seats 5-8 are closed. No ready / not ready.
+- The seats: every seat nobody sits on is a computer tank ("AI (medium)"). Anybody can sit on one
+  (Enter / a click: "take this tank from the computer"); a click on the own name stands up (watching),
+  standing up / leaving turns the seat back into a computer tank. Seats 5-8 are closed; the teams are
+  fixed (free-for-all: `me {team}` is refused too). No ready / not ready.
 - The Game box shows "Next match in N s" instead of "I am ready!". The match starts by itself 10 s
   after the first player sat down (20 s after the previous match ended - time for the statistics and the
   chat). The host's "Start game" starts it at once (the reason it can't, in red, as before).
-- The list of games shows "Quick play" in the MODE column, PLAYERS "humans / 4"; Enter on a running
-  quick-play game with a computer tank joins as a player (a normal running game: watching).
+- The list of games shows "quick play" in the MODE column, PLAYERS "humans / 4"; Enter on a running
+  quick-play game with a computer tank joins as a player (a normal running game: watching). The list
+  shows at most 8 games now (was 9: the Quick play item needs the row).
 - **Taking over in the middle of a match**: a player who connects to a running quick-play match
   (without `/watch`) gets a computer-driven tank at once. Their page catches up with the match as a
   spectator does, then drives that tank. A yellow notice across the game says "You drive the CYAN tank
@@ -165,9 +167,10 @@ names this page (`k === me.k`) shows the take-over notice.
 
 ## 5. Texts (all 5 languages, `src/lang/<code>/quickplay.js`, `Lang.extend`)
 
-`home.quick(.i)`, `lobby.quick(.i)`, `qp.title`, `qp.finding`, `qp.err`, `qp.room`, `qp.mode`,
-`qp.next`, `qp.wait`, `qp.next.i1/i2`, `qp.go.i`, `qp.sit.i1/i2`, `qp.took`, `qp.set.i`, and a
-"Quick play" section on the Information page (inserted before "The desktop app").
+`home.quick(.i1/.i2)` (the main menu's and the games list's item), `qp.title`, `qp.finding`, `qp.err`,
+`qp.again`, `qp.room` (the new room's name), `qp.mode` (the list's MODE column), `qp.next`, `qp.wait`,
+`qp.next.i1/i2`, `qp.go.i`, `qp.sit.i1/i2`, `qp.mine.i`, `qp.took`, and a "Quick play" section on the
+Information page (inserted before "The desktop app"; test/lang-check.js now expects 5 sections there).
 
 `Lang.extend(code, texts)` (new in lang.js): adds texts to a registered language (re-picks the font
 slots when it is the current one).

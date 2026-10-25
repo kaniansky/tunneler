@@ -894,3 +894,18 @@ none, i.e. a page from before 2.0 - is refused (POST 409 `{code:
   folder store drops older files (and won't serve one not swept yet). test/replay-share-check.js (the API) + replay-check (the page). Texts `rp.*`,
   `home.replays`, `back.replays`, an Information section. Test hooks `tunnelerReplay / tunnelerReplayUI /
   tunnelerReplayList`. Test: replay-check.js.
+- **Quick play** (docs/v6/QUICKPLAY.md, version 6): main menu / games list "Quick play" -> lobby.js `quick()` (`/games?quick=1`)
+  -> `POST /api/quickplay {version, name}` -> `{id, created, hostKey?}` (server.js `quickRoom`: a public quick-play room with a
+  place for one more human - a seat nobody sits on, or a computer-driven tank of its running match -, the most humans first;
+  else `createRoom(..., qp)`: `NetProto.quickSettings()` = 4 tanks free-for-all, computer level "normal", fixed settings).
+  `room.qp`: `seat.ai` = the seat's level, an unoccupied seat's kind is it (`qpSeat`), `free()` counts it; `set` / `seatSet` /
+  `ready` / `me {team}` refused; `qpSchedule` starts the match by itself (`qpStartMs` 10 s after a player sat down, `qpAfterMs`
+  20 s after a match; `st.qp = {left}`). Matches: `cfg.qp`, every slot has a level -> every client runs a TunnelerAI for every
+  tank (`NetProto.aiSlot`). Taking over: `qpTake` (a connection without `role=watch` joining a running match, or `qpFill` for
+  waiting spectators -> `{t:"you", m, p}`) / `qpRelease` (its socket closes) queue **drive markers** `[p, k, name]` (k = the
+  connection number, 0 = the computer) that the tick puts into the next frame: extended entry `[[bits], 1, keys|null, drives]`
+  (FrameLog.pushN's 3rd argument; never merged; FrameQueue returns `[bits, keys, drives]`, `readDrives` checks them). Clients
+  (online.js `drive`, `setPlayer`): markers first (`human[p]`, `engine.setNames`), then `NetProto.botInputs` - every computer
+  player's `update()` runs every frame, a human-driven tank's AI bits are dropped. Engine untouched; replays record the bits
+  stepped. Texts `src/lang/<code>/quickplay.js` (`Lang.extend`, new in lang.js) + an Information section. Tests:
+  test/quickplay-sim.js, net-page-smoke, layout-check.
