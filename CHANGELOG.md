@@ -3,6 +3,14 @@
 All notable changes to Tunneler Online. Versions follow [semantic versioning](https://semver.org/);
 a release is made by pushing a version tag (see CONTRIBUTING.md).
 
+## Unreleased
+
+- Your own maps (main menu, Maps): paint a world - rock, dirt and tunnels - and place up to 8 bases, on a small,
+  medium or large map, starting from dirt everywhere or a random world. The editor works with the keyboard, the
+  mouse, a gamepad and on a phone (one finger paints, two move and zoom); maps are kept in the browser and can be
+  shared as links (`/map/<id>`). Play a map in a skirmish (Settings, Map) or choose it for an online game (the
+  room's Settings, Map) - every player gets the same map. Replays of map games carry their map. (docs/v6/MAPS.md)
+
 ## 5.0.4
 
 - Phones and tablets: a finger on a menu item highlights it, and the highlight follows the finger over the other

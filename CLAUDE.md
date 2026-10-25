@@ -892,3 +892,20 @@ none, i.e. a page from before 2.0 - is refused (POST 409 `{code:
   folder store drops older files (and won't serve one not swept yet). test/replay-share-check.js (the API) + replay-check (the page). Texts `rp.*`,
   `home.replays`, `back.replays`, an Information section. Test hooks `tunnelerReplay / tunnelerReplayUI /
   tunnelerReplayList`. Test: replay-check.js.
+- **Custom maps** (v6, docs/v6/MAPS.md): `src/js/mapdata.js` (`MapData`: 4 x 4 px cells tunnel / dirt / rock, a
+  rock frame of `sc(40)` px, up to 8 bases at cells, name; a compact binary encoding - packed or runs - and its
+  base64url `code`; `decode` checks everything, `canonical`, `paint` / `paintRow` into a world, `fromWorld`). Engine
+  option `map` (a code): `paintMapStep` instead of the generator (no Random()), forces the extended engine and the
+  map's size, `mapBases` deals N of the K bases with the engine's RNG (K < N: the rest placed at random), `openBase`
+  as always; without it nothing changes. `src/js/mapstore.js` (`MapStore`: IndexedDB "tunneler-maps", `share` = POST
+  /api/maps, `fetchShared`). Route `/maps` (`maps.js`; `/maps/<id>`, `/map/<id>` = a shared one; the app:
+  `maps.html?id= / ?share=`): the list, a new map (dirt / a random world), a map's screen, open a link, the editor
+  (LORES screen + the clickable status line; keys / mouse / touch - two fingers move and pinch - / gamepad; undo;
+  the editor's menu; leaving saves). Main menu "Maps". Skirmish: Settings row Map (`tunneler.cpu.map`, links
+  `&lmap=<local id>[&map=<shared id>]`, play.js loads it first - `noMap` screen when it can't). Online: the room's
+  Settings row Map (the host's maps, uploaded once), `{t:"set", map: id}` -> server `setMap` (loads from the store,
+  `st.map = {id, name, size, bases}`, size follows, `cantStart` "map" with too few bases), match cfg `map` = the
+  code, `isClassic` false with a map. Server: `sharedStore` (replays and maps: bucket `<id>.map` / folder
+  `MAP_DIR` default `REPLAY_DIR/maps` / memory), map ids = content hash (10 of a-z2-9), `MAX_MAP_BYTES` 40 KB, 20
+  shares / min. `Lang.extend(code, {...})` (lang.js) for feature text files: `src/lang/<code>/maps.js`. Tests:
+  map-check.js, map-share-check.js, net-sim "custom map online", layout-check (the maps screens).

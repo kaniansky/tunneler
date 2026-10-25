@@ -107,6 +107,7 @@ const MAX_REPLAY_BYTES = 512 * 1024;   // one shared replay, as sent (gzip'd: a 
 const MAX_MAP_SHARES_PER_MIN = 20;     // POST /api/maps per address
 const MAX_SHARED_MAPS = 5000;          // shared maps kept in the folder (the oldest go)
 const MAX_MAP_BYTES = 40 * 1024;       // one map, as sent (mapdata.js: at most ~33 KB, usually a few hundred bytes)
+const MAP_LOADS_PER_MIN = 30;          // maps a room's host may choose a minute (each one a lookup in the store)
 const MAX_ROOMS_PER_ADDR = 20;         // rooms created by one address that still exist
 const MAX_CONNECTS_PER_MIN = 120;      // websocket connections per address
 const MAX_PW_FAILS = 10;               // wrong game passwords per address and minute (then refused unchecked)
@@ -245,6 +246,10 @@ function createServer(opts = {}) {
   // to agree again. Only in the lobby.
   async function setMap(room, id) {
     id = NetProto.mapId(id);
+    // (each id is a lookup in the store - the bucket: a request; at most MAP_LOADS_PER_MIN a room)
+    const now = Date.now();
+    room.mapLoads = (room.mapLoads || []).filter(t => now - t < 60000);
+    if (id && id !== room.map && room.mapLoads.push(now) > MAP_LOADS_PER_MIN) return;
     room.mapWant = id;
     let got = null;
     if (id) { try { got = await loadMap(id); } catch (e) { got = null; } if (!got) { if (room.mapWant === id) room.mapWant = room.map; return; } }

@@ -84,14 +84,18 @@ Share a link (uploads it, copies `/map/<id>`), Delete (twice to confirm), Back.
 **New map**: Name, Map size, Start from: dirt everywhere / a random world (the engine's own generator,
 sampled into cells: a cell with more than half of its pixels rock is rock), Create.
 
-**Editing**: the map in the game's LORES screen (the world map's dotted frame; 156 x 98 pixels of map), the
-tools on the status line under it (DOS text, clickable - also the phone's way to choose):
+**Editing**: the map in the game's LORES screen (the game's dotted frame around it; 156 x 98 pixels of map;
+rock in the frame darker - it can't be painted), the tools on the status line under it (DOS text, clickable -
+also the phone's way to choose). A desktop (two rows under the 4:3 screen):
 
 ```
- Tunnel   Dirt   Rock   Base          (the tool; the chosen one white on magenta)
- Brush - 3 +   Zoom - 1:1 +   Undo   Menu
- X 120  Y 64   Bases 2 of 8   (a message: "No room for a base here")
+ 1 Tunnel   2 Dirt   3 Rock   4 Base   Undo  Menu      (the tool: the chosen one white on magenta)
+ Brush - 3 +  Zoom - 1:1 +  X 120  Y 64  Bases: 2 of 8  ESC: menu ...   (or a message in red)
 ```
+
+A phone (40 columns, three rows - there is room under the screen): the tools; Brush, Undo, Menu; Zoom, the
+bases, a message. What a row can't hold goes first: the key hint, the position, the zoom, the brush - the tools,
+Undo, Menu and a message always stay (map-check checks it in every language).
 
 - Keyboard: arrows / W A S D move the cursor (Shift: 8 cells), Space / Enter paint (held: draw while
   moving), 1-4 the tools, Tab the next tool, [ ] (or , .) the brush, + - the zoom, U or Ctrl+Z undo, Esc
@@ -152,8 +156,9 @@ Creating a game with a remembered map id (tunneler.online) applies it once loade
 - Every decoded field is range-checked; anything odd -> null (400 on the API, ignored in options / cfg).
 - Request bodies over 40 KB -> 413; 20 shares a minute per address; 5000 maps on disk (oldest go); the
   bucket keeps everything (its own rules may delete).
-- A room's `set {map}` with an unknown / bad id is ignored; the lookup is per message, rate-limited by the
-  existing 120 messages / s and the lobby-only rule; a map arriving after the match started is dropped.
+- A room's `set {map}` with an unknown / bad id is ignored; only the host, only in the lobby, at most
+  `MAP_LOADS_PER_MIN` (30) new ids a minute per room (each a lookup in the store); a map arriving after the
+  match started is dropped; the last one chosen wins.
 - Names are cleaned (no control / bidi characters, 24 columns) and shown through the Unicode plane.
 
 ## 8. Texts
@@ -178,6 +183,7 @@ section about maps.
   match cfg's map, identical clients (no desync).
 - `test/layout-check.js`: the maps list, a map's screen, new map, open a link, the editor's menu - desktop,
   phone upright and sideways, every language; and the skirmish with a map chosen.
+- `test/lang-check.js`: the new Information section in every language.
 
 ## 10. Out of scope
 
