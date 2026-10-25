@@ -31,7 +31,9 @@ function makeEnv(search, store) {
   const elements = {};
   const storage = store || new Map();
   const win = {
-    document: { title: "", getElementById: id => elements[id] || (elements[id] = mkEl(id)), createElement: mkEl },
+    document: { title: "", getElementById: id => elements[id] || (elements[id] = mkEl(id)), createElement: mkEl,
+      // (a browser's: the Fullscreen API there - screen.js offers the Settings row only where it exists)
+      documentElement: { requestFullscreen: () => Promise.resolve(), style: { setProperty() {}, removeProperty() {} }, classList: { toggle() {} } } },
     location: { search, pathname: "/", hash: "", href: "" },
     history: { replaceState() {} },
     localStorage: { getItem: k => storage.has(k) ? storage.get(k) : null, setItem: (k, v) => storage.set(k, String(v)) },

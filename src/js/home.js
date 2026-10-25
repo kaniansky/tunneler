@@ -288,8 +288,13 @@ export function mount() {
       if (SCR()) {
         const sc = GameScreen;
         if (!sc.mobile()) {                            // (a phone / tablet: neither - screen.js)
-          rows.push(L("fullscreen", pad("set.fullscreen") + onOffT(sc.fullscreen()), [T("set.fullscreen.i1"), T("set.fullscreen.i2")],
-            () => { sc.setFullscreen(!sc.fullscreen()); settings(true); }));
+          const fsErr = sc.fullscreenError ? sc.fullscreenError() : "", fsOk = !sc.fullscreenAvailable || sc.fullscreenAvailable();
+          const f11 = !!(sc.browserFullscreen && sc.browserFullscreen());   // (the browser's F11: on, and only F11 leaves it)
+          rows.push(L("fullscreen", pad("set.fullscreen") + onOffT(f11 || sc.fullscreen()),
+            f11 ? [{ text: T("set.fullscreen.f11"), color: 14 }, T("set.fullscreen.i2")]
+              : !fsOk ? [{ text: T("set.fullscreen.na"), color: 12 }, T("set.fullscreen.i2")]
+              : fsErr ? [{ text: T("set.fullscreen.err", { msg: fsErr }), color: 12 }, T("set.fullscreen.i2")] : [T("set.fullscreen.i1"), T("set.fullscreen.i2")],
+            () => { sc.setFullscreen(!sc.fullscreen()); settings(true); }, { disabled: !fsOk }));
           rows.push(L("scale", pad("set.scale") + T("scale." + sc.scale()), [T("set.scale.i1"), T("set.scale.i2")],
             d => { sc.setScale(step(sc.SCALES, sc.scale(), d)); settings(true); }));
         }

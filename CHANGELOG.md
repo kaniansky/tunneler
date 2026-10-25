@@ -16,6 +16,7 @@ a release is made by pushing a version tag (see CONTRIBUTING.md).
   sideways was blank; the games list's column titles ran together; a long info line in the online lobby was
   cut off; the replay player's status line was unreadable; the lists say "tap" instead of "<ENTER>", and a
   tap on a game's state watches it.
+- Fullscreen: the Settings row shows the browser's own fullscreen (F11) too, and says why when a browser refuses.
 - Replays: the first one saved in a browser without IndexedDB (a private window) is no longer lost.
 
 ## 5.0.0

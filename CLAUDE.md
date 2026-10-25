@@ -710,7 +710,10 @@ none, i.e. a page from before 2.0 - is refused (POST 409 `{code:
   turns it off; the desktop app: lib.rs `set_fullscreen` / `is_fullscreen` commands, the window stays)
   and Screen size ("tunneler.scale" fit / integer: the game canvas capped at a whole multiple of its pixel
   width in device pixels). On a phone / tablet (`GameScreen.mobile()`, app and browser) neither row is shown
-  and both count as off / fit (owner, 2026-10-25).
+  and both count as off / fit (owner, 2026-10-25). A refused request (`requestFullscreen` rejected) turns the
+  setting off and Settings shows the reason (`fullscreenError`); where the page may not (`fullscreenAvailable`:
+  no API, `fullscreenEnabled` false) the row is grayed out; the browser's own F11 fullscreen (`browserFullscreen`:
+  the window fills the screen - pages aren't told) shows the row on with "F11 leaves it" (a page can't end it).
 - **Tank colors** ("tunneler.tankcolors" normal / colorblind / relation; display.js `tankPalette(snap,
   engine, viewer)` / `tankPalette8`): only the game screen - views.js (`viewerOf(v)`: a player's own tank,
   else the view's own; `paintView` keeps the instrument panel in the normal palette: the shield gauge's 3 is

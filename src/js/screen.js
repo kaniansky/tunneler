@@ -15,7 +15,7 @@ const doc = root.document;
 const tauri = () => root.__TAURI__ && root.__TAURI__.core;
 // (the desktop app: its tauri:// pages)
 const app = () => !!(tauri() && tauri().invoke) && Endpoint.isApp;
-let appFull = false;
+let appFull = false, fsError = "";
 const touchOnly = () => { try { return !!root.matchMedia && root.matchMedia("(pointer: coarse)").matches && !root.matchMedia("(any-pointer: fine)").matches; } catch (e) { return false; } };
 const listeners = [];                                   // (onChange: e.g. the Settings screen's Fullscreen row)
 const changed = () => { for (const f of listeners) try { f(); } catch (e) { /* a listener's problem */ } };
@@ -29,22 +29,42 @@ const GameScreen = {
   mobile: () => GameScreen.android() || touchOnly(),
   // (a phone / tablet: neither setting - no Fullscreen (the app is full screen; a phone's browser keeps its own
   // bars), the screen always fits the window - owner, 2026-10-25; what a desktop stored stays for it)
-  fullscreen: () => !GameScreen.mobile() && load("tunneler.fullscreen", "0") === "1",
+  fullscreen: () => !GameScreen.mobile() && GameScreen.fullscreenAvailable() && load("tunneler.fullscreen", "0") === "1",
   scale: () => !GameScreen.mobile() && load("tunneler.scale", "fit") === "integer" ? "integer" : "fit",
   // (on = the stored setting; the screen follows)
-  setFullscreen(on) { save("tunneler.fullscreen", on ? "1" : "0"); apply(on); changed(); },
+  setFullscreen(on) {
+    if (on && !GameScreen.fullscreenAvailable()) { changed(); return; }   // (this page may not: Settings says so)
+    save("tunneler.fullscreen", on ? "1" : "0"); fsError = ""; apply(on); changed();
+  },
+  // (the browser refused it: its reason, shown by the Settings row - "" = none; available: false = this page
+  // may not go fullscreen at all, e.g. inside another page without allow="fullscreen")
+  fullscreenError: () => fsError,
+  // the browser's own fullscreen (F11): pages aren't told - the window fills the screen; the page can't end it
+  browserFullscreen: () => browserFull(),
+  // the window is fullscreen now, either way (the Settings row shows this)
+  isFullscreen: () => isFull() || browserFull(),
+  fullscreenAvailable: () => app() || !!(doc && doc.documentElement && doc.documentElement.requestFullscreen && doc.fullscreenEnabled !== false),
   onChange(f) { listeners.push(f); Scope.onEnd(() => { const i = listeners.indexOf(f); if (i >= 0) listeners.splice(i, 1); }); },
-  toggle() { GameScreen.setFullscreen(!isFull()); },
+  // (in the browser's F11 fullscreen nothing to switch: F11 leaves it - Settings says so)
+  toggle() { if (browserFull()) { changed(); return; } GameScreen.setFullscreen(!isFull()); },
   setScale(v) { save("tunneler.scale", v === "integer" ? "integer" : "fit"); fit(); },
 };
 
 function isFull() { return app() ? appFull : !!(doc && doc.fullscreenElement); }
+function browserFull() {
+  const sc = root.screen;
+  return !app() && !(doc && doc.fullscreenElement) && !!sc && sc.width > 0 &&
+    (root.innerWidth || 0) >= sc.width - 1 && (root.innerHeight || 0) >= sc.height - 1;
+}
 function apply(on) {
   if (app()) { tauri().invoke("set_fullscreen", { on }).then(() => { appFull = on; }).catch(() => {}); return; }
+  // (refused - not from a key press / click, a page inside another one, the browser's settings: the setting goes
+  // back to off and Settings says why)
+  const refused = e => { fsError = String((e && (e.message || e.name)) || e || "refused").slice(0, 120); save("tunneler.fullscreen", "0"); changed(); };
   try {
-    if (on && !doc.fullscreenElement) doc.documentElement.requestFullscreen().catch(() => {});
+    if (on && !doc.fullscreenElement) { const r = doc.documentElement.requestFullscreen(); if (r && r.catch) r.catch(refused); }
     else if (!on && doc.fullscreenElement) doc.exitFullscreen().catch(() => {});
-  } catch (e) { /* no Fullscreen API */ }
+  } catch (e) { refused(e); }
 }
 
 // Screen size "integer": the game canvas capped at the largest whole multiple of its pixel width (in device
@@ -85,6 +105,9 @@ if (doc && root.addEventListener) {
     });
   }
   root.addEventListener("resize", fit);
+  // (F11 in or out: the Settings row follows)
+  let wasF11 = browserFull();
+  root.addEventListener("resize", () => { const f = browserFull(); if (f !== wasF11) { wasF11 = f; changed(); } });
   if (root.setInterval) root.setInterval(fit, 300);    // (the canvas changes shape with the screens)
 }
 
