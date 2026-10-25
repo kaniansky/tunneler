@@ -485,9 +485,12 @@ none, i.e. a page from before 2.0 - is refused (POST 409 `{code:
 - Classic AI almost never enters the enemy base (its grid rarely aligns with the doorway); a human hiding
   in their base can only be shot through the doorways. The extended AI steers through other bases'
   doorways (`TunnelerAI.doorway`), but the classic one is kept exactly as it was.
-- Bot-only extended games still have many drawn rounds between equal bots (every tank out of shield
-  dies, and the last shots are still flying); the extended AI breaks off a losing head-on duel with a
-  coin toss, which helps but does not remove it.
+- Drawn rounds between equal bots (extended): were 40 % - point-blank duels in a tunnel one tank wide (the
+  explosions filled it, and the side-step only took empty pixels, so the coin toss to break off a losing duel
+  never left the line) and winners standing still under the dead enemy's last shots. Fixed 2026-10-25 (ai.js
+  `pickDodge`: class 2 / dirt passable, longer when digging; `evade` after the fight; a volley that would
+  destroy it / a dead shooter's shots always side-stepped): ~12 %, ai-ext-sim "Drawn rounds" (at most 25 %).
+  What's left: shots landing in the same frame at point-blank range.
 - Low-energy "static" copies a simulated low-memory image (the original showed real-mode memory).
 - Sound timing within a frame uses a fixed fake CPU cost model (`CPU_PLAYERS`, `CPU_BLIT`).
 

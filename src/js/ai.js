@@ -21,7 +21,9 @@
 // Extended engine only (the classic 1-vs-1 AI stays exactly as it was - test/ai-sim.js golden values):
 // steering through other bases' doorways (doorway), breaking dirt standoffs on a firing line (engage),
 // a coin toss to break off a losing head-on duel (decide), a bigger A* budget on the large map, no spinning
-// in place (clues of dead tanks dropped, reached clues used up, doorway hysteresis, ditherN -> unstick).
+// in place (clues of dead tanks dropped, reached clues used up, doorway hysteresis, ditherN -> unstick),
+// side-steps through fire and dirt (pickDodge), always out of a volley that would destroy it or a dead tank's
+// shots, and out of the way of the shots still flying once its fight is over (evade) - fewer drawn rounds.
 // Line of sight (engine.sight circle / walls, both engines): it sees only what engine.sightSees allows,
 // and the best level gets rough positions instead of exact ones (SIGHT_LEVELS); off = unchanged.
 //
@@ -458,7 +460,7 @@ class TunnelerAI {
     this.reach = null;               // interior cells (see interior), built on first use
     this.retreating = false;
     this.spot = null; this.spotT = -9999;
-    this.dodgeDir = -1; this.dodgeT = 0; this.threatSeen = new Set();
+    this.dodgeDir = -1; this.dodgeT = 0; this.dodgeLen = 5; this.threatSeen = new Set();
     this.unstickDir = -1; this.unstickT = 0;
     this.lineWait = 0; this.lineWaitT = -9999;  // extended: frames on a firing line, facing, without a shot
     this.clearShot = false;          // extended: fire this frame to blow away the dirt on the line
@@ -492,7 +494,11 @@ class TunnelerAI {
     for (let p = 1; p <= N; p++) key += ":" + e.baseX[p] + ":" + e.baseY[p] + ":" + teamOf(e, p);
     if (key !== this.roundKey || e !== this.eng) { this.roundKey = key; this.eng = e; this.resetRound(e); }
     // (a game mode with objectives - GM.aiAlways - keeps playing while no enemy is alive)
-    if (!e.alive[this.me] || e.endTimer >= 0 || (!this.enemies.some(q => e.alive[q]) && !(e.GM && e.GM.aiAlways))) {
+    const over = e.endTimer >= 0 || (!this.enemies.some(q => e.alive[q]) && !(e.GM && e.GM.aiAlways));
+    // extended: the fight is over, but the shots its last enemies fired are still flying - it side-steps them
+    // (it stood still before: 3 of 4 drawn rounds between computer tanks were the winner destroyed by them)
+    if (over && e.alive[this.me] && e.extended) { this.t++; this.perceive(e); return this.evade(e); }
+    if (!e.alive[this.me] || over) {
       this.prevKeys = false; return NONE;
     }
     this.t++;
@@ -515,6 +521,22 @@ class TunnelerAI {
     this.lastX = mx; this.lastY = my;
     this.prevKeys = moving;
     return out;
+  }
+
+  // the fight over (update): only out of the way of the shots still flying, no firing
+  evade(e) {
+    const me = this.me, mx = e.tankX[me], my = e.tankY[me];
+    if (this.dodgeT <= 0) {
+      const threat = this.findThreat(e, mx, my);
+      const d = threat ? this.pickDodge(e, mx, my, threat.dir) : -1;
+      if (d >= 0) { this.dodgeDir = d; this.dodgeT = this.dodgeLen; }
+    }
+    if (this.dodgeT <= 0) { this.prevKeys = false; return NONE; }
+    this.dodgeT--;
+    const dir = this.dodgeDir;
+    if (e.tankBlocked(mx + DX[dir], my + DY[dir], dir) > 2) this.dodgeT = 0;
+    this.prevKeys = true;
+    return { up: DY[dir] < 0, down: DY[dir] > 0, left: DX[dir] < 0, right: DX[dir] > 0, fire: false };
   }
 
   // ---------------------------------------------------------------- perception
@@ -678,11 +700,15 @@ class TunnelerAI {
     // --- incoming shots
     if (cfg.dodge > 0 && this.dodgeT <= 0) {
       const threat = this.findThreat(e, mx, my);
-      if (threat && !this.threatSeen.has(threat.id)) {
+      // extended: shots it can't take - a volley that would destroy it, or any shot once its shooter is gone (a
+      // dead tank can't be traded with): always side-stepped, every frame it sees them. 40 % of the rounds between
+      // computer tanks ended drawn - mostly the winner destroyed by the shots its last enemy fired before it died.
+      const must = !!threat && e.extended && (threat.n * 0x700 >= e.shield[me] || !e.alive[threat.q]);
+      if (threat && (must || !this.threatSeen.has(threat.id))) {
         this.threatSeen.add(threat.id);
-        if (this.rng() < cfg.dodge && !this.canTrade(e, threat)) {
+        if (must || (this.rng() < cfg.dodge && !this.canTrade(e, threat))) {
           const d = this.pickDodge(e, mx, my, threat.dir);
-          if (d >= 0) { this.dodgeDir = d; this.dodgeT = 5; }
+          if (d >= 0) { this.dodgeDir = d; this.dodgeT = this.dodgeLen; }
         }
       }
       if ((this.t % 40) === 0) this.threatSeen.clear();
@@ -701,7 +727,7 @@ class TunnelerAI {
       if (hit && this.duel <= 0 && cfg.dodge > 0 && this.dodgeT <= 0 && T && T.dir === ((d + 4) & 7) &&
           cheb(mx, my, T.x, T.y) <= 40 && this.wouldHit(e, mx, my, d, T, 2) && this.rng() < 0.5) {
         const dd = this.pickDodge(e, mx, my, T.dir);
-        if (dd >= 0) { this.dodgeDir = dd; this.dodgeT = 5; }
+        if (dd >= 0) { this.dodgeDir = dd; this.dodgeT = this.dodgeLen; }
       }
       this.prevShield = e.shield[me]; this.prevHits = e.shotsHit[me];
     }
@@ -1190,25 +1216,29 @@ class TunnelerAI {
   }
 
   // a shot (as perceived) that will hit us within a few frames if we stay put - an enemy's, or (friendly
-  // fire on) a teammate's
+  // fire on) a teammate's; the first one found, its shooter q, and n = how many shots will hit us
   findThreat(e, mx, my) {
     const P = this.perceived;
     if (!P || !P.shots.length) return null;
+    let first = null, n = 0;
     for (let i = 0; i < P.shots.length; i += 4) {
       if (!this.ff && this.mates.length && !enemyOf(e, this.me, P.shots[i + 3])) continue;
       const x0 = P.shots[i], y0 = P.shots[i + 1], d = P.shots[i + 2];
       for (let k = 1; k <= 28; k++) {
         const x = x0 + DX[d] * k, y = y0 + DY[d] * k;
         if (e.distance(Math.abs(x - mx), Math.abs(y - my)) < 4) {
+          n++;
           // shots along the same line count as one threat (one dodge decision per volley)
           const line = DX[d] === 0 ? x0 : DY[d] === 0 ? y0 : DX[d] === DY[d] ? x0 - y0 : x0 + y0;
-          return { dir: d, id: d * 4096 + line + 2048, k };
+          if (!first) first = { dir: d, id: d * 4096 + line + 2048, k, q: P.shots[i + 3] };
+          break;
         }
         const c = e.getPixel(x, y);
         if (c !== 0 && c !== 12) break;
       }
     }
-    return null;
+    if (first) first.n = n;
+    return first;
   }
 
   // facing the shooter and able to hit it: shooting back beats side-stepping when we are healthier
@@ -1221,17 +1251,22 @@ class TunnelerAI {
 
   pickDodge(e, mx, my, sd) {
     const opts = [(sd + 2) & 7, (sd + 6) & 7, (sd + 1) & 7, (sd + 7) & 7, (sd + 3) & 7, (sd + 5) & 7];
-    let best = -1, bestScore = -1;
+    // extended: fire / explosions (class 2) and dirt (1) don't block a side-step either - a tank drives and digs
+    // through them; a duel at close range in a tunnel one tank wide fills it with explosions, and with only empty
+    // pixels counting neither tank could ever get out of the line: both stood and fired until both were destroyed
+    const ext = e.extended;
+    let best = -1, bestScore = -1, bestSlow = false;
     for (let i = 0; i < opts.length; i++) {
       const d = opts[i];
-      let free = 0;
+      let free = 0, slow = false;
       for (let k = 1; k <= 4; k++) {
         const b = e.tankBlocked(mx + DX[d] * k, my + DY[d] * k, d);
-        if (b === 0) free++; else break;
+        if (b === 0 || (ext && b <= 2)) { free++; if (b) slow = true; } else break;
       }
-      const score = free * 10 - (i >> 1) * 5 + this.rng();
-      if (free > 0 && score > bestScore) { bestScore = score; best = d; }
+      const score = free * 10 - (i >> 1) * 5 - (slow ? 8 : 0) + this.rng();
+      if (free > 0 && score > bestScore) { bestScore = score; best = d; bestSlow = slow; }
     }
+    this.dodgeLen = bestSlow ? 10 : 5;      // (digging is slower: held longer to leave the line)
     return best;
   }
 }

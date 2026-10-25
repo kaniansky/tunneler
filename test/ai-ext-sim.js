@@ -465,6 +465,25 @@ function borderMatch(seed, engOpts, levels, maxFrames) {
 
 }
 
+// ------------------------------------------------------------------ drawn rounds
+// "equal computer tanks often destroy each other at the end of a round" (owner, 2026-10-25): 40 % of the rounds
+// between bots were drawn - two tanks at point-blank range in a tunnel one tank wide fired until both were
+// destroyed (the explosions filled the tunnel and the side-step only took empty pixels, so the coin toss to
+// break off a losing duel never got out of the line), and a winner stood still while the shots of the tank it
+// had just destroyed were still flying. Now: at most a quarter (was 49 % normal, 69 % hard, 41 % 2 v 2 hard).
+if (!timeOnly) {
+  console.log("\nDrawn rounds");
+  let rounds = 0, draws = 0;
+  const cfgs = [[[1, 2], ["normal", "normal"]], [[1, 2], ["hard", "hard"]], [[1, 2, 1, 2], ["hard", "hard", "hard", "hard"]]];
+  for (const [teams, levels] of cfgs)
+    for (const seed of quick ? [1, 2, 3] : [1, 2, 3, 4, 5, 6]) {
+      const r = runMatch(seed, { slots: slots(teams), size: "small", winScore: 3, extended: true }, levels, { maxFrames: 60000 });
+      for (const rd of r.e.roundLog) { rounds++; if (rd.how === "draw") draws++; }
+    }
+  console.log("  " + draws + " of " + rounds + " rounds drawn");
+  check(rounds >= 10 && draws * 4 <= rounds, "bots: at most a quarter of the rounds drawn (" + draws + " of " + rounds + ")");
+}
+
 // ------------------------------------------------------------------ 7 bots + an idle BLUE: time per frame
 if (!timeOnly) {
   const r = require("child_process").spawnSync(process.execPath, [__filename, "time", ...(quick ? ["quick"] : [])], { stdio: "inherit" });

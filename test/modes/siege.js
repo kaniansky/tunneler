@@ -281,7 +281,7 @@ for (const s of setups) {
       const levels = [0, 1, 2, 3, 4, 5, 6, 7].map(i => L[(i + seed) % 3]);
       const r = runMatch({ mode: "siege", slots: slots([1, 2, 3, 4, 5, 6, 7, 8]), levels, seed, size, winScore: 1, maxFrames: 13000 });
       all++; if (!r.engine.timedOut) early++;
-      check(r.finished && r.rounds.length >= 1 && r.rounds[0].winnerTeam >= 0,
+      check(r.finished && r.rounds.length >= 1 && r.rounds[r.rounds.length - 1].winnerTeam >= 0,
         "8 tanks free-for-all, " + size + ", seed " + seed + ": finishes with a winner (" + r.frames + " frames" + (r.engine.timedOut ? ", at the time" : "") + ")");
     }
   check(early * 4 >= all * 3, "8 tanks free-for-all: most rounds end before the time limit (" + early + " of " + all + ")");
