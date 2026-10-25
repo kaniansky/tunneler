@@ -577,7 +577,9 @@ export function mount() {
       row("mode", T("lc.mode") + T("gm." + mode), [T("gm." + mode + ".i"), T("lc.mode.i")], d => setSetting("mode", cycle(ML, mode, d))),
       // the map (docs/v6/MAPS.md): random or a shared one - its own size then (grayed)
       row("map", T("os.map") + (mapNote ? UniText.slice(UniText.fromRaw(mapNote.rec.name), MAP_COLS) : mapName()),
-        mapNote ? [{ text: mapNote.text, color: mapNote.color }] : [T("os.map.i1"), T("os.map.i2")], d => stepMap(d)),
+        mapNote ? [{ text: mapNote.text, color: mapNote.color }]
+          : st.map && st.map.id === s.map && st.map.linked === false ? [{ text: T("os.map.cut"), color: 12 }, T("os.map.i1")]   // (the server's check)
+          : [T("os.map.i1"), T("os.map.i2")], d => stepMap(d)),
       s.map ? { key: "size", label: T("os.size") + T("os.size." + (st.map && st.map.id === s.map ? st.map.size : s.size)), align: "left", static: true, attr: 8 }
         : row("size", T("os.size") + T("os.size." + s.size), [T("os.size.i1"), T("os.size.i2")], d => setSetting("size", cycle(SIZES, s.size, d))),
       // (a mode with a goal - gold, waves, kills...: the goal instead of rounds to win, one round decides it)

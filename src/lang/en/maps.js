@@ -52,4 +52,14 @@ Lang.extend("en", {
   "os.map": "Map: ", "os.map.random": "random", "os.map.i1": "A random world, or one of your maps (Maps on the main menu):",
   "os.map.i2": "it goes to the server, every player gets the same.", "os.map.sending": "Sending the map...", "os.map.err": "Could not send the map: {msg}",
   "pg.cant.map": "The map has fewer bases than there are tanks.",
+  // a way between the bases (TunnelerEngine.mapReach), map files
+  "map.cut": "No way for a tank to base {list} from the others.",
+  "map.cut.dig": "Rock and base walls stop tanks: dig a way (dirt or tunnel).",
+  "map.cut.play": "A tank can't reach every base: dig a way in the editor.",
+  "lc.err.path": "A tank can't reach every base of this map: dig a way (Maps).",
+  "os.map.cut": "A tank can't reach every base of this map: choose another.",
+  "pg.cant.path": "A tank can't reach every base of the map.",
+  "map.file": "Open a map file", "map.file.i": "A .tmap file saved here or sent by someone else.", "map.file.err": "That file is not a map.",
+  "map.tofile": "Save as a file", "map.tofile.i": "Downloads it as a .tmap file - to keep it or send it.",
+  "map.saved": "Saved: {where}", "map.save.err": "The file could not be saved.",
 });

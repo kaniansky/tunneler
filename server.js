@@ -114,6 +114,9 @@ const { NetProto } = require("./src/js/netproto.js");
 const { Challenge } = require("./src/js/challenge.js");
 const { Worker } = require("worker_threads");
 const { MapData } = require("./src/js/mapdata.js");
+// the engine only for TunnelerEngine.mapReach (rooms' maps): loaded when first needed
+let engineModule = null;
+const mapEngine = () => (engineModule = engineModule || require("./src/js/engine.js")).TunnelerEngine;
 // this server's version (package.json): clients of another version can't create or join its games
 const VERSION = (() => { try { return require("./package.json").version || null; } catch (e) { return null; } })();
 const { FrameLog, ALL_BITS, EXT_BITS, F10, HASH_EVERY, ROLES, MAX_SLOTS, MAX_PLAYER_NAME, SEAT_KINDS, SETTINGS, cleanPlayerName, cleanChat,
@@ -549,7 +552,7 @@ function createServer(opts = {}) {
   // seated player other than the host isn't ready), "match" (one is on)
   function cantStart(room) {
     if (room.match) return "match";
-    const p = startProblem(slotsNow(room), room.mode, room.mapInfo ? room.mapInfo.bases : null);
+    const p = startProblem(slotsNow(room), room.mode, room.mapInfo ? room.mapInfo.bases : null, room.mapInfo ? room.mapInfo.linked : null);
     if (p) return p;
     if (!room.qp && seated(room).some(i => { const ws = room.seats[i].occ; return !ws.host && !ws.ready; })) return "ready";   // (quick play: nobody gets ready)
     return null;
@@ -756,11 +759,22 @@ function createServer(opts = {}) {
   // a map's id: its content's hash (10 characters of the replay ids' alphabet) - the same map is one object
   const mapIdOf = bytes => { const h = crypto.createHash("sha256").update(bytes).digest(); let id = ""; for (let i = 0; i < 10; i++) id += "abcdefghijkmnpqrstuvwxyz23456789"[h[i] & 31]; return id; };
   // a shared map by id -> {id, code, info: {id, name, size, bases}} or null (unknown, not a map)
+  // a shared map for a room: its code and {id, name, size, bases, linked} - linked: a tank can drive between all of its
+  // bases (TunnelerEngine.mapReach, up to ~100 ms on a large map: kept per id - the id is the content's hash)
+  const linkedCache = new Map();
+  function mapLinked(id, m) {
+    if (!linkedCache.has(id)) {
+      const r = mapEngine().mapReach(m);
+      if (linkedCache.size >= 2000) linkedCache.delete(linkedCache.keys().next().value);
+      linkedCache.set(id, !!(r && r.ok));
+    }
+    return linkedCache.get(id);
+  }
   async function loadMap(id) {
     if (!NetProto.mapId(id)) return null;
     const bytes = await maps.get(id);
     const m = bytes ? MapData.decode(bytes) : null;
-    return m ? { id, code: MapData.code(m), info: { id, name: m.name, size: m.size, bases: m.bases.length } } : null;
+    return m ? { id, code: MapData.code(m), info: { id, name: m.name, size: m.size, bases: m.bases.length, linked: mapLinked(id, m) } } : null;
   }
   const replayId = () => { const a = crypto.randomBytes(8); let s = ""; for (const b of a) s += "abcdefghijkmnpqrstuvwxyz23456789"[b & 31]; return s; };
 

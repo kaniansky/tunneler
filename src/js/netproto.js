@@ -163,9 +163,11 @@ function matchSlots(seats, occupied) {
 }
 // Why a match can't start, or null: "tanks" (fewer than 2), "human" (no player), "teams" (fewer than 2 -
 // not for the modes that make their own teams), "ai" (survival without AI tanks), "map" (the room's map has
-// fewer bases than the match would have tanks - mapBases: its number of bases, null = no map)
-function startProblem(slots, mode, mapBases) {
+// fewer bases than the match would have tanks - mapBases: its number of bases, null = no map), "path" (a tank can't
+// drive between all of the map's bases - mapLinked false: TunnelerEngine.mapReach, worked out by the server)
+function startProblem(slots, mode, mapBases, mapLinked) {
   if (slots.length < 2) return "tanks";
+  if (mapBases != null && mapLinked === false) return "path";
   if (mapBases != null && mapBases < slots.length) return "map";
   if (!slots.some(s => !s.bot)) return "human";
   if (mode === "survival" && !slots.some(s => s.bot)) return "ai";

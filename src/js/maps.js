@@ -1,5 +1,7 @@
 // Custom maps (docs/v6/MAPS.md): /maps = the maps kept in this browser (mapstore.js), newest first - one opens its
-// screen (edit, play in a skirmish, share a link, delete); "Make a new map", "Open a map link". /maps/<id> opens a
+// screen (edit, play in a skirmish, share a link, save as a file, delete); "Make a new map", "Open a map link", "Open a
+// map file". A map is played only when a tank can drive between all of its bases (TunnelerEngine.mapReach: the
+// editor's status line and menu say so, the list's bases go red). /maps/<id> opens a
 // map's screen (the desktop app: /maps.html?id=), /map/<id> a shared map (fetched, kept, its screen; the app:
 // /maps.html?share=).
 // The editor: the map in the game's LORES screen (the world map's dotted frame around it), the tools on the status
@@ -55,33 +57,74 @@ export function mount() {
   // ------------------------------------------------------------ the list
   const WIDE = [30, 12], NARROW = [16, 8];                // (name, size; the bases take the rest)
   const cols = () => ui.isNarrow() ? NARROW : WIDE;
-  const ROWS = 12;
+  const ROWS = 11;
   let list = [];
   const rowText = r => {
     const C = cols();
     return UniText.padEnd(UniText.slice(UniText.fromRaw(r.name || "?"), C[0] - 1), C[0]) + UniText.padEnd(Lang.enc(sizeText(r.size)), C[1]) + r.bases;
   };
-  const rowSpans = () => { const C = cols(); return [[0, C[0], 0x0F], [C[0], C[0] + C[1], 0x0B], [C[0] + C[1], 200, 0x0A]]; };
+  // (the bases green, red while the map can't be played - too few, or not every base reaches the others)
+  const rowSpans = r => { const C = cols(); return [[0, C[0], 0x0F], [C[0], C[0] + C[1], 0x0B], [C[0] + C[1], 200, MapStore.playable(r) ? 0x0C : 0x0A]]; };
+  const whyNot = r => ({ bases: T("map.need"), path: T("map.cut.play") })[MapStore.playable(r)];
   async function showList(keep) {
     try { list = await MapStore.list(); } catch (e) { list = []; }
     if (ed) return;
-    const items = list.map(r => ({ key: "m:" + r.id, label: rowText(r), align: "left", spans: rowSpans(),
-      info: [T("map.info", { size: sizeText(r.size), n: r.bases }), T(mobile ? "map.row.i.touch" : "map.row.i")], go: () => detail(r) }));
+    const items = list.map(r => ({ key: "m:" + r.id, label: rowText(r), align: "left", spans: rowSpans(r),
+      info: [T("map.info", { size: sizeText(r.size), n: r.bases }), MapStore.playable(r) ? { text: whyNot(r), color: 12 } : T(mobile ? "map.row.i.touch" : "map.row.i")],
+      go: () => detail(r) }));
     if (!list.length) items.push({ key: "none", label: T("map.none"), disabled: true });
     items.push({ key: "sep", separator: true });
     items.push({ key: "new", label: T("map.new"), info: [T("map.new.i")], go: () => newMap() });
     items.push({ key: "link", label: T("map.link"), info: [T("map.link.i")], go: () => openLink() });
+    items.push({ key: "file", label: T("map.file"), info: fileError ? [{ text: T("map.file.err"), color: 12 }] : [T("map.file.i")], go: () => openFile() });
     items.push({ key: "gap", label: "", disabled: true });
     items.push({ key: "back", label: T("back.main"), info: [T("back.main.i")], go: home });
-    const shown = Math.max(1, Math.min(items.length - 5, ROWS)), bottom = 3 + 3 + shown + 5;
+    const shown = Math.max(1, Math.min(items.length - 6, ROWS)), bottom = 3 + 3 + shown + 6;
     const C = cols();
     ui.show({
       lines: [{ row: 2, text: T("map.title"), color: 12 }],
-      box: { x: 2, y: 3, w: 76, rows: shown }, fixed: 5,
+      box: { x: 2, y: 3, w: 76, rows: shown }, fixed: 6,
       header: UniText.padEnd(" " + T("map.h.name"), C[0] + 1) + UniText.padEnd(T("map.h.size"), C[1]) + T("map.h.bases"),
       items, infoRow: bottom + 2, back: home,
     }, keep);
   }
+
+  // ------------------------------------------------------------ map files (MapData.fileName: "<name>.tmap" = the encoded bytes)
+  // a .tmap file: checked (MapData.decode - anything odd: an error, nothing kept), kept with your maps (a new local id,
+  // its name from the file), its screen opened - also a map that can't be played yet (it can be edited)
+  let fileError = false;
+  async function readFile(f) {
+    const map = f && f.size <= 64 * 1024 ? MapData.decode(new Uint8Array(await f.arrayBuffer())) : null;
+    if (!map) { fileError = true; return showList(true); }
+    fileError = false;
+    const rec = await MapStore.save(map);
+    if (!ed) detail(rec);
+  }
+  function openFile() {
+    const inp = document.createElement("input");
+    inp.type = "file"; inp.accept = MapData.FILE_EXT + ",application/octet-stream";
+    inp.addEventListener("change", () => { const f = inp.files && inp.files[0]; if (f) readFile(f).catch(() => { fileError = true; showList(true); }); });
+    inp.click();
+  }
+  // a map as a file: the Android app has its own way into the Downloads folder (MainActivity.kt - a download does
+  // nothing in its web view) and the screen says where it went; a browser / the desktop app: a download.
+  // -> {text, color} for the item's info (Android), or null
+  function saveFile(map) {
+    const bytes = MapData.encode(map), name = MapData.fileName(map), A = window.TunnelerAndroid;
+    if (A && A.saveFile) {
+      let bin = "", where = "";
+      for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+      try { where = A.saveFile(name, btoa(bin)); } catch (e) { where = ""; }
+      return where ? { text: T("map.saved", { where }), color: 10 } : { text: T("map.save.err"), color: 12 };
+    }
+    const url = URL.createObjectURL(new Blob([bytes], { type: "application/octet-stream" }));
+    const a = document.createElement("a");
+    a.href = url; a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    return null;
+  }
+  let fileNote = null;                                     // {id, text, color}: what Save as a file did (Android)
 
   // ------------------------------------------------------------ a new map
   const form = { name: { value: "", max: MapData.MAX_NAME, width: MapData.MAX_NAME }, size: "medium", from: "dirt" };
@@ -125,17 +168,20 @@ export function mount() {
     const map = MapData.decode(r.code);
     if (!map) return showList();
     const sure = armed && performance.now() < armed;
-    const playable = map.bases.length >= MapData.MIN_BASES;
+    if (typeof r.linked !== "boolean") { const rr = TunnelerEngine.mapReach(map); r.linked = !!(rr && rr.ok); MapStore.put(r).catch(() => {}); }   // (a record from before the check)
+    const why = MapStore.playable(r), playable = !why;
     ui.show({
       lines: [{ row: 2, text: T("map.one.title"), color: 12 }, { row: 5, text: T("map.info", { size: sizeText(r.size), n: r.bases }), color: 11 }],
       text: [{ row: 4, col: 41 - (UniText.cols(r.name) >> 1), text: r.name, color: 15 }],
       box: { y: 7 }, infoRow: 18, back: () => { armed = 0; showList(); },
       items: [
         { key: "edit", label: T("map.edit"), info: [T("map.edit.i")], go: () => edit(r, map) },
-        { key: "play", label: T("map.play"), info: playable ? [T("map.play.i")] : [{ text: T("map.need"), color: 12 }],
+        { key: "play", label: T("map.play"), info: playable ? [T("map.play.i")] : [{ text: whyNot(r), color: 12 }],
           go: () => { if (!playable) return; store("tunneler.cpu.map", r.id); Nav.go("/#cpu"); } },
         { key: "share", label: T("map.share"), go: () => shareMap(r),
           info: shareNote && shareNote.id === r.id ? [{ text: shareNote.text, color: shareNote.color }] : [T("map.share.i1"), T("map.share.i2")] },
+        { key: "save", label: T("map.tofile"), info: fileNote && fileNote.id === r.id ? [{ text: fileNote.text, color: fileNote.color }] : [T("map.tofile.i")],
+          go: () => { const n = saveFile(map); fileNote = n && Object.assign({ id: r.id }, n); if (n) detail(r, true); } },
         { key: "delete", label: T("map.delete"), info: [sure ? { text: T("map.delete.sure"), color: 12 } : T("map.delete.i")],
           go: async () => {
             if (!sure) { armed = performance.now() + 4000; detail(r, true); setTimeout(() => { if (!ed && armed) { armed = 0; detail(r, true); } }, 4100); return; }
@@ -197,7 +243,7 @@ export function mount() {
   // ------------------------------------------------------------ the editor
   function edit(rec, map) {
     ed = { rec, map: MapData.copy(map), tool: "rock", brush: 1, zoom: 2, cx: map.w >> 1, cy: map.h >> 1, ox: 0, oy: 0,
-      undo: [], msg: null, menu: false, stroke: false, last: null, fill: "dirt", fillArmed: 0, changed: false, walled: null };
+      undo: [], msg: null, menu: false, stroke: false, last: null, fill: "dirt", fillArmed: 0, changed: false, reach: null, reachShown: null };
     // a medium / large map starts zoomed out so all of it shows
     while (ed.zoom > 0 && map.w * ZOOMS[ed.zoom] > VW * 1.0001) ed.zoom--;
     clampView(true);
@@ -298,7 +344,9 @@ export function mount() {
     return out;
   }
   function renderBar() {
-    if (ed) status.set(barRows(mobile));
+    if (!ed) return;
+    if (!ed.reach) reachSoon();
+    status.set(barRows(mobile));
   }
   // the status line's rows (a phone: 40 columns and room below the screen - three rows; a desktop: two, under the
   // 4:3 screen); the groups a row may drop have the higher prio numbers (StatusLine drops those first)
@@ -312,7 +360,9 @@ export function mount() {
       { text: ZOOM_TEXT[ed.zoom], attr: 0x0E, prio: 3 }, { text: pm("+"), attr: 0x0F, prio: 3, onClick: () => setZoom(1) }];
     const acts = [{ text: T("map.undo"), attr: ed.undo.length ? 0x0B : 0x08, prio: 0, onClick: () => undo() },
       { text: T("map.menu"), attr: 0x0D, prio: 0, onClick: () => openMenu() }];
-    const bases = { text: T("map.bases", { n: m.bases.length }), attr: m.bases.length >= MapData.MIN_BASES ? 0x0A : 0x0C, prio: 1 };
+    // (red while the map can't be played: too few bases, or not every base reaches the others - worked out a moment
+    // after a change: reachSoon)
+    const bases = { text: T("map.bases", { n: m.bases.length }), attr: m.bases.length >= MapData.MIN_BASES && (ed.reachShown || {}).ok !== false ? 0x0A : 0x0C, prio: 1 };
     const msg = ed.msg ? [{ text: ed.msg, attr: 0x0C, prio: 0 }] : [];
     if (phone) return [tools, brush.concat(acts), zoom.concat([bases], msg.length ? msg : [{ text: T("map.keys.touch"), attr: 0x08, prio: 5 }])];
     // (a desktop: the keys beside the tools - the row with room for them -, a message on the second row)
@@ -335,12 +385,12 @@ export function mount() {
   function snapshotUndo() {
     ed.undo.push({ cells: ed.map.cells.slice(), bases: ed.map.bases.map(b => ({ x: b.x, y: b.y })) });
     if (ed.undo.length > UNDO_MAX) ed.undo.shift();
-    ed.changed = true; ed.walled = null;
+    ed.changed = true; ed.reach = null;
   }
   function undo() {
     const u = ed.undo.pop();
     if (!u) return;
-    ed.map.cells.set(u.cells); ed.map.bases = u.bases; ed.walled = null;
+    ed.map.cells.set(u.cells); ed.map.bases = u.bases; ed.reach = null;
     render();
   }
   // painting: the brush stamped on every cell from the last one to (x, y)
@@ -350,6 +400,7 @@ export function mount() {
       const cx = x + dx, cy = y + dy;
       if (inMap(cx, cy) && !MapData.inFrame(m.size, cx, cy)) m.cells[cy * m.w + cx] = v;
     }
+    ed.reach = null;
   }
   function paintTo(x, y) {
     const [x0, y0] = ed.last || [x, y];
@@ -364,7 +415,7 @@ export function mount() {
     paintTo(ed.cx, ed.cy);
     render();
   }
-  function endStroke() { ed.stroke = false; ed.last = null; }
+  function endStroke() { ed.stroke = false; ed.last = null; if (!ed.reach) reachSoon(); }
   const baseUnder = (x, y) => ed.map.bases.findIndex(b => Math.abs(b.x - x) * MapData.CELL <= 17 && Math.abs(b.y - y) * MapData.CELL <= 17);
   // the base tool at the cursor: a base there goes, else a new one (when there is room)
   function baseAction() {
@@ -506,24 +557,38 @@ export function mount() {
 
   // ---- the editor's menu (Esc / Menu)
   const nameForm = { value: "", max: MapData.MAX_NAME, width: MapData.MAX_NAME };
-  // which bases are walled in by rock (the game digs a way out of them): the engine's own check on the map's world
-  function walledIn() {
-    if (ed.walled) return ed.walled;
-    const m = ed.map;
-    if (!m.bases.length) return (ed.walled = []);
-    const e = new TunnelerEngine(1, { map: MapData.code(m) });
-    MapData.paint(m, e.world, e.ws);
-    ed.walled = m.bases.map((b, i) => { const p = MapData.basePx(b); return e.openBase(p.x, p.y) > 0 ? i + 1 : 0; }).filter(Boolean);
-    return ed.walled;
+  // can a tank drive between all the bases, which ones are walled in by rock (the game digs a way out of them): the
+  // engine's own check on the world a match starts on (TunnelerEngine.mapReach; ~5 / 15 / 60 ms on a small / medium /
+  // large map) - the status line asks a moment after the last change (reachSoon), the menu and saving at once
+  function reachOf() {
+    if (!ed.reach) { ed.reach = TunnelerEngine.mapReach(ed.map) || { ok: true, groups: [], walled: [] }; ed.reachShown = ed.reach; }
+    return ed.reach;
+  }
+  function reachSoon() {
+    clearTimeout(ed.reachTimer);
+    const e = ed;
+    e.reachTimer = setTimeout(() => {
+      if (ed !== e || e.menu || e.stroke) return;
+      const was = (e.reachShown || {}).ok;
+      reachOf();
+      if (e.reachShown.ok !== was) renderBar();
+    }, 400);
+  }
+  // the bases (numbers from 1) a tank can't get to from the biggest group of bases that reach each other
+  function cutOff(r) {
+    const big = r.groups.reduce((a, g) => g.length > a.length ? g : a, []);
+    return r.groups.filter(g => g !== big).flat().sort((a, b) => a - b).map(i => i + 1).join(", ");
   }
   function openMenu() { ed.menu = true; endStroke(); ed.drag = null; pan = null; pinch = null; touches.clear(); statusEl.style.display = "none"; nameForm.value = ed.map.name; menu(); }
   function closeMenu() { setName(); ed.menu = false; statusEl.style.display = ""; render(); }
   // the name typed in the menu (a changed name is a change: kept when the screen is left some other way)
   function setName() { const n = MapData.cleanName(nameForm.value) || ed.map.name; if (n !== ed.map.name) { ed.map.name = n; ed.changed = true; } }
   function menu(keep, sel) {
-    const m = ed.map, n = m.bases.length, walled = walledIn();
-    const state = n >= MapData.MIN_BASES ? { text: T("map.ok", { n }), color: 10 } : { text: T("map.need"), color: 12 };
-    const backInfo = [state].concat(walled.length ? [{ text: T("map.walled", { list: walled.join(", ") }), color: 14 }] : []);
+    const m = ed.map, n = m.bases.length, r = reachOf(), walled = r.walled.map(i => i + 1);
+    // the state: too few bases / bases a tank can't reach (a way to dig) / ready (and the bases the game digs out)
+    const backInfo = n < MapData.MIN_BASES ? [{ text: T("map.need"), color: 12 }]
+      : !r.ok ? [{ text: T("map.cut", { list: cutOff(r) }), color: 12 }, { text: T("map.cut.dig"), color: 14 }]
+      : [{ text: T("map.ok", { n }), color: 10 }].concat(walled.length ? [{ text: T("map.walled", { list: walled.join(", ") }), color: 14 }] : []);
     const setT = d => { ed.tool = step(TOOLS, ed.tool, d); menu(true); };
     const setB = d => { ed.brush = Math.max(0, Math.min(BRUSHES.length - 1, ed.brush + d)); menu(true); };
     const setF = d => { ed.fill = step(["dirt", "rock", "tunnel"], ed.fill, d); ed.fillArmed = 0; menu(true); };
@@ -542,7 +607,9 @@ export function mount() {
             if (!sure) { ed.fillArmed = performance.now() + 4000; return menu(true); }
             ed.fillArmed = 0; snapshotUndo(); m.cells.fill(VALUE[ed.fill]); MapData.frame(m); closeMenu();
           } },
-        { key: "undo", label: T("map.undo"), disabled: !ed.undo.length, info: [T("map.undo.i")], go: () => { undo(); ed.menu = true; ed.walled = null; menu(true); } },
+        { key: "undo", label: T("map.undo"), disabled: !ed.undo.length, info: [T("map.undo.i")], go: () => { undo(); ed.menu = true; menu(true); } },
+        { key: "tofile", label: T("map.tofile"), info: ed.fileNote ? [{ text: ed.fileNote.text, color: ed.fileNote.color }] : [T("map.tofile.i")],
+          go: () => { setName(); ed.fileNote = saveFile(ed.map); if (ed.fileNote) menu(true); } },
         { key: "gap", label: "", disabled: true },
         { key: "save", label: T("map.save"), info: [T("map.save.i")], go: () => leaveEditor() },
       ],
@@ -570,7 +637,7 @@ export function mount() {
   window.tunnelerMapsList = () => showList(true);
   window.tunnelerMapsOpen = (rec, map) => edit(rec, map || MapData.decode(rec.code));   // (tests)
   window.tunnelerMapsApi = { showList, newMap, detail, openLink, openMenu, edit, stamp: (x, y) => { ed.cx = x; ed.cy = y; beginStroke(); endStroke(); },
-    setTool, setBrush, setZoom, undo, leaveEditor, render, barRows, say: msg => say(msg) };
+    setTool, setBrush, setZoom, undo, leaveEditor, render, barRows, say: msg => say(msg), readFile, saveFile, reachOf: () => reachOf() };
   if (sharedId && /^[a-z2-9]{10}$/.test(sharedId)) loadShared("", sharedId);
   else if (oneId) MapStore.get(oneId).then(r => { if (r) detail(r); else showList(); }, () => showList());
   else showList();

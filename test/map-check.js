@@ -13,11 +13,11 @@ let failures = 0;
 const ok = (name, fn) => { try { fn(); console.log("  ok  " + name); } catch (e) { failures++; console.log("  FAIL " + name + ": " + (e && e.stack || e)); } };
 const okAsync = async (name, fn) => { try { await fn(); console.log("  ok  " + name); } catch (e) { failures++; console.log("  FAIL " + name + ": " + (e && e.stack || e)); } };
 
-// a test map: dirt, a tunnel, a rock wall, bases
+// a test map: dirt, a tunnel, a rock wall (the tunnel goes through it: every base reaches the others), bases
 function testMap(size = "medium", nBases = 3) {
-  const m = MapData.blank(size);
-  for (let y = Math.floor(m.h * 0.3); y < Math.floor(m.h * 0.35); y++) for (let x = 12; x < m.w - 12; x++) m.cells[y * m.w + x] = MapData.TUNNEL;
-  for (let y = 12; y < m.h - 12; y++) m.cells[y * m.w + (m.w >> 1)] = MapData.ROCK;
+  const m = MapData.blank(size), t0 = Math.floor(m.h * 0.3), t1 = Math.floor(m.h * 0.35);
+  for (let y = t0; y < t1; y++) for (let x = 12; x < m.w - 12; x++) m.cells[y * m.w + x] = MapData.TUNNEL;
+  for (let y = 12; y < m.h - 12; y++) if (y < t0 || y >= t1) m.cells[y * m.w + (m.w >> 1)] = MapData.ROCK;
   const spots = [[0.2, 0.5], [0.8, 0.5], [0.5, 0.25], [0.5, 0.75], [0.2, 0.25], [0.8, 0.75], [0.2, 0.78], [0.8, 0.22]];
   for (const [fx, fy] of spots.slice(0, nBases)) {
     const x = Math.round(m.w * fx), y = Math.round(m.h * fy);
@@ -340,6 +340,10 @@ ok("NetProto: the cfg's map checked, engine options with the map (extended), can
   assert.strictEqual(NetProto.startProblem(two.concat([{ color: 2, team: 1, bot: true }]), "standard", 2), "map");
   assert.strictEqual(NetProto.startProblem(two, "standard", 2), null);
   assert.strictEqual(NetProto.startProblem(two, "standard", null), null);
+  assert.strictEqual(NetProto.startProblem(two, "standard", 2, false), "path", "bases not all connected");
+  assert.strictEqual(NetProto.startProblem(two.concat([{ color: 2, team: 1, bot: true }]), "standard", 2, false), "path");
+  assert.strictEqual(NetProto.startProblem(two, "standard", 2, true), null);
+  assert.strictEqual(NetProto.startProblem(two, "standard", null, false), null, "no map: no path problem");
   assert.strictEqual(NetProto.roomSettings({ map: "abcdefghij" }).map, "abcdefghij");
   assert.strictEqual(NetProto.roomSettings({ map: "../etc" }).map, "");
 });
@@ -620,6 +624,130 @@ const ticks = async (n = 8) => { for (let i = 0; i < n; i++) await tick(); };
     while (!/nobody/.test(w.Lang.decode(ui.spec.items.find(it => it.key === "slot2").label))) ui.spec.items.find(it => it.key === "slot2").change(1);
     ui.spec.items.find(it => it.key === "play").go();
     assert(/[?&]lmap=/.test(w.location.href) && /[?&]g=/.test(w.location.href), "the link: " + w.location.href);
+  });
+
+  // a small map split by a rock wall (2 cells) from top to bottom: base 1 left, base 2 right
+  const splitMap = () => {
+    const m = MapData.blank("small");
+    m.bases.push({ x: 30, y: 32 }, { x: 98, y: 32 });
+    fillCells(m, 63, 0, 64, m.h - 1, MapData.ROCK);
+    m.name = "Split";
+    return MapData.frame(m);
+  };
+  await okAsync("bases a tank can't all reach: the store knows (linked), the list and the map's screen say so, the editor's menu says which and to dig, the status line's bases go red; dug through: ready", async () => {
+    const env = makeEnv("/maps");
+    env.page("maps.html");
+    await ticks();
+    const w = env.win, ui = w.tunnelerMapsUI(), api = w.tunnelerMapsApi, T = w.Lang.t;
+    const rec = await w.MapStore.save(splitMap()), good = await w.MapStore.save(testMap("small", 2));
+    assert(rec.linked === false && good.linked === true, "linked kept with the records");
+    assert.strictEqual(w.MapStore.playable(rec), "path"); assert.strictEqual(w.MapStore.playable(good), "");
+    // a record from before the check (no linked): worked out when listed, kept
+    const old = Object.assign({}, rec, { id: "oldrecord2" }); delete old.linked;
+    await w.MapStore.put(old);
+    assert.strictEqual((await w.MapStore.list()).find(r => r.id === "oldrecord2").linked, false, "an old record filled");
+    await w.MapStore.remove("oldrecord2");
+    await api.showList(true);
+    const row = ui.spec.items.find(it => it.key === "m:" + rec.id), grow = ui.spec.items.find(it => it.key === "m:" + good.id);
+    assert.strictEqual(row.spans[2][2], 0x0C, "its bases red"); assert.strictEqual(grow.spans[2][2], 0x0A, "a playable one's green");
+    assert.strictEqual(row.info[1].text, T("map.cut.play"), "the list says why");
+    api.detail(rec);
+    const play = ui.spec.items.find(it => it.key === "play");
+    assert.strictEqual(play.info[0].text, T("map.cut.play"), "Play says why not");
+    play.go();
+    assert(!env.storage.get("tunneler.cpu.map"), "not played");
+    // the editor: the menu names the base that can't be reached and says to dig; the status line's bases red
+    w.tunnelerMapsOpen(rec);
+    const ed = w.tunnelerMapEditor();
+    api.openMenu();
+    assert.deepStrictEqual([...ui.spec.items[0].info.map(i => i.text)], [T("map.cut", { list: "2" }), T("map.cut.dig")], "which base, dig a way");
+    env.key("Escape", "Escape");
+    const basesSeg = () => api.barRows(false)[1].find(g => g.text === T("map.bases", { n: 2 }));
+    assert.strictEqual(basesSeg().attr, 0x0C, "the bases red");
+    // a way dug through the wall (tunnel, a brush 3 cells tall): ready to play, green
+    api.setTool("tunnel"); api.setBrush(-9); api.setBrush(1);
+    api.stamp(63, 32); api.stamp(64, 32);
+    api.reachOf();
+    assert.strictEqual(basesSeg().attr, 0x0A, "the bases green again");
+    api.openMenu();
+    assert.strictEqual(ui.spec.items[0].info[0].text, T("map.ok", { n: 2 }), "ready to play");
+    assert(ed.menu);
+    await ui.spec.items.find(it => it.key === "save").go();
+    await ticks();
+    assert.strictEqual((await w.MapStore.get(rec.id)).linked, true, "saved: linked");
+    // the status line works it out by itself a moment after a change (no menu)
+    w.tunnelerMapsOpen(rec);
+    api.setTool("rock"); api.stamp(63, 32); api.stamp(64, 32);
+    await new Promise(r => setTimeout(r, 500));
+    assert.strictEqual(basesSeg().attr, 0x0C, "red again after a moment");
+  });
+  await okAsync("map files: Save as a file (a download; the Android app's saveFile with the name and the bytes), Open a map file (kept as a new map, its screen); a broken file refused", async () => {
+    const env = makeEnv("/maps");
+    env.page("maps.html");
+    await ticks();
+    const w = env.win, ui = w.tunnelerMapsUI(), api = w.tunnelerMapsApi, T = w.Lang.t;
+    const m = Object.assign(testMap("small", 2), { name: "Moja mapa / 2" });
+    const rec = await w.MapStore.save(m);
+    assert.strictEqual(MapData.fileName(m), "Moja-mapa-2.tmap"); assert.strictEqual(MapData.fileName({ name: "" }), "map.tmap");
+    // the Android app
+    const saved = [];
+    w.TunnelerAndroid = { saveFile: (name, b64) => { saved.push([name, b64]); return "Download/" + name; } };
+    api.detail(rec);
+    ui.spec.items.find(it => it.key === "save").go();
+    assert.strictEqual(saved.length, 1);
+    assert.strictEqual(saved[0][0], "Moja-mapa-2.tmap", "the name");
+    const bytes = Uint8Array.from(Buffer.from(saved[0][1], "base64"));
+    assert(sameMap(MapData.decode(bytes), MapData.decode(rec.code)), "the map's bytes");
+    assert.strictEqual(ui.spec.items.find(it => it.key === "save").info[0].text, T("map.saved", { where: "Download/Moja-mapa-2.tmap" }), "says where");
+    w.TunnelerAndroid = { saveFile: () => "" };
+    assert.strictEqual(api.saveFile(m).text, T("map.save.err"), "an Android error said");
+    // the editor's menu has it too
+    w.tunnelerMapsOpen(rec); api.openMenu();
+    w.TunnelerAndroid = { saveFile: (name, b64) => { saved.push([name, b64]); return "Download/" + name; } };
+    ui.spec.items.find(it => it.key === "tofile").go();
+    assert.strictEqual(saved.length, 2, "saved from the editor");
+    await ui.spec.items.find(it => it.key === "save").go();
+    await ticks();
+    // a browser: a download (no note)
+    delete w.TunnelerAndroid; w.Blob = Blob;
+    assert.strictEqual(api.saveFile(m), null);
+    // Open a map file: a new map with the file's name, its screen; an unplayable map opens too
+    const file = b => ({ size: b.length, arrayBuffer: async () => b.buffer.slice(b.byteOffset, b.byteOffset + b.length) });
+    await api.readFile(file(MapData.encode(splitMap())));
+    const all = await w.MapStore.list();
+    assert.strictEqual(all.length, 2, "kept");
+    const got = all.find(r => r.name === "Split");
+    assert(got && got.id !== rec.id && got.linked === false, "a new local id, the file's name, not playable yet");
+    assert(ui.spec.items.some(it => it.key === "edit") && ui.spec.items.find(it => it.key === "play").info[0].text === T("map.cut.play"), "its screen");
+    // round trip: the saved file opens as the same map
+    await api.readFile(file(bytes));
+    assert(sameMap(MapData.decode((await w.MapStore.list())[0].code), MapData.decode(rec.code)), "the same map back");
+    // junk: an error on the list, nothing kept
+    await api.readFile(file(Uint8Array.from([1, 2, 3, 4, 5, 6, 7, 8, 9])));
+    assert.strictEqual((await w.MapStore.list()).length, 3, "nothing kept");
+    assert.strictEqual(ui.spec.items.find(it => it.key === "file").info[0].text, T("map.file.err"), "the list says so");
+    await api.readFile({ size: 10 * 1024 * 1024, arrayBuffer: async () => new ArrayBuffer(8) });
+    assert.strictEqual((await w.MapStore.list()).length, 3, "a huge file: nothing kept");
+  });
+  await okAsync("a skirmish with a map whose bases aren't all connected: the Map row and Start say why, nothing starts; a link with such a map: a screen saying so", async () => {
+    const env = makeEnv("/", "");
+    env.page("index.html");
+    const w = env.win, ui = w.tunnelerHomeUI(), T = w.Lang.t;
+    await w.MapStore.save(splitMap());
+    await w.tunnelerHomeMaps();
+    ui.spec.items.find(it => it.key === "cpu").go();
+    ui.spec.items.find(it => it.key === "map").change(1);
+    assert.strictEqual(ui.spec.items.find(it => it.key === "map").info[0].text, T("lc.err.path"), "the Map row");
+    const play = ui.spec.items.find(it => it.key === "play");
+    assert.strictEqual(play.info[0].text, T("lc.err.path"), "Start");
+    play.go();
+    assert(!/skirmish/.test(w.location.href), "not started");
+    const env2 = makeEnv("/skirmish", "?mode=cpu&slots=0:you:1,1:normal:2&map=abcdefgh23", { abcdefgh23: MapData.encode(splitMap()) });
+    env2.page("play.html");
+    await ticks(12);
+    assert(!env2.win.tunnelerEngine, "no game");
+    assert.strictEqual(env2.win.tunnelerNoMap().why, "path", "the reason");
+    assert(env2.win.tunnelerNoMap().ui.spec.lines.some(l => l.text === env2.win.Lang.t("map.cut.play")), "said");
   });
 
   console.log(failures ? "map-check: " + failures + " FAILED" : "map-check: all passed");

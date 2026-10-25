@@ -12,6 +12,8 @@
 //                                    the index of a base being moved)
 //   MapData.paint(map, world, ws)    the world bytes of the map (engine.world, ws bytes per row)
 //   MapData.fromWorld(size, world, ws)  a map from a generated world (the editor's "random world")
+//   MapData.fileName(map)            "<name>.tmap" - a map file is its encoded bytes (the "TM" magic and format byte
+//                                    tell it; decode checks it like any other bytes)
 import { UniText } from "./unitext.js";
 
 const CELL = 4;
@@ -175,6 +177,12 @@ function decode(src) {
 }
 
 const code = map => toCode(encode(map));
+// a file name for a map: its name's letters and digits (any script), the rest "-"; "map" when nothing is left
+const FILE_EXT = ".tmap";
+function fileName(map) {
+  const base = Array.from(cleanName(map && map.name).replace(/[^\p{L}\p{N}]+/gu, "-").replace(/^-+|-+$/g, "")).slice(0, 40).join("");
+  return (base || "map") + FILE_EXT;
+}
 function canonical(bytes) {
   const m = decode(bytes);
   return m ? encode(m) : null;
@@ -229,7 +237,7 @@ function fromWorld(size, world, ws) {
 export const MapData = {
   CELL, SIZES, DIMS, FRAME, MAX_BASES, MIN_BASES, MAX_NAME, TUNNEL, DIRT, ROCK, BASE_GAP,
   cleanName, blank, frame, inFrame, baseProblem, encode, decode, code, canonical, checkCode, toCode, fromCode,
-  paint, paintRow, fromWorld, dirtAt,
+  paint, paintRow, fromWorld, dirtAt, fileName, FILE_EXT,
   // a base's centre pixel
   basePx: b => ({ x: b.x * CELL + 2, y: b.y * CELL + 2 }),
   copy: m => ({ size: m.size, w: m.w, h: m.h, cells: m.cells.slice(), bases: m.bases.map(b => ({ x: b.x, y: b.y })), name: m.name }),

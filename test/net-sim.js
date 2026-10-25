@@ -556,6 +556,24 @@ async function main() {
     m1.send({ t: "set", size: "large" });
     await settle();
     check("the size can't change while a map is set", () => assert.strictEqual(m1.status.settings.size, "small"));
+    // a map whose bases a tank can't all drive between: shared like any other, but the room can't start with it -
+    // the server's own check (TunnelerEngine.mapReach), whatever the host's page says
+    const cut = MapData.blank("small");
+    cut.bases.push({ x: 25, y: 32 }, { x: 103, y: 32 });
+    for (let y = 0; y < cut.h; y++) { cut.cells[y * cut.w + 63] = MapData.ROCK; cut.cells[y * cut.w + 64] = MapData.ROCK; }
+    cut.name = "Cut map";
+    const cutId = (await (await fetch(`http://127.0.0.1:${port}/api/maps`, { method: "POST", body: Buffer.from(MapData.encode(cut)) })).json()).id;
+    check("a map whose bases aren't all connected is still shared (work in progress)", () => assert(NetProto.mapId(cutId)));
+    m1.send({ t: "set", map: cutId });
+    await updated(m1, st => st.map && st.map.id === cutId, "the cut map set");
+    check("its bases aren't all connected: st.map.linked false, can't start (\"path\")", () =>
+      assert(m1.status.map.linked === false && m1.status.cant === "path"));
+    m1.send({ t: "start" });
+    await settle();
+    check("the host's start is refused", () => assert(!m1.match && !srv.rooms.get(mr.id).match));
+    m1.send({ t: "set", map: mapId });
+    await updated(m1, st => st.map && st.map.id === mapId, "the map set again");
+    check("a connected map: linked", () => assert(m1.status.map.linked === true && m1.status.cant !== "path"));
     m2.send({ t: "ready", v: 1 });
     await settle();
     check("4 tanks on a map of 3 bases: can't start (\"map\")", () => assert.strictEqual(m1.status.cant, "map"));

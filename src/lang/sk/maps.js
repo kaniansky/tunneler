@@ -45,4 +45,14 @@ Lang.extend("sk", {
   "os.map": "Mapa: ", "os.map.random": "náhodná", "os.map.i1": "Náhodný svet alebo jedna z tvojich máp (Mapy v hlavnom menu):",
   "os.map.i2": "pošle sa na server, každý hráč dostane tú istú.", "os.map.sending": "Posielam mapu...", "os.map.err": "Mapu sa nepodarilo poslať: {msg}",
   "pg.cant.map": "Mapa má menej základní, ako je tankov.",
+  // cesta medzi základňami (TunnelerEngine.mapReach), súbory s mapami
+  "map.cut": "Tank sa k základni {list} od ostatných nedostane.",
+  "map.cut.dig": "Skala a steny základní tanky zastavia: vykop cestu (hlina alebo tunel).",
+  "map.cut.play": "Tank sa nedostane ku každej základni: vykop cestu v editore.",
+  "lc.err.path": "Tank sa nedostane ku každej základni tejto mapy: vykop cestu (Mapy).",
+  "os.map.cut": "Tank sa nedostane ku každej základni tejto mapy: vyber inú.",
+  "pg.cant.path": "Tank sa nedostane ku každej základni mapy.",
+  "map.file": "Otvoriť súbor s mapou", "map.file.i": "Súbor .tmap uložený tu alebo od niekoho iného.", "map.file.err": "Ten súbor nie je mapa.",
+  "map.tofile": "Uložiť ako súbor", "map.tofile.i": "Stiahne ju ako súbor .tmap - na uchovanie alebo poslanie.",
+  "map.saved": "Uložené: {where}", "map.save.err": "Súbor sa nepodarilo uložiť.",
 });
