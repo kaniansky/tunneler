@@ -608,7 +608,11 @@ none, i.e. a page from before 2.0 - is refused (POST 409 `{code:
   (invite links point at the server's own pages). The server's `/api` sends CORS headers (any origin,
   OPTIONS preflight). `.github/workflows/app-build.yml` builds Windows exe, Linux tar.gz / deb / rpm and
   macOS arm64 / x64 dmg; release.yml calls it and attaches them to the release; pushes to app/**
-  branches build artifacts only. Icons: `src-tauri/app-icon.png` -> `npx @tauri-apps/cli@2 icon`.
+  branches build artifacts only. Icons (owner, 2026-10-25: a blue tank seen from the side, flat colours with
+  hard-edged shading, on earth - no game graphics): `node tools/make-icons.js` draws it as SVG and renders every
+  icon (app-icon.png, src/icons, the favicons, site/img/icon.png, the Play icon, the Android mipmaps + adaptive
+  background colour); then `npx @tauri-apps/cli@2 icon src-tauri/app-icon.png -o <tmp>` and copy what
+  src-tauri/icons/ has.
 - Room lobby items (DESIGN-8P 26): "I am ready!" (pg.start) / "Not ready yet!" (pg.cancel) for seated
   players, "Start game" (pg.go) for the host (no more "Start now": the host starts once everybody seated
   is ready; open seats nobody took get no tank), "Copy invite link" ("Watch instead" removed 2026-10-24).

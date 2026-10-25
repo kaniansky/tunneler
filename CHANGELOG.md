@@ -12,6 +12,8 @@ a release is made by pushing a version tag (see CONTRIBUTING.md).
 - Homepage: the header stays at the top while scrolling (one row on a phone); the Linux repository commands use
   the page's full width.
 - `npm run check:phone` also plays an online game (a desktop host and the phone) to its end.
+- A new app icon: a blue tank seen from the side on earth (desktop app, Android, the web app, the favicon,
+  the homepage).
 - Computer tanks: far fewer drawn rounds between them (40 % -> about 12 %) - they get out of a point-blank duel
   in a narrow tunnel instead of firing until both are destroyed, and a winner dodges the last shots of the tank
   it just destroyed.

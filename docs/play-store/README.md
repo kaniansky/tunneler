@@ -7,7 +7,7 @@ Background: docs/ANDROID.md (build, signing, CI). Files in this folder:
 |---|---|
 | `listing.md` | App name, short and full description in en, sk, cs, uk, ru (with character counts) |
 | `forms.md` | Suggested answers: Data safety, content rating, target audience, ads, app access, category, contact |
-| `icon-512.png` | The app icon, 512 x 512, full square (Play rounds the corners itself) - `src-tauri/app-icon.png`'s 16 x 16 pixel grid, its transparent rounded corners filled with the dirt next to them |
+| `icon-512.png` | The app icon, 512 x 512, full square (Play rounds the corners itself) - `node tools/make-icons.js` |
 | `feature-graphic.png` | 1024 x 500 feature graphic |
 | `screenshots/phone-1..6-*.png` | Portrait phone screenshots, 1080 x 2160 (1:2 - Play allows at most 2:1) |
 | `screenshots/phone-7..8-landscape-*.png` | Landscape phone screenshots, 1920 x 1080 |

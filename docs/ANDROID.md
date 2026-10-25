@@ -37,7 +37,9 @@ What differs from the desktop app:
   a server on the local network (`192.168.1.5:8050` -> `http://...`). The public server is https / wss.
 - `INTERNET` is the only permission. Portrait and landscape both work (the touch controls lay out for
   each); rotating doesn't restart the page (`configChanges`). Black window background (no white flash).
-- Icon: `src-tauri/app-icon.png` as an adaptive icon on the dirt colour `#C3671C`.
+- Icon: an adaptive icon - `ic_launcher_foreground` (the tank inside the 66 % safe zone, the ground across the
+  whole width) on `#D48A3F` (`res/values/ic_launcher_background.xml`), plus `ic_launcher` / `ic_launcher_round`;
+  all from `node tools/make-icons.js`.
 
 ## Tools
 
@@ -129,7 +131,7 @@ don't touch it.
    run a closed test with testers for some days before it can publish to production).
 2. Create the app, package name `com.kaniansky.TunnelerOnline` (fixed forever once uploaded).
 3. Play App Signing on (the default); upload the signed `.aab` from a release.
-4. Store listing (texts, the 512 x 512 icon - `src-tauri/app-icon.png` scaled -, a 1024 x 500 feature
+4. Store listing (texts, the 512 x 512 icon - `docs/play-store/icon-512.png` -, a 1024 x 500 feature
    graphic, phone screenshots), content rating questionnaire, target audience, the Data safety form
    (online play sends the chosen player name and chat to the game server; nothing else is collected),
    and a privacy policy URL (e.g. a page on kaniansky.com/tunneler).
@@ -150,8 +152,7 @@ It rewrites `src-tauri/gen/android/` from the template. Then put back:
 - `app/build.gradle.kts`: the `keystoreProperties` signing block, release `signingConfig`, and
   `usesCleartextTraffic` "true" in `defaultConfig`
 - `res/values/themes.xml`, `res/values-night/themes.xml`: `android:windowBackground` black
-- the icons: `npx @tauri-apps/cli@2 icon src-tauri/app-icon.png -o /tmp/icons`, copy `/tmp/icons/android/*`
-  into `app/src/main/res/` (delete the template's `drawable/ic_launcher_background.xml` and
-  `drawable-v24/ic_launcher_foreground.xml`), and set `res/values/ic_launcher_background.xml` to `#C3671C`
+- the icons: `node tools/make-icons.js` writes the `mipmap-*` icons and `res/values/ic_launcher_background.xml`
+  (delete the template's `drawable/ic_launcher_background.xml` and `drawable-v24/ic_launcher_foreground.xml`)
 
 `git diff` shows the rest.
