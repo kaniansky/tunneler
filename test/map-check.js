@@ -193,6 +193,139 @@ ok("a replay of a map game plays back the same (the map travels in its options)"
   assert(!bad && p.done && e2.customMap, "it plays back the same");
 });
 
+console.log("the way between the bases (mapReach)");
+// cells (x0..x1, y0..y1) of map m set to v
+const fillCells = (m, x0, y0, x1, y1, v) => { for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) m.cells[y * m.w + x] = v; };
+// drive tank 1 (on map base 0: a seed that deals it there) along a way from mapReach; -> null when it got to the
+// other end (up to the other tank, who sits on it), else where it stuck
+function driveWay(m, way) {
+  const code = MapData.code(m), b0 = MapData.basePx(m.bases[0]), end = way[way.length - 1];
+  for (let seed = 1; seed < 60; seed++) {
+    const e = new E(seed, { map: code, slots: slots(2), autoStart: true });
+    toPlay(e, 2);
+    if (e.baseX[1] !== b0.x || e.baseY[1] !== b0.y) continue;
+    for (let s = 1; s < way.length; s++) {
+      if (Math.max(Math.abs(way[s][0] - end[0]), Math.abs(way[s][1] - end[1])) < 12) break;
+      const [tx, ty] = way[s], dx = tx - e.tankX[1], dy = ty - e.tankY[1];
+      const bits = (dy < 0 ? 1 : dy > 0 ? 2 : 0) | (dx < 0 ? 4 : dx > 0 ? 8 : 0);
+      for (let k = 0; k < 60 && (e.tankX[1] !== tx || e.tankY[1] !== ty); k++) e.step({ bits: [bits, 0], keys: [] });
+      if (e.tankX[1] !== tx || e.tankY[1] !== ty) return "stuck at " + e.tankX[1] + "," + e.tankY[1] + " (step " + s + ")";
+    }
+    return null;
+  }
+  return "no seed dealt tank 1 to base 0";
+}
+ok("two bases in one open area: connected (also in dirt - it is dug); junk -> null; 0 or 1 base: nothing to connect", () => {
+  for (const fill of [MapData.TUNNEL, MapData.DIRT]) {
+    const m = MapData.blank("small", fill);
+    m.bases.push({ x: 30, y: 30 }, { x: 90, y: 34 });
+    const r = E.mapReach(m);
+    assert(r.ok, "connected"); assert.deepStrictEqual(r.groups, [[0, 1]]); assert.deepStrictEqual(r.walled, []);
+    assert.deepStrictEqual(E.mapReach(MapData.code(m)), r, "a code: the same");
+  }
+  assert.strictEqual(E.mapReach("junk!"), null);
+  assert.strictEqual(E.mapReach(null), null);
+  const one = MapData.blank("small"); one.bases.push({ x: 30, y: 30 });
+  assert(E.mapReach(one).ok && E.mapReach(MapData.blank("small")).ok);
+});
+ok("a rock wall across the map: not connected, the groups on either side", () => {
+  const m = MapData.blank("medium", MapData.TUNNEL);
+  m.bases.push({ x: 40, y: 40 }, { x: 200, y: 60 }, { x: 60, y: 90 });
+  fillCells(m, 128, 0, 129, m.h - 1, MapData.ROCK);         // (8 px of rock: a tank can't dig it)
+  const r = E.mapReach(m);
+  assert(!r.ok); assert.deepStrictEqual(r.groups, [[0, 2], [1]]);
+  // a gap of one cell (4 px): still too narrow for a tank (5 px wide at least); two cells (8 px): a way
+  fillCells(m, 128, 60, 129, 60, MapData.TUNNEL);
+  assert(!E.mapReach(m).ok, "4 px gap");
+  fillCells(m, 128, 61, 129, 61, MapData.TUNNEL);
+  assert(E.mapReach(m).ok, "8 px gap");
+  // dirt in the gap: dug through
+  fillCells(m, 128, 60, 129, 61, MapData.DIRT);
+  assert(E.mapReach(m).ok, "dirt");
+});
+ok("a base walled in by thin rock: the game digs it a way out (openBase), so it is connected", () => {
+  const m = MapData.blank("small", MapData.TUNNEL);
+  m.bases.push({ x: 30, y: 30 }, { x: 90, y: 30 });
+  fillCells(m, 84, 24, 97, 37, MapData.ROCK);               // (rock 2 cells thick around base 1)
+  fillCells(m, 86, 26, 94, 34, MapData.TUNNEL);
+  const r = E.mapReach(m, { way: 1 });
+  assert(r.ok, "connected"); assert.deepStrictEqual(r.walled, [1]);
+  assert.strictEqual(driveWay(m, r.way), null, "driven in the game");
+  // thicker rock - beyond openBase's reach (sc(64) px, 32 on the small map): its way out ends in the rock - cut off
+  fillCells(m, 80, 20, 100, 40, MapData.ROCK);
+  fillCells(m, 86, 26, 94, 34, MapData.TUNNEL);
+  const r2 = E.mapReach(m);
+  assert(!r2.ok && r2.walled.includes(1)); assert.deepStrictEqual(r2.groups, [[0], [1]]);
+});
+ok("a base is entered only by its doorways: a tunnel to its side wall is no way in", () => {
+  const m = MapData.blank("small", MapData.ROCK);
+  m.bases.push({ x: 25, y: 32 }, { x: 80, y: 32 });
+  fillCells(m, 8, 8, 40, 56, MapData.TUNNEL);                // base 0's hall
+  // base 1: a long pocket above its top doorway (openBase finds that a way out: it digs nothing) and below it
+  fillCells(m, 78, 8, 82, 28, MapData.TUNNEL); fillCells(m, 78, 36, 82, 56, MapData.TUNNEL);
+  fillCells(m, 41, 31, 76, 33, MapData.TUNNEL);              // a tunnel from the hall to base 1's west wall
+  const r = E.mapReach(m);
+  assert.deepStrictEqual(r.walled, [], "nothing dug");
+  assert(!r.ok, "the side wall stops tanks"); assert.deepStrictEqual(r.groups, [[0], [1]]);
+  fillCells(m, 41, 10, 77, 12, MapData.TUNNEL);              // a tunnel into the pocket above the doorway
+  const r2 = E.mapReach(m, { way: 1 });
+  assert(r2.ok, "through the doorway");
+  assert.strictEqual(driveWay(m, r2.way), null, "a tank drives that way in the game");
+});
+ok("3+ bases, one cut off in a closed chamber (openBase sees enough room: no way dug)", () => {
+  const m = MapData.blank("medium", MapData.DIRT);
+  m.bases.push({ x: 40, y: 40 }, { x: 200, y: 40 }, { x: 120, y: 90 }, { x: 200, y: 95 });
+  fillCells(m, 170, 75, 235, 116, MapData.ROCK);
+  fillCells(m, 172, 77, 233, 114, MapData.TUNNEL);
+  const r = E.mapReach(m);
+  assert(!r.ok); assert.deepStrictEqual(r.groups, [[0, 1, 2], [3]]); assert.deepStrictEqual(r.walled, []);
+  fillCells(m, 170, 90, 171, 92, MapData.DIRT);              // a door of dirt
+  assert(E.mapReach(m).ok);
+});
+ok("the step table is the game's: the engine's tankBlocked on the match's world (bases drawn, ways dug)", () => {
+  const m = MapData.blank("small", MapData.ROCK);
+  m.bases.push({ x: 30, y: 30 }, { x: 95, y: 34 });
+  fillCells(m, 6, 6, 50, 26, MapData.TUNNEL); fillCells(m, 60, 40, 120, 58, MapData.DIRT); fillCells(m, 40, 27, 41, 50, MapData.TUNNEL);
+  const code = MapData.code(m), b0 = MapData.basePx(m.bases[0]), r = E.mapReach(m, { can: true });
+  let checked = 0;
+  for (let seed = 1; seed < 60 && !checked; seed++) {
+    const e = new E(seed, { map: code, slots: slots(2), autoStart: true });
+    toPlay(e, 2);
+    if (e.baseX[1] !== b0.x) continue;                       // (openBase ran in the map's base order)
+    for (let y = 3; y < e.worldH - 3; y++)
+      for (let x = 3; x < e.worldW - 3; x++) {
+        if ([1, 2].some(p => Math.abs(x - e.tankX[p]) < 8 && Math.abs(y - e.tankY[p]) < 8)) continue;   // (the tanks themselves)
+        for (let d = 0; d < 8; d++) {
+          const game = e.tankBlocked(x, y, d) <= 2, mine = !!(r.can[y * r.W + x] & (1 << d));
+          if (game !== mine) assert.fail(x + "," + y + " dir " + d + ": game " + game + ", mapReach " + mine);
+          checked++;
+        }
+      }
+  }
+  assert(checked > 500000, "checked " + checked);
+});
+ok("the way found is one a tank drives in the game (a narrow winding tunnel, ways dug out of both bases)", () => {
+  const m = MapData.blank("small", MapData.ROCK);
+  m.bases.push({ x: 20, y: 20 }, { x: 100, y: 44 });
+  fillCells(m, 20, 30, 100, 31, MapData.TUNNEL);             // 8 px tall
+  fillCells(m, 20, 20, 21, 30, MapData.TUNNEL); fillCells(m, 100, 31, 101, 44, MapData.TUNNEL);
+  const r = E.mapReach(m, { way: 1 });
+  assert(r.ok && r.way.length > 100, "a way");
+  assert.strictEqual(driveWay(m, r.way), null);
+});
+ok("fast enough for the editor: every size (the large map below 300 ms - typically ~70)", () => {
+  const ms = {};
+  for (const size of MapData.SIZES) {
+    const m = MapData.blank(size, MapData.TUNNEL), f = MapData.FRAME[size];
+    m.bases.push({ x: f + 6, y: f + 6 }, { x: m.w - f - 7, y: m.h - f - 7 });   // (opposite corners: the flood covers everything)
+    const t = [];
+    for (let k = 0; k < 5; k++) { const t0 = performance.now(); assert(E.mapReach(m).ok); t.push(performance.now() - t0); }
+    ms[size] = t.sort((a, b) => a - b)[2];
+  }
+  console.log("       mapReach median ms: " + Object.entries(ms).map(([k, v]) => k + " " + v.toFixed(1)).join(", "));
+  assert(ms.large < 300, "large: " + ms.large);
+});
+
 console.log("protocol");
 ok("NetProto: the cfg's map checked, engine options with the map (extended), cantStart \"map\", a map is never classic", () => {
   const code = MapData.code(testMap("medium", 2));
