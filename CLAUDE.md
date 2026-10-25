@@ -789,7 +789,9 @@ none, i.e. a page from before 2.0 - is refused (POST 409 `{code:
 - **Graphics setting** (docs/GRAPHICS.md - read it before touching gfx*.js; DESIGN-8P 29; display only,
   local): localStorage `tunneler.gfx` original / modern (the default since 5.0; no WebGL2 = original; "upscaled" and
   its CRT were dropped, a stored "upscaled" = modern) + `tunneler.gfx.modern` (JSON: style clean / retro /
-  custom, quality, terrain, edges, light, particles, glow, shake, camera, panel, fog - `Gfx.modern()`,
+  custom, quality (auto - the default, owner 2026-10-25: `AUTO` / `autoFrame` in the frame loop, the median frame time
+  of a window while a play screen moves -> one step smaller / bigger with a growing wait; no more "phones: medium") /
+  high / medium / low, terrain, edges, light, particles, glow, shake, camera, panel, fog - `Gfx.modern()`,
   `setModern`, `PRESETS`, `menuStyle()`); homepage Settings, category Graphics: the Graphics row, then
   Smooth scrolling (original) or the modern rows (texts `mod.*`). `src/js/gfx.js` (`Gfx`, before display.js on
   every page): `Gfx.attach(canvas)` (Display, StatusLine) lays a WebGL2 canvas over the 2D one (the 2D

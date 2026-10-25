@@ -15,7 +15,7 @@
 //   node tools/phone-check.js [out dir]       (public/ as it is)
 // Needs playwright-core (not a dependency: npm i --no-save playwright-core) and a Chromium - set CHROME to its
 // executable (default: playwright's download in ~/.cache/ms-playwright). The GPU is off (software WebGL), so the
-// pixel ratio is 2 (PHONE_DPR=3 like most phones: the modern graphics then run at a few frames a second).
+// pixel ratio is 2 (PHONE_DPR=3 like most phones: Quality auto then takes a few seconds to step down).
 "use strict";
 const fs = require("fs"), os = require("os"), path = require("path");
 let chromium;

@@ -20,7 +20,7 @@ const MODES = ["original", "modern"];
 // (PRESETS), changing one of them makes it "custom"
 const MODERN = {
   style: ["clean", "retro", "custom"],
-  quality: ["high", "medium", "low"],
+  quality: ["auto", "high", "medium", "low"],
   terrain: ["textured", "smooth", "flat"],
   edges: ["smooth", "pixel"],
   light: ["on", "off"],
@@ -36,12 +36,39 @@ const PRESETS = {
   retro: { terrain: "textured", edges: "pixel", light: "off", particles: "low", glow: "on", shake: "off", camera: "exact", panel: "classic", fog: "gray" },
 };
 const QUALITY = { high: 1, medium: 0.75, low: 0.5 };     // the modern output's size: device pixels times this
+// Quality "auto" (the default - owner, 2026-10-25): the output's size follows the play screen's frame times - one
+// step smaller (high -> medium -> low) while frames come slowly (the median of a window - AUTO.frames frames or
+// windowMs, at least 3 - over slowMs), one step bigger again after upFrames fast ones; a size that turned out slow
+// waits before it's tried again (30 s, doubled every time it's slow again, at most 10 minutes - no flipping back and
+// forth). Measured only while a play screen moves (its view windows are drawn every frame); off it, or while the
+// page is hidden, the count starts again.
+const AUTO = { steps: ["high", "medium", "low"], slowMs: 25, fastMs: 18, frames: 90, windowMs: 3000, upFrames: 1200, retryMs: 30000, maxRetryMs: 600000 };
+const auto = { level: 0, last: 0, times: [], sum: 0, fast: 0, slowAt: [], wait: [] };
+function autoFrame(now, playing) {
+  const hidden = !!(root.document && root.document.hidden);
+  if (!playing || hidden || !auto.last) { auto.last = playing && !hidden ? now : 0; auto.times = []; auto.sum = 0; return; }
+  const dt = now - auto.last;
+  auto.times.push(dt); auto.sum += dt;
+  auto.last = now;
+  if (auto.times.length < AUTO.frames && !(auto.sum >= AUTO.windowMs && auto.times.length >= 3)) return;
+  const t = auto.times.sort((a, b) => a - b), median = t[t.length >> 1];
+  auto.times = []; auto.sum = 0;
+  if (median > AUTO.slowMs && auto.level < AUTO.steps.length - 1) {
+    const l = auto.level;
+    auto.wait[l] = Math.min(AUTO.maxRetryMs, auto.wait[l] ? auto.wait[l] * 2 : AUTO.retryMs);
+    auto.slowAt[l] = now; auto.level++; auto.fast = 0;
+  } else if (median < AUTO.fastMs && auto.level > 0) {
+    auto.fast += t.length;
+    const up = auto.level - 1;
+    if (auto.fast >= AUTO.upFrames && !(now - auto.slowAt[up] < auto.wait[up])) { auto.level = up; auto.fast = 0; }
+  } else auto.fast = 0;
+}
+const qualityScale = () => { const q = Gfx.modern().quality; return QUALITY[q === "auto" ? AUTO.steps[auto.level] : q]; };
 
 const load = (k, d) => { try { const v = root.localStorage.getItem(k); return v == null ? d : v; } catch (e) { return d; } };
 const save = (k, v) => { try { root.localStorage.setItem(k, v); } catch (e) { /* no storage */ } };
 const pick = (list, v) => list.includes(v) ? v : list[0];
 // a touch screen without a mouse (phones, tablets)
-const touchOnly = () => { try { return !!root.matchMedia && root.matchMedia("(pointer: coarse)").matches && !root.matchMedia("(any-pointer: fine)").matches; } catch (e) { return false; } };
 
 const VS = `#version 300 es
 in vec2 aPos;
@@ -201,7 +228,7 @@ class Presenter {
     if (!this.on) return;
     const r = this.src.getBoundingClientRect(), out = this.out, st = out.style;
     if (!r.width || !r.height || !this.src.isConnected) { st.display = "none"; this.key = ""; return; }
-    const modern = Gfx.mode() === "modern", q = QUALITY[Gfx.modern().quality];
+    const modern = Gfx.mode() === "modern", q = qualityScale();
     const dpr = root.devicePixelRatio || 1;
     const W = Math.max(1, Math.round(r.width * dpr * q)), H = Math.max(1, Math.round(r.height * dpr * q));
     const key = [r.left, r.top, r.width, r.height, W, H, Gfx.mode(), Gfx.modernKey()].join(",");
@@ -331,10 +358,11 @@ const Gfx = {
     const r = {};
     for (const k in MODERN) r[k] = pick(MODERN[k], o[k]);
     if (r.style !== "custom" && !o.terrain) Object.assign(r, PRESETS[r.style]);    // (nothing stored yet: the preset)
-    if (!o.quality && touchOnly()) r.quality = "medium";   // (a phone / tablet: its many device pixels cost - unless chosen)
     return r;
   },
   modernKey: () => load("tunneler.gfx.modern", ""),
+  // Quality auto: the size it uses now ("high" / "medium" / "low"); AUTO + autoFrame for tests
+  autoQuality: () => AUTO.steps[auto.level], AUTO, autoFrame, autoReset() { Object.assign(auto, { level: 0, last: 0, times: [], sum: 0, fast: 0, slowAt: [], wait: [] }); },
   setModern(key, v) {
     if (!MODERN[key] || !MODERN[key].includes(v)) return;
     const o = Gfx.modern();
@@ -391,6 +419,8 @@ const Gfx = {
 function tick(now) {
   raf = 0;
   let any = false;
+  if (Gfx.mode() === "modern" && Gfx.modern().quality === "auto")
+    autoFrame(now, presenters.some(p => p.on && p.painted && p.painted.scene && p.painted.scene.windows && p.painted.scene.windows.length));
   for (const p of presenters) {
     try { p.frame(now); }
     catch (e) {                                             // never a blank screen: that canvas back to the original

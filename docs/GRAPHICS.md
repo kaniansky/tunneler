@@ -26,7 +26,7 @@ how the game and every menu screen are drawn. This file describes what is built.
   | Row | Choices |
   |---|---|
   | Style | clean / retro (custom when a row below differs from the style's preset) |
-  | Quality | high / medium / low (the output's size: 1 / 0.75 / 0.5 x the device pixels) |
+  | Quality | auto / high / medium / low (the output's size: 1 / 0.75 / 0.5 x the device pixels; auto - the default since 5.0.3 - steps down while the play screen's frames are slow and back up after a fast stretch: gfx.js `AUTO`) |
   | Terrain | textured / smooth / flat |
   | Tunnel edges | smooth / pixel |
   | Lighting | on / off |
@@ -155,5 +155,6 @@ how the game and every menu screen are drawn. This file describes what is built.
 
 - Upkeep: what is new on the game screen should also be supported in modern (the glowing "other" pixels
   and the upscaled classic panel soften it).
-- Speed: 8 views on the large map with light and particles - Quality low halves the pixels.
+- Speed: 8 views on the large map with light and particles - Quality low halves the pixels; auto does it by itself
+  (a phone at pixel density 3 with software rendering: low within seconds, the game at full speed again).
 - Fairness online: the smooth camera and the blurred fog change how things look, not what can be seen.

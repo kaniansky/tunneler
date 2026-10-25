@@ -74,7 +74,7 @@ function makeEnv(store, webgl, more) {
   const m0 = G.modern();
   assert.strictEqual(m0.style, "clean", "default style clean");
   for (const k in G.PRESETS.clean) assert.strictEqual(m0[k], G.PRESETS.clean[k], "clean preset: " + k);
-  assert.strictEqual(m0.quality, "high");
+  assert.strictEqual(m0.quality, "auto", "quality auto by default");
   G.setModern("style", "retro");
   const m1 = G.modern();
   for (const k in G.PRESETS.retro) assert.strictEqual(m1[k], G.PRESETS.retro[k], "retro preset: " + k);
@@ -165,6 +165,49 @@ function makeEnv(store, webgl, more) {
   runFrames();
   assert.strictEqual(out.width, 960, "quality low: half the device pixels");
   ok("presenter: overlay in device pixels (quality), redraws only after drawing, back to the original");
+
+  // quality auto: the play screen's frame times decide the size
+  G.setModern("quality", "auto");
+  G.autoReset();
+  runFrames();
+  assert.strictEqual(out.width, 1920, "auto: full size at first");
+  let t = 1000;
+  // (each phase after a gap: its own count - a gap starts the count again)
+  const frames = (n, ms, playing = true) => { G.autoFrame(t += 1000, false); for (let i = 0; i < n; i++) { t += ms; G.autoFrame(t, playing); } };
+  frames(200, 40, false);
+  assert.strictEqual(G.autoQuality(), "high", "slow frames off the play screen (menus): not counted");
+  frames(91, 16.7);
+  assert.strictEqual(G.autoQuality(), "high", "fast frames: high");
+  frames(91, 40);
+  assert.strictEqual(G.autoQuality(), "medium", "slow frames (40 ms): one step smaller");
+  runFrames();
+  assert.strictEqual(out.width, 1440, "auto at medium: 0.75 of the device pixels");
+  frames(91, 40);
+  assert.strictEqual(G.autoQuality(), "low", "still slow: low");
+  frames(91, 40);
+  assert.strictEqual(G.autoQuality(), "low", "never below low");
+  win.document.hidden = true;
+  frames(60, 16.7);
+  assert.strictEqual(G.autoQuality(), "low", "a hidden page counts nothing");
+  win.document.hidden = false;
+  frames(1300, 16.7);
+  assert.strictEqual(G.autoQuality(), "low", "fast for 20 s, but medium was slow less than 30 s ago: still low");
+  frames(1300, 16.7);
+  assert.strictEqual(G.autoQuality(), "medium", "fast, and medium's 30 s are over: one step bigger");
+  frames(1300, 16.7);
+  assert.strictEqual(G.autoQuality(), "high", "fast again: high");
+  frames(91, 40);
+  assert.strictEqual(G.autoQuality(), "medium", "slow again at high");
+  frames(1300, 16.7);
+  assert.strictEqual(G.autoQuality(), "medium", "high was slow again: it waits longer now (60 s)");
+  frames(3000, 16.7);
+  assert.strictEqual(G.autoQuality(), "high", "after the wait: high again");
+  frames(91, 21);
+  assert.strictEqual(G.autoQuality(), "high", "a bit slower than 60 fps (21 ms): stays");
+  frames(4, 1100);
+  assert.strictEqual(G.autoQuality(), "medium", "very slow (a frame a second): decided after 3 s, not 90 frames");
+  G.setModern("quality", "high");
+  ok("quality auto: smaller while the play screen's frames are slow, bigger again after a fast stretch, waiting longer each time");
 }
 
 // ---------------------------------------------------------------- the renderers register themselves

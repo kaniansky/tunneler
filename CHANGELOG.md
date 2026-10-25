@@ -12,6 +12,8 @@ a release is made by pushing a version tag (see CONTRIBUTING.md).
 - Homepage: the header stays at the top while scrolling (one row on a phone); the Linux repository commands use
   the page's full width.
 - `npm run check:phone` also plays an online game (a desktop host and the phone) to its end.
+- Modern graphics: Quality "auto" (the new default) draws at a lower resolution by itself while the game runs
+  slowly and goes back up when it's fast again - a slow phone or computer stays smooth. A chosen quality stays.
 
 ## 5.0.2
 
