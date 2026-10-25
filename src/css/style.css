@@ -97,3 +97,7 @@ html.modern .loading { color: #b9b0a2; background: #16130f; font-family: ui-mono
 .loading .cursor { animation: blink 1.07s steps(1) infinite; }
 @keyframes blink { 50% { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .loading .cursor { animation: none; } }
+/* a screen that failed to load or crashed (app.js failScreen): two lines over the whole screen, a click / tap retries */
+.loading.failed { background: #000; white-space: pre-line; text-align: center; line-height: 1.6; padding: 0 16px;
+  pointer-events: auto; cursor: pointer; }
+html.modern .loading.failed { background: #16130f; }

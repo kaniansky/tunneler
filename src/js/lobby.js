@@ -13,6 +13,7 @@ import { Lang } from "./lang.js";
 import { NetProto } from "./netproto.js";
 import { Pads } from "./pads.js";
 import { UniText } from "./unitext.js";
+import { Reload } from "./report.js";
 import { VERSION } from "./version.js";
 import { Nav } from "./nav.js";
 import { GameScreen } from "./screen.js";
@@ -170,7 +171,8 @@ export function mount() {
     try {
       const res = await fetch(Endpoint.api("/api/rooms"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const r = await res.json();
-      if (res.status === 409 && r.code === "version") { serverVersion = r.version; return list(); }   // (another version: see the list)
+      // (another version: a browser page reloads itself once for it - docs/v6/RELIABILITY.md 2.7 -, else see the list)
+      if (res.status === 409 && r.code === "version") { if (Reload.forVersion(String(r.version))) return; serverVersion = r.version; return list(); }
       if (!res.ok) throw new Error(r.error || "failed");
       if (r.hostKey) store.set("tunneler.host." + r.id, r.hostKey);   // this browser is the game's host
       Nav.go(Links.game(r.id));
@@ -230,6 +232,10 @@ export function mount() {
       try {
         const res = await fetch(Endpoint.api("/api/rooms"), { cache: "no-store" });
         reached = true;
+        // the server's version (every API answer names it): another one - a browser page reloads itself once for
+        // it (a new version went live while this page was open; docs/v6/RELIABILITY.md 2.7)
+        const sv = res.headers && res.headers.get ? res.headers.get("X-Tunneler-Version") : null;
+        if (sv && myVersion && sv !== myVersion && Reload.forVersion(sv)) return;
         r = res.ok ? await res.json() : null;
       } catch (e) {
         failed = true;

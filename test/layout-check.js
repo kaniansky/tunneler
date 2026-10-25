@@ -188,6 +188,7 @@ const tick = () => new Promise(r => setTimeout(r, 0));
         const env = makeEnv("/game/lob", size, touch, true);
         env.storage.set("tunneler.lang", code);
         if (who === "host") env.storage.set("tunneler.host.lob", "a".repeat(32));
+        env.win.tunnelerNetTimes = { gone: 1 };              // (the game gone at the second "no such room")
         env.page("online.html");
         await new Promise(r => setTimeout(r, 20));
         const ws = env.sockets[0], k = who === "host" ? 2 : who === "player" ? 1 : 5;
@@ -207,6 +208,27 @@ const tick = () => new Promise(r => setTimeout(r, 0));
         const it = key => ui.spec.items.find(x => x.key === key);
         if (it("gameset")) { it("gameset").go(); check(win, ui, W + ", online game settings (" + who + ")"); ui.spec.back(); }
         if (who === "host" && it("kick")) { it("kick").go(); check(win, ui, W + ", kick a player"); }
+        // the status screens of running reliably (docs/v6/RELIABILITY.md 2.5): the server restarting, no network,
+        // the game gone after a restart
+        if (who === "host") {
+          const status = what => { const s = win.tunnelerStatusUI(); if (s) check(win, s, W + ", " + what); else problems.push(W + ", " + what + ": not shown"); };
+          // (the next connection, open - a loaded machine runs the timers late)
+          const next = async n => { for (let t = 0; t < 400 && !(env.sockets.length > n && env.sockets[n].readyState === 1); t++) await new Promise(r => setTimeout(r, 10)); return env.sockets[env.sockets.length - 1]; };
+          ws.recv({ t: "restart", saved: true });
+          ws.readyState = 3; ws.onclose({ code: 1012 });
+          status("server restarting");
+          const ws2 = await next(env.sockets.length);
+          ws2.recv({ t: "hello", id: "lob", name: "Championship night", created: 1, you: { k: 2, host: true, name: "Norko" }, chat: [], match: null });
+          win.navigator.onLine = false;
+          ws2.readyState = 3; ws2.onclose({ code: 1006 });
+          status("no network");
+          win.navigator.onLine = true;
+          const ws3 = await next(env.sockets.length);
+          ws3.recv({ t: "err", code: "noroom", msg: "No such room" });
+          await new Promise(r => setTimeout(r, 5));
+          ws3.recv({ t: "err", code: "noroom", msg: "No such room" });
+          status("game gone after a restart");
+        }
         for (const t of env.sockets) t.close();
       }
       // ---------------------------------------------------------------- the replays

@@ -894,3 +894,23 @@ none, i.e. a page from before 2.0 - is refused (POST 409 `{code:
   folder store drops older files (and won't serve one not swept yet). test/replay-share-check.js (the API) + replay-check (the page). Texts `rp.*`,
   `home.replays`, `back.replays`, an Information section. Test hooks `tunnelerReplay / tunnelerReplayUI /
   tunnelerReplayList`. Test: replay-check.js.
+- **Running reliably** (v6, docs/v6/RELIABILITY.md - its audit lists what went wrong): server.js listens for every
+  socket's `error` (a message over maxPayload used to end the process), logs uncaught exceptions and goes on;
+  `shutdown()` on SIGTERM / SIGINT: clocks stopped, the **handoff snapshot** (rooms + matches with their frame logs,
+  gzip'd JSON) written to `stateStore` (the replays' bucket, object `handoff-state.json.gz`; else `STATE_DIR` / the
+  replays' folder; only with `opts.handoff` - the program - or `opts.stateStore`), then `{t:"restart", saved}` +
+  close 1012; the next server restores it at `listen` and, for an unknown room during `HANDOFF_WINDOW_MS`, on demand
+  (`refreshHandoff`; Render starts the new instance first); a restored match waits for its players (`waitAll`,
+  `RESUME_GRACE_MS`); another version: lobbies only; a room's / match's unknown plain-data fields go along (`extra`). `&sid=` (a page's random id): a new connection with the cid +
+  sid of one still in the room replaces it (`leaveRoom(room, ws, true)`; seat, tank, host role). `POST /api/errors`
+  (`clientError`, 4 KB, 10/min/address, 120/min in all; logged), `GET /api/health`, `X-Tunneler-Version` on /api.
+  online.js: dead connection = a ping answered by nothing for `DEAD_MS` (after a first pong) -> `dropSocket()`;
+  `closed(code)` backs off with jitter; `online` / visibilitychange reconnect now; restart / 1012 -> `rel.restart`
+  screen; `noroom` after a hello -> retried `GONE_RETRY_MS` (`saved: false`: not at all), then `rel.gone`; desync / an engine error -> `rebuild()`
+  (reconnect without &match: the whole log on a fresh engine; `MAX_REBUILDS` 2); `window.tunnelerNetTimes` (tests),
+  `tunnelerStatusUI`. report.js: `Report.error(where, err)` / `install()` (built pages, 5 per load), `Reload.forVersion`
+  (browser on its own site, once per version - online.js, lobby.js's 409 / list header), `Reload.afterChunkFailure`
+  (app.js: a failed route chunk reloads, once a minute; `failScreen` on #loading for that and a crashing mount;
+  `tunnelerApp.routes` for tests). `Lang.extend(code, {...})`: a feature's texts in `src/lang/<code>/<feature>.js`
+  (here reliability.js, `rel.*`). Tests: test/reliability-check.js, app-check (chunk / crash), layout-check (status
+  screens).

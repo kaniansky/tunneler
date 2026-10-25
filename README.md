@@ -236,7 +236,12 @@ then `npm run build && npx @tauri-apps/cli@2 build`.
 The live version at <https://tunneler-online.onrender.com/> runs this repo's `Dockerfile` on
 [Render](https://render.com) as a web service (port 8050, HTTPS and websockets handled by Render). Any
 host that runs a Docker image or `npm run build && npm start` and allows websockets works the same way.
-Games live in the server's memory, so a restart ends running games.
+Games live in the server's memory. When the server is stopped with SIGTERM (a deploy, a restart), it first
+writes every game (lobbies and running matches) to the same store as the shared replays: the bucket, or else a
+folder (`STATE_DIR`, by default the replays' folder). The next server reads them back, and the players' pages
+reconnect and carry on. Without a bucket or a writable folder, a restart ends running games. The log says
+which store it uses at start (`rooms on a restart: ...`). `GET /api/health` answers `{ok, version, uptime,
+rooms, matches, errors}`, and pages report the errors they catch to the server's log (`client error ...`).
 
 **Shared replays** (the links from "Share a link") need a place that survives restarts. In order:
 
