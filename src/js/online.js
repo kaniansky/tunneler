@@ -291,7 +291,7 @@ export function mount() {
   // gamepads / touch controls (pads.js): turned into the same keys as the keyboard - a player's tank
   // during play (any gamepad, the on-screen joystick + FIRE), arrows / Enter / Esc everywhere else
   Pads.start({ menu: () => !isPlayer() || !inPlay() || !!lobby, gamepadSet: () => "blue", touchSet: "blue",
-    hideTouch: () => !!lobby || !isPlayer() || !engine || engine.screen !== "play" });   // (the touch controls only while playing)
+    hideTouch: () => !!lobby || !!msgSnap || !isPlayer() || !engine || engine.screen !== "play" });   // (the touch controls only while playing - not under a status screen)
 
   function sendKeys() {
     const keys = keyboard.takeKeys();

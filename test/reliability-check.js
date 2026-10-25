@@ -27,7 +27,7 @@ let failures = 0;
 function check(name, fn) {
   try { fn(); console.log("  ok  " + name); } catch (e) { failures++; console.log("  FAIL " + name + ": " + e.message); }
 }
-const memStore = () => ({ name: "memory", data: null, puts: 0, async get() { return this.data; }, async put(b) { this.puts++; this.data = b; } });
+const memStore = () => ({ name: "memory", data: null, puts: 0, async get() { return this.data; }, async put(b) { this.puts++; this.data = b; }, async del() { this.data = null; } });
 const start = opts => new Promise(r => { const s = createServer(Object.assign({ tickMs: 4, quiet: true }, opts)); s.listen(0, port => r({ s, port })); });
 
 // ---------------------------------------------------------------- a client running the engine (as net-sim's)
@@ -285,10 +285,12 @@ async function main() {
     a.port = B.port;
     await a.connect(true);
     check("its player sits on their seat again (by the client id)", () => assert.strictEqual(a.seat(), 0));
-    B.s.close();
-    // a stale snapshot is ignored; one already restored is not read twice
+    check("the snapshot read is deleted (a later start never brings these rooms' old state back)", () => assert.strictEqual(store.data, null));
+    await B.s.shutdown();                                   // (B hands them on in turn)
+    // a stale snapshot is ignored (and deleted too)
+    await sleep(5);
     const C = await start({ stateStore: store, version: "6.0.0", handoffMaxAgeMs: 1 });
-    await sleep(100);
+    await until(() => store.data === null, "stale snapshot deleted", 5000);
     check("a snapshot older than the limit is ignored", () => assert.strictEqual(C.s.rooms.size, 0));
     C.s.close();
   }

@@ -179,8 +179,10 @@ async function s3Request(cfg, method, key, body) {
 }
 
 // ------------------------------------------------------------ the handoff store (docs/v6/RELIABILITY.md 2.3)
-// Where a shutting-down server leaves its rooms for the next one: {name, get() -> Buffer | null, put(Buffer)}.
+// Where a shutting-down server leaves its rooms for the next one: {name, get() -> Buffer | null, put(Buffer), del()}.
 // The bucket (survives a Render deploy, whose disk is wiped), else a folder (a docker-compose volume), else none.
+// The server that reads a snapshot deletes it: a later start (the next deploy's new instance, up while this one
+// still runs the games) must never bring back these rooms' old state.
 function s3StateStore(cfg) {
   return {
     name: "the bucket " + cfg.bucket,
@@ -194,6 +196,10 @@ function s3StateStore(cfg) {
       const r = await s3Request(cfg, "PUT", HANDOFF_KEY, buf);
       if (r.status < 200 || r.status >= 300) throw new Error("storage " + r.status);
     },
+    async del() {
+      const r = await s3Request(cfg, "DELETE", HANDOFF_KEY);
+      if (r.status >= 300 && r.status !== 404) throw new Error("storage " + r.status);
+    },
   };
 }
 function dirStateStore(dir) {
@@ -202,6 +208,7 @@ function dirStateStore(dir) {
     name: "the folder " + dir,
     async get() { try { return fs.readFileSync(f); } catch (e) { return null; } },
     async put(buf) { fs.writeFileSync(f + ".tmp", buf); fs.renameSync(f + ".tmp", f); },
+    async del() { try { fs.unlinkSync(f); } catch (e) { /* gone */ } },
   };
 }
 // errors that escaped every handler (counted for /api/health; the program logs them and keeps serving)
@@ -1129,16 +1136,20 @@ function createServer(opts = {}) {
     if (!force && (!handoffPending() || Date.now() - lastPoll < handoffPollMs)) return Promise.resolve();
     lastPoll = Date.now();
     polling = (async () => {
-      try { const buf = await stateStore.get(); if (buf) restoreSnapshot(buf); }
-      catch (e) { say("handoff: could not read", stateStore.name + ":", e && e.message); }
-      finally { polling = null; }
+      try {
+        const buf = await stateStore.get();
+        // (a snapshot read for the first time - restored or too old - is deleted: never restored twice)
+        if (buf && restoreSnapshot(buf) >= 0 && stateStore.del) await stateStore.del().catch(e => say("handoff: could not delete the snapshot:", e && e.message));
+      } catch (e) {
+        say("handoff: could not read", stateStore.name + ":", e && e.message);
+      } finally { polling = null; }
     })();
     return polling;
   }
   function restoreSnapshot(buf) {
     let snap;
-    try { snap = JSON.parse(zlib.gunzipSync(buf, { maxOutputLength: 1 << 30 }).toString("utf8")); } catch (e) { say("handoff: unreadable snapshot"); return 0; }
-    if (!snap || snap.format !== 1 || !Array.isArray(snap.rooms) || !Number.isFinite(snap.at) || restored.has(snap.at)) return 0;
+    try { snap = JSON.parse(zlib.gunzipSync(buf, { maxOutputLength: 1 << 30 }).toString("utf8")); } catch (e) { say("handoff: unreadable snapshot"); return -1; }
+    if (!snap || snap.format !== 1 || !Array.isArray(snap.rooms) || !Number.isFinite(snap.at) || restored.has(snap.at)) return -1;
     restored.add(snap.at);
     if (Date.now() - snap.at > handoffMaxAgeMs) return 0;
     const sameVersion = snap.version === version;
