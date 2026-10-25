@@ -201,6 +201,24 @@ class Display {
     return [0, 80];
   }
 
+  // a text screen's rows of their own heights (snap.rowH, the phone layout): {y: first scan line per row, h:
+  // scan lines per row, total, clip}; null = 16 scan lines each. snap.view = {rows, units, top}: its first `rows`
+  // rows are scrolling content shown in a window `units` rows high from `top` (rows of 16 scan lines, any
+  // fraction), the rest below the window - content rows are drawn only within it (clip: its scan lines)
+  rowLayout(s, text, rows) {
+    if (!text || !s || !s.cols || !Array.isArray(s.rowH) || !(s.view || s.rowH.some(m => m !== 1))) return null;
+    const v = s.view, key = rows + "|" + (v ? v.rows + "," + v.units + "," + v.top : "");
+    if (this.layOf === s.rowH && this.layKey === key) return this.lay;
+    const y = [], h = [];
+    let at = 0;
+    const n = v ? Math.min(v.rows, rows) : 0, clip = v ? Math.round(v.units * 16) : 0, scroll = v ? Math.round(v.top * 16) : 0;
+    for (let r = 0; r < n; r++) { const k = Math.round(16 * (s.rowH[r] || 1)); y.push(at - scroll); h.push(k); at += k; }
+    at = clip;
+    for (let r = n; r < rows; r++) { const k = Math.round(16 * (s.rowH[r] || 1)); y.push(at); h.push(k); at += k; }
+    this.layOf = s.rowH; this.layKey = key;
+    return (this.lay = { y, h, total: at, clip: v ? clip : 0, n, scroll });
+  }
+
   // text cell [col, row] (0-based, in the 80-column screen) under a mouse event, or null
   cellAt(ev) {
     const r = this.canvas.getBoundingClientRect();
@@ -212,7 +230,15 @@ class Display {
       const c = Math.floor((ev.clientX - r.left) / r.width * (z.c1 - z.c0)), w = Math.floor((ev.clientY - r.top) / r.height * z.rows);
       return c >= 0 && w >= 0 && w < z.rows ? z.at(z.c0 + c, w) : null;
     }
-    const row = Math.floor((ev.clientY - r.top) / r.height * (this.snap.mode === "text" ? this.snap.rows || 25 : 100));
+    const lay = this.rowLayout(this.snap, this.snap.mode === "text", this.snap.rows || 25);
+    let row;
+    if (lay) {                                           // (rows of their own heights: the one at that scan line)
+      const y = (ev.clientY - r.top) / r.height * lay.total, inWin = lay.clip && y < lay.clip;
+      row = -1;
+      for (let k = inWin ? 0 : lay.n; k < (inWin ? lay.n : lay.y.length); k++) if (y >= lay.y[k]) row = k;
+      if (y >= lay.total) row = lay.y.length;
+      if (inWin && row >= 0 && y >= lay.y[row] + lay.h[row]) row = -1;   // (below the content)
+    } else row = Math.floor((ev.clientY - r.top) / r.height * (this.snap.mode === "text" ? this.snap.rows || 25 : 100));
     return col >= c0 && col < c1 && row >= 0 ? [col, row] : null;
   }
 
@@ -229,12 +255,21 @@ class Display {
     // a text screen of its own size (snap.cols x snap.rows: the phone layout, dosui.js) - the canvas takes
     // its shape (text cells as tall as on the 80 x 25 screen shown at 4:3: 1.35 x 16 for 9), as wide as the
     // page; back to the CSS's 4:3 for the others
+    // snap.rowH (the phone layout): each text row's height in rows of 16 scan lines - a taller one gets the
+    // font's 16 in its middle, the rest repeating its cell's top / bottom scan line (backgrounds, a highlight
+    // bar and box sides go on; text stays the font's size)
+    const lay = this.rowLayout(s, text, rows), scan = lay ? lay.total : rows * 16;
     if (text && (s.cols || z)) {
-      this.canvas.style.width = "calc(100vw - 16px)"; this.canvas.style.aspectRatio = (c1 - c0) * 9 + " / " + (rows * 16 * 1.35).toFixed(1);
+      // (as wide as the page, but never taller than the room under the safe area: style.css's .screen padding)
+      const ratio = (c1 - c0) * 9 / (scan * 1.35);
+      this.canvas.style.width = "min(calc(100vw - 16px), calc((100dvh - max(8px, env(safe-area-inset-top)) - 8px) * " + ratio.toFixed(4) + "))";
+      this.canvas.style.aspectRatio = (c1 - c0) * 9 + " / " + (scan * 1.35).toFixed(1);
       this.shaped = true;
-    } else if (this.shaped) { this.canvas.style.width = ""; this.canvas.style.aspectRatio = ""; this.shaped = false; }
+    } else if (this.shaped || this.canvas.style.aspectRatio) {   // (also a shape the previous screen left: app.js)
+      this.canvas.style.width = ""; this.canvas.style.aspectRatio = ""; this.shaped = false;
+    }
 
-    const width = (c1 - c0) * 9, height = text ? rows * 16 : 400;
+    const width = (c1 - c0) * 9, height = text ? scan : 400;
     if (this.canvas.width !== width || this.canvas.height !== height) {
       this.canvas.width = width; this.canvas.height = height;
       this.img = null;
@@ -243,15 +278,51 @@ class Display {
     const px = new Uint32Array(this.img.data.buffer);
     // (paletteFor: views.js gives the tank colours of the play screen / the world map)
     const pal = !text && this.paletteFor ? this.paletteFor(s) : paletteOf(s);
-    paint(px, width, 0, 0, vram, c0, c1, rows, text, pal, blinkOn, this.font, text ? uni : null, text ? null : s.dim);
+    if (!lay) paint(px, width, 0, 0, vram, c0, c1, rows, text, pal, blinkOn, this.font, text ? uni : null, text ? null : s.dim);
+    else {
+      const n = width * rows * 16;
+      if (!this.rowBuf || this.rowBuf.length !== n) this.rowBuf = new Uint32Array(n);
+      const src = this.rowBuf;
+      // (only the rows on the screen: a long page scrolls through hundreds)
+      const seen = r => r >= lay.n || (lay.y[r] + lay.h[r] > 0 && lay.y[r] < lay.clip);
+      for (let a = 0; a < rows;) {
+        if (!seen(a)) { a++; continue; }
+        let b = a;
+        while (b < rows && seen(b)) b++;
+        paint(src, width, 0, a * 16, vram.subarray(a * 160), c0, c1, b - a, text, pal, blinkOn, this.font, uni ? uni.subarray(a * 80) : null, null);
+        a = b;
+      }
+      if (lay.clip) px.fill(pal[0] !== undefined ? pal[0] : 0xFF000000, 0, lay.clip * width);   // (the window's background)
+      for (let r = 0; r < rows; r++) {
+        const o = r * 16 * width, RH = lay.h[r], pad = (RH - 16) >> 1;
+        const lo = r < lay.n ? 0 : lay.clip, hi = r < lay.n ? lay.clip : lay.total;   // (content rows: within the window)
+        for (let k = 0; k < RH; k++) {
+          const yy = lay.y[r] + k;
+          if (yy < lo || yy >= hi) continue;
+          const line = k < pad ? 0 : k < pad + 16 ? k - pad : 15;
+          px.set(src.subarray(o + line * width, o + (line + 1) * width), yy * width);
+          // (a block character - the volume meter's cells - stays its usual height: its background around it)
+          if (line === k - pad || RH === 16) continue;
+          for (let c = c0; c < c1; c++) {
+            const ch = vram[r * 160 + c * 2];
+            if (ch < 0xB0 || !((ch >= 0xB0 && ch <= 0xB2) || (ch >= 0xDB && ch <= 0xDF))) continue;
+            px.fill(pal[(vram[r * 160 + c * 2 + 1] >> 4) & 7], yy * width + (c - c0) * 9, yy * width + (c - c0) * 9 + 9);
+          }
+        }
+      }
+    }
     // a text cursor (DosUI: an empty input) - the VGA's underline: the cell's last two scan lines, bright
     // white, blinking with the text
     const cur = text && blinkOn && s.cursor && !z ? s.cursor : null;
     if (cur && cur.col >= c0 && cur.col < c1 && cur.row >= 0 && cur.row < rows)
-      for (let l = 13; l < 15; l++) px.fill(TEXT_U32[15], (cur.row * 16 + l) * width + (cur.col - c0) * 9, (cur.row * 16 + l) * width + (cur.col - c0) * 9 + 8);
+      for (let l = 13; l < 15; l++) {
+        const y = lay ? lay.y[cur.row] + ((lay.h[cur.row] - 16) >> 1) + l : cur.row * 16 + l;
+        if (lay && cur.row < lay.n && (y < 0 || y >= lay.clip)) continue;   // (scrolled out of the window)
+        px.fill(TEXT_U32[15], y * width + (cur.col - c0) * 9, y * width + (cur.col - c0) * 9 + 8);
+      }
     this.ctx.putImageData(this.img, 0, 0);
     // graphics "modern" (gfx.js): what was drawn - a text screen goes through gfx-text.js
-    Gfx.painted(this.canvas, text ? { text: { vram, uni: uni || null, rows, c0, c1, cursor: cur && s.cursor ? cur : null, blinkOn,
+    Gfx.painted(this.canvas, text ? { text: { vram, uni: uni || null, rows, rowH: lay ? s.rowH : null, view: lay ? s.view || null : null, c0, c1, cursor: cur && s.cursor ? cur : null, blinkOn,
       centres: z ? null : s.centres || null } }
       : { lores: s });
   }

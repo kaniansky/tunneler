@@ -34,11 +34,12 @@ let scope = null, seq = 0, first = true;
 function loading(on) { const el = $("loading"); if (el) el.hidden = !on; }
 
 // the canvases as a new route expects them (what routes change: the split screen's shape, the cursor, the
-// status line shown)
+// status line shown). The phone layout's shape (style width / aspect-ratio, display.js) stays until the new
+// screen's first draw sets its own - cleared here, the old picture flashed in the 4:3 shape in between.
 function resetScreen() {
   const c = $("screen"), s = $("status");
   c.classList.remove("half");
-  for (const k of ["width", "aspectRatio", "cursor"]) c.style[k] = "";
+  c.style.cursor = "";
   s.style.display = "none";
   for (const k of ["width", "cursor"]) s.style[k] = "";
 }

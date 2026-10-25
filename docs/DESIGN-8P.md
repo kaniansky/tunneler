@@ -672,6 +672,15 @@ graphics, the settings for it open with back button".
   is typed goes into the DOS input.
 - Touch controls (joystick, FIRE, ESC) only while the player drives a tank - not on menus, the room lobby
   or while spectating.
+- Follow-ups (owner, 2026-10-25, on the phone): the screen fits under the safe area (the camera cutout) and
+  is the same height on every screen; 36 columns (larger text); the rows one can tap 1.5 times as tall (the
+  highlight bar as tall), titles, borders, info and pages at the usual height; the content scrolls smoothly
+  (a drag, a flick, the selection gliding into view; Instructions and Information too) and keeps its place
+  when the screen refreshes (the online lobby); "Game settings" (a skirmish's, an online game's) on a screen
+  of its own with Back; no empty rows in the online lobby's Game box; no Fullscreen or Screen size settings
+  (always fit); Settings: Language a centred switch below the categories, rows lined up per category (a
+  category too wide for the phone left-aligned), a selected row too wide for its box slides (marquee); the
+  Android app saves files into Downloads (written over when saved again).
 
 ## 33. Replays (owner, 2026-10-25) - implemented
 

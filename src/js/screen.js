@@ -27,8 +27,10 @@ const GameScreen = {
   // a phone or tablet: the Android app, or a touch screen without a mouse - one player, the on-screen controls
   // (no split screen, no skirmish player 2, touch hints instead of keys; owner, 2026-10-24)
   mobile: () => GameScreen.android() || touchOnly(),
-  fullscreen: () => load("tunneler.fullscreen", "0") === "1",
-  scale: () => load("tunneler.scale", "fit") === "integer" ? "integer" : "fit",
+  // (a phone / tablet: neither setting - no Fullscreen (the app is full screen; a phone's browser keeps its own
+  // bars), the screen always fits the window - owner, 2026-10-25; what a desktop stored stays for it)
+  fullscreen: () => !GameScreen.mobile() && load("tunneler.fullscreen", "0") === "1",
+  scale: () => !GameScreen.mobile() && load("tunneler.scale", "fit") === "integer" ? "integer" : "fit",
   // (on = the stored setting; the screen follows)
   setFullscreen(on) { save("tunneler.fullscreen", on ? "1" : "0"); apply(on); changed(); },
   onChange(f) { listeners.push(f); Scope.onEnd(() => { const i = listeners.indexOf(f); if (i >= 0) listeners.splice(i, 1); }); },

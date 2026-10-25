@@ -507,6 +507,7 @@ export function mount() {
   function drawLobby(keep, selKey) {
     if (!lobby || !st) return;
     lobby.page = "lobby";
+    if (lobby.setOpen && lobbyUI.isNarrow()) return drawGameSettings(keep, selKey);
     const seats = seatItems(), sets = settingItems(), acts = actionItems();
     const lines = [], text = [];
     // the seats (the game's name in the top border) and the settings on top, the actions and the chat
@@ -536,12 +537,17 @@ export function mount() {
     // messages wrapped to the width (names in their tank colours), the Say input in it; the spectators on top
     if (lobbyUI.isNarrow()) {
       lines.length = 0; text.length = 0;
-      if (specs.length) lines.push({ row: 1, text: T("pg.specs.who") + Lang.enc(UniText.truncRaw(specs.join(", "), 30)), color: 8 });
+      if (specs.length) lines.push({ row: 1, text: T("pg.specs.who") + Lang.enc(UniText.truncRaw(specs.join(", "), DosUI.NARROW_W - 6)), color: 8 });
       boxes.length = 0;
-      boxes.push({ title, items: seats }, { title: T("box.settings"), items: sets }, { title: T("box.game"), items: acts });
+      // (the settings on a screen of their own, like a skirmish's - owner, 2026-10-25: Game settings in the Game box)
+      acts.splice(Math.min(1, acts.length), 0, { key: "gameset", label: T("lc.gameset"), info: [T("lc.set.i"), T("lc.set.i2")],
+        go: () => { lobby.setOpen = true; drawLobby(false); } });
+      // (no empty rows between the actions on a phone - the rows are tall enough apart: owner, 2026-10-25)
+      for (let k = acts.length - 1; k >= 0; k--) if (acts[k].disabled && !acts[k].label) acts.splice(k, 1);
+      boxes.push({ title, items: seats }, { title: T("box.game"), items: acts });
       if (!chatHidden()) {
-        chatForm.width = 34 - W(T("pg.say"));
-        boxes.push({ title: T("pg.chat"), items: chatRows(34).concat(say) });
+        chatForm.width = DosUI.NARROW_W - 2 - W(T("pg.say"));
+        boxes.push({ title: T("pg.chat"), items: chatRows(DosUI.NARROW_W - 2).concat(say) });
       }
     }
     const all = [].concat(...boxes.map(b => b.items)), enabled = it => !it.static && !it.disabled;
@@ -553,6 +559,18 @@ export function mount() {
       back: () => { if (isReady()) send({ t: "ready", v: 0 }); else leave(gamesHref); } };   // Esc: unready, else out
     spec.sel = Math.max(0, all.findIndex(it => it.key === first));
     lobbyUI.show(spec, keep && !selKey);
+    lobby.key = lobbyKey();
+  }
+  // the phone layout's Game settings screen (lobby.setOpen; drawLobby comes here while it is open, so the host's
+  // changes and everybody else's updates redraw it): the settings - the host's switches, read-only for the
+  // others - and Back to the lobby
+  function drawGameSettings(keep, selKey) {
+    const sets = settingItems(), close = () => { lobby.setOpen = false; drawLobby(false, "gameset"); };
+    const items = sets.concat({ key: "gap-back", label: "", disabled: true },
+      { key: "back-set", label: T("set.back"), info: [T("pg.set.back.i")], go: close });
+    const first = selKey || (items.find(it => !it.static && !it.disabled) || { key: "back-set" }).key;
+    lobbyUI.show({ lines: [{ row: 2, text: T("lc.gameset.title"), color: 12 }], box: { y: 5 }, infoRow: 21, items, back: close,
+      sel: Math.max(0, items.findIndex(it => it.key === first)) }, keep && !selKey);
     lobby.key = lobbyKey();
   }
   // The chat: a box from column x0 to x1, rows y0 to y1 (1-based, borders included) with the last

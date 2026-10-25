@@ -48,12 +48,17 @@ a release is made by pushing a version tag (see CONTRIBUTING.md).
 - **Replays**: every match you play or watch is kept (the newest 20, main menu, Replays). Watch it again like
   a spectator - every view, the live map or one tank, paused, 1/2x to 8x, 30 seconds back or on - see its
   statistics, or save it as a .replay file and send it to someone (Open a replay file plays it).
-- **Phones**: held upright, every menu is laid out for the narrow screen - one column, 40 characters wide
-  and as tall as the phone, boxes one below the other, scrolled with a finger; the Settings are a list of
-  categories, each opening on its own screen with a Back item. The round title, the statistics and the menu
-  after a match are enlarged to the screen's width (after a match the menu comes below the statistics). Tapping a text field opens the phone's keyboard; the
-  on-screen controls show only while you drive a tank. Phones and tablets have no split screen and no
-  player 2 (one player per device). Held sideways, a phone shows the usual 80-column screens.
+- **Phones**: held upright, every menu is laid out for the narrow screen - one column of large text, tall
+  rows that are easy to tap, boxes one below the other, scrolled smoothly with a finger (Instructions and
+  Information too); the Settings are a list of categories, each on its own screen with Back, and Language
+  is a switch below them; a skirmish's and an online game's settings open from "Game settings". The round
+  title, the statistics and the menu after a match are enlarged to the screen's width (after a match the
+  menu comes below the statistics). Tapping a text field opens the phone's keyboard; the on-screen controls
+  show only while you drive a tank. Phones and tablets have no split screen, no player 2 (one player per
+  device), no Fullscreen and Screen size settings. Held sideways, a phone shows the usual 80-column screens.
+  The Android app saves a replay into the phone's Downloads folder.
+- **Settings**: Language is a switch below the categories; each category's rows line up on their own, and a
+  row too wide for its box slides through when selected.
 - **Install the game from the browser** (an installable web app): it then starts like an app and plays split
   screen and skirmish without a connection.
 - The homepage (kaniansky.com/tunneler) is redesigned for 5.0, in the game's two looks: modern (the default)

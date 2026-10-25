@@ -139,7 +139,7 @@ function makeEnv(pathname) {
     addEventListener: (t, f) => { (listeners[t] = listeners[t] || []).push(f); }, removeEventListener() {},
     requestAnimationFrame: () => 0, cancelAnimationFrame() {},
     performance, setTimeout, clearTimeout, setInterval: (f, ms) => { const t = setInterval(f, ms); timers.push(t); return t; },
-    clearInterval, console, URLSearchParams, Math, atob, Uint8Array, TextEncoder, TextDecoder, Blob, Response,
+    clearInterval, console, URLSearchParams, Math, atob, btoa, Uint8Array, TextEncoder, TextDecoder, Blob, Response,
   };
   win.window = win; win.globalThis = win;
   const ctx = vm.createContext(win);
@@ -167,6 +167,18 @@ async function viewer(classicRep, extRep) {
     const keys = ui.spec.items.map(it => it.key);
     ok(["p0", "p1", "p2", "p3", "watch", "save", "delete", "back"].every(k => keys.includes(k)) && ui.spec.items[ui.sel].key === "watch",
       "a replay's screen: its players, Watch (selected), Save as a file, Delete, Back");
+    // the Android app: Save as a file goes through its own bridge (MainActivity.kt) into Downloads; the screen says where
+    const calls = [];
+    env.win.TunnelerAndroid = { saveFile: (name, b64) => { calls.push([name, b64]); return "Download/" + name; } };
+    await ui.spec.items.find(it => it.key === "save").go();
+    const saved = calls[0] && await Replay.fromBytes(Buffer.from(calls[0][1], "base64"));
+    ok(calls.length === 1 && /\.replay$/.test(calls[0][0]) && saved && saved.id === "new" &&
+      JSON.stringify(ui.spec.items.find(it => it.key === "save").info).includes("Download/" + calls[0][0]),
+      "the Android app: Save as a file - its bridge gets the .replay file, the screen says where it went");
+    env.win.TunnelerAndroid = { saveFile: () => "" };
+    await ui.spec.items.find(it => it.key === "save").go();
+    ok(JSON.stringify(ui.spec.items.find(it => it.key === "save").info).includes("12"), "a failed save: said in red");
+    delete env.win.TunnelerAndroid;
     const del = () => ui.spec.items.find(it => it.key === "delete");
     await del().go();
     ok(ui.spec.items.some(it => it.key === "delete") && JSON.stringify(del().info).includes("12"), "Delete asks once more (red)");

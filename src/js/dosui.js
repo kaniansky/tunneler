@@ -78,7 +78,11 @@ const U = UniText;
 // characters an input never takes: control, bidi, zero-width, private use (see NetProto's cleaning)
 const BAD_INPUT = /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff\ue000-\uf8ff\ufe00-\ufe0f]/;
 // the phone layout (drawNarrow): the screen's columns, and every box's place (left border column, interior width)
-const NC = 40, NB = { x: 2, w: NC - 4 };
+// the phone layout: NC columns; the rows one can tap (menu items) LINE_H times as tall as the others (the text
+// centred, the highlight bar as tall as the row), titles, borders, info lines and pages at the DOS screen's
+// height (owner, 2026-10-25: "the font should be little larger and the highlighted row taller", "the text below
+// has too tall line height"); NB = its boxes (x, width)
+const NC = 36, LINE_H = 1.5, NB = { x: 2, w: NC - 4 };
 // a page row's text without its {n} colour switches
 const visible = t => String(t).replace(/\{\d+\}/g, "");
 // font text wrapped to w display columns, at spaces where it can (a longer word is cut)
@@ -135,29 +139,56 @@ class DosUI {
     canvas.addEventListener("click", e => { if (this.active()) this.click(e); });
     canvas.addEventListener("contextmenu", e => { if (this.active() && (this.zoneClick(e, -1) || this.backClick(e))) e.preventDefault(); });
     canvas.addEventListener("wheel", e => { if (this.active() && this.wheel(e)) e.preventDefault(); }, { passive: false });
-    // touch screens: dragging a page scrolls it (a tap still goes back)
+    // touch screens: dragging a page scrolls it (a tap still goes back) - the engine's 80 x 25 page by rows; the
+    // phone layout's pages scroll smoothly like its menus (below)
     canvas.addEventListener("touchstart", e => {
-      if (this.active() && this.spec && (this.spec.engine || this.spec.nlines) && e.touches.length === 1) { this.touchY = e.touches[0].clientY; this.dragged = false; }
+      if (this.active() && this.spec && this.spec.engine && e.touches.length === 1) { this.touchY = e.touches[0].clientY; this.dragged = false; }
     }, { passive: true });
     canvas.addEventListener("touchmove", e => {
-      if (this.touchY == null || !this.active() || !this.spec || !(this.spec.engine || this.spec.nlines) || e.touches.length !== 1) return;
-      const h = (canvas.getBoundingClientRect().height || 400) / (this.spec.nlines ? this.narrowRows() : 25), d = Math.trunc((this.touchY - e.touches[0].clientY) / h);
+      if (this.touchY == null || !this.active() || !this.spec || !this.spec.engine || e.touches.length !== 1) return;
+      const h = (canvas.getBoundingClientRect().height || 400) / 25, d = Math.trunc((this.touchY - e.touches[0].clientY) / h);
       if (d) { this.touchY -= d * h; this.dragged = true; this.scrollPage(d); }
       e.preventDefault();
     }, { passive: false });
     canvas.addEventListener("touchend", () => { this.touchY = null; });
     // the phone layout (narrow): turning the phone or resizing lays the screen out again; a drag scrolls it
     window.addEventListener("resize", () => { if (this.active() && this.spec && !this.spec.page) this.draw(); });
+    // (a drag moves the content with the finger - fractions of a row: smooth; let go while moving: it glides on)
     canvas.addEventListener("touchstart", e => {
-      if (this.active() && this.narrow && e.touches.length === 1) { this.ndragY = e.touches[0].clientY; this.dragged = false; }
+      if (!this.active() || !this.narrow || e.touches.length !== 1) return;
+      this.ndrag = { y0: e.touches[0].clientY, top0: this.ntopU || 0, y: e.touches[0].clientY, t: performance.now(), v: 0 };
+      this.nanim = null; this.dragged = false;
     }, { passive: true });
     canvas.addEventListener("touchmove", e => {
-      if (this.ndragY == null || !this.active() || !this.narrow || e.touches.length !== 1) return;
-      const h = (canvas.getBoundingClientRect().height || 400) / this.narrow.rows, d = Math.trunc((this.ndragY - e.touches[0].clientY) / h);
-      if (d) { this.ndragY -= d * h; this.dragged = true; this.ntop = (this.ntop || 0) + d; this.nfollow = false; this.draw(); }
+      const d = this.ndrag;
+      if (!d || !this.active() || !this.narrow || e.touches.length !== 1) return;
+      const y = e.touches[0].clientY, now = performance.now(), upp = this.narrow.units / (canvas.getBoundingClientRect().height || 400);
+      if (Math.abs(y - d.y0) > 6) this.dragged = true;
+      if (this.dragged) {
+        if (now > d.t) d.v = 0.6 * d.v + 0.4 * ((d.y - y) * upp / (now - d.t));   // (units per ms)
+        this.nfollow = false;
+        this.presentNarrowAt(d.top0 + (d.y0 - y) * upp);
+      }
+      d.y = y; d.t = now;
       e.preventDefault();
     }, { passive: false });
-    canvas.addEventListener("touchend", () => { this.ndragY = null; });
+    canvas.addEventListener("touchend", () => {
+      const d = this.ndrag;
+      this.ndrag = null;
+      if (!d || !this.dragged || Math.abs(d.v) < 0.003 || performance.now() - d.t > 80) return;
+      const a = this.nanim = { fling: true };
+      let v = d.v, last = performance.now();
+      const step = now => {
+        if (this.nanim !== a || !this.active() || !this.narrow) return;
+        const dt = Math.min(40, now - last);
+        last = now;
+        const top = (this.ntopU || 0) + v * dt;
+        this.presentNarrowAt(top);
+        v *= Math.pow(0.994, dt);
+        if (Math.abs(v) > 0.0015 && top > 0 && top < this.narrow.maxTop) requestAnimationFrame(step); else this.nanim = null;
+      };
+      requestAnimationFrame(step);
+    });
     if (!opts.display) {
       const loop = now => { this.display.draw(now); requestAnimationFrame(loop); };
       requestAnimationFrame(loop);
@@ -204,11 +235,11 @@ class DosUI {
   // scroll the page shown by showPage: "up" / "down" / "pgup" / "pgdn" / "home" / "end" or a number of rows
   scrollPage(what) {
     const s = this.spec;
-    if (s && s.nlines) {
-      const view = this.narrowRows() - 3, max = Math.max(0, s.nlines.length - view);
+    if (s && s.nlines) {                                 // (the phone layout: glides there)
+      if (!this.narrow) return;
+      const view = this.narrow.view, from = this.nanim && this.nanim.to != null ? this.nanim.to : this.ntopU || 0;
       const d = typeof what === "number" ? what : { up: -1, down: 1, pgup: 1 - view, pgdn: view - 1, home: -1e6, end: 1e6 }[what];
-      const top = Math.max(0, Math.min(max, s.ntop + (d || 0)));
-      if (top !== s.ntop) { s.ntop = top; this.presentPage(); }
+      this.scrollNarrow(Math.max(0, Math.min(this.narrow.maxTop, from + (d || 0))), true);
       return;
     }
     if (s && s.engine && s.engine.pageScroll(what)) this.presentPage();
@@ -218,6 +249,7 @@ class DosUI {
     const keyOf = it => it && (it.key != null ? it.key : it.label);
     const prev = this.spec && keyOf(this.spec.items[this.sel]);
     this.spec = spec;
+    this.nkeep = !!keepSel;                    // (the same screen with fresh data: the phone layout keeps its scroll)
     if (spec.boxes) spec.items = [].concat(...spec.boxes.map(b => b.items));   // one selection over all boxes
     const n = spec.items.length;
     if (!keepSel) { this.sel = spec.sel || 0; this.top = 0; }
@@ -336,6 +368,13 @@ class DosUI {
     } else if (inp && !inp.value && room > 3 && U.cols(value) > room - 1) value = U.slice(value, room - 3) + "..";
     const labelW = U.cols(it.label), valueW = U.cols(value);
     let text = it.label + value;
+    // the selected row wider than its box: a marquee - it slides through to its end and back (this.marq, draw())
+    if (i === this.sel && !inp && it.align === "left" && U.cols(text) > b.w - 1) {
+      const over = U.cols(text) - (b.w - 1);
+      this.marq = { i, over };
+      const off = Math.min(this.marqOff || 0, over);
+      if (off > 0) { let k = 0, cut = 0; U.each(text, (bt, cp, w, a, z) => { if (k < off) { k += w; cut = z; } }); text = text.slice(cut); }
+    }
     if (it.align !== "left" && this.centres) this.centres.push([row - 1, b.x, b.x + b.w]);
     text = it.align === "left" ? U.padEnd(" " + text, b.w) : U.padEnd(" ".repeat(this.centreStart(i, b, U.cols(text))) + text, b.w);
     text = U.padEnd(U.slice(text, b.w), b.w);
@@ -408,6 +447,26 @@ class DosUI {
   boxOf(i) { return this.boxesGeom().find(b => i >= b.start && i < b.end); }
 
   draw() {
+    this.marq = null;
+    this.drawScreen();
+    this.marquee();
+  }
+  // the marquee of a selected row that doesn't fit (drawItem): a second at its start, then a column every
+  // MARQ_MS to its end, a second there, back to the start; another selection starts it anew
+  marquee() {
+    const m = this.marq;
+    if (!m || !this.active()) { if (this.marqTimer) { clearTimeout(this.marqTimer); this.marqTimer = null; } this.marqOff = 0; this.marqSel = -1; return; }
+    if (this.marqSel !== m.i) { this.marqSel = m.i; this.marqOff = 0; if (this.marqTimer) { clearTimeout(this.marqTimer); this.marqTimer = null; } }
+    if (this.marqTimer) return;
+    const off = this.marqOff || 0, wait = off === 0 || off >= m.over ? 1000 : 160;
+    this.marqTimer = setTimeout(() => {
+      this.marqTimer = null;
+      if (!this.marq || this.marqSel !== this.marq.i) return;
+      this.marqOff = off >= this.marq.over ? 0 : off + 1;
+      this.draw();
+    }, wait);
+  }
+  drawScreen() {
     const t = this.t, s = this.spec;
     if (this.softFor && !(s && !s.page && s.items[this.sel] && s.items[this.sel].input === this.softFor)) this.softBlur();   // (moved off it)
     // (the page changed the input's value - a chat message sent clears it: the hidden input follows, or its
@@ -499,11 +558,14 @@ class DosUI {
   // a page (Instructions / Information) on the phone layout: its rows ({c: centred, t: text with {n} colour
   // switches}) from ntop, the rule and "Tap to go back" at the bottom; up / down arrows while there is more
   presentNarrowPage() {
-    const s = this.spec, R = this.narrowRows(), VIEW = R - 3, o = this.t2 || (this.t2 = new TextBuf());
-    o.textMode(R); o.window(1, 1, 80, R); o.textBackground(0); o.clearScreen();
+    // (every row in the snapshot, the rule and "Tap to go back" below them; the renderer shows the rows in a
+    // window from view.top - smooth scrolling, like the menus: presentNarrowAt)
+    const s = this.spec, R = this.narrowRows(), VIEW = R - 2, n = Math.min(s.nlines.length, 598), R2 = n + 2;   // (below: the rule, the hint)
+    const o = this.t2 || (this.t2 = new TextBuf());
+    o.textMode(R2); o.window(1, 1, 80, R2); o.textBackground(0); o.clearScreen();
     const centres = [];
-    for (let k = 0; k < VIEW && s.ntop + k < s.nlines.length; k++) {
-      const l = s.nlines[s.ntop + k], w = U.cols(visible(l.t));
+    for (let k = 0; k < n; k++) {
+      const l = s.nlines[k], w = U.cols(visible(l.t));
       o.gotoXY(l.c ? Math.max(1, (NC >> 1) + 1 - (w >> 1)) : 2, k + 1);
       if (l.c) centres.push([k, 0, NC]);
       let color = 7;
@@ -513,17 +575,16 @@ class DosUI {
         o.textColor(color); o.write(part);
       }
     }
-    o.textColor(frameColor());
-    if (s.ntop > 0) { o.gotoXY(NC, 1); o.write("\x18"); }
-    if (s.ntop + VIEW < s.nlines.length) { o.gotoXY(NC, VIEW); o.write("\x19"); }
-    o.drawBottomRule(R - 1, 1, NC);
+    o.drawBottomRule(R2 - 1, 1, NC);
     const hint = " " + Lang.t("page.back.touch") + " ";
-    o.textColor(15); o.gotoXY(Math.max(1, NC + 1 - U.cols(hint)), R); o.write(U.slice(hint, NC));
-    this.narrow = null;
-    const snap = { t: 0, mode: "text", screen: "text", vram: o.vram.slice(0, 16000), cols: NC, rows: R };
+    o.textColor(15); o.gotoXY(Math.max(1, NC + 1 - U.cols(hint)), R2); o.write(U.slice(hint, NC));
+    if (this.nspec !== s) { this.ntopU = 0; this.nanim = null; this.nspec = s; }
+    this.narrow = { rows: R2, units: R, view: VIEW, maxTop: Math.max(0, n - VIEW), items: {}, links: [], height: n };
+    const snap = { t: 0, mode: "text", screen: "text", vram: o.vram.slice(0, Math.max(16000, R2 * 160)), cols: NC, rows: R2, rowH: new Array(R2).fill(1) };
     o.snapUni(snap);
     if (centres.length) snap.centres = centres;
-    this.present(snap);
+    this.nbase = snap;
+    this.presentNarrowAt(this.ntopU || 0);
   }
 
   isNarrow() {
@@ -531,17 +592,24 @@ class DosUI {
     return GameScreen.mobile() && h > w && w > 0;
   }
   narrowRows() {
-    const w = Math.max(160, (root.innerWidth || 390) - 16), h = Math.max(200, (root.innerHeight || 844) - 16);
-    return Math.max(25, Math.min(100, Math.floor(h / (w / NC * 16 * 1.35 / 9))));   // (the cells' shape: display.js)
+    // the height the page leaves the canvas: the window less the screen's padding - on a phone that includes the
+    // safe area at the top (the camera cutout / status bar strip: env(safe-area-inset-top), style.css)
+    let pad = 16;
+    try {
+      const box = this.canvas.closest && this.canvas.closest(".screen");
+      if (box && root.getComputedStyle) { const cs = root.getComputedStyle(box); pad = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0); }
+    } catch (e) { /* no layout (tests): the default */ }
+    const w = Math.max(160, (root.innerWidth || 390) - 16), h = Math.max(200, (root.innerHeight || 844) - pad);
+    return Math.max(25, Math.min(100, Math.floor(h / (w / NC * 16 * 1.35 / 9))));   // (rows of the DOS screen's height: display.js)
   }
   narrowBox(i) {
     const g = this.spec.boxes ? this.boxOf(i) : { start: 0, end: this.spec.items.length };
     return Object.assign({}, g, NB);
   }
   drawNarrow() {
-    const t = this.t, s = this.spec.narrow || this.spec, R = this.narrowRows(), VIEW = R - 7;
+    const t = this.t, s = this.spec.narrow || this.spec, R = this.narrowRows();
     const items = this.spec.items;
-    t.textMode(100); t.window(1, 1, 80, 100); t.textBackground(0); t.clearScreen();
+    t.textMode(600); t.window(1, 1, 80, 600); t.textBackground(0); t.clearScreen();
     this.centres = [];
     const rowItem = {}, links = [], centres = [];
     let row = 2;
@@ -583,40 +651,46 @@ class DosUI {
       line(row, "\xC0", "\xC4", "\xD9");
       row += 2;
     }
-    const height = row - 1;
-    // the view: follows the selection (unless a drag moved it), within the content
-    const selRow = +Object.keys(rowItem).find(r => rowItem[r] === this.sel) || 1;
-    if (this.nsel !== this.sel || this.nspec !== this.spec) { this.nfollow = true; this.nsel = this.sel; }
-    if (this.nspec !== this.spec && !this.nkeep) this.ntop = 0;
+    const height = Math.min(row - 2, 592);                // (to the last box's bottom border: no empty row after it)
+    // each content row's height: an item one can pick LINE_H, the rest 1 (in rows of the DOS screen's height)
+    const H = r => { const it = rowItem[r] != null ? items[rowItem[r]] : null; return it && !it.static && !(it.disabled && !it.label) ? LINE_H : 1; };
+    // the snapshot: every content row, then the info, the rule and the hint (7 rows); the renderer shows the
+    // content in a window VIEW rows high from view.top (units: rows of the DOS screen's height - any fraction:
+    // smooth scrolling), the rest below it - so the screen is always R rows high (owner, 2026-10-25)
+    const VIEW = R - 7, start = [0];
+    for (let r = 1; r <= height; r++) start.push(start[r - 1] + H(r));   // (row r from start[r - 1] to start[r])
+    const total = start[height], maxTop = Math.max(0, total - VIEW);
+    const selRow = +Object.keys(rowItem).find(r => rowItem[r] === this.sel) || 0;
+    const fresh = this.nspec !== this.spec && !this.nkeep;
+    // (the view follows the selection when it moved or on a new screen - not on a refresh: the online lobby's
+    // pings and chat redraw it, and a drag away from the selection stays where it is)
+    if (this.nsel !== this.sel || fresh) { this.nfollow = true; this.nsel = this.sel; }
+    if (fresh) { this.ntopU = 0; this.nanim = null; }
     this.nspec = this.spec;
-    let top = this.ntop || 0;
-    if (this.nfollow) {
-      if (selRow - 2 < top) top = selRow - 2;
-      if (selRow + 2 > top + VIEW) top = selRow + 2 - VIEW;
+    let target = Math.max(0, Math.min(this.ntopU || 0, maxTop));
+    if (this.nfollow && selRow) {                        // (the selection in view, a row of room around it)
+      if (start[selRow - 1] - 1 < target) target = start[selRow - 1] - 1;
+      if (start[selRow] + 1 > target + VIEW) target = start[selRow] + 1 - VIEW;
+      target = Math.max(0, Math.min(target, maxTop));
     }
-    top = this.ntop = Math.max(0, Math.min(top, height - VIEW));
-    // the screen: the visible rows of the content, then the info, the rule and the hint at the bottom
-    const o = this.t2 || (this.t2 = new TextBuf());
-    o.textMode(R); o.window(1, 1, 80, R); o.textBackground(0); o.clearScreen();
-    for (let r = 0; r < VIEW; r++) {
-      const src = (top + r) * 160, dst = r * 160;
-      o.vram.set(t.vram.subarray(src, src + NC * 2), dst);
-      if (t.uniUsed) { o.uni.set(t.uni.subarray((top + r) * 80, (top + r) * 80 + NC), r * 80); o.uniUsed = true; }
-    }
-    const map = {}, itemCentres = this.centres;
+    const R2 = height + 7, o = this.t2 || (this.t2 = new TextBuf());
+    o.textMode(R2); o.window(1, 1, 80, R2); o.textBackground(0); o.clearScreen();
+    o.vram.set(t.vram.subarray(0, height * 160), 0);
+    if (t.uniUsed) { o.uni.set(t.uni.subarray(0, height * 80), 0); o.uniUsed = true; }
+    const rowH = [];
+    for (let r = 1; r <= height; r++) rowH.push(H(r));
+    for (let k = 0; k < 7; k++) rowH.push(1);
+    // (content row r - 1-based, as gotoXY - is the snapshot's row r - 1, as the centred rows and the cursor have it)
+    const itemCentres = this.centres;
     this.centres = [];
-    for (const r in rowItem) if (r - 1 >= top && r - 1 < top + VIEW) map[r - top] = rowItem[r];
-    for (const [r, a, z] of centres.concat(itemCentres)) if (r >= top && r < top + VIEW) this.centres.push([r - top, a, z]);
-    const cursor = this.cursor && this.cursor.row >= top && this.cursor.row < top + VIEW ? { col: this.cursor.col, row: this.cursor.row - top } : null;
-    o.textColor(frameColor());
-    if (top > 0) { o.gotoXY(NC, 1); o.write("\x18"); }
-    if (top + VIEW < height) { o.gotoXY(NC, VIEW); o.write("\x19"); }
+    for (const [r, a, z] of centres.concat(itemCentres)) if (r >= 0 && r < height) this.centres.push([r, a, z]);
+    const cursor = this.cursor && this.cursor.row >= 0 && this.cursor.row < height ? this.cursor : null;
     const it = items[this.sel];
-    let ir = VIEW + 2;
+    let ir = height + 2;
     (it && it.info || []).forEach(l => {
       const text = typeof l === "string" ? l : l.text;
       for (const part of wrapCols(text, NC - 2)) {
-        if (ir > R - 2) return;
+        if (ir > R2 - 2) return;
         o.textColor(l.color == null ? 3 : l.color);
         const x = Math.max(1, (NC >> 1) + 1 - (U.cols(part) >> 1));
         o.gotoXY(x, ir); o.write(part);
@@ -625,15 +699,37 @@ class DosUI {
         ir++;
       }
     });
-    o.drawBottomRule(R - 1, 1, NC);
+    o.drawBottomRule(R2 - 1, 1, NC);
     const hint = " " + (GameScreen.mobile() ? Lang.t("ui.hint.touch") : Lang.t("ui.hint")) + " ";
-    o.textColor(15); o.gotoXY(Math.max(1, NC + 1 - U.cols(hint)), R); o.write(U.slice(hint, NC));
-    this.narrow = { rows: R, items: map, links, top, height };
-    const snap = { t: 0, mode: "text", screen: "text", vram: o.vram.slice(0, 16000), cols: NC, rows: R };
+    o.textColor(15); o.gotoXY(Math.max(1, NC + 1 - U.cols(hint)), R2); o.write(U.slice(hint, NC));
+    // (items: 0-based snapshot row + 1 -> item, as itemAt asks: the content row)
+    const items1 = {};
+    for (const r in rowItem) if (r <= height) items1[r] = rowItem[r];
+    this.narrow = { rows: R2, units: R, view: VIEW, maxTop, items: items1, links, height };
+    const snap = { t: 0, mode: "text", screen: "text", vram: o.vram.slice(0, Math.max(16000, R2 * 160)), cols: NC, rows: R2, rowH };
     o.snapUni(snap);
     if (cursor) snap.cursor = cursor;
     if (this.centres.length) snap.centres = this.centres;
-    this.present(snap);
+    this.nbase = snap;
+    this.scrollNarrow(target, !fresh && Math.abs(target - (this.ntopU || 0)) > 0.01);
+  }
+  // the phone layout's content window from `top` (units); animate: glide there (the selection moved out of view)
+  presentNarrowAt(top) {
+    if (!this.nbase || !this.narrow) return;
+    this.ntopU = Math.max(0, Math.min(top, this.narrow.maxTop));
+    this.present(Object.assign({}, this.nbase, { view: { rows: this.narrow.height, units: this.narrow.view, top: this.ntopU } }));
+  }
+  scrollNarrow(to, animate) {
+    if (!animate) { this.nanim = null; return this.presentNarrowAt(to); }
+    const a = this.nanim = { from: this.ntopU || 0, to, t0: performance.now() };
+    const step = now => {
+      if (this.nanim !== a || !this.active()) return;
+      const k = Math.min(1, (now - a.t0) / 180);
+      this.presentNarrowAt(a.from + (a.to - a.from) * (1 - Math.pow(1 - k, 3)));
+      if (k < 1) requestAnimationFrame(step); else this.nanim = null;
+    };
+    this.presentNarrowAt(a.from);
+    requestAnimationFrame(step);
   }
 
   // Where centred item i (w columns wide) starts in box b (0-based interior column): the box's widest
@@ -817,6 +913,7 @@ DosUI.boxWidth = items => {
 // The player's name for online games (docs/DESIGN-8P.md 26): localStorage "tunneler.name", at most
 // NAME_MAX display columns ("" = none yet: online play asks for one first - askName).
 DosUI.NAME_MAX = 12;
+DosUI.NARROW_W = NB.w;                   // (the phone layout's box width: screens with their own narrow version)
 DosUI.playerName = () => {
   let v = "";
   try { v = root.localStorage.getItem("tunneler.name") || ""; } catch (e) { /* private mode */ }

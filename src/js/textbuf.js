@@ -1,10 +1,10 @@
 // A text screen for the menus (dosui.js): the engine's Crt text calls on a B800-layout buffer of its own -
-// 160 bytes per row, 100 rows, a Unicode plane of 80 cells per row - so a snapshot of it is drawn like the
+// 160 bytes per row, 600 rows, a Unicode plane of 80 cells per row - so a snapshot of it is drawn like the
 // engine's (display.js, gfx-text.js). Unlike the engine's window, which stops at row 25 (the DOS screen),
 // it has every row: the phone layout's taller screen (docs/DESIGN-8P.md 32). Display only.
 import { UniText } from "./unitext.js";
 
-const COLS = 80, ROWS = 100;
+const COLS = 80, ROWS = 600;                // (600: the phone layout's long pages - every row in one snapshot)
 
 export class TextBuf {
   constructor() {

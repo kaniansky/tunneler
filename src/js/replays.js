@@ -74,7 +74,7 @@ export function mount() {
   };
 
   // ------------------------------------------------------------ the list
-  const WIDE = [14, 22, 30], NARROW = [14, 0, 14];       // (date, game, players; the length takes the rest)
+  const WIDE = [14, 22, 30], NARROW = [14, 0, 10];       // (date, game, players; the length takes the rest)
   const cols = () => ui.isNarrow() ? NARROW : WIDE;
   const ROWS = 12;
   function rowText(r) {
@@ -137,7 +137,8 @@ export function mount() {
       lines, box: { y: 7 }, infoRow: 9 + who.length + 7, back: () => { armed = 0; showList(); },
       items: [...who, { key: "gap0", label: "", disabled: true },
         { key: "watch", label: T("rp.watch"), info: [T("rp.watch.i")], go: () => Nav.go(Links.replay(r.id)) },
-        { key: "save", label: T("rp.save"), info: [T("rp.save.i"), T("rp.version", { v: r.version })], go: () => saveFile(r) },
+        { key: "save", label: T("rp.save"), go: () => saveFile(r),
+          info: saveNote && saveNote.id === r.id ? [{ text: saveNote.text, color: saveNote.color }, T("rp.version", { v: r.version })] : [T("rp.save.i"), T("rp.version", { v: r.version })] },
         { key: "delete", label: T("rp.delete"), info: [sure ? { text: T("rp.delete.sure"), color: 12 } : T("rp.delete.i")],
           go: async () => {
             if (!sure) { armed = performance.now() + 4000; detail(r, true); setTimeout(() => { if (!watching && armed) { armed = 0; detail(r, true); } }, 4100); return; }
@@ -148,8 +149,22 @@ export function mount() {
       sel: keep ? undefined : who.length + 1,
     }, keep);
   }
+  // the Android app: its own way into the Downloads folder (MainActivity.kt - a download does nothing in
+  // its web view), then the screen says where it went; a browser: a download
+  let saveNote = null;                                     // {id, text, color} under "Save as a file"
   async function saveFile(r) {
-    const url = URL.createObjectURL(await Replay.toBlob(r));
+    const blob = await Replay.toBlob(r), A = window.TunnelerAndroid;
+    if (A && A.saveFile) {
+      const b = new Uint8Array(await blob.arrayBuffer());
+      let bin = "";
+      for (let i = 0; i < b.length; i += 0x8000) bin += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000));
+      let where = "";
+      try { where = A.saveFile(Replay.fileName(r), btoa(bin)); } catch (e) { where = ""; }
+      saveNote = where ? { id: r.id, text: T("rp.saved", { where }), color: 10 } : { id: r.id, text: T("rp.save.err"), color: 12 };
+      if (!watching) detail(r, true);
+      return;
+    }
+    const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url; a.download = Replay.fileName(r);
     document.body.appendChild(a); a.click(); a.remove();

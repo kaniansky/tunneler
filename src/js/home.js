@@ -199,7 +199,10 @@ export function mount() {
   // right box is as wide as its widest row in any category - nothing moves when a value or the category changes.
   // categories (owner, 2026-10-24): Display, Graphics (the original's or the modern's settings), Sound,
   // Controls, Online, Language
-  const cats = () => ["display", "graphics", "sound", "controls", "online", "language"];
+  // (Language is no category: a switch of its own below them - owner, 2026-10-25)
+  const cats = () => ["display", "graphics", "sound", "controls", "online"];
+  const langRow = () => ({ key: "lang", label: T("home.lang") + Lang.name(Lang.code), info: [T("home.lang.i1"), T("home.lang.i2")],
+    go: () => setLang(1), change: setLang });
   let setCat = "display";
   const ONOFF = ["light", "glow", "shake"];
   const modValue = (k, v, c) => ONOFF.includes(k) ? Lang.raw(v === "on" ? "set.ping.on" : "set.ping.off", c) : Lang.raw("mod." + k + "." + v, c);
@@ -244,7 +247,23 @@ export function mount() {
   // (Alt+Enter, or leaving fullscreen with the browser's Esc: the Fullscreen row follows)
   GameScreen.onChange(() => { if (ui.spec && ui.spec.items && ui.spec.items.some(i => i.key === "fullscreen")) settings(true); });
   // the settings of category c
+  // a category's rows line up on their ": " within the category (owner, 2026-10-25: the value gets the room a
+  // longer label elsewhere would take): the padding every aligned row shares is taken off, click zones with it
+  // On the phone layout, a category whose lined-up rows don't fit its width (a long label in some language) goes
+  // left-aligned instead: each label right before its value (owner, 2026-10-25: "sound settings in russian on
+  // phone are unusable")
   function catItems(c) {
+    const rows = catRows(c), lead = it => typeof it.label === "string" && it.label.includes(": ") ? it.label.length - it.label.replace(/^ +/, "").length : -1;
+    const shift = (it, n) => n > 0 ? Object.assign({}, it, { label: it.label.slice(n),
+      zones: it.zones ? it.zones.map(z => Object.assign({}, z, { from: z.from - n, to: z.to - n })) : it.zones }) : it;
+    let cut = Math.min(...rows.map(lead).filter(n => n >= 0));
+    if (!(cut > 0) || cut === Infinity) cut = 0;
+    const out = rows.map(it => lead(it) < cut ? it : shift(it, cut));
+    const room = DosUI.NARROW_W - 1;                     // (the phone layout's box less its leading space)
+    if (!ui.isNarrow() || !out.some(it => lead(it) >= 0 && UniText.cols(it.label) > room)) return out;
+    return out.map(it => lead(it) > 0 ? shift(it, lead(it)) : it);
+  }
+  function catRows(c) {
     const L = (key, label, info, change, extra) => Object.assign({ key, label, info, align: "left",
       go: () => change(1), change }, extra || {});
     if (c === "sound") {
@@ -268,10 +287,12 @@ export function mount() {
       const rows = [];
       if (SCR()) {
         const sc = GameScreen;
-        if (!sc.android()) rows.push(L("fullscreen", pad("set.fullscreen") + onOffT(sc.fullscreen()), [T("set.fullscreen.i1"), T("set.fullscreen.i2")],
-          () => { sc.setFullscreen(!sc.fullscreen()); settings(true); }));
-        rows.push(L("scale", pad("set.scale") + T("scale." + sc.scale()), [T("set.scale.i1"), T("set.scale.i2")],
+        if (!sc.mobile()) {                            // (a phone / tablet: neither - screen.js)
+          rows.push(L("fullscreen", pad("set.fullscreen") + onOffT(sc.fullscreen()), [T("set.fullscreen.i1"), T("set.fullscreen.i2")],
+            () => { sc.setFullscreen(!sc.fullscreen()); settings(true); }));
+          rows.push(L("scale", pad("set.scale") + T("scale." + sc.scale()), [T("set.scale.i1"), T("set.scale.i2")],
             d => { sc.setScale(step(sc.SCALES, sc.scale(), d)); settings(true); }));
+        }
       }
       if (Display.TANK_COLOR_MODES) {
         const now = Display.tankColorMode();
@@ -340,7 +361,7 @@ export function mount() {
         L("ping", pad("set.ping") + onOffT(load("tunneler.ping", "0") === "1"), [T("set.ping.i"), T("home.lang.i2")], togglePing),
       ];
     }
-    return [L("lang", pad("home.lang") + Lang.name(Lang.code), [T("home.lang.i1"), T("home.lang.i2")], setLang)];   // language
+    return [];
   }
   // the right box: as wide as the longest label + the widest value or input of any category (this language)
   const settingsWidth = () => {
@@ -366,7 +387,7 @@ export function mount() {
     // (the category shown on the right in white - it stays marked while the selection is in the settings)
     const catRows = CATS.map(c => ({ key: "cat-" + c, label: T("set.cat." + c), info: [T("set.cat." + c + ".i")], attr: c === setCat ? 0x0F : 0,
       go: () => ui.nextBox(1), change: d => { if (d > 0) ui.nextBox(1); } }));
-    const left = catRows.concat({ key: "gap", label: "", disabled: true },
+    const left = catRows.concat({ key: "gap", label: "", disabled: true }, langRow(), { key: "gap2", label: "", disabled: true },
       { key: "back", label: T("back.main"), info: [T("back.main.i")], go: leave });
     // (the desktop app's Server input: narrower when the two boxes would not fit 80 columns - a longer
     // address scrolls inside it)
@@ -395,7 +416,8 @@ export function mount() {
         lines: [{ row: 2, text: T("set.title"), color: 12 }], box: { y: 5 }, sel: Math.max(0, CATS.indexOf(setCat)), infoRow: 19,
         items: CATS.map(c => ({ key: "cat-" + c, label: T("set.cat." + c), info: [T("set.cat." + c + ".i")],
           go: () => { setCat = c; setOpen = c; settings(); } }))
-          .concat({ key: "gap", label: "", disabled: true }, { key: "back", label: T("back.main"), info: [T("back.main.i")], go: leave }),
+          .concat({ key: "gap", label: "", disabled: true }, langRow(), { key: "gap2", label: "", disabled: true },
+            { key: "back", label: T("back.main"), info: [T("back.main.i")], go: leave }),
         back: leave,
       }, keep);
       return;
@@ -457,6 +479,8 @@ export function mount() {
     };
   }
 
+  // a phone: the skirmish's settings on a screen of their own (owner, 2026-10-25), opened from the Game box
+  let cpuSetOpen = false;
   function cpu(keep, sel) {
     const S = cpuSetup();
     const redraw = () => { saveCpu(); cpu(true); };
@@ -540,6 +564,28 @@ export function mount() {
       { key: "gap2", label: "", disabled: true },
       { key: "back", label: T("back.main"), info: [T("back.main.i")], go: () => main("cpu") },
     ];
+    if (MOBILE) {
+      const close = () => { cpuSetOpen = false; cpu(false, "settings"); };
+      if (cpuSetOpen) {
+        ui.show({
+          lines: [{ row: 2, text: T("lc.gameset.title"), color: 12 }], box: { y: 5 }, infoRow: 21,
+          items: sets.concat({ key: "gap-back", label: "", disabled: true },
+            { key: "back-set", label: T("set.back"), info: [T("lc.set.back.i")], go: close }),
+          sel: Math.max(0, sets.findIndex(it => it.key === (typeof sel === "string" ? sel : "mode"))),
+          back: close,
+        }, keep);
+        return;
+      }
+      acts.splice(1, 0, { key: "settings", label: T("lc.gameset"), info: [T("lc.set.i"), T("lc.set.i2")],
+        go: () => { cpuSetOpen = true; cpu(false, "mode"); } });
+      const mItems = slotItems.concat(acts);
+      ui.show({
+        boxes: [{ title: T("cpu.title"), items: slotItems }, { title: T("box.game"), items: acts }],
+        sel: Math.max(0, mItems.findIndex(it => it.key === (typeof sel === "string" ? sel : "play"))),
+        back: () => main("cpu"),
+      }, keep);
+      return;
+    }
     const items = slotItems.concat(sets, acts);
     const selKey = typeof sel === "string" ? sel : "play";
     // (the slots and the settings side by side, 3 columns apart, centred together; the Game box centred

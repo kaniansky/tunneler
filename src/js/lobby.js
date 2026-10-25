@@ -49,8 +49,8 @@ export function mount() {
   // the list's columns after the name: PLAYERS ("2/4": seated / seats they can take - during a match:
   // connected / its players), AI (computer tanks), WATCHING (spectators); 0 = blank
   const WIDE = [22, 17, 8, 4, 9];                    // (name, mode, players, AI, watching; the state takes the rest)
-  // the phone layout (DosUI narrow, 36 columns): name, players and the state (0 = the column left out)
-  const NARROW = [17, 0, 8, 0, 0];
+  // the phone layout (DosUI narrow, DosUI.NARROW_W - 2 columns): name, players and the state (0 = the column left out)
+  const NARROW = [14, 0, 6, 0, 0];
   const cols = () => ui.isNarrow() ? NARROW : WIDE;
   const ROWS = 9;                                    // game rows shown at most (the box then ends on row 20, the info on rows 22-23)
   const places = r => r.places != null ? r.places : r.players + (r.open || 0);

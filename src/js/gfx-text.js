@@ -324,7 +324,7 @@ function analyse(t) {
   }
   let blinks = false;
   for (let r = 0; r < rows && !blinks; r++) for (let c = c0; c < c1; c++) if (vram[r * 160 + c * 2 + 1] & 0x80) { blinks = true; break; }
-  return { rows, c0, c1, cp, box, used, panels, runs, hl, rules, titles, blinks, CONT };
+  return { rows, c0, c1, cp, box, used, panels, runs, hl, rules, titles, blinks, CONT, rowH: Array.isArray(t.rowH) ? t.rowH : null, view: t.view || null };
 }
 
 // ------------------------------------------------------------ drawing
@@ -336,13 +336,37 @@ const SLIDE_MS = 120;
 const ease = p => 1 - Math.pow(1 - p, 3);
 const advances = new Map();                           // font -> measured advance (px)
 
+// t.rowH (the phone layout, dosui.js): each row's height in rows of the usual one - ch is the usual row,
+// rh(r) row r's, Y(r) where it starts (fractions within the row: r + 0.5 = its middle)
+// t.view = {rows, units, top} (the phone layout's scrolling): the first `rows` rows in a window `units` rows high
+// from `top` (any fraction), the rest below it - clip = the window's height (drawn in two clipped passes)
 function geometry(W, H, S, st) {
-  const cols = S.c1 - S.c0, cw = W / cols, ch = H / S.rows;
+  const cols = S.c1 - S.c0, cw = W / cols, m = S.rowH, v = S.view;
+  const n = v ? Math.min(v.rows, S.rows) : 0;
+  let units = m ? m.reduce((a, b) => a + (b || 1), 0) : S.rows;
+  if (v && m) units = v.units + m.slice(n).reduce((a, b) => a + (b || 1), 0);
+  const ch = H / units, clip = v ? v.units * ch : 0, scroll = v ? v.top * ch : 0;
+  // where each row starts: content rows by the running sum less the scroll, the rows below from the window's end
+  const top = [];
+  if (m) {
+    let at = -scroll;
+    for (let r = 0; r < S.rows; r++) {
+      if (v && r === n) at = clip;
+      top.push(at);
+      at += (m[r] || 1) * ch;
+    }
+  }
+  const rh = m ? r => (m[Math.max(0, Math.min(S.rows - 1, Math.floor(r)))] || 1) * ch : () => ch;
+  const Y = m ? r => { const k = Math.max(0, Math.floor(r)); return k >= S.rows ? H : top[k] + (r - k) * rh(k); } : r => r * ch;
   const fs = Math.min(cw / ADVANCE, ch / 1.3), f = fs.toFixed(2) + "px " + STACK, fa = (fs * 1.3).toFixed(2) + "px " + STACK;
   return {
-    W, H, cols, cw, ch, rows: S.rows, c0: S.c0, fs, base: ch / 2 + CAP * fs / 2,
-    X: c => (c - S.c0) * cw, Y: r => r * ch,
-    sx: c => Math.round((c - S.c0) * cw), sy: r => Math.round(r * ch),
+    W, H, cols, cw, ch, rh, rows: S.rows, c0: S.c0, fs, clip, scroll, nScroll: n, region: null,
+    // (in a clipped pass, clipped(): only the window's rows, or only the ones below it)
+    mine(r) { return !this.region || (this.region === "window" ? r < n : r >= n); },
+    // (a text row worth drawing in this pass: its own region and, in the window, on the screen)
+    seen(r) { return this.mine(r) && (this.region !== "window" || (Y(r) + rh(r) > 0 && Y(r) < clip)); }, base: ch / 2 + CAP * fs / 2, baseOf: r => rh(r) / 2 + CAP * fs / 2,
+    X: c => (c - S.c0) * cw, Y,
+    sx: c => Math.round((c - S.c0) * cw), sy: r => Math.round(Y(r)),
     lw: Math.max(1, Math.round(st.border * H / 720 * 2) / 2),
     fontR: f, fontB: "bold " + f, fontA: fa, fontBA: "bold " + fa,
   };
@@ -371,6 +395,7 @@ function drawBase(ctx, S, st, g) {
   ctx.fillRect(0, 0, W, H);
   const R = ch * 0.12;                                // (clean: small corners, the same on panels and bars)
   for (const p of S.panels) {
+    if (!g.mine(p.r)) continue;
     const x0 = X(p.c + 0.5), y0 = Y(p.r + 0.5), x1 = X(p.c2 + 0.5), y1 = Y(p.r2 + 0.5), col = st.fg[p.fg];
     ctx.beginPath();
     if (st.rounded) {                                 // (clean: a flat panel - no shadow, no tint)
@@ -388,12 +413,13 @@ function drawBase(ctx, S, st, g) {
     }
   }
   for (const p of S.panels) {
+    if (!g.mine(p.r)) continue;
     const x0 = X(p.c + 0.5), y0 = Y(p.r + 0.5), x1 = X(p.c2 + 0.5), y1 = Y(p.r2 + 0.5), col = st.fg[p.fg];
     ctx.save();
     if (p.gaps.length) {                              // a title in the frame: the line stops around it
       ctx.beginPath();
       ctx.rect(0, 0, W, H);
-      for (const [a, b, bot] of p.gaps) ctx.rect(X(a) - cw * 0.2, Y(bot ? p.r2 : p.r), X(b + 1) - X(a) + cw * 0.4, ch);
+      for (const [a, b, bot] of p.gaps) ctx.rect(X(a) - cw * 0.2, Y(bot ? p.r2 : p.r), X(b + 1) - X(a) + cw * 0.4, g.rh(bot ? p.r2 : p.r));
       ctx.clip("evenodd");
     }
     ctx.strokeStyle = st.rounded ? LINE : col;
@@ -417,13 +443,14 @@ function drawBase(ctx, S, st, g) {
     }
   }
   for (const q of S.runs) {
-    if (q === S.hl) continue;
+    if (q === S.hl || !g.mine(q.r)) continue;
     const x0 = X(q.c), w = X(q.c2 + 1) - x0;
     ctx.fillStyle = st.bg[q.bg];
-    if (st.rounded) { ctx.beginPath(); roundRect(ctx, x0 + 1, Y(q.r) + ch * 0.06, w - 2, ch * 0.88, R); ctx.fill(); }
+    if (st.rounded) { const h = g.rh(q.r); ctx.beginPath(); roundRect(ctx, x0 + 1, Y(q.r) + h * 0.06, w - 2, h * 0.88, R); ctx.fill(); }
     else ctx.fillRect(sx(q.c), sy(q.r), sx(q.c2 + 1) - sx(q.c), sy(q.r + 1) - sy(q.r));
   }
   for (const q of S.rules) {
+    if (!g.mine(q.r)) continue;
     const a = X(q.c), b = X(q.c2 + 1), y = Math.round(q.low ? Y(q.r + 1) - ch * 0.2 : Y(q.r + 0.5)) + (lw % 2) / 2, col = st.fg[q.fg];
     ctx.lineWidth = lw;
     ctx.strokeStyle = st.rounded ? LINE : col;
@@ -456,7 +483,7 @@ function drawText(ctx, glow, S, t, st, g) {
   let at = null;
   const add = op => { ops.push(op); meta.push({ r: at.r, c0: at.c, c1: at.c + 1 }); };
   for (let r = 0; r < rows; r++) {
-    if (inTitle[r]) continue;
+    if (inTitle[r] || !g.seen(r)) continue;
     let run = null;
     for (let c = c0; c < c1; c++) {
       at = { r, c };
@@ -466,24 +493,24 @@ function drawText(ctx, glow, S, t, st, g) {
       const attr = vram[r * 160 + c * 2 + 1], fg = attr & 15, bgc = (attr >> 4) & 7;
       if ((attr & 0x80) && !blinkOn || fg === bgc && !box[i]) { run = null; continue; }
       const color = bgc === 5 && r === hlRow && st.rounded ? ACCENT_TEXT : st.fg[fg];
-      const x = X(c), y = Y(r);
-      if (box[i]) { run = null; add([2, box[i], x, y, color]); continue; }
+      const x = X(c), y = Y(r), b = g.baseOf(r);
+      if (box[i]) { run = null; add([2, box[i], x, y, color, g.rh(r)]); continue; }
       const blk = BLOCKS.get(k);
       if (blk) { run = null; add([3, blk, c, r, color]); continue; }
       const wide = t.uni && t.uni[i] && UniText.charCols(k) === 2;
-      if (!covered(k) || wide) { run = null; add([4, k, x, y, color]); continue; }
+      if (!covered(k) || wide) { run = null; add([4, k, x, y, color, g.rh(r), b]); continue; }
       const bold = r === hlRow && bgc === 5;
       const arrow = k >= 0x2190 && k <= 0x21FF, glows = st.glow && fg >= 9;
       if (arrow) {                                    // (the font's arrows are small: larger, on the text's middle)
         run = null;
-        add([1, charOf(k), x + cw / 2, y + ch / 2 + CAP * fs * 0.65 - fs * 0.02, bold ? g.fontBA : g.fontA, color, glows, "center"]);
+        add([1, charOf(k), x + cw / 2, y + g.rh(r) / 2 + CAP * fs * 0.65 - fs * 0.02, bold ? g.fontBA : g.fontA, color, glows, "center"]);
         continue;
       }
       const font = bold ? g.fontB : g.fontR;
       if (strings && run && run.font === font && run.color === color) { run.s += charOf(k); meta[run.mi].c1 = c + 1; continue; }
-      if (!strings) { run = null; add([1, charOf(k), x + cw / 2, y + base, font, color, glows, "center"]); continue; }
+      if (!strings) { run = null; add([1, charOf(k), x + cw / 2, y + b, font, color, glows, "center"]); continue; }
       run = { s: charOf(k), font, color, mi: meta.length };
-      add([1, run, x, y + base, font, color, glows, "left"]);
+      add([1, run, x, y + b, font, color, glows, "left"]);
     }
   }
   // clean: a centred row's text exactly in the middle of its columns (DosUI places it on whole cells: up to
@@ -500,16 +527,17 @@ function drawText(ctx, glow, S, t, st, g) {
   // titles: larger, letter by letter on their cells' centre
   const titleOps = [];
   for (const q of S.titles) {
+    if (!g.mine(q.r)) continue;
     const n = q.c2 - q.c + 1, mid = (X(q.c) + X(q.c2 + 1)) / 2;
     const s = Math.min(q.big ? 2 : 1.7, (g.cols * 0.8) / n), fT = fs * s, step = cw * s * 1.04;
-    const font = "bold " + fT.toFixed(2) + "px " + STACK, y = Y(q.r) + ch / 2 + CAP * fT / 2;
+    const font = "bold " + fT.toFixed(2) + "px " + STACK, y = Y(q.r) + g.rh(q.r) / 2 + CAP * fT / 2;
     const fill = st.fg[12];                           // (a solid colour: no gradient text)
     for (let c = q.c; c <= q.c2; c++) {
       const k = cp[q.r * 80 + c];
       if (k === 0x20 || k === 0) continue;
       const x = mid + (c - q.c - (n - 1) / 2) * step;
       if (covered(k)) titleOps.push([1, charOf(k), x, y, font, fill, st.glow, "center"]);
-      else titleOps.push([4, k, x - cw / 2, Y(q.r), st.fg[12]]);
+      else titleOps.push([4, k, x - cw / 2, Y(q.r), st.fg[12], g.rh(q.r), g.baseOf(q.r)]);
     }
   }
   const all = ops.concat(titleOps);
@@ -522,9 +550,12 @@ function drawText(ctx, glow, S, t, st, g) {
         if (o[7] !== curAlign) ctx.textAlign = curAlign = o[7];
         ctx.fillText(typeof o[1] === "string" ? o[1] : o[1].s, o[2], o[3]);
         break;
-      case 2: looseBox(ctx, o[1], o[2], o[3], cw, ch, o[4], lw); curFill = null; break;
-      case 3: block(ctx, o[1], o[2], o[3], sx, sy, o[4], st.rounded, cp, rows, c0, c1); curFill = null; break;
-      case 4: bitmap(ctx, o[1], o[2], o[3], cw, ch, fs, base, o[4]); break;
+      case 2: looseBox(ctx, o[1], o[2], o[3], cw, o[5] || ch, o[4], lw); curFill = null; break;
+      case 3: {                                       // (in a taller row: the block at the usual height, centred)
+        const r = o[3], h = g.rh(r), band = h > g.ch * 1.01 ? v => Math.round(g.Y(r) + (h - g.ch) / 2 + (v - r) * g.ch) : sy;
+        block(ctx, o[1], o[2], o[3], sx, band, o[4], st.rounded, cp, rows, c0, c1); curFill = null; break;
+      }
+      case 4: bitmap(ctx, o[1], o[2], o[3], cw, o[5] || ch, fs, o[6] || base, o[4]); break;
     }
   };
   // the glow: what glows drawn first; around it (rectangles, merged, 4-pixel aligned) copied down to a half,
@@ -574,8 +605,8 @@ function drawText(ctx, glow, S, t, st, g) {
   }
   // the text cursor (an empty input): an underline under its cell, blinking
   const cur = t.cursor;
-  if (cur && blinkOn && cur.col >= c0 && cur.col < c1 && cur.row >= 0 && cur.row < rows) {
-    const x = X(cur.col) + cw * 0.12, w = cw * 0.76, y = Y(cur.row) + base + fs * 0.14, h = Math.max(2, fs * 0.09);
+  if (cur && blinkOn && cur.col >= c0 && cur.col < c1 && cur.row >= 0 && cur.row < rows && g.mine(cur.row)) {
+    const x = X(cur.col) + cw * 0.12, w = cw * 0.76, y = Y(cur.row) + g.baseOf(cur.row) + fs * 0.14, h = Math.max(2, fs * 0.09);
     ctx.fillStyle = st.fg[15];
     if (st.rounded) { ctx.beginPath(); roundRect(ctx, x, y, w, h, h / 2); ctx.fill(); }
     else ctx.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h));
@@ -584,11 +615,11 @@ function drawText(ctx, glow, S, t, st, g) {
 
 // the highlight bar (clean: a solid bar in the one accent colour, small corners; retro: the DOS bar)
 function drawBar(ctx, state, h, st, g) {
-  const { cw, ch } = g;
+  const { cw } = g, ch = h.h || g.ch;                 // (the bar's row: taller ones on the phone layout)
   if (!st.rounded) { ctx.fillStyle = st.bg[5]; ctx.fillRect(Math.round(h.x), Math.round(h.y), Math.round(h.w), Math.round(ch)); return; }
   const ix = Math.min(cw * 0.35, h.w * 0.1);
   ctx.fillStyle = ACCENT;
-  ctx.beginPath(); roundRect(ctx, h.x + ix, h.y + ch * 0.07, h.w - 2 * ix, ch * 0.86, ch * 0.12); ctx.fill();
+  ctx.beginPath(); roundRect(ctx, h.x + ix, h.y + ch * 0.07, h.w - 2 * ix, ch * 0.86, g.ch * 0.12); ctx.fill();
 }
 
 // is t's content what the text layer shows?
@@ -623,13 +654,13 @@ function draw(ctx, W, H, t, opts) {
   const S = analyse(t), g = geometry(W, H, S, st);
   let state = states.get(ctx);
   if (!state) states.set(ctx, state = { hl: null, anim: null, sig: "" });
-  const dims = [style, W, H, S.rows, S.c0, S.c1].join(",");
+  const dims = [style, W, H, S.rows, S.c0, S.c1, S.rowH ? S.rowH.join(" ") : "", S.view ? S.view.top : ""].join(",");
   // the base layer
   const baseKey = dims + "|" + S.panels.map(p => [p.c, p.r, p.c2, p.r2, p.fg, p.double, p.gaps.join(" "), p.seps.join(" ")].join(",")).join(";")
     + "|" + S.runs.filter(q => q !== S.hl).map(q => [q.r, q.c, q.c2, q.bg].join(",")).join(";")
     + "|" + S.rules.map(q => [q.r, q.c, q.c2, q.fg, q.low].join(",")).join(";");
   const baseC = layer(state, "baseC", W, H);
-  if (state.baseKey !== baseKey) { state.baseKey = baseKey; drawBase(baseC.getContext("2d"), S, st, g); }
+  if (state.baseKey !== baseKey) { state.baseKey = baseKey; clipped(baseC.getContext("2d"), g, x => drawBase(x, S, st, g)); }
   // the text layer
   const textKey = dims + "|" + fontState + "|" + decStr;
   const textC = layer(state, "textC", W, H);
@@ -639,13 +670,15 @@ function draw(ctx, W, H, t, opts) {
     keepText(state, t, textKey);
     pending = false;
     const q4 = (W2, k) => Math.ceil(W2 / 4) * 4 * k;     // (the glow layers: a half and a quarter of a 4-aligned size)
-    drawText(textC.getContext("2d"), [layer(state, "glowA", q4(W, 1), q4(H, 1), 0.5), layer(state, "glowB", q4(W, 1), q4(H, 1), 0.25)], S, t, st, g);
+    const glowL = [layer(state, "glowA", q4(W, 1), q4(H, 1), 0.5), layer(state, "glowB", q4(W, 1), q4(H, 1), 0.25)];
+    clipped(textC.getContext("2d"), g, x => drawText(x, glowL, S, t, st, g));
     if (pending) state.textKey = null;
   }
   // the highlight bar: slides from where it was (on the same screen: the same panels)
-  const sig = dims + "|" + S.panels.map(p => p.c + "," + p.r + "," + p.c2 + "," + p.r2).join(";");
-  const target = S.hl ? { x: g.X(S.hl.c), y: g.Y(S.hl.r), w: g.X(S.hl.c2 + 1) - g.X(S.hl.c) } : null;
-  const same = (a, b) => a.x === b.x && a.y === b.y && a.w === b.w;
+  const sig = [style, W, H, S.rows, S.c0, S.c1, S.rowH ? S.rowH.join(" ") : ""].join(",") + "|" + S.panels.map(p => p.c + "," + p.r + "," + p.c2 + "," + p.r2).join(";");
+  const inWin = S.hl && S.hl.r < g.nScroll, sc = inWin ? g.scroll : 0;   // (the bar in content coordinates: it scrolls with it)
+  const target = S.hl ? { x: g.X(S.hl.c), y: g.Y(S.hl.r) + sc, w: g.X(S.hl.c2 + 1) - g.X(S.hl.c), h: g.rh(S.hl.r) } : null;
+  const same = (a, b) => a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h;
   let animating = false;
   // (it slides only up and down within one box - the same column and width; to another box it jumps)
   const inBox = (a, b) => Math.abs(a.x - b.x) < 1 && Math.abs(a.w - b.w) < 1;
@@ -657,11 +690,12 @@ function draw(ctx, W, H, t, opts) {
   state.sig = sig;
   if (state.anim) {
     const a = state.anim, k = ease(Math.min(1, Math.max(0, (now - a.t0) / SLIDE_MS)));
-    state.hl = { x: a.from.x + (a.to.x - a.from.x) * k, y: a.from.y + (a.to.y - a.from.y) * k, w: a.from.w + (a.to.w - a.from.w) * k };
+    state.hl = { x: a.from.x + (a.to.x - a.from.x) * k, y: a.from.y + (a.to.y - a.from.y) * k, w: a.from.w + (a.to.w - a.from.w) * k,
+      h: (a.from.h || g.ch) + ((a.to.h || g.ch) - (a.from.h || g.ch)) * k };
     if (k >= 1) { state.anim = null; state.hl = target; } else animating = true;
   }
   // (nothing changed: the output still shows it)
-  const cv = ctx.canvas, bar = state.hl ? [state.hl.x, state.hl.y, state.hl.w].join(",") : "";
+  const cv = ctx.canvas, bar = state.hl ? [state.hl.x, state.hl.y - sc, state.hl.w, state.hl.h].join(",") : "";
   if (!changed && !animating && state.shownBar === bar && cv && cv.width === W && cv.height === H) return false;
   state.shown = baseKey; state.shownBar = bar;
   prep(ctx);
@@ -669,10 +703,25 @@ function draw(ctx, W, H, t, opts) {
   if (state.hl) {
     const ix = Math.min(g.cw * 0.35, target.w * 0.1);
     state.barW = target.w - 2 * ix;
-    drawBar(ctx, state, state.hl, st, g);
+    const hb = Object.assign({}, state.hl, { y: state.hl.y - sc });
+    if (inWin) { ctx.save(); ctx.beginPath(); ctx.rect(0, 0, W, g.clip); ctx.clip(); drawBar(ctx, state, hb, st, g); ctx.restore(); }
+    else drawBar(ctx, state, hb, st, g);
   }
   ctx.drawImage(textC, 0, 0);
   return animating;
+}
+
+// draw(ctx) once - or, with a scrolling window (g.clip), twice: clipped to the window, then to the rest
+function clipped(ctx, g, draw) {
+  if (!g.clip) { draw(ctx); return; }
+  for (const [a, b, region] of [[0, g.clip, "window"], [g.clip, g.H, "below"]]) {
+    ctx.save();
+    ctx.beginPath(); ctx.rect(0, a, g.W, b - a); ctx.clip();
+    g.region = region;
+    draw(ctx);
+    ctx.restore();
+  }
+  g.region = null;
 }
 
 // a loose box-drawing piece: lines from the cell's centre to the edges it connects

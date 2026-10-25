@@ -473,7 +473,16 @@ function play(search) {
   env.key("ArrowUp"); env.key("Enter");                    // (wraps to the last item) Settings
   const keys = () => ui().spec.items.map(i => i.key), sel = () => ui().spec.items[ui().sel].key;
   const right = () => keys().slice(keys().indexOf("back") + 1);
-  same(keys().filter(k => /^cat-/.test(k)), ["cat-display", "cat-graphics", "cat-sound", "cat-controls", "cat-online", "cat-language"], "categories");
+  same(keys().filter(k => /^cat-/.test(k)), ["cat-display", "cat-graphics", "cat-sound", "cat-controls", "cat-online"], "categories");
+  // Language: no category - a centred switch below them (owner, 2026-10-25)
+  {
+    const it = () => ui().spec.items.find(i => i.key === "lang"), before = env.win.Lang.code;
+    assert(it() && it().align !== "left" && keys().indexOf("lang") > keys().indexOf("cat-online"), "Language: a switch below the categories");
+    it().change(1);
+    assert(env.win.Lang.code !== before && it(), "Left / Right on it: the next language");
+    it().change(-1);
+    assert.strictEqual(env.win.Lang.code, before, "and back");
+  }
   assert.strictEqual(sel(), "cat-display", "on the first category");
   same(right(), ["fullscreen", "scale", "tankcolors"], "Display: fullscreen, screen size, tank colors");
   env.key("Enter"); assert.strictEqual(sel(), "fullscreen", "Enter: into the settings");
@@ -530,12 +539,12 @@ function play(search) {
   env.key("ArrowDown"); assert.strictEqual(sel(), "ping", "(skipped)");
   env.key("Enter");                                        // Show ping on
   same(["tunneler.ping", "tunneler.online.color"].map(k => store.get(k)), ["1", "blue"]);
-  env.key("Escape"); env.key("ArrowDown");                 // Language
-  same(right(), ["lang"]);
-  env.key("Enter"); env.key("ArrowRight");
+  env.key("Escape"); env.key("ArrowDown");                 // Language (a switch below the categories)
+  assert.strictEqual(sel(), "lang");
+  env.key("ArrowRight");
   assert.notStrictEqual(store.get("tunneler.lang") || "en", "en", "language switched");
   env.key("ArrowLeft");
-  env.key("Escape"); env.key("ArrowDown"); assert.strictEqual(sel(), "back", "the categories wrap: Language, then Back");
+  env.key("ArrowDown"); assert.strictEqual(sel(), "back", "Language, then Back");
   // Controls: a key row takes the next key press (Esc cancels), the page doesn't see it
   if (env.win.Controls && env.win.Controls.get) {
     env.key("ArrowUp"); env.key("ArrowUp"); env.key("ArrowUp");   // Controls
@@ -860,12 +869,21 @@ function play(search) {
   assert(ui.spec.items.find(i => i.key === "slot0").label.includes(L.t("lc.me")), "your slot: you");
   const snap = ui.display.snap, bottom = Array.from({ length: 80 }, (_, c) => String.fromCharCode(snap.vram[24 * 160 + c * 2])).join("");
   assert(bottom.includes(L.t("ui.hint.touch")), "the touch hint: " + bottom);
+  // the settings: a submenu (the Game box's Settings item), its Back returns to Settings
+  assert(!keys().includes("mode") && keys().includes("settings"), "the skirmish's settings in a submenu: " + keys());
+  ui.sel = keys().indexOf("settings"); env.key("Enter");
+  assert(keys().includes("mode") && keys().includes("watch") && keys().includes("back-set") && !keys().includes("slot0"), "the settings screen: " + keys());
+  const sizeBefore = ui.spec.items.find(i => i.key === "size").label;
+  ui.sel = keys().indexOf("size"); env.key("ArrowRight");
+  assert(ui.spec.items.find(i => i.key === "size").label !== sizeBefore && keys().includes("back-set"), "a setting changes, the screen stays");
+  env.key("Escape");
+  assert(keys().includes("slot0") && ui.spec.items[ui.sel].key === "settings", "Esc / Back: the skirmish again, on Settings");
   const pe = makeEnv("?mode=cpu&slots=0:you:1,1:p2:2,2:easy:2");
   pe.win.matchMedia = touch;
   pe.page("play.html");
   const e = pe.win.tunnelerEngine();
   assert(e.nPlayers === 3 && pe.win.tunnelerAIs().filter(Boolean).length === 2, "player 2 in a link: a computer tank");
-  ok("a phone / tablet: no split screen, no player 2, the touch hint; a link's player 2 plays as a computer tank");
+  ok("a phone / tablet: no split screen, no player 2, the touch hint, the skirmish's settings in a submenu; a link's player 2 plays as a computer tank");
 }
 
 // ---------------------------------------------------------------- the phone layout (DosUI narrow, Display zoom)
@@ -875,14 +893,19 @@ function play(search) {
   const env = phone();
   env.page("index.html");
   const ui = env.win.tunnelerHomeUI(), snap = () => ui.display.snap;
-  assert(snap().cols === 40 && snap().rows > 25 && snap().rows < 50, "a narrow, tall screen: " + snap().cols + " x " + snap().rows);
+  assert(snap().view && snap().view.rows + 7 === snap().rows && snap().view.top === 0, "the content in a window: " + JSON.stringify(snap().view));
+  assert(snap().cols === 36 && snap().rowH && snap().rowH.length === snap().rows && snap().rowH.some(m => m > 1) && snap().rowH.some(m => m === 1) && snap().rows >= 16 && snap().rows < 60, "a narrow, tall screen: " + snap().cols + " x " + snap().rows);
   const rowOf = key => +Object.keys(ui.narrow.items).find(r => ui.spec.items[ui.narrow.items[r]].key === key);
   // a tap on a row (the canvas 720 x 400 here): that item
-  const tap = key => { const r = rowOf(key); return { clientX: 360, clientY: (r - 0.5) / snap().rows * 400 }; };
+  const tap = key => {                                // (rows of their own heights: snap.rowH; the content in a window: snap.view)
+    const r = rowOf(key), h = snap().rowH, v = snap().view, total = v.units + h.slice(v.rows).reduce((a, b) => a + b, 0);
+    const above = h.slice(0, r - 1).reduce((a, b) => a + b, 0) - v.top;
+    return { clientX: 360, clientY: (above + h[r - 1] / 2) / total * 400 };
+  };
   assert.strictEqual(ui.spec.items[ui.itemAt(tap("settings"))].key, "settings", "a tap on a row = its item");
   // Settings: one column of categories; one opens its own screen with Back
   ui.sel = ui.spec.items.findIndex(i => i.key === "settings"); env.key("Enter");
-  same(ui.spec.items.map(i => i.key), ["cat-display", "cat-graphics", "cat-sound", "cat-controls", "cat-online", "cat-language", "gap", "back"], "the categories");
+  same(ui.spec.items.map(i => i.key), ["cat-display", "cat-graphics", "cat-sound", "cat-controls", "cat-online", "gap", "lang", "gap2", "back"], "the categories, Language, Back");
   ui.sel = 1; env.key("Enter");
   assert(ui.spec.items.some(i => i.key === "gfx") && ui.spec.items[ui.spec.items.length - 1].key === "back-cat", "Graphics, with Back");
   env.key("Escape");
@@ -892,9 +915,28 @@ function play(search) {
   ui.sel = ui.spec.items.findIndex(i => i.key === "instr"); env.key("Enter");
   assert(ui.spec.nlines && ui.spec.nlines.length > 60, "the page's rows");
   assert(ui.spec.nlines.every(l => l.t.replace(/\{\d+\}/g, "").length <= 38), "every row fits 38 columns");
+  const pv = () => ui.display.snap.view;
+  assert(pv() && pv().rows === ui.spec.nlines.length && pv().top === 0, "every row in a scroll window: " + JSON.stringify(pv()));
   ui.scrollPage(5);
-  assert.strictEqual(ui.spec.ntop, 5, "scrolls");
+  assert(ui.nanim && ui.nanim.to === 5, "scrolls: glides 5 rows on");
+  ui.presentNarrowAt(ui.nanim.to + 0.5);
+  assert.strictEqual(pv().top, 5.5, "any fraction of a row: smooth");
   env.key("Escape");
+  // a selected row wider than its box: a marquee (DosUI marq / marqOff) - the row slides on, a narrower one doesn't
+  {
+    const long = "Long label: " + "abcdefghij".repeat(5), rowText = () => {
+      const sn = ui.display.snap, r = sn.rowH ? Object.keys(ui.narrow.items).find(k => ui.narrow.items[k] === 0) - 1 : 0;
+      return String.fromCharCode(...Array.from({ length: 36 }, (_, c) => sn.vram[r * 160 + c * 2]));
+    };
+    ui.show({ items: [{ key: "a", label: long, align: "left", go() {} }, { key: "b", label: "Short", align: "left", go() {} }], back() {} });
+    assert(ui.marq && ui.marq.i === 0 && ui.marq.over === long.length - 31, "the long row selected: a marquee over " + (ui.marq && ui.marq.over) + " columns");
+    const start = rowText();
+    ui.marqOff = 7; ui.draw();
+    assert(rowText().includes(long.slice(7, 30)) && rowText() !== start, "it slides: " + rowText());
+    ui.sel = 1; ui.draw();
+    assert(!ui.marq && !ui.marqTimer, "a row that fits: no marquee");
+    env.key("Escape");
+  }
   // the Display's zoom: an engine screen's left and right halves (a divider between) stacked 40 wide; taps map back
   const D = env.win.Display, d = new D(env.win.document.createElement("canvas"));
   const vram = new Uint8Array(16000);
