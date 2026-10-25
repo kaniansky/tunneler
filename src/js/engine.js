@@ -18,6 +18,7 @@
 // only, never read by the game (snapshots carry a copy while it holds something).
 import { STRINGS_EN } from "../lang/en/engine.js";
 import { Lang } from "./lang.js";
+import { MapData } from "./mapdata.js";
 import { UniText } from "./unitext.js";
 
 const PIT_HZ = 1193182;
@@ -206,6 +207,9 @@ class TunnelerEngine {
   //                                           when it runs out the side that did the most shield damage to
   //                                           enemy tanks this round wins it (the others' tanks blow up); a
   //                                           tie blows up everybody (nobody wins). 0 = the original.
+  //   map: a map's code (mapdata.js)         a custom map (docs/v6/MAPS.md): the world painted from it instead of
+  //                                           generated, its size, the tanks' bases drawn from its bases; forces
+  //                                           the extended engine. A code that doesn't decode is ignored.
   //   mode: "standard" | a game mode         extended only (docs/DESIGN-8P.md 27): TunnelerEngine.MODES[mode]
   //                                           (src/js/modes/<mode>.js) hooks into the extended play loop;
   //                                           "standard" (default) = last team standing, as before
@@ -215,7 +219,9 @@ class TunnelerEngine {
   constructor(seed, opts) {
     const o = opts || {};
     const gameMode = TunnelerEngine.MODES[o.mode] ? o.mode : "standard";
-    let slots, forceExt = !!o.extended || gameMode !== "standard";
+    // a custom map (null: a generated world, as always)
+    this.customMap = o.map ? MapData.decode(o.map) : null;
+    let slots, forceExt = !!o.extended || gameMode !== "standard" || !!this.customMap;
     if (Array.isArray(o.slots) && o.slots.length)
       slots = o.slots.slice(0, EXT_MAX_PLAYERS).map((s, i) =>
         ({ color: clampInt(s && s.color, 0, 7, i), team: clampInt(s && s.team, 1, 8, i + 1) }));
@@ -250,7 +256,7 @@ class TunnelerEngine {
     this.roundTime = clampInt(o.roundTime, 0, 60, 0);
     this.roundTicks = Math.round(this.roundTime * 60 * PIT_HZ / TICK);   // the limit in steps (BIOS ticks)
     // world size: W x H pixels, 2 per byte (odd x = high nibble), ws bytes per row
-    this.size = WORLD_SIZES[o.size] ? o.size : "medium";
+    this.size = this.customMap ? this.customMap.size : WORLD_SIZES[o.size] ? o.size : "medium";
     [this.scN, this.scD] = WORLD_SIZES[this.size];
     this.worldW = this.sc(1024); this.worldH = this.sc(512); this.ws = this.worldW >> 1;
     // extended mode, local games only: player 1's Esc (bit 32) ends the match as in the original (online
@@ -1664,7 +1670,8 @@ class TunnelerEngine {
     this.roundWinner = 0; this.roundWinnerTeam = -1;
     const dist = d => Math.max(this.sc(d), 40 + (d - 60) / 5);       // small world: 50 / 44 / 40
     let minDist = dist(100);
-    for (let attempt = 1; ; attempt++) {
+    if (this.customMap) minDist = this.mapBases();
+    else for (let attempt = 1; ; attempt++) {
       if (attempt > 100) minDist = dist(80);
       if (attempt > 300) minDist = dist(60);
       let ok = true;
@@ -1687,6 +1694,29 @@ class TunnelerEngine {
     this.modeScore = new Array(N + 1).fill(0);      // the game mode's score per player (gold, points, kills...)
     this.GS = {};
     if (this.GM && this.GM.init) this.GM.init(this);
+  }
+
+  // A custom map's bases (docs/v6/MAPS.md): N of its K bases, drawn with the engine's RNG (a partial
+  // Fisher-Yates shuffle: the same on every client, a new deal every match). A map with fewer bases than
+  // tanks (the pages never start one): the missing bases go to random places in the map's interior away
+  // from the others. -> the closest distance the bases keep
+  mapBases() {
+    const N = this.nPlayers, B = this.customMap.bases.map(MapData.basePx), order = B.map((b, i) => i);
+    for (let i = 0; i < Math.min(N, order.length); i++) {
+      const j = i + this.random(order.length - i);
+      const t = order[i]; order[i] = order[j]; order[j] = t;
+    }
+    const f = MapData.FRAME[this.size] * MapData.CELL + 18, W = this.worldW - 2 * f, H = this.worldH - 2 * f;
+    for (let p = 1; p <= N; p++) {
+      if (p <= B.length) { this.baseX[p] = B[order[p - 1]].x; this.baseY[p] = B[order[p - 1]].y; continue; }
+      for (let tries = 0; tries < 500; tries++) {
+        this.baseX[p] = f + this.random(W); this.baseY[p] = f + this.random(H);
+        let ok = true;
+        for (let q = 1; q < p && ok; q++) if (Math.max(Math.abs(this.baseX[p] - this.baseX[q]), Math.abs(this.baseY[p] - this.baseY[q])) < MapData.BASE_GAP) ok = false;
+        if (ok) break;
+      }
+    }
+    return MapData.BASE_GAP;
   }
 
   // Extended only (the classic placement stays the original's): a base whose two doorways both open into
@@ -2451,6 +2481,7 @@ class TunnelerEngine {
   // original world (mFor), in the original's units, so a small world is a scaled-down medium one and a
   // large one a scaled-up one. For the medium world every expression is the original's.
   *createWorldStep() {
+    if (this.customMap) { yield* this.paintMapStep(); return; }
     const W = this.world, ws = this.ws, WW = this.worldW, H = this.worldH;
     const top = this.sc(40), Y1 = this.sc(472) - 1, X1 = this.sc(984) - 1, five = this.sc(5);
     const blobSize = rnd => this.sc(this.random(21 - Math.trunc(rnd / 7)) + 6);
@@ -2550,6 +2581,24 @@ class TunnelerEngine {
         }
         this.worldStage++;
       } while (this.worldStage < 5);
+    }
+    this.worldStage = -1;
+  }
+
+  // A custom map instead of the generator (docs/v6/MAPS.md): one row of cells a CPU slice (like the
+  // generator's rows - a key pressed meanwhile goes to the menu, and the painting goes on later); no random
+  // numbers
+  *paintMapStep() {
+    const M = this.customMap;
+    if (this.worldStage === -2) { this.worldStage = 1; this.genY = -1; }
+    if (this.worldStage !== -1) {
+      for (let y = this.genY + 1; y < M.h; y++) {
+        this.genY = y;
+        MapData.paintRow(M, this.world, this.ws, y);
+        yield CPU_WORLD_ROW;
+        this.keyStr = this.inKey();
+        if (this.keyStr !== NO_KEY && y !== M.h - 1) return;
+      }
     }
     this.worldStage = -1;
   }

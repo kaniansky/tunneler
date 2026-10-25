@@ -111,13 +111,23 @@ function register(c, data) {
   data = Object.assign({}, data);
   ORDER[c] = typeof data.order === "number" ? data.order : Infinity;
   delete data.order;
-  L[c] = data;
+  L[c] = Object.assign(data, EXTRA[c]);
   if (!CODES.includes(c)) CODES.push(c);
   const sorted = CODES.slice().sort((a, b) => ORDER[a] - ORDER[b]);   // stable: ties keep load order
   CODES.splice(0, CODES.length, ...sorted);
   for (const k of sorted) { const v = L[k]; delete L[k]; L[k] = v; }   // Lang.data in the same order
   const target = L[wanted] ? wanted : "en";
   if (L[target] && (target === c || active !== target)) { use(target); remember(target); }
+}
+
+// src/lang/<code>/<feature>.js: more texts for a language (a feature's own file, imported by the language's
+// index.js after main.js) - merged into its texts; before the language is registered they wait for it. The
+// current language's letters are loaded again (the new texts may need more of them).
+const EXTRA = {};
+function extend(c, data) {
+  if (L[c]) Object.assign(L[c], data);
+  else EXTRA[c] = Object.assign(EXTRA[c] || {}, data);
+  if (active === c) use(c);
 }
 
 const cur = () => L[code] || L.en || {};
@@ -195,7 +205,7 @@ function decode(text) {
 
 export const Lang = {
   decode, decodeByte: b => decode(String.fromCharCode(b)),
-  codes: CODES, get code() { return code; }, set, t, enc, apply, register, title, version, modeTexts, modeData: MODE_TEXTS,
+  codes: CODES, get code() { return code; }, set, t, enc, apply, register, extend, title, version, modeTexts, modeData: MODE_TEXTS,
   name: c => enc(L[c].name), next: () => CODES[(CODES.indexOf(code) + 1) % CODES.length],
   raw: (key, c) => (L[c || code] || {})[key] !== undefined ? L[c || code][key] : (L.en || {})[key], data: L,
   colorKeys: COLOR_KEYS,
