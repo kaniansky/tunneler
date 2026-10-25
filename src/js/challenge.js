@@ -20,6 +20,7 @@ import { Replay } from "./replay.js";
 
 const DAY = 86400000;
 const GRACE_MS = 2 * 3600 * 1000;                          // the last day's challenge still takes results this long after midnight UTC
+const BOARD_DAYS = 30;                                     // the past days whose boards the server answers (server.js BOARD_DAYS)
 const MAX_STEPS = Math.ceil(2 * 3600 * 1000 / NetProto.TICK_MS);   // a replay longer than 2 hours of play isn't checked
 const LEVELS = ["easy", "normal", "hard"];
 const z2 = n => String(n).padStart(2, "0");
@@ -190,6 +191,6 @@ function clean(rep, e, player, checks, name) {
 }
 
 export const Challenge = {
-  MAX_STEPS, GRACE_MS, LEVELS, MODE_WEIGHTS, DAY, dayOf, dayStart, dayEnd, validDay, config, query, engineOptions, sameOptions,
+  MAX_STEPS, GRACE_MS, BOARD_DAYS, LEVELS, MODE_WEIGHTS, DAY, dayOf, dayStart, dayEnd, validDay, config, query, engineOptions, sameOptions,
   track, result, compare, clock, verify,
 };

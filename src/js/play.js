@@ -10,6 +10,7 @@
 // Old links (?mode=cpu&level=...&opp=1..7&teams=0|1, hide=1 = self / hide=0 = everyone) still work.
 // ?challenge=<day> (docs/v6/CHALLENGE.md): that day's challenge - challenge.js's query for it, the day's seed, its
 // result remembered for the challenge screen (localStorage tunneler.challenge.last); after the match: back to it.
+// &practice=1 (a past day, from its leaderboard): the result is never remembered (nor sent); back to that day's board.
 // A custom map (docs/v6/MAPS.md): &lmap=<local id> (a map kept in this browser, mapstore.js) and / or &map=<shared id>
 // (fetched from the game's server and kept) - the engine gets its code (opts.map).
 import "./gfx-modern.js";
@@ -58,6 +59,7 @@ function run(mapRec) {
   const query = new URLSearchParams(location.search), code = query.get("g") ? CpuCode.decode(query.get("g")) : null;
   // the daily challenge (?challenge=2026-10-25, docs/v6/CHALLENGE.md): that day's skirmish, read from the query it stands for
   const chDay = Challenge.validDay(query.get("challenge")) ? query.get("challenge") : null, ch = chDay ? Challenge.config(chDay) : null;
+  const practice = !!ch && query.get("practice") === "1";   // (a past day played again: practice - docs/v6/CHALLENGE.md 2)
   const params = ch ? new URLSearchParams(Challenge.query(ch) + "&mode=cpu")
     : code ? new URLSearchParams(code + (query.get("mode") ? "&mode=" + query.get("mode") : "")) : query;
   // /skirmish?... (old: /vs-computer?...) or /split?... (play.html?mode=cpu|hotseat&... in the desktop app)
@@ -158,7 +160,7 @@ function run(mapRec) {
   // stored where that screen reads them, so also a game opened from a link comes back as it was (owner,
   // 2026-10-24)
   function toLobby() {
-    if (ch) { leave(Links.challenge()); return; }        // (the challenge: back to its screen - the skirmish's settings stay)
+    if (ch) { leave(Links.challenge(practice ? chDay : null)); return; }   // (the challenge: back to its screen - practice: that day's board; the skirmish's settings stay)
     const save = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* no storage */ } };
     if (mode === "cpu") {
       const all = [0, 1, 2, 3, 4, 5, 6, 7].map(c => {
@@ -191,7 +193,7 @@ function run(mapRec) {
 
   engine.uiMode = mode;
   Lang.apply(engine);
-  if (ch) engine.strings = Object.assign({}, engine.strings, { rematch: Lang.t("ch.back") });   // ("Back to the challenge")
+  if (ch) engine.strings = Object.assign({}, engine.strings, { rematch: Lang.t(practice ? "ch.back.board" : "ch.back") });   // ("Back to the challenge" / "... leaderboard")
 
   // mouse: click a main menu item to choose it; click anywhere on a menu page / "press any key" screen
   // to go on (acts like Enter)
@@ -306,7 +308,7 @@ function run(mapRec) {
   runner.recorder = Replay.recorder(engine, { kind: mode === "cpu" ? "skirmish" : "split", seed, opts, challenge: chDay }, rep => {
     Replay.save(rep).catch(e => console.warn("replay:", e));
     // (a better unsent result of the same day stays: "Send your result" sends the best match since the last one sent)
-    if (ch) try {
+    if (ch && !practice) try {                           // (practice: nothing to send - the remembered result stays)
       const result = Challenge.result(engine, kills, rep.steps);
       let kept = null;
       try { kept = JSON.parse(localStorage.getItem("tunneler.challenge.last") || "null"); } catch (e) { kept = null; }

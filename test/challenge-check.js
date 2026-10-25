@@ -107,7 +107,13 @@ function makeEnv(pathname, search, opts = {}) {
   win.window = win; win.globalThis = win;
   storage.set("tunneler.gfx", "original");
   const ctx = vm.createContext(win);
-  return { win, page: f => runPage(ctx, f), storage };
+  // (a key pressed: every keydown listener of the window - DosUI's and the page's - gets it, as a browser would)
+  const key = (k, code) => {
+    const ev = { key: k, code: code || k, defaultPrevented: false, preventDefault() { this.defaultPrevented = true; }, getModifierState: () => false };
+    for (const f of (listeners.keydown || []).slice()) f(ev);
+    return ev;
+  };
+  return { win, page: f => runPage(ctx, f), storage, listeners, key };
 }
 const tick = (ms = 0) => new Promise(r => setTimeout(r, ms));
 
@@ -336,7 +342,7 @@ const copy = rep => JSON.parse(JSON.stringify(rep));
     const rows = ui.spec.items.filter(x => /^e:/.test(x.key));
     ok(rows.length === 2 && win.Lang.decode(rows[0].label).includes("Zoë") && rows[1].spans[1][2] === 0x0E, "the leaderboard: the rows, your own in yellow");
     rows[0].go();
-    ok(String(win.location.href).endsWith("/replay/abcdefgh"), "a row watches that player's replay");
+    ok(String(win.location.href).endsWith("/replay/abcdefgh?challenge=" + day), "a row watches that player's replay (/replay/<id>?challenge=<day>: its Back comes to this board)");
     // its texts fit, every day of a year, every language
     let fit = true;
     for (const c of win.Lang.codes) {
@@ -361,6 +367,133 @@ const copy = rep => JSON.parse(JSON.stringify(rep));
     ok(!crashed && items.includes("send") === offered && (!offered || info.includes("yesterday's challenge")) && env.win.tunnelerChallenge().day === day,
       (kept ? "a remembered result with the old week id " + JSON.stringify(kept) + ": ignored (no Send, no crash)"
         : "yesterday's unsent result " + (later / 3600000) + " h after midnight: " + (offered ? "Send offered (\"" + info + "\")" : "no Send")));
+  }
+
+  // ---------------------------------------------------------------- the leaderboard's days (today and the 30 before)
+  {
+    const today = quick, D = n => Challenge.dayOf(Challenge.dayStart(today) - n * DAY), oldest = D(30);
+    const gets = new Map(), posts = [];
+    // (a past day's board: two entries with replays, one without - and your own entry below the best)
+    const pastBoard = d => ({ day: d, current: false, ends: Challenge.dayEnd(d), now: Challenge.dayStart(today) + 9 * 3600000, total: 60,
+      top: [{ rank: 1, name: "Ann " + d.slice(8), rounds: 3, won: true, kills: 5, secs: 300, replay: "past" + d.slice(8) + "aa" },
+        { rank: 2, name: "Bob", rounds: 2, won: false, kills: 3, secs: 500, replay: null }],
+      you: { rank: 57, name: "Norko", rounds: 1, won: false, kills: 1, secs: 600, replay: "mine" + d.slice(8) + "aa" } });
+    const todayBoard = { day: today, current: true, ends: Challenge.dayEnd(today), now: Challenge.dayStart(today) + 9 * 3600000, total: 1,
+      top: [{ rank: 1, name: "Zoë", rounds: 3, won: true, kills: 4, secs: 200, replay: "abcdefgh" }], you: null };
+    const fetchFn = async (url, o) => {
+      if (o && o.method === "POST") { posts.push(url); return { ok: false, status: 500, json: async () => ({}) }; }
+      gets.set(url, (gets.get(url) || 0) + 1);
+      const m = /^\/api\/challenge\/(\d{4}-\d{2}-\d{2})\?cid=client-zzzz$/.exec(url);
+      if (m) return { ok: true, status: 200, json: async () => pastBoard(m[1]) };
+      return { ok: true, status: 200, json: async () => todayBoard };
+    };
+    // (an unsent result of today stays what it is through all of this)
+    const kept = JSON.stringify({ day: today, id: rep.id, result, sent: false });
+    const storage = new Map([["tunneler.name", "Norko"], ["tunneler.client", "client-zzzz"], ["tunneler.challenge.last", kept]]);
+    const env = makeEnv("/challenge", "", { storage, fetch: fetchFn });
+    env.page("challenge.html");
+    await tick(10);
+    const win = env.win, ui = win.tunnelerChallengeUI(), C = () => win.tunnelerChallenge();
+    const dec = t => win.Lang.decode(t).replace(/\u00A0/g, " ");
+    ui.spec.items.find(x => x.key === "board").go();
+    await tick(10);
+    const dayRow = () => ui.spec.items.find(x => x.key === "day");
+    const lines = () => ui.spec.lines.map(l => dec(l.text)).join(" | ");
+    ok(C().view === "board" && C().bday === today && dec(dayRow().label).includes("2026") && !dec(dayRow().label).includes("\u25BA") &&
+      ui.spec.items.find(x => x.key === "play").label === win.Lang.t("ch.play") && lines().includes("Today's challenge - "),
+      "the leaderboard opens on today: its day row (no arrow to a later day), Play the challenge, the time left");
+    // Left: the day before - its settings, its board (fetched), practice said
+    let ev = env.key("ArrowLeft");
+    await tick(10);
+    const y1 = D(1), cfg1 = Challenge.config(y1);
+    const keysNow = () => ui.spec.items.filter(x => /^e:/.test(x.key)).map(x => x.key).join();
+    ok(ev.defaultPrevented && C().bday === y1 && ui.spec.items[ui.sel].key === "e:1" && gets.get("/api/challenge/" + y1 + "?cid=client-zzzz") === 1 && keysNow() === "e:1,e:2,e:57" &&
+      lines().includes(dec(win.challengeLines(cfg1)[0])) && lines().includes("Practice - results of past days don't count") &&
+      ui.spec.items.find(x => x.key === "play").label === win.Lang.t("ch.again"),
+      "Left: the day before (" + y1 + ") - its settings, its board fetched (your own entry #57 below the best), practice said, Play this day again; the row chosen (#1) still chosen");
+    const e1 = ui.spec.items.find(x => x.key === "e:1"), e2 = ui.spec.items.find(x => x.key === "e:2"), mine = ui.spec.items.find(x => x.key === "e:57");
+    ok(!!e1.go && !e1.static && e2.static && !ui.enabled(ui.spec.items.indexOf(e2)) && mine.spans[1][2] === 0x0E,
+      "an entry with a replay can be chosen, one without can't; your own row in yellow");
+    e1.go();
+    ok(String(win.location.href).endsWith("/replay/past" + y1.slice(8) + "aa?challenge=" + y1), "an entry's replay: /replay/<id>?challenge=" + y1);
+    // all the way back: 30 days, not one more; every day fetched once
+    for (let i = 0; i < 40; i++) env.key("ArrowLeft");
+    await tick(20);
+    const fetchedDays = [...gets.keys()].filter(u => /\/api\/challenge\/\d/.test(u));
+    ok(C().bday === oldest && fetchedDays.length === 30 && fetchedDays.every(u => gets.get(u) === 1) && !gets.has("/api/challenge/" + D(31) + "?cid=client-zzzz") &&
+      !dec(dayRow().label).startsWith("\u25C4"),
+      "Left 41 times: 30 days back (" + oldest + ") and no further, each day's board fetched once (" + fetchedDays.length + " days), no arrow to an older day");
+    // forward again by the day row's arrows (DosUI zones) and its change (the wheel / Left / Right on it): cached
+    dayRow().zones[1].click(1);
+    ok(C().bday === D(29), "the day row's right arrow: the day after");
+    dayRow().zones[0].click(1);
+    ok(C().bday === D(30), "its left arrow: the day before");
+    for (let i = 0; i < 35; i++) dayRow().change(1);
+    await tick(10);
+    ok(C().bday === today && [...gets.keys()].filter(u => /\/api\/challenge\/\d/.test(u)).every(u => gets.get(u) === 1), "forward to today and no further - the boards come from the cache");
+    // a day that can't be loaded (offline): said so, Enter on it tries again; /challenge?board=<day> (a fresh screen)
+    let down = true;
+    const env2 = makeEnv("/challenge", "?board=" + D(4), { storage: new Map([["tunneler.name", "Norko"], ["tunneler.client", "client-zzzz"]]),
+      fetch: async url => { if (/\/api\/challenge\/\d/.test(url)) { if (down) throw new Error("offline"); return { ok: true, status: 200, json: async () => pastBoard(url.slice(15, 25)) }; }
+        return { ok: true, status: 200, json: async () => todayBoard }; } });
+    env2.page("challenge.html");
+    await tick(20);
+    const ui2 = env2.win.tunnelerChallengeUI(), C2 = env2.win.tunnelerChallenge();
+    const offRow = ui2.spec.items.find(x => x.key === "off");
+    ok(C2.view === "board" && C2.bday === D(4) && offRow && env2.win.Lang.decode(offRow.label).includes("be loaded") && ui2.spec.items.some(x => x.key === "play"),
+      "/challenge?board=<day> opens the leaderboard on that day; offline: \"can't be loaded\" (Enter tries again), practice still possible");
+    down = false;
+    if (offRow) offRow.go();
+    await tick(10);
+    ok(ui2.spec.items.some(x => x.key === "e:1") && !ui2.spec.items.some(x => x.key === "off"), "Enter on it: tried again - the board");
+    // practice: a past day's "Play this day again" -> the skirmish with practice=1; nothing sent, the remembered result untouched
+    env.key("ArrowLeft");
+    await tick(10);
+    const pd = C().bday;
+    ui.spec.items.find(x => x.key === "play").go();
+    ok(String(win.location.href).endsWith("/skirmish?challenge=" + pd + "&practice=1") && !ui.spec.items.some(x => x.key === "send") && posts.length === 0,
+      "a past day: Play this day again = /skirmish?challenge=" + pd + "&practice=1, no Send offered");
+    // Esc: back to the challenge, the URL without the day again
+    ui.spec.back();
+    ok(C().view === "main" && storage.get("tunneler.challenge.last") === kept, "Esc / Back: the challenge screen; today's unsent result untouched");
+  }
+  // play.js: a practice match played to its end: tunneler.challenge.last untouched, nothing sent, "Back to the leaderboard" -> that
+  // day's board; the same day without practice: remembered as the result to send
+  for (const practice of [true, false]) {
+    const day = quick, cfg = Challenge.config(day);
+    const kept = JSON.stringify({ day: Challenge.dayOf(Challenge.dayStart(day) + DAY), id: "other", result: { rounds: 1, won: false, kills: 0, secs: 99 }, sent: false });
+    const posts = [];
+    const storage = new Map([["tunneler.name", "Norko"], ["tunneler.client", "client-zzzz"], ["tunneler.challenge.last", kept]]);
+    const env = makeEnv("/skirmish", "?challenge=" + day + (practice ? "&practice=1" : ""), { storage, fetch: async (u, o) => { posts.push(u); throw new Error("no"); } });
+    env.page("play.html");
+    const win = env.win, e = win.tunnelerEngine(), runner = win.tunnelerRunner(), rec = runner.recorder;
+    const ais = cfg.slots.map((s, i) => new TunnelerAI(s.level || "hard", i + 1));
+    let n = 0;
+    for (; n < 200000 && e.screen !== "map"; n++) { const inp = { bits: ais.map(ai => TunnelerAI.bitsFor(ai, e)), keys: [] }; rec.input(inp); e.step(inp); rec.stepped(); }
+    await tick(10);
+    const last = storage.get("tunneler.challenge.last");
+    // on to the game's menu (any key on the map, then the statistics), then Esc = its first item
+    for (let k = 0; k < 400 && !(e.screen === "text" && e.menuPage === "menu" && !e.kbdInstalled && e.menuShown); k++)
+      e.step({ bits: new Array(cfg.slots.length).fill(0), keys: k % 20 === 0 ? [[13, 28]] : [] });
+    const label = win.Lang.decode(e.strings.rematch);
+    env.key("Escape", "Escape");
+    const href = String(win.location.href);
+    if (practice) ok(e.screen !== "play" && last === kept && posts.length === 0 && label === "Back to the leaderboard" && href.endsWith("/challenge?board=" + day),
+      "a practice match (" + n + " steps): the remembered result untouched, nothing sent; \"" + label + "\" -> " + href);
+    else ok(last !== kept && JSON.parse(last).day === day && label === "Back to the challenge" && href.endsWith("/challenge"),
+      "the same day without practice: remembered as the result to send; \"" + label + "\" -> " + href);
+  }
+  // the replay's page from a board (?challenge=<day>): Back goes to that day's board
+  {
+    const d = Challenge.dayOf(Challenge.dayStart(quick) - 5 * DAY);
+    const env = makeEnv("/replay/abcdefgh", "?challenge=" + d, { fetch: async () => ({ ok: false, status: 404, arrayBuffer: async () => new ArrayBuffer(0) }) });
+    env.page("replays.html");
+    await tick(20);
+    const ui = env.win.tunnelerReplayUI(), back = ui.spec.items.find(x => x.key === "back");
+    const label = back && env.win.Lang.decode(back.label);
+    back.go();
+    ok(label === "Back to the leaderboard" && String(env.win.location.href).endsWith("/challenge?board=" + d),
+      "a board entry's replay page: \"" + label + "\" -> " + env.win.location.href + " (Esc too)");
   }
 
   // a match given up with Esc wins nothing (survival between two waves: only the players were left - Esc won the round

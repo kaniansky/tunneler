@@ -948,7 +948,17 @@ none, i.e. a page from before 2.0 - is refused (POST 409 `{code:
   and the locale `ch.locale`, through the Unicode plane -, the time left "3 h 57 min", the description -
   `challengeLines` -, your place, Play, Send your result - also yesterday's during the grace -, Leaderboard -> a row
   watches its shared replay; at midnight UTC it asks the server for the new day); home.js main menu item after Online
-  game; an Information section. Server: `GET /api/challenge[/<day>][?cid=]` (the last `BOARD_DAYS` 30 days: they
+  game; an Information section. The leaderboard steps through today and the `Challenge.BOARD_DAYS` (30) days before
+  (Left / Right anywhere - a window keydown listener -, the day row "◄ date ►": `change`, two half-row `zones`, the
+  wheel; desktop: the box ends on row 21 whatever the description takes, padded with empty rows, so the day row stays
+  under the mouse; phone upright: the day row first): each day's description, status line (today: time left; past:
+  "Practice - ..."), board (GET /api/challenge/<day>?cid=, cached in `past` for the screen's life, a failed one
+  "can't be loaded" - Enter retries; your own entry below the best when outside them; entries without a replay
+  `static`), "Play the challenge" (today) / "Play this day again" (`?challenge=<day>&practice=1`: play.js `practice`
+  - no tunneler.challenge.last, "Back to the leaderboard" -> `Links.challenge(day)` = `/challenge?board=<day>`). An
+  entry's replay: `Links.sharedReplay(id, day)` = `/replay/<id>?challenge=<day>` (app `&challenge=`): replays.js
+  `fromDay` - Back / Esc go to `/challenge?board=<day>`. The page keeps `?board=<day>` in its address
+  (history.replaceState). Server: `GET /api/challenge[/<day>][?cid=]` (the last `BOARD_DAYS` 30 days: they
   fit the board cache), `POST /api/challenge/<day>?cid=&name=` (the replay; a <day> that isn't one - an old week id -:
   400 bad) -> `runCheck` in a worker thread (`challenge-worker.js`: version, day, seed + options, the server's own
   TunnelerAIs must give the recorded bits, the state hashes, the world map at the last step; `CHALLENGE_TIME_MS`

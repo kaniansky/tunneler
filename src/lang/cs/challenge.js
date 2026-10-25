@@ -28,10 +28,17 @@ Lang.extend("cs", {
   "ch.err.long": "Ten zápas je příliš dlouhý na kontrolu.", "ch.err.busy": "Server je zaneprázdněný - zkus to za minutu.",
   "ch.err.net": "Server neodpověděl: {msg}", "ch.err.gone": "Záznam toho zápasu tu už není.",
   "ch.err.bad": "Server ho odmítl: {msg}",
-  "ch.board": "Žebříček", "ch.board.i": "Dnešní nejlepší hráči - podívej se, jak to dokázali.",
+  "ch.board": "Žebříček", "ch.board.i": "Nejlepší hráči dneška a 30 dní předtím - podívej se, jak to dokázali.",
   "ch.board.title": "ŽEBŘÍČEK - {date}",
   "ch.h.name": "JMÉNO", "ch.h.rounds": "KOLA", "ch.h.kills": "ZNIČENÉ", "ch.h.time": "ČAS",
   "ch.row.i": "<ENTER> přehraje zápas tohoto hráče.", "ch.row.i.touch": "Ťukni na něj a uvidíš zápas tohoto hráče.",
   "ch.board.none": "V žebříčku zatím nikdo není - buď první!", "ch.board.wait": "Načítám...",
   "ch.back": "Zpět na výzvu", "ch.back.i": "Zpět na dnešní výzvu.",
+  // the leaderboard's days (today and the 30 before), practice
+  "ch.board.today": "Dnešní výzva - zbývá {t}", "ch.practice": "Trénink - výsledky minulých dní se nepočítají.",
+  "ch.days.i": "← → ukážou žebříčky 30 dní předtím.", "ch.days.i.touch": "Ťukni na šipku a uvidíš žebříčky 30 dní předtím.",
+  "ch.again": "Zahrát si tento den znovu", "ch.again.i": "Svět a nastavení toho dne - stejné, jaké měli všichni.",
+  "ch.board.off": "Teď nejde načíst", "ch.board.off.i": "Žebříček tohoto dne teď nejde načíst.", "ch.retry.i": "<ENTER> to zkusí znovu.",
+  "ch.retry.i.touch": "Ťukni na něj a zkusí se to znovu.", "ch.board.none.past": "V žebříčku toho dne nikdo není.",
+  "ch.back.board": "Zpět na žebříček", "ch.back.board.i": "Zpět na žebříček denní výzvy z toho dne.",
 });

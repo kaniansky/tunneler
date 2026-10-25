@@ -1,7 +1,8 @@
 // The replays (docs/DESIGN-8P.md 33): /replays = the matches kept in this browser (replay.js: every match
 // played or watched here, the newest Replay.MAX), newest first - one opens its screen (watch, save as a file,
 // share a link, delete); "Open a replay file" reads a .replay file, "Open a replay link" a link someone sent
-// (shared: POST /api/replays on the game's server; /replay/<id> - the app: ?share=<id> - fetches and plays it). /replays/<id> plays one
+// (shared: POST /api/replays on the game's server; /replay/<id> - the app: ?share=<id> - fetches and plays it;
+// ?challenge=<day>: watched from that day's challenge leaderboard, whose board Back / Esc go to again). /replays/<id> plays one
 // (the desktop app: /replays.html[?id=]): the match again on its own engine, watched like a spectator (every
 // view, the live map or one tank - Tab, 1 2 3, Left / Right) with Space / Enter (a tap) = pause, + / - =
 // speed (1/2x .. 8x; sound only at 1x), PgUp / PgDn = 30 s back / on, Home = from the start, Esc = back.
@@ -56,7 +57,11 @@ export function mount() {
   window.tunnelerReplay = () => ({ rep, steps: player ? player.n : 0, paused, speed, ended, differs, watching });
   window.tunnelerReplayList = () => showList(true);
 
-  const back = () => Nav.go(Links.replays());
+  // watched from a day's challenge leaderboard (/replay/<id>?challenge=<day>, daily.js): Back / Esc go to that day's board
+  const fromDay = (d => /^\d{4}-\d{2}-\d{2}$/.test(d || "") ? d : null)(new URLSearchParams(location.search).get("challenge"));
+  const back = () => Nav.go(fromDay ? Links.challenge(fromDay) : Links.replays());
+  const backItem = () => fromDay ? { key: "back", label: T("ch.back.board"), info: [T("ch.back.board.i")], go: back }
+    : { key: "back", label: T("back.replays"), info: [T("back.replays.i")], go: back };
   const home = () => Nav.go("/");
   const z = n => String(n).padStart(2, "0");
   const clock = steps => { const s = Math.floor(steps * TICK_MS / 1000); return Math.floor(s / 60) + ":" + z(s % 60); };
@@ -182,7 +187,7 @@ export function mount() {
   async function loadShared(origin, id) {
     watching = false;
     ui.show({ lines: [{ row: 2, text: T("rp.title"), color: 12 }, { row: 10, text: T("rp.fetching"), color: 7 }],
-      box: { y: 13 }, infoRow: 18, back, items: [{ key: "back", label: T("back.replays"), info: [T("back.replays.i")], go: back }] });
+      box: { y: 13 }, infoRow: 18, back, items: [backItem()] });
     try {
       const res = await fetch((origin || Endpoint.base()) + "/api/replays/" + id);
       if (!res.ok) throw new Error(res.status === 404 ? T("rp.gone.404") : "HTTP " + res.status);
@@ -191,7 +196,7 @@ export function mount() {
       watch(r);
     } catch (e) {
       ui.show({ lines: [{ row: 2, text: T("rp.title"), color: 12 }, { row: 10, text: T("rp.gone", { msg: String(e.message || e).slice(0, 60) }), color: 12 }],
-        box: { y: 13 }, infoRow: 18, back, items: [{ key: "back", label: T("back.replays"), info: [T("back.replays.i")], go: back }] });
+        box: { y: 13 }, infoRow: 18, back, items: [backItem()] });
     }
   }
   // "Open a replay link": a pasted link (or a replay's id)
@@ -368,7 +373,7 @@ export function mount() {
         ...(differs ? [] : [{ key: "stats", label: T("rp.stats"), info: [T("rp.stats.i")], go: showStats }]),
         { key: "again", label: T("rp.again"), info: [T("rp.again.i")], go: () => { ui.spec = null; watch(rep); } },
         { key: "gap", label: "", disabled: true },
-        { key: "back", label: T("back.replays"), info: [T("back.replays.i")], go: back }],
+        backItem()],
     }, keep);
   }
   // the match's statistics: drawn by a private engine (the menu screen's code) with its numbers copied in

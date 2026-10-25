@@ -32,7 +32,9 @@ a release is made by pushing a version tag (see CONTRIBUTING.md).
   replay again with its own computer players, so only real results get on the day's leaderboard (won, rounds,
   kills, time). The screen shows today's date and the time left until the next challenge; the leaderboard shows
   the day's best, and every entry's match can be watched. A match finished just before midnight can still be sent
-  for two hours. (docs/v6/CHALLENGE.md)
+  for two hours. The leaderboard also goes back through the 30 days before (Left / Right, or the arrows of its day
+  row): each day's settings and board, the matches to watch (Back returns to that day's board), and "Play this day
+  again" - practice, whose results are never sent. (docs/v6/CHALLENGE.md)
 - Your own maps (main menu, Maps): paint a world - rock, dirt and tunnels - and place up to 8 bases, on a small,
   medium or large map, starting from dirt everywhere or a random world. The editor works with the keyboard, the
   mouse, a gamepad and on a phone (one finger paints, two move and zoom); maps are kept in the browser and can be

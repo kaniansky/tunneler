@@ -3,8 +3,12 @@
 // the time left until the next one, your place on the leaderboard; Play the challenge (the skirmish
 // /skirmish?challenge=<day>, play.js), Send your result (the last challenge match's replay, POST /api/challenge/<day>:
 // the server plays it again and puts it on the board), Leaderboard (the day's best; Enter watches a player's replay -
-// /replay/<id>). The day and the board come from the game's server (Endpoint); without it the computer's own day
-// (UTC) is shown and played.
+// /replay/<id>?challenge=<day>, whose Back comes here again). The leaderboard steps through today and the 30 days
+// before (Left / Right, the arrows of its day row, the wheel there): each day's settings and board (fetched once per
+// screen), and on a past day "Play this day again" - practice (/skirmish?challenge=<day>&practice=1: never sent,
+// never remembered as the result to send; its end comes back to that day's board). /challenge?board=<day> opens the
+// leaderboard on that day. The day and the board come from the game's server (Endpoint); without it the computer's
+// own day (UTC) is shown and played.
 import { Challenge } from "./challenge.js";
 import { DosUI } from "./dosui.js";
 import { Endpoint, Links } from "./endpoint.js";
@@ -83,6 +87,7 @@ export function mount() {
   // ------------------------------------------------------------ the challenge
   function main(keep) {
     view = "main";
+    if (/[?&]board=/.test(location.search)) try { history.replaceState(history.state, "", Links.challenge()); } catch (e) { /* no history */ }
     const cfg = Challenge.config(day), L = last();
     // a result not sent yet: today's, or yesterday's while the server still takes it (a match begun just before midnight UTC)
     const pending = L && !L.sent &&
@@ -103,10 +108,18 @@ export function mount() {
     ui.show({ lines, box: { y: 14 }, infoRow: 22, back: home, items, sel: !keep && pending ? 1 : undefined }, keep);
   }
 
-  // ------------------------------------------------------------ the leaderboard
+  // ------------------------------------------------------------ the leaderboard: today and the 30 days before
+  // (Left / Right anywhere on it, the day row's arrows / the wheel over it; docs/v6/CHALLENGE.md 2)
   const WIDE = [5, 15, 10, 10], NARROW = [4, 12, 5, 4];    // (place, name, rounds, kills; the time takes the rest)
   const cols = () => ui.isNarrow() ? NARROW : WIDE;
-  const ROWS = 12;
+  const BOX_X = 15, BOX_W = 50, BOX_BOTTOM = 21;           // (desktop: the box's bottom border stays on its row - the day row too)
+  const past = new Map(), fetching = new Set(), failed = new Set();   // past days' boards (GET /api/challenge/<day>), for the screen's life
+  let bday = null;                                       // the board's day (null: today)
+  let selWant = null;                                    // (the row chosen when the day changed: chosen again once that day's board is there)
+  const oldest = () => Challenge.dayOf(Challenge.dayStart(day) - Challenge.BOARD_DAYS * Challenge.DAY);
+  const clampDay = d => !Challenge.validDay(d) || d > day ? day : d < oldest() ? oldest() : d;
+  // (bday stays what was asked for - /challenge?board=<day> before the server said which day it is today)
+  const shownDay = () => clampDay(bday || day);
   function rowText(x, cfg) {
     const C = cols(), cell = (t, k) => UniText.padEnd(UniText.slice(t, C[k] - 1), C[k]);
     return cell(x.rank + ".", 0) + cell(UniText.fromRaw(x.name), 1) + cell(x.rounds + "/" + cfg.winScore, 2) + cell(String(x.kills), 3) + Challenge.clock(x.secs);
@@ -115,27 +128,114 @@ export function mount() {
     const C = cols(), at = [0]; for (const w of C) at.push(at[at.length - 1] + w);
     return [0x07, mine ? 0x0E : 0x0F, 0x0A, 0x0C, 0x0B].map((a, i) => [at[i], i < C.length ? at[i + 1] : 200, a]);
   }
+  // a day's board: {j} (the server's answer), "wait" or "off" (offline / refused: Enter on its row tries again)
+  function boardState(d) {
+    if (d === day) return board && board.day === day ? { j: board } : offline ? "off" : "wait";
+    if (past.has(d)) return { j: past.get(d) };
+    if (failed.has(d)) return "off";
+    fetchDay(d);
+    return "wait";
+  }
+  async function fetchDay(d) {
+    if (past.has(d) || fetching.has(d)) return;
+    fetching.add(d); failed.delete(d);
+    try {
+      const res = await fetch(Endpoint.api("/api/challenge/" + d + "?cid=" + encodeURIComponent(cid)));
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const j = await res.json();
+      if (!j || j.day !== d || !Array.isArray(j.top)) throw new Error("no board");
+      past.set(d, j);
+    } catch (e) { failed.add(d); }
+    fetching.delete(d);
+    if (view === "board" && shownDay() === d) showBoard(true);
+  }
+  function retry(d) {
+    if (d === day) { offline = false; board = null; showBoard(true); load(); return; }
+    failed.delete(d);
+    showBoard(true);
+  }
+  // another day (dir -1: the day before, +1: the day after) - not past today nor before the 30 days the server keeps
+  function stepDay(dir) {
+    const cur = shownDay(), d = clampDay(Challenge.dayOf(Challenge.dayStart(cur) + dir * Challenge.DAY));
+    if (d === cur) return false;
+    const it = ui.spec && ui.spec.items[ui.sel];
+    selWant = it && /^e:/.test(it.key) ? it.key : null;
+    bday = d;
+    failed.delete(d);                                    // (a day that couldn't be loaded: tried again)
+    showBoard(true);
+    return true;
+  }
+  // the day row: "◄  Saturday, October 24, 2026  ►" (an arrow only where there is a day to go to); the date as long as
+  // the box allows
+  const DATES = [{ weekday: "long", year: "numeric", month: "long", day: "numeric" }, { year: "numeric", month: "long", day: "numeric" },
+    { year: "numeric", month: "short", day: "numeric" }, { year: "numeric", month: "2-digit", day: "2-digit" }];
+  function dayItem(d) {
+    const room = (ui.isNarrow() ? DosUI.NARROW_W : BOX_W) - 4 - 6;
+    let date = d;
+    for (const o of DATES) { const t = dateText(d, o); if (UniText.rawCols(t) <= room) { date = t; break; } }
+    const label = (d > oldest() ? "\x11" : " ") + "  " + UniText.fromRaw(date) + "  " + (d < day ? "\x10" : " "), w = UniText.cols(label);
+    const touch = GameScreen.mobile();
+    return { key: "day", label, change: dir => stepDay(dir), go: () => { if (!stepDay(-1)) { bday = day; showBoard(true); } },   // (Enter: the day before; the oldest: today again)
+      zones: [{ from: -80, to: w >> 1, click: () => stepDay(-1) }, { from: w >> 1, to: w + 80, click: () => stepDay(1) }],
+      info: [T(touch ? "ch.days.i.touch" : "ch.days.i"), ...(d < day ? [T("ch.practice")] : [])] };
+  }
   function showBoard(keep) {
     view = "board";
-    const cfg = Challenge.config(day), C = cols();
-    const top = board && board.day === day ? board.top || [] : [];
-    const you = board && board.day === day ? board.you : null;
-    const touch = GameScreen.mobile();
-    const items = top.map(x => ({ key: "e:" + x.rank, label: rowText(x, cfg), align: "left", spans: rowSpans(you && you.rank === x.rank),
-      info: [UniText.fromRaw(scoreText(x, cfg)), T(touch ? "ch.row.i.touch" : "ch.row.i")], go: () => { if (x.replay) Nav.go(Links.sharedReplay(x.replay)); } }));
-    if (!items.length) items.push({ key: "none", label: T(board ? "ch.board.none" : "ch.board.wait"), disabled: true });
-    items.push({ key: "gap", label: "", disabled: true });
-    items.push({ key: "back", label: T("ch.back"), info: [T("ch.back.i")], go: () => main() });
-    const shown = Math.max(1, Math.min(items.length - 2, ROWS)), bottom = 3 + 3 + shown + 2;
+    const d = shownDay(), today = d === day, narrow = ui.isNarrow();
+    try { history.replaceState(history.state, "", Links.challenge(today ? null : d)); } catch (e) { /* no history (tests) */ }
+    const cfg = Challenge.config(d), C = cols(), st = boardState(d), touch = GameScreen.mobile();
+    const j = typeof st === "object" ? st.j : null, top = j ? j.top || [] : [], you = j ? j.you : null;
+    // the rows: the best (up to 50), your own entry below them when it isn't one of them; a row with a replay watches it
+    // (its Back comes to this day's board again), one without isn't choosable
+    const list = top.slice();
+    if (you && !top.some(x => x.rank === you.rank)) list.push(you);
+    const entries = list.map(x => Object.assign({ key: "e:" + x.rank, label: rowText(x, cfg), align: "left", spans: rowSpans(you && you.rank === x.rank) },
+      x.replay ? { info: [UniText.fromRaw(scoreText(x, cfg)), T(touch ? "ch.row.i.touch" : "ch.row.i")], go: () => Nav.go(Links.sharedReplay(x.replay, d)) }
+        : { static: true }));
+    if (!entries.length) entries.push(st === "off" ? { key: "off", label: T("ch.board.off"), attr: 0x0C, info: [T("ch.board.off.i"), T(touch ? "ch.retry.i.touch" : "ch.retry.i")], go: () => retry(d) }
+      : { key: "none", label: T(st === "wait" ? "ch.board.wait" : today ? "ch.board.none" : "ch.board.none.past"), disabled: true });
+    const play = today ? { key: "play", label: T("ch.play"), info: [T("ch.play.i"), T("ch.play.i2")], go: () => Nav.go(Links.cpu("challenge=" + d)) }
+      : { key: "play", label: T("ch.again"), info: [T("ch.practice"), T("ch.again.i")], go: () => Nav.go(Links.cpu("challenge=" + d + "&practice=1")) };
+    const back = { key: "back", label: T("ch.back"), info: [T("ch.back.i")], go: () => main() };
+    const lines = [{ row: 2, text: T("ch.board.title", { date: dateText(d, { month: "long", day: "numeric" }).toLocaleUpperCase() }), color: 12 }];
+    const desc = challengeLines(cfg);
+    desc.forEach((t, i) => lines.push({ row: 4 + i, text: t, color: 3 }));
+    // (today: the time left; a past day: practice)
+    const status = today ? offline ? null : { text: T("ch.board.today", { t: timeLeft() }), color: 15 } : { text: T("ch.practice"), color: 10 };
+    if (status) lines.push(Object.assign({ row: 4 + desc.length }, status));
+    if (narrow) {
+      // (a phone: every row shown - the day row first, where a thumb finds it)
+      ui.show({ lines, box: { y: 3 }, items: [dayItem(d)].concat(entries, [{ key: "gap", label: "", disabled: true }, play, back]), back: () => main() }, keep);
+      return reselect(j);
+    }
+    // desktop: the box ends on BOX_BOTTOM whatever the day's description takes - the day row stays under the mouse; the
+    // rows the description leaves show the board (it scrolls), empty ones fill the rest
+    const y = 5 + desc.length, shown = BOX_BOTTOM - y - 6;
+    while (entries.length < shown) entries.push({ key: "pad" + entries.length, label: "", disabled: true });
     const head = (k, i) => UniText.padEnd(UniText.slice(T(k), C[i] - 1), C[i]);
     ui.show({
-      lines: [{ row: 2, text: T("ch.board.title", { date: dateText(day, { month: "long", day: "numeric" }).toLocaleUpperCase() }), color: 12 }],
-      box: ui.isNarrow() ? { y: 3, rows: shown } : { x: 15, y: 3, w: 50, rows: shown }, fixed: 2,
-      // (a phone: no room for the other headings - the selected row's info says it in words)
-      header: " " + UniText.padEnd("#", C[0]) + head("ch.h.name", 1) + (ui.isNarrow() ? "" : head("ch.h.rounds", 2) + head("ch.h.kills", 3) + T("ch.h.time")),
-      items, infoRow: bottom + 2, back: () => main(),
+      lines, box: { x: BOX_X, y, w: BOX_W, rows: shown }, fixed: 3,
+      header: " " + UniText.padEnd("#", C[0]) + head("ch.h.name", 1) + head("ch.h.rounds", 2) + head("ch.h.kills", 3) + T("ch.h.time"),
+      items: entries.concat([dayItem(d), play, back]), infoRow: BOX_BOTTOM + 1, back: () => main(),
     }, keep);
+    reselect(j);
   }
+  // (a row was chosen when the day changed - "#3": the same place on this day's board, once it has come)
+  function reselect(j) {
+    if (!selWant || !j) return;
+    const i = ui.spec.items.findIndex(x => x.key === selWant);
+    selWant = null;
+    if (i >= 0 && ui.enabled(i) && i !== ui.sel) { ui.sel = i; ui.draw(); }
+  }
+  // Left / Right on any row of the board (the day row steps by its own change())
+  window.addEventListener("keydown", e => {
+    if (view !== "board" || e.defaultPrevented || e.ctrlKey || e.altKey || e.metaKey) return;
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    const it = ui.spec && ui.spec.items[ui.sel];
+    if (it && it.change) return;
+    e.preventDefault();
+    stepDay(e.key === "ArrowLeft" ? -1 : 1);
+  });
 
   // ------------------------------------------------------------ the server: the day and the board, sending a result
   let loading = false;
@@ -149,6 +249,7 @@ export function mount() {
       const j = await res.json();
       if (!j || !Challenge.validDay(j.day)) throw new Error("no day");
       fresh = day !== j.day;                             // (the server's day isn't this computer's: its screen anew)
+      if (board && board.day !== j.day && Challenge.validDay(board.day)) past.set(board.day, board);   // (midnight: today's board is a past day's now)
       board = j; offline = false; day = j.day;
       if (Number.isFinite(j.now)) skew = j.now - Date.now();
     } catch (e) { offline = true; }
@@ -202,11 +303,17 @@ export function mount() {
       load();
     }
     if (view === "main") main(true);
+    else if (view === "board" && shownDay() === day) showBoard(true);   // (today's: the time left)
   }, 60000);
   setInterval(load, 120000);
-  window.tunnelerChallenge = () => ({ day, board, offline, note, view, cid, send, load });
+  window.tunnelerChallenge = () => ({ day, board, offline, note, view, cid, send, load, bday: view === "board" ? shownDay() : bday, past, stepDay, showBoard: d => { bday = d || null; showBoard(); } });
 
-  const start = () => { main(); load(); };
+  // /challenge?board=<day>: the leaderboard on that day (a replay's Back, a practice match's end)
+  const boardDay = new URLSearchParams(location.search).get("board");
+  const start = () => {
+    if (Challenge.validDay(boardDay)) { bday = boardDay; showBoard(); } else main();
+    load();
+  };
   if (!DosUI.playerName()) { view = "name"; ui.askName(start, home); }
   else start();
 }

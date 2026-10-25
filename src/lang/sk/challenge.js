@@ -28,10 +28,17 @@ Lang.extend("sk", {
   "ch.err.long": "Ten zápas je príliš dlhý na kontrolu.", "ch.err.busy": "Server je zaneprázdnený - skús to o minútu.",
   "ch.err.net": "Server neodpovedal: {msg}", "ch.err.gone": "Záznam toho zápasu tu už nie je.",
   "ch.err.bad": "Server ho odmietol: {msg}",
-  "ch.board": "Rebríček", "ch.board.i": "Dnešní najlepší hráči - pozri sa, ako to dokázali.",
+  "ch.board": "Rebríček", "ch.board.i": "Najlepší hráči dneška a 30 dní predtým - pozri sa, ako to dokázali.",
   "ch.board.title": "REBRÍČEK - {date}",
   "ch.h.name": "MENO", "ch.h.rounds": "KOLÁ", "ch.h.kills": "ZNIČENÉ", "ch.h.time": "ČAS",
   "ch.row.i": "<ENTER> prehrá zápas tohto hráča.", "ch.row.i.touch": "Ťukni naň a uvidíš zápas tohto hráča.",
   "ch.board.none": "V rebríčku zatiaľ nikto nie je - buď prvý!", "ch.board.wait": "Načítavam...",
   "ch.back": "Späť na výzvu", "ch.back.i": "Späť na dnešnú výzvu.",
+  // the leaderboard's days (today and the 30 before), practice
+  "ch.board.today": "Dnešná výzva - zostáva {t}", "ch.practice": "Tréning - výsledky minulých dní sa nepočítajú.",
+  "ch.days.i": "← → ukážu rebríčky 30 dní predtým.", "ch.days.i.touch": "Ťukni na šípku a uvidíš rebríčky 30 dní predtým.",
+  "ch.again": "Zahrať si tento deň znova", "ch.again.i": "Svet a nastavenie toho dňa - rovnaké, aké mali všetci.",
+  "ch.board.off": "Teraz sa nedá načítať", "ch.board.off.i": "Rebríček tohto dňa sa teraz nedá načítať.", "ch.retry.i": "<ENTER> to skúsi znova.",
+  "ch.retry.i.touch": "Ťukni naň a skúsi sa to znova.", "ch.board.none.past": "V rebríčku toho dňa nikto nie je.",
+  "ch.back.board": "Späť na rebríček", "ch.back.board.i": "Späť na rebríček dennej výzvy z toho dňa.",
 });

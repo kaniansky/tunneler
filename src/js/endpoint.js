@@ -62,11 +62,13 @@ const Links = {
   // the replays kept in this browser (replay.js), one of them played (its id)
   replays: () => isApp ? "/replays.html" : "/replays",
   replay: id => isApp ? "/replays.html?id=" + enc(id) : "/replays/" + enc(id),
-  // a shared replay (POST /api/replays): its page here, and the link to send (always the server's address)
-  sharedReplay: id => isApp ? "/replays.html?share=" + enc(id) : "/replay/" + enc(id),
+  // a shared replay (POST /api/replays): its page here, and the link to send (always the server's address); day: watched
+  // from that day's challenge leaderboard - its Back goes there again
+  sharedReplay: (id, day) => (isApp ? "/replays.html?share=" + enc(id) : "/replay/" + enc(id)) + (day ? (isApp ? "&" : "?") + "challenge=" + enc(day) : ""),
   replayLink: id => "/replay/" + enc(id),
-  // the daily challenge's screen (docs/v6/CHALLENGE.md); playing it: Links.cpu("challenge=<day>")
-  challenge: () => isApp ? "/challenge.html" : "/challenge",
+  // the daily challenge's screen (docs/v6/CHALLENGE.md; day: its leaderboard on that day); playing it:
+  // Links.cpu("challenge=<day>"), a past day as practice: Links.cpu("challenge=<day>&practice=1")
+  challenge: day => (isApp ? "/challenge.html" : "/challenge") + (day ? "?board=" + enc(day) : ""),
   // the custom maps kept in this browser (mapstore.js, docs/v6/MAPS.md), one map's screen (its local id), a shared
   // map (POST /api/maps: its page here, and the link to send)
   maps: () => isApp ? "/maps.html" : "/maps",

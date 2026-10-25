@@ -28,10 +28,17 @@ Lang.extend("en", {
   "ch.err.long": "That match is too long to check.", "ch.err.busy": "The server is busy - try again in a minute.",
   "ch.err.net": "The server didn't answer: {msg}", "ch.err.gone": "The replay of that match isn't here any more.",
   "ch.err.bad": "The server refused it: {msg}",
-  "ch.board": "Leaderboard", "ch.board.i": "Today's best players - watch how they did it.",
+  "ch.board": "Leaderboard", "ch.board.i": "The best players of today and the 30 days before - watch how they did it.",
   "ch.board.title": "LEADERBOARD - {date}",
   "ch.h.name": "NAME", "ch.h.rounds": "ROUNDS", "ch.h.kills": "KILLS", "ch.h.time": "TIME",
   "ch.row.i": "<ENTER> watches this player's match.", "ch.row.i.touch": "Tap it to watch this player's match.",
   "ch.board.none": "Nobody is on the board yet - be the first!", "ch.board.wait": "Loading...",
   "ch.back": "Back to the challenge", "ch.back.i": "Back to today's challenge.",
+  // the leaderboard's days (today and the 30 before), practice
+  "ch.board.today": "Today's challenge - {t} left", "ch.practice": "Practice - results of past days don't count.",
+  "ch.days.i": "← → show the leaderboards of the 30 days before.", "ch.days.i.touch": "Tap an arrow for the leaderboards of the 30 days before.",
+  "ch.again": "Play this day again", "ch.again.i": "That day's world and settings - the same as everyone had.",
+  "ch.board.off": "Can't be loaded now", "ch.board.off.i": "This day's leaderboard can't be loaded now.", "ch.retry.i": "<ENTER> tries again.",
+  "ch.retry.i.touch": "Tap it to try again.", "ch.board.none.past": "Nobody got on that day's leaderboard.",
+  "ch.back.board": "Back to the leaderboard", "ch.back.board.i": "Back to the daily challenge's leaderboard of that day.",
 });

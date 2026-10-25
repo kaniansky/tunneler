@@ -343,6 +343,37 @@ const tick = () => new Promise(r => setTimeout(r, 0));
         if (!ui.isNarrow()) for (const l of ui.spec.lines) if (win.UniText.cols(l.text) > 78) problems.push(W + ", daily challenge: a line is " + win.UniText.cols(l.text) + " columns wide: " + win.Lang.decode(l.text));
         ui.spec.items.find(x => x.key === "board").go();
         check(win, ui, W + ", challenge leaderboard");
+        // the leaderboard's past days: a day with 4 lines of description and a long date, its board; loading; offline
+        {
+          let past = C.dayOf(C.dayStart(day) - 7 * 86400000), most = -1;
+          for (let k = 1; k <= 30; k++) {
+            const d = C.dayOf(C.dayStart(day) - k * 86400000), n = win.challengeLines(C.config(d)).length * 100 +
+              win.UniText.rawCols(new Intl.DateTimeFormat(win.Lang.raw("ch.locale"), { timeZone: "UTC", weekday: "long", year: "numeric", month: "long", day: "numeric" }).format(new Date(C.dayStart(d))));
+            if (n > most) { most = n; past = d; }
+          }
+          let mode = "ok";
+          env.win.fetch = async url => {
+            const m = /\/api\/challenge\/(\d{4}-\d{2}-\d{2})/.exec(url);
+            if (!m) return { ok: true, status: 200, json: async () => board };
+            if (mode === "off") throw new Error("offline");
+            if (mode === "wait") return new Promise(() => {});
+            return { ok: true, status: 200, json: async () => Object.assign({}, board, { day: m[1], current: false }) };
+          };
+          const step = async () => { st.showBoard(past); await tick(); await tick(); await tick(); };
+          await step();
+          check(win, ui, W + ", challenge leaderboard of " + past);
+          const dayRow = ui.spec.items.find(x => x.key === "day");
+          if (!dayRow || !ui.spec.items.some(x => x.key === "e:1")) problems.push(W + ", challenge leaderboard of " + past + ": no day row / no board");
+          if (!ui.isNarrow()) for (const l of ui.spec.lines) if (win.UniText.cols(l.text) > 78) problems.push(W + ", challenge leaderboard of " + past + ": a line is " + win.UniText.cols(l.text) + " columns wide: " + win.Lang.decode(l.text));
+          const fresh = [28, 29, 30].map(k => C.dayOf(C.dayStart(day) - k * 86400000)).filter(d => d !== past);   // (days not loaded yet)
+          for (const [m, k] of [["wait", "none"], ["off", "off"]]) {
+            mode = m;
+            past = fresh.shift();
+            await step();
+            check(win, ui, W + ", challenge leaderboard " + (m === "wait" ? "loading" : "offline"));
+            if (!ui.spec.items.some(x => x.key === k)) problems.push(W + ", challenge leaderboard " + m + ": no " + k + " row");
+          }
+        }
         const env2 = makeEnv("/challenge", size, touch);
         env2.storage.set("tunneler.lang", code); env2.storage.delete("tunneler.name");
         env2.page("challenge.html");

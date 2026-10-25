@@ -59,9 +59,60 @@ Online play needs a name, and so does the leaderboard: without one it asks first
   wasn't better, or why the server refused it (another version, that day is over, the name is taken today, the replay
   plays differently).
 - **Leaderboard**: today's best (up to 50) in a scrolling box like the replays list - place, name, rounds,
-  kills, time (a phone: place and name, the rest in the row's info line); your own row in yellow. Enter / a click /
-  a tap on a row watches that player's replay (the server
-  keeps every board entry's replay as a shared replay: `/replay/<id>`). Below the box: "Back to the challenge".
+  kills, time (a phone: place and name, the rest in the row's info line); your own row in yellow, and below the best
+  when you aren't one of them (the server's `you`: "57."). Enter / a click / a tap on a row watches that player's
+  replay (the server keeps every board entry's replay as a shared replay: `/replay/<id>`); a row without a replay
+  can't be chosen. Below the rows: the day row, "Play the challenge" and "Back to the challenge".
+
+### The leaderboard's days
+
+```
+                          LEADERBOARD - OCTOBER 24
+               Mode: capture the flag   Captures to win: 3
+                    Map size: medium   Round time: 5 min
+          Opponents: easy, easy, hard, hard - everyone for themselves
+                Practice - results of past days don't count.
+              ┌──────────────────────────────────────────────────┐
+              │ #    NAME           ROUNDS    KILLS     TIME     │
+              ├──────────────────────────────────────────────────┤
+              │ 1.   Александра     0/1       1         2:08     │
+              │ 2.   Zoë            0/1       0         1:53     │
+              │                                                  │
+              │      ◄  Saturday, October 24, 2026  ►            │
+              │             Play this day again                  │
+              │            Back to the challenge                 │
+              └──────────────────────────────────────────────────┘
+```
+
+- The leaderboard shows today and the 30 days before it (`Challenge.BOARD_DAYS`, the days `GET /api/challenge/<day>`
+  answers): Left / Right on any row (a gamepad's too), the day row's arrows (a click / tap on its left half: the day
+  before, its right half: the day after - DosUI zones), the wheel over the day row, Enter on it (the day before; from
+  the oldest back to today). It never goes past today nor before the 30 days; an arrow is shown only where there is
+  a day to go to. Today stays the default.
+- Every day shows its date (the day row, localized like today's; as long as the box allows - a phone: without the
+  weekday), its settings (the same lines as the challenge screen, `challengeLines`), a status line (today: the time
+  left; a past day: "Practice - results of past days don't count.") and its board: the best (up to 50) and your own
+  entry (the request carries `cid`).
+- Boards of past days are fetched when first shown (`GET /api/challenge/<day>?cid=`) and kept for the screen's life;
+  meanwhile "Loading...". One that can't be loaded (offline, the server asleep) says so in the box in red - Enter /
+  a tap on it tries again, and so does coming back to that day. At midnight UTC today's board becomes a past day's
+  (kept), and the new day's is loaded.
+- On a desktop the box always ends on the same row (21): a day with a longer description shows fewer rows (the board
+  scrolls), a shorter board is padded with empty rows - so the day row stays under the mouse while it steps. A phone
+  held upright shows every row, the day row first. The row chosen (e.g. "#3") stays chosen on the next day.
+- The page's address follows the day (`/challenge?board=2026-10-24`, `history.replaceState`), so a reload or the
+  browser's Back shows the same day; the challenge screen's address is `/challenge` again.
+- **Watching an entry**: `/replay/<id>?challenge=<day>` (the desktop app: `/replays.html?share=<id>&challenge=<day>`,
+  `Links.sharedReplay(id, day)`). The replay screen (replays.js) plays it as any shared replay; its Esc, its loading
+  / error screen's Back and its end screen's "Back to the leaderboard" go to `/challenge?board=<day>` - that day's
+  board - instead of the replays list (`Links.challenge(day)`).
+- **Practice** (a past day only): "Play this day again" starts that day's challenge -
+  `/skirmish?challenge=<day>&practice=1` (play.js plays any valid day: the day's seed and options). A practice match
+  is recorded and kept with the replays like any, but its result is never remembered as the result to send
+  (`tunneler.challenge.last` stays as it was - an unsent result of today or yesterday too) and nothing is sent - the
+  server would refuse a past day anyway, apart from yesterday's own grace for a real result. Yesterday played again
+  from the board is practice too. The end-of-match menu says "Back to the leaderboard" (Esc too) and returns to that
+  day's board (`/challenge?board=<day>`).
 - Keys, mouse, gamepad and touch work as in every DosUI menu; Esc goes back (board -> challenge -> main menu).
   The phone held upright gets DosUI's narrow layout (the lines re-wrapped, the boxes stacked).
 
@@ -197,10 +248,19 @@ The Information page has a "Daily challenge" section (en/engine.js and every mai
   screen in a vm (a fake server): the screen with its localized date and time left, Play's link, Send and its
   answer, the leaderboard, yesterday's unsent result offered during the grace only, a remembered weekly result
   ignored; a survival day given up with Esc wins nothing.
+  The leaderboard's days: today by default, Left: the day before (its settings, its board fetched, your own entry
+  below the best, practice said, the chosen row still chosen), entries with / without a replay, an entry's replay
+  (`/replay/<id>?challenge=<day>`), 30 days back and no further with every board fetched once, the day row's arrows
+  (zones) and change, forward to today and no further from the cache, `/challenge?board=<day>` offline ("can't be
+  loaded", Enter tries again), a past day's "Play this day again" (`&practice=1`, no Send), Esc; play.js: a practice
+  match played to its end leaves `tunneler.challenge.last` untouched, sends nothing and its menu's "Back to the
+  leaderboard" goes to `/challenge?board=<day>` (the same day without practice: remembered); the replay page from a
+  board: "Back to the leaderboard" -> that day.
 - `test/layout-check.js`: the challenge screen (a long date, yesterday's result to send) and the leaderboard on
-  desktop / phone upright / sideways, every language. `test/lang-check.js`: the new texts fit. `test/app-check.js`: the new route.
+  desktop / phone upright / sideways, every language; also a past day (the one of the 30 with the most description
+  and the longest date), a day loading and a day that can't be loaded. `test/lang-check.js`: the new texts fit. `test/app-check.js`: the new route.
 
 ## 8. Out of scope
 
-Prizes, accounts, streaks, history of past days' boards on the screen (the API answers for the last 30 days), a
-challenge for split screen or online play, catching bots.
+Prizes, accounts, streaks, boards older than 30 days, results of past days (practice only), a challenge for split
+screen or online play, catching bots.
