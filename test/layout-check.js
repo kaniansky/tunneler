@@ -7,6 +7,7 @@
 //   - boxes stay on the screen, don't overlap each other, end above the info (the online lobby's Game box ran
 //     into it), the info ends above the bottom rule,
 //   - every row fits its box (no label cut off: the Russian sound settings on a phone),
+//   - the online game's lobby too: host, player, spectator, its Game settings, the kick page;
 //   - every item's info fits (a narrow screen: 7 rows - the window gets shorter for more than 4; a wide one: the
 //     rows down to the rule, 80 columns).
 const path = require("path"), vm = require("vm");
@@ -16,8 +17,15 @@ const { SRC } = require("./src.js");
 let failures = 0, checked = 0;
 const problems = [];
 
-function makeEnv(pathname, size, touch) {
-  const listeners = {}, storage = new Map();
+function makeEnv(pathname, size, touch, realTimers) {
+  const listeners = {}, storage = new Map(), sockets = [];
+  // (the online game: a websocket the test answers - hello, the room's status)
+  class FakeWS {
+    constructor(url) { this.url = url; this.readyState = 0; this.sent = []; sockets.push(this); setTimeout(() => { this.readyState = 1; this.onopen && this.onopen(); }, 0); }
+    send(m) { this.sent.push(JSON.parse(m)); }
+    close() { this.readyState = 3; }
+    recv(m) { this.onmessage && this.onmessage({ data: JSON.stringify(m) }); }
+  }
   const mkEl = id => ({ id, width: 720, height: 400, style: {}, classList: { toggle() {}, contains: () => false }, hidden: false,
     addEventListener() {}, removeEventListener() {}, click() {}, appendChild() {}, remove() {}, focus() {}, blur() {}, setAttribute() {},
     getBoundingClientRect: () => ({ left: 0, top: 0, width: 720, height: 400, right: 720, bottom: 400 }),
@@ -40,14 +48,15 @@ function makeEnv(pathname, size, touch) {
     matchMedia: q => ({ matches: touch ? /coarse/.test(q) : /fine/.test(q) }),
     innerWidth: size[0], innerHeight: size[1], devicePixelRatio: 1, screen: { width: size[0], height: size[1] },
     fetch: async url => ({ ok: true, status: 200, json: async () => (/\/api\/rooms$/.test(url) ? rooms : {}) }),
-    performance, setTimeout, clearTimeout, setInterval: () => 0, clearInterval() {}, console, URLSearchParams, Math, atob, btoa, Uint8Array,
+    WebSocket: FakeWS, navigator: {},
+    performance, setTimeout, clearTimeout, setInterval: realTimers ? setInterval : () => 0, clearInterval, console, URLSearchParams, URL, Math, atob, btoa, Uint8Array,
     TextEncoder, TextDecoder, Blob, Response, CompressionStream, DecompressionStream,
   };
   win.window = win; win.globalThis = win;
   storage.set("tunneler.name", "Norko");
   storage.set("tunneler.gfx", "original");
   const ctx = vm.createContext(win);
-  return { win, page: f => runPage(ctx, f), storage };
+  return { win, page: f => runPage(ctx, f), storage, sockets };
 }
 
 // a simple word wrap, as DosUI wraps the narrow layout's info (display columns)
@@ -172,6 +181,33 @@ const tick = () => new Promise(r => setTimeout(r, 0));
         env2.page("lobby.html");
         await tick();
         check(env2.win, env2.win.tunnelerLobbyUI(), W + ", your name");
+      }
+      // ---------------------------------------------------------------- the online game's lobby: the host (View shown,
+      // a spectator, an AI seat), a seated player, a spectator; its Game settings (a phone) and the kick page
+      for (const who of ["host", "player", "spectator"]) {
+        const env = makeEnv("/game/lob", size, touch, true);
+        env.storage.set("tunneler.lang", code);
+        if (who === "host") env.storage.set("tunneler.host.lob", "a".repeat(32));
+        env.page("online.html");
+        await new Promise(r => setTimeout(r, 20));
+        const ws = env.sockets[0], k = who === "host" ? 2 : who === "player" ? 1 : 5;
+        ws.recv({ t: "hello", id: "lob", name: "Championship night", created: 1, you: { k, host: who === "host", name: "Norko" }, chat: [], match: null });
+        ws.recv({ t: "st", name: "Championship night", public: true, spectators: true,
+          settings: { size: "medium", winScore: 3, friendlyFire: false, roundTime: 0, visible: "everyone", watchOut: "wreck", sight: "full", mode: "standard" },
+          seats: [{ kind: "open", team: 1, k: 1, name: k === 1 ? "Norko" : "Александра", ready: false, host: false, ping: 30 },
+            { kind: "open", team: 2, k: 2, name: k === 2 ? "Norko" : "Zoë", ready: true, host: true, ping: 120 },
+            { kind: "open", team: 3, k: null, name: "", ready: false, host: false, ping: null },
+            { kind: "hard", team: 2, k: null, name: "", ready: false, host: false, ping: null },
+            ...[4, 5, 6, 7].map(i => ({ kind: "closed", team: i + 1, k: null, name: "", ready: false, host: false, ping: null }))],
+          specs: [{ k: 5, name: k === 5 ? "Norko" : "Watcher", host: false, ping: 12 }], cant: "ready", match: null });
+        await new Promise(r => setTimeout(r, 250));
+        const win = env.win, ui = win.tunnelerLobbyUI();
+        if (!ui || !ui.spec) { problems.push(W + ", online lobby (" + who + "): no lobby shown"); continue; }
+        check(win, ui, W + ", online lobby (" + who + ")");
+        const it = key => ui.spec.items.find(x => x.key === key);
+        if (it("gameset")) { it("gameset").go(); check(win, ui, W + ", online game settings (" + who + ")"); ui.spec.back(); }
+        if (who === "host" && it("kick")) { it("kick").go(); check(win, ui, W + ", kick a player"); }
+        for (const t of env.sockets) t.close();
       }
       // ---------------------------------------------------------------- the replays
       {

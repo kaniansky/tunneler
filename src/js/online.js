@@ -368,7 +368,8 @@ export function mount() {
     const levels = NetProto.LEVELS.map(l => T("seat.cpu", { level: Lang.raw("level." + l) }));
     const nw = Math.max(NetProto.MAX_PLAYER_NAME, W(T("seat.open")), W(T("seat.closed")), ...levels.map(W));
     const tw = Math.max(...[1, 8].map(n => W(T("pg.teamn", { n }))));
-    return { nw, tw };
+    // (the ping: 7 columns, 6 on a phone - "120 ms"; the Ukrainian / Russian team word left no room there)
+    return { nw, tw, pw: lobbyUI.isNarrow() ? 6 : 7 };
   }
   // (infection / survival make their own teams: the seats' teams mean nothing - the team column gray)
   const ownTeams = () => !!(st && st.settings && TunnelerEngine.OWN_TEAMS.includes(st.settings.mode));
@@ -376,13 +377,13 @@ export function mount() {
     let name, team = T("pg.teamn", { n: s.team }), ping = "";
     if (s.k) {
       name = Lang.enc(s.name);
-      ping = s.ping != null ? s.ping + " ms" : "";
+      ping = s.ping == null ? "" : s.ping > 999 && c.pw < 7 ? "999+" : s.ping + " ms";
     } else if (s.kind === "open") name = T("seat.open");
     else if (s.kind === "closed") { name = T("seat.closed"); team = ""; }
     else name = T("seat.cpu", { level: Lang.raw("level." + s.kind) });
     const P = (t, w) => UniText.padEnd(UniText.slice(t, w), w);
     const mark = s.k && s.ready && !st.match ? "\xFB" : s.k && s.k === me.k ? "\x10" : " ";
-    return mark + " " + P(name, c.nw) + " " + P(team, c.tw) + " " + UniText.padStart(ping, 7);
+    return mark + " " + P(name, c.nw) + " " + P(team, c.tw) + " " + UniText.padStart(ping, c.pw);
   }
 
   // Seat rows. Everybody: Enter or a left click on a free open seat sits there. The host, on every seat

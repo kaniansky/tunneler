@@ -9,7 +9,8 @@ a release is made by pushing a version tag (see CONTRIBUTING.md).
   README.md, Hosting) - the live server's links now survive restarts and deploys.
 
 - Phones: a long info is no longer cut off (the window gets shorter for it); the games list shows a running
-  game's round without the score (the row was too wide).
+  game's round without the score (the row was too wide); the online lobby's seat rows fit in Ukrainian and
+  Russian (a narrower ping column).
 - The live server is kept awake (no ~15 s wait for the first visitor).
 
 ## 5.0.1
