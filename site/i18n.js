@@ -84,7 +84,7 @@ const L = {
     "cr4": "Source code: <a href=\"https://github.com/kaniansky/tunneler-online\">github.com/kaniansky/tunneler-online</a> (public domain, Unlicense).",
     "privacy.h": "Privacy",
     "privacy.p": "The game and the desktop app collect no personal data. Online, the server keeps game rooms (names, chat, moves) in memory only while a game exists; nothing is stored or shared. The desktop app only asks GitHub whether a new version is out; it connects to a game server only when you choose online play.",
-    "foot.play": "play", "foot.source": "source code", "foot.changelog": "changes",
+    "foot.play": "play", "foot.source": "source code", "foot.changelog": "changes", "foot.privacy": "privacy",
   },
   sk: {
     name: "Slovenčina",
@@ -166,7 +166,7 @@ const L = {
     "cr4": "Zdrojový kód: <a href=\"https://github.com/kaniansky/tunneler-online\">github.com/kaniansky/tunneler-online</a> (voľné dielo, Unlicense).",
     "privacy.h": "Súkromie",
     "privacy.p": "Hra ani aplikácia nezbierajú žiadne osobné údaje. Online server drží herné miestnosti (mená, chat, ťahy) iba v pamäti, kým hra existuje; nič sa neukladá ani nezdieľa. Aplikácia sa iba pýta GitHubu, či vyšla nová verzia; k hernému serveru sa pripojí, až keď si zvolíte hru online.",
-    "foot.play": "hrať", "foot.source": "zdrojový kód", "foot.changelog": "zmeny",
+    "foot.play": "hrať", "foot.source": "zdrojový kód", "foot.changelog": "zmeny", "foot.privacy": "súkromie",
   },
   cs: {
     name: "Čeština",
@@ -248,7 +248,7 @@ const L = {
     "cr4": "Zdrojový kód: <a href=\"https://github.com/kaniansky/tunneler-online\">github.com/kaniansky/tunneler-online</a> (volné dílo, Unlicense).",
     "privacy.h": "Soukromí",
     "privacy.p": "Hra ani aplikace nesbírají žádné osobní údaje. Online server drží herní místnosti (jména, chat, tahy) jen v paměti, dokud hra existuje; nic se neukládá ani nesdílí. Aplikace se jen ptá GitHubu, zda vyšla nová verze; k hernímu serveru se připojí, až když si zvolíte hru online.",
-    "foot.play": "hrát", "foot.source": "zdrojový kód", "foot.changelog": "změny",
+    "foot.play": "hrát", "foot.source": "zdrojový kód", "foot.changelog": "změny", "foot.privacy": "soukromí",
   },
   uk: {
     name: "Українська",
@@ -330,7 +330,7 @@ const L = {
     "cr4": "Вихідний код: <a href=\"https://github.com/kaniansky/tunneler-online\">github.com/kaniansky/tunneler-online</a> (суспільне надбання, Unlicense).",
     "privacy.h": "Приватність",
     "privacy.p": "Гра й застосунок не збирають жодних персональних даних. Онлайн сервер тримає ігрові кімнати (імена, чат, ходи) лише в пам'яті, поки гра існує; нічого не зберігається і не передається. Застосунок лише питає GitHub, чи вийшла нова версія; з ігровим сервером з'єднується, лише коли ви оберете онлайн-гру.",
-    "foot.play": "грати", "foot.source": "вихідний код", "foot.changelog": "зміни",
+    "foot.play": "грати", "foot.source": "вихідний код", "foot.changelog": "зміни", "foot.privacy": "приватність",
   },
   ru: {
     name: "Русский",
@@ -412,7 +412,7 @@ const L = {
     "cr4": "Исходный код: <a href=\"https://github.com/kaniansky/tunneler-online\">github.com/kaniansky/tunneler-online</a> (общественное достояние, Unlicense).",
     "privacy.h": "Конфиденциальность",
     "privacy.p": "Игра и приложение не собирают никаких персональных данных. Онлайн сервер держит игровые комнаты (имена, чат, ходы) только в памяти, пока игра существует; ничего не сохраняется и не передаётся. Приложение только спрашивает GitHub, вышла ли новая версия; к игровому серверу подключается, только когда вы выберете онлайн-игру.",
-    "foot.play": "играть", "foot.source": "исходный код", "foot.changelog": "изменения",
+    "foot.play": "играть", "foot.source": "исходный код", "foot.changelog": "изменения", "foot.privacy": "конфиденциальность",
   },
 };
 const ORDER = ["en", "sk", "cs", "uk", "ru"];

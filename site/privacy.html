@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy policy - Tunneler Online</title>
+<meta name="description" content="Privacy policy of Tunneler Online (the browser game, the desktop app and the Android app): no accounts, no ads, no analytics, no tracking.">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#16130f">
+<!-- the look, like the homepage: modern (the default) or original - before anything is drawn -->
+<script>(function () { let t = "modern"; try { t = localStorage.getItem("tunneler.site.theme") === "original" ? "original" : "modern"; } catch (e) { /* private mode */ }
+  document.documentElement.setAttribute("data-theme", t);
+  if (t === "original") document.querySelector('meta[name="theme-color"]').setAttribute("content", "#000000"); })();</script>
+<link rel="icon" href="favicon.ico">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:ital,wght@0,400;0,600;1,400&family=Noto+Sans+Mono:wght@400;600;700&family=Noto+Sans:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+  /* the homepage's styles (index.html), only what this page uses */
+  @font-face { font-family: "Tunneler VGA"; src: url("fonts/vga.woff") format("woff"); font-display: swap; }
+  :root {
+    --black: #000; --gray: #aaa; --dgray: #555; --white: #fff;
+    --magenta: #a0a; --lmagenta: #f5f; --cyan: #5ff; --yellow: #ff5; --lred: #f55;
+    --text: #c4c4c4; --rule: #333;
+    --vga: "Tunneler VGA", "IBM Plex Mono", ui-monospace, monospace;
+    --mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
+    --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--black); color: var(--text); font: 17px/1.62 var(--sans); }
+  a { color: var(--cyan); text-underline-offset: .18em; text-decoration-thickness: 1px; }
+  a:hover { color: var(--white); }
+  :focus-visible { outline: 2px solid var(--yellow); outline-offset: 2px; }
+  strong, b { color: var(--white); font-weight: 600; }
+  p { margin: 0 0 1em; }
+  ul { margin: 0 0 1em; padding-left: 1.3em; }
+  li { margin: 0 0 .4em; }
+  code { font-family: var(--mono); font-size: .9em; color: var(--white); }
+  .wrap { max-width: 1140px; margin: 0 auto; padding: 0 24px; }
+  .measure { max-width: 46em; }
+  h1, h2 { font-family: var(--vga); font-weight: 400; color: var(--lred); margin: 0; letter-spacing: 0; }
+  h1 { font-size: 32px; line-height: 32px; margin-bottom: 12px; }
+  h2 { font-size: 16px; line-height: 16px; margin: 40px 0 16px; }
+  .date { font: 14px var(--mono); color: var(--gray); margin-bottom: 32px; }
+
+  .top { border-bottom: 1px solid var(--rule); }
+  .top .wrap { display: flex; align-items: center; gap: 4px 22px; flex-wrap: wrap; min-height: 52px; padding-top: 8px; padding-bottom: 8px; }
+  .top .brand { font: 16px/16px var(--vga); color: var(--lred); text-decoration: none; margin-right: auto; }
+  .top nav { display: flex; gap: 4px 20px; flex-wrap: wrap; }
+  .top nav a { font: 14px var(--mono); color: var(--gray); text-decoration: none; }
+  .top nav a:hover { color: var(--white); text-decoration: underline; }
+
+  main { padding: 56px 0 64px; border-bottom: 1px solid var(--rule); }
+  footer { padding: 28px 0 56px; font: 13px var(--mono); color: var(--gray); }
+  footer a { color: var(--gray); }
+
+  /* the modern look (see index.html) */
+  html[data-theme="modern"] {
+    --black: #16130f; --gray: #9a9184; --dgray: #4a4238; --white: #efe7da;
+    --magenta: #4a4238; --lmagenta: #d4913a; --cyan: #93c7c1; --yellow: #e3c065; --lred: #e08470;
+    --text: #b9b0a2; --rule: #2e2822; --panel: #1d1915; --accent: #d4913a;
+    --vga: "Noto Sans Mono", ui-monospace, monospace;
+    --mono: "Noto Sans Mono", ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
+    --sans: "Noto Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  html[data-theme="modern"] body { font-size: 16.5px; }
+  html[data-theme="modern"] h1, html[data-theme="modern"] h2 { font-weight: 700; letter-spacing: -.01em; }
+  html[data-theme="modern"] h1 { font-size: 30px; line-height: 1.2; }
+  html[data-theme="modern"] h2 { font-size: 19px; line-height: 1.3; }
+  html[data-theme="modern"] .top .brand { font: 700 16px/1 var(--mono); }
+  html[data-theme="modern"] :focus-visible { outline-color: var(--accent); }
+
+  @media (max-width: 640px) {
+    body { font-size: 16px; }
+    .wrap { padding: 0 16px; }
+    main { padding: 36px 0 48px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="top"><div class="wrap">
+  <a class="brand" href="index.html">Tunneler Online</a>
+  <nav aria-label="Pages">
+    <a href="index.html">Home</a>
+    <a href="index.html#download">Download</a>
+    <a href="https://github.com/kaniansky/tunneler-online">Source code</a>
+  </nav>
+</div></header>
+
+<main id="main"><div class="wrap measure">
+  <h1>Privacy policy</h1>
+  <p class="date">Last updated: 2026-10-25</p>
+
+  <p>This policy covers <strong>Tunneler Online</strong>: the game in the browser, the desktop app and the
+  Android app (<code>com.kaniansky.TunnelerOnline</code>), made by Norko Kaniansky. In short: the game has
+  <strong>no accounts, no ads, no analytics and no tracking</strong>, and it collects no personal data
+  about you.</p>
+
+  <h2>What stays on your device</h2>
+  <p>The game keeps these only on your own device, in the browser's or the app's local storage
+  (localStorage and IndexedDB). They are never sent anywhere by themselves, and you can delete them by
+  clearing the site's data or the app's storage, or by uninstalling the app:</p>
+  <ul>
+    <li>your settings (language, graphics, sound, controls and so on) and the player name you choose for
+    online games;</li>
+    <li>the replays of your last matches (the newest 20);</li>
+    <li>a random id for this browser or app (it lets the game server give you your seat back after a lost
+    connection) and the keys of the online games you created.</li>
+  </ul>
+  <p>The browser version can also keep the game's own files in the browser's cache so that it starts
+  without a connection.</p>
+
+  <h2>Online games</h2>
+  <p>Split screen and skirmish games run entirely on your device. Only when you choose an online game does
+  the game connect to a game server: by default <code>https://tunneler-online.onrender.com</code>, or another
+  server you set in the app's Settings. That server receives:</p>
+  <ul>
+    <li>the player name you chose, and the chat messages you write;</li>
+    <li>the random id mentioned above, and the version of the game;</li>
+    <li>your moves during a match (the keys you press), the game's own checks and your ping;</li>
+    <li>the name, settings and optional password of a game you create (the password is kept only as a
+    salted hash).</li>
+  </ul>
+  <p>The server needs this to run the game: everyone in the same game sees your name, your chat messages
+  and your tank. It keeps it <strong>in memory only, while the game room exists</strong>; rooms are removed
+  after about 10 minutes without players. The server program writes a short technical log (for example
+  when a room is created, or when a player name joins or leaves a room) to its console; it does not
+  record chat messages or IP addresses there.</p>
+  <p>The server sees your IP address, as every internet server does. The game server uses it in memory only,
+  to limit how many requests one address can make (against abuse), and does not store it. The hosting
+  provider of the default server (Render) may keep standard technical access logs, as described in its own
+  privacy policy. Connections to the default server are encrypted (HTTPS / secure WebSocket).</p>
+  <p><strong>Shared replays:</strong> if you choose to share a replay as a link, that replay (the match's
+  moves, settings and player names) is uploaded to the game server and kept there, so that anyone with the
+  link can watch it. It is never shared unless you ask for it.</p>
+
+  <h2>The Android app</h2>
+  <p>The Android app asks for no permissions beyond network access. Saving a replay as a file writes that
+  file into your Downloads folder; opening a replay file reads only the file you pick. It does not check
+  for updates itself (Google Play or you update it). The desktop app asks GitHub once in a while whether a
+  new version is out; GitHub sees that request like any web request.</p>
+
+  <h2>This homepage</h2>
+  <p>This homepage uses no cookies and no analytics. It loads fonts from Google Fonts and the list of
+  downloads from the GitHub API; those services receive your IP address with the request, under their own
+  privacy policies. Your choice of language and look is kept in your browser only.</p>
+
+  <h2>Children</h2>
+  <p>The game is not directed at children under 13 and collects no personal data from anyone. Online chat
+  is between the players of one game room; it is not moderated, and anyone can leave a room at any time.</p>
+
+  <h2>Changes and contact</h2>
+  <p>If this policy changes, the new version will be published on this page with a new date. Questions?
+  Please open an issue on the
+  <a href="https://github.com/kaniansky/tunneler-online/issues">GitHub repository's issues page</a>.</p>
+</div></main>
+
+<footer><div class="wrap">Tunneler Online &middot; <a href="index.html">home</a> &middot;
+  <a href="https://github.com/kaniansky/tunneler-online">source code</a></div></footer>
+
+</body>
+</html>
