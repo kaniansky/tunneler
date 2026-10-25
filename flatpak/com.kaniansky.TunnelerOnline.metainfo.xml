@@ -81,6 +81,9 @@
     <color type="primary" scheme_preference="dark">#550055</color>
   </branding>
   <releases>
+    <release version="5.0.3" date="2026-10-25">
+      <url type="details">https://github.com/kaniansky/tunneler-online/releases/tag/v5.0.3</url>
+    </release>
     <release version="5.0.2" date="2026-10-25">
       <url type="details">https://github.com/kaniansky/tunneler-online/releases/tag/v5.0.2</url>
     </release>

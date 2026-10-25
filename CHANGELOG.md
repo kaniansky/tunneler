@@ -3,22 +3,23 @@
 All notable changes to Tunneler Online. Versions follow [semantic versioning](https://semver.org/);
 a release is made by pushing a version tag (see CONTRIBUTING.md).
 
-## Unreleased
+## 5.0.3
 
+- **A new app icon**: a blue tank seen from the side on earth (desktop app, Android, the web app, the favicon,
+  the homepage).
+- **Computer tanks**: far fewer drawn rounds between them (40 % -> about 12 %) - they get out of a point-blank
+  duel in a narrow tunnel instead of firing until both are destroyed, and a winner dodges the last shots of the
+  tank it just destroyed.
+- **Modern graphics**: Quality "auto" (the new default) draws at a lower resolution by itself while the game
+  runs slowly and goes back up when it's fast again - a slow phone or computer stays smooth. A chosen quality
+  stays.
 - A shared replay's link says how long it works when the server keeps them for a limited time
   (`REPLAY_KEEP_DAYS`; the live server: 90 days).
-- Releases: the GitHub release stays a draft until every app is attached, so the homepage, the apps' updater
-  and the Linux repositories keep offering the previous version while a new one is being built.
 - Homepage: the header stays at the top while scrolling (one row on a phone); the Linux repository commands use
   the page's full width.
+- Releases: the GitHub release stays a draft until every app is attached, so the homepage, the apps' updater
+  and the Linux repositories keep offering the previous version while a new one is being built.
 - `npm run check:phone` also plays an online game (a desktop host and the phone) to its end.
-- A new app icon: a blue tank seen from the side on earth (desktop app, Android, the web app, the favicon,
-  the homepage).
-- Computer tanks: far fewer drawn rounds between them (40 % -> about 12 %) - they get out of a point-blank duel
-  in a narrow tunnel instead of firing until both are destroyed, and a winner dodges the last shots of the tank
-  it just destroyed.
-- Modern graphics: Quality "auto" (the new default) draws at a lower resolution by itself while the game runs
-  slowly and goes back up when it's fast again - a slow phone or computer stays smooth. A chosen quality stays.
 
 ## 5.0.2
 
