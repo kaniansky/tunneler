@@ -3,6 +3,12 @@
 All notable changes to Tunneler Online. Versions follow [semantic versioning](https://semver.org/);
 a release is made by pushing a version tag (see CONTRIBUTING.md).
 
+## Unreleased
+
+- `TRUST_PROXY` also takes a number (the n-th `X-Forwarded-For` entry from the right) or a header name: on Render
+  the last entry is Render's own internal hop, so every player counted as one address for the login limits.
+  `/api/health?addr=1` shows the forwarding headers.
+
 ## 6.0.1
 
 - The live server keeps itself awake (it asks its own address every 10 minutes): GitHub's scheduled

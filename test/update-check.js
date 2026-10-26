@@ -156,5 +156,27 @@ const ok = msg => { n++; console.log("  ok  " + msg); };
   }
   ok("keep awake: the server's own public address asked now and then (Render), off without one or with KEEP_AWAKE=0");
 
+  // TRUST_PROXY: the client's address behind proxies - the last X-Forwarded-For entry, the n-th from the right, or a
+  // header the edge proxy sets; /api/health says what the limits see (you) and, with ?addr=1, the forwarding headers
+  {
+    const { createServer } = require("../server.js");
+    const seen = async (trustProxy, headers) => {
+      const s = createServer({ quiet: true, trustProxy, replayDir: null });
+      const port = await new Promise(r => s.listen(0, r));
+      const j = await (await fetch("http://127.0.0.1:" + port + "/api/health?addr=1", { headers })).json();
+      await new Promise(r => s.close(r));
+      return j;
+    };
+    const chain = { "x-forwarded-for": "6.6.6.6, 78.45.115.205, 10.199.247.25", "true-client-ip": "78.45.115.205" };
+    assert.strictEqual((await seen("", chain)).you.replace(/^::ffff:/, ""), "127.0.0.1", "no TRUST_PROXY: the socket's peer");
+    assert.strictEqual((await seen("1", chain)).you, "10.199.247.25", "1: the last entry");
+    assert.strictEqual((await seen("2", chain)).you, "78.45.115.205", "2: the second from the right (a client's own entry before it doesn't count)");
+    assert.strictEqual((await seen("true-client-ip", chain)).you, "78.45.115.205", "a header name: that header");
+    assert.strictEqual((await seen("true-client-ip", { "x-forwarded-for": "1.2.3.4" })).you.replace(/^::ffff:/, ""), "127.0.0.1", "the header missing: the socket's peer");
+    const d = await seen("2", chain);
+    assert(d.fwd && d.fwd["x-forwarded-for"] === chain["x-forwarded-for"] && d.fwd["true-client-ip"], "?addr=1: the forwarding headers shown to the caller");
+  }
+  ok("TRUST_PROXY: last entry, n-th from the right, an edge proxy's header; /api/health's you and ?addr=1");
+
   console.log(`update-check: ${n} ok`);
 })().catch(e => { console.error(e); process.exit(1); });

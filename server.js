@@ -282,15 +282,23 @@ function createServer(opts = {}) {
   const handoffMaxAgeMs = opts.handoffMaxAgeMs != null ? opts.handoffMaxAgeMs : HANDOFF_MAX_AGE_MS;
   const qpStartMs = opts.qpStartMs != null ? opts.qpStartMs : QP_START_MS, qpAfterMs = opts.qpAfterMs != null ? opts.qpAfterMs : QP_AFTER_MS;
   const qpHoldMs = opts.qpHoldMs != null ? opts.qpHoldMs : QP_HOLD_MS;
-  // Behind a reverse proxy (TRUST_PROXY=1) the client's address is the last X-Forwarded-For entry - the
-  // one the proxy itself appended (anything before it came from the client). Otherwise the socket's peer.
-  const trustProxy = opts.trustProxy != null ? !!opts.trustProxy : /^(1|true|yes)$/i.test(process.env.TRUST_PROXY || "");
+  // Behind reverse proxies (TRUST_PROXY): "1" / "true" / "yes" = the last X-Forwarded-For entry (the one the proxy
+  // itself appended - anything before it came from the client); a number n = the n-th entry from the right (n proxies
+  // in a row, each appending one: on Render the last entry is its own internal hop - seen 2026-10-26); a header name
+  // (e.g. "true-client-ip", "cf-connecting-ip") = that header, set by the edge proxy (which overwrites a client's own).
+  // Otherwise the socket's peer. /api/health?addr=1 shows a caller its own forwarding headers (checking this).
+  const tp = String(opts.trustProxy != null ? opts.trustProxy : process.env.TRUST_PROXY || "").trim();
+  const trust = /^(1|true|yes)$/i.test(tp) ? { hops: 1 } : /^\d+$/.test(tp) && +tp > 1 ? { hops: Math.min(+tp, 16) }
+    : /^[a-z][a-z0-9-]*$/i.test(tp) && !/^(0|false|no|off)$/i.test(tp) ? { header: tp.toLowerCase() } : null;
   const rooms = new Map();
   const say = (...a) => { if (!quiet) log(...a); };
   function addressOf(req) {
-    if (trustProxy) {
+    if (trust && trust.header) {
+      const v = String(req.headers[trust.header] || "").split(",")[0].trim();
+      if (v) return v;
+    } else if (trust) {
       const fwd = String(req.headers["x-forwarded-for"] || "").split(",").map(s => s.trim()).filter(Boolean);
-      if (fwd.length) return fwd[fwd.length - 1];
+      if (fwd.length) return fwd[Math.max(0, fwd.length - trust.hops)];
     }
     return req.socket.remoteAddress || "";
   }
@@ -1024,7 +1032,10 @@ function createServer(opts = {}) {
       for (const r of rooms.values()) if (r.match) matches++;
       return json(res, closing ? 503 : 200, { ok: !closing, version, uptime: Math.round((Date.now() - startedAt) / 1000), rooms: rooms.size, matches,
         errors: processErrors.count, accounts: accountsOn,
-        you: addressOf(req) });   // (the caller's own address as the limits see it: checks TRUST_PROXY behind a proxy)
+        you: addressOf(req),      // (the caller's own address as the limits see it: checks TRUST_PROXY behind a proxy)
+        // (?addr=1: the caller's own forwarding headers - which entry / header has the real address)
+        ...(/[?&]addr=1(&|$)/.test(req.url) ? { fwd: Object.fromEntries(["x-forwarded-for", "x-real-ip", "true-client-ip", "cf-connecting-ip", "forwarded"]
+          .filter(h => req.headers[h]).map(h => [h, String(req.headers[h]).slice(0, 300)])) } : {}) });
     }
     // what pages need to know about this server: whether online play needs an account (docs/v6/ACCOUNTS.md)
     if (p === "/api/config" && (req.method === "GET" || req.method === "HEAD")) return json(res, 200, { version, accounts: accountsOn });

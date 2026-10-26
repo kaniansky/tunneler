@@ -316,8 +316,10 @@ Render's free disk is wiped on every deploy.
   bucket too** (an account is refreshed once a day when it is used, so only accounts unused for that long would
   go): with `REPLAY_KEEP_DAYS` / such a rule, give accounts their own bucket (`ACCOUNT_S3_BUCKET`) - the log warns.
 
-Behind a reverse proxy (Render, a CDN, nginx) set `TRUST_PROXY=1`, or the per-address limits of logins and sign-ups
-count every player as one address. The log says it at start (`accounts: on, kept in ...`). Passwords and recovery codes are kept only as scrypt
+Behind a reverse proxy (Render, a CDN, nginx) set `TRUST_PROXY`, or the per-address limits of logins and sign-ups
+count every player as one address: `1` = the last `X-Forwarded-For` entry, a number n = the n-th entry from the right
+(several proxies in a row), or the name of a header the edge proxy sets (e.g. `true-client-ip`). Check it with
+`/api/health?addr=1`: `you` is the address the server sees for you, `fwd` your forwarding headers. The log says it at start (`accounts: on, kept in ...`). Passwords and recovery codes are kept only as scrypt
 hashes; players delete their accounts in the game (Settings, Online).
 
 ### Docker
