@@ -1,0 +1,55 @@
+name: Homepage
+
+# The homepage (site/) at https://kaniansky.com/tunneler/, uploaded by FTPS: fresh screenshots from screenshots/
+# (tools/site-images.py), then every file of site/. release.yml calls it once a release is public (the page itself
+# reads the newest release's downloads when it opens); run it by hand (Actions -> Homepage -> Run workflow) to upload
+# a change of the homepage without a release - from main, or any branch / tag you give. Needs the repository secrets
+# SITE_FTP_USER and SITE_FTP_PASSWORD (and optionally SITE_FTP_HOST: the FTP server's own name, which its TLS
+# certificate is issued for); skipped without them.
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: "the branch / tag whose site/ is uploaded"
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "the branch / tag whose site/ is uploaded"
+        required: false
+        default: main
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  site:
+    runs-on: ubuntu-latest
+    env:
+      FTP_HOST: ${{ secrets.SITE_FTP_HOST || 'ing.r4.websupport.sk' }}
+      FTP_USER: ${{ secrets.SITE_FTP_USER }}
+      FTP_PASSWORD: ${{ secrets.SITE_FTP_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Fresh screenshots
+        run: |
+          pip install --quiet pillow
+          python3 tools/site-images.py
+
+      - name: Upload site/ to kaniansky.com/tunneler
+        if: env.FTP_USER != '' && env.FTP_PASSWORD != ''
+        run: |
+          umask 077
+          printf 'user = "%s:%s"\n' "$FTP_USER" "$FTP_PASSWORD" > "$RUNNER_TEMP/ftp.cfg"
+          cd site
+          find . -type f | sort | while read -r f; do
+            curl -sS --ssl-reqd --ftp-create-dirs -K "$RUNNER_TEMP/ftp.cfg" -T "$f" "ftp://$FTP_HOST/web/tunneler/${f#./}"
+            echo "uploaded ${f#./}"
+          done
+          rm -f "$RUNNER_TEMP/ftp.cfg"

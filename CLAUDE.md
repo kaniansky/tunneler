@@ -603,7 +603,8 @@ none, i.e. a page from before 2.0 - is refused (POST 409 `{code:
   "tunneler.site.theme" (the Look select); CSS variables + `html[data-theme=modern]` rules; screenshots / captions in
   both looks as `.th-o` / `.th-m` pairs (modern-*.png from `tools/readme-screenshots.js <port> screenshots modern`,
   cropped by tools/site-images.py); the VGA web font `site/fonts/vga.woff` = `tools/make-site-font.js`. Its download list comes
-  from the GitHub API (latest release) at page load. release.yml's `site` job uploads it after every
+  from the GitHub API (latest release) at page load. site.yml uploads it (release.yml calls it after every release; run it by
+  hand - Actions, Homepage - for a homepage change without a release) after every
   release by FTPS (`ing.r4.websupport.sk`, the host its TLS certificate names; dir `web/tunneler/`)
   with the repo secrets SITE_FTP_USER / SITE_FTP_PASSWORD (skipped without them), after refreshing
   site/img from screenshots/ (`tools/site-images.py`).
