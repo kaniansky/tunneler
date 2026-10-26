@@ -83,6 +83,8 @@ android {
     }
     buildFeatures {
         buildConfig = true
+        // the Play Games ids above (AGP 9 has resource values off by default)
+        resValues = true
     }
 }
 
