@@ -10,7 +10,8 @@ those releases are tagged `online-vX.Y.Z`, their changes are in [docs/CHANGELOG-
 - Quick play is in the list of games (Online game) only - no longer on the main menu.
 - Quick play games have all 8 seats (computer tanks in every seat nobody sits on), and a destroyed player watches
   the tank that destroyed them.
-- The list of games has no WATCHING column: PLAYERS shows the spectators too ("2/4 + 3").
+- The list of games has no AI and WATCHING columns: PLAYERS shows players + computer tanks / all tanks, then the
+  spectators ("2+3/7 +1").
 - The Map setting (skirmish, online game) shows the map's number of bases: "Crossroads (6)".
 - Phones and tablets: Settings has no Controls category (its keys are a keyboard's; the touch controls' size and
   left-handed rows are in Display) and no Volume row (always 100 %: the phone's buttons set the loudness), and the

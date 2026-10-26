@@ -62,29 +62,31 @@ export function mount() {
     const tries = ["  " + sc, " " + sc, ...(r.ext && !r.teams ? ["  " + T("lobby.best", { n: Math.max(0, ...r.wins) })] : [])];
     return head + (tries.find(x => UniText.cols(head + x) <= room) || "");
   }
-  // the list's columns after the name: PLAYERS ("2/4": seated / seats they can take - during a match:
-  // connected / its players; "2/4 + 3" with 3 spectators - no column of their own, owner 2026-10-26), AI
-  // (computer tanks); 0 = blank
-  const WIDE = [22, 17, 12, 4];                      // (name, mode, players, AI; the state takes the rest)
+  // the list's columns after the name: PLAYERS - "2+3/7 +1" (owner, 2026-10-26: no AI / WATCHING columns): the
+  // players (seated - during a match: connected) + the computer tanks / every tank (the seats players can take and
+  // the computer's), + the spectators; "1/2" without computer tanks and spectators; 0 = blank
+  const WIDE = [22, 17, 12];                         // (name, mode, players; the state takes the rest)
   const ROW_W = 75;                                  // a row's columns in the box (76 wide; one more slides the row left)
   // the phone layout (DosUI narrow, DosUI.NARROW_W - 2 columns): name, players and the state (0 = the column left out)
-  const NARROW = [12, 0, 10, 0];
+  const NARROW = [12, 0, 10];
   const cols = () => ui.isNarrow() ? NARROW : WIDE;
   const ROWS = 8;                                    // game rows shown at most (the box then ends on row 20, the info on rows 22-23)
   const FIXED = 6;                                   // the items below the games: separator, Quick play, Create, Join by link, gap, Back
   const places = r => r.places != null ? r.places : r.players + (r.open || 0);
+  // (quick play: its places are its tanks, computer-driven ones included)
+  const playersText = r => (r.bots ? r.players + "+" + r.bots : r.players) + "/" + (r.qp ? places(r) : places(r) + (r.bots || 0)) +
+    (r.spec ? " +" + r.spec : "");
   // a game Enter joins as a player: a free seat in its lobby - a quick-play game also a computer tank during a match
   const joinable = r => !!r.open && (r.state === "lobby" || !!r.qp);
   function rowText(r, state) {
     const C = cols(), cell = (t, k) => C[k] ? UniText.padEnd(UniText.slice(t, C[k] - 1), C[k]) : "";
-    return cell(E((r.locked ? LOCK : "") + r.name), 0) + cell(r.qp ? T("qp.mode") : T("gm." + (r.mode || "standard")), 1) + cell(r.players + "/" + places(r) + (r.spec ? " + " + r.spec : ""), 2) +
-      cell(r.bots ? String(r.bots) : "", 3) + state;
+    return cell(E((r.locked ? LOCK : "") + r.name), 0) + cell(r.qp ? T("qp.mode") : T("gm." + (r.mode || "standard")), 1) + cell(playersText(r), 2) + state;
   }
-  // its columns' colors (DosUI spans): the name white, the mode light cyan, the players light green, AI gray,
-  // the state yellow in the lobby (joinable), light magenta during a match
+  // its columns' colors (DosUI spans): the name white, the mode light cyan, the players light green, the state
+  // yellow in the lobby (joinable), light magenta during a match
   function rowSpans(r) {
     const C = cols(), at = [0]; for (const w of C) at.push(at[at.length - 1] + w);
-    const colors = [0x0F, 0x0B, 0x0A, 0x07, r.state === "lobby" ? 0x0E : 0x0D];
+    const colors = [0x0F, 0x0B, 0x0A, r.state === "lobby" ? 0x0E : 0x0D];
     return colors.map((a, i) => [at[i], i < C.length ? at[i + 1] : 200, a]);
   }
 
@@ -151,7 +153,7 @@ export function mount() {
         ...(serverVersion ? [{ row: 1, text: T("ver.server", { server: serverVersion, you: myVersion }), color: 12 }] : [])],
       box: { x: 2, y: 3, w: 76, rows: shown }, fixed: FIXED,
       // (each title cut to leave a space before the next: the phone's narrow columns)
-      header: UniText.padEnd(" " + UniText.slice(T("lobby.name"), cols()[0] - 1), cols()[0] + 1) + [T("lobby.mode"), T("lobby.players"), T("lobby.ai")].map((h, i) => cols()[i + 1] ? UniText.padEnd(UniText.slice(h, cols()[i + 1] - 1), cols()[i + 1]) : "").join("") +
+      header: UniText.padEnd(" " + UniText.slice(T("lobby.name"), cols()[0] - 1), cols()[0] + 1) + [T("lobby.mode"), T("lobby.players")].map((h, i) => cols()[i + 1] ? UniText.padEnd(UniText.slice(h, cols()[i + 1] - 1), cols()[i + 1]) : "").join("") +
         T("lobby.state"),
       items, infoRow: bottom + 2, back: home,
     }, keep);

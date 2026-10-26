@@ -431,7 +431,7 @@ function loadPage(page, search, stored, version) {
       ext: true, mode: "standard", qp: true, players: 2, places: 4, bots: 2, open: 2, spec: 0, seats: [] });
     await waitFor(() => list.win.tunnelerLobbyUI().spec && list.win.tunnelerLobbyUI().spec.items.some(it => it.key === "room:qp1"), "the list");
     const lui = list.win.tunnelerLobbyUI(), row = lui.spec.items.find(it => it.key === "room:qp1");
-    assert(/^Quick play +quick play +2\/4 +2 /.test(row.label), "a quick-play row: " + row.label);
+    assert(/^Quick play +quick play +2\+2\/4 +Round/.test(row.label), "a quick-play row (players + computer tanks / its tanks): " + row.label);
     assert(lui.spec.items.some(it => it.key === "quick"), "Quick play in the list");
     row.go();
     assert.strictEqual(list.win.location.href, "/game/qp1", "Enter on a running quick-play game with a computer tank: joins to play");
@@ -653,8 +653,8 @@ function loadPage(page, search, stored, version) {
     const keys = ui.spec.items.filter(it => /^room:/.test(it.key)).map(it => it.key).join();
     assert.strictEqual(keys, "room:priv1,room:pub1,room:other", "own games first, the private one too: " + keys);
     const row = k => ui.spec.items.find(it => it.key === k).label;
-    assert(/MODE +PLAYERS +AI +STATE/.test(text()) && !/WATCHING/.test(text()), "the columns (spectators in PLAYERS): " + text());
-    assert(/^My secret game +standard +1\/3 \+ 4 +2 +Lobby$/.test(row("room:priv1").trimEnd()), "a row: " + row("room:priv1"));
+    assert(/MODE +PLAYERS +STATE/.test(text()) && !/WATCHING|AI +STATE/.test(text()), "the columns (computer tanks and spectators in PLAYERS): " + text());
+    assert(/^My secret game +standard +1\+2\/5 \+4 +Lobby$/.test(row("room:priv1").trimEnd()), "a row: " + row("room:priv1"));
     assert(!/you host/.test(text()), "no mark in the rows: " + text());
     assert(/You are this game's host/.test(text()) && !/\(private\)/.test(text()), "the info: only that you host it (and the keys): " + text());
     assert(!env.ls.has("tunneler.host.gone") && env.ls.has("tunneler.host.priv1"), "the stale key dropped");

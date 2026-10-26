@@ -327,10 +327,11 @@ async function main() {
   });
   await until(() => A.run.frames > N + 200 && C.run.frames > N + 200, "Cleo plays");
   check("from frame N on tank 1 moves by Cleo's bits from the log (her computer player's bits dropped)", () => {
-    const r = reference(room.match);
-    const logged = r.inputs.slice(N, N + 200).map(b => b[1]);
+    // (every frame since she took over that every client has run - a busy machine starves her input timer for a while)
+    const r = reference(room.match), end = Math.min(A.run.frames, C.run.frames, S.run.frames);
+    const logged = r.inputs.slice(N, end).map(b => b[1]);
     assert(logged.some(b => b), "Cleo's bits in the log");
-    for (const c of [A, C, S]) assert.deepStrictEqual(c.run.inputs.slice(N, N + 200).map(b => b[1]), logged, c.name);
+    for (const c of [A, C, S]) assert.deepStrictEqual(c.run.inputs.slice(N, end).map(b => b[1]), logged, c.name);
   });
   clearInterval(cleoTimer);
   const leaveAt = room.match.log.length;
