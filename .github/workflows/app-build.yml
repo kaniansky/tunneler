@@ -2,16 +2,16 @@ name: Desktop and Android app
 
 # The desktop app (src-tauri/: the game's pages in the OS's own web view, online play on a server set
 # in the app) for Windows, Linux and macOS, built as small as possible:
-#   Windows  tunneler-online-<v>-windows-x64.exe    portable, needs WebView2 (built into Windows 10/11)
+#   Windows  tunneler-<v>-windows-x64.exe           portable, needs WebView2 (built into Windows 10/11)
 #            ...-windows-x64-setup.exe               installer (the installed app updates itself)
-#   Linux    tunneler-online-<v>-linux-x64.tar.gz   the binary, needs libwebkit2gtk-4.1 (-linux-arm64: ARM64)
+#   Linux    tunneler-<v>-linux-x64.tar.gz          the binary, needs libwebkit2gtk-4.1 (-linux-arm64: ARM64)
 #            ..._amd64.deb / ....x86_64.rpm          packages that pull that in (_arm64.deb / .aarch64.rpm: ARM64; update with the admin
 #                                                    password, or from the apt / dnf repository: linux-repos.yml)
-#            tunneler-online-linux-x64.AppImage      runs anywhere, updates itself - no version in its name:
+#            tunneler-linux-x64.AppImage             runs anywhere, updates itself - no version in its name:
 #                                                    the update writes over the same file (shortcuts keep working)
-#   macOS    tunneler-online-<v>-macos-arm64.dmg / -macos-x64.dmg  (unsigned: right click -> Open)
-#   Android  tunneler-online-<v>-android.apk         to install directly (arm64, armv7, x86_64 in one)
-#            tunneler-online-<v>-android.aab         the same for Google Play
+#   macOS    tunneler-<v>-macos-arm64.dmg / -macos-x64.dmg  (unsigned: right click -> Open)
+#   Android  tunneler-<v>-android.apk                to install directly (arm64, armv7, x86_64 in one)
+#            tunneler-<v>-android.aab                the same for Google Play
 #            (signed with the repository secrets ANDROID_KEYSTORE = the upload keystore as base64,
 #            ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD; without them unsigned,
 #            named ...-android-unsigned.apk / .aab - an unsigned APK doesn't install. docs/ANDROID.md)
@@ -121,7 +121,7 @@ jobs:
         shell: bash
         run: |
           v=$(node -p "require('./package.json').version")
-          out="tunneler-online-$v-${{ matrix.name }}"
+          out="tunneler-$v-${{ matrix.name }}"
           rel=src-tauri/target/${{ matrix.target }}/release
           [ -d "$rel" ] || rel=src-tauri/target/release
           mkdir dist
@@ -129,17 +129,17 @@ jobs:
           upd() { for f in $1; do [ -f "$f" ] && cp "$f" "dist/$2"; [ -f "$f.sig" ] && cp "$f.sig" "dist/$2.sig"; done; return 0; }
           case "${{ matrix.name }}" in
             windows-*)
-              cp "$rel/tunneler-online.exe" "dist/$out.exe"
+              cp "$rel/tunneler.exe" "dist/$out.exe"
               upd "$rel/bundle/nsis/*-setup.exe" "$out-setup.exe" ;;
             linux-arm64)
-              tar -czf "dist/$out.tar.gz" -C "$rel" tunneler-online
-              upd "$rel/bundle/deb/*.deb" "tunneler-online-${v}_arm64.deb"
-              upd "$rel/bundle/rpm/*.rpm" "tunneler-online-$v.aarch64.rpm" ;;
+              tar -czf "dist/$out.tar.gz" -C "$rel" tunneler
+              upd "$rel/bundle/deb/*.deb" "tunneler-${v}_arm64.deb"
+              upd "$rel/bundle/rpm/*.rpm" "tunneler-$v.aarch64.rpm" ;;
             linux-*)
-              tar -czf "dist/$out.tar.gz" -C "$rel" tunneler-online
-              upd "$rel/bundle/deb/*.deb" "tunneler-online-${v}_amd64.deb"
-              upd "$rel/bundle/rpm/*.rpm" "tunneler-online-$v.x86_64.rpm"
-              upd "$rel/bundle/appimage/*.AppImage" "tunneler-online-linux-x64.AppImage" ;;   # (no version: see above)
+              tar -czf "dist/$out.tar.gz" -C "$rel" tunneler
+              upd "$rel/bundle/deb/*.deb" "tunneler-${v}_amd64.deb"
+              upd "$rel/bundle/rpm/*.rpm" "tunneler-$v.x86_64.rpm"
+              upd "$rel/bundle/appimage/*.AppImage" "tunneler-linux-x64.AppImage" ;;   # (no version: see above)
             macos-*)
               cp "$rel"/bundle/dmg/*.dmg "dist/$out.dmg"
               upd "$rel/bundle/macos/*.app.tar.gz" "$out.app.tar.gz" ;;
@@ -228,11 +228,11 @@ jobs:
           out=src-tauri/gen/android/app/build/outputs
           mkdir dist
           if [ -f src-tauri/gen/android/keystore.properties ]; then
-            cp "$out/apk/universal/release/app-universal-release.apk" "dist/tunneler-online-$v-android.apk"
-            cp "$out/bundle/universalRelease/app-universal-release.aab" "dist/tunneler-online-$v-android.aab"
+            cp "$out/apk/universal/release/app-universal-release.apk" "dist/tunneler-$v-android.apk"
+            cp "$out/bundle/universalRelease/app-universal-release.aab" "dist/tunneler-$v-android.aab"
           else
-            cp "$out/apk/universal/release/app-universal-release-unsigned.apk" "dist/tunneler-online-$v-android-unsigned.apk"
-            cp "$out/bundle/universalRelease/app-universal-release.aab" "dist/tunneler-online-$v-android-unsigned.aab"
+            cp "$out/apk/universal/release/app-universal-release-unsigned.apk" "dist/tunneler-$v-android-unsigned.apk"
+            cp "$out/bundle/universalRelease/app-universal-release.aab" "dist/tunneler-$v-android-unsigned.aab"
           fi
           rm -f src-tauri/gen/android/keystore.properties "$RUNNER_TEMP/upload.jks"
           ls -la dist

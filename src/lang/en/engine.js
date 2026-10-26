@@ -2,7 +2,7 @@
 // translate it in their main.js (`engine: {...}`, lang.js engineStrings); "{n}" in a line switches the text
 // colour to n. engine.js imports it.
 const STRINGS_EN = {
-  title: "TUNNELER ONLINE", by: "by Norko Kaniansky",
+  title: "TUNNELER", by: "by Norko Kaniansky",
   menu: ["Start game", "Instructions", "Back to main menu"],
   rematch: "Rematch",                   // replaces "Start game" after a match (same settings again)
   waiting: ["Waiting for the", "players to start"],
@@ -139,7 +139,7 @@ const STRINGS_EN = {
   },
   info: {
     title: "INFORMATION",
-    p1: ["Tunneler Online brings TUNNELER 2.0 to the web browser.  The DOS program was",
+    p1: ["This Tunneler brings TUNNELER 2.0 to the web browser.  The DOS program was",
       "decompiled and rewritten in JavaScript routine by routine, so tanks, digging,",
       "shots, energy and the world generator behave exactly like in 1991, on the same",
       "low-res screen (160x100 in 16 colors) with the sound of a simulated PC speaker."],
@@ -158,9 +158,9 @@ const STRINGS_EN = {
       ["Replays:  ", "every match you play or watch is kept (the newest 20, main menu, Replays): watch it again like a spectator - every view, the live map or one tank, paused, faster or slower - or send it to someone as a link or a file."],
       ["Daily challenge:  ", "every day (midnight to midnight, UTC) everyone gets the same skirmish - the same world, mode and computer tanks (main menu, Daily challenge).  Send your result: the server plays your match's replay again, and only what really happened goes on the day's leaderboard, where anyone can watch the best matches.  The leaderboard also shows the 30 days before (left / right), and any past day can be played again as practice - its results don't count.  Tomorrow brings a new one."],
       ["Your own maps:  ", "paint a world - rock, dirt and tunnels - and place up to 8 bases (main menu, Maps) - a tank has to be able to drive between all of them (rock stops it); play it in a skirmish or an online game, or send it to someone as a link or a file."],
-      ["The desktop app:  ", "Tunneler Online also comes as a small program for Windows, Linux and " +
+      ["The desktop app:  ", "Tunneler also comes as a small program for Windows, Linux and " +
         "macOS - download it from the releases page on GitHub " +
-        "(github.com/kaniansky/tunneler-online/releases).  It plays split screen and skirmish " +
+        "(github.com/kaniansky/tunneler/releases).  It plays split screen and skirmish " +
         "without a network, and online games on the public server or any other one (Settings, " +
         "Online, Server).  In a browser the game can be installed as an app too (it then also starts offline)."],
       ["The original:  ", "TUNNELER 2.0 was written by Geoffrey Silverton in 1991 in Turbo Pascal: " +

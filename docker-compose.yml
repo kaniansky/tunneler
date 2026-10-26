@@ -1,4 +1,4 @@
-# Tunneler Online in Docker.
+# Tunneler in Docker.
 #
 #   docker compose up -d            # run the published image, open http://localhost:8050
 #   docker compose up -d --build    # build the image from this checkout instead
@@ -10,9 +10,9 @@
 
 services:
   tunneler:
-    image: ghcr.io/kaniansky/tunneler-online:latest
+    image: ghcr.io/kaniansky/tunneler:latest
     build: .
-    container_name: tunneler-online
+    container_name: tunneler
     restart: unless-stopped
     ports:
       - "${TUNNELER_PORT:-8050}:8050"

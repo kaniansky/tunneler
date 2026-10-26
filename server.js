@@ -1798,7 +1798,7 @@ function createServer(opts = {}) {
 
 // New releases: the started server asks GitHub for the latest release now and once a day and logs it
 // when it is newer than this server (UPDATE_CHECK=0 turns that off). Nothing is downloaded or changed.
-const RELEASES = "https://api.github.com/repos/kaniansky/tunneler-online/releases/latest";
+const RELEASES = "https://api.github.com/repos/kaniansky/tunneler/releases/latest";
 const DAY_MS = 24 * 3600 * 1000;
 // true when version a (e.g. "2.1.0", "v2.1.0") is newer than b; pre-releases ("2.1.0-rc1") count as
 // older than their release
@@ -1813,12 +1813,12 @@ function newerVersion(a, b) {
 async function latestRelease(current, fetchFn = globalThis.fetch) {
   if (!fetchFn || !current) return null;
   try {
-    const res = await fetchFn(RELEASES, { headers: { accept: "application/vnd.github+json", "user-agent": "tunneler-online/" + current },
+    const res = await fetchFn(RELEASES, { headers: { accept: "application/vnd.github+json", "user-agent": "tunneler/" + current },
       signal: AbortSignal.timeout(10000) });
     if (!res.ok) return null;
     const rel = await res.json();
     const version = String(rel.tag_name || "").replace(/^v/, "");
-    return newerVersion(version, current) ? { version, url: rel.html_url || "https://github.com/kaniansky/tunneler-online/releases/latest" } : null;
+    return newerVersion(version, current) ? { version, url: rel.html_url || "https://github.com/kaniansky/tunneler/releases/latest" } : null;
   } catch (e) { return null; }
 }
 // Render's free plan stops a service after 15 minutes without a request through its public address; the first visitor

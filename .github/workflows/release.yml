@@ -105,7 +105,7 @@ jobs:
     permissions:
       contents: read
 
-  # the Flatpak manifest (flatpak/com.kaniansky.TunnelerOnline.yml) for this release, committed to main: both
+  # the Flatpak manifest (flatpak/com.kaniansky.Tunneler.yml) for this release, committed to main: both
   # .deb urls + sha256 (they exist once app attached them) and the tag + its commit (tools/flatpak-update.js).
   # The metainfo's <release> entry has to be in the tag already (test/update-check.js fails without it; `npm
   # version X` adds it). Once the app is on Flathub, its bot opens the Flathub update by itself (the
@@ -128,7 +128,7 @@ jobs:
       - name: The metainfo lists this release
         run: |
           v="${{ needs.release.outputs.version }}"
-          git show "v$v:flatpak/com.kaniansky.TunnelerOnline.metainfo.xml" | grep -q "<release version=\"$v\"" ||
+          git show "v$v:flatpak/com.kaniansky.Tunneler.metainfo.xml" | grep -q "<release version=\"$v\"" ||
             echo "::warning::the tag's metainfo has no <release version=\"$v\"> - Flathub will show the previous version's notes"
 
       - name: Update the manifest

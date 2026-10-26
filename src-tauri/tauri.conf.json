@@ -1,16 +1,16 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Tunneler Online",
-  "mainBinaryName": "tunneler-online",
+  "productName": "Tunneler",
+  "mainBinaryName": "tunneler",
   "version": "../package.json",
-  "identifier": "io.github.kaniansky.tunneler-online",
+  "identifier": "com.kaniansky.Tunneler",
   "build": {
     "frontendDist": "../public"
   },
   "app": {
     "windows": [
       {
-        "title": "Tunneler Online",
+        "title": "Tunneler",
         "width": 1000,
         "height": 760,
         "minWidth": 400,
@@ -35,8 +35,18 @@
       "app"
     ],
     "category": "ArcadeGame",
+    "linux": {
+      "deb": {
+        "provides": ["tunneler-online"],
+        "conflicts": ["tunneler-online"],
+        "replaces": ["tunneler-online"]
+      },
+      "rpm": {
+        "obsoletes": ["tunneler-online"]
+      }
+    },
     "shortDescription": "TUNNELER (1991) in a window, with online play",
-    "longDescription": "TUNNELER 2.0 (1991, Geoffrey Silverton) rewritten in JavaScript: split screen, versus the computer and online play on a Tunneler Online server.",
+    "longDescription": "TUNNELER 2.0 (1991, Geoffrey Silverton) rewritten in JavaScript: split screen, versus the computer and online play on a Tunneler server.",
     "copyright": "Public domain (Unlicense); GNU Unifont glyphs under SIL OFL 1.1 / GPL 2+",
     "icon": [
       "icons/32x32.png",
@@ -50,7 +60,7 @@
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEQwNzY3OTI5REY2OUFCM0IKUldRN3EybmZLWGwyMEFnc3YvbFc4WUJ4ZkRCMWVkRVhnb0RKRUE4aU8wY0VORHl5THdNUjU4blcK",
       "endpoints": [
-        "https://github.com/kaniansky/tunneler-online/releases/latest/download/latest.json"
+        "https://github.com/kaniansky/tunneler/releases/latest/download/latest.json"
       ],
       "windows": {
         "installMode": "passive"

@@ -1,4 +1,4 @@
-# Tunneler Online
+# Tunneler
 
 **TUNNELER 2.0** - the 1991 DOS two-player tank game by Geoffrey Silverton - rewritten in JavaScript from
 the decompiled original and playable in the browser: split screen, against computer tanks, or online with
@@ -224,45 +224,45 @@ npm start          # http://localhost:8050  (PORT=... to change)
 
 ### Desktop app
 
-Every [release](https://github.com/kaniansky/tunneler-online/releases) has a small desktop app: the game
+Every [release](https://github.com/kaniansky/tunneler/releases) has a small desktop app: the game
 in its own window, using the web view the system already has (a few MB, no browser needed).
 
 | System | File | Needs |
 |---|---|---|
-| Windows 10 / 11 | `-windows-x64-setup.exe` (installer) or `tunneler-online-<version>-windows-x64.exe` (just run it) | WebView2 (built in) |
-| Linux | `tunneler-online-linux-x64.AppImage` (`chmod +x` first; always the newest: <https://github.com/kaniansky/tunneler-online/releases/latest/download/tunneler-online-linux-x64.AppImage>), `.deb`, `.rpm` (or the repositories below), or the bare binary in `-linux-x64.tar.gz` | `libwebkit2gtk-4.1` |
+| Windows 10 / 11 | `-windows-x64-setup.exe` (installer) or `tunneler-<version>-windows-x64.exe` (just run it) | WebView2 (built in) |
+| Linux | `tunneler-linux-x64.AppImage` (`chmod +x` first; always the newest: <https://github.com/kaniansky/tunneler/releases/latest/download/tunneler-linux-x64.AppImage>), `.deb`, `.rpm` (or the repositories below), or the bare binary in `-linux-x64.tar.gz` | `libwebkit2gtk-4.1` |
 | macOS | `-macos-arm64.dmg` (Apple silicon) / `-macos-x64.dmg` (Intel) | not signed: right click -> Open the first time |
 
 When a newer release is out, the app's main menu shows **Update to version X**: the installed Windows
 app, the AppImage and the macOS app download it, install it and restart; the `.deb` / `.rpm` do the same
 after asking for the admin password; the portable exe and the `.tar.gz` show **New version X**, which
 opens the download page. A downloaded AppImage has to be made executable once (`chmod +x
-tunneler-online-linux-x64.AppImage`, or Properties -> Allow executing as a program) - browsers never keep
+tunneler-linux-x64.AppImage`, or Properties -> Allow executing as a program) - browsers never keep
 that. Its name has no version: an update writes the new version over the same file, so shortcuts keep
 working (the main menu's bottom-left corner shows the version).
 
 On Linux the game can also come from its own **apt / dnf repository** and then updates with the rest of
-the system (signed with the key at <https://kaniansky.com/tunneler/tunneler-online.asc>):
+the system (signed with the key at <https://kaniansky.com/tunneler/tunneler.asc>):
 
 ```bash
 # Debian, Ubuntu, Mint
-curl -fsSL https://kaniansky.com/tunneler/tunneler-online.gpg | sudo tee /usr/share/keyrings/tunneler-online.gpg >/dev/null
-echo "deb [signed-by=/usr/share/keyrings/tunneler-online.gpg] https://kaniansky.com/tunneler/apt ./" | sudo tee /etc/apt/sources.list.d/tunneler-online.list
-sudo apt update && sudo apt install tunneler-online
+curl -fsSL https://kaniansky.com/tunneler/tunneler.gpg | sudo tee /usr/share/keyrings/tunneler.gpg >/dev/null
+echo "deb [signed-by=/usr/share/keyrings/tunneler.gpg] https://kaniansky.com/tunneler/apt ./" | sudo tee /etc/apt/sources.list.d/tunneler.list
+sudo apt update && sudo apt install tunneler
 
 # Fedora and other dnf systems
-sudo curl -fsSL -o /etc/yum.repos.d/tunneler-online.repo https://kaniansky.com/tunneler/rpm/tunneler-online.repo
-sudo dnf install tunneler-online
+sudo curl -fsSL -o /etc/yum.repos.d/tunneler.repo https://kaniansky.com/tunneler/rpm/tunneler.repo
+sudo dnf install tunneler
 ```
 
-There is also a **Flatpak** (`flatpak/`, app id `com.kaniansky.TunnelerOnline`) - the release's
+There is also a **Flatpak** (`flatpak/`, app id `com.kaniansky.Tunneler`) - the release's
 `.deb` on the GNOME runtime - meant for [Flathub](https://flathub.org), where software managers such as
 Linux Mint's find it; it updates through them, not through the app. To build and install it yourself:
 
 ```bash
 flatpak install --user flathub org.flatpak.Builder org.gnome.Sdk//51
-flatpak run org.flatpak.Builder --user --install --force-clean build-dir flatpak/com.kaniansky.TunnelerOnline.yml
-flatpak run com.kaniansky.TunnelerOnline
+flatpak run org.flatpak.Builder --user --install --force-clean build-dir flatpak/com.kaniansky.Tunneler.yml
+flatpak run com.kaniansky.Tunneler
 ```
 
 Split screen and skirmish work offline. Online play goes to the public server; to play on your own,
@@ -337,8 +337,8 @@ docker compose up -d --build                    # build from this checkout inste
 Or plain Docker:
 
 ```bash
-docker run -d -p 8050:8050 --restart unless-stopped ghcr.io/kaniansky/tunneler-online:latest
-docker build -t tunneler-online . && docker run -d -p 8050:8050 tunneler-online   # from source
+docker run -d -p 8050:8050 --restart unless-stopped ghcr.io/kaniansky/tunneler:latest
+docker build -t tunneler . && docker run -d -p 8050:8050 tunneler   # from source
 ```
 
 Games live in the server's memory; a restart hands them over through the replays' folder (docker-compose
@@ -349,7 +349,7 @@ minutes is closed automatically. Players need an account on your server unless y
 The server checks GitHub for a newer release when it starts and once a day, and logs a line when one is
 out (`UPDATE_CHECK=0` turns that off; nothing is downloaded).
 
-Every release (a pushed version tag) publishes the Docker image to `ghcr.io/kaniansky/tunneler-online`
+Every release (a pushed version tag) publishes the Docker image to `ghcr.io/kaniansky/tunneler`
 (`latest` and the version; see `.github/workflows/release.yml`).
 Put a reverse proxy (nginx, Caddy, ...) in front for HTTPS; the game connects its websocket over `wss:`
 automatically when the page is served over HTTPS.
@@ -384,6 +384,6 @@ More detail for contributors in [CONTRIBUTING.md](CONTRIBUTING.md) and [CLAUDE.m
 
 ## Credits
 
-TUNNELER 2.0 (1991) by Geoffrey Silverton, released by him into the public domain. Tunneler Online by
+TUNNELER 2.0 (1991) by Geoffrey Silverton, released by him into the public domain. Tunneler by
 Norko Kaniansky, 2026 - also public domain ([Unlicense](LICENSE)). The fonts and glyph data come from
 third parties under their own licenses: see [NOTICE](NOTICE).

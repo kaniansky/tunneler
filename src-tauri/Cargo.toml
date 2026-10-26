@@ -1,16 +1,16 @@
 [package]
-name = "tunneler-online"
+name = "tunneler"
 version = "0.0.0"            # (the app's version comes from package.json via tauri.conf.json)
-description = "TUNNELER ONLINE desktop app: the game's web pages in a native window"
+description = "TUNNELER desktop app: the game's web pages in a native window"
 license = "Unlicense"
 edition = "2021"
 rust-version = "1.77"
 publish = false
 
 # the library is the whole app: main.rs (desktop) calls its run(), the Android project (gen/android)
-# loads it as libtunneler_online_lib.so (a name apart from the binary's: Windows can't have both the same)
+# loads it as libtunneler_lib.so (a name apart from the binary's: Windows can't have both the same)
 [lib]
-name = "tunneler_online_lib"
+name = "tunneler_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

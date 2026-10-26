@@ -1,4 +1,4 @@
-// TUNNELER ONLINE app: a native window (the OS's own web view) showing the game's pages from public/
+// TUNNELER app: a native window (the OS's own web view) showing the game's pages from public/
 // (embedded at build time). Online play goes to the server set on the homepage Settings screen
 // (src/js/endpoint.js), by default the public one. The same code is the desktop app (main.rs calls run())
 // and the Android app (the Android project in gen/android loads this library and calls run() through
@@ -156,5 +156,5 @@ pub fn run() {
     builder
         .invoke_handler(tauri::generate_handler![update_check, update_install, update_page, set_fullscreen, is_fullscreen])
         .run(tauri::generate_context!())
-        .expect("error while running TUNNELER ONLINE");
+        .expect("error while running TUNNELER");
 }

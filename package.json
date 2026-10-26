@@ -1,16 +1,16 @@
 {
-  "name": "tunneler-online",
-  "version": "6.0.1",
+  "name": "tunneler",
+  "version": "1.0.0",
   "description": "TUNNELER 2.0 (1991, Geoffrey Silverton) rewritten in JavaScript from the decompiled original: split screen, vs computer and online multiplayer in the browser",
   "license": "Unlicense",
   "author": "Norko Kaniansky",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/kaniansky/tunneler-online.git"
+    "url": "git+https://github.com/kaniansky/tunneler.git"
   },
-  "homepage": "https://github.com/kaniansky/tunneler-online#readme",
+  "homepage": "https://github.com/kaniansky/tunneler#readme",
   "bugs": {
-    "url": "https://github.com/kaniansky/tunneler-online/issues"
+    "url": "https://github.com/kaniansky/tunneler/issues"
   },
   "engines": {
     "node": ">=20.19"

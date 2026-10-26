@@ -3,8 +3,9 @@
 #   tools/linux-repos.sh <packages-dir> <out-dir> <base-url>
 # <packages-dir> holds the release's .deb and .rpm; <out-dir> gets
 #   apt/                        a flat apt repository: the .deb, Packages(.gz), Release, InRelease, Release.gpg
-#   rpm/                        the .rpm, repodata/ (repomd.xml signed: repomd.xml.asc), tunneler-online.repo
-#   tunneler-online.gpg / .asc  the public signing key (binary for apt's signed-by, armored for dnf)
+#   rpm/                        the .rpm, repodata/ (repomd.xml signed: repomd.xml.asc), tunneler.repo
+#   tunneler.gpg / .asc         the public signing key (binary for apt's signed-by, armored for dnf), also as
+#                               tunneler-online.gpg / .asc: the names installs from before 6.1 point at
 # Signs with the first secret key in the gpg keyring ($GNUPGHOME). Needs dpkg-scanpackages (dpkg-dev),
 # apt-ftparchive (apt-utils), createrepo_c and rpmsign (rpm). Only the packages given are listed (the
 # newest release). The .rpm here gets the key's signature (rpmsign; the release's own copy stays as it
@@ -16,37 +17,40 @@ cp "$pkgs"/*.deb "$out/apt/"
 cp "$pkgs"/*.rpm "$out/rpm/"
 key=$(gpg --list-secret-keys --with-colons | awk -F: '/^fpr/ { print $10; exit }')
 [ -n "$key" ] || { echo "no secret key in the gpg keyring" >&2; exit 1; }
-gpg --batch --yes --export "$key" > "$out/tunneler-online.gpg"
-gpg --batch --yes --armor --export "$key" > "$out/tunneler-online.asc"
+gpg --batch --yes --export "$key" > "$out/tunneler.gpg"
+gpg --batch --yes --armor --export "$key" > "$out/tunneler.asc"
+cp "$out/tunneler.gpg" "$out/tunneler-online.gpg"
+cp "$out/tunneler.asc" "$out/tunneler-online.asc"
 
-# apt: deb [signed-by=/usr/share/keyrings/tunneler-online.gpg] <base>/apt ./
+# apt: deb [signed-by=/usr/share/keyrings/tunneler.gpg] <base>/apt ./
 (
   cd "$out/apt"
   dpkg-scanpackages --multiversion . /dev/null > Packages 2>/dev/null
   gzip -9kf Packages
   apt-ftparchive \
+    `# Origin / Label keep the game's old name: apt refuses an update whose Origin or Label changed` \
     -o APT::FTPArchive::Release::Origin="Tunneler Online" \
     -o APT::FTPArchive::Release::Label="Tunneler Online" \
     -o APT::FTPArchive::Release::Suite=stable \
     -o APT::FTPArchive::Release::Architectures="amd64 arm64" \
-    -o APT::FTPArchive::Release::Description="Tunneler Online desktop app" \
+    -o APT::FTPArchive::Release::Description="Tunneler desktop app" \
     release . > ../Release.tmp
   mv ../Release.tmp Release
   gpg --batch --yes -u "$key" --clearsign -o InRelease Release
   gpg --batch --yes -u "$key" --armor --detach-sign -o Release.gpg Release
 )
 
-# dnf: /etc/yum.repos.d/tunneler-online.repo
+# dnf: /etc/yum.repos.d/tunneler.repo
 for f in "$out"/rpm/*.rpm; do rpmsign --define "_gpg_name $key" --define "__gpg $(command -v gpg)" --addsign "$f" > /dev/null; done
 createrepo_c --quiet "$out/rpm"
 gpg --batch --yes -u "$key" --armor --detach-sign -o "$out/rpm/repodata/repomd.xml.asc" "$out/rpm/repodata/repomd.xml"
-cat > "$out/rpm/tunneler-online.repo" <<EOF
-[tunneler-online]
-name=Tunneler Online
+cat > "$out/rpm/tunneler.repo" <<EOF
+[tunneler]
+name=Tunneler
 baseurl=$base/rpm
 enabled=1
 gpgcheck=1
 repo_gpgcheck=1
-gpgkey=$base/tunneler-online.asc
+gpgkey=$base/tunneler.asc
 EOF
 find "$out" -type f | sort

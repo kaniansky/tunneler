@@ -328,7 +328,7 @@ function stats(e) { e.textMode(); e.menuShift = -20; e.showMainMenu(); return sc
 {
   const e2 = makeEnv();
   const ui = new e2.win.DosUI(e2.win.document.getElementById("c"), { display: new e2.win.Display(e2.win.document.getElementById("c")), present() {} });
-  ui.show({ lines: [{ row: 1, text: "Tunneler Online" }], box: { y: 5 }, items: [{ label: e2.win.Lang.t("menu.instr"), go() {} }] });
+  ui.show({ lines: [{ row: 1, text: "Tunneler" }], box: { y: 5 }, items: [{ label: e2.win.Lang.t("menu.instr"), go() {} }] });
   for (const c of e2.win.Lang.codes) { e2.win.Lang.set(c); ui.draw(); }
   assert.strictEqual(e2.loads.length, 0, "no Unifont block without user text");
   ok("menus in every language load no Unifont block");

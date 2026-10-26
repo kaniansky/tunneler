@@ -4,7 +4,10 @@ Guidance for Claude Code (and humans) working in this repo. Read it before non-t
 
 ## What this is
 
-**Tunneler Online**: TUNNELER 2.0 (1991 DOS game by Geoffrey Silverton, Turbo Pascal 4.0, public domain)
+**Tunneler** (called Tunneler Online up to its 6.0.1, then started again at 1.0.0 - owner, 2026-10-26;
+the old releases are tagged `online-vX.Y.Z`, their changes in docs/CHANGELOG-online.md; only the server's address
+tunneler.onrender.com keeps the old name; ids, file names, packages and the repository are `tunneler` /
+`com.kaniansky.Tunneler` now): TUNNELER 2.0 (1991 DOS game by Geoffrey Silverton, Turbo Pascal 4.0, public domain)
 rewritten in JavaScript from its **decompiled** source, playable in the browser in three modes:
 split screen (hotseat), vs computer (1-7 computer tanks, free-for-all or teams, 4 difficulties, seeing
 your own screen, your team's or everyone's) and online (a list of games; every game a lobby with 8
@@ -16,7 +19,7 @@ sections 0-33 all implemented; the classic 2-player game - medium map, 3 rounds 
 byte-for-byte the original). Author of this version: Norko Kaniansky, 2026,
 public domain (Unlicense).
 
-Origin: built in the repo `kaniansky/tunneler` (branch `decompiled-source`, folder `decompiled/` has the
+Origin: built in the decompiled-source repo (`kaniansky/tunneler` until 2026-10-26, when this repo took that name; branch `decompiled-source`, folder `decompiled/` has the
 reconstructed Pascal: `src/TUNNELER.PAS`, `LORES.PAS`, `KBD.PAS`, notes, Ghidra/asm dumps; folder
 `tunneler-js/` was this game before it moved here). That repo's main app is an older netplay layer around a
 WASM transpile of the original; this repo replaces it with the pure-JS port.
@@ -469,7 +472,7 @@ none, i.e. a page from before 2.0 - is refused (POST 409 `{code:
   2026-10-24 - docs/GRAPHICS.md; every screen still has to look right in both) (VGA text screen, CP437 font, magenta menu boxes with
   white-on-magenta bar, cyan info text, bottom rule + white hint at the right; no "public domain" text
   in the footer any more).
-- Title "Tunneler Online", "by Norko Kaniansky"; the Information page describes this version and still
+- Title "Tunneler" (owner, 2026-10-26 - was "Tunneler Online"), "by Norko Kaniansky"; the Information page describes this version and still
   credits Geoffrey Silverton for the original.
 - Menu items in **sentence case** ("Start game", "Back to main menu"); tank names BLUE/GREEN in caps.
 - Menus: arrow keys + Enter + mouse; switches also with Left/Right; menus auto-size and are centred;
@@ -707,9 +710,9 @@ none, i.e. a page from before 2.0 - is refused (POST 409 `{code:
   type Deb / Rpm from `tauri::utils::platform::bundle_type()`, binary under /usr) -> `update_check`'s
   `admin` (home.js info `home.update.admin.i`); the updater runs `dpkg -i` / `rpm -U` via pkexec / sudo.
   latest.json: `linux-x86_64-deb` / `-rpm` / `-appimage` + `linux-x86_64` (= AppImage, named
-  `tunneler-online-linux-x64.AppImage` without a version since 3.1.3: updates write over the same file); app-build.yml
+  `tunneler-linux-x64.AppImage` without a version since 3.1.3: updates write over the same file); app-build.yml
   attaches the .deb / .rpm .sig files. apt / dnf repositories: `tools/linux-repos.sh` (flat apt repo with
-  signed Release / InRelease, createrepo_c + signed repomd.xml, rpmsign'd .rpm, tunneler-online.repo, the
+  signed Release / InRelease, createrepo_c + signed repomd.xml, rpmsign'd .rpm, tunneler.repo, the
   public key as .gpg / .asc) built and uploaded by FTPS to web/tunneler/apt, /rpm by
   `.github/workflows/linux-repos.yml` (release.yml job `repos`, or by hand per tag); secrets
   REPO_GPG_PRIVATE_KEY (key 5E12365F...99223B06, copies in ~/.tauri and kaniansky/private) + SITE_FTP_*.
@@ -788,8 +791,8 @@ none, i.e. a page from before 2.0 - is refused (POST 409 `{code:
   team - 1, then 4 packed characters for size / win, time / ff / view, watch / sight (+ the old Base repairs bit, ignored), mode /
   goal index); play.js expands `g` with `CpuCode.decode` into the long query (lv=2) and reads that as
   before. The long form still works; a broken code = the default game. Test: local-check "short skirmish links".
-- **Flatpak** (`flatpak/`, id `com.kaniansky.TunnelerOnline` - on the owner's domain: a Flathub id allows
-  no hyphen, and io.github.kaniansky.tunneler_online would name a repository that doesn't exist; Flathub
+- **Flatpak** (`flatpak/`, id `com.kaniansky.Tunneler`, `com.kaniansky.TunnelerOnline` until Tunneler Online 6.0.1 - on the owner's domain: a Flathub id
+  allows no hyphen, and io.github.kaniansky.tunneler_online would have named a repository that doesn't exist; Flathub
   verifies it by kaniansky.com/.well-known/org.flathub.VerifiedApps.txt). The manifest (no comments - the
   Flathub review asked) repackages the release's `.deb` per architecture (`_amd64.deb` x86_64,
   `_arm64.deb` aarch64 - app-build.yml's linux-arm64 job) on org.gnome.Platform (WebKitGTK 4.1) and
@@ -827,7 +830,7 @@ none, i.e. a page from before 2.0 - is refused (POST 409 `{code:
 - **Android app** (docs/ANDROID.md; Tauri v2 mobile): src-tauri/src/lib.rs holds the app (`run()`, the mobile entry
   point; main.rs only calls it), the updater / opener / fullscreen commands are desktop-only (on Android
   `update_check` = no update, the others "not supported"); `tauri.android.conf.json` = id
-  `com.kaniansky.TunnelerOnline`, minSdk 24; `src-tauri/gen/android/` (generated by `tauri android init`, committed;
+  `com.kaniansky.Tunneler`, minSdk 24; `src-tauri/gen/android/` (generated by `tauri android init`, committed;
   its build outputs ignored) with MainActivity.kt edits: fullscreen + screen kept on, Back = <ESC> unless
   `window.tunnelerBackExits()` (home.js: true on the main menu) - then the app goes to the background;
   `window.TunnelerAndroid.saveFile(name, base64)` (a JavascriptInterface: a page's download does nothing in the

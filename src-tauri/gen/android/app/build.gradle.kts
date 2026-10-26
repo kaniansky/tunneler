@@ -36,12 +36,12 @@ android {
         }
     }
     compileSdk = 37
-    namespace = "com.kaniansky.TunnelerOnline"
+    namespace = "com.kaniansky.Tunneler"
     defaultConfig {
         // plain http allowed: the Settings screen's Server may be a game server on the local network
         // (src/js/endpoint.js: "192.168.1.5:8050" -> http://...); the public server is https / wss
         manifestPlaceholders["usesCleartextTraffic"] = "true"
-        applicationId = "com.kaniansky.TunnelerOnline"
+        applicationId = "com.kaniansky.Tunneler"
         minSdk = 24
         targetSdk = 37
         versionCode = tauriProperties.getProperty("tauri.android.versionCode", "1").toInt()

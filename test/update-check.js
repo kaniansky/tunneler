@@ -33,41 +33,41 @@ const ok = msg => { n++; console.log("  ok  " + msg); };
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tunneler-upd-"));
   const put = (f, s) => fs.writeFileSync(path.join(dir, f), s);
   assert.strictEqual(manifest(dir, "v2.1.0", "o/r"), null, "nothing signed");
-  put("tunneler-online-2.1.0-windows-x64.exe", "x");
-  put("tunneler-online-2.1.0-windows-x64-setup.exe", "x"); put("tunneler-online-2.1.0-windows-x64-setup.exe.sig", "SIGW\n");
-  put("tunneler-online-2.1.0-linux-x64.AppImage", "x"); put("tunneler-online-2.1.0-linux-x64.AppImage.sig", "SIGL");
-  put("tunneler-online-2.1.0-macos-arm64.app.tar.gz", "x"); put("tunneler-online-2.1.0-macos-arm64.app.tar.gz.sig", "SIGA");
-  put("tunneler-online-2.1.0-macos-x64.app.tar.gz.sig", "orphan");          // (its package is missing)
+  put("tunneler-2.1.0-windows-x64.exe", "x");
+  put("tunneler-2.1.0-windows-x64-setup.exe", "x"); put("tunneler-2.1.0-windows-x64-setup.exe.sig", "SIGW\n");
+  put("tunneler-2.1.0-linux-x64.AppImage", "x"); put("tunneler-2.1.0-linux-x64.AppImage.sig", "SIGL");
+  put("tunneler-2.1.0-macos-arm64.app.tar.gz", "x"); put("tunneler-2.1.0-macos-arm64.app.tar.gz.sig", "SIGA");
+  put("tunneler-2.1.0-macos-x64.app.tar.gz.sig", "orphan");          // (its package is missing)
   const m = manifest(dir, "v2.1.0", "o/r", new Date("2026-10-18T10:00:00.123Z"));
   assert.strictEqual(m.version, "2.1.0"); assert.strictEqual(m.pub_date, "2026-10-18T10:00:00Z");
   assert.deepStrictEqual(Object.keys(m.platforms).sort(), ["darwin-aarch64", "linux-x86_64", "linux-x86_64-appimage", "windows-x86_64"]);
   assert.deepStrictEqual(m.platforms["windows-x86_64"],
-    { signature: "SIGW", url: "https://github.com/o/r/releases/download/v2.1.0/tunneler-online-2.1.0-windows-x64-setup.exe" });
+    { signature: "SIGW", url: "https://github.com/o/r/releases/download/v2.1.0/tunneler-2.1.0-windows-x64-setup.exe" });
   // deb / rpm: their own entries (an app installed from a package updates with the same kind)
-  put("tunneler-online-2.1.0_amd64.deb", "x"); put("tunneler-online-2.1.0_amd64.deb.sig", "SIGD");
-  put("tunneler-online-2.1.0.x86_64.rpm", "x"); put("tunneler-online-2.1.0.x86_64.rpm.sig", "SIGR");
+  put("tunneler-2.1.0_amd64.deb", "x"); put("tunneler-2.1.0_amd64.deb.sig", "SIGD");
+  put("tunneler-2.1.0.x86_64.rpm", "x"); put("tunneler-2.1.0.x86_64.rpm.sig", "SIGR");
   const pk = manifest(dir, "v2.1.0", "o/r");
-  assert.strictEqual(pk.platforms["linux-x86_64-deb"].url.split("/").pop(), "tunneler-online-2.1.0_amd64.deb");
+  assert.strictEqual(pk.platforms["linux-x86_64-deb"].url.split("/").pop(), "tunneler-2.1.0_amd64.deb");
   assert.strictEqual(pk.platforms["linux-x86_64-rpm"].signature, "SIGR");
-  assert.strictEqual(pk.platforms["linux-x86_64"].url.split("/").pop(), "tunneler-online-2.1.0-linux-x64.AppImage", "plain linux = the AppImage");
+  assert.strictEqual(pk.platforms["linux-x86_64"].url.split("/").pop(), "tunneler-2.1.0-linux-x64.AppImage", "plain linux = the AppImage");
   // ARM64 Linux: its deb / rpm (no AppImage, so no plain linux-aarch64)
-  put("tunneler-online-2.1.0_arm64.deb", "x"); put("tunneler-online-2.1.0_arm64.deb.sig", "SIGAD");
-  put("tunneler-online-2.1.0.aarch64.rpm", "x"); put("tunneler-online-2.1.0.aarch64.rpm.sig", "SIGAR");
+  put("tunneler-2.1.0_arm64.deb", "x"); put("tunneler-2.1.0_arm64.deb.sig", "SIGAD");
+  put("tunneler-2.1.0.aarch64.rpm", "x"); put("tunneler-2.1.0.aarch64.rpm.sig", "SIGAR");
   const arm = manifest(dir, "v2.1.0", "o/r");
-  assert.strictEqual(arm.platforms["linux-aarch64-deb"].url.split("/").pop(), "tunneler-online-2.1.0_arm64.deb");
+  assert.strictEqual(arm.platforms["linux-aarch64-deb"].url.split("/").pop(), "tunneler-2.1.0_arm64.deb");
   assert.strictEqual(arm.platforms["linux-aarch64-rpm"].signature, "SIGAR");
   assert(!arm.platforms["linux-aarch64"], "no ARM64 AppImage: no plain linux-aarch64");
   // the AppImage without a version in its name (3.1.3 on): the same entries
   const d2 = fs.mkdtempSync(path.join(os.tmpdir(), "tunneler-upd-"));
-  fs.writeFileSync(path.join(d2, "tunneler-online-linux-x64.AppImage.sig"), "SIGN");
-  const nv = manifest(d2, "v2.1.0", "o/r", new Date(), ["tunneler-online-linux-x64.AppImage"]);
-  assert.strictEqual(nv.platforms["linux-x86_64"].url, "https://github.com/o/r/releases/download/v2.1.0/tunneler-online-linux-x64.AppImage");
+  fs.writeFileSync(path.join(d2, "tunneler-linux-x64.AppImage.sig"), "SIGN");
+  const nv = manifest(d2, "v2.1.0", "o/r", new Date(), ["tunneler-linux-x64.AppImage"]);
+  assert.strictEqual(nv.platforms["linux-x86_64"].url, "https://github.com/o/r/releases/download/v2.1.0/tunneler-linux-x64.AppImage");
   assert.strictEqual(nv.platforms["linux-x86_64-appimage"].signature, "SIGN");
   fs.rmSync(d2, { recursive: true });
   // (updater-manifest.yml: only the .sig files here, the packages named by the release's file list)
-  fs.rmSync(path.join(dir, "tunneler-online-2.1.0-linux-x64.AppImage"));
+  fs.rmSync(path.join(dir, "tunneler-2.1.0-linux-x64.AppImage"));
   assert(!manifest(dir, "v2.1.0", "o/r").platforms["linux-x86_64"], "no package, no list: left out");
-  const listed = manifest(dir, "v2.1.0", "o/r", new Date(), ["tunneler-online-2.1.0-linux-x64.AppImage"]);
+  const listed = manifest(dir, "v2.1.0", "o/r", new Date(), ["tunneler-2.1.0-linux-x64.AppImage"]);
   assert.strictEqual(listed.platforms["linux-x86_64"].signature, "SIGL", "listed in the release: in");
   fs.rmSync(dir, { recursive: true });
   ok("updater manifest: one entry per signed package, release URLs, no entry without the package");
@@ -125,9 +125,9 @@ const ok = msg => { n++; console.log("  ok  " + msg); };
     // (npm version X adds it: tools/flatpak-update.js --metainfo); the manifest's sources tell Flathub's bot
     // where new versions come from
     const v = require("../package.json").version, dir = path.join(__dirname, "..", "flatpak");
-    const meta = fs.readFileSync(path.join(dir, "com.kaniansky.TunnelerOnline.metainfo.xml"), "utf8");
+    const meta = fs.readFileSync(path.join(dir, "com.kaniansky.Tunneler.metainfo.xml"), "utf8");
     assert(meta.includes('<release version="' + v + '"'), "the Flatpak metainfo has no <release> for " + v + ": node tools/flatpak-update.js --metainfo " + v);
-    const man = fs.readFileSync(path.join(dir, "com.kaniansky.TunnelerOnline.yml"), "utf8");
+    const man = fs.readFileSync(path.join(dir, "com.kaniansky.Tunneler.yml"), "utf8");
     assert.strictEqual((man.match(/x-checker-data:/g) || []).length, 3, "x-checker-data on both .deb sources and the git source");
     assert(/url: \S+_amd64\.deb\n\s+sha256: [0-9a-f]{64}/.test(man) && /url: \S+_arm64\.deb\n\s+sha256: [0-9a-f]{64}/.test(man) && /tag: v\S+\n\s+commit: [0-9a-f]{40}/.test(man),
       "the lines tools/flatpak-update.js rewrites are there");

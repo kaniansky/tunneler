@@ -196,7 +196,7 @@ Lang.register("cs", {
     },
     info: {
       title: "INFORMACE",
-      p1: ["Tunneler Online přináší hru TUNNELER 2.0 do prohlížeče.  Program pro DOS byl",
+      p1: ["Tento Tunneler přináší hru TUNNELER 2.0 do prohlížeče.  Program pro DOS byl",
         "dekompilován a přepsán do JavaScriptu rutinu po rutině, takže tanky, kopání,",
         "střely, energie i generátor světa se chovají přesně jako v roce 1991, na stejné",
         "obrazovce (160x100 v 16 barvách) se zvukem PC reproduktoru."],
@@ -214,8 +214,8 @@ Lang.register("cs", {
         ["Záznamy:  ", "každý zápas, který hraješ nebo sleduješ, se uloží (20 nejnovějších, hlavní menu, Záznamy): podívej se na něj znovu jako divák - všechny pohledy, živou mapu nebo jeden tank, s pauzou, rychleji či pomaleji - nebo ho někomu pošli jako odkaz či soubor."],
         ["Denní výzva:  ", "každý den (od půlnoci do půlnoci, UTC) dostanou všichni stejnou šarvátku - stejný svět, režim i počítačové tanky (hlavní menu, Denní výzva).  Pošli svůj výsledek: server znovu přehraje záznam tvého zápasu a do žebříčku dne se dostane jen to, co se opravdu stalo - nejlepší zápasy si tam může prohlédnout každý.  Žebříček ukáže i 30 dní předtím (doleva / doprava) a kterýkoli minulý den si můžeš zahrát znovu jako trénink - jeho výsledky se nepočítají.  Zítra přijde nová."],
         ["Vlastní mapy:  ", "nakresli si svět - skály, hlínu a tunely - a rozmísti až 8 základen (hlavní menu, Mapy) - tank musí dojet mezi všemi (skála ho zastaví); hraj na něm v šarvátce nebo online, nebo ho pošli někomu jako odkaz nebo soubor."],
-        ["Desktopová aplikace:  ", "Tunneler Online je i malý program pro Windows, Linux a macOS - " +
-          "stáhneš ho ze stránky vydání na GitHubu (github.com/kaniansky/tunneler-online/releases).  " +
+        ["Desktopová aplikace:  ", "Tunneler je i malý program pro Windows, Linux a macOS - " +
+          "stáhneš ho ze stránky vydání na GitHubu (github.com/kaniansky/tunneler/releases).  " +
           "Dělenou obrazovku a potyčku hraje bez sítě, hry online na veřejném serveru nebo " +
           "na jakémkoli jiném (Nastavení, Online, Server).  V prohlížeči se hra dá nainstalovat i jako aplikace (pak se spustí i bez sítě)."],
         ["Originál:  ", "TUNNELER 2.0 napsal Geoffrey Silverton v roce 1991 v Turbo Pascalu: dva " +

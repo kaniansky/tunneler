@@ -1,4 +1,4 @@
-package com.kaniansky.TunnelerOnline
+package com.kaniansky.Tunneler
 
 import android.content.ContentUris
 import android.content.ContentValues
@@ -17,7 +17,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 
-// TUNNELER ONLINE on Android (docs/ANDROID.md):
+// TUNNELER on Android (docs/ANDROID.md):
 // - the game full screen (immersive: the status and navigation bars hidden, a swipe from the edge shows
 //   them for a moment) and the screen kept on while the app is in front (a match is played with the touch
 //   controls or a gamepad, often without touching the screen for a while);

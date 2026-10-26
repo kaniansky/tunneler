@@ -67,7 +67,7 @@ for (const [cp, g] of [...glyphs].sort((a, b) => a[0] - b[0])) {
 const font = new opentype.Font({ familyName: "Tunneler VGA", styleName: "Regular", unitsPerEm: 16 * U,
   ascender: ASC, descender: -DESC, glyphs: list,
   copyright: "IBM VGA 8x16 ROM font; extra letters from the Linux console font Uni2-VGA16",
-  designer: "IBM; Tunneler Online", version: "1.0" });
+  designer: "IBM; Tunneler", version: "1.0" });
 const otf = Buffer.from(font.toArrayBuffer());
 
 // WOFF 1.0 wrapper (zlib per table)

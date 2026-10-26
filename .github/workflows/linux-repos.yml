@@ -68,7 +68,7 @@ jobs:
           cd out
           for f in apt/*.deb rpm/*.rpm; do put "$f"; done
           for f in rpm/repodata/*; do case "$f" in */repomd.xml*) ;; *) put "$f" ;; esac; done
-          for f in tunneler-online.gpg tunneler-online.asc rpm/tunneler-online.repo apt/Packages apt/Packages.gz apt/Release apt/Release.gpg apt/InRelease rpm/repodata/repomd.xml rpm/repodata/repomd.xml.asc; do put "$f"; done
+          for f in tunneler.gpg tunneler.asc tunneler-online.gpg tunneler-online.asc rpm/tunneler.repo apt/Packages apt/Packages.gz apt/Release apt/Release.gpg apt/InRelease rpm/repodata/repomd.xml rpm/repodata/repomd.xml.asc; do put "$f"; done
           for d in apt rpm rpm/repodata; do
             curl -sS --ssl-reqd -K "$RUNNER_TEMP/ftp.cfg" --list-only "$url/$d/" | tr -d '\r' | while read -r f; do
               case "$f" in ""|.|..|repodata) continue ;; esac

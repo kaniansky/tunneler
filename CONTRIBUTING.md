@@ -40,7 +40,7 @@ The tag runs `.github/workflows/release.yml`:
 
 - a GitHub Release whose notes are that version's CHANGELOG.md section (`tools/changelog-notes.sh`);
 - the desktop app for Windows, Linux and macOS attached to it (`app-build.yml`);
-- the Docker image (linux/amd64 + arm64) pushed to `ghcr.io/<owner>/tunneler-online` as `latest`,
+- the Docker image (linux/amd64 + arm64) pushed to `ghcr.io/<owner>/tunneler` as `latest`,
   `X.Y.Z`, `X.Y` and the short commit sha;
 - the homepage (`site/`) uploaded to https://kaniansky.com/tunneler/;
 - the Flatpak manifest (`flatpak/`) updated for it - both `.deb` sha256, the tag and its commit - and

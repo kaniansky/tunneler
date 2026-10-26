@@ -1,16 +1,16 @@
 #!/usr/bin/env node
 "use strict";
-// The Flatpak (flatpak/, Flathub: com.kaniansky.TunnelerOnline) for a release <version>:
+// The Flatpak (flatpak/, Flathub: com.kaniansky.Tunneler) for a release <version>:
 //   node tools/flatpak-update.js --metainfo <version>   before tagging: a <release> entry (version, today)
 //                                                        at the top of the metainfo's <releases> - the
 //                                                        Flatpak installs the metainfo from the tag
 //   node tools/flatpak-update.js <version>              after the release: the manifest's two .deb urls +
 //                                                        sha256 (x86_64, aarch64) and the git source's tag +
 //                                                        commit; then copy the manifest into the Flathub
-//                                                        repository (flathub/com.kaniansky.TunnelerOnline)
+//                                                        repository (flathub/com.kaniansky.Tunneler)
 const fs = require("fs"), path = require("path"), crypto = require("crypto"), { execFileSync } = require("child_process");
 
-const ID = "com.kaniansky.TunnelerOnline", REPO = "kaniansky/tunneler-online";
+const ID = "com.kaniansky.Tunneler", REPO = "kaniansky/tunneler";
 const dir = path.join(__dirname, "..", "flatpak");
 const args = process.argv.slice(2), meta = args[0] === "--metainfo", ver = meta ? args[1] : args[0];
 if (!/^\d+\.\d+\.\d+$/.test(ver || "")) { console.error("usage: flatpak-update.js [--metainfo] <version, e.g. 4.0.1>"); process.exit(1); }
@@ -32,7 +32,7 @@ if (meta) {
   const f = path.join(dir, ID + ".yml");
   let s = fs.readFileSync(f, "utf8");
   for (const arch of ["amd64", "arm64"]) {
-    const url = "https://github.com/" + REPO + "/releases/download/v" + ver + "/tunneler-online-" + ver + "_" + arch + ".deb";
+    const url = "https://github.com/" + REPO + "/releases/download/v" + ver + "/tunneler-" + ver + "_" + arch + ".deb";
     const res = await fetch(url);
     if (!res.ok) throw new Error(url + ": " + res.status);
     const sha = crypto.createHash("sha256").update(Buffer.from(await res.arrayBuffer())).digest("hex");

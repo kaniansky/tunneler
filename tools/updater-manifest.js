@@ -3,8 +3,8 @@
 // latest.json for the desktop app's updater (tauri-plugin-updater, src-tauri/src/lib.rs), from the
 // signed update packages app-build.yml collected:
 //   node tools/updater-manifest.js <dir> <tag> <owner/repo> [assets.txt]  > latest.json
-// <dir> holds tunneler-online-<v>-windows-x64-setup.exe(.sig), tunneler-online[-<v>]-linux-x64.AppImage(.sig),
-// tunneler-online-<v>_amd64.deb(.sig), tunneler-online-<v>.x86_64.rpm(.sig) (ARM64: _arm64.deb, .aarch64.rpm), -macos-arm64.app.tar.gz(.sig),
+// <dir> holds tunneler-<v>-windows-x64-setup.exe(.sig), tunneler[-<v>]-linux-x64.AppImage(.sig),
+// tunneler-<v>_amd64.deb(.sig), tunneler-<v>.x86_64.rpm(.sig) (ARM64: _arm64.deb, .aarch64.rpm), -macos-arm64.app.tar.gz(.sig),
 // -macos-x64.app.tar.gz(.sig); the URLs point at the release <tag>. An app looks for
 // "<os>-<arch>-<its package type>" first, then "<os>-<arch>": linux-x86_64 is the AppImage, a deb / rpm
 // install gets its own package (installed with the admin password).

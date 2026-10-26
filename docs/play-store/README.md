@@ -1,6 +1,6 @@
 # Google Play - what to upload where
 
-Everything for the Play Store listing of the Android app (`com.kaniansky.TunnelerOnline`, version 5.0.0).
+Everything for the Play Store listing of the Android app (`com.kaniansky.Tunneler`, version 1.0.0).
 Background: docs/ANDROID.md (build, signing, CI). Files in this folder:
 
 | File | What |
@@ -18,25 +18,25 @@ The screenshots were taken from a local build (modern graphics, a 360 x 720 / 64
 
 ## Before you start
 
-- [ ] Google Play developer account (one-time fee, identity verification). A **new personal account** must
+- [x] Google Play developer account (one-time fee, identity verification) - verified 2026-10-26. A **new personal account** must
       run a **closed test** before it can publish to production (currently at least 12 testers opted in
       for 14 days in a row - check the current rule in Play Console).
-- [ ] The privacy policy page is **online**: `https://kaniansky.com/tunneler/privacy.html`. `site/privacy.html`
+- [x] The privacy policy page is **online**: `https://kaniansky.com/tunneler/privacy.html`. `site/privacy.html`
       is uploaded with the rest of `site/` by release.yml's `site` job at the next release - or upload that
       one file by hand (FTPS, `web/tunneler/privacy.html`) before submitting.
-- [ ] The release's AAB is **signed**: the GitHub release v5.0.0 must have
-      `tunneler-online-5.0.0-android.aab` (not `...-android-unsigned.aab`; unsigned means the
+- [ ] The release's AAB is **signed**: the GitHub release v1.0.0 must have
+      `tunneler-1.0.0-android.aab` (not `...-android-unsigned.aab`; unsigned means the
       `ANDROID_KEYSTORE` secret was missing when CI ran).
 
 ## Play Console checklist
 
-1. **Create app**: name "Tunneler Online", default language English (United States), **Game**, **Free**,
+1. **Create app**: name "Tunneler", default language English (United States), **Game**, **Free**,
    accept the declarations.
 2. **Testing -> Internal testing** (first release goes here, not to production):
    - Create a release, **Play App Signing**: keep Google's default (Google holds the app signing key; the
      key that signs the AAB in CI becomes the **upload key**).
-   - Upload `tunneler-online-5.0.0-android.aab` from the GitHub release v5.0.0.
-   - Release name `5.0.0`; release notes: a few lines from CHANGELOG.md's 5.0.0 section.
+   - Upload `tunneler-1.0.0-android.aab` from the GitHub release v1.0.0.
+   - Release name `1.0.0`; release notes: a few lines from CHANGELOG.md's 1.0.0 section.
    - Add yourself (and testers) by e-mail list; install from the opt-in link and play once (menus, a
      skirmish, an online game, saving a replay).
    - Then a **closed test** (required for new personal accounts), then **production**.
@@ -81,21 +81,19 @@ The screenshots were taken from a local build (modern graphics, a 360 x 720 / 64
 
 - Nothing in the repository sets a versionCode by hand. `src-tauri/tauri.conf.json` takes the version from
   `package.json` (`"version": "../package.json"`), and the Tauri CLI computes
-  **versionCode = major * 1000000 + minor * 1000 + patch** (5.0.0 -> **5000000**) and writes it into
+  **versionCode = major * 1000000 + minor * 1000 + patch** (1.0.0 -> **1000000**) and writes it into
   `src-tauri/gen/android/app/tauri.properties` (generated at build time, gitignored), which
   `app/build.gradle.kts` reads (`tauri.android.versionCode`).
 - So every release with a new version number (`vX.Y.Z` tag -> CI builds the AAB) gets a higher versionCode
-  automatically: 5.0.1 -> 5000001, 5.1.0 -> 5001000, 6.0.0 -> 6000000.
+  automatically: 1.0.1 -> 1000001, 1.1.0 -> 1001000, 2.0.0 -> 2000000.
 - Play refuses an upload whose versionCode it has seen before, also on another track. To re-upload a
-  rebuilt 5.0.0 (e.g. after a signing fix) you need a new version (5.0.1), or an explicit
+  rebuilt 1.0.0 (e.g. after a signing fix) you need a new version (1.0.1), or an explicit
   `bundle.android.versionCode` in `src-tauri/tauri.android.conf.json` - not set today.
 - The scheme breaks only if minor or patch ever reach 1000.
 
 ### Each later release
 
-1. Tag `vX.Y.Z` as usual -> CI attaches `tunneler-online-X.Y.Z-android.aab`.
+1. Tag `vX.Y.Z` as usual -> CI attaches `tunneler-X.Y.Z-android.aab`.
 2. Play Console -> the track -> Create new release -> upload the AAB, release notes from CHANGELOG.md.
-3. Update the Data safety form if what the app sends changed (e.g. **shared replays** - "Share a link" -
-   are not in 5.0.0; the first release with them must add "Other user-generated content", see `forms.md`),
-   and the screenshots / texts if the game looks different.
+3. Update the Data safety form if what the app sends changed (`forms.md`), and the screenshots / texts if the game looks different.
 4. Google requires a recent target SDK every year (the generated project targets API 37).

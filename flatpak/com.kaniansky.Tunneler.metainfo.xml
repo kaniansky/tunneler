@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- AppStream metadata: the game's page in software managers (Flathub, Linux Mint's Software Manager). -->
 <component type="desktop-application">
-  <id>com.kaniansky.TunnelerOnline</id>
+  <id>com.kaniansky.Tunneler</id>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>Unlicense AND OFL-1.1</project_license>
-  <name>Tunneler Online</name>
+  <name>Tunneler</name>
   <summary>The 1991 tunnel-digging tank duel, with online play</summary>
   <developer id="com.kaniansky">
     <name>Norko Kaniansky</name>
@@ -27,30 +27,30 @@
       <li>English, Slovak, Czech, Ukrainian and Russian</li>
     </ul>
   </description>
-  <launchable type="desktop-id">com.kaniansky.TunnelerOnline.desktop</launchable>
+  <launchable type="desktop-id">com.kaniansky.Tunneler.desktop</launchable>
   <url type="homepage">https://kaniansky.com/tunneler/</url>
-  <url type="bugtracker">https://github.com/kaniansky/tunneler-online/issues</url>
-  <url type="vcs-browser">https://github.com/kaniansky/tunneler-online</url>
+  <url type="bugtracker">https://github.com/kaniansky/tunneler/issues</url>
+  <url type="vcs-browser">https://github.com/kaniansky/tunneler</url>
   <screenshots>
     <screenshot type="default">
       <caption>Split screen: two tanks in the underground world</caption>
-      <image>https://raw.githubusercontent.com/kaniansky/tunneler-online/v4.0.0/screenshots/split-screen.png</image>
+      <image>https://raw.githubusercontent.com/kaniansky/tunneler/online-v4.0.0/screenshots/split-screen.png</image>
     </screenshot>
     <screenshot>
       <caption>The main menu</caption>
-      <image>https://raw.githubusercontent.com/kaniansky/tunneler-online/v4.0.0/screenshots/home.png</image>
+      <image>https://raw.githubusercontent.com/kaniansky/tunneler/online-v4.0.0/screenshots/home.png</image>
     </screenshot>
     <screenshot>
       <caption>Skirmish: you against computer tanks, in teams</caption>
-      <image>https://raw.githubusercontent.com/kaniansky/tunneler-online/v4.0.0/screenshots/vs-computer.png</image>
+      <image>https://raw.githubusercontent.com/kaniansky/tunneler/online-v4.0.0/screenshots/vs-computer.png</image>
     </screenshot>
     <screenshot>
       <caption>An online game's lobby: seats, teams, settings and chat</caption>
-      <image>https://raw.githubusercontent.com/kaniansky/tunneler-online/v4.0.0/screenshots/online-lobby.png</image>
+      <image>https://raw.githubusercontent.com/kaniansky/tunneler/online-v4.0.0/screenshots/online-lobby.png</image>
     </screenshot>
     <screenshot>
       <caption>Watching an online game: every tank's view</caption>
-      <image>https://raw.githubusercontent.com/kaniansky/tunneler-online/v4.0.0/screenshots/spectator-grid.png</image>
+      <image>https://raw.githubusercontent.com/kaniansky/tunneler/online-v4.0.0/screenshots/spectator-grid.png</image>
     </screenshot>
   </screenshots>
   <categories>
@@ -81,35 +81,8 @@
     <color type="primary" scheme_preference="dark">#550055</color>
   </branding>
   <releases>
-    <release version="6.0.1" date="2026-10-26">
-      <url type="details">https://github.com/kaniansky/tunneler-online/releases/tag/v6.0.1</url>
-    </release>
-    <release version="6.0.0" date="2026-10-25">
-      <url type="details">https://github.com/kaniansky/tunneler-online/releases/tag/v6.0.0</url>
-    </release>
-    <release version="5.0.4" date="2026-10-25">
-      <url type="details">https://github.com/kaniansky/tunneler-online/releases/tag/v5.0.4</url>
-    </release>
-    <release version="5.0.3" date="2026-10-25">
-      <url type="details">https://github.com/kaniansky/tunneler-online/releases/tag/v5.0.3</url>
-    </release>
-    <release version="5.0.2" date="2026-10-25">
-      <url type="details">https://github.com/kaniansky/tunneler-online/releases/tag/v5.0.2</url>
-    </release>
-    <release version="5.0.1" date="2026-10-25">
-      <url type="details">https://github.com/kaniansky/tunneler-online/releases/tag/v5.0.1</url>
-    </release>
-    <release version="5.0.0" date="2026-10-25">
-      <url type="details">https://github.com/kaniansky/tunneler-online/releases/tag/v5.0.0</url>
-    </release>
-    <release version="4.0.1" date="2026-10-21">
-      <url type="details">https://github.com/kaniansky/tunneler-online/releases/tag/v4.0.1</url>
-    </release>
-    <release version="4.0.0" date="2026-10-20">
-      <url type="details">https://github.com/kaniansky/tunneler-online/releases/tag/v4.0.0</url>
-      <description>
-        <p>Line of sight (circle or true, with a gray memory of what you have seen), computer tanks that see the same way, short skirmish links, smooth scrolling on by default.</p>
-      </description>
+    <release version="1.0.0" date="2026-10-26">
+      <url type="details">https://github.com/kaniansky/tunneler/releases/tag/v1.0.0</url>
     </release>
   </releases>
 </component>
