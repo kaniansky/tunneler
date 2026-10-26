@@ -7,6 +7,7 @@ import android.os.Bundle
 import android.os.Environment
 import android.provider.MediaStore
 import android.util.Base64
+import android.util.Log
 import android.view.KeyEvent
 import android.view.WindowManager
 import android.webkit.JavascriptInterface
@@ -103,19 +104,24 @@ class MainActivity : TauriActivity() {
   // Back: added once the app is up, after Tauri's own app plugin added its handler (history back) - the
   // handler added last is asked first
   // signed in already (Play Games signs in by itself at start), else the sign-in dialog; then the server auth code
+  // (a failure logged as TunnelerPlayGames; Google's own reason: tag PlayGamesServices[SignInAuthenticator] - ACCOUNTS.md 6)
   private fun playGamesSignIn() {
     if (!playGamesOn) return playGamesAnswer(null, "google")
     val client = PlayGames.getGamesSignInClient(this)
     client.isAuthenticated.addOnCompleteListener { t ->
       if (t.isSuccessful && t.result.isAuthenticated) playGamesServerCode()
       else client.signIn().addOnCompleteListener { s ->
-        if (s.isSuccessful && s.result.isAuthenticated) playGamesServerCode() else playGamesAnswer(null, "cancel")
+        if (s.isSuccessful && s.result.isAuthenticated) playGamesServerCode()
+        else { Log.w("TunnelerPlayGames", "sign-in: not signed in", s.exception); playGamesAnswer(null, "cancel") }
       }
     }
   }
   private fun playGamesServerCode() {
     PlayGames.getGamesSignInClient(this).requestServerSideAccess(getString(R.string.play_games_web_client), false)
-      .addOnCompleteListener { t -> if (t.isSuccessful && !t.result.isNullOrEmpty()) playGamesAnswer(t.result, null) else playGamesAnswer(null, "google") }
+      .addOnCompleteListener { t ->
+        if (t.isSuccessful && !t.result.isNullOrEmpty()) playGamesAnswer(t.result, null)
+        else { Log.w("TunnelerPlayGames", "server auth code refused", t.exception); playGamesAnswer(null, "google") }
+      }
   }
   private fun playGamesAnswer(code: String?, error: String?) {
     val js = if (code != null) "{\"code\":" + JSONObject.quote(code) + "}" else "{\"error\":" + JSONObject.quote(error ?: "google") + "}"
