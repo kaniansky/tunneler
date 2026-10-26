@@ -3,10 +3,13 @@
 All notable changes to Tunneler Online. Versions follow [semantic versioning](https://semver.org/);
 a release is made by pushing a version tag (see CONTRIBUTING.md).
 
-## Unreleased
+## 6.0.1
 
 - The live server keeps itself awake (it asks its own address every 10 minutes): GitHub's scheduled
   wake-up ran hours apart, so the server slept between them and the first visitor waited.
+- The homepage and the README describe 6.0 (quick play, the daily challenge, your own maps, accounts), with new
+  screenshots; the privacy page says what a server restart keeps for a moment.
+- `/api/health` also says the caller's own address as the server sees it (to check `TRUST_PROXY` behind a proxy).
 
 ## 6.0.0
 
