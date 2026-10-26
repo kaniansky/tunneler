@@ -3,6 +3,11 @@
 All notable changes to Tunneler Online. Versions follow [semantic versioning](https://semver.org/);
 a release is made by pushing a version tag (see CONTRIBUTING.md).
 
+## Unreleased
+
+- The live server keeps itself awake (it asks its own address every 10 minutes): GitHub's scheduled
+  wake-up ran hours apart, so the server slept between them and the first visitor waited.
+
 ## 6.0.0
 
 Online play changes in this version: games need an account, and 5.x pages can't join 6.0 servers (they are asked

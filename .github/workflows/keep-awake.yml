@@ -1,9 +1,10 @@
 name: Keep the server awake
 
 # Render's free plan puts the live server (https://tunneler-online.onrender.com) to sleep after 15 minutes
-# without requests; the first visitor then waits ~15 s for it to start. A light request every 10 minutes keeps
-# it up (750 free hours a month cover one service around the clock). GitHub may run scheduled jobs late at busy
-# times, and pauses them in a repository without activity for 60 days (Actions tab: enable it again).
+# without requests; the first visitor then waits ~15 s for it to start. The server keeps itself awake (server.js
+# keepAwake: its own public address every 10 minutes); this job is only the fallback that wakes it after it stopped
+# some other way - GitHub runs scheduled jobs hours apart at busy times (seen: 2-5 h), and pauses them in a
+# repository without activity for 60 days (Actions tab: enable it again).
 
 on:
   schedule:

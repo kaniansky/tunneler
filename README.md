@@ -236,6 +236,9 @@ then `npm run build && npx @tauri-apps/cli@2 build`.
 The live version at <https://tunneler-online.onrender.com/> runs this repo's `Dockerfile` on
 [Render](https://render.com) as a web service (port 8050, HTTPS and websockets handled by Render). Any
 host that runs a Docker image or `npm run build && npm start` and allows websockets works the same way.
+Render's free plan stops a service after 15 minutes without requests; the server keeps itself awake by asking its own
+public address (`RENDER_EXTERNAL_URL`, which Render sets, or `KEEP_AWAKE_URL`) for `/api/health` every 10 minutes
+(`KEEP_AWAKE=0` turns that off).
 Games live in the server's memory. When the server is stopped with SIGTERM (a deploy, a restart), it first
 writes every game (lobbies and running matches) to the same store as the shared replays: the bucket, or else a
 folder (`STATE_DIR`, by default the replays' folder). The next server reads them back, and the players' pages
