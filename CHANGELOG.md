@@ -4,42 +4,51 @@ All notable changes to Tunneler. Versions follow [semantic versioning](https://s
 by pushing a version tag (see CONTRIBUTING.md). Up to its version 6.0.1 the game was called Tunneler Online:
 those releases are tagged `online-vX.Y.Z`, their changes are in [docs/CHANGELOG-online.md](docs/CHANGELOG-online.md).
 
-## Unreleased
+## 1.1.0
 
-- Android: the app bundle carries native debug symbols (readable crash reports on Google Play).
-- Text fields: Left / Right (and Home / End) move inside the text; typing, Backspace and Delete work where the cursor
-  is. A name that fills its field shows its first letter.
-- Privacy policy: the display name, and that shared replay links stay after an account is deleted.
-- Settings: the rows are centred in their box (lined up on the ":"), moved left only when a long name or value needs
-  the room.
-- Accounts: a display name, changeable when logged in (Settings, Online, Name) - the name other players see; the
-  username stays the login. It can't be another account's username.
-- Accounts: a recovery code really works only once - two password resets with the same code at the same moment
-  could both get through.
-- Maps: a new map can start from rock everywhere or empty too (besides dirt and a random world); the editor's
-  "Fill everything with" is gone.
-- Modern graphics: the simple tanks (the retro style) have square corners - tracks, body, turret, gun and shadow.
+Online play needs this version on every side: a 1.0.0 app or page is asked to update.
+
+**Look**
 - New tank colors that tell apart better: BLUE, GREEN, RED, GOLD, PINK, LIME, SKY and WHITE (were BLUE, GREEN, CYAN,
   YELLOW, WHITE, PINK, VIOLET and TEAL). Old invite links and a saved preferred color still pick the same seat. The
   split screen keeps the original's colors.
+- Modern graphics: a new Tanks setting - realistic (steel tracks, armor plates, a turret with a hatch, a barrel; the
+  clean style) or simple (flat shapes with square corners; the retro style), both as big as the game's own tank.
+  The treads roll as a tank drives. Rock and base walls stay on top of a turned tank's corners.
+- Modern graphics: the textured rock looks like stone; the energy / shield panel is as wide as its view; the
+  graphics settings are in a more sensible order (picture, world, tanks, effects, camera, UI last).
+
+**Online**
 - Online games react faster: after a hiccup (a late packet, a pause, the server waking up) a page stayed up to
   3 frames (165 ms) behind for the rest of the match. It now catches up within a couple of seconds.
-- Modern graphics: the tanks' treads roll as they drive (forwards and backwards).
-- Modern graphics: a new Tanks setting - realistic (tracks, armor plates, a turret with a hatch, a barrel; the clean
-  style) or simple (the flat shapes; the retro style). The textured rock looks like stone. The settings are in a
-  more sensible order (picture, world, tanks, effects, camera, UI last). With line of sight, the remembered view no
-  longer draws rock past the world's edge (it looked like a border far beyond the real one).
-- Line of sight: a tank driving through its base's doorway no longer hides what is behind it (its own pixels counted
-  as the base's wall - the view showed remembered tread marks there, and computer players didn't see behind it).
-- Quick play is in the list of games (Online game) only - no longer on the main menu.
-- Quick play games have all 8 seats (computer tanks in every seat nobody sits on), and a destroyed player watches
-  the tank that destroyed them.
-- The list of games has no AI and WATCHING columns: PLAYERS shows players + computer tanks / all tanks, then the
-  spectators ("2+3/7 +1").
+- Quick play has all 8 seats (computer tanks in every seat nobody sits on), a destroyed player watches the tank
+  that destroyed them, and it is in the list of games (Online game) only - no longer on the main menu.
+- The list of games: PLAYERS shows players + computer tanks / all tanks, then the spectators ("2+3/7 +1") - no AI
+  and WATCHING columns.
+- Accounts: a display name, changeable when logged in (Settings, Online, Name) - the name other players see; the
+  username stays the login. It can't be another account's username.
+
+**Maps**
+- A new map can start from rock everywhere or empty too (besides dirt and a random world); the editor's "Fill
+  everything with" is gone.
 - The Map setting (skirmish, online game) shows the map's number of bases: "Crossroads (6)".
-- Phones and tablets: Settings has no Controls category (its keys are a keyboard's; the touch controls' size and
-  left-handed rows are in Display) and no Volume row (always 100 %: the phone's buttons set the loudness), and the
-  Graphics rows leave out the "Display only" line, so everything fits above Back.
+
+**Menus**
+- Text fields: Left / Right (and Home / End) move inside the text; typing, Backspace and Delete work where the
+  cursor is. A name that fills its field shows its first letter.
+- Settings: the rows are centred in their box (lined up on the ":"), moved left only when a long name or value
+  needs the room.
+- Phones and tablets: Settings has no Controls category (the touch controls' size and left-handed rows are in
+  Display) and no Volume row (always 100 %: the phone's buttons set the loudness); the Graphics rows leave out the
+  "Display only" line, so everything fits above Back.
+
+**Fixes**
+- Accounts: a recovery code really works only once - two password resets with the same code at the same moment
+  could both get through.
+- Line of sight: a tank driving through its base's doorway no longer hides what is behind it (its own pixels
+  counted as the base's wall); with line of sight the remembered view no longer draws rock past the world's edge.
+- Android: the app bundle carries native debug symbols (readable crash reports on Google Play).
+- Privacy policy: the display name, and that shared replay links stay after an account is deleted.
 
 ## 1.0.0
 

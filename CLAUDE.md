@@ -357,7 +357,9 @@ joystick drives the tank, the end map / menu without them, a tap beside the map 
   Left/Right), `fixed` footer items, scrolling, auto width (omit `box.w`; `box.x` places it, else
   centred; `DosUI.boxWidth(items)`), keep selection by `key`. `spec.text` = raw Unicode lines (other texts
   are font text); inputs take any printable characters typed / pasted (AltGr too), `input.max` /
-  `input.width` in display columns (the end of a wider value shown).
+  `input.width` in display columns; a caret (`input.caret`, owner 2026-10-26): Left / Right / Home / End move it,
+  typing / pasting insert there, Backspace / Delete before / after it, drawn as the snapshot's `cursor`; a value is
+  shown from its first letter while it fits, else a window around the caret (`input.scroll`).
 - `statusline.js` - the DOS text lines under the game canvas: state only, never "how to play" hints
   (DESIGN-8P 9): split screen + sound; online room, role, players, connection, ping, sound (a spectator
   also gets a view-mode line). None vs computer and none on the end-of-match world map; a spectator gets it only on the play screen
@@ -729,7 +731,8 @@ none, i.e. a page from before 2.0 - is refused (POST 409 `{code:
   row, a centred "Language: X" switch (`langRow`, owner 2026-10-25 - no category any more), a blank row, Back to
   main menu; texts `set.cat.<c>(.i)`, `set.*`, `ctl.*`, `touch.*`, `tc.*`, `scale.*`),
   the chosen one's settings on the right (box title = the category; rows line up on their ": " within the
-  category - `catItems` takes off the padding all of its rows share, click zones with it; on the phone a
+  category - `catItems` takes off the padding all of its rows share, click zones with it; on a desktop `centred`
+  puts the ": " column in the box's middle, moved left only as far as the longest name and value need; on the phone a
   category whose lined-up rows don't fit goes left-aligned; the box as wide as its widest possible row). The right box follows the selection (DosUI `spec.onSel`); both boxes
   `wrap`; Enter / Right / Tab go into the settings, Esc back to the category, then the main menu. The app's
   Server input narrows so the boxes fit 80 columns. Test: local-check "homepage Settings: categories".
@@ -815,7 +818,9 @@ none, i.e. a page from before 2.0 - is refused (POST 409 `{code:
   its CRT were dropped, a stored "upscaled" = modern) + `tunneler.gfx.modern` (JSON: style clean / retro /
   custom, quality (auto - the default, owner 2026-10-25: `AUTO` / `autoFrame` in the frame loop, the median frame time
   of a window while a play screen moves -> one step smaller / bigger with a growing wait; no more "phones: medium") /
-  high / medium / low, terrain, edges, light, particles, glow, shake, camera, panel, fog - `Gfx.modern()`,
+  high / medium / low, terrain, edges, fog, tanks (realistic / simple - shader `uTankStyle`; both as big as the
+  game's 7 x 7 sprite, measured; rock / base walls drawn over a turned tank's corners), light, glow, particles,
+  shake, camera, panel - in that order (owner, 2026-10-26) - `Gfx.modern()`,
   `setModern`, `PRESETS`, `menuStyle()`); homepage Settings, category Graphics: the Graphics row, then
   Smooth scrolling (original) or the modern rows (texts `mod.*`). `src/js/gfx.js` (`Gfx`, before display.js on
   every page): `Gfx.attach(canvas)` (Display, StatusLine) lays a WebGL2 canvas over the 2D one (the 2D
@@ -1029,6 +1034,12 @@ none, i.e. a page from before 2.0 - is refused (POST 409 `{code:
   plain ones), `passwordProblem` (8..200), `cleanRecovery`.
   Pages: `src/js/account.js` (`Account`: session `tunneler.session.<origin>`, the server's answer
   `tunneler.accounts.<origin>` "1"/"0", `required()` / `config()` / `check()` / `ticket()` / `auth()`...),
+  Display name (owner, 2026-10-26): `a.display` (the username unless changed) is the name players see - `ws.name`
+  (made unique per room), the board's name; `POST /api/account/name {name}` (Bearer; the username's rules, 409 `taken`
+  for another account's username, the own username = none) -> pub `display`; `Account.display()` / `setName()`;
+  home.js Settings, Online: a Name row while logged in (`dispForm`, `saveDisplay`). `reset()` takes the recovery
+  code's record before its check and compares / writes the current account inside the lock (a race let one code
+  reset twice).
   `src/js/login.js` (`Login.ask` LOG IN -> CREATE AN ACCOUNT / RESET PASSWORD -> YOUR RECOVERY CODE (`Login.code`),
   `Login.change`, `Login.remove` (asks twice)) on any DosUI; lobby.js / online.js (err `login`: a new ticket once,
   then LOG IN) / daily.js (Send) ask to log in instead of the name prompt on such servers; home.js Settings, Online:
