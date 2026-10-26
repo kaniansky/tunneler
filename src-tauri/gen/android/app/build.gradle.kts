@@ -62,8 +62,6 @@ android {
         }
         getByName("release") {
             signingConfigs.findByName("release")?.let { signingConfig = it }
-            // native debug symbols (the symbol table) in the AAB for Google Play's crash reports - the APKs stay stripped
-            ndk { debugSymbolLevel = "SYMBOL_TABLE" }
             optimization {
                enable = true
             }

@@ -81,9 +81,13 @@ editor, 8 a replay.
 
 ### Native debug symbols
 
-- The AAB carries the Rust library's symbol table (`ndk { debugSymbolLevel = "SYMBOL_TABLE" }` in
-  `app/build.gradle.kts`, the library built unstripped in CI), so Play Console shows readable native crash stacks
-  and no "no debug symbols" warning. The APKs stay stripped.
+- Play Console warns that the bundle has native code without debug symbols. 1.1.0 tried to include them
+  (`ndk { debugSymbolLevel = "SYMBOL_TABLE" }`, the library built unstripped in CI) - Gradle found no NDK to
+  extract the symbols and strip the libraries with, so the APK grew from 15.6 to 38.4 MB and the AAB had no
+  symbols. 1.1.1 is back to stripped libraries. To try again: give Gradle the NDK the Tauri build uses (`ndkPath` /
+  `ndkVersion` in `app/build.gradle.kts`, from `NDK_HOME`) and check the AAB for
+  `BUNDLE-METADATA/com.android.tools.build.debugsymbols/` and the APK's size before releasing. The warning is
+  harmless - only crash stacks are less readable.
 
 ### versionCode
 

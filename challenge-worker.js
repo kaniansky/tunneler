@@ -21,7 +21,7 @@ function check({ bytes, day, version, name }) {
   try { rep = JSON.parse(raw.toString("utf8")); } catch (e) { return { code: "bad" }; }
   if (!rep || typeof rep !== "object") return { code: "bad" };
   // another version's engine may play differently (pages served from src/ say "dev": never refused, as for rooms)
-  // (from 1.2 another patch of the same major.minor plays the same: NetProto.sameGame)
+  // (from 1.1 another patch of the same major.minor plays the same: NetProto.sameGame)
   if (version && !NetProto.sameGame(version, rep.version)) return { code: "version" };
   const r = Challenge.verify(rep, { Engine: TunnelerEngine, AI: TunnelerAI, day, name });
   if (r.code) return { code: r.code, step: r.step };

@@ -463,9 +463,9 @@ per connection in 5 s; kicked / banned clients can't), broadcast `{t:"chat", fro
 Versions: the server's is package.json's (`VERSION`, `createServer({version})` for tests); pages send
 theirs (version.js `VERSION`, put in by build.js; "dev" unbuilt = never
 refused) with the POST (`version`) and the websocket (`&v=`; tests send "dev" too). A version that doesn't play
-along (`NetProto.sameGame`: from 1.2 the same major.minor - owner, 2026-10-26: **a patch release never changes the
+along (`NetProto.sameGame`: from 1.1 the same major.minor - owner, 2026-10-26: **a patch release never changes the
 game**: only display / menus / texts / sound / server fixes; anything that changes the engine's state, world pixels,
-`stateHash`, the AI, netproto or replays' playback needs a minor; before 1.2 the exact version) - or none, i.e. a
+`stateHash`, the AI, netproto or replays' playback needs a minor; 1.0.x the exact version) - or none, i.e. a
 page from before 2.0 - is refused (POST 409 `{code:
 "version", version}`, websocket `err` code "version" with the server's `version`); roomInfo carries
 `version`. lobby.js then shows "This server runs version X; your game is version Y" (`ver.server`,

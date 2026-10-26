@@ -36,15 +36,15 @@ const ROLES = ["blue", "green", "red", "gold", "pink", "lime", "sky", "white"];
 const OLD_ROLES = { cyan: 2, yellow: 3, violet: 6, teal: 7 };
 const roleIndex = r => ROLES.includes(r) ? ROLES.indexOf(r) : OLD_ROLES[r] != null ? OLD_ROLES[r] : -1;
 const MAX_SLOTS = ROLES.length;
-// do two versions play together (online, the daily challenge's check, a restart's handoff)? From 1.2 the same
-// major.minor - a patch never changes the game (owner, 2026-10-26); before 1.2 only the same version. "dev" (pages
+// do two versions play together (online, the daily challenge's check, a restart's handoff)? From 1.1 the same
+// major.minor - a patch never changes the game (owner, 2026-10-26); 1.0.x only the same version. "dev" (pages
 // served from src/) always; none (a page from before 2.0 of the old numbering) never.
 function sameGame(a, b) {
   if (a === "dev" || b === "dev") return true;
   if (!a || !b) return false;
   if (a === b) return true;
   const p = v => (/^(\d+)\.(\d+)\.(\d+)$/.exec(v) || []).slice(1).map(Number), x = p(a), y = p(b);
-  return x.length === 3 && y.length === 3 && x[0] === y[0] && x[1] === y[1] && (x[0] > 1 || x[1] >= 2);
+  return x.length === 3 && y.length === 3 && x[0] === y[0] && x[1] === y[1] && (x[0] > 1 || x[1] >= 1);
 }
 // computer levels to choose (ai.js), shown as easy / medium / hard. Up to version 3.2 they were called
 // normal / hard / expert (and a weaker easy came first): oldLevel turns such a name into today's - for what

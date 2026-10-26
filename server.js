@@ -267,7 +267,7 @@ function createServer(opts = {}) {
   const version = opts.version !== undefined ? opts.version : VERSION;
   // a client's version that doesn't match this server's: pages send build.js's version, "dev" when they
   // have none (served from src/: not checked); none at all = a page from before versions were checked
-  const wrongVersion = v => !!version && !NetProto.sameGame(version, v);   // (from 1.2: another patch plays along)
+  const wrongVersion = v => !!version && !NetProto.sameGame(version, v);   // (from 1.1: another patch plays along)
   const versionMsg = v => "This server runs version " + version + (typeof v === "string" && v ? "; yours is " + v : "") + " - please update your game.";
   const matchAloneMs = opts.matchAloneMs != null ? opts.matchAloneMs : MATCH_ALONE_MS;
   const maxRoomsPerAddr = opts.maxRoomsPerAddr || MAX_ROOMS_PER_ADDR;

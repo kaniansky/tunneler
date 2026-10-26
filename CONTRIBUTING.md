@@ -30,7 +30,7 @@ window), create a game, join as BLUE in one and GREEN in the other, and add a th
 
 A release is made by pushing a version tag; pushes to `main` only run CI.
 
-Versions (from 1.2): pages, apps and servers of the same **major.minor** play together online (`NetProto.sameGame`),
+Versions (from 1.1): pages, apps and servers of the same **major.minor** play together online (`NetProto.sameGame`),
 so a **patch** (X.Y.Z+1) must not change the game: no change to the engine's state or world pixels, `stateHash`,
 the computer players, the network messages or how replays play back - only display, menus, texts, sound, server
 fixes and docs. Anything else is a **minor** (X.Y+1.0).

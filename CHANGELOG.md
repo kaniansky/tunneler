@@ -4,6 +4,14 @@ All notable changes to Tunneler. Versions follow [semantic versioning](https://s
 by pushing a version tag (see CONTRIBUTING.md). Up to its version 6.0.1 the game was called Tunneler Online:
 those releases are tagged `online-vX.Y.Z`, their changes are in [docs/CHANGELOG-online.md](docs/CHANGELOG-online.md).
 
+## 1.1.1
+
+- Android: the APK and the app bundle are small again. 1.1.0 built them with unstripped native libraries (the APK
+  38.4 MB instead of 15.6 MB) for debug symbols that didn't make it into the bundle anyway.
+- Versions with the same major.minor play together online from now on (a patch release never changes the game):
+  a 1.1.1 server takes 1.1.0 apps and pages (a 1.1.0 app's own list of games still shows 1.1.1 games as another
+  version - its Quick play and invite links work).
+
 ## 1.1.0
 
 Online play needs this version on every side: a 1.0.0 app or page is asked to update.
@@ -47,7 +55,6 @@ Online play needs this version on every side: a 1.0.0 app or page is asked to up
   could both get through.
 - Line of sight: a tank driving through its base's doorway no longer hides what is behind it (its own pixels
   counted as the base's wall); with line of sight the remembered view no longer draws rock past the world's edge.
-- Android: the app bundle carries native debug symbols (readable crash reports on Google Play).
 - Privacy policy: the display name, and that shared replay links stay after an account is deleted.
 
 ## 1.0.0

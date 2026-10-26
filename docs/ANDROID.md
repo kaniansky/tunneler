@@ -149,9 +149,7 @@ It rewrites `src-tauri/gen/android/` from the template. Then put back:
 - `app/src/main/java/com/kaniansky/Tunneler/MainActivity.kt` (immersive, keep screen on, Back = Esc)
 - `buildSrc/src/main/java/com/kaniansky/Tunneler/kotlin/BuildTask.kt`: executable `npx`, arguments
   `--yes @tauri-apps/cli@2 android android-studio-script` (the template runs `npm run -- tauri`)
-- `app/build.gradle.kts`: the `keystoreProperties` signing block, release `signingConfig`, release
-  `ndk { debugSymbolLevel = "SYMBOL_TABLE" }` (native symbols in the AAB for Play; CI builds the library with
-  `CARGO_PROFILE_RELEASE_STRIP=false` for it), and
+- `app/build.gradle.kts`: the `keystoreProperties` signing block, release `signingConfig`, and
   `usesCleartextTraffic` "true" in `defaultConfig`
 - `res/values/themes.xml`, `res/values-night/themes.xml`: `android:windowBackground` black
 - the icons: `node tools/make-icons.js` writes the `mipmap-*` icons and `res/values/ic_launcher_background.xml`

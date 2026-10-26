@@ -171,10 +171,10 @@ function netprotoChecks() {
     assert(aiSlot({}, { bot: true }) && !aiSlot({}, { bot: false, level: "normal" }) && aiSlot({ qp: true }, { bot: false, level: "normal" }));
     assert(!aiSlot({ qp: true }, { bot: false, level: null }));
   });
-  check("versions that play together: from 1.2 the same major.minor (a patch never changes the game), before only the same", () => {
+  check("versions that play together: from 1.1 the same major.minor (a patch never changes the game), 1.0.x only the same", () => {
     const g = NetProto.sameGame;
-    assert(g("1.2.0", "1.2.7") && g("1.2.3", "1.2.0") && g("2.0.1", "2.0.4") && g("1.1.0", "1.1.0"));
-    assert(!g("1.2.0", "1.3.0") && !g("1.2.0", "2.2.0") && !g("1.1.0", "1.1.1") && !g("1.0.0", "1.0.1"), "another minor / major; patches before 1.2");
+    assert(g("1.2.0", "1.2.7") && g("1.2.3", "1.2.0") && g("2.0.1", "2.0.4") && g("1.1.0", "1.1.1") && g("1.0.0", "1.0.0"));
+    assert(!g("1.2.0", "1.3.0") && !g("1.2.0", "2.2.0") && !g("1.1.0", "1.2.0") && !g("1.0.0", "1.0.1"), "another minor / major; 1.0.x patches");
     assert(g("dev", "1.2.0") && g("1.0.0", "dev") && !g("1.2.0", undefined) && !g("1.2.0", "") && !g("1.2.0", "1.2"), "dev always, none / junk never");
   });
   check("seat names: the new ones, and the ones gone since 2026-10-26 keep their seat", () => {
