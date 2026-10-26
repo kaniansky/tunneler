@@ -641,6 +641,8 @@ none, i.e. a page from before 2.0 - is refused (POST 409 `{code:
   main menu; one request at a time (`poll()`), the 2 s polling keeps retrying.
 - README screenshots: `tools/readme-screenshots.js <port> screenshots` against a fresh local server
   (scripted session: menus, split screen, a 4-tank online game with chat, spectator views; GPU off).
+  6.0's screens (quickplay / challenge / map-editor.png, both looks): `tools/v6-screenshots.js <port> screenshots`
+  against a fresh server with `ACCOUNTS=off` (it first fills today's challenge board with bot-played replays).
 - Short addresses (the routes, app.js): `/games`, `/game/<id>[/<color|watch>]` (the game's lobby; watch = as a
   spectator, a color = that seat if free), `/split`, `/skirmish` (`/vs-computer`); server.js `PRETTY` answers
   them with index.html (the routes read room / role / mode from the path: `Links.here()` in endpoint.js,

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Tunneler Online - the 1991 tunnel-digging tank game, in your browser</title>
-<meta name="description" content="TUNNELER 2.0 (1991, Geoffrey Silverton) rebuilt in JavaScript from its decompiled code: dig tunnels and hunt tanks in your browser or a small desktop app - split screen, skirmish against computer tanks, or online with up to 8 tanks. Version 5.0 adds optional modern graphics.">
+<meta name="description" content="TUNNELER 2.0 (1991, Geoffrey Silverton) rebuilt in JavaScript from its decompiled code: dig tunnels and hunt tanks in your browser or a small desktop app - split screen, skirmish against computer tanks, or online with up to 8 tanks. Version 6.0 adds quick play, a daily challenge with a leaderboard and a map editor.">
 <meta name="color-scheme" content="dark">
 <meta name="theme-color" content="#16130f">
 <!-- the look, like the game's Graphics setting: modern (the default) or original - before anything is drawn -->
@@ -109,6 +109,12 @@
   ul.changes { list-style: none; margin: 0; padding: 0; }
   ul.changes li { padding: 12px 0 12px 22px; border-top: 1px solid var(--rule); position: relative; }
   ul.changes li::before { content: "+"; position: absolute; left: 0; top: 12px; font: 600 16px/1.62 var(--mono); color: var(--green); }
+
+  /* the new features: the text beside its screenshot (the middle one the other way round) */
+  .feat { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 48px; align-items: center; margin-top: 56px; }
+  .feat.rev { grid-template-columns: minmax(0, 6fr) minmax(0, 5fr); }
+  .feat.rev > figure { order: -1; }
+  .feat p:last-child { margin-bottom: 0; }
 
   /* three ways: newspaper columns with rules between */
   .cols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 8px; }
@@ -223,7 +229,8 @@
   html[data-theme="modern"] .skip { background: var(--accent); color: var(--black); }
 
   @media (max-width: 900px) {
-    .intro .grid, .split, .credits { grid-template-columns: minmax(0, 1fr); gap: 36px; }
+    .intro .grid, .split, .credits, .feat, .feat.rev { grid-template-columns: minmax(0, 1fr); gap: 36px; }
+    .feat.rev > figure { order: 0; }
     .cols { grid-template-columns: minmax(0, 1fr); }
     .cols > div { padding: 18px 0; border-left: 0; border-top: 1px solid var(--rule); }
     .cols > div:first-child { padding-top: 0; border-top: 0; }
@@ -258,7 +265,7 @@
 <header class="top"><div class="wrap">
   <a class="brand" href="#">Tunneler Online</a>
   <nav aria-label="Sections">
-    <a class="opt" href="#new" data-i18n="nav.new">New in 5.0</a>
+    <a class="opt" href="#new" data-i18n="nav.new">New in 6.0</a>
     <a class="opt" href="#modes" data-i18n="nav.modes">Game modes</a>
     <a href="#download" data-i18n="nav.download">Download</a>
     <a class="opt" href="https://github.com/kaniansky/tunneler-online" data-i18n="nav.source">Source code</a>
@@ -279,11 +286,11 @@
           <li><a class="sel" href="https://tunneler-online.onrender.com/" data-play="https://tunneler-online.onrender.com/" data-info="menu.play.i" data-i18n="menu.play">Play in the browser</a></li>
           <li><a href="#download" data-info="menu.dl.i" data-i18n="menu.dl">Download the desktop app</a></li>
           <li class="gap" aria-hidden="true"></li>
-          <li><a href="#new" data-info="menu.new.i" data-i18n="menu.new">What's new in 5.0</a></li>
+          <li><a href="#new" data-info="menu.new.i" data-i18n="menu.new">What's new in 6.0</a></li>
           <li><a href="https://github.com/kaniansky/tunneler-online" data-info="menu.src.i" data-i18n="menu.src">Source code</a></li>
         </ul>
       </div>
-      <p class="info" id="info" aria-live="polite" data-i18n="menu.play.i">Free, no account, nothing to install. The free server can take up to a minute to wake up.</p>
+      <p class="info" id="info" aria-live="polite" data-i18n="menu.play.i">Nothing to install. Online games need a free account (a username and a password); split screen and skirmish don't. The free server can take up to a minute to wake up.</p>
     </div>
     <figure class="shot">
       <a class="zoom th-o" href="img/split-screen.png"><img src="img/split-screen.png" width="984" height="742" loading="lazy" data-i18n-alt="hero.alt" alt="Split screen in the original DOS look: the BLUE and the GREEN tank digging out of their bases"></a>
@@ -291,40 +298,59 @@
       <figcaption><span class="th-o" data-i18n="hero.cap">Split screen in the original DOS look - one switch away in Settings.</span><span class="th-m" data-i18n="hero.cap.m">Split screen in the modern look - the original DOS look is one switch away in Settings.</span></figcaption>
     </figure>
   </div>
-  <div class="bottomline"><span>TUNNELER 2.0 &middot; Geoffrey Silverton &middot; 1991</span><span>Tunneler Online 5.0 &middot; Norko Kaniansky &middot; 2026</span></div>
+  <div class="bottomline"><span>TUNNELER 2.0 &middot; Geoffrey Silverton &middot; 1991</span><span>Tunneler Online 6.0 &middot; Norko Kaniansky &middot; 2026</span></div>
 </div></div>
 
 <section id="new"><div class="wrap">
-  <h2 data-i18n="new.h">New in 5.0</h2>
-  <p class="measure" data-i18n="new.lead"><strong>Modern graphics</strong>, now the default (the original DOS look is one switch away in Settings &rarr; Graphics). The same game is drawn at your screen's resolution: smooth tunnel walls, grainy dirt and cracked rock, dark tunnels lit by the tanks' headlights, dust, sparks and debris, a camera that glides with your tank, and the menus in a modern font. It changes only what you see. The game plays the same, and online every player picks their own look.</p>
-  <figure class="wide">
-    <a class="zoom" href="img/modern-game.jpg"><img src="img/modern-game.jpg" width="986" height="373" loading="lazy" data-i18n-alt="new.alt1" alt="Modern graphics: four tanks' views side by side, lit tunnels in textured dirt, an explosion's sparks, energy and shield gauges below each view"></a>
-    <figcaption><span class="tag mod" data-i18n="tag.clean">MODERN, CLEAN</span><span data-i18n="new.cap1">Four tanks, each with its own view and headlight.</span></figcaption>
-  </figure>
-  <div class="pair">
-    <figure style="margin:0">
-      <a class="zoom" href="img/modern-retro.png"><img class="pixel" src="img/modern-retro.png" width="984" height="742" loading="lazy" data-i18n-alt="new.alt2" alt="Modern graphics in the retro style: chunky pixels and the DOS colors, two tanks leaving their bases"></a>
-      <figcaption><span class="tag mod" data-i18n="tag.retro">MODERN, RETRO</span><span data-i18n="new.cap2">Chunky pixels and the DOS colors, drawn sharp.</span></figcaption>
+  <h2 data-i18n="new.h">New in 6.0</h2>
+  <p class="measure" data-i18n="new.lead">Three new ways to play: <strong>quick play</strong> puts you in an online game in seconds, the <strong>daily challenge</strong> gives everybody the same game for a day, with a leaderboard, and the <strong>map editor</strong> lets you draw your own worlds. Online play now uses free player accounts, and online games carry on through server restarts.</p>
+  <div class="feat">
+    <div>
+      <h3 data-i18n="new.qp.h">Quick play</h3>
+      <p data-i18n="new.qp.p">One choice on the main menu and you are in an online game. The server finds a game with a place for you or starts one: four tanks, everyone for themselves, computer tanks in every seat nobody sits on, and matches that start by themselves after a short countdown. Join a match that is already running and you take over a computer tank at once; leave, and the computer drives it again.</p>
+    </div>
+    <figure class="shot">
+      <a class="zoom th-o" href="img/quickplay.png"><img src="img/quickplay.png" width="985" height="733" loading="lazy" data-i18n-alt="new.qp.alt" alt="A quick-play game's lobby: two players and two computer tanks, the fixed settings and the countdown to the next match"></a>
+      <a class="zoom th-m" href="img/modern-quickplay.png"><img src="img/modern-quickplay.png" width="986" height="731" loading="lazy" data-i18n-alt="new.qp.alt" alt="A quick-play game's lobby: two players and two computer tanks, the fixed settings and the countdown to the next match"></a>
+      <figcaption data-i18n="new.qp.cap">Two players, two computer tanks, the next match in 7 seconds.</figcaption>
     </figure>
-    <figure style="margin:0">
-      <a class="zoom" href="img/modern-settings.png"><img src="img/modern-settings.png" width="986" height="730" loading="lazy" data-i18n-alt="new.alt3" alt="The new Settings screen: categories on the left, the graphics settings on the right"></a>
-      <figcaption><span class="tag" data-i18n="tag.settings">SETTINGS</span><span data-i18n="new.cap3">Categories on the left, their settings on the right.</span></figcaption>
+  </div>
+  <div class="feat rev">
+    <div>
+      <h3 data-i18n="new.ch.h">Daily challenge</h3>
+      <p data-i18n="new.ch.p">Every day a new skirmish, the same for everyone: the same world, mode, map size and computer opponents. Play it as often as you like and send your best result. The server plays your match again before it goes on the day's leaderboard, so only real results count.</p>
+      <p data-i18n="new.ch.p2">Watch the match behind any entry on the board. Go back through the 30 days before to see their boards and play their challenges again for practice.</p>
+    </div>
+    <figure class="shot">
+      <a class="zoom th-o" href="img/challenge.png"><img src="img/challenge.png" width="985" height="704" loading="lazy" data-i18n-alt="new.ch.alt" alt="The daily challenge's leaderboard: the day's settings, then players with their rounds, kills and times"></a>
+      <a class="zoom th-m" href="img/modern-challenge.png"><img src="img/modern-challenge.png" width="986" height="706" loading="lazy" data-i18n-alt="new.ch.alt" alt="The daily challenge's leaderboard: the day's settings, then players with their rounds, kills and times"></a>
+      <figcaption data-i18n="new.ch.cap">Today's leaderboard. Enter watches that player's match.</figcaption>
+    </figure>
+  </div>
+  <div class="feat">
+    <div>
+      <h3 data-i18n="new.map.h">Your own maps</h3>
+      <p data-i18n="new.map.p">Paint a world of rock, dirt and tunnels and place up to eight bases, on a small, medium or large map, starting from plain dirt or a random world. The editor works with the keyboard, the mouse, a gamepad and on a phone. Keep your maps in the browser, share them as links or save them as <code>.tmap</code> files, and play them in a skirmish or an online game.</p>
+      <p data-i18n="new.map.p2">One rule: a tank must be able to drive between all the bases. The editor says which base can't be reached, and the map can't be played until you dig a way.</p>
+    </div>
+    <figure class="shot">
+      <a class="zoom th-o" href="img/map-editor.png"><img src="img/map-editor.png" width="984" height="801" loading="lazy" data-i18n-alt="new.map.alt" alt="The map editor: a small map with rock ridges, a rock ring in the middle, tunnels and six numbered bases, the tools below"></a>
+      <a class="zoom th-m" href="img/modern-map-editor.jpg"><img src="img/modern-map-editor.jpg" width="986" height="801" loading="lazy" data-i18n-alt="new.map.alt" alt="The map editor: a small map with rock ridges, a rock ring in the middle, tunnels and six numbered bases, the tools below"></a>
+      <figcaption data-i18n="new.map.cap">The map editor: a small map with six bases.</figcaption>
     </figure>
   </div>
   <div class="split">
     <div>
-      <h3 data-i18n="new.also">Also in 5.0</h3>
+      <h3 data-i18n="new.also">Also in 6.0</h3>
       <ul class="changes">
-        <li data-i18n="new.l1"><b>Settings</b> in two boxes, with new options: volume, stereo, distance fade, recorded sound effects, fullscreen (also <kbd>Alt</kbd>+<kbd>Enter</kbd>), screen size, color-blind tank colors, key remapping for both tanks and the size of the touch controls.</li>
-        <li data-i18n="new.l2"><b>Skirmish for two players</b>: two people on one keyboard, on the same team or against each other, with or against computer tanks.</li>
-        <li data-i18n="new.l3"><b>Password-protected online games</b>: set a password when you create a game. A lock marks it in the list.</li>
-        <li data-i18n="new.l4"><b>Rematch</b> takes you back to the setup screen with the same settings.</li>
-        <li data-i18n="new.l5"><b>Five languages</b>: English, Slovak, Czech, Ukrainian and Russian.</li>
+        <li data-i18n="new.l1"><b>Player accounts</b> for online games: a username (the name everybody sees, yours alone on that server) and a password, no e-mail. A recovery code, shown once when you sign up, is how you set a new password. Your account is you: your seat or tank comes back on any device, and nobody else can play under your name. Split screen, skirmish, replays, maps and looking at the daily challenge need no account.</li>
+        <li data-i18n="new.l2"><b>Running reliably</b>: a server restart or an update no longer ends online games. They move to the new server, and the players' pages reconnect and carry on. A dropped connection (a phone changing networks, a laptop waking up) reconnects within seconds with your tank, and a desync repairs itself.</li>
+        <li data-i18n="new.l3"><b>Realistic sound</b> is the default style now. The original PC speaker is one choice away in Settings &rarr; Sound.</li>
       </ul>
     </div>
     <div>
-      <h3 data-i18n="new.since">Since 4.0</h3>
-      <p data-i18n="new.since.p"><b>Line of sight</b>: you see only what your tank could see; the rest of the map stays as you last saw it. Computer tanks play by the same rule.</p>
+      <h3 data-i18n="new.since">Since 5.0</h3>
+      <p data-i18n="new.since.p"><b>Modern graphics</b> are the default: the same game drawn at your screen's resolution, with lit tunnels, dust and sparks, while the original DOS look is one switch away in Settings &rarr; Graphics.</p>
       <p><a href="https://github.com/kaniansky/tunneler-online/blob/main/CHANGELOG.md" data-i18n="new.log">All changes, version by version</a></p>
     </div>
   </div>
@@ -335,7 +361,7 @@
   <div class="cols">
     <div><h3 data-i18n="w1.h">Split screen</h3><p data-i18n="w1.p">Two players on one keyboard, as in 1991. <span class="blue">BLUE</span> on the left steers with W A S D, <span class="green">GREEN</span> on the right with the arrow keys. On the medium map with three rounds to win, this is the original game, frame for frame.</p></div>
     <div><h3 data-i18n="w2.h">Skirmish</h3><p data-i18n="w2.p">Up to eight tanks: you, and a friend if you like, against computer tanks at easy, medium or hard. Any teams, from everyone for themselves to four against four.</p></div>
-    <div><h3 data-i18n="w3.h">Online</h3><p data-i18n="w3.p">Create a game and send the invite link. Each game is a lobby with eight seats (open, closed or taken by a computer tank) with teams, chat and the host's settings. Others can watch as spectators.</p></div>
+    <div><h3 data-i18n="w3.h">Online</h3><p data-i18n="w3.p">Quick play finds you a game at once; or create a game and send the invite link. Each game is a lobby with eight seats (open, closed or taken by a computer tank) with teams, chat and the host's settings. Others can watch as spectators. Online play needs a free account on the server.</p></div>
   </div>
   <div class="gallery">
     <figure><a class="zoom th-o" href="img/vs-computer.png"><img src="img/vs-computer.png" width="985" height="733" loading="lazy" data-i18n-alt="g1.alt" alt="Skirmish setup screen with eight color rows and the settings"></a><a class="zoom th-m" href="img/modern-vs-computer.png"><img src="img/modern-vs-computer.png" width="986" height="731" loading="lazy" data-i18n-alt="g1.alt" alt="Skirmish setup screen with eight color rows and the settings"></a><figcaption data-i18n="g1">Setting up a skirmish: who drives each of the eight colors, in which team, and the settings.</figcaption></figure>
@@ -359,7 +385,7 @@
     <div><dt data-i18n="m.siege">base siege</dt><dd data-i18n="m.siege.p">Bases can be shot down. The last team with a base or a tank left wins.</dd></div>
     <div><dt data-i18n="m.dm">deathmatch</dt><dd data-i18n="m.dm.p">Destroyed tanks come back after three seconds. The first team to the kill target wins.</dd></div>
   </dl>
-  <p class="setline measure" data-i18n="set.p"><b>Settings for every game:</b> three map sizes (the original, half and double), 1 to 9 rounds to win, a round time limit, friendly fire for teams, line of sight, and what you watch after your tank is destroyed.</p>
+  <p class="setline measure" data-i18n="set.p"><b>Settings for every game:</b> three map sizes (the original, half and double) or a map of your own, 1 to 9 rounds to win, a round time limit, friendly fire for teams, line of sight, and what you watch after your tank is destroyed.</p>
 </div></section>
 
 <section id="original"><div class="wrap">
@@ -376,7 +402,7 @@
           <tr><th data-i18n="spec.year">Year</th><td>1991</td><td>2026</td></tr>
           <tr><th data-i18n="spec.by">Author</th><td>Geoffrey Silverton</td><td>Norko Kaniansky</td></tr>
           <tr><th data-i18n="spec.lang">Written in</th><td>Turbo Pascal 4.0</td><td>JavaScript</td></tr>
-          <tr><th data-i18n="spec.runs">Runs on</th><td data-i18n="spec.runs.o">DOS with VGA</td><td data-i18n="spec.runs.t">browsers; Windows, Linux, macOS</td></tr>
+          <tr><th data-i18n="spec.runs">Runs on</th><td data-i18n="spec.runs.o">DOS with VGA</td><td data-i18n="spec.runs.t">browsers; Windows, Linux, macOS, Android</td></tr>
           <tr><th data-i18n="spec.tanks">Tanks</th><td>2</td><td data-i18n="spec.tanks.t">2 to 8</td></tr>
           <tr><th data-i18n="spec.lic">License</th><td data-i18n="spec.pd">public domain</td><td data-i18n="spec.pdu">public domain (Unlicense)</td></tr>
         </tbody>
@@ -429,6 +455,7 @@ sudo dnf install tunneler-online</pre>
     <h3 data-i18n="dl.server.h">Your own server</h3>
     <p class="note" data-i18n="dl.docker">Prefer to host it yourself? The server is one Node.js file or a Docker image:</p>
     <pre class="cmd">docker run -p 8050:8050 ghcr.io/kaniansky/tunneler-online</pre>
+    <p class="note" data-i18n="dl.server.p">Players need an account on your server too (a username and a password, kept by the server); <code>ACCOUNTS=off</code> runs it with free names instead, for example on a LAN. How to keep accounts and games through restarts: <a href="https://github.com/kaniansky/tunneler-online#hosting">Hosting</a> in the README.</p>
   </div>
 </div></section>
 
@@ -446,7 +473,7 @@ sudo dnf install tunneler-online</pre>
     </div>
     <div id="privacy">
       <h2 data-i18n="privacy.h">Privacy</h2>
-      <p data-i18n="privacy.p">The game and the desktop app collect no personal data. Online, the server keeps game rooms (names, chat, moves) in memory only while a game exists; nothing is stored or shared. The desktop app only asks GitHub whether a new version is out; it connects to a game server only when you choose online play.</p>
+      <p data-i18n="privacy.p">The game has no ads, no analytics and no tracking. Online games and the daily challenge's leaderboard need an account on the game server: a username and a password, nothing else (no e-mail). Game rooms (names, chat, moves) stay in the server's memory only while a game exists. The apps ask GitHub whether a new version is out, and connect to a game server only when you play online. The whole <a href="privacy.html">privacy policy</a>.</p>
     </div>
   </div>
 </div></section>

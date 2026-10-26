@@ -13,7 +13,9 @@ ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 SHOTS = ["home", "split-screen", "vs-computer", "online-team", "spectator-grid", "spectator-map",
          "online-lobby", "lobby", "create", "modern-game", "modern-retro", "modern-settings",
          # the homepage's modern theme: the same screens in the modern look (readme-screenshots.js ... modern)
-         "modern-split-screen", "modern-vs-computer", "modern-online-lobby", "modern-spectator-grid", "modern-spectator-map"]
+         "modern-split-screen", "modern-vs-computer", "modern-online-lobby", "modern-spectator-grid", "modern-spectator-map",
+         # 6.0's new screens, both looks (v6-screenshots.js)
+         "quickplay", "challenge", "map-editor", "modern-quickplay", "modern-challenge", "modern-map-editor"]
 
 def crop(src, dst, pad=6):
     im = Image.open(src).convert("RGB")
@@ -31,7 +33,7 @@ def crop(src, dst, pad=6):
         im.save(dst, optimize=True)
     return im.size
 
-JPEG = ["modern-game", "modern-split-screen", "modern-spectator-grid", "modern-spectator-map"]  # lit, textured: much smaller as JPEG
+JPEG = ["modern-game", "modern-split-screen", "modern-spectator-grid", "modern-spectator-map", "modern-map-editor"]  # lit, textured: much smaller as JPEG
 
 for name in SHOTS:
     ext = ".jpg" if name in JPEG else ".png"

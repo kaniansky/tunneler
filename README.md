@@ -2,9 +2,10 @@
 
 **TUNNELER 2.0** - the 1991 DOS two-player tank game by Geoffrey Silverton - rewritten in JavaScript from
 the decompiled original and playable in the browser: split screen, against computer tanks, or online with
-up to 8 tanks, in teams, with spectators.
+up to 8 tanks, in teams, with spectators - plus quick play, a daily challenge with a leaderboard and a map editor.
 
-**Play it now: <https://tunneler-online.onrender.com/>** - no install, just a browser. (Hosted on
+**Play it now: <https://tunneler-online.onrender.com/>** - no install, just a browser. Online games need a
+free account on the server (a username and a password); split screen and skirmish don't. (Hosted on
 Render's free tier: if nobody has played for a while, the first visit can take up to a minute while the
 server wakes up.)
 
@@ -27,6 +28,36 @@ screens drawn anew - see below).
 |---|---|
 | ![Split screen](screenshots/split-screen.png) | ![Skirmish](screenshots/vs-computer.png) |
 
+## New in 6.0
+
+- **Quick play** (main menu, and the list of games): straight into an online game. The server finds a game with a
+  place for you or makes one - four tanks free-for-all, computer tanks in every seat nobody sits on, matches that
+  start by themselves after a short countdown. Join a running match and you take over a computer tank at once;
+  leave, and the computer drives it again.
+- **Daily challenge** (main menu): every day (UTC) a new skirmish, the same for everyone - the same world, mode,
+  map size and computer opponents. Play it as often as you like and send your result: the server plays the
+  match's replay again with its own computer players, so only real results get on the day's leaderboard. Every
+  entry's match can be watched, and the leaderboard goes back 30 days (play those days again as practice).
+- **Your own maps** (main menu, Maps): paint rock, dirt and tunnels and place up to 8 bases on a small, medium or
+  large map, with the keyboard, the mouse, a gamepad or a finger. Maps are kept in the browser, shared as links
+  (`/map/<id>`) and saved as / opened from `.tmap` files, and played in a skirmish or an online game. A map is
+  played only when a tank can drive between all of its bases - the editor says which can't be reached.
+- **Player accounts**: online games and the daily challenge's leaderboard need an account on the game's server -
+  a username (the name everybody sees, unique on that server) and a password, no e-mail. A recovery code, shown
+  once, is the way to set a new password. A player is their account: a seat or tank comes back from any device,
+  and nobody can play under another's name. Split screen, skirmish, replays, maps and looking at the daily
+  challenge need none. (Servers can switch accounts off - see [Hosting](#hosting).)
+- **Running reliably**: a server restart or deploy no longer ends online games (the server hands them to the
+  next one, the pages reconnect and carry on); a dead connection is noticed within seconds and the page
+  reconnects with its tank; a desync repairs itself.
+- **Realistic** is the default sound style now.
+
+The details are in [CHANGELOG.md](CHANGELOG.md) and [docs/v6/](docs/v6/).
+
+| Quick play: two players, two computer tanks | The daily challenge's leaderboard | The map editor |
+|---|---|---|
+| ![Quick play](screenshots/quickplay.png) | ![Daily challenge leaderboard](screenshots/challenge.png) | ![Map editor](screenshots/map-editor.png) |
+
 ## Modern graphics
 
 Settings, **Graphics: modern** draws the same game at your screen's resolution: smooth tunnels, textured
@@ -42,17 +73,21 @@ play stay exactly the same, and every player chooses their own look. **Modern** 
 | ![Modern main menu](screenshots/modern-home.png) | ![Modern settings](screenshots/modern-settings.png) |
 | **Modern: a skirmish of four** | **Modern, retro style: split screen** |
 | ![Modern skirmish](screenshots/modern-game.png) | ![Modern retro split screen](screenshots/modern-retro.png) |
+| **Modern: the daily challenge** | **Modern: the map editor** |
+| ![Modern daily challenge](screenshots/modern-challenge.png) | ![Modern map editor](screenshots/modern-map-editor.png) |
 
 ## Modes
 
 - **Split screen** - two players on one keyboard, like the original.
 - **Skirmish** - you (in any color) against 1 to 7 computer tanks (easy, medium or hard),
   every tank for itself or in teams. See your own screen, your team's screens or everybody's.
+- **Quick play** - straight into an online game with computer tanks in the free seats (see above).
 - **Online game** - create a game (public or private, with or without spectators, with an optional
   password), send the invite
   link (`/game/<name>`), and play with 2 to 8 tanks from several computers; any seat can be an AI tank.
   Addresses: `/games` (the list), `/game/<name>` (the game's lobby), `/game/<name>/watch` (spectating),
-  `/split`, `/skirmish`, `/replays`.
+  `/split`, `/skirmish`, `/replays`, `/challenge`, `/maps`.
+- **Daily challenge** - the day's skirmish, the same for everyone, and its leaderboard (see above).
 - **Replays** - every match you play or watch is kept in the browser (the newest 20). Watch one again like a
   spectator (every view, the live map or one tank; pause, 1/2x to 8x, 30 s back / on), see its statistics,
   share it as a link (`/replay/<id>`: whoever opens it watches at once) or save it as a `.replay` file.
@@ -81,6 +116,7 @@ Settings (split screen: map size, rounds to win and round time only):
   human or a computer tank (online: open, closed or AI), each with a team number 1-8: all different =
   free-for-all, shared numbers = teams of any size (4 v 4, 2 v 2 v 2 v 2, 3 v 5, ...).
 - **Map size** - small (512x256), medium (1024x512, the original) or large (2048x1024).
+- **Map** - random (the original's world generator) or one of your own maps (skirmish and online).
 - **Rounds to win** - 1 to 9 (the original: 3).
 - **Round time limit** - off, 2, 3, 5 or 10 minutes. When the time is up, the side that hit enemy tanks
   the most wins the round (a tie: nobody); the last 30 seconds count down next to the instrument panel.
@@ -95,8 +131,9 @@ Settings (split screen: map size, rounds to win and round time only):
   its killer, ...) or every tank still alive (then only those - your own destroyed view goes); nobody left
   to watch - black. Except with "my wreck", a destroyed teammate's view goes black too.
 
-The homepage's **Settings** screen holds your name for online games, the language, the **sound** - muted, original (the PC speaker),
-realistic or cartoony (a sample plays when you change it) - **Smooth scrolling** (on by default: the original
+The homepage's **Settings** screen holds your account for online games (Online: log in or out, change the
+password, delete the account), the language, the **sound** - muted, original (the PC speaker),
+realistic (the default), recorded or cartoony (a sample plays when you change it) - **Smooth scrolling** (on by default: the original
 moves the view sideways 2 pixels at a time - its screen mode holds two pixels per byte - so it stutters a
 little when you drive left or right; on, the view follows 1 pixel at a time; only the picture changes, not
 the game) - and **Show ping** (your round-trip time as
@@ -109,17 +146,20 @@ tank you watch and come from their side, in stereo (split screen: left near BLUE
 
 ### Online
 
-Online play needs a name - asked the first time, changed any time on the Settings screen. Every game
+Online play needs an account on the server: the games list, quick play and an invite link ask you to log
+in or create one first (LOG IN / CREATE AN ACCOUNT), then go on where you were going; your username is the
+name everybody sees. Every game
 has a **lobby** with 8 seats, one per color, each row in its color: a player's name (a √ in front once
 ready), **open**, **closed** or **AI** (easy, medium, hard), the team and the ping. Joining a game takes
-a free open seat (else you watch); sit on another open seat to play that color, change your team with
+a free open seat (else you watch; a quick-play game: a computer tank's seat, even during a match); sit on another open seat to play that color, change your team with
 Left / Right, 1-8 or a click, chat with players and spectators (any alphabet), choose **I am ready!** (a click on your
 name leaves the seat to watch).
 The creator of the game is its **host** (when the host leaves, the next player takes over): a click (or
 Left / Right) steps every seat nobody else sits on through closed, open, the host's own seat (while they
 sit nowhere else) and AI (easy, medium, hard), a right click goes back; they also set its team, change
 the game's settings, **Kick a player** (who then can't come back) and **Start game** once everybody
-seated is ready. Open seats nobody took get no tank. During a match only its players play - whoever
+seated is ready. Open seats nobody took get no tank. (A quick-play game has fixed settings, no "ready": its
+next match starts by itself after a countdown.) During a match only its players play - whoever
 joins then watches; afterwards everyone is back in the lobby, with the statistics of the last match.
 The list of games shows each game's mode, players, AI tanks, spectators and state; Enter joins, Right or
 a right click watches. Games you host come first (your private ones too).
@@ -298,8 +338,10 @@ docker run -d -p 8050:8050 --restart unless-stopped ghcr.io/kaniansky/tunneler-o
 docker build -t tunneler-online . && docker run -d -p 8050:8050 tunneler-online   # from source
 ```
 
-Games live in the server's memory (a restart ends running games); a game nobody plays in for 10 minutes
-is closed automatically.
+Games live in the server's memory; a restart hands them over through the replays' folder (docker-compose
+keeps it in a volume), so running games carry on (see [Hosting](#hosting)). A game nobody plays in for 10
+minutes is closed automatically. Players need an account on your server unless you start it with
+`ACCOUNTS=off` (see [Hosting](#hosting) for `ACCOUNT_SECRET` and where accounts are kept).
 
 The server checks GitHub for a newer release when it starts and once a day, and logs a line when one is
 out (`UPDATE_CHECK=0` turns that off; nothing is downloaded).
