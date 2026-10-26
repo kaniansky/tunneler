@@ -29,13 +29,14 @@ how the game and every menu screen are drawn. This file describes what is built.
   | Quality | auto / high / medium / low (the output's size: 1 / 0.75 / 0.5 x the device pixels; auto - the default since 5.0.3 - steps down while the play screen's frames are slow and back up after a fast stretch: gfx.js `AUTO`) |
   | Terrain | textured / smooth / flat |
   | Tunnel edges | smooth / pixel |
+  | Fog of war | blurred / dark / gray (line of sight: what is only remembered) |
+  | Tanks | realistic / simple (tracks, plates, turret, barrel - or the flat shapes) |
   | Lighting | on / off |
   | Particles | many / few / none (`high` / `low` / `off`) |
   | Glow | on / off |
   | Screen shake | on / off |
   | Camera | smooth / exact |
   | Panel | modern / classic |
-  | Fog of war | blurred / dark / gray (line of sight: what is only remembered) |
 
   Presets (`Gfx.PRESETS`): **clean** = textured, smooth edges, light, many particles, glow, shake, smooth
   camera, modern panel, blurred fog; **retro** = textured, pixel edges, no light, few particles, glow, no
@@ -112,7 +113,9 @@ how the game and every menu screen are drawn. This file describes what is built.
   shots / embers, 4 shot trails, anything else "other" (glows in its own colour: game modes' objects work
   without modern code). The contour upscaler over the classes (or plain pixels: Tunnel edges "pixel");
   textured / smooth / flat surfaces; tunnels darker near their walls, dirt and rock darker at an edge.
-- Tanks as rotated vector shapes (treads, body, turret, gun, a soft shadow). Camera "smooth": tanks glide
+- Tanks as rotated vector shapes: realistic (steel track links, a bevelled hull with an engine deck, a cast turret with a
+  hatch, a round barrel with a muzzle brake, headlights; lit from the top left) or simple (treads, body, turret, gun),
+  with a soft shadow; the treads roll with the way driven (`uTread`). Camera "smooth": tanks glide
   between engine steps (interpolated over a tick, turning eased) and the view follows the gliding tank
   exactly (`tank - 38`); "exact": the engine's positions and cameras.
 - Light: ambient darkness, each tank's lamp and headlight cone, shots, flashes of firing / impacts / hits

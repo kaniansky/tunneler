@@ -18,22 +18,25 @@ const root = globalThis;
 const MODES = ["original", "modern"];
 // the modern settings (docs/GRAPHICS.md 2): the first choice of each is the default; "style" sets the others
 // (PRESETS), changing one of them makes it "custom"
+// (the Settings rows in this order - owner, 2026-10-26: the picture, the world, the tanks, the effects, the camera,
+// the UI last)
 const MODERN = {
   style: ["clean", "retro", "custom"],
   quality: ["auto", "high", "medium", "low"],
   terrain: ["textured", "smooth", "flat"],
   edges: ["smooth", "pixel"],
+  fog: ["blurred", "dark", "gray"],
+  tanks: ["real", "simple"],
   light: ["on", "off"],
-  particles: ["high", "low", "off"],
   glow: ["on", "off"],
+  particles: ["high", "low", "off"],
   shake: ["on", "off"],
   camera: ["smooth", "exact"],
   panel: ["modern", "classic"],
-  fog: ["blurred", "dark", "gray"],
 };
 const PRESETS = {
-  clean: { terrain: "textured", edges: "smooth", light: "on", particles: "high", glow: "on", shake: "on", camera: "smooth", panel: "modern", fog: "blurred" },
-  retro: { terrain: "textured", edges: "pixel", light: "off", particles: "low", glow: "on", shake: "off", camera: "exact", panel: "classic", fog: "gray" },
+  clean: { terrain: "textured", edges: "smooth", fog: "blurred", tanks: "real", light: "on", glow: "on", particles: "high", shake: "on", camera: "smooth", panel: "modern" },
+  retro: { terrain: "textured", edges: "pixel", fog: "gray", tanks: "simple", light: "off", glow: "on", particles: "low", shake: "off", camera: "exact", panel: "classic" },
 };
 const QUALITY = { high: 1, medium: 0.75, low: 0.5 };     // the modern output's size: device pixels times this
 // Quality "auto" (the default - owner, 2026-10-25): the output's size follows the play screen's frame times - one

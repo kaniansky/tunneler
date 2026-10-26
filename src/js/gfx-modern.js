@@ -43,6 +43,7 @@ uniform vec4 uTank[8];        // x, y, angle (radians), lamp (1 = its headlight 
 uniform vec3 uTankCol[24];    // per tank: body, treads, gun
 uniform float uTread[8];      // per tank: how far it has driven (world pixels) - its treads roll with it
 uniform float uTS;            // tank size
+uniform int uTankStyle;       // 0 simple shapes, 1 realistic (setting Tanks)
 uniform int uNL;
 uniform vec4 uLt[32];         // lights: x, y, radius, intensity
 uniform int uNS;
@@ -51,7 +52,9 @@ uniform vec3 uLc[32];
 out vec4 outColor;
 
 int colAt(ivec2 g) {
-  if (g.x < 0 || g.y < 0 || g.x >= uWorldPx.x || g.y >= uWorldPx.y) return 7;
+  // (outside the world: rock live, nothing in the memory - the remembered view drew rock past the world's edge, a
+  // border far beyond the real one, the map's rock frame)
+  if (g.x < 0 || g.y < 0 || g.x >= uWorldPx.x || g.y >= uWorldPx.y) return uOutside;
   int r = g.y - uRowOff;
   if (r < 0 || r >= uRows) return uOutside;
   uint b = texelFetch(uWorld, ivec2(g.x >> 1, r), 0).r;
@@ -80,6 +83,7 @@ float mn(float x) {
   return x < 1.0 ? (7.0 * x * x * x - 12.0 * x * x + 16.0 / 3.0) / 6.0
        : x < 2.0 ? (-7.0 / 3.0 * x * x * x + 12.0 * x * x - 20.0 * x + 32.0 / 3.0) / 6.0 : 0.0;
 }
+float fbm3(vec2 p) { return vnoise(p) * 0.55 + vnoise(p * 2.07 + 5.3) * 0.28 + vnoise(p * 4.13 + 11.7) * 0.17; }
 vec4 kern(float t) { return vec4(mn(1.0 + t), mn(t), mn(1.0 - t), mn(2.0 - t)); }
 
 // a material's colour at world position wp; c: the colour index it comes from, open: how much tunnel is
@@ -99,9 +103,24 @@ vec3 shade(int cls, int c, vec2 wp, float open, float tone) {
     return d * (1.0 - 0.45 * smoothstep(0.0, 0.5, open));             // the edge of a tunnel in shadow
   }
   if (cls == 2) {
-    float r = uTerrain == 2 ? 0.55 : 0.42 + 0.22 * (uTerrain == 0 ? vnoise(wp * 0.45) : n) + 0.08 * grain;
-    float crack = uTerrain == 0 ? 1.0 - 0.35 * (1.0 - smoothstep(0.0, 0.06, abs(vnoise(wp * 0.6 + 7.0) - 0.5))) : 1.0;
-    return vec3(r * 0.97, r, r * 1.04) * crack * (1.0 - 0.35 * smoothstep(0.0, 0.5, open));
+    if (uTerrain != 0) {
+      float r = uTerrain == 2 ? 0.55 : 0.42 + 0.22 * n;
+      return vec3(r * 0.97, r, r * 1.04) * (1.0 - 0.35 * smoothstep(0.0, 0.5, open));
+    }
+    // textured (owner, 2026-10-26: "more like a rock"): a warped, layered height - lumps and facets lit from the top
+    // left -, a few long thin cracks in some places only, mineral grains, a warm / cool cast
+    vec2 q = wp * 0.16;
+    vec2 w = vec2(vnoise(q * 0.7 + 2.3), vnoise(q * 0.7 + 9.1)) * 0.9;
+    float h = fbm3(q + w), hx = fbm3(q + w + vec2(0.11, 0.0)), hy = fbm3(q + w + vec2(0.0, 0.11));
+    vec3 nrm = normalize(vec3((h - hx) * 7.0, (h - hy) * 7.0, 1.0));
+    float lit = clamp(dot(nrm, normalize(vec3(-0.45, -0.55, 0.7))), 0.0, 1.0);
+    float crack = smoothstep(0.0, 0.03, abs(vnoise(q * 0.9 + w * 0.9 + 19.0) - 0.5));
+    crack = mix(1.0, crack, smoothstep(0.5, 0.7, vnoise(q * 0.35 + 50.0)));
+    float speck = hash(floor(wp * 2.0));
+    vec3 rk = mix(vec3(0.27, 0.26, 0.25), vec3(0.58, 0.57, 0.54), h);
+    rk *= mix(vec3(0.96, 0.98, 1.03), vec3(1.05, 1.0, 0.93), vnoise(q * 0.45 + 31.0));
+    rk *= (0.62 + 0.62 * lit) * (0.86 + 0.28 * speck) * mix(0.5, 1.0, crack);
+    return rk * (1.0 - 0.35 * smoothstep(0.0, 0.5, open));
   }
   return uPal[c] * 1.05;                                                // base walls
 }
@@ -187,17 +206,64 @@ void main() {
     float dShadow = min(sdBox(ls, vec2(0.0, 0.5), vec2(2.5, 3.0), 0.8), sdBox(ls, vec2(0.0, -1.8), vec2(0.35, 1.8), 0.3));
     col *= 1.0 - 0.5 * clamp(0.5 - dShadow / 1.2, 0.0, 1.0);
     vec3 body = uTankCol[i * 3], tread = uTankCol[i * 3 + 1], gun = uTankCol[i * 3 + 2];
-    float dTr = min(sdBox(l, vec2(-2.0, 0.5), vec2(0.62, 3.05), 0.45), sdBox(l, vec2(2.0, 0.5), vec2(0.62, 3.05), 0.45));
-    float stripe = 0.82 + 0.25 * step(0.5, fract((l.y + uTread[i] / uTS) * 1.6));
-    col = mix(col, tread * stripe, clamp(0.5 - dTr / ta, 0.0, 1.0));
-    float dBody = sdBox(l, vec2(0.0, 0.5), vec2(1.45, 2.05), 0.55);
-    vec3 bc3 = body * (1.15 - 0.3 * clamp((l.y + 1.5) / 4.0, 0.0, 1.0));
-    col = mix(col, bc3, clamp(0.5 - dBody / ta, 0.0, 1.0));
-    float dTur = length(l - vec2(0.0, 0.6)) - 1.05;
-    vec3 tc = body * 0.78 + 0.25 * (1.0 - smoothstep(0.0, 0.9, length(l - vec2(-0.35, 0.25))));
-    col = mix(col, tc, clamp(0.5 - dTur / ta, 0.0, 1.0));
-    float dGun = sdBox(l, vec2(0.0, -1.75), vec2(0.34, 1.85), 0.3);
-    col = mix(col, gun * (1.0 - 0.2 * clamp(-l.y / 3.5, 0.0, 1.0)), clamp(0.5 - dGun / ta, 0.0, 1.0));
+    if (uTankStyle == 0) {
+      // simple: flat shapes
+      float dTr = min(sdBox(l, vec2(-2.0, 0.5), vec2(0.62, 3.05), 0.45), sdBox(l, vec2(2.0, 0.5), vec2(0.62, 3.05), 0.45));
+      float stripe = 0.82 + 0.25 * step(0.5, fract((l.y + uTread[i] / uTS) * 1.6));
+      col = mix(col, tread * stripe, clamp(0.5 - dTr / ta, 0.0, 1.0));
+      float dBody = sdBox(l, vec2(0.0, 0.5), vec2(1.45, 2.05), 0.55);
+      vec3 bc3 = body * (1.15 - 0.3 * clamp((l.y + 1.5) / 4.0, 0.0, 1.0));
+      col = mix(col, bc3, clamp(0.5 - dBody / ta, 0.0, 1.0));
+      float dTur = length(l - vec2(0.0, 0.6)) - 1.05;
+      vec3 tc = body * 0.78 + 0.25 * (1.0 - smoothstep(0.0, 0.9, length(l - vec2(-0.35, 0.25))));
+      col = mix(col, tc, clamp(0.5 - dTur / ta, 0.0, 1.0));
+      float dGun = sdBox(l, vec2(0.0, -1.75), vec2(0.34, 1.85), 0.3);
+      col = mix(col, gun * (1.0 - 0.2 * clamp(-l.y / 3.5, 0.0, 1.0)), clamp(0.5 - dGun / ta, 0.0, 1.0));
+      continue;
+    }
+    // realistic (setting Tanks - owner, 2026-10-26): the same layout - two tracks, the hull between them, the
+    // turret, the gun - as steel links, a bevelled armor plate with an engine deck, a cast turret with a hatch and a
+    // round barrel; lit from the top left, fixed in the world (the light doesn't turn with the tank)
+    vec2 Lw = normalize(vec2(-0.6, -0.8)), Ll = vec2(dot(Lw, r), -dot(Lw, f));
+    // the tracks: links rolling with the tank (uTread), the guide teeth along the middle
+    float dTr = min(sdBox(l, vec2(-2.0, 0.5), vec2(0.64, 3.08), 0.5), sdBox(l, vec2(2.0, 0.5), vec2(0.64, 3.08), 0.5));
+    float side = clamp(abs(abs(l.x) - 2.0) / 0.64, 0.0, 1.0);
+    float link = fract((l.y + uTread[i] / uTS) * 2.4);
+    float gap = smoothstep(0.0, 0.14, link) * smoothstep(1.0, 0.8, link);
+    vec3 steel = vec3(0.24, 0.235, 0.23) * (0.5 + 0.5 * gap) * (1.12 - 0.5 * side * side);
+    steel += vec3(0.07) * (1.0 - smoothstep(0.0, 0.18, abs(side - 0.5))) * gap;
+    col = mix(col, steel, clamp(0.5 - dTr / ta, 0.0, 1.0));
+    // the hull: its edges bevelled (lit or in shadow by which way they face), the front plate, the engine deck's slats
+    vec2 hc = vec2(0.0, 0.45), hh = vec2(1.5, 2.35);
+    float e = 0.06, dH = sdBox(l, hc, hh, 0.3);
+    vec2 g = vec2(sdBox(l + vec2(e, 0.0), hc, hh, 0.3) - sdBox(l - vec2(e, 0.0), hc, hh, 0.3),
+                  sdBox(l + vec2(0.0, e), hc, hh, 0.3) - sdBox(l - vec2(0.0, e), hc, hh, 0.3));
+    g = dot(g, g) > 0.0 ? normalize(g) : vec2(0.0);
+    float rim = 1.0 - clamp(-dH / 0.32, 0.0, 1.0);
+    vec3 hull = body * (0.84 + 0.36 * rim * dot(g, Ll)) * (l.y < -1.35 ? 1.08 : 1.0);
+    if (l.y > 1.55 && l.y < 2.55 && abs(l.x) < 1.05) hull *= 0.76 + 0.24 * smoothstep(0.35, 0.55, fract(l.y * 4.0));
+    col = mix(col, hull, clamp(0.5 - dH / ta, 0.0, 1.0));
+    // the turret: lit like a dome, a ring for the commander's hatch
+    vec2 tcn = vec2(0.0, 0.7), tq = (l - tcn) / vec2(1.0, 1.15);
+    float dT = sdBox(l, tcn, vec2(0.95, 1.1), 0.75), dome = sqrt(max(0.0, 1.0 - dot(tq, tq)));
+    vec3 tur = body * (0.66 + 0.26 * dome + 0.4 * clamp(dot(tq, Ll), 0.0, 1.0));
+    float dHa = abs(length(l - tcn - vec2(0.42, 0.35)) - 0.3) - 0.05;
+    tur *= 1.0 - 0.35 * clamp(0.5 - dHa / ta, 0.0, 1.0);
+    col *= 1.0 - 0.35 * clamp(0.5 - sdBox(l - Ll * 0.25, tcn, vec2(0.95, 1.1), 0.75) / 0.4, 0.0, 1.0) * (1.0 - clamp(0.5 - dT / ta, 0.0, 1.0));
+    col = mix(col, tur, clamp(0.5 - dT / ta, 0.0, 1.0));
+    // the gun: the mantlet, the barrel (round: bright along its middle), the fume extractor, the muzzle brake
+    float dM = sdBox(l, vec2(0.0, -0.4), vec2(0.42, 0.28), 0.12);
+    col = mix(col, body * 0.6, clamp(0.5 - dM / ta, 0.0, 1.0));
+    float dB = sdBox(l, vec2(0.0, -2.0), vec2(0.17, 1.6), 0.15);
+    float dEv = sdBox(l, vec2(0.0, -2.2), vec2(0.25, 0.34), 0.14);
+    float dMz = sdBox(l, vec2(0.0, -3.42), vec2(0.27, 0.2), 0.08);
+    float dG = min(dB, min(dEv, dMz)), wdt = dMz < 0.0 ? 0.27 : dEv < 0.0 ? 0.25 : 0.17;
+    float cyl = clamp(1.0 - (l.x / wdt) * (l.x / wdt), 0.0, 1.0);
+    vec3 gc = body * 0.56 * (0.5 + 0.65 * sqrt(cyl)) + vec3(0.1) * pow(cyl, 6.0);
+    col = mix(col, gc, clamp(0.5 - dG / ta, 0.0, 1.0));
+    // the headlights (on while its lamp shines)
+    float dL = min(length(l - vec2(-1.12, -1.75)), length(l - vec2(1.12, -1.75))) - 0.16;
+    col = mix(col, uTank[i].w > 0.5 ? vec3(1.0, 0.94, 0.7) : vec3(0.35, 0.33, 0.28), clamp(0.5 - dL / ta, 0.0, 1.0));
   }
 
   // light: dark tunnels, lit by lamps, headlights, shots and flashes
@@ -314,7 +380,7 @@ function create(gl) {
   const u = {}, pu = {};
   for (const n of ["uWorld", "uVis", "uWorldPx", "uRowOff", "uRows", "uOutside", "uSize", "uOut", "uWin", "uCam", "uScale", "uPal",
     "uCls", "uTerrain", "uEdges", "uGlow", "uLight", "uFog", "uVisOn", "uStatic", "uMap", "uVisOrg", "uTime", "uNT", "uTank",
-    "uTankCol", "uTread", "uTS", "uNL", "uLt", "uLc", "uNS", "uShot"]) u[n] = gl.getUniformLocation(prog, n);
+    "uTankCol", "uTread", "uTS", "uTankStyle", "uNL", "uLt", "uLc", "uNS", "uShot"]) u[n] = gl.getUniformLocation(prog, n);
   if (pprog) for (const n of ["uCam", "uScale", "uSize", "uOut", "uWin"]) pu[n] = gl.getUniformLocation(pprog, n);
   const worldTex = texture(gl), visTex = texture(gl);
   gl.bindTexture(gl.TEXTURE_2D, visTex);
@@ -482,6 +548,7 @@ function create(gl) {
     gl.uniform1i(u.uEdges, set.edges === "pixel" ? 1 : 0);
     gl.uniform1i(u.uGlow, set.glow === "on" ? 1 : 0);
     gl.uniform1i(u.uFog, ["blurred", "dark", "gray"].indexOf(set.fog));
+    gl.uniform1i(u.uTankStyle, set.tanks === "simple" ? 0 : 1);
     gl.uniform1f(u.uTime, now / 1000);
     return pal;
   }
