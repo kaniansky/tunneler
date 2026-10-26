@@ -95,7 +95,7 @@ export function mount() {
   // this page's version (build.js's version.js; null on a development page: not checked) - the server
   // refuses games of another version, so they can't be joined or created here
   const myVersion = VERSION || null;
-  const otherVersion = r => !!(myVersion && r && r.version && r.version !== myVersion);
+  const otherVersion = r => !!(myVersion && r && r.version && !NetProto.sameGame(r.version, myVersion));   // (from 1.2: another patch joins)
   let serverVersion = null;                          // the server's, when it isn't ours (from the list / a refused POST)
   const versionInfo = () => [{ text: T("ver.server", { server: serverVersion, you: myVersion }), color: 12 }, T("ver.update")];
 

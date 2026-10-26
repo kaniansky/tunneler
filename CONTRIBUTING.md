@@ -30,6 +30,11 @@ window), create a game, join as BLUE in one and GREEN in the other, and add a th
 
 A release is made by pushing a version tag; pushes to `main` only run CI.
 
+Versions (from 1.2): pages, apps and servers of the same **major.minor** play together online (`NetProto.sameGame`),
+so a **patch** (X.Y.Z+1) must not change the game: no change to the engine's state or world pixels, `stateHash`,
+the computer players, the network messages or how replays play back - only display, menus, texts, sound, server
+fixes and docs. Anything else is a **minor** (X.Y+1.0).
+
 1. Set the version (`npm version 1.4.1 --no-git-tag-version` sets `package.json` / `package-lock.json`
    and adds the release to the Flatpak's metainfo - by hand: `node tools/flatpak-update.js --metainfo 1.4.1`;
    the tests fail while it's missing) and rename CHANGELOG.md's "## Unreleased" section to it (e.g. `## 1.4.1`).

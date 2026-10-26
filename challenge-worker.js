@@ -10,6 +10,7 @@ const zlib = require("zlib");
 const { TunnelerEngine } = require("./src/js/engine.js");
 const { TunnelerAI } = require("./src/js/ai.js");
 const { Challenge } = require("./src/js/challenge.js");
+const { NetProto } = require("./src/js/netproto.js");
 require("./src/lang/en/index.js");                       // (the game modes' texts: the engine draws them)
 require("./src/js/modes/index.js");
 
@@ -20,7 +21,8 @@ function check({ bytes, day, version, name }) {
   try { rep = JSON.parse(raw.toString("utf8")); } catch (e) { return { code: "bad" }; }
   if (!rep || typeof rep !== "object") return { code: "bad" };
   // another version's engine may play differently (pages served from src/ say "dev": never refused, as for rooms)
-  if (version && rep.version !== "dev" && rep.version !== version) return { code: "version" };
+  // (from 1.2 another patch of the same major.minor plays the same: NetProto.sameGame)
+  if (version && !NetProto.sameGame(version, rep.version)) return { code: "version" };
   const r = Challenge.verify(rep, { Engine: TunnelerEngine, AI: TunnelerAI, day, name });
   if (r.code) return { code: r.code, step: r.step };
   const gz = zlib.gzipSync(Buffer.from(JSON.stringify(r.replay)));   // (the cleaned replay: challenge.js clean())
