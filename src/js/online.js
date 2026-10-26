@@ -429,11 +429,13 @@ export function mount() {
     if (id && !out.some(o => o.id === id)) out.push({ id, room: true });
     return out;
   }
+  // a map's name and its number of bases ("Crossroads (6)" - owner, 2026-10-26)
+  const mapLabel = (name, bases) => UniText.slice(UniText.fromRaw(name), MAP_COLS) + (bases ? " (" + bases + ")" : "");
   function mapName() {
     const id = st.settings.map || "";
     if (!id) return T("os.map.random");
-    const name = st.map && st.map.id === id ? st.map.name : (myMaps.find(r => r.shared === id) || {}).name;
-    return name ? UniText.slice(UniText.fromRaw(name), MAP_COLS) : "...";
+    const m = st.map && st.map.id === id ? st.map : myMaps.find(r => r.shared === id) || {};
+    return m.name ? mapLabel(m.name, m.bases) : "...";
   }
   function stepMap(d) {
     if (!st || !isHost() || st.match) return;
@@ -581,7 +583,7 @@ export function mount() {
       // the game mode first (docs/DESIGN-8P.md 27); the modifiers at the end
       row("mode", T("lc.mode") + T("gm." + mode), [T("gm." + mode + ".i"), T("lc.mode.i")], d => setSetting("mode", cycle(ML, mode, d))),
       // the map (docs/v6/MAPS.md): random or a shared one - its own size then (grayed)
-      row("map", T("os.map") + (mapNote ? UniText.slice(UniText.fromRaw(mapNote.rec.name), MAP_COLS) : mapName()),
+      row("map", T("os.map") + (mapNote ? mapLabel(mapNote.rec.name, mapNote.rec.bases) : mapName()),
         mapNote ? [{ text: mapNote.text, color: mapNote.color }]
           : st.map && st.map.id === s.map && st.map.linked === false ? [{ text: T("os.map.cut"), color: 12 }, T("os.map.i1")]   // (the server's check)
           : [T("os.map.i1"), T("os.map.i2")], d => stepMap(d)),

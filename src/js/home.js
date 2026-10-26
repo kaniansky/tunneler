@@ -39,6 +39,8 @@ export function mount() {
   const TEXT_COLORS = TunnelerEngine.PLAYER_TEXT_COLORS || [9, 10, 11, 13, 15, 12, 5, 3];
   const clampInt = (v, lo, hi, d) => { v = parseInt(v, 10); return v >= lo && v <= hi ? v : d; };
   const MAP_COLS = 14;                                    // (a map's name in the Settings box: at most this wide)
+  // a map's name and its number of bases ("Crossroads (6)" - owner, 2026-10-26)
+  const mapLabel = rec => UniText.slice(UniText.fromRaw(rec.name), MAP_COLS) + (rec.bases ? " (" + rec.bases + ")" : "");
   const step = (list, v, d) => list[(list.indexOf(v) + d + list.length) % list.length];
   // round time limit in minutes (engine option roundTime; 0 = no limit, the original)
   const TIMES = [0, 2, 3, 5, 10];
@@ -602,7 +604,7 @@ export function mount() {
     const setMap = d => { cpuMap = step([""].concat(cpuMaps.map(r => r.id)), cpuMap, d); redraw(); };
     const options = [
       { key: "mode", label: T("lc.mode") + T("gm." + gmode), info: [T("gm." + gmode + ".i"), T("lc.mode.i")], go: () => setMode(1), change: setMode },
-      { key: "map", label: T("lc.map") + (rec ? UniText.slice(UniText.fromRaw(rec.name), MAP_COLS) : T("lc.map.random")),
+      { key: "map", label: T("lc.map") + (rec ? mapLabel(rec) : T("lc.map.random")),
         info: rec && rec.linked === false ? [{ text: T("lc.err.path"), color: 12 }, T("lc.map.i2")] : [T("lc.map.i1"), T("lc.map.i2")],
         go: () => setMap(1), change: setMap },
       // (a map has its own size: shown, grayed)
@@ -668,7 +670,7 @@ export function mount() {
     // (the settings box as wide as its widest possible value, so it doesn't jump when one changes)
     const noop = () => {}, labels = [
       ...MODE_LIST.map(m => T("lc.mode") + T("gm." + m)),
-      T("lc.map") + "W".repeat(MAP_COLS), T("lc.map") + T("lc.map.random"),
+      T("lc.map") + "W".repeat(MAP_COLS) + " (8)", T("lc.map") + T("lc.map.random"),
       ...SIZES.map(v => sizeItem(v, noop).label),
       ...Object.keys(GOALS).flatMap(m => GOALS[m].choices.map(n => T("goal." + m) + (m === "infection" ? T("time.n", { n }) : n))),
       ...[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => winItem(n, noop).label),
