@@ -290,6 +290,20 @@ function record(day) {
     const rc = (await signup(port, "Twice", "first password")).j;
     const both = await Promise.all(["second password", "third password"].map(pw => api(port, "POST", "/api/account/reset", { name: "Twice", code: rc.recovery, password: pw })));
     ok(both.filter(x => x.status === 200).length === 1 && both.filter(x => x.status === 401).length === 1, "a recovery code used by two resets at once: one succeeds (" + both.map(x => x.status) + ")");
+    // the same, made certain: the second reset's check of the code takes longer than the whole first reset (it
+    // used to take the code's record after its check - by then the first reset's new one - and both got in)
+    {
+      const rc2 = (await signup(port, "Slowpoke", "first password")).j, code = require("./src.js").NetProto.cleanRecovery(rc2.recovery);
+      const orig = crypto.scrypt; let seen = 0;
+      crypto.scrypt = function (text, ...rest) {
+        if (String(text) === code && ++seen === 2) { setTimeout(() => orig.call(crypto, text, ...rest), 400); return; }
+        return orig.call(crypto, text, ...rest);
+      };
+      let two;
+      try { two = await Promise.all(["second password", "third password"].map(pw => api(port, "POST", "/api/account/reset", { name: "Slowpoke", code: rc2.recovery, password: pw }))); }
+      finally { crypto.scrypt = orig; }
+      ok(seen >= 2 && two.filter(x => x.status === 200).length === 1 && two.filter(x => x.status === 401).length === 1, "a recovery code, the second check slower than the first reset: still one use (" + two.map(x => x.status) + ")");
+    }
     s.close();
   }
   {

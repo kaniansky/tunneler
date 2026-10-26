@@ -272,20 +272,26 @@ function createAccounts(opts) {
     if (pp) fail(400, pp);
     checkLock(key);
     const a = await byName(name);
-    const ok = a && a.recovery ? await hashOk(a.recovery, cleanRecovery(code)) : await dummyCheck(cleanRecovery(code));
+    // (the record the code is checked against, taken before the check: a reset finishing meanwhile writes a new one -
+    // taken after, two resets at once both got in with one code)
+    const used = a && a.recovery;
+    const ok = used ? await hashOk(used, cleanRecovery(code)) : await dummyCheck(cleanRecovery(code));
     if (!ok) { wrong(key); fail(401, "wrong"); }
     fails.delete(key);
-    const used = a.recovery;
     const fresh = newRecovery();
     const pw = await makeHash(password), rec = await makeHash(fresh);
+    let acct = a;
     await serial("a:" + a.id, async () => {
-      // (deleted meanwhile, or the code already used by a reset that came first: one use only)
-      if (a.deleted || gone.has(a.id) || a.recovery !== used) fail(401, "wrong");
-      a.ids.password = pw; a.recovery = rec; a.gen++; a.touched = now();
-      await save(a);
+      // the account as it is now (another request may have loaded its own copy and changed that): deleted meanwhile,
+      // or the code already used by a reset that came first - one use only
+      const cur = cache.get(a.id) || (await store.get(a.id)) || a;
+      if (cur.deleted || a.deleted || gone.has(a.id) || cur.recovery !== used) fail(401, "wrong");
+      cur.ids.password = pw; cur.recovery = rec; cur.gen++; cur.touched = now();
+      await save(cur);
+      acct = cur;
     });
-    say("account password reset", JSON.stringify(a.name));
-    return { account: a, recovery: showRecovery(fresh) };
+    say("account password reset", JSON.stringify(acct.name));
+    return { account: acct, recovery: showRecovery(fresh) };
   }
   async function changePassword(a, old, password) {
     const pp = passwordProblem(password);
