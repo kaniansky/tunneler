@@ -110,8 +110,8 @@ function draw(ctx, W, H, sc, sw, sh, set, now, style) {
       ctx.fillText(sc.destroyed || "DESTROYED", wx + ww / 2, wy + wh / 2);
       ctx.restore();
     }
-    // the panel: energy and shield
-    const bx = px(c.x + 27), by = py(c.y + 300), bw = px(306), bh = py(92);
+    // the panel: energy and shield - as wide as the window above it (owner, 2026-10-26)
+    const bx = wx, by = py(c.y + 300), bw = ww, bh = py(92);
     ctx.save();
     ctx.beginPath(); rrect(ctx, bx, by, bw, bh, clean ? py(1.5) : 0);
     ctx.fillStyle = clean ? PANEL : "#2b2b2b"; ctx.fill();
