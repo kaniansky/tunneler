@@ -132,7 +132,8 @@ export function mount() {
   function newMap(keep) {
     form.name.placeholder = T("map.ph.name");
     const setSize = d => { form.size = step(MapData.SIZES, form.size, d); newMap(true); };
-    const setFrom = d => { form.from = step(["dirt", "random"], form.from, d); newMap(true); };
+    // (owner, 2026-10-26: also rock everywhere and empty - the editor's "Fill everything with" is gone)
+    const setFrom = d => { form.from = step(["dirt", "rock", "empty", "random"], form.from, d); newMap(true); };
     ui.show({
       lines: [{ row: 2, text: T("map.new.title"), color: 12 }], box: { y: 7 }, infoRow: 18, back: () => showList(),
       items: [
@@ -154,7 +155,7 @@ export function mount() {
     return MapData.fromWorld(size, g.world, g.ws);
   }
   async function create() {
-    const map = form.from === "random" ? randomWorld(form.size) : MapData.blank(form.size);
+    const map = form.from === "random" ? randomWorld(form.size) : MapData.blank(form.size, { rock: MapData.ROCK, empty: MapData.TUNNEL }[form.from]);
     map.name = MapData.cleanName(form.name.value) || Lang.raw("map.ph.name");
     // (no bases: the player places them - owner, 2026-10-25; a map needs MapData.MIN_BASES to be played)
     form.name.value = "";
@@ -243,7 +244,7 @@ export function mount() {
   // ------------------------------------------------------------ the editor
   function edit(rec, map) {
     ed = { rec, map: MapData.copy(map), tool: "rock", brush: 1, zoom: 2, cx: map.w >> 1, cy: map.h >> 1, ox: 0, oy: 0,
-      undo: [], msg: null, menu: false, stroke: false, last: null, fill: "dirt", fillArmed: 0, changed: false, reach: null, reachShown: null };
+      undo: [], msg: null, menu: false, stroke: false, last: null, changed: false, reach: null, reachShown: null };
     // a medium / large map starts zoomed out so all of it shows
     while (ed.zoom > 0 && map.w * ZOOMS[ed.zoom] > VW * 1.0001) ed.zoom--;
     clampView(true);
@@ -591,8 +592,6 @@ export function mount() {
       : [{ text: T("map.ok", { n }), color: 10 }].concat(walled.length ? [{ text: T("map.walled", { list: walled.join(", ") }), color: 14 }] : []);
     const setT = d => { ed.tool = step(TOOLS, ed.tool, d); menu(true); };
     const setB = d => { ed.brush = Math.max(0, Math.min(BRUSHES.length - 1, ed.brush + d)); menu(true); };
-    const setF = d => { ed.fill = step(["dirt", "rock", "tunnel"], ed.fill, d); ed.fillArmed = 0; menu(true); };
-    const sure = ed.fillArmed && performance.now() < ed.fillArmed;
     nameForm.placeholder = T("map.ph.name");
     ui.show({
       lines: [{ row: 2, text: T("map.menu.title"), color: 12 }], box: { y: 5 }, infoRow: 19, back: closeMenu,
@@ -602,11 +601,6 @@ export function mount() {
         { key: "name", label: T("map.name"), input: nameForm, align: "left", info: [T("map.name.i")], go: closeMenu },
         { key: "tool", label: T("map.tool") + T("map.t." + ed.tool), info: [T(mobile ? "map.tool.i.touch" : "map.tool.i")], go: () => setT(1), change: setT },
         { key: "brush", label: T("map.brushsize") + (BRUSHES[ed.brush] * 2 + 1), info: [T(mobile ? "map.brush.i.touch" : "map.brush.i")], go: () => setB(1), change: setB },
-        { key: "fill", label: T("map.fill") + T("map.t." + ed.fill), info: [sure ? { text: T("map.fill.sure", { what: Lang.raw("map.m." + ed.fill) }), color: 12 } : T("map.fill.i")],
-          change: setF, go: () => {
-            if (!sure) { ed.fillArmed = performance.now() + 4000; return menu(true); }
-            ed.fillArmed = 0; snapshotUndo(); m.cells.fill(VALUE[ed.fill]); MapData.frame(m); closeMenu();
-          } },
         { key: "undo", label: T("map.undo"), disabled: !ed.undo.length, info: [T("map.undo.i")], go: () => { undo(); ed.menu = true; menu(true); } },
         { key: "tofile", label: T("map.tofile"), info: ed.fileNote ? [{ text: ed.fileNote.text, color: ed.fileNote.color }] : [T("map.tofile.i")],
           go: () => { setName(); ed.fileNote = saveFile(ed.map); if (ed.fileNote) menu(true); } },

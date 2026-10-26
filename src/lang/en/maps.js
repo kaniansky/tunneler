@@ -14,8 +14,8 @@ Lang.extend("en", {
   // a new map
   "map.new.title": "NEW MAP", "map.name": "Name: ", "map.ph.name": "My map", "map.name.i": "The map's name, shown wherever it is chosen.",
   "map.size.i": "Small 512 x 256, medium 1024 x 512 (the original), large 2048 x 1024 pixels.",
-  "map.from": "Start from: ", "map.from.dirt": "dirt everywhere", "map.from.random": "a random world",
-  "map.from.i": "Dirt everywhere, or a world made the way the game makes its own.",
+  "map.from": "Start from: ", "map.from.dirt": "dirt everywhere", "map.from.rock": "rock everywhere", "map.from.empty": "empty",
+  "map.from.random": "a random world", "map.from.i": "Dirt or rock everywhere, empty, or a world made the way the game makes its own.",
   "map.create": "Create the map", "map.create.i": "Then paint it. Your maps are kept in this browser.",
   // a map's screen
   "map.one.title": "MAP", "map.edit": "Edit", "map.edit.i": "Paint the map and place its bases.",
@@ -31,7 +31,6 @@ Lang.extend("en", {
   "map.fetching": "Fetching the map...", "map.gone": "This map link doesn't work: {msg}", "map.gone.404": "the server doesn't have it",
   // the editor
   "map.t.tunnel": "Tunnel", "map.t.dirt": "Dirt", "map.t.rock": "Rock", "map.t.base": "Base",
-  "map.m.tunnel": "tunnel", "map.m.dirt": "dirt", "map.m.rock": "rock",
   "map.brush": "Brush", "map.zoom": "Zoom", "map.undo": "Undo", "map.menu": "Menu",
   "map.pos": "X {x}  Y {y}", "map.bases": "Bases: {n} of 8",
   "map.keys": "SPACE: paint  ESC: menu", "map.keys.touch": "1 finger paints, 2 move",
@@ -42,8 +41,6 @@ Lang.extend("en", {
   "map.ok": "{n} bases - ready to play.", "map.walled": "Walled in by rock: base {list} (the game digs a way out).",
   "map.tool": "Tool: ", "map.tool.i": "What the brush does. Keys 1-4; Tab: the next tool.", "map.tool.i.touch": "What a finger does on the map.",
   "map.brushsize": "Brush size: ", "map.brush.i": "How wide the brush paints. Keys [ and ].", "map.brush.i.touch": "How wide a finger paints.",
-  "map.fill": "Fill everything with: ", "map.fill.i": "Left / Right: what with; Enter twice: the whole map.",
-  "map.fill.sure": "Press again: the whole map becomes {what}.",
   "map.undo.i": "Takes back the last change (U, Ctrl+Z).",
   "map.save": "Save and back", "map.save.i": "Keeps the map and goes back to its screen.",
   // playing a map: the skirmish, the online lobby

@@ -6,6 +6,9 @@ those releases are tagged `online-vX.Y.Z`, their changes are in [docs/CHANGELOG-
 
 ## Unreleased
 
+- Maps: a new map can start from rock everywhere or empty too (besides dirt and a random world); the editor's
+  "Fill everything with" is gone.
+- Modern graphics, retro (Tunnel edges: pixel): the tanks are blocky, on the world's pixel grid, like the terrain.
 - New tank colors that tell apart better: BLUE, GREEN, RED, GOLD, PINK, LIME, SKY and WHITE (were BLUE, GREEN, CYAN,
   YELLOW, WHITE, PINK, VIOLET and TEAL). Old invite links and a saved preferred color still pick the same seat. The
   split screen keeps the original's colors.

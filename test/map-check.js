@@ -452,12 +452,10 @@ const ticks = async (n = 8) => { for (let i = 0; i < n; i++) await tick(); };
     env.key("Escape", "Escape");
     assert(!ed.menu, "Esc closes it");
     env.key("Escape", "Escape");
-    ui.spec.items.find(it => it.key === "fill").change(1);           // rock
-    ui.spec.items.find(it => it.key === "fill").go();
-    ui.spec.items.find(it => it.key === "fill").go();
-    assert(!ed.menu && ed.map.cells.every(v => v === MapData.ROCK), "filled with rock (twice)");
+    assert(!ui.spec.items.some(it => it.key === "fill"), "no Fill everything with (a new map starts from rock / empty instead)");
+    env.key("Escape", "Escape");
     env.key("KeyZ", "z", { ctrlKey: true });
-    assert(!ed.map.cells.every(v => v === MapData.ROCK), "Ctrl+Z");
+    assert.notStrictEqual(ed.map.cells[target[1] * ed.map.w + target[0]], MapData.ROCK, "Ctrl+Z: the click's rock gone");
     env.key("Escape", "Escape");
     await ui.spec.items.find(it => it.key === "save").go();
     await ticks();
@@ -478,12 +476,23 @@ const ticks = async (n = 8) => { for (let i = 0; i < n; i++) await tick(); };
     await ticks();
     const ui2 = env2.win.tunnelerMapsUI();
     ui2.spec.items.find(it => it.key === "new").go();
-    ui2.spec.items.find(it => it.key === "from").change(1);
+    ui2.spec.items.find(it => it.key === "from").change(-1);         // (dirt, rock, empty, random: back = random)
     ui2.spec.items.find(it => it.key === "create").go();
     await ticks();
     const ed2 = env2.win.tunnelerMapEditor(), n = [0, 0, 0];
     ed2.map.cells.forEach(v => n[v]++);
     assert(ed2.map.size === "medium" && n[2] > ed2.map.cells.length * 0.2 && n[1] > 0, "a random world: " + JSON.stringify(n));
+    // rock everywhere / empty: the inside all rock / all tunnel (the frame rock either way)
+    for (const [steps, want] of [[1, MapData.ROCK], [2, MapData.TUNNEL]]) {
+      const env3 = makeEnv("/maps"); env3.page("maps.html"); await ticks();
+      const ui3 = env3.win.tunnelerMapsUI();
+      ui3.spec.items.find(it => it.key === "new").go();
+      for (let k = 0; k < steps; k++) ui3.spec.items.find(it => it.key === "from").change(1);
+      ui3.spec.items.find(it => it.key === "create").go();
+      await ticks();
+      const m3 = env3.win.tunnelerMapEditor().map, mid = m3.cells[(m3.h >> 1) * m3.w + (m3.w >> 1)];
+      assert(mid === want && m3.cells.every(v => v === want || v === MapData.ROCK), "start from " + (want === MapData.ROCK ? "rock" : "empty"));
+    }
   });
 
   await okAsync("the editor by pointer: a base dragged to another spot (and back where it can't go), two fingers move the view and paint nothing", async () => {

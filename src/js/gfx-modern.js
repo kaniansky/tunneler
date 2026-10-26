@@ -196,13 +196,15 @@ void main() {
   float aa = 1.0 / pw;
   for (int i = 0; i < 8; i++) {
     if (i >= uNT) break;
-    vec2 d = (wp - (uTank[i].xy + 0.5)) / uTS;
+    // (Tunnel edges "pixel" - the retro style: sampled on the world's pixel grid with hard edges, blocky like the
+    // terrain - owner, 2026-10-26)
+    vec2 d = ((uEdges == 1 ? floor(wp) + 0.5 : wp) - (uTank[i].xy + 0.5)) / uTS;
     if (dot(d, d) > 30.0) continue;
     float a = uTank[i].z;
     vec2 f = vec2(sin(a), -cos(a)), r = vec2(cos(a), sin(a));
     vec2 l = vec2(dot(d, r), -dot(d, f));                // u to the right, v backwards (forward = -v)
     vec2 ls = vec2(dot(d - vec2(0.45, 0.6), r), -dot(d - vec2(0.45, 0.6), f));
-    float ta = aa / uTS;
+    float ta = uEdges == 1 ? 0.0001 : aa / uTS;
     float dShadow = min(sdBox(ls, vec2(0.0, 0.5), vec2(2.5, 3.0), 0.8), sdBox(ls, vec2(0.0, -1.8), vec2(0.35, 1.8), 0.3));
     col *= 1.0 - 0.5 * clamp(0.5 - dShadow / 1.2, 0.0, 1.0);
     vec3 body = uTankCol[i * 3], tread = uTankCol[i * 3 + 1], gun = uTankCol[i * 3 + 2];
@@ -244,12 +246,12 @@ void main() {
     if (l.y > 1.55 && l.y < 2.55 && abs(l.x) < 1.05) hull *= 0.76 + 0.24 * smoothstep(0.35, 0.55, fract(l.y * 4.0));
     col = mix(col, hull, clamp(0.5 - dH / ta, 0.0, 1.0));
     // the turret: lit like a dome, a ring for the commander's hatch
-    vec2 tcn = vec2(0.0, 0.7), tq = (l - tcn) / vec2(1.0, 1.15);
-    float dT = sdBox(l, tcn, vec2(0.95, 1.1), 0.75), dome = sqrt(max(0.0, 1.0 - dot(tq, tq)));
+    vec2 tcn = vec2(0.0, 0.7), tq = (l - tcn) / vec2(1.5, 1.15);
+    float dT = sdBox(l, tcn, vec2(1.45, 1.1), 0.75), dome = sqrt(max(0.0, 1.0 - dot(tq, tq)));
     vec3 tur = body * (0.66 + 0.26 * dome + 0.4 * clamp(dot(tq, Ll), 0.0, 1.0));
-    float dHa = abs(length(l - tcn - vec2(0.42, 0.35)) - 0.3) - 0.05;
+    float dHa = abs(length(l - tcn - vec2(0.75, 0.35)) - 0.3) - 0.05;
     tur *= 1.0 - 0.35 * clamp(0.5 - dHa / ta, 0.0, 1.0);
-    col *= 1.0 - 0.35 * clamp(0.5 - sdBox(l - Ll * 0.25, tcn, vec2(0.95, 1.1), 0.75) / 0.4, 0.0, 1.0) * (1.0 - clamp(0.5 - dT / ta, 0.0, 1.0));
+    col *= 1.0 - 0.35 * clamp(0.5 - sdBox(l - Ll * 0.25, tcn, vec2(1.45, 1.1), 0.75) / 0.4, 0.0, 1.0) * (1.0 - clamp(0.5 - dT / ta, 0.0, 1.0));
     col = mix(col, tur, clamp(0.5 - dT / ta, 0.0, 1.0));
     // the gun: the mantlet, the barrel (round: bright along its middle), the fume extractor, the muzzle brake
     float dM = sdBox(l, vec2(0.0, -0.4), vec2(0.42, 0.28), 0.12);
