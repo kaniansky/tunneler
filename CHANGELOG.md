@@ -6,6 +6,8 @@ those releases are tagged `online-vX.Y.Z`, their changes are in [docs/CHANGELOG-
 
 ## Unreleased
 
+- Online games react faster: after a hiccup (a late packet, a pause, the server waking up) a page stayed up to
+  3 frames (165 ms) behind for the rest of the match. It now catches up within a couple of seconds.
 - Modern graphics: the tanks' treads roll as they drive (forwards and backwards).
 - Line of sight: a tank driving through its base's doorway no longer hides what is behind it (its own pixels counted
   as the base's wall - the view showed remembered tread marks there, and computer players didn't see behind it).

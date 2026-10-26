@@ -104,6 +104,11 @@ export function mount() {
   let frames = 0;                    // frames run through the engine
   const queue = new FrameQueue();    // frames received, not yet run
   let catching = false, nextAt = 0;
+  // the jitter buffer (owner, 2026-10-26 - "unplayable"): frames run on the page's own 55 ms clock, and a hiccup
+  // (a late packet, a pause) left 2-3 of them waiting for good - 110-165 ms behind for the rest of the match. Now:
+  // the fewest frames left waiting after a scheduled step, over half a second (spare); when that never got down to 0,
+  // one frame runs early - the buffer shrinks to what the connection's jitter needs (0-1 frames on a steady one)
+  let spare = Infinity, spareSince = 0;
   let fatal = null, fatal2 = null, desyncAt = -1, lastReport = "";
   let lastMatch = null;              // {engine, cfg, player} of the last match played to its end (statistics)
   let statsShown = 0;
@@ -288,8 +293,12 @@ export function mount() {
     if (rebuilding && queue.length <= 3) { rebuilding = false; renderBar(); }
     if (queue.length > 60) { catching = true; return; }       // far behind (tab was hidden): fast-forward
     if (queue.length && nextAt < now - 250) nextAt = now;      // stream stalled and resumed: resync
-    while (queue.length && now >= nextAt) { stepFrame(nextAt, false); nextAt += TICK_MS; }
+    while (queue.length && now >= nextAt) { spare = Math.min(spare, queue.length - 1); stepFrame(nextAt, false); nextAt += TICK_MS; }
     while (queue.length > 3) { stepFrame(now, false); nextAt = Math.max(nextAt, now + TICK_MS); }
+    if (now - spareSince >= 500) {
+      if (spare >= 1 && spare !== Infinity && queue.length) { stepFrame(now, false); nextAt = now + TICK_MS; }
+      spare = Infinity; spareSince = now;
+    }
     if (isPlayer()) sendKeys();
   }
   setInterval(pump, 4);

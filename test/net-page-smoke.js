@@ -271,7 +271,21 @@ function loadPage(page, search, stored, version) {
     assert(ws.sent.some(m => m.t === "r" && m.playing), "report sent");
     key(env, "keyup", "KeyD");
     assert(ws.sent.some(m => m.t === "b" && m.v === 0), "release sent");
-    ws.recv({ t: "f", m: 2, n: 505, f: [[0, 0, 1]] });                 // another match's frames: ignored
+    // the jitter buffer: a stall (nothing for 330 ms - the network, a pause, the server) and then the frames held
+    // up all at once, then one every tick: it doesn't stay 3 frames (165 ms) behind for the rest of the match
+    await waitFor(() => env.win.tunnelerFrames().queued === 0, "the frames so far run");
+    let n = 505;
+    const TICK = 65536 / 1193182 * 1000, t0 = performance.now(), queued = [];
+    for (let i = 0; i < 6; i++) { await wait(Math.max(0, t0 + (i + 1) * TICK - performance.now())); ws.recv({ t: "f", m: 1, n: n++, f: [[0, 0, 1]] }); }
+    await wait(330);
+    for (let i = 0; i < 6; i++) ws.recv({ t: "f", m: 1, n: n++, f: [[0, 0, 1]] });
+    const t1 = performance.now();
+    for (let i = 0; i < 80; i++) {                     // (exactly the server's clock: one frame a tick)
+      await wait(Math.max(0, t1 + (i + 1) * TICK - performance.now()));
+      ws.recv({ t: "f", m: 1, n: n++, f: [[0, 0, 1]] }); queued.push(env.win.tunnelerFrames().queued);
+    }
+    assert(Math.max(...queued.slice(-20)) <= 1, "the buffer shrinks again (to nothing waiting): " + queued.join(" "));
+    ws.recv({ t: "f", m: 2, n, f: [[0, 0, 1]] });                     // another match's frames: ignored
     assert.strictEqual(env.sockets.length, 1);
     // the end: back to the lobby
     ws.recv({ t: "end", no: 1 });
