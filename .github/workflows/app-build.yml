@@ -222,6 +222,11 @@ jobs:
       - name: Build the app
         # (no native debug symbols for Play: 1.1.0 built the library unstripped for them, but Gradle found no NDK to
         # extract / strip with - the APK went from 15.6 to 38.4 MB and the AAB had no symbols; see docs/ANDROID.md)
+        env:
+          # Google Play Games sign-in: repository variables (Settings, Secrets and variables, Actions, Variables) -
+          # unset = a build without it
+          PLAY_GAMES_APP_ID: ${{ vars.PLAY_GAMES_APP_ID }}
+          PLAY_GAMES_WEB_CLIENT_ID: ${{ vars.PLAY_GAMES_WEB_CLIENT_ID }}
         run: npx --yes @tauri-apps/cli@2 android build --apk --aab --ci --target aarch64 armv7 x86_64
 
       - name: Collect the files

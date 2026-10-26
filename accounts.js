@@ -15,6 +15,7 @@ const { cleanUsername, usernameKey, passwordProblem, cleanRecovery, RECOVERY_ALP
 const TOKEN_MS = 90 * 86400000;       // a session token lasts this long ...
 const TOKEN_REFRESH_MS = 86400000;    // ... and GET /api/account gives a new one when it is older than this
 const TICKET_MS = 60 * 1000;          // a websocket ticket: used once, within this time
+const LINK_MS = 10 * 60 * 1000;       // Google Play: choosing a username for a new account within this time
 const SCRYPT = { N: 1 << 14, r: 8, p: 1 };
 const KEYLEN = 32;
 const MAX_SCRYPT = 4, MAX_SCRYPT_WAIT = 64;   // hashes at once, waiting (then 503 busy)
@@ -45,6 +46,8 @@ function newRecovery() {
 }
 const showRecovery = c => c.match(/.{1,5}/g).join("-");
 const nameFile = key => "name-" + crypto.createHash("sha256").update(key).digest("hex").slice(0, 32);
+// a Google Play Games player's index: "google-<hash of the player id>" = {id}
+const googleFile = sub => "google-" + crypto.createHash("sha256").update(String(sub)).digest("hex").slice(0, 32);
 
 // ------------------------------------------------------------ the stores: get(key) -> object | null, put(key, object), del(key)
 // keys: an account id, "name-<hash>", "secret"
@@ -143,7 +146,7 @@ function createAccounts(opts) {
           if (!s || typeof s.secret !== "string" || s.secret.length < 32) { s = { secret: crypto.randomBytes(32).toString("hex"), created: now() }; await store.put("secret", s); }
           secret = Buffer.from(s.secret, "hex");
         }
-        return { token: hmac(secret, "tunneler-session"), ticket: hmac(secret, "tunneler-ticket") };
+        return { token: hmac(secret, "tunneler-session"), ticket: hmac(secret, "tunneler-ticket"), google: hmac(secret, "tunneler-google-link") };
       })();
       keyPromise.catch(() => { keyPromise = null; });   // (the store failed: asked again next time)
     }
@@ -317,16 +320,19 @@ function createAccounts(opts) {
     const pp = passwordProblem(password);
     if (pp) fail(400, pp);
     checkLock(a.key);
-    if (typeof old !== "string" || !(a.ids.password && await hashOk(a.ids.password, old))) { wrong(a.key); fail(401, "wrong"); }
+    // (an account made with Google Play has no password: it sets one - the session is the proof)
+    if (a.ids.password && !(typeof old === "string" && await hashOk(a.ids.password, old))) { wrong(a.key); fail(401, "wrong"); }
     const pw = await makeHash(password);
     await serial("a:" + a.id, async () => { if (a.deleted || gone.has(a.id)) fail(401, "session"); a.ids.password = pw; a.gen++; a.touched = now(); await save(a); });
     return a;
   }
   async function remove(a, password) {
     checkLock(a.key);
-    if (typeof password !== "string" || !(a.ids.password && await hashOk(a.ids.password, password))) { wrong(a.key); fail(401, "wrong"); }
+    // (an account without a password - Google Play: the session is the proof; the page asks twice)
+    if (a.ids.password && !(typeof password === "string" && await hashOk(a.ids.password, password))) { wrong(a.key); fail(401, "wrong"); }
     await serial("a:" + a.id, async () => {
       if (a.deleted || gone.has(a.id)) fail(401, "session");
+      if (a.ids.google && a.ids.google.sub) await store.del(googleFile(a.ids.google.sub));
       await store.del(nameFile(a.key));
       await store.del(a.id);
       gone.add(a.id);                 // (after the deletes: a store that failed keeps the account usable)
@@ -335,6 +341,74 @@ function createAccounts(opts) {
     });
     say("account deleted", JSON.stringify(a.name));
     if (opts.onDelete) try { await opts.onDelete(a); } catch (e) { say("account deleted, its data not all:", e && e.message); }
+  }
+
+  // ---------------------------------------------------------- Google Play Games (docs/v6/ACCOUNTS.md 6)
+  // opts.google = {clientId, clientSecret} - the game server's OAuth client of the Play Games project (GOOGLE_CLIENT_ID /
+  // GOOGLE_CLIENT_SECRET); without them signing in with Google is off (404 "off"). opts.google.fetch: tests.
+  const G = opts.google && opts.google.clientId && opts.google.clientSecret ? opts.google : null;
+  // the Android app's server auth code -> {sub: the Play Games player id, name}
+  async function googlePlayer(code) {
+    if (!G) fail(404, "off");
+    if (typeof code !== "string" || !code || code.length > 2000) fail(400, "bad");
+    const get = G.fetch || globalThis.fetch;
+    let me = null;
+    try {
+      const r = await get("https://oauth2.googleapis.com/token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ code, client_id: G.clientId, client_secret: G.clientSecret, grant_type: "authorization_code", redirect_uri: "" }).toString() });
+      const t = r.ok ? await r.json() : null;
+      if (t && typeof t.access_token === "string") {
+        const m = await get("https://games.googleapis.com/games/v1/players/me", { headers: { Authorization: "Bearer " + t.access_token } });
+        me = m.ok ? await m.json() : null;
+      }
+    } catch (e) { fail(503, "google"); }
+    if (!me || typeof me.playerId !== "string" || !me.playerId || me.playerId.length > 200) fail(401, "google");
+    return { sub: me.playerId, name: typeof me.displayName === "string" ? me.displayName : "" };
+  }
+  // signing in: the linked account - or, the first time, a link for choosing a username (and a suggestion)
+  async function google(code) {
+    const p = await googlePlayer(code), idx = await store.get(googleFile(p.sub));
+    const a = idx && typeof idx.id === "string" ? await load(idx.id) : null;
+    if (a && !a.deleted) { touch(a); say("account login (Google Play)", JSON.stringify(a.name)); return { account: a }; }
+    const k = await keys();
+    return { link: sign(k.google, { s: p.sub, e: now() + LINK_MS }), suggest: cleanUsername(p.name) || "" };
+  }
+  // the first time: a new account with that username, Google Play linked, no password
+  async function googleSignup(link, name) {
+    const k = await keys(), o = unsign(k.google, link);
+    if (!o || typeof o.s !== "string" || !Number.isFinite(o.e) || o.e <= now()) fail(401, "google");
+    const nm = cleanUsername(name);
+    if (!nm) fail(400, "name");
+    const key = usernameKey(nm), idx = nameFile(key), gidx = googleFile(o.s);
+    return serial("g:" + o.s, () => serial("n:" + key, async () => {
+      if (await store.get(gidx)) fail(409, "linked");
+      if (await store.get(idx)) fail(409, "taken");
+      const a = { format: 1, id: newId(), name: nm, key, created: now(), touched: now(), gen: 1, ids: { google: { sub: o.s } }, recovery: null };
+      await store.put(a.id, a);
+      await store.put(idx, { id: a.id });
+      await store.put(gidx, { id: a.id });
+      remember(a);
+      say("account created (Google Play)", JSON.stringify(nm));
+      return a;
+    }));
+  }
+  // a logged-in account links its Google Play (then either signs in)
+  async function linkGoogle(a, code) {
+    const p = await googlePlayer(code), gidx = googleFile(p.sub);
+    let acct = a;
+    await serial("g:" + p.sub, () => serial("a:" + a.id, async () => {
+      const idx = await store.get(gidx);
+      if (idx && idx.id && idx.id !== a.id) fail(409, "linked");
+      const cur = cache.get(a.id) || (await store.get(a.id)) || a;
+      if (cur.deleted || gone.has(a.id)) fail(401, "session");
+      if (cur.ids.google && cur.ids.google.sub && cur.ids.google.sub !== p.sub) await store.del(googleFile(cur.ids.google.sub));
+      cur.ids.google = { sub: p.sub };
+      await save(cur);
+      await store.put(gidx, { id: a.id });
+      acct = cur;
+    }));
+    say("account linked Google Play", JSON.stringify(acct.name));
+    return acct;
   }
 
   // ---------------------------------------------------------- tokens and tickets
@@ -391,7 +465,7 @@ function createAccounts(opts) {
   const L = opts.limits || {};                 // (tests: other limits per address)
   const allowSignup = rateLimiter(L.signups || MAX_SIGNUPS, SIGNUP_WINDOW, now0), allowLogin = rateLimiter(L.logins || MAX_LOGINS, LOGIN_WINDOW, now0);
   const allowReset = rateLimiter(MAX_RESETS, RESET_WINDOW, now0), allowSession = rateLimiter(MAX_SESSION_CALLS, 60000, now0);
-  const pub = a => ({ id: a.id, name: a.name, display: shown(a), created: a.created });
+  const pub = a => ({ id: a.id, name: a.name, display: shown(a), created: a.created, password: !!a.ids.password, google: !!a.ids.google });
   const str = (v, max) => typeof v === "string" && v.length <= max ? v : null;
   async function body(req) {
     let b;
@@ -445,6 +519,25 @@ function createAccounts(opts) {
         await changePassword(a, pwField(b.password), pwField(b.newPassword));
         return json(res, 200, { token: await token(a), account: pub(a) });
       }
+      if (p === "/api/account/google" && req.method === "POST") {             // (Google Play: the app's server auth code)
+        const b = await body(req);
+        if (!allowLogin(addr)) fail(429, "busy");
+        const r = await google(str(b.code, 2000));
+        return json(res, 200, r.account ? { token: await token(r.account), account: pub(r.account) } : { new: true, link: r.link, suggest: r.suggest });
+      }
+      if (p === "/api/account/google/signup" && req.method === "POST") {
+        const b = await body(req);
+        if (!allowSignup(addr)) fail(429, "busy");
+        const a = await googleSignup(str(b.link, 600), str(b.name, 100));
+        return json(res, 200, { token: await token(a), account: pub(a) });
+      }
+      if (p === "/api/account/link/google" && req.method === "POST") {
+        const b = await body(req);
+        if (!allowLogin(addr)) fail(429, "busy");
+        const a = await sessionOf(req);
+        if (!a) fail(401, "session");
+        return json(res, 200, { account: pub(await linkGoogle(a, str(b.code, 2000))) });
+      }
       if (p === "/api/account/name" && req.method === "POST") {
         const b = await body(req);
         if (!allowSession(addr)) fail(429, "busy");
@@ -469,6 +562,7 @@ function createAccounts(opts) {
   }
 
   return { api, sessionOf, useTicket, verifyToken, token, ticket, signup, login, reset, changePassword, setDisplay, shown, remove, load, byName, keys,
+    google, googleSignup, linkGoogle, get googleOn() { return !!G; },
     store, get storeName() { return store.name; }, get persistent() { return store.persistent; } };
 }
 

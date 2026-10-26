@@ -239,6 +239,10 @@ export function mount() {
     toAccount({ text: T(r.code === "taken" ? "set.dname.taken" : r.code === "name" ? "set.dname.bad" : "acc.err." + (["net", "busy", "session", "storage"].includes(r.code) ? r.code : "server"), { msg: r.msg || "" }), color: 12 });
     focusRow("dname");
   }
+  async function linkGoogle() {
+    const r = await Account.linkGoogle();
+    toAccount(r.ok ? { text: T("set.glink.ok"), color: 10 } : r.code === "cancel" ? null : { text: Login.errText(r), color: 12 });
+  }
   const focusRow = key => { const i = ui.spec.items.findIndex(it => it.key === key); if (i >= 0) { ui.sel = i; ui.draw(); } };
   function accountRows() {
     const s = Account.session();
@@ -248,7 +252,9 @@ export function mount() {
     if (!s) rows.push({ key: "login", label: T("acc.login.go"), info: [T("set.account.in.i"), T("set.account.i2")], go: openLogin });
     else rows.push({ key: "dname", label: pad("set.name"), input: dispForm, align: "left", info: [T("set.dname.i1"), T("set.name.i2")], go: saveDisplay },
       { key: "logout", label: T("acc.logout"), info: [T("acc.logout.i")], go: () => { Account.logout(); toAccount({ text: T("acc.out"), color: 10 }); } },
-      { key: "chpw", label: T("acc.change"), info: [T("acc.change.i"), T("acc.change.i2")],
+      // (Google Play, the Android app: link it - then either way signs in)
+      ...(Account.google() && !s.google ? [{ key: "glink", label: T("set.glink"), info: [T("set.glink.i")], go: linkGoogle }] : []),
+      { key: "chpw", label: T(Account.hasPassword() ? "acc.change" : "acc.setpw"), info: [T(Account.hasPassword() ? "acc.change.i" : "acc.setpw.i"), T("acc.change.i2")],
         go: () => Login.change(ui, { done: () => toAccount({ text: T("acc.changed"), color: 10 }), back: () => toAccount() }) },
       { key: "delacc", label: T("acc.delete"), info: [T("acc.delete.i")],
         go: () => Login.remove(ui, { done: () => toAccount({ text: T("acc.deleted"), color: 10 }), back: () => toAccount() }) });

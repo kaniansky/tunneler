@@ -285,17 +285,34 @@ and the recovery code's scrypt hashes, a random id, when it was created / last u
 results sent with it; the page keeps the session token in the browser. Deleting the account in the game (Settings,
 Online, Delete account) removes all of it from the server at once (the board entries and their replays too).
 
-## 6. Later: Google Play Games sign-in
+## 6. Google Play Games sign-in (the Android app - owner, 2026-10-26: an extra option)
 
-The account already holds linked identities (`ids`). Google comes as `ids.google = {sub}` (Play Games Services v2
-player id) with its own index object `account-google-<sha256(sub)>.json`:
+An account's linked identities (`ids`) hold `ids.google = {sub}` (the Play Games Services v2 player id), with its own
+index object `google-<sha256(sub)>` = `{id}` (accounts.js `googleFile`).
 
-- the Android app gets a server auth code from Play Games (a Tauri plugin / the MainActivity), sends it to
-  `POST /api/account/google {code}`; the server exchanges it with Google (OAuth client secret in the server's
-  env), reads the player id, and logs in the linked account - or, the first time, asks for a username and
-  creates one (no password: `ids.password` absent; Change password then offers "set a password");
-- a logged-in player links Google from Settings (`POST /api/account/link/google`), so the same account works
-  with either; deleting the account deletes the index too.
+- **The app** (MainActivity.kt): `window.TunnelerAndroid.playGamesCode()` - Play Games signs in by itself at start,
+  else its sign-in dialog -, then `requestServerSideAccess(<the server's web client id>)` -> the page gets
+  `window.tunnelerPlayGames({code})` or `{error: "cancel" | "google"}`. `playGamesAvailable()` is false in a build
+  without the Play Games project (the strings `game_services_project_id` / `play_games_web_client` from
+  `PLAY_GAMES_APP_ID` / `PLAY_GAMES_WEB_CLIENT_ID` at build time - CI: repository variables; the manifest's
+  `com.google.android.gms.games.APP_ID`). Dependency `play-services-games-v2`.
+- **The server** (`createAccounts({google: {clientId, clientSecret}})` from `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`,
+  off without - `/api/config` `google`): `POST /api/account/google {code}` swaps the code at Google's token endpoint
+  and reads `games/v1/players/me` -> the linked account's `{token, account}`, or the first time `{new, link, suggest}`
+  (a signed link, 10 minutes, and Play Games' display name if it is a username); `POST /api/account/google/signup
+  {link, name}` -> a new account, Google linked, **no password** (`ids.password` absent; `recovery` null); `POST
+  /api/account/link/google {code}` (Bearer) links a logged-in account (409 `linked` when another account has that
+  player). An account without a password sets one with Change password (no old one asked) and deletes itself
+  without one (the page asks twice); deleting removes the Google index too. `pub()` says `password` / `google`.
+- **The pages** (account.js `Account.google()` = the bridge is there and the server said `google`; `googleSignIn`,
+  `googleSignup`, `linkGoogle`, `hasPassword`): LOG IN offers "Sign in with Google Play"; the first time CHOOSE A
+  USERNAME; Settings, Online: "Link Google Play" while not linked, "Set a password" without one.
+- **Setting it up** (the owner): Play Console -> Play Games Services -> set up (a new Games project for
+  `com.kaniansky.Tunneler`); credentials: an Android OAuth client per signing key's SHA-1 (Play App Signing's and the
+  upload key's), and a **web application** OAuth client for the game server; the project id and the web client id
+  as repository variables `PLAY_GAMES_APP_ID`, `PLAY_GAMES_WEB_CLIENT_ID`; the web client's id and secret on the
+  server as `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` (Render: Environment). Add testers in Play Games Services
+  (while it isn't published) and publish its configuration when the app goes to production.
 
 Tokens, tickets, rooms and boards don't change: they only know the account id.
 

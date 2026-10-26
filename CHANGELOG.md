@@ -4,6 +4,12 @@ All notable changes to Tunneler. Versions follow [semantic versioning](https://s
 by pushing a version tag (see CONTRIBUTING.md). Up to its version 6.0.1 the game was called Tunneler Online:
 those releases are tagged `online-vX.Y.Z`, their changes are in [docs/CHANGELOG-online.md](docs/CHANGELOG-online.md).
 
+## Unreleased
+
+- Android: "Sign in with Google Play" - a Google Play Games account signs in (the first time it picks a username;
+  such an account has no password until it sets one), and a logged-in account can link its Google Play in Settings.
+  Needs the server's Google client and the app's Play Games project (docs/v6/ACCOUNTS.md section 6).
+
 ## 1.1.1
 
 - Android: the APK and the app bundle are small again. 1.1.0 built them with unstripped native libraries (the APK

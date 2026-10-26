@@ -27,7 +27,7 @@ function fakeServer(accounts) {
     let body = null;
     try { body = typeof o.body === "string" ? JSON.parse(o.body) : null; } catch (e) { body = null; }
     s.calls.push({ p, method, h, body });
-    if (p === "/api/config") return res(200, { version: "dev", accounts: s.accounts });
+    if (p === "/api/config") return res(200, { version: "dev", accounts: s.accounts, google: !!s.google });
     if (p.startsWith("/api/account") || p === "/api/ticket") {
       if (!s.accounts) return res(404, { code: "off" });
       const u = userOf(h);
@@ -41,6 +41,16 @@ function fakeServer(accounts) {
         const x = s.users.get(String(body.name).toLowerCase());
         if (!x || x.password !== body.password) return res(401, { code: "wrong" });
         return res(200, { token: x.token, account: { id: x.id, name: x.name } });
+      }
+      if (p === "/api/account/google") {                      // (Google Play: "code-<name>" - a new player the first time)
+        const g = [...s.users.values()].find(x => x.gsub === body.code);
+        return g ? res(200, { token: g.token, account: { id: g.id, name: g.name, google: true } }) : res(200, { new: true, link: "lnk:" + body.code, suggest: "Zed" });
+      }
+      if (p === "/api/account/google/signup") {
+        if (s.users.has(String(body.name).toLowerCase())) return res(409, { code: "taken" });
+        const nu = { id: "id" + s.users.size, name: body.name, token: "tok-" + body.name + "-1", gsub: String(body.link).slice(4) };
+        s.users.set(body.name.toLowerCase(), nu);
+        return res(200, { token: nu.token, account: { id: nu.id, name: nu.name, google: true, password: false } });
       }
       if (!u) return res(401, { code: "session" });
       if (p === "/api/account") return res(200, { account: { id: u.id, name: u.name } });
@@ -117,6 +127,38 @@ const item = (ui, k) => ui.spec.items.find(x => x.key === k);
 const go = (ui, k) => { const it = item(ui, k); assert(it, "no item " + k + " in " + ui.spec.items.map(x => x.key).join(",")); ui.sel = ui.spec.items.indexOf(it); it.go(); };
 
 (async () => {
+  // ---------------------------------------------------------------- Google Play (the Android app's bridge)
+  {
+    const srv = fakeServer(true);
+    srv.google = true;
+    const env = makeEnv("/games", "", srv, { [KNOWN]: "1", ["tunneler.google." + ORIGIN]: "1" });
+    let asked = 0;
+    env.win.TunnelerAndroid = { playGamesAvailable: () => true, playGamesCode() { asked++; setTimeout(() => env.win.tunnelerPlayGames({ code: "code-zed" }), 5); } };
+    env.page("lobby.html");
+    const win = env.win, ui = win.tunnelerLobbyUI();
+    ok(item(ui, "gplay") && /Google Play/.test(win.Lang.decode(String(item(ui, "gplay").label))), "LOG IN in the Android app: Sign in with Google Play");
+    go(ui, "gplay");
+    await waitFor(() => /CHOOSE A USERNAME/.test(linesOf(win, ui)));
+    ok(asked === 1 && item(ui, "user").input.value === "Zed", "the first time: CHOOSE A USERNAME, Google Play's name suggested");
+    item(ui, "user").input.value = "Zedd";
+    go(ui, "go");
+    await waitFor(() => env.storage.get(SESSION));
+    const ses = JSON.parse(env.storage.get(SESSION));
+    ok(ses.name === "Zedd" && ses.google === true && ses.password === false, "the account made: logged in, Google Play linked, no password");
+    // a cancelled sign-in: said so, still LOG IN
+    win.Account.logout();
+    const env2 = makeEnv("/games", "", srv, { [KNOWN]: "1", ["tunneler.google." + ORIGIN]: "1" });
+    env2.win.TunnelerAndroid = { playGamesCode() { setTimeout(() => env2.win.tunnelerPlayGames({ error: "cancel" }), 5); } };
+    env2.page("lobby.html");
+    const ui2 = env2.win.tunnelerLobbyUI();
+    go(ui2, "gplay");
+    await waitFor(() => /cancelled/.test(linesOf(env2.win, ui2)));
+    ok(/LOG IN/.test(linesOf(env2.win, ui2)) && !env2.storage.get(SESSION), "cancelled: said so, still LOG IN");
+    // a browser (no bridge): no such item
+    const env3 = makeEnv("/games", "", srv, { [KNOWN]: "1", ["tunneler.google." + ORIGIN]: "1" });
+    env3.page("lobby.html");
+    ok(!item(env3.win.tunnelerLobbyUI(), "gplay"), "a browser (no Android bridge): no Google Play item");
+  }
   // ---------------------------------------------------------------- the games list: LOG IN, create an account
   {
     const srv = fakeServer(true);

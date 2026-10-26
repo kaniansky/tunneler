@@ -16,8 +16,14 @@ import androidx.activity.enableEdgeToEdge
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import com.google.android.gms.games.PlayGames
+import com.google.android.gms.games.PlayGamesSdk
+import org.json.JSONObject
 
 // TUNNELER on Android (docs/ANDROID.md):
+// - Google Play Games sign-in (docs/v6/ACCOUNTS.md 6): window.TunnelerAndroid.playGamesCode() signs in and asks for a
+//   server auth code, answered by window.tunnelerPlayGames({code} | {error: "cancel" | "google"}); playGamesAvailable()
+//   is false when the build has no Play Games project (PLAY_GAMES_APP_ID / PLAY_GAMES_WEB_CLIENT_ID at build time);
 // - the game full screen (immersive: the status and navigation bars hidden, a swipe from the edge shows
 //   them for a moment) and the screen kept on while the app is in front (a match is played with the touch
 //   controls or a gamepad, often without touching the screen for a while);
@@ -32,9 +38,13 @@ class MainActivity : TauriActivity() {
   private var webView: WebView? = null
   private var backAdded = false
 
+  // (the build's Play Games project: empty strings = no Google Play sign-in in this build)
+  private val playGamesOn by lazy { getString(R.string.game_services_project_id).isNotEmpty() && getString(R.string.play_games_web_client).isNotEmpty() }
+
   override fun onCreate(savedInstanceState: Bundle?) {
     enableEdgeToEdge()
     super.onCreate(savedInstanceState)
+    if (playGamesOn) PlayGamesSdk.initialize(this)
     window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     immersive()
   }
@@ -46,6 +56,12 @@ class MainActivity : TauriActivity() {
 
   // the page's own files to the user's: returns where the file went ("Download/<name>"), "" when it couldn't
   inner class Files {
+    @JavascriptInterface
+    fun playGamesAvailable(): Boolean = playGamesOn
+
+    @JavascriptInterface
+    fun playGamesCode() { runOnUiThread { playGamesSignIn() } }
+
     @JavascriptInterface
     fun saveFile(name: String, base64: String): String {
       val safe = name.replace(Regex("[^A-Za-z0-9._-]"), "_").take(80).ifEmpty { "tunneler.replay" }
@@ -86,6 +102,26 @@ class MainActivity : TauriActivity() {
 
   // Back: added once the app is up, after Tauri's own app plugin added its handler (history back) - the
   // handler added last is asked first
+  // signed in already (Play Games signs in by itself at start), else the sign-in dialog; then the server auth code
+  private fun playGamesSignIn() {
+    if (!playGamesOn) return playGamesAnswer(null, "google")
+    val client = PlayGames.getGamesSignInClient(this)
+    client.isAuthenticated.addOnCompleteListener { t ->
+      if (t.isSuccessful && t.result.isAuthenticated) playGamesServerCode()
+      else client.signIn().addOnCompleteListener { s ->
+        if (s.isSuccessful && s.result.isAuthenticated) playGamesServerCode() else playGamesAnswer(null, "cancel")
+      }
+    }
+  }
+  private fun playGamesServerCode() {
+    PlayGames.getGamesSignInClient(this).requestServerSideAccess(getString(R.string.play_games_web_client), false)
+      .addOnCompleteListener { t -> if (t.isSuccessful && !t.result.isNullOrEmpty()) playGamesAnswer(t.result, null) else playGamesAnswer(null, "google") }
+  }
+  private fun playGamesAnswer(code: String?, error: String?) {
+    val js = if (code != null) "{\"code\":" + JSONObject.quote(code) + "}" else "{\"error\":" + JSONObject.quote(error ?: "google") + "}"
+    webView?.post { webView?.evaluateJavascript("window.tunnelerPlayGames && window.tunnelerPlayGames($js)", null) }
+  }
+
   override fun onPostResume() {
     super.onPostResume()
     if (backAdded) return

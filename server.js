@@ -788,7 +788,10 @@ function createServer(opts = {}) {
   const accounts = !accountsOn ? null : Accounts.createAccounts({ store: accountStore,
     secret: opts.accountSecret !== undefined ? opts.accountSecret : process.env.ACCOUNT_SECRET || null,
     scryptN: opts.scryptN, now: opts.now, say, lockFails: opts.lockFails, lockMs: opts.lockMs, limits: opts.accountLimits, json, readBody, addressOf,
-    onDelete: a => accountDeleted(a) });
+    onDelete: a => accountDeleted(a),
+    // Google Play Games sign-in (the Android app): the game server's OAuth client - off without (docs/v6/ACCOUNTS.md 6)
+    google: { clientId: opts.googleClientId !== undefined ? opts.googleClientId : process.env.GOOGLE_CLIENT_ID || null,
+      clientSecret: opts.googleClientSecret !== undefined ? opts.googleClientSecret : process.env.GOOGLE_CLIENT_SECRET || null, fetch: opts.googleFetch } });
   // the request's account (Bearer token) - or null after answering 401 {code: "session"} (503 when the store fails)
   async function needSession(req, res) {
     let a = null;
@@ -1038,7 +1041,7 @@ function createServer(opts = {}) {
           .filter(h => req.headers[h]).map(h => [h, String(req.headers[h]).slice(0, 300)])) } : {}) });
     }
     // what pages need to know about this server: whether online play needs an account (docs/v6/ACCOUNTS.md)
-    if (p === "/api/config" && (req.method === "GET" || req.method === "HEAD")) return json(res, 200, { version, accounts: accountsOn });
+    if (p === "/api/config" && (req.method === "GET" || req.method === "HEAD")) return json(res, 200, { version, accounts: accountsOn, google: !!(accounts && accounts.googleOn) });
     if (p === "/api/ticket" || p === "/api/account" || p.startsWith("/api/account/")) {
       if (!accounts) return json(res, 404, { error: "this server has no accounts", code: "off" });
       return accounts.api(req, res, p);

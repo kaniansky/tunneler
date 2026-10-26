@@ -310,6 +310,8 @@ Render's free disk is wiped on every deploy.
 - `ACCOUNTS=off` - no accounts: free player names as before (a LAN game, a server for friends). Default: on.
 - `ACCOUNT_SECRET` - the key that signs the players' login tokens (any long random string). Without it the server
   makes one at its first start and keeps it with the accounts; set it to be independent of the store.
+- `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` (optional) - the Play Games project's web OAuth client: the Android
+  app's "Sign in with Google Play" (docs/v6/ACCOUNTS.md section 6). Without them that option isn't offered.
 - Where accounts are kept: the replays' bucket - or `ACCOUNT_S3_BUCKET`, a bucket of their own with the same
   endpoint and keys -, else a folder (`ACCOUNT_DIR`, default `accounts/` in `REPLAY_DIR`), else memory (lost on a
   restart: development only). **A bucket lifecycle rule that deletes old replays deletes accounts in the same

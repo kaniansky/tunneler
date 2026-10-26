@@ -43,6 +43,10 @@ android {
         manifestPlaceholders["usesCleartextTraffic"] = "true"
         applicationId = "com.kaniansky.Tunneler"
         minSdk = 24
+        // Google Play Games sign-in (docs/v6/ACCOUNTS.md 6): the Play Games project's id and the game server's OAuth
+        // (web) client id, from the build's environment (repository variables in CI) - empty: no Google Play sign-in
+        resValue("string", "game_services_project_id", System.getenv("PLAY_GAMES_APP_ID") ?: "")
+        resValue("string", "play_games_web_client", System.getenv("PLAY_GAMES_WEB_CLIENT_ID") ?: "")
         targetSdk = 37
         versionCode = tauriProperties.getProperty("tauri.android.versionCode", "1").toInt()
         versionName = tauriProperties.getProperty("tauri.android.versionName", "1.0")
@@ -98,6 +102,7 @@ dependencies {
     implementation("androidx.activity:activity-ktx:1.10.1")
     implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.lifecycle:lifecycle-process:2.10.0")
+    implementation("com.google.android.gms:play-services-games-v2:20.1.2")
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.4")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.0")

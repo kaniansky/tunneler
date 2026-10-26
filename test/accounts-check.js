@@ -163,6 +163,74 @@ function record(day) {
     s.close();
   }
   {
+    // Google Play Games sign-in (docs/v6/ACCOUNTS.md 6): a fake Google - auth code "code-<player>" -> that player
+    console.log("Google Play");
+    let clock = Date.UTC(2026, 9, 26, 12);
+    const seen = [];
+    const googleFetch = async (url, o) => {
+      seen.push(url);
+      const res = (status, obj) => ({ ok: status < 300, status, json: async () => obj });
+      if (url === "https://oauth2.googleapis.com/token") {
+        const q = new URLSearchParams(o.body), m = /^code-(.+)$/.exec(q.get("code") || "");
+        return q.get("client_id") === "cid" && q.get("client_secret") === "csecret" && m ? res(200, { access_token: "at-" + m[1] }) : res(400, { error: "invalid_grant" });
+      }
+      if (url === "https://games.googleapis.com/games/v1/players/me") {
+        const m = /^Bearer at-(.+)$/.exec(o.headers.Authorization || "");
+        return m ? res(200, { playerId: "p-" + m[1], displayName: m[1] === "zed" ? "Zed Player" : "Ann" }) : res(401, {});
+      }
+      return res(404, {});
+    };
+    const off = await start();
+    let r = await api(off.port, "POST", "/api/account/google", { code: "code-zed" });
+    const cfgOff = await api(off.port, "GET", "/api/config");
+    ok(r.status === 404 && r.j.code === "off" && cfgOff.j.google === false, "without the server's Google client: off (404), /api/config google false");
+    off.s.close();
+    const { s, port } = await start({ now: () => clock, googleClientId: "cid", googleClientSecret: "csecret", googleFetch });
+    ok((await api(port, "GET", "/api/config")).j.google === true, "/api/config: google true");
+    r = await api(port, "POST", "/api/account/google", { code: "nonsense" });
+    ok(r.status === 401 && r.j.code === "google", "a code Google refuses: 401 google");
+    r = await api(port, "POST", "/api/account/google", { code: "code-zed" });
+    ok(r.status === 200 && r.j.new === true && typeof r.j.link === "string" && r.j.suggest === "Zed Player" && !r.j.token, "the first time: a link to choose a username, Google Play's name suggested");
+    const link = r.j.link;
+    await signup(port, "Taken", "taken password");
+    r = await api(port, "POST", "/api/account/google/signup", { link, name: "taken" });
+    ok(r.status === 409 && r.j.code === "taken", "the username taken: 409");
+    r = await api(port, "POST", "/api/account/google/signup", { link: link.replace(/.$/, c => c === "A" ? "B" : "A"), name: "Zedd" });
+    ok(r.status === 401 && r.j.code === "google", "a forged link: 401");
+    r = await api(port, "POST", "/api/account/google/signup", { link, name: "Zedd" });
+    ok(r.status === 200 && r.j.token && r.j.account.name === "Zedd" && r.j.account.google === true && r.j.account.password === false, "a new account: Google Play linked, no password");
+    const zedd = r.j;
+    r = await api(port, "POST", "/api/account/google/signup", { link, name: "Zedd2" });
+    ok(r.status === 409 && r.j.code === "linked", "the same Google Play account once only");
+    r = await api(port, "POST", "/api/account/google", { code: "code-zed" });
+    ok(r.status === 200 && r.j.token && r.j.account.id === zedd.account.id, "signing in again: the account");
+    ok((await login(port, "Zedd", "anything at all")).status === 401, "no password to log in with");
+    r = await api(port, "POST", "/api/account/password", { newPassword: "now a password" }, zedd.token);
+    ok(r.status === 200 && r.j.account.password === true && (await login(port, "Zedd", "now a password")).status === 200, "it sets a password (no old one): then both ways work");
+    clock += 11 * 60 * 1000;
+    const late = (await api(port, "POST", "/api/account/google", { code: "code-ann" })).j.link;
+    clock += 11 * 60 * 1000;
+    r = await api(port, "POST", "/api/account/google/signup", { link: late, name: "Annie" });
+    ok(r.status === 401 && r.j.code === "google", "a link older than 10 minutes: 401");
+    const taken = (await login(port, "Taken", "taken password")).j;
+    r = await api(port, "POST", "/api/account/link/google", { code: "code-zed" }, taken.token);
+    ok(r.status === 409 && r.j.code === "linked", "linking a Google Play account another account has: 409 linked");
+    r = await api(port, "POST", "/api/account/link/google", { code: "code-ann" }, taken.token);
+    ok(r.status === 200 && r.j.account.google === true && (await api(port, "POST", "/api/account/google", { code: "code-ann" })).j.account.name === "Taken",
+      "a password account links Google Play: it signs in with either");
+    const ann = (await api(port, "POST", "/api/account/google", { code: "code-ann" })).j;
+    r = await api(port, "POST", "/api/account/delete", {}, ann.token);
+    ok(r.status === 401, "deleting an account with a password still needs it");
+    r = await api(port, "POST", "/api/account/delete", { password: "taken password" }, ann.token);
+    ok(r.status === 200 && (await api(port, "POST", "/api/account/google", { code: "code-ann" })).j.new === true, "deleted: its Google Play link gone too (a new account next time)");
+    const z2 = (await api(port, "POST", "/api/account/google", { code: "code-zed" })).j;
+    await api(port, "POST", "/api/account/google/signup", { link: (await api(port, "POST", "/api/account/google", { code: "code-nopw" })).j.link, name: "NoPw" });
+    const nopw = (await api(port, "POST", "/api/account/google", { code: "code-nopw" })).j;
+    r = await api(port, "POST", "/api/account/delete", {}, nopw.token);
+    ok(z2.token && r.status === 200, "an account without a password deletes with its session alone");
+    s.close();
+  }
+  {
     // the display name (owner, 2026-10-26): changeable when logged in, the username stays the login
     console.log("display name");
     const { s, port } = await start();

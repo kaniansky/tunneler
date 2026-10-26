@@ -31,10 +31,13 @@ function session() {
     return s && typeof s === "object" && typeof s.token === "string" && typeof s.name === "string" ? s : null;
   } catch (e) { return null; }
 }
-const keep = (token, account) => { store.set(sessionKey(), JSON.stringify({ token, id: account.id, name: account.name, display: account.display || account.name })); return session(); };
+const keep = (token, account) => { store.set(sessionKey(), JSON.stringify({ token, id: account.id, name: account.name, display: account.display || account.name,
+  password: account.password !== false, google: !!account.google })); return session(); };
 const logout = () => store.del(sessionKey());
 function required() { const v = store.get(configKey()); return v === "1" ? true : v === "0" ? false : null; }
 const remember = on => store.set(configKey(), on ? "1" : "0");
+// the server signs in with Google Play (its OAuth client set) - remembered like the accounts' answer
+const googleKey = () => "tunneler.google." + origin();
 
 const asked = new Map();                                 // origin -> the answer's promise (once per page life)
 function config(force) {
@@ -49,6 +52,7 @@ function config(force) {
       if (!j || typeof j !== "object") { asked.delete(o); return null; }
       const on = j.accounts === true;
       remember(on);
+      store.set(googleKey(), on && j.google === true ? "1" : "0");
       return on;
     })
     .catch(() => { asked.delete(o); return null; });
@@ -100,6 +104,49 @@ async function setName(name) {
   else if (r.code === "session") logout();
   return r;
 }
+// ---- Google Play Games (the Android app - docs/v6/ACCOUNTS.md 6): the app's bridge (MainActivity) gives a server auth
+// code, the server swaps it with Google for the player
+const bridge = () => root.TunnelerAndroid && typeof root.TunnelerAndroid.playGamesCode === "function" ? root.TunnelerAndroid : null;
+// offered: in the Android app with Play Games set up, and the server signs in with it
+const googleReady = () => !!(bridge() && (!bridge().playGamesAvailable || bridge().playGamesAvailable()) && store.get(googleKey()) === "1");
+// the app's code -> {ok: true, authCode} | {ok: false, code: "off" / "cancel" / "google"}; the bridge answers through
+// window.tunnelerPlayGames({code} | {error})
+function playGamesCode() {
+  return new Promise(resolve => {
+    const b = bridge();
+    if (!b) return resolve({ ok: false, code: "off" });
+    const t = setTimeout(() => { root.tunnelerPlayGames = null; resolve({ ok: false, code: "google" }); }, 90000);
+    root.tunnelerPlayGames = r => {
+      clearTimeout(t); root.tunnelerPlayGames = null;
+      resolve(r && typeof r.code === "string" && r.code ? { ok: true, authCode: r.code } : { ok: false, code: r && r.error === "cancel" ? "cancel" : "google" });
+    };
+    try { b.playGamesCode(); } catch (e) { clearTimeout(t); root.tunnelerPlayGames = null; resolve({ ok: false, code: "google" }); }
+  });
+}
+// signing in: logged in ({ok, token}) - or, the first time, {ok, new: true, link, suggest} (then googleSignup)
+async function googleSignIn() {
+  const c = await playGamesCode();
+  if (!c.ok) return c;
+  const r = await call("POST", "/api/account/google", { code: c.authCode });
+  if (r.ok && r.token) keep(r.token, r.account);
+  return r;
+}
+async function googleSignup(link, name) {
+  const r = await call("POST", "/api/account/google/signup", { link, name });
+  if (r.ok) keep(r.token, r.account);
+  return r;
+}
+// the logged-in account links its Google Play
+async function linkGoogle() {
+  const s = session();
+  if (!s) return { ok: false, code: "session" };
+  const c = await playGamesCode();
+  if (!c.ok) return c;
+  const r = await call("POST", "/api/account/link/google", { code: c.authCode }, true);
+  if (r.ok && r.account) keep(s.token, r.account);
+  else if (r.code === "session") logout();
+  return r;
+}
 async function remove(password) {
   const r = await call("POST", "/api/account/delete", { password }, true);
   if (r.ok || r.code === "session") logout();
@@ -127,4 +174,5 @@ export const Account = {
   origin, host: () => origin().replace(/^[a-z]+:\/\//i, ""), required, config, session, name: () => (session() || {}).name || "",
   display: () => { const s = session() || {}; return s.display || s.name || ""; },
   check, signup, login, reset, changePassword, setName, remove, logout, ticket, auth,
+  google: googleReady, googleSignIn, googleSignup, linkGoogle, hasPassword: () => (session() || {}).password !== false,
 };

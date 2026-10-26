@@ -20,7 +20,7 @@ function errText(r, ctx) {
   if (c === "wrong" && ctx) return T("acc.err." + ctx);
   if (c === "locked") return T("acc.err.locked", { n: String(Math.max(1, r.wait | 0 || 60)) });
   if (c === "net") return T("acc.err.net");
-  if (["wrong", "busy", "taken", "name", "short", "long", "off", "session", "match", "empty", "code", "storage"].includes(c)) return T("acc.err." + c);
+  if (["wrong", "busy", "taken", "name", "short", "long", "off", "session", "match", "empty", "code", "storage", "google", "linked", "cancel"].includes(c)) return T("acc.err." + c);
   return T("acc.err.server", { msg: String(r && (r.msg || c) || "?").slice(0, 40) });
 }
 // right-aligned labels: the inputs line up (display columns)
@@ -89,6 +89,7 @@ function ask(ui, opts) {
   const user = { value: Account.name() || "", max: NetProto.MAX_PLAYER_NAME, width: widthFor("ph.user", NetProto.MAX_PLAYER_NAME, 18) };
   const pass = { value: "", max: PW_MAX, width: 20, secret: true }, pass2 = { value: "", max: PW_MAX, width: 20, secret: true };
   const code = { value: "", max: 23, width: 23 };
+  let link = null;                                       // (Google Play, the first time: the server's link for the username)
   const clear = () => { pass.value = ""; pass2.value = ""; code.value = ""; state.err = null; };
   const to = v => { view = v; clear(); ui.sel = 0; draw(); };
   const back = () => { if (state.busy) return; if (view === "login") opts.back(); else to("login"); };
@@ -116,6 +117,18 @@ function ask(ui, opts) {
     if (pass.value !== pass2.value) return refuse("match");
     run(() => Account.signup(name, pass.value), r => { clear(); view = "code"; showCode(ui, r.account.name, r.recovery, false, () => done(Account.session())); });
   }
+  // Google Play (the Android app): signed in - or, the first time, CHOOSE A USERNAME (Google Play's name suggested)
+  function doGoogle() {
+    run(() => Account.googleSignIn(), r => {
+      if (r.token) { clear(); return done(Account.session()); }
+      link = r.link; to("gname"); if (r.suggest && !user.value.trim()) user.value = r.suggest; draw(true);
+    });
+  }
+  function doGoogleName() {
+    const name = NetProto.cleanUsername(user.value);
+    if (!name) return refuse("name");
+    run(() => Account.googleSignup(link, name), () => { clear(); link = null; done(Account.session()); });
+  }
   function doReset() {
     if (!user.value.trim() || !NetProto.cleanRecovery(code.value)) return refuse("code");
     const pp = NetProto.passwordProblem(pass.value);
@@ -130,13 +143,17 @@ function ask(ui, opts) {
     if (view === "login") formScreen(ui, { title: "acc.login.title", lines: ["acc.login.i1", "acc.login.i2"], state,
       fields: [{ key: "user", label: "acc.user", input: user, info: ["acc.user.i"] }, { key: "pass", label: "acc.pass", input: pass, info: ["acc.login.go.i"] }],
       go: { label: "acc.login.go", info: ["acc.login.go.i"], run: doLogin },
-      extra: [{ key: "create", label: T("acc.create"), info: [T("acc.create.i")], go: () => { if (!state.busy) to("create"); } },
+      extra: [...(Account.google() ? [{ key: "gplay", label: T("acc.gplay"), info: [T("acc.gplay.i")], go: doGoogle }] : []),
+        { key: "create", label: T("acc.create"), info: [T("acc.create.i")], go: () => { if (!state.busy) to("create"); } },
         { key: "forgot", label: T("acc.forgot"), info: [T("acc.forgot.i")], go: () => { if (!state.busy) to("reset"); } }],
       back: backItem }, keep);
     else if (view === "create") formScreen(ui, { title: "acc.create.title", lines: ["acc.create.i1", "acc.create.i2"], state,
       fields: [{ key: "user", label: "acc.user", input: user, info: ["acc.user.i"] }, { key: "pass", label: "acc.pass", input: pass, info: ["acc.pass.i"] },
         { key: "pass2", label: "acc.pass2", input: pass2, info: ["acc.pass.i"] }],
       go: { label: "acc.create.go", info: ["acc.create.go.i"], run: doCreate }, back: backItem }, keep);
+    else if (view === "gname") formScreen(ui, { title: "acc.gname.title", lines: ["acc.gname.i1", "acc.gname.i2"], state,
+      fields: [{ key: "user", label: "acc.user", input: user, info: ["acc.user.i"] }],
+      go: { label: "acc.gname.go", info: ["acc.gname.go.i"], run: doGoogleName }, back: backItem }, keep);
     else if (view === "reset") formScreen(ui, { title: "acc.reset.title", lines: ["acc.reset.i1", "acc.reset.i2"], state,
       fields: [{ key: "user", label: "acc.user", input: user, info: ["acc.reset.user.i"] }, { key: "code", label: "acc.code", input: code, info: ["acc.code.i"] },
         { key: "pass", label: "acc.newpass", input: pass, info: ["acc.pass.i"] }, { key: "pass2", label: "acc.pass2", input: pass2, info: ["acc.pass.i"] }],
@@ -150,10 +167,11 @@ function change(ui, opts) {
   const state = { err: null, busy: false };
   const old = { value: "", max: PW_MAX, width: 20, secret: true }, pass = { value: "", max: PW_MAX, width: 20, secret: true }, pass2 = { value: "", max: PW_MAX, width: 20, secret: true };
   const back = () => { if (!state.busy) opts.back(); };
+  const hasPw = Account.hasPassword();                   // (an account made with Google Play sets its first one: no old one)
   async function go() {
     if (state.busy) return;
     const pp = NetProto.passwordProblem(pass.value);
-    if (!old.value) { state.err = errText({ code: "empty" }); return draw(true); }
+    if (hasPw && !old.value) { state.err = errText({ code: "empty" }); return draw(true); }
     if (pp || pass.value !== pass2.value) { state.err = errText({ code: pp || "match" }); return draw(true); }
     state.busy = true; state.err = null; draw(true);
     const r = await Account.changePassword(old.value, pass.value).catch(() => ({ ok: false, code: "net" }));
@@ -165,8 +183,8 @@ function change(ui, opts) {
   }
   function draw(keep) {
     pass.placeholder = T("ph.pass8");
-    formScreen(ui, { title: "acc.change.title", lines: ["acc.change.i1", "acc.change.i2"], state,
-      fields: [{ key: "old", label: "acc.oldpass", input: old, info: ["acc.change.i1"] }, { key: "pass", label: "acc.newpass", input: pass, info: ["acc.pass.i"] },
+    formScreen(ui, { title: hasPw ? "acc.change.title" : "acc.setpw.title", lines: hasPw ? ["acc.change.i1", "acc.change.i2"] : ["acc.setpw.i1", "acc.change.i2"], state,
+      fields: [...(hasPw ? [{ key: "old", label: "acc.oldpass", input: old, info: ["acc.change.i1"] }] : []), { key: "pass", label: "acc.newpass", input: pass, info: ["acc.pass.i"] },
         { key: "pass2", label: "acc.pass2", input: pass2, info: ["acc.pass.i"] }],
       go: { label: "acc.change.go", info: ["acc.change.go.i"], run: go }, back: { label: "set.back", run: back } }, keep);
   }
@@ -178,9 +196,10 @@ function remove(ui, opts) {
   const pass = { value: "", max: PW_MAX, width: 20, secret: true };
   let armed = 0, timer = null;
   const back = () => { if (!state.busy) { clearTimeout(timer); opts.back(); } };
+  const hasPw = Account.hasPassword();                   // (without one - Google Play: Enter twice is all)
   async function go() {
     if (state.busy) return;
-    if (!pass.value) { state.err = errText({ code: "empty" }); return draw(true); }
+    if (hasPw && !pass.value) { state.err = errText({ code: "empty" }); return draw(true); }
     // (the first Enter arms it for 4 s - a second one deletes)
     if (!(armed > Date.now())) { armed = Date.now() + 4000; clearTimeout(timer); timer = setTimeout(() => { armed = 0; draw(true); }, 4000); return draw(true); }
     armed = 0; clearTimeout(timer);
@@ -194,8 +213,8 @@ function remove(ui, opts) {
   }
   function draw(keep) {
     const name = Account.name();
-    formScreen(ui, { title: "acc.delete.title", lines: [{ text: T("acc.delete.i1", { name }), color: 15 }, "acc.delete.i2", "acc.delete.i3"], state,
-      fields: [{ key: "pass", label: "acc.pass", input: pass, info: ["acc.delete.i3"] }],
+    formScreen(ui, { title: "acc.delete.title", lines: [{ text: T("acc.delete.i1", { name }), color: 15 }, "acc.delete.i2", hasPw ? "acc.delete.i3" : "acc.delete.i3g"], state,
+      fields: hasPw ? [{ key: "pass", label: "acc.pass", input: pass, info: ["acc.delete.i3"] }] : [],
       go: { label: "acc.delete.go", info: armed > Date.now() ? [] : ["acc.delete.go.i"], run: go }, back: { label: "set.back", run: back } }, keep);
     // (armed: the warning in red as the item's info)
     if (armed > Date.now() && ui.spec && ui.spec.items) {
