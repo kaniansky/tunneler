@@ -6,7 +6,7 @@ Guidance for Claude Code (and humans) working in this repo. Read it before non-t
 
 **Tunneler** (called Tunneler Online up to its 6.0.1, then started again at 1.0.0 - owner, 2026-10-26;
 the old releases are tagged `online-vX.Y.Z`, their changes in docs/CHANGELOG-online.md; only the server's address
-tunneler.onrender.com keeps the old name; ids, file names, packages and the repository are `tunneler` /
+tunneler-online.onrender.com keeps the old name; ids, file names, packages and the repository are `tunneler` /
 `com.kaniansky.Tunneler` now): TUNNELER 2.0 (1991 DOS game by Geoffrey Silverton, Turbo Pascal 4.0, public domain)
 rewritten in JavaScript from its **decompiled** source, playable in the browser in three modes:
 split screen (hotseat), vs computer (1-7 computer tanks, free-for-all or teams, 4 difficulties, seeing

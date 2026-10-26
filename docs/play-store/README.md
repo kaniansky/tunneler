@@ -9,12 +9,14 @@ Background: docs/ANDROID.md (build, signing, CI). Files in this folder:
 | `forms.md` | Suggested answers: Data safety, content rating, target audience, ads, app access, category, contact |
 | `icon-512.png` | The app icon, 512 x 512, full square (Play rounds the corners itself) - `node tools/make-icons.js` |
 | `feature-graphic.png` | 1024 x 500 feature graphic |
-| `screenshots/phone-1..6-*.png` | Portrait phone screenshots, 1080 x 2160 (1:2 - Play allows at most 2:1) |
-| `screenshots/phone-7..8-landscape-*.png` | Landscape phone screenshots, 1920 x 1080 |
+| `screenshots/phone-1..8-*.png` | Phone screenshots, upright, 1080 x 2160 (1:2 - Play allows at most 2:1) |
+| `screenshots/tablet7-1..8-*.png` | 7" tablet screenshots, sideways, 1920 x 1200 |
+| `screenshots/tablet10-1..8-*.png` | 10" tablet screenshots, sideways, 2560 x 1600 |
 
-The screenshots were taken from a local build (modern graphics, a 360 x 720 / 640 x 360 phone viewport at
-3x, touch): the main menu, the skirmish setup, a battle, four tanks' views, an online game's lobby, a replay
-(four views), a landscape battle and a landscape replay.
+`node tools/play-screenshots.js` takes all of them from the current build (`npm run build` first; it runs its own
+server, modern graphics, a touch device): 1 the main menu, 2 the skirmish's settings, 3 a battle with the touch
+controls, 4 four tanks, 5 an online game's lobby (quick play), 6 the daily challenge's leaderboard, 7 the map
+editor, 8 a replay.
 
 ## Before you start
 
@@ -44,8 +46,8 @@ The screenshots were taken from a local build (modern graphics, a 360 x 720 / 64
    - App name, short description, full description: `listing.md` -> en.
    - App icon: `icon-512.png`.
    - Feature graphic: `feature-graphic.png`.
-   - Phone screenshots: `screenshots/phone-1-menu.png` ... `phone-8-landscape-replay.png` (2-8 allowed;
-     order as numbered). Tablet screenshots are optional (the same files can be used for 7" tablets).
+   - Phone screenshots: `screenshots/phone-1-menu.png` ... `phone-8-replay.png` (2-8 allowed; order as numbered).
+   - 7-inch / 10-inch tablet screenshots: `screenshots/tablet7-*.png` / `tablet10-*.png`.
    - Translations: "Manage translations" -> "Add your own translations" -> sk-SK, cs-CZ, uk-UA, ru-RU,
      paste from `listing.md` (the same graphics are used unless you upload localized ones).
 4. **Store settings**: category Game -> **Arcade** (or Action), tags, contact e-mail and website
