@@ -128,8 +128,10 @@
     salted hash).</li>
   </ul>
   <p>The server needs this to run the game: everyone in the same game sees your name, your chat messages
-  and your tank. It keeps it <strong>in memory only, while the game room exists</strong>; rooms are removed
-  after about 10 minutes without players. The server program writes a short technical log (for example
+  and your tank. It keeps it <strong>in memory, while the game room exists</strong>; rooms are removed
+  after about 10 minutes without players. When the server restarts (for example when a new version goes live),
+  it writes its open rooms - their players' names, settings and recent chat - to its storage so that the next
+  server can carry the games on, and the next server deletes that copy as soon as it has read it. The server program writes a short technical log (for example
   when a room is created, or when a player name joins or leaves a room) to its console; it does not
   record chat messages or IP addresses there.</p>
   <p>The server sees your IP address, as every internet server does. The game server uses it in memory only,
