@@ -31,7 +31,7 @@ screens drawn anew - see below).
 ## What's new
 
 - **Quick play** (Online game, in the list of games): straight into an online game. The server finds a game with a
-  place for you or makes one - four tanks free-for-all, computer tanks in every seat nobody sits on, matches that
+  place for you or makes one - eight tanks free-for-all, computer tanks in every seat nobody sits on, matches that
   start by themselves after a short countdown. Join a running match and you take over a computer tank at once;
   leave, and the computer drives it again.
 - **Daily challenge** (main menu): every day (UTC) a new skirmish, the same for everyone - the same world, mode,

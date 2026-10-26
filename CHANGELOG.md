@@ -8,6 +8,9 @@ those releases are tagged `online-vX.Y.Z`, their changes are in [docs/CHANGELOG-
 
 - Modern graphics: the tanks' treads roll as they drive (forwards and backwards).
 - Quick play is in the list of games (Online game) only - no longer on the main menu.
+- Quick play games have all 8 seats (computer tanks in every seat nobody sits on), and a destroyed player watches
+  the tank that destroyed them.
+- The list of games has no WATCHING column: PLAYERS shows the spectators too ("2/4 + 3").
 - Phones and tablets: Settings has no Controls category (its keys are a keyboard's; the touch controls' size and
   left-handed rows are in Display) and no Volume row (always 100 %: the phone's buttons set the loudness), and the
   Graphics rows leave out the "Display only" line, so everything fits above Back.

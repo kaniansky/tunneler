@@ -37,7 +37,7 @@ Lang.register("uk", {
   "vw.grid": "Усі екрани", "vw.map": "Мапа й рахунок", "vw.follow": "Стежу за: {name}", "vw.hint": "Tab або 1 2 3: огляд", "vw.destroyed": "ЗНИЩЕНО", "vw.hint2": "← →: танк",
   "vw.tank": "Танк", "vw.wins": "Перемоги", "vw.energy": "Енергія", "vw.shield": "Щит", "vw.alive": "живий", "vw.dead": "знищений",
   "back.main": "До головного меню", "back.main.i": "Назад до головного меню.",
-  "lobby.title": "ІГРИ ОНЛАЙН", "room.title": "ГРА ОНЛАЙН", "lobby.name": "НАЗВА", "lobby.players": "ГРАВЦІ", "lobby.mode": "РЕЖИМ", "lobby.ai": "ШІ", "lobby.spec": "ГЛЯДАЧІ", "lobby.state": "СТАН",
+  "lobby.title": "ІГРИ ОНЛАЙН", "room.title": "ГРА ОНЛАЙН", "lobby.name": "НАЗВА", "lobby.players": "ГРАВЦІ", "lobby.mode": "РЕЖИМ", "lobby.ai": "ШІ", "lobby.state": "СТАН",
   "state.paused": "Пауза", "state.round": "Раунд {n}",
   "lobby.join": "<ENTER> - приєднатися до гри", "lobby.none": "Зараз немає відкритих ігор",
   "lobby.create": "Створити нову гру", "lobby.create.i": "Створи гру й запроси когось.", "lobby.connecting": "Підключення до сервера...", "lobby.wake": "Сервер, що спав, може прокидатися до хвилини.",

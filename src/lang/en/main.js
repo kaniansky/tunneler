@@ -39,7 +39,7 @@ Lang.register("en", {
   "vw.grid": "All views", "vw.map": "Map and scores", "vw.follow": "Following {name}", "vw.hint": "Tab or 1 2 3: view", "vw.destroyed": "DESTROYED", "vw.hint2": "← →: tank",
   "vw.tank": "Tank", "vw.wins": "Wins", "vw.energy": "Energy", "vw.shield": "Shield", "vw.alive": "alive", "vw.dead": "destroyed",
   "back.main": "Back to main menu", "back.main.i": "Back to the main menu.",
-  "lobby.title": "ONLINE GAMES", "room.title": "ONLINE GAME", "lobby.name": "NAME", "lobby.players": "PLAYERS", "lobby.mode": "MODE", "lobby.ai": "AI", "lobby.spec": "WATCHING", "lobby.state": "STATE",
+  "lobby.title": "ONLINE GAMES", "room.title": "ONLINE GAME", "lobby.name": "NAME", "lobby.players": "PLAYERS", "lobby.mode": "MODE", "lobby.ai": "AI", "lobby.state": "STATE",
   "state.paused": "Paused", "state.round": "Round {n}",
   "lobby.join": "<ENTER> to join this game", "lobby.none": "No public games right now",
   "lobby.create": "Create a new game", "lobby.create.i": "Start a game and invite someone to it.", "lobby.connecting": "Connecting to the server...", "lobby.wake": "A server that was asleep can take up to a minute to wake up.",

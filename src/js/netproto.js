@@ -238,10 +238,11 @@ function readCfg(c) {
 // A quick-play room: QUICK_TANKS seats free-for-all, every seat nobody sits on a computer tank of QUICK_LEVEL,
 // the settings fixed; it starts its matches by itself, and a human who joins takes over a computer tank -
 // in the middle of a match too. Who drives a tank changes by "drive markers" in the frame log (FrameLog.pushN).
-const QUICK_TANKS = 4, QUICK_LEVEL = "normal";
+// (owner, 2026-10-26: all 8 seats - was 4 and 4 closed -, after death "watch killer": free-for-all has no team to watch)
+const QUICK_TANKS = 8, QUICK_LEVEL = "normal";
 const quickSettings = () => roomSettings({
   seats: ROLES.map((r, i) => i < QUICK_TANKS ? { kind: QUICK_LEVEL, team: i + 1 } : { kind: "closed", team: i + 1 }),
-  size: "medium", winScore: 3, roundTime: 5, friendlyFire: false, visible: "self", watchOut: "wreck", sight: "full", mode: "standard" });
+  size: "medium", winScore: 3, roundTime: 5, friendlyFire: false, visible: "self", watchOut: "killer", sight: "full", mode: "standard" });
 // does slot s of a match get a computer player on every client? Its computer tanks - and in a quick-play match
 // every tank (a human's too: its computer player takes over when the human leaves)
 const aiSlot = (cfg, s) => !!s && (!!s.bot || (!!cfg && !!cfg.qp && LEVELS.includes(s.level)));

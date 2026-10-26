@@ -171,11 +171,11 @@ function netprotoChecks() {
     assert(aiSlot({}, { bot: true }) && !aiSlot({}, { bot: false, level: "normal" }) && aiSlot({ qp: true }, { bot: false, level: "normal" }));
     assert(!aiSlot({ qp: true }, { bot: false, level: null }));
   });
-  check("quickSettings: 4 computer tanks of medium level free-for-all, the rest closed, fixed settings", () => {
+  check("quickSettings: 8 computer tanks of medium level free-for-all, fixed settings, after death watch killer", () => {
     const s = NetProto.quickSettings();
-    assert.deepStrictEqual(s.seats.map(x => x.kind), ["normal", "normal", "normal", "normal", "closed", "closed", "closed", "closed"]);
-    assert.deepStrictEqual(s.seats.slice(0, 4).map(x => x.team), [1, 2, 3, 4]);
-    assert(s.size === "medium" && s.winScore === 3 && s.mode === "standard" && s.roundTime === 5 && !s.friendlyFire);
+    assert.deepStrictEqual(s.seats.map(x => x.kind), Array(8).fill("normal"));
+    assert.deepStrictEqual(s.seats.map(x => x.team), [1, 2, 3, 4, 5, 6, 7, 8]);
+    assert(s.size === "medium" && s.winScore === 3 && s.mode === "standard" && s.roundTime === 5 && !s.friendlyFire && s.watchOut === "killer");
   });
 }
 
@@ -192,10 +192,12 @@ async function holdChecks() {
   const B = await new Client(port, id, { name: "Ben" }).connect();
   const C = await new Client(port, id, { name: "Cid" }).connect();
   const D = await new Client(port, id, { name: "Dee" }).connect();
+  const more = [];
+  for (const name of ["Eli", "Fay", "Gus", "Hal"]) more.push(await new Client(port, id, { name }).connect());
   const W = await new Client(port, id, { name: "Wes" }).connect();
   await settle();
-  check("four players drive the four tanks, the fifth waits", () => {
-    assert.deepStrictEqual([A.you, B.you, C.you, D.you, W.you], [0, 1, 2, 3, -1]);
+  check("eight players drive the eight tanks, the ninth waits", () => {
+    assert.deepStrictEqual([A.you, B.you, C.you, D.you, ...more.map(c => c.you), W.you], [0, 1, 2, 3, 4, 5, 6, 7, -1]);
   });
   const cidB = B.cid;
   await B.close();
@@ -218,7 +220,7 @@ async function holdChecks() {
     const r = reference(room.match);
     for (const c of [A, B2, D, W]) sameHashes(c.run, r, c.name);
   });
-  for (const c of [A, B2, D, W]) await c.close();
+  for (const c of [A, B2, D, W, ...more]) await c.close();
   srv.close();
 }
 
@@ -238,8 +240,8 @@ async function main() {
     assert(/^[0-9a-f]{32}$/.test(q1.json.hostKey));
     const r = info.json;
     assert.strictEqual(r.qp, true); assert.strictEqual(r.public, true); assert.strictEqual(r.spectators, true);
-    assert.deepStrictEqual(r.seats.map(s => s.kind), ["normal", "normal", "normal", "normal", "closed", "closed", "closed", "closed"]);
-    assert(r.places === 4 && r.open === 4 && r.bots === 4 && r.players === 0, JSON.stringify([r.places, r.open, r.bots, r.players]));
+    assert.deepStrictEqual(r.seats.map(s => s.kind), Array(8).fill("normal"));
+    assert(r.places === 8 && r.open === 8 && r.bots === 8 && r.players === 0, JSON.stringify([r.places, r.open, r.bots, r.players]));
   });
   const bad = await http(port, "POST", "/api/quickplay", { name: "x", version: "0.0.1" });
   const junk = await fetch(`http://127.0.0.1:${port}/api/quickplay`, { method: "POST", body: "x".repeat(3000) });
@@ -251,7 +253,7 @@ async function main() {
   await until(() => A.status, "status");
   check("the first player sits on a computer seat (it becomes open); the countdown runs", () => {
     assert.strictEqual(A.seat(), 0);
-    assert.deepStrictEqual(A.status.seats.map(s => s.kind).slice(0, 5), ["open", "normal", "normal", "normal", "closed"]);
+    assert.deepStrictEqual(A.status.seats.map(s => s.kind).slice(0, 5), ["open", "normal", "normal", "normal", "normal"]);
     assert(A.status.qp && A.status.qp.left > 0 && A.status.qp.left <= 1500, JSON.stringify(A.status.qp));
     assert.strictEqual(A.status.cant, null);
   });
@@ -284,9 +286,9 @@ async function main() {
   check("the match started by itself: quick play cfg, every tank with a computer level, Anna drives BLUE", () => {
     const c = A.run.cfg;
     assert.strictEqual(c.qp, true); assert.strictEqual(c.ext, true);
-    assert.deepStrictEqual(c.slots.map(s => [s.color, s.bot, s.level, s.team]), [[0, false, "normal", 1], [1, true, "normal", 2], [2, true, "normal", 3], [3, true, "normal", 4]]);
+    assert.deepStrictEqual(c.slots.map(s => [s.color, s.bot, s.level, s.team]), [0, 1, 2, 3, 4, 5, 6, 7].map(i => [i, i > 0, "normal", i + 1]));
     assert.strictEqual(A.you, 0); assert.strictEqual(A.run.names[0], "Anna");
-    assert.deepStrictEqual(A.run.bots.map(Boolean), [true, true, true, true]);
+    assert.deepStrictEqual(A.run.bots.map(Boolean), Array(8).fill(true));
   });
   // Anna plays a little: moves and fires now and then
   let tAnna = 0;
@@ -311,14 +313,16 @@ async function main() {
     const e = room.match.log.entries.find(x => x.length === 4);
     assert(e && e[1] === 1 && e[3][0][1] === C.k);
   });
-  // more players: D and E take the last two computer tanks, F finds none and waits as a spectator
+  // more players: D, E and four more take the last computer tanks, F finds none and waits as a spectator
   const D = await new Client(port, id, { name: "Dan" }).connect();
   const E = await new Client(port, id, { name: "Eve" }).connect();
+  const more = [];
+  for (const name of ["Gil", "Hana", "Ivo", "Jo"]) more.push(await new Client(port, id, { name }).connect());
   const F = await new Client(port, id, { name: "Finn" }).connect();
   await settle();
   const qFull = await http(port, "POST", "/api/quickplay", { name: "Quick play" });
-  check("every tank taken: D, E get the last two, F waits; the next quick play makes a new room", () => {
-    assert.strictEqual(D.you, 2); assert.strictEqual(E.you, 3); assert.strictEqual(F.you, -1);
+  check("every tank taken: D, E and four more get the last ones, F waits; the next quick play makes a new room", () => {
+    assert.strictEqual(D.you, 2); assert.strictEqual(E.you, 3); assert.deepStrictEqual(more.map(c => c.you), [4, 5, 6, 7]); assert.strictEqual(F.you, -1);
     assert.strictEqual(qFull.json.created, true); assert.notStrictEqual(qFull.json.id, id);
   });
   await until(() => A.run.frames > N + 200 && C.run.frames > N + 200, "Cleo plays");
@@ -332,7 +336,7 @@ async function main() {
   const leaveAt = room.match.log.length;
   await C.close();
   await until(() => F.yous.length, "F gets the tank Cleo left");
-  await until(() => A.run.drives.length >= 5, "the hand-back markers");
+  await until(() => A.run.drives.length >= 9, "the hand-back markers");
   check("Cleo leaves: tank 1 back to its computer player and on to the waiting spectator ({t:\"you\"}), both in one frame", () => {
     assert.deepStrictEqual(F.yous, [1]);
     const last = A.run.drives.slice(-2);
@@ -340,7 +344,7 @@ async function main() {
     assert.strictEqual(last[0][0], last[1][0]); assert(last[0][0] >= leaveAt);
   });
   await F.close();
-  await until(() => A.run.drives.length >= 6 && A.run.drives[A.run.drives.length - 1][2] === 0, "F's hand-back");
+  await until(() => A.run.drives.length >= 10 && A.run.drives[A.run.drives.length - 1][2] === 0, "F's hand-back");
   await until(() => A.run.frames > A.run.drives[A.run.drives.length - 1][0] + 150, "the computer drives tank 1 again");
   check("Finn leaves: tank 1 to the computer again, its name gone", () => {
     assert.strictEqual(A.run.engine.names[1], null);
@@ -366,22 +370,22 @@ async function main() {
     assert.strictEqual(stateHash(e), A.run.hashes[rec.n - 1]);
   });
   const list = await http(port, "GET", "/api/rooms");
-  check("the list: qp, players 3 (Anna, Dan, Eve), places 4, one computer tank to take over", () => {
+  check("the list: qp, players 7 (Anna, Dan, Eve and four more), places 8, one computer tank to take over", () => {
     const r = list.json.find(x => x.id === id);
-    assert(r.qp && r.players === 3 && r.places === 4 && r.open === 1 && r.bots === 1, JSON.stringify([r.players, r.places, r.open, r.bots]));
+    assert(r.qp && r.players === 7 && r.places === 8 && r.open === 1 && r.bots === 1, JSON.stringify([r.players, r.places, r.open, r.bots]));
   });
 
   // ---------------------------------------------------------------- the end, and the next match by itself
   console.log("the next match");
   clearInterval(annaTimer);
-  for (const c of [A, D, E]) c.send({ t: "r", screen: "map", playing: false, round: 1, wins: [0, 0, 0, 0], teamWins: [] });
+  for (const c of [A, D, E, ...more]) c.send({ t: "r", screen: "map", playing: false, round: 1, wins: Array(8).fill(0), teamWins: [] });
   await until(() => A.matches.length === 2 && D.matches.length === 2, "the next match starts by itself", 10000);
   check("after the match the next one starts by itself; the players of the last one drive their tanks", () => {
-    assert.deepStrictEqual(A.run.cfg.slots.map(s => s.bot), [false, true, false, false]);
-    assert.deepStrictEqual(A.run.cfg.names, ["Anna", null, "Dan", "Eve"]);
+    assert.deepStrictEqual(A.run.cfg.slots.map(s => s.bot), [false, true, false, false, false, false, false, false]);
+    assert.deepStrictEqual(A.run.cfg.names, ["Anna", null, "Dan", "Eve", "Gil", "Hana", "Ivo", "Jo"]);
     assert(A.you === 0 && D.you === 2 && E.you === 3 && S.you === -1);
   });
-  for (const c of [A, D, E, S, L]) await c.close();
+  for (const c of [A, D, E, S, L, ...more]) await c.close();
   await until(() => !srv.rooms.get(id).match, "the match ends without players", 10000);
   check("nobody left: the match ends, no countdown", () => assert.strictEqual(srv.rooms.get(id).qpTimer, null));
 

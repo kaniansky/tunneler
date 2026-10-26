@@ -929,7 +929,7 @@ none, i.e. a page from before 2.0 - is refused (POST 409 `{code:
 - **Quick play** (docs/v6/QUICKPLAY.md, version 6): the games list's "Quick play" (not on the main menu - owner, 2026-10-26) -> lobby.js `quick()` (`/games?quick=1`)
   -> `POST /api/quickplay {version, name}` -> `{id, created, hostKey?}` (server.js `quickRoom`: a public quick-play room with a
   place for one more human - a seat nobody sits on, or a computer-driven tank of its running match -, the most humans first;
-  else `createRoom(..., qp)`: `NetProto.quickSettings()` = 4 tanks free-for-all, computer level "normal", fixed settings).
+  else `createRoom(..., qp)`: `NetProto.quickSettings()` = 8 tanks free-for-all, computer level "normal", after death "killer", fixed settings).
   `room.qp`: `seat.ai` = the seat's level, an unoccupied seat's kind is it (`qpSeat`), `free()` counts it; `set` / `seatSet` /
   `ready` / `me {team}` refused; `qpSchedule` starts the match by itself (`qpStartMs` 10 s after a player sat down, `qpAfterMs`
   20 s after a match; `st.qp = {left}`). Matches: `cfg.qp`, every slot has a level -> every client runs a TunnelerAI for every

@@ -15,4 +15,4 @@ Lang.extend("sk", {
   "qp.took": "Teraz riadiš tank {name}", "qp.again": "Skúsiť znova",
 });
 const S = Lang.data.sk.engine.info.sections;
-S.splice(S.length - 2, 0, ["Rýchla hra:  ", "Rýchla hra v zozname hier (Hra online) ťa hneď pustí do online hry: jej štyri miesta zaplnia počítačové tanky, zápasy sa začínajú samy a ty prevezmeš počítačový tank - aj uprostred zápasu.  Keď odídeš, tvoj tank znova riadi počítač - ak sa vrátiš do 15 sekúnd, je znova tvoj."]);
+S.splice(S.length - 2, 0, ["Rýchla hra:  ", "Rýchla hra v zozname hier (Hra online) ťa hneď pustí do online hry: jej osem miest zaplnia počítačové tanky, zápasy sa začínajú samy a ty prevezmeš počítačový tank - aj uprostred zápasu.  Keď odídeš, tvoj tank znova riadi počítač - ak sa vrátiš do 15 sekúnd, je znova tvoj."]);

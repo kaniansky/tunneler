@@ -61,7 +61,7 @@ for (const c of Lang.codes) {
     fits(c, "seat.sit.i", t("seat.sit.i", { name: Lang.raw("yellow") }), 78);
     fits(c, "lobby.link", t("lobby.link"), 66);
     // the list of games' columns (lobby.js COLS: mode 17, players 8, AI 4, watching 9 - one blank column each)
-    fits(c, "lobby.mode", t("lobby.mode"), 16); fits(c, "lobby.players", t("lobby.players"), 7); fits(c, "lobby.ai", t("lobby.ai"), 3); fits(c, "lobby.spec", t("lobby.spec"), 8);
+    fits(c, "lobby.mode", t("lobby.mode"), 16); fits(c, "lobby.players", t("lobby.players"), 11); fits(c, "lobby.ai", t("lobby.ai"), 3);
     fits(c, "link.label", t("link.label") + "x".repeat(57), 78);
     fits(c, "ver.server", t("ver.server", { server: "10.10.10", you: "10.10.10" }), 78);
   }

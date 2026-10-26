@@ -24,8 +24,8 @@ entries open the same screen:
 
 **A quick-play game** (online.js, the room lobby of DESIGN-8P 26 with these differences):
 
-- 4 tanks free-for-all (BLUE, GREEN, CYAN, YELLOW, teams 1-4), computer level medium, medium map,
-  3 rounds to win, rounds of at most 5 minutes, no friendly fire, view: self, after death: wreck, line of
+- 8 tanks free-for-all (every color, teams 1-8; owner, 2026-10-26 - was 4), computer level medium, medium map,
+  3 rounds to win, rounds of at most 5 minutes, no friendly fire, view: self, after death: watch killer, line of
   sight full, standard mode. These settings are fixed - the Settings box is read-only for everybody,
   the host included (the game is what quick play promised; nobody can turn it into a 1-vs-7).
 - The seats: every seat nobody sits on is a computer tank ("AI (medium)"). Anybody can sit on one

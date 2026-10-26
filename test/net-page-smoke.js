@@ -653,8 +653,8 @@ function loadPage(page, search, stored, version) {
     const keys = ui.spec.items.filter(it => /^room:/.test(it.key)).map(it => it.key).join();
     assert.strictEqual(keys, "room:priv1,room:pub1,room:other", "own games first, the private one too: " + keys);
     const row = k => ui.spec.items.find(it => it.key === k).label;
-    assert(/MODE +PLAYERS +AI +WATCHING +STATE/.test(text()), "the columns: " + text());
-    assert(/^My secret game +standard +1\/3 +2 +4 +Lobby$/.test(row("room:priv1").trimEnd()), "a row: " + row("room:priv1"));
+    assert(/MODE +PLAYERS +AI +STATE/.test(text()) && !/WATCHING/.test(text()), "the columns (spectators in PLAYERS): " + text());
+    assert(/^My secret game +standard +1\/3 \+ 4 +2 +Lobby$/.test(row("room:priv1").trimEnd()), "a row: " + row("room:priv1"));
     assert(!/you host/.test(text()), "no mark in the rows: " + text());
     assert(/You are this game's host/.test(text()) && !/\(private\)/.test(text()), "the info: only that you host it (and the keys): " + text());
     assert(!env.ls.has("tunneler.host.gone") && env.ls.has("tunneler.host.priv1"), "the stale key dropped");

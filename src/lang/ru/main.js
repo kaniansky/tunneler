@@ -37,7 +37,7 @@ Lang.register("ru", {
   "vw.grid": "Все экраны", "vw.map": "Карта и счёт", "vw.follow": "Слежу за: {name}", "vw.hint": "Tab или 1 2 3: вид", "vw.destroyed": "УНИЧТОЖЕН", "vw.hint2": "← →: танк",
   "vw.tank": "Танк", "vw.wins": "Победы", "vw.energy": "Энергия", "vw.shield": "Щит", "vw.alive": "жив", "vw.dead": "уничтожен",
   "back.main": "В главное меню", "back.main.i": "Назад в главное меню.",
-  "lobby.title": "ИГРЫ ОНЛАЙН", "room.title": "ИГРА ОНЛАЙН", "lobby.name": "НАЗВАНИЕ", "lobby.players": "ИГРОКИ", "lobby.mode": "РЕЖИМ", "lobby.ai": "ИИ", "lobby.spec": "ЗРИТЕЛИ", "lobby.state": "СОСТОЯНИЕ",
+  "lobby.title": "ИГРЫ ОНЛАЙН", "room.title": "ИГРА ОНЛАЙН", "lobby.name": "НАЗВАНИЕ", "lobby.players": "ИГРОКИ", "lobby.mode": "РЕЖИМ", "lobby.ai": "ИИ", "lobby.state": "СОСТОЯНИЕ",
   "state.paused": "Пауза", "state.round": "Раунд {n}",
   "lobby.join": "<ENTER> - присоединиться к игре", "lobby.none": "Сейчас нет открытых игр",
   "lobby.create": "Создать новую игру", "lobby.create.i": "Создай игру и пригласи кого-нибудь.", "lobby.connecting": "Подключение к серверу...", "lobby.wake": "Уснувший сервер может просыпаться до минуты.",

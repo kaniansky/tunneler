@@ -37,7 +37,7 @@ Lang.register("cs", {
   "vw.grid": "Všechny obrazovky", "vw.map": "Mapa a skóre", "vw.follow": "Sleduji: {name}", "vw.hint": "Tab nebo 1 2 3: pohled", "vw.destroyed": "ZNIČEN", "vw.hint2": "← →: tank",
   "vw.tank": "Tank", "vw.wins": "Výhry", "vw.energy": "Energie", "vw.shield": "Štít", "vw.alive": "žije", "vw.dead": "zničen",
   "back.main": "Do hlavního menu", "back.main.i": "Zpět do hlavního menu.",
-  "lobby.title": "HRY ONLINE", "room.title": "HRA ONLINE", "lobby.name": "NÁZEV", "lobby.players": "HRÁČI", "lobby.mode": "REŽIM", "lobby.ai": "AI", "lobby.spec": "DIVÁCI", "lobby.state": "STAV",
+  "lobby.title": "HRY ONLINE", "room.title": "HRA ONLINE", "lobby.name": "NÁZEV", "lobby.players": "HRÁČI", "lobby.mode": "REŽIM", "lobby.ai": "AI", "lobby.state": "STAV",
   "state.paused": "Pozastavena", "state.round": "Kolo {n}",
   "lobby.join": "<ENTER> - připojit se ke hře", "lobby.none": "Momentálně žádné veřejné hry",
   "lobby.create": "Vytvořit novou hru", "lobby.create.i": "Založ hru a pozvi do ní někoho.", "lobby.connecting": "Připojuji se k serveru...", "lobby.wake": "Server, který spal, se může probouzet až minutu.",
