@@ -193,7 +193,7 @@ function netprotoChecks() {
 // doesn't get it meanwhile, /api/quickplay doesn't count it), then anybody may take it.
 async function holdChecks() {
   console.log("a dropped connection");
-  const srv = createServer({ tickMs: 4, quiet: true, cleanupMs: 5000, matchAloneMs: 1500, qpStartMs: 100, qpAfterMs: 400, qpHoldMs: 2000 });
+  const srv = createServer({ tickMs: 4, quiet: true, cleanupMs: 5000, matchAloneMs: 1500, qpStartMs: 100, qpAfterMs: 400, qpHoldMs: 6000 });
   const port = await new Promise(r => srv.listen(0, r));
   const q = await http(port, "POST", "/api/quickplay", { name: "Hold" });
   const id = q.json.id, room = srv.rooms.get(id);
@@ -211,7 +211,8 @@ async function holdChecks() {
   });
   const cidB = B.cid;
   await B.close();
-  await sleep(50);
+  // (a busy machine - CI, every test at once - takes a while to notice the closed socket: wait for it, not a fixed time)
+  await until(() => room.match.slots[1].bot, "Ben's tank goes to the computer");
   const info = await http(port, "GET", "/api/rooms/" + id);
   check("Ben's connection drops: the computer drives tank 1, kept for him - not handed to the waiting spectator, no place offered", () => {
     assert.strictEqual(room.match.slots[1].bot, true); assert.deepStrictEqual(W.yous, []); assert.strictEqual(info.json.open, 0);
@@ -222,7 +223,7 @@ async function holdChecks() {
     assert.strictEqual(B2.you, 1); assert.deepStrictEqual(W.yous, []);
   });
   await C.close();
-  await until(() => W.yous.length, "the hold runs out: the waiting spectator gets the tank", 15000);
+  await until(() => W.yous.length, "the hold runs out: the waiting spectator gets the tank", 25000);
   check("Cid doesn't come back: after the hold the waiting spectator gets tank 2", () => assert.deepStrictEqual(W.yous, [2]));
   await until(() => A.run.frames > 0 && A.run.drives.length >= 4 && W.run.frames >= A.run.frames - 5, "frames");
   await settle();
