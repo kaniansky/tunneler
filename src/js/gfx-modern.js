@@ -210,10 +210,11 @@ void main() {
     vec3 body = uTankCol[i * 3], tread = uTankCol[i * 3 + 1], gun = uTankCol[i * 3 + 2];
     if (uTankStyle == 0) {
       // simple: flat shapes, square corners (owner, 2026-10-26: no rounded corners)
-      float dTr = min(sdBox(l, vec2(-2.0, 0.5), vec2(0.62, 3.05), 0.0), sdBox(l, vec2(2.0, 0.5), vec2(0.62, 3.05), 0.0));
+      // (the tracks 1.6 .. 2.43 out, the body to them - as wide as the game's sprite: measured against it, owner 2026-10-26)
+      float dTr = min(sdBox(l, vec2(-2.015, 0.5), vec2(0.415, 3.05), 0.0), sdBox(l, vec2(2.015, 0.5), vec2(0.415, 3.05), 0.0));
       float stripe = 0.82 + 0.25 * step(0.5, fract((l.y + uTread[i] / uTS) * 1.6));
       col = mix(col, tread * stripe, clamp(0.5 - dTr / ta, 0.0, 1.0));
-      float dBody = sdBox(l, vec2(0.0, 0.5), vec2(1.45, 2.05), 0.0);
+      float dBody = sdBox(l, vec2(0.0, 0.5), vec2(1.6, 2.05), 0.0);
       vec3 bc3 = body * (1.15 - 0.3 * clamp((l.y + 1.5) / 4.0, 0.0, 1.0));
       col = mix(col, bc3, clamp(0.5 - dBody / ta, 0.0, 1.0));
       float dTur = sdBox(l, vec2(0.0, 0.6), vec2(0.95, 0.95), 0.0);
