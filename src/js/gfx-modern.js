@@ -194,6 +194,7 @@ void main() {
 
   // tanks
   float aa = 1.0 / pw;
+  vec3 ground = col;
   for (int i = 0; i < 8; i++) {
     if (i >= uNT) break;
     vec2 d = (wp - (uTank[i].xy + 0.5)) / uTS;
@@ -246,12 +247,12 @@ void main() {
     if (l.y > 1.55 && l.y < 2.55 && abs(l.x) < 1.05) hull *= 0.76 + 0.24 * smoothstep(0.35, 0.55, fract(l.y * 4.0));
     col = mix(col, hull, clamp(0.5 - dH / ta, 0.0, 1.0));
     // the turret: lit like a dome, a ring for the commander's hatch
-    vec2 tcn = vec2(0.0, 0.7), tq = (l - tcn) / vec2(1.5, 1.15);
-    float dT = sdBox(l, tcn, vec2(1.45, 1.1), 0.75), dome = sqrt(max(0.0, 1.0 - dot(tq, tq)));
+    vec2 tcn = vec2(0.0, 0.7), tq = (l - tcn) / vec2(1.2, 1.15);
+    float dT = sdBox(l, tcn, vec2(1.15, 1.1), 0.75), dome = sqrt(max(0.0, 1.0 - dot(tq, tq)));
     vec3 tur = body * (0.66 + 0.26 * dome + 0.4 * clamp(dot(tq, Ll), 0.0, 1.0));
-    float dHa = abs(length(l - tcn - vec2(0.75, 0.35)) - 0.3) - 0.05;
+    float dHa = abs(length(l - tcn - vec2(0.5, 0.35)) - 0.3) - 0.05;
     tur *= 1.0 - 0.35 * clamp(0.5 - dHa / ta, 0.0, 1.0);
-    col *= 1.0 - 0.35 * clamp(0.5 - sdBox(l - Ll * 0.25, tcn, vec2(1.45, 1.1), 0.75) / 0.4, 0.0, 1.0) * (1.0 - clamp(0.5 - dT / ta, 0.0, 1.0));
+    col *= 1.0 - 0.35 * clamp(0.5 - sdBox(l - Ll * 0.25, tcn, vec2(1.15, 1.1), 0.75) / 0.4, 0.0, 1.0) * (1.0 - clamp(0.5 - dT / ta, 0.0, 1.0));
     col = mix(col, tur, clamp(0.5 - dT / ta, 0.0, 1.0));
     // the gun: the mantlet, the barrel (round: bright along its middle), the fume extractor, the muzzle brake
     float dM = sdBox(l, vec2(0.0, -0.4), vec2(0.58, 0.3), 0.12);
@@ -267,6 +268,10 @@ void main() {
     float dL = min(length(l - vec2(-1.12, -1.45)), length(l - vec2(1.12, -1.45))) - 0.16;
     col = mix(col, uTank[i].w > 0.5 ? vec3(1.0, 0.94, 0.7) : vec3(0.35, 0.33, 0.28), clamp(0.5 - dL / ta, 0.0, 1.0));
   }
+
+  // rock and base walls over the tanks: a turned tank (a rectangle) reaches half a pixel past the game's own 7 x 7
+  // sprite, over a wall beside it - the wall covers it there, as in the original graphics (owner, 2026-10-26)
+  if (bs == 2 || bs == 3) col = ground;
 
   // light: dark tunnels, lit by lamps, headlights, shots and flashes
   if (uLight == 1) {
