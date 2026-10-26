@@ -711,6 +711,17 @@ class TunnelerEngine {
     for (let q = C.prev[k]; q >= 0 && C.prev[q] >= 0; q = C.prev[q]) if (this.sightBlocks(tx + C.dx[q], ty + C.dy[q])) return false;
     return true;
   }
+  // is world pixel (x, y) one of a live tank's own pixels (its sprite, drawn at tankX - 3, tankY - 3)?
+  tankPixel(x, y) {
+    for (let p = 1; p <= this.nPlayers; p++) {
+      if (!this.alive[p]) continue;
+      const c = x - this.tankX[p] + 3, r = y - this.tankY[p] + 3;
+      if (c < 0 || c > 6 || r < 0 || r > 6) continue;
+      const S = this.extended ? this.extSprites && this.extSprites[p] : this.tankSprites[p];
+      if (S && S[this.tankDir[p] & 7][r][c] !== 0x10) return true;
+    }
+    return false;
+  }
   // does the pixel at x, y hide what is behind it? Dirt (6, 8), rock (7) and base walls (tanks, shots and
   // explosions don't)
   sightBlocks(x, y) {
@@ -718,6 +729,7 @@ class TunnelerEngine {
     const c = this.getPixel(x, y);
     if (c === 6 || c === 7 || c === 8) return true;
     if (c === 0) return false;
+    if (this.tankPixel(x, y)) return false;      // (a tank in a doorway lies on the wall ring: it hid what was behind it)
     for (let b = 1; b <= this.nPlayers; b++) {
       const ax = Math.abs(x - this.baseX[b]), ay = Math.abs(y - this.baseY[b]);
       if (ax <= 17 && ay <= 17 && (ax === 17 || ay === 17)) return true;

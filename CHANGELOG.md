@@ -7,6 +7,8 @@ those releases are tagged `online-vX.Y.Z`, their changes are in [docs/CHANGELOG-
 ## Unreleased
 
 - Modern graphics: the tanks' treads roll as they drive (forwards and backwards).
+- Line of sight: a tank driving through its base's doorway no longer hides what is behind it (its own pixels counted
+  as the base's wall - the view showed remembered tread marks there, and computer players didn't see behind it).
 - Quick play is in the list of games (Online game) only - no longer on the main menu.
 - Quick play games have all 8 seats (computer tanks in every seat nobody sits on), and a destroyed player watches
   the tank that destroyed them.

@@ -178,6 +178,23 @@ function makeEnv(search, store) {
   assert.strictEqual(NP.engineOptions({ slots: [{ color: 0, team: 1 }, { color: 1, team: 2 }], sight: "circle" }).sight, "circle");
   assert.strictEqual(NP.engineOptions({ slots: [{ color: 0, team: 1 }, { color: 1, team: 2 }], sight: "full" }).sight, undefined);
   ok("line of sight: the same game, views live only around the tank (classic " + classic.join(" / ") + ", extended " + ext.join(" / ") + " dimmed cells)");
+  // a tank in its doorway lies on the base's wall ring: its own pixels don't hide what is behind it (they did -
+  // the view showed the remembered treads there, the computer players didn't see behind it)
+  for (const opts of [{}, { slots: [{ color: 0, team: 1 }, { color: 4, team: 2 }] }]) {
+    const e = new E(5, Object.assign({ autoStart: true, sight: "walls" }, opts));
+    for (let n = 0; n < 3000 && e.screen !== "play"; n++) e.step({ keyDown: new Uint8Array(128), keys: [], bits: [0, 0] });
+    const erase = () => opts.slots ? e.eraseTankExt(1) : e.drawTank(e.tankX[1], e.tankY[1], 3, e.tankDir[1]);
+    const draw = () => opts.slots ? e.drawTankExt(1) : e.drawTank(e.tankX[1], e.tankY[1], 1, e.tankDir[1]);
+    for (const dy of [1, 2, 3]) {                     // (driving out of the bottom doorway: 1 - 2 px past the ring hid 49 pixels)
+      erase(); e.tankX[1] = e.baseX[1]; e.tankY[1] = e.baseY[1] + 17 + dy; e.tankDir[1] = 4; draw();
+      const ring = [-3, -2, -1, 0, 1, 2, 3].map(x => e.tankX[1] + x).filter(x => e.tankPixel(x, e.baseY[1] + 17));
+      assert(dy === 3 || (ring.length && ring.every(x => !e.sightBlocks(x, e.baseY[1] + 17))), "the tank's own pixels on the ring don't block");
+      let hidden = 0;
+      for (let y = -10; y <= -4; y++) for (let x = -3; x <= 3; x++) if (!e.sightSees(1, e.tankX[1] + x, e.tankY[1] + y)) hidden++;
+      assert.strictEqual(hidden, 0, "it sees into its base behind it, " + dy + " px out" + (opts.slots ? " (extended)" : ""));
+    }
+  }
+  ok("line of sight: a tank in its doorway sees past its own pixels (they lie on the wall ring)");
 }
 
 // ---------------------------------------------------------------- sound attenuation
