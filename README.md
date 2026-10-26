@@ -28,7 +28,7 @@ screens drawn anew - see below).
 |---|---|
 | ![Split screen](screenshots/split-screen.png) | ![Skirmish](screenshots/vs-computer.png) |
 
-## New in 6.0
+## What's new
 
 - **Quick play** (main menu, and the list of games): straight into an online game. The server finds a game with a
   place for you or makes one - four tanks free-for-all, computer tanks in every seat nobody sits on, matches that
