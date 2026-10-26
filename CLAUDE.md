@@ -507,8 +507,11 @@ none, i.e. a page from before 2.0 - is refused (POST 409 `{code:
 
 ## Changes after v1.0.0 (release/v1.1.0 branch) - quick reference
 
-- Slot colors: BLUE GREEN CYAN **YELLOW** (was MAGENTA; the yellow tank's gun is gray like its treads,
-  since every other tank's gun is yellow) WHITE PINK VIOLET TEAL. Role keys are the lowercase names.
+- Slot colors (owner, 2026-10-26): BLUE #0000ff, GREEN #006400, RED #ff0000, GOLD #ffd700 (its gun is gray like its
+  treads, since every other tank's gun is yellow), PINK #ff00ff, LIME #00ff00, SKY #1e90ff, WHITE #ffffff (were BLUE
+  GREEN CYAN YELLOW WHITE PINK VIOLET TEAL). Extended palette indexes `EXT_COLORS` [1, 2, 11, 5, 9, 10, 3, 15]: SKY on 3,
+  the shield gauge's colour (`EXT_SHIELD`). Role keys are the lowercase names; the gone ones stay their seat
+  (`NetProto.roleIndex`: cyan 2, yellow 3, violet 6, teal 7 - old links, a stored preferred colour).
 - Unicode plane (src/js/unitext.js, unidata.js, src/fonts/unifont/): any script in names, room names
   and chat on every screen; wide characters take two cells; user text goes through the plane, never
   through the CP437 font slots. Player names replace color names wherever a player is shown.
@@ -751,7 +754,7 @@ none, i.e. a page from before 2.0 - is refused (POST 409 `{code:
 - **Tank colors** ("tunneler.tankcolors" normal / colorblind / relation; display.js `tankPalette(snap,
   engine, viewer)` / `tankPalette8`): only the game screen - views.js (`viewerOf(v)`: a player's own tank,
   else the view's own; `paintView` keeps the instrument panel in the normal palette: the shield gauge's 3 is
-  CYAN's colour), the display path (`display.paletteFor`), the maps, gfx-modern.js (per window) and
+  SKY's colour), the display path (`display.paletteFor`), the maps, gfx-modern.js (per window) and
   gfx-hud.js (borders, labels). Colour-blind: Okabe-Ito based colours per slot; relation: the viewer blue,
   teammates green, enemies red. Text screens keep the slots' colours.
 - Engine menu visibility (display only): `engine.menuShown` - its items are on the screen (showMainMenu

@@ -30,7 +30,11 @@ const GREEN_SCAN = [0x48, 0x50, 0x4B, 0x4D, 0x1C];
 const F10 = 0x44;
 const EXT_BITS = UP | DOWN | LEFT | RIGHT | FIRE;        // extended rooms: no Esc
 // slot i's role (= tank colour, lang key); the first two are the classic BLUE / GREEN
-const ROLES = ["blue", "green", "cyan", "yellow", "white", "pink", "violet", "teal"];
+const ROLES = ["blue", "green", "red", "gold", "pink", "lime", "sky", "white"];
+// a seat's name -> its index (-1: none); the names before 2026-10-26 that are gone stay what they were (old links,
+// stored choices): cyan 2, yellow 3, violet 6, teal 7
+const OLD_ROLES = { cyan: 2, yellow: 3, violet: 6, teal: 7 };
+const roleIndex = r => ROLES.includes(r) ? ROLES.indexOf(r) : OLD_ROLES[r] != null ? OLD_ROLES[r] : -1;
 const MAX_SLOTS = ROLES.length;
 // computer levels to choose (ai.js), shown as easy / medium / hard. Up to version 3.2 they were called
 // normal / hard / expert (and a weaker easy came first): oldLevel turns such a name into today's - for what
@@ -105,7 +109,7 @@ function cleanPassword(s) {
 // name as the plain ones, and a reserved name can't come back in them ("ＡＤＭＩＮ").
 const RESERVED_NAMES = ["player", "players", "computer", "ai", "admin", "administrator", "moderator", "mod", "host", "server",
   "system", "root", "tunneler", "tunneler online", "nobody", "anonymous", "guest", "spectator", "you", "me", "open", "closed",
-  "blue", "green", "cyan", "yellow", "white", "pink", "violet", "teal"];
+  "blue", "green", "red", "gold", "pink", "lime", "sky", "white", "cyan", "yellow", "violet", "teal"];
 const usernameKey = s => String(s == null ? "" : s).normalize("NFKC").replace(/\s+/g, " ").trim().toLowerCase();
 function cleanUsername(s) {
   const typed = String(s == null ? "" : s).normalize("NFC").replace(/\s+/g, " ").trim();
@@ -410,7 +414,7 @@ function stateHash(e) {
 }
 
 const NetProto = { TICK_MS, UP, DOWN, LEFT, RIGHT, FIRE, ESC, ALL_BITS, EXT_BITS, BLUE_SCAN, GREEN_SCAN, F10,
-  AFTER_DEATH, afterDeath, ROLES, MAX_SLOTS, LEVELS, oldLevel, SEAT_KINDS, SIZES, MAX_PLAYER_NAME, MAX_CHAT, VISIBLE, SIGHTS, ROUND_TIMES, roundTime,
+  AFTER_DEATH, afterDeath, ROLES, roleIndex, MAX_SLOTS, LEVELS, oldLevel, SEAT_KINDS, SIZES, MAX_PLAYER_NAME, MAX_CHAT, VISIBLE, SIGHTS, ROUND_TIMES, roundTime,
   cleanPlayerName, cleanChat, cleanRoomName, MAX_PASSWORD, cleanPassword,
   RESERVED_NAMES, usernameKey, cleanUsername, MIN_ACCOUNT_PASSWORD, MAX_ACCOUNT_PASSWORD, passwordProblem, RECOVERY_ALPHABET, cleanRecovery, SETTINGS, defaultSeats, roomSettings, matchSlots, startProblem, isClassic, engineOptions, readCfg,
   MODES, OWN_TEAMS, GOALS, goalOf, QUICK_TANKS, QUICK_LEVEL, quickSettings, aiSlot, readDrives, botInputs, MAP_ID, mapId,

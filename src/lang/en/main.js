@@ -11,7 +11,7 @@ Lang.register("en", {
   // touch controls (pads.js): the on-screen buttons
   "touch.fire": "FIRE", "touch.esc": "ESC", "pad.on": "Gamepad {n} connected", "pad.off": "Gamepad {n} disconnected",
   // extended mode (3-8 players): the other tank colours
-  cyan: "CYAN", yellow: "YELLOW", white: "WHITE", pink: "PINK", violet: "VIOLET", teal: "TEAL",
+  red: "RED", gold: "GOLD", pink: "PINK", lime: "LIME", sky: "SKY", white: "WHITE",
   "ui.hint": "↑↓ and <ENTER>, or the mouse.", "ui.back": "<ESC> back.",
   "home.split": "Split screen", "home.split.i1": "Two players on one keyboard, like the original.",
   "home.split.i2": "{blue}: W A S D + SHIFT     {green}: arrow keys + ENTER",

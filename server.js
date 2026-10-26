@@ -1334,7 +1334,7 @@ function createServer(opts = {}) {
     if (room.sockets.size >= MAX_SPECTATORS + MAX_SLOTS) return fail(ws, "This game is full.", "full");
     // role: "watch" / "spectate" = only watch; a colour = the seat this page would like; else any seat
     const role = q.get("role") || "";
-    const watch = role === "watch" || role === "spectate", want = ROLES.indexOf(role);
+    const watch = role === "watch" || role === "spectate", want = NetProto.roleIndex(role);
     const m = room.match;
     // during a match only its players play (their tank, by client id); everybody else watches
     const player = m ? m.slots.findIndex((s, i) => !s.bot && s.cid === cid && !m.socks[i]) : -1;

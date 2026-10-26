@@ -2,7 +2,7 @@
 //
 //   const ai = new TunnelerAI(level, player[, {seed}]); // level: "easy" | "normal" | "hard" (shown as easy /
 //                                                       // medium / hard; anything else = "easy"),
-//                                                       // player: 1..N (1 = BLUE, 2 = GREEN, 3 = CYAN, ...)
+//                                                       // player: 1..N (1 = BLUE, 2 = GREEN, 3 = RED, ...)
 //   const keys = ai.update(engine);                     // once per engine step, before engine.step()
 //   -> { up, down, left, right, fire }
 //   const bits = TunnelerAI.bitsFor(ai, engine);        // the same as net bits: 1 up, 2 down, 4 left,

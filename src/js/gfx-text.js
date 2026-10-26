@@ -75,8 +75,8 @@ function loadFont() {
 const DOS = ["#000000", "#0000aa", "#00aa00", "#00aaaa", "#aa0000", "#aa00aa", "#aa5500", "#aaaaaa",
   "#555555", "#5555ff", "#55ff55", "#55ffff", "#ff5555", "#ff55ff", "#ffff55", "#ffffff"];
 // the same 16 hues, muted and warm - taken from the game's own world (dirt, rock) rather than neon on navy:
-// every tank's text colour keeps its hue (BLUE 9, GREEN 10, CYAN 11, YELLOW 14, WHITE 15, PINK 12, VIOLET 5,
-// TEAL 3), black is a warm near-black, white a warm off-white
+// every tank's text colour keeps its hue (BLUE 9, GREEN 2, RED 12, GOLD 14, PINK 13, LIME 10, SKY 11, WHITE 15),
+// black is a warm near-black, white a warm off-white
 const CLEAN = ["#16130f", "#4e6fa3", "#5c8a4f", "#7fa596", "#a8543f", "#9a83bd", "#a8763d", "#b9b0a2",
   "#6f675c", "#86a6d8", "#93c27e", "#93c7c1", "#e08470", "#cfa3d6", "#e3c065", "#efe7da"];
 // clean: the one accent (the highlight bar; the dirt's ochre), its text, the hairlines of panels and rules,

@@ -255,7 +255,7 @@ class ViewModes {
   }
   statusColumns() { const L = this.layout(); return L.kind === "display" ? this.display.columns()[1] - this.display.columns()[0] : 80; }
 
-  // player i (0-based) as the engine has it: its slot's color (a room of BLUE, CYAN and TEAL keeps
+  // player i (0-based) as the engine has it: its slot's color (a room of BLUE, RED and WHITE keeps
   // those colors), its name from the pre-game lobby
   playerKey(i) {
     const keys = TunnelerEngine.PLAYER_KEYS;
@@ -489,7 +489,7 @@ class ViewModes {
 
   // one 40-column view (columns c0..c0+39 of a LORES buffer) at (x, y): with the tank colours' palette, but
   // the instrument panel (cells 3-36 x rows 74-98) with the normal one - its gauges share palette entries
-  // with some tanks' colours (the shield's 3 = CYAN)
+  // with some tanks' colours (the shield's 3 = SKY)
   paintView(px, W, x, y, vram, c0, pal, normal, dim) {
     const D = Display, F = VGA_FONT;
     if (pal === normal) { D.paint(px, W, x, y, vram, c0, c0 + 40, 100, false, pal, true, F, null, dim); return; }

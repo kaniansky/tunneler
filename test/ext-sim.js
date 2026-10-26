@@ -132,7 +132,7 @@ function soundCheck(e, label) {
   check(new E(1, { players: 2, extended: true }).extended, "{players: 2, extended: true} is extended");
   check(new E(1, { players: 2, teams: true }).extended, "{players: 2, teams: true} is extended");
   check(new E(1, { slots: slots([1, 0], [1, 2]) }).extended, "GREEN + BLUE (other order) is extended");
-  check(new E(1, { slots: slots([0, 2], [1, 2]) }).extended, "BLUE + CYAN is extended");
+  check(new E(1, { slots: slots([0, 2], [1, 2]) }).extended, "BLUE + RED is extended");
   check(new E(1, { slots: slots([0, 1], [1, 1]) }).extended, "BLUE + GREEN in one team is extended");
   check(new E(1, { players: 12 }).nPlayers === 8 && new E(1, { slots: new Array(12).fill(0).map((_, i) => ({ color: i & 7, team: i })) }).nPlayers === 8, "players capped at 8");
   check(!new E(1, { size: "small" }).extended && !new E(1, { winScore: 5 }).extended, "size / winScore keep the classic engine");
@@ -162,7 +162,7 @@ function soundCheck(e, label) {
   check([1, 2, 3, 4, 5].map(p => e.team(p)).join() === "1,0,1,2,0", "slots: team index per player");
   check([1, 2, 3, 4, 5].map(p => e.teamNumber(p)).join() === "4,2,4,8,2", "slots: team numbers");
   check(e.isEnemy(1, 2) && !e.isEnemy(1, 3) && !e.isEnemy(2, 5) && e.isEnemy(4, 5) && !e.isEnemy(3, 3), "isEnemy");
-  check([1, 2, 3, 4, 5].map(p => e.colorName(p)).join() === "TEAL,BLUE,YELLOW,PINK,GREEN", "color names from the slots");
+  check([1, 2, 3, 4, 5].map(p => e.colorName(p)).join() === "WHITE,BLUE,GOLD,LIME,GREEN", "color names from the slots");
   check([1, 2, 3, 4, 5].map(p => e.playerColor(p)).join() === [7, 0, 3, 5, 1].map(c => E.PLAYER_COLORS[c]).join(), "playerColor from the slots");
   check(e.playerTextColor(1) === E.PLAYER_TEXT_COLORS[7], "playerTextColor from the slots");
   check(e.teamName(2) === "TEAM 8" && e.teamMembers(0).join() === "2,5" && e.teamWins.length === 3, "teamName / teamMembers / teamWins");
@@ -180,7 +180,7 @@ function soundCheck(e, label) {
   u.setTeams([3, 3, 1, 1]);
   check(u.teams && u.nTeams === 2 && u.team(1) === 1 && u.team(3) === 0 && u.teamWins.length === 2 && u.teamName(0) === "TEAM 1", "setTeams");
   u.setNames(["Alice", null, "", "Bob"]);
-  check(u.playerName(1) === "Alice" && u.playerName(2) === "GREEN" && u.playerName(3) === "CYAN" && u.playerName(4) === "Bob", "setNames / playerName");
+  check(u.playerName(1) === "Alice" && u.playerName(2) === "GREEN" && u.playerName(3) === "RED" && u.playerName(4) === "Bob", "setNames / playerName");
   const c = new E(1);
   c.setTeams([1, 1]);
   check(c.nTeams === 2 && !c.teams, "setTeams leaves the classic engine alone");
@@ -480,7 +480,7 @@ for (const [opts, seed, name] of [[{ winScore: 1 }, 101, "win 1"], [{ size: "sma
 }
 
 // ------------------------------------------------------------------ 6. friendly fire
-// BLUE and GREEN (team 1) and CYAN (team 2); BLUE fires at GREEN, then at CYAN.
+// BLUE and GREEN (team 1) and RED (team 2); BLUE fires at GREEN, then at RED.
 function duel(ff, target) {
   const e = startEngine(11, { slots: slots([0, 1, 2], [1, 1, 2]), friendlyFire: ff });
   for (let i = 0; i < 600 && e.screen !== "play"; i++) e.step({ bits: [] });
@@ -732,17 +732,17 @@ ok("extended texts lay out in every language (" + LAYOUTS.length + " team setups
     const e = new E(5, { slots: slots([0, 1, 2, 3], [1, 2, 1, 2]), friendlyFire: true, size: "large", winScore: 5 });
     e.initTables(); e.initTablesExt(); e.round = 2;
     e.youPlayer = 3; e.showSettings = { view: "team", visible: false, watchOut: "black" };
-    const t = title(e), cyanRow = t.findIndex(r => r.includes("CYAN"));
-    check(marks(t) === 2 && /\x10 CYAN \x11/.test(t[cyanRow]), "extended round title: marker around CYAN only");
+    const t = title(e), cyanRow = t.findIndex(r => r.includes("RED"));
+    check(marks(t) === 2 && /\x10 RED \x11/.test(t[cyanRow]), "extended round title: marker around RED only");
     const bottom = t.slice(18, 25).map(l => l.trim()).join(" ");
     check(bottom.includes("map size: large, rounds to win: 5, friendly fire: on, view: team, after death: black screen"), "extended settings at the bottom: " + bottom);
-    const st = stats(e), r = st.findIndex(l => /CYAN/.test(l) && /\d/.test(l));
-    check(marks(st) === 1 && /CYAN\x11/.test(st[r]), "extended statistics: CYAN\u25c4 only");
+    const st = stats(e), r = st.findIndex(l => /RED/.test(l) && /\d/.test(l));
+    check(marks(st) === 1 && /RED\x11/.test(st[r]), "extended statistics: RED\u25c4 only");
     check(!/friendly fire|rounds to win/.test(st.join("\n")), "extended statistics: no settings lines");
     // free-for-all list, 6 players, you = 6
     const f = new E(5, { players: 6 }); f.initTables(); f.initTablesExt(); f.round = 1; f.youPlayer = 6;
     const ft = title(f);
-    check(marks(ft) === 2 && ft.some(l => /\x10 PINK +0 \x11/.test(l)), "free-for-all round title: PINK's row marked: " + JSON.stringify(ft.filter(l => /PINK/.test(l))));
+    check(marks(ft) === 2 && ft.some(l => /\x10 LIME +0 \x11/.test(l)), "free-for-all round title: LIME's row marked: " + JSON.stringify(ft.filter(l => /LIME/.test(l))));
     f.showSettings = { view: "self", visible: false, watchOut: "wreck" };
     check(!/friendly fire/.test(title(f).join("")), "free-for-all: no friendly fire line");
   }

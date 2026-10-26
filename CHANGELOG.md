@@ -6,6 +6,9 @@ those releases are tagged `online-vX.Y.Z`, their changes are in [docs/CHANGELOG-
 
 ## Unreleased
 
+- New tank colors that tell apart better: BLUE, GREEN, RED, GOLD, PINK, LIME, SKY and WHITE (were BLUE, GREEN, CYAN,
+  YELLOW, WHITE, PINK, VIOLET and TEAL). Old invite links and a saved preferred color still pick the same seat. The
+  split screen keeps the original's colors.
 - Online games react faster: after a hiccup (a late packet, a pause, the server waking up) a page stayed up to
   3 frames (165 ms) behind for the rest of the match. It now catches up within a couple of seconds.
 - Modern graphics: the tanks' treads roll as they drive (forwards and backwards).

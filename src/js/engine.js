@@ -79,15 +79,18 @@ const PixelClass = [0, 3, 3, 4, 4, 4, 1, 4, 1, 3, 3, 4, 2, 4, 3, 4];
 // Slot color c (0..7) is EXT_COLORS[c] in the extended palette (EXT_PAL_RGB, used for the LORES screens
 // instead of the original PalRGB); EXT_TEXT_COLORS[c] is the closest text-mode colour for the round
 // title / statistics screens. A player's color is its slot's (engine.playerColor(p)).
-const EXT_KEYS = ["blue", "green", "cyan", "yellow", "white", "pink", "violet", "teal"];
-const EXT_COLORS = [1, 2, 3, 5, 9, 10, 11, 15];
-const EXT_TEXT_COLORS = [9, 10, 11, 14, 15, 12, 5, 3];
+// (owner, 2026-10-26: blue #0000ff, green #006400, red #ff0000, gold #ffd700, pink #ff00ff, lime #00ff00, sky
+// #1e90ff, white #ffffff - they tell apart better than the old blue green cyan yellow white pink violet teal; sky
+// sits on 3, the shield gauge's colour, and red on 11)
+const EXT_KEYS = ["blue", "green", "red", "gold", "pink", "lime", "sky", "white"];
+const EXT_COLORS = [1, 2, 11, 5, 9, 10, 3, 15];
+const EXT_TEXT_COLORS = [9, 2, 12, 14, 13, 10, 11, 15];
 const EXT_PAL_RGB = [
-  [0, 0, 0], [11, 11, 63], [0, 48, 0], [10, 60, 60], [46, 0, 0], [63, 63, 18], [48, 30, 12], [38, 38, 38],
-  [46, 22, 1], [63, 63, 63], [63, 40, 48], [36, 18, 63], [63, 13, 2], [25, 25, 25], [60, 58, 7], [0, 38, 32]];
+  [0, 0, 0], [0, 0, 63], [0, 25, 0], [7, 36, 63], [46, 0, 0], [63, 53, 0], [48, 30, 12], [38, 38, 38],
+  [46, 22, 1], [63, 0, 63], [0, 63, 0], [63, 0, 0], [63, 13, 2], [25, 25, 25], [60, 58, 7], [63, 63, 63]];
 // colour -> 0 free, 1 dirt (6, 8), 2 shot (12), 3 tank / base (player colours, treads 13, gun 14), 4 rock (7, 4)
 const PixelClassExt = [0, 3, 3, 3, 4, 3, 1, 4, 1, 3, 3, 3, 2, 3, 3, 3];
-const EXT_TREADS = 13, EXT_GUN = 14, EXT_SHIELD = 3;   // shield gauge: 11 is VIOLET here, 3 is the original's cyan
+const EXT_TREADS = 13, EXT_GUN = 14, EXT_SHIELD = 3;   // shield gauge: 3 (the original's cyan) is SKY here
 const EXT_MAX_PLAYERS = 8;
 // net bits (netproto.js): 1 up, 2 down, 4 left, 8 right, 16 fire (32 esc is ignored in extended mode)
 const B_UP = 1, B_DOWN = 2, B_LEFT = 4, B_RIGHT = 8, B_FIRE = 16;
@@ -192,7 +195,7 @@ class TunnelerEngine {
   // seed: Turbo Pascal RandSeed (what Randomize would have put there)
   // opts (not in the original, docs/DESIGN-8P.md):
   //   slots: [{color: 0..7, team: 1..8}, ...]  the used slots in slot order (2..8): player p (1..N) has the
-  //          color of slots[p - 1] (BLUE GREEN CYAN YELLOW WHITE PINK VIOLET TEAL) and its team number
+  //          color of slots[p - 1] (BLUE GREEN RED GOLD PINK LIME SKY WHITE) and its team number
   //   players: 2..8, teams: bool              shorthand: slot i = color i, team i + 1 (teams: i % 2 + 1;
   //                                           teams: true always runs the extended engine)
   //   extended: bool                          force the extended engine (e.g. 2 players, one a computer online)
@@ -1552,7 +1555,7 @@ class TunnelerEngine {
   team(p) { return this.teamOf[p]; }
   teamNumber(p) { return this.slots[p - 1].team; }
   isEnemy(a, b) { return a !== b && this.team(a) !== this.team(b); }
-  // color index 0..7 of player p (BLUE GREEN CYAN YELLOW WHITE PINK VIOLET TEAL)
+  // color index 0..7 of player p (BLUE GREEN RED GOLD PINK LIME SKY WHITE)
   colorIndex(p) { return this.extended ? this.slots[p - 1].color : p - 1; }
   // LORES color of player p (extended palette in extended mode, the original's 9 / 10 in classic)
   playerColor(p) { return this.extended ? EXT_COLORS[this.colorIndex(p)] : p + 8; }
@@ -1653,7 +1656,7 @@ class TunnelerEngine {
     this.extSprites = [null];
     for (let p = 1; p <= this.nPlayers; p++) {
       const col = this.playerColor(p);
-      // the gun is yellow (14) on every tank - on the YELLOW tank (slot color 3) it is gray like the treads
+      // the gun is yellow (14) on every tank - on the GOLD tank (slot color 3) it is gray like the treads
       const gun = this.colorIndex(p) === 3 ? EXT_TREADS : EXT_GUN;
       this.extSprites.push(S[1].map(rows => rows.map(r => r.map(v => v === 1 ? EXT_TREADS : v === 9 ? col : v === 14 ? gun : v))));
     }

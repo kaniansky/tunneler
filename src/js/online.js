@@ -210,7 +210,7 @@ export function mount() {
 
   // Quick play's drive markers (a frame's [[p, k, name], ...]): from this frame on tank p is driven by connection k
   // (0: its computer player again) and shows that player's name - on every client at the same frame. The one
-  // that names this page: "You drive the CYAN tank now" across the game for a few seconds.
+  // that names this page: "You drive the RED tank now" across the game for a few seconds.
   function drive(list) {
     for (const [p, k, name] of list) {
       if (!human || p >= human.length) continue;
@@ -999,10 +999,11 @@ export function mount() {
     url += "&v=" + encodeURIComponent(VERSION || "dev");   // (another version is refused; dev: not built)
     // (no seat in the link: the preferred colour, Settings - Online; the server still gives this browser's
     // last seat in this game first when it is free)
-    const prefer = store.get("tunneler.online.color");
+    // (a colour by its name - also one of the names gone since 2026-10-26: NetProto.roleIndex)
+    const prefer = NetProto.roleIndex(store.get("tunneler.online.color")), want = NetProto.roleIndex(wantRole);
     if (wantRole === "spectate") url += "&role=watch";
-    else if (ROLES.includes(wantRole)) url += "&role=" + wantRole;
-    else if (ROLES.includes(prefer)) url += "&role=" + prefer;
+    else if (want >= 0) url += "&role=" + ROLES[want];
+    else if (prefer >= 0) url += "&role=" + ROLES[prefer];
     const hostKey = store.get("tunneler.host." + roomId);   // (read now: it may have been handed over)
     if (hostKey) url += "&host=" + encodeURIComponent(hostKey);
     if (password) url += "&pw=" + encodeURIComponent(password);

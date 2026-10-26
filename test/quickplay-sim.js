@@ -171,6 +171,10 @@ function netprotoChecks() {
     assert(aiSlot({}, { bot: true }) && !aiSlot({}, { bot: false, level: "normal" }) && aiSlot({ qp: true }, { bot: false, level: "normal" }));
     assert(!aiSlot({ qp: true }, { bot: false, level: null }));
   });
+  check("seat names: the new ones, and the ones gone since 2026-10-26 keep their seat", () => {
+    assert.deepStrictEqual(NetProto.ROLES, ["blue", "green", "red", "gold", "pink", "lime", "sky", "white"]);
+    assert.deepStrictEqual(["red", "sky", "white", "cyan", "yellow", "violet", "teal", "watch", ""].map(NetProto.roleIndex), [2, 6, 7, 2, 3, 6, 7, -1, -1]);
+  });
   check("quickSettings: 8 computer tanks of medium level free-for-all, fixed settings, after death watch killer", () => {
     const s = NetProto.quickSettings();
     assert.deepStrictEqual(s.seats.map(x => x.kind), Array(8).fill("normal"));

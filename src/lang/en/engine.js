@@ -16,7 +16,7 @@ const STRINGS_EN = {
     head: ["shot", "hit", "hit%", "dug", "moved"] },
   // extended mode: tank color names (slot color 0..7); "team" labels a team ("{n}" = its number 1..8;
   // "teams" is no longer used - teams are numbered now)
-  colors: ["BLUE", "GREEN", "CYAN", "YELLOW", "WHITE", "PINK", "VIOLET", "TEAL"],
+  colors: ["BLUE", "GREEN", "RED", "GOLD", "PINK", "LIME", "SKY", "WHITE"],
   teams: ["BLUE TEAM", "GREEN TEAM"],
   team: "TEAM {n}",
   // the game's settings, a compact list (display only, `showSettings`): round title and statistics
@@ -90,8 +90,8 @@ const STRINGS_EN = {
         "that hit the enemy tanks the most wins the round and the other tanks blow up; a tie means " +
         "nobody wins it.  After the match the statistics show everybody's shots, hits, meters dug and " +
         "meters traveled, and \"Rematch\" plays again with the same settings."],
-      ["Teams:  ", "Besides the original duel, up to 8 tanks (BLUE, GREEN, CYAN, YELLOW, WHITE, PINK, " +
-        "VIOLET and TEAL) can play free-for-all - every tank for itself - or in teams.  Tanks with the " +
+      ["Teams:  ", "Besides the original duel, up to 8 tanks (BLUE, GREEN, RED, GOLD, PINK, LIME, " +
+        "SKY and WHITE) can play free-for-all - every tank for itself - or in teams.  Tanks with the " +
         "same team number are teammates; a team wins the round when only its tanks are left, and all " +
         "of them score it.  Friendly fire on: your shots hurt your teammates too.  Friendly fire off: " +
         "a shot explodes on a teammate like on a wall."],

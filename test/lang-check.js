@@ -58,7 +58,7 @@ for (const c of Lang.codes) {
     for (const k of ["seat.kind.i", "seat.sit.host.i", "seat.team.i", "seat.mine.i1", "seat.mine.watch.i", "seat.mine.i2", "seat.sit.i2", "pg.go.i", "pg.cant.tanks", "pg.cant.human",
       "pg.cant.teams", "pg.cant.ready", "pg.cant.match", "name.i1", "name.i2", "name.i3", "set.name.i1", "set.name.i2",
       "lobby.join2", "lobby.watch", "lobby.closed", "create.go.i1", "create.go.i2", "on.full", "on.busy", "ver.update", "lobby.link.i1", "lobby.link.i2", "link.i1", "link.i2", "link.err", "lobby.host.i"]) fits(c, k, t(k), 78);
-    fits(c, "seat.sit.i", t("seat.sit.i", { name: Lang.raw("yellow") }), 78);
+    fits(c, "seat.sit.i", t("seat.sit.i", { name: Lang.raw("gold") }), 78);
     fits(c, "lobby.link", t("lobby.link"), 66);
     // the list of games' columns (lobby.js COLS: mode 17, players 8, AI 4, watching 9 - one blank column each)
     fits(c, "lobby.mode", t("lobby.mode"), 16); fits(c, "lobby.players", t("lobby.players"), 11);
@@ -92,7 +92,7 @@ for (const c of Lang.codes) {
   {
     const bw = len => { const w = Math.max(14, len + 4); return w + w % 2; };
     const mx = a => Math.max(...a.map(x => typeof x === "number" ? x : vis(x)));
-    const lv = ["easy", "normal", "hard"], names = ["blue", "green", "cyan", "yellow", "white", "pink", "violet", "teal"].map(r => t(r));
+    const lv = ["easy", "normal", "hard"], names = ["blue", "green", "red", "gold", "pink", "lime", "sky", "white"].map(r => t(r));
     const cpuL = [...["small", "medium", "large"].map(z => t("lc.size") + t("lc.size." + z)), t("lc.win") + "9", t("lc.time") + t("time.off"), t("lc.time") + t("time.n", { n: 10 }), t("lc.ff") + t("lc.on"), t("lc.ff") + t("lc.off"),
       ...["self", "team", "everyone"].map(v => t("cpu.view") + t("view." + v)), ...["black", "wreck", "team", "killer", "others"].map(v => t("lc.watch") + t("watch." + v)),
       t("cpu.start"), t("menu.instr"), t("back.main")];

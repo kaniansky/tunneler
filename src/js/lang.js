@@ -24,7 +24,7 @@ function modeTexts(mode, c, texts) { (MODE_TEXTS[mode] = MODE_TEXTS[mode] || {})
 const CODES = [];
 const ORDER = {};
 // tank colours of players 0..7 (extended mode; also the online role names)
-const COLOR_KEYS = ["blue", "green", "cyan", "yellow", "white", "pink", "violet", "teal"];
+const COLOR_KEYS = ["blue", "green", "red", "gold", "pink", "lime", "sky", "white"];
 
 // ------------------------------------------------------------------ encoding to the font
 const BASE_FONT = VGA_FONT.slice();

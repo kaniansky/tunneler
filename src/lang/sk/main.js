@@ -10,7 +10,7 @@ Lang.register("sk", {
   blue: "MODRÝ", green: "ZELENÝ",
   "touch.fire": "PAĽBA", "touch.esc": "ESC", "pad.on": "Gamepad {n} pripojený", "pad.off": "Gamepad {n} odpojený",
   // extended mode (3-8 players): the other tank colours
-  cyan: "AZÚROVÝ", yellow: "ŽLTÝ", white: "BIELY", pink: "RUŽOVÝ", violet: "FIALOVÝ", teal: "TYRKYSOVÝ",
+  red: "ČERVENÝ", gold: "ZLATÝ", pink: "RUŽOVÝ", lime: "LIMETKOVÝ", sky: "BLANKYTNÝ", white: "BIELY",
   "ui.hint": "↑↓ a <ENTER>, alebo myš.", "ui.back": "<ESC> späť.",
   "home.split": "Delená obrazovka", "home.split.i1": "Dvaja hráči na jednej klávesnici, ako v origináli.",
   "home.split.i2": "{blue}: W A S D + SHIFT     {green}: šípky + ENTER",
@@ -147,8 +147,8 @@ Lang.register("sk", {
           "najviac zasiahla nepriateľské tanky, a ostatné tanky vybuchnú; pri remíze nevyhrá nikto.  " +
           "Po zápase štatistika ukáže výstrely, zásahy, vykopané a prejdené metre každého tanku a " +
           "\"Odveta\" spustí hru znova s rovnakými nastaveniami."],
-        ["Tímy:  ", "Okrem pôvodného súboja môže hrať až 8 tankov (MODRÝ, ZELENÝ, AZÚROVÝ, ŽLTÝ, " +
-          "BIELY, RUŽOVÝ, FIALOVÝ a TYRKYSOVÝ) každý sám za seba alebo v tímoch.  Tanky s rovnakým " +
+        ["Tímy:  ", "Okrem pôvodného súboja môže hrať až 8 tankov (MODRÝ, ZELENÝ, ČERVENÝ, ZLATÝ, " +
+          "RUŽOVÝ, LIMETKOVÝ, BLANKYTNÝ a BIELY) každý sám za seba alebo v tímoch.  Tanky s rovnakým " +
           "číslom tímu sú spoluhráči; tím vyhrá kolo, keď ostanú iba jeho tanky, a bod dostanú všetci " +
           "jeho členovia.  Priateľská paľba zapnutá: tvoje strely zrania aj spoluhráčov.  Vypnutá: " +
           "strela na spoluhráčovi vybuchne ako na stene."],

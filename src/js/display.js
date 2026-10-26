@@ -22,11 +22,11 @@ const PAL_RGB = [
   [0, 0, 0], [0, 0, 45], [0, 42, 0], [0, 42, 42], [46, 0, 0], [46, 0, 46], [48, 30, 12], [38, 38, 38],
   [46, 22, 1], [11, 11, 63], [0, 63, 0], [10, 60, 60], [63, 13, 2], [25, 25, 25], [60, 58, 7], [63, 63, 63]];
 // extended mode (3-8 players, not in the original; same as engine.js EXT_PAL_RGB): player colours at
-// 1 2 3 5 9 10 11 15, the rest as PalRGB (tank treads use the panel grey 13). Snapshots with
+// 1 2 3 5 9 10 11 15 (blue, green, sky, gold, pink, lime, red, white), the rest as PalRGB (tank treads use the panel grey 13). Snapshots with
 // palette "extended" are drawn with it.
 const EXT_PAL_RGB = [
-  [0, 0, 0], [11, 11, 63], [0, 48, 0], [10, 60, 60], [46, 0, 0], [63, 63, 18], [48, 30, 12], [38, 38, 38],
-  [46, 22, 1], [63, 63, 63], [63, 40, 48], [36, 18, 63], [63, 13, 2], [25, 25, 25], [60, 58, 7], [0, 38, 32]];
+  [0, 0, 0], [0, 0, 63], [0, 25, 0], [7, 36, 63], [46, 0, 0], [63, 53, 0], [48, 30, 12], [38, 38, 38],
+  [46, 22, 1], [63, 0, 63], [0, 63, 0], [63, 0, 0], [63, 13, 2], [25, 25, 25], [60, 58, 7], [63, 63, 63]];
 const dac = pal => pal.map(c => c.map(v => (v << 2) | (v >> 4)));
 const LORES_PALETTE = dac(PAL_RGB), EXT_PALETTE = dac(EXT_PAL_RGB);
 const toU32 = pal => pal.map(([r, g, b]) => (255 << 24) | (b << 16) | (g << 8) | r);  // little-endian RGBA
@@ -52,7 +52,7 @@ let tagLores = false;
 // world maps): a player's palette entries - extended: its colour, classic: body 9 / 10 and treads 1 / 2 -
 // get the new colour; text screens keep the slots' colours (names say which tank is which).
 const TANK_COLOR_MODES = ["normal", "colorblind", "relation"];
-const CB_COLORS = [[47, 134, 201], [0, 158, 115], [86, 180, 233], [240, 228, 66], [255, 255, 255], [204, 121, 167], [230, 159, 0], [213, 94, 0]];
+const CB_COLORS = [[47, 134, 201], [0, 158, 115], [213, 94, 0], [240, 228, 66], [204, 121, 167], [230, 159, 0], [86, 180, 233], [255, 255, 255]];
 const REL_COLORS = { me: [79, 134, 255], team: [71, 196, 99], enemy: [229, 72, 60] };
 function tankColorMode() {
   let v = "normal";

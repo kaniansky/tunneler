@@ -112,7 +112,7 @@ kills to win.
 
 Settings (split screen: map size, rounds to win and round time only):
 
-- **Slots and teams** - 8 slots (BLUE, GREEN, CYAN, YELLOW, WHITE, PINK, VIOLET, TEAL), each nobody,
+- **Slots and teams** - 8 slots (BLUE, GREEN, RED, GOLD, PINK, LIME, SKY, WHITE), each nobody,
   human or a computer tank (online: open, closed or AI), each with a team number 1-8: all different =
   free-for-all, shared numbers = teams of any size (4 v 4, 2 v 2 v 2 v 2, 3 v 5, ...).
 - **Map size** - small (512x256), medium (1024x512, the original) or large (2048x1024).

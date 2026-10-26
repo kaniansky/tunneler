@@ -35,8 +35,8 @@ export function mount() {
   const MOBILE = GameScreen.mobile();                     // (a phone / tablet: one player - no player 2, no split screen)
   const KINDS = ["none"].concat(LEVELS, MOBILE ? ["you"] : ["you", "p2"]);
   const SIZES = TunnelerEngine.SIZES || ["small", "medium", "large"];
-  const COLORS = TunnelerEngine.PLAYER_KEYS || ["blue", "green", "cyan", "yellow", "white", "pink", "violet", "teal"];
-  const TEXT_COLORS = TunnelerEngine.PLAYER_TEXT_COLORS || [9, 10, 11, 13, 15, 12, 5, 3];
+  const COLORS = TunnelerEngine.PLAYER_KEYS;
+  const TEXT_COLORS = TunnelerEngine.PLAYER_TEXT_COLORS;
   const clampInt = (v, lo, hi, d) => { v = parseInt(v, 10); return v >= lo && v <= hi ? v : d; };
   const MAP_COLS = 14;                                    // (a map's name in the Settings box: at most this wide)
   // a map's name and its number of bases ("Crossroads (6)" - owner, 2026-10-26)
@@ -264,7 +264,10 @@ export function mount() {
   const CTL = () => Controls && Controls.get ? Controls : null;        // (key remapping)
   const PADS = () => Pads && Pads.getTouch ? Pads : null;              // (touch controls)
   const SCR = () => GameScreen || null;                                 // (fullscreen, screen size: screen.js)
-  const COLORS8 = ["blue", "green", "cyan", "yellow", "white", "pink", "violet", "teal"];
+  const COLORS8 = TunnelerEngine.PLAYER_KEYS;
+  // the preferred colour as stored: the names gone since 2026-10-26 stay their seat (netproto.js roleIndex)
+  const OLD_COLORS = { cyan: 2, yellow: 3, violet: 6, teal: 7 };
+  const storedColor = () => { const v = load("tunneler.online.color", ""); return COLORS8.includes(v) ? v : OLD_COLORS[v] != null ? COLORS8[OLD_COLORS[v]] : ""; };
   // a key row's label: "BLUE up: "
   const keyLabel = (set, a) => Lang.raw(set) + " " + Lang.raw("ctl." + a) + ": ";
   const rowLabels = () => ["set.name", "set.account", "home.lang", "set.sound", "set.volume", "set.stereo", "set.fade", "set.gfx", "set.fullscreen",
@@ -407,7 +410,7 @@ export function mount() {
       // (a server with accounts: the account's rows instead of the name - docs/v6/ACCOUNTS.md)
       const nameRows = Account.required() === true ? accountRows() : [{ key: "name", label: pad("set.name"), input: nameForm, align: "left", info: [T("set.name.i1"), T("set.name.i2")],
         go: () => { saveName(); settings(true); } }];
-      const prefer = COLORS8.includes(load("tunneler.online.color", "")) ? load("tunneler.online.color", "") : "";
+      const prefer = storedColor();
       const shown = load("tunneler.chat.hide", "0") !== "1";          // (Show chat: the stored key says hidden)
       return [
         ...nameRows,
