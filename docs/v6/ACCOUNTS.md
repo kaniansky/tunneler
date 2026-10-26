@@ -313,6 +313,13 @@ index object `google-<sha256(sub)>` = `{id}` (accounts.js `googleFile`).
   as repository variables `PLAY_GAMES_APP_ID`, `PLAY_GAMES_WEB_CLIENT_ID`; the web client's id and secret on the
   server as `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` (Render: Environment). Add testers in Play Games Services
   (while it isn't published) and publish its configuration when the app goes to production.
+  Troubleshooting (`adb logcat`, tag `PlayGamesServices[SignInAuthenticator]` prints package, SHA-1 and App ID):
+  "not registered to use OAuth2.0" / `DEVELOPER_ERROR` at sign-in = no Android client for that SHA-1 (the GitHub
+  APK is signed with the upload key `7D:26:3C:...:03:78`, a Play install with Play App Signing's key - one Android
+  credential each; Cloud Console's "not applicable to verify ownership" note doesn't stop creating it); "Invalid
+  audience value: server:client_id:<id>" at `requestServerSideAccess` = `PLAY_GAMES_WEB_CLIENT_ID` isn't the
+  project's **Game server** credential (a web client) - the app, `GOOGLE_CLIENT_ID` and that credential must be the
+  same client (the live one, 2026-10-26: `1075533788402-v13bhslc...`; the Play Games project / App ID `1075533788402`).
 
 Tokens, tickets, rooms and boards don't change: they only know the account id.
 
