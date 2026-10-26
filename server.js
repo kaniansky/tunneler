@@ -1809,6 +1809,25 @@ async function latestRelease(current, fetchFn = globalThis.fetch) {
     return newerVersion(version, current) ? { version, url: rel.html_url || "https://github.com/kaniansky/tunneler-online/releases/latest" } : null;
   } catch (e) { return null; }
 }
+// Render's free plan stops a service after 15 minutes without a request through its public address; the first visitor
+// then waits ~a minute. GitHub's scheduled "keep awake" job ran hours apart (scheduled jobs are throttled), so the
+// server keeps itself awake: every KEEP_AWAKE_MS it asks its own public address (RENDER_EXTERNAL_URL, which Render
+// sets; or KEEP_AWAKE_URL) for /api/health - that request comes in through Render's proxy and counts. Off with
+// KEEP_AWAKE=0; nothing to do where neither address is set. (owner, 2026-10-26)
+const KEEP_AWAKE_MS = 10 * 60 * 1000;
+function keepAwake(say = log, every = KEEP_AWAKE_MS) {
+  const base = (process.env.KEEP_AWAKE_URL || process.env.RENDER_EXTERNAL_URL || "").replace(/\/+$/, "");
+  if (!base || /^(0|false|no|off)$/i.test(process.env.KEEP_AWAKE || "")) return null;
+  let failed = 0;
+  const ping = () => fetch(base + "/api/health", { signal: AbortSignal.timeout(30000) })
+    .then(r => { if (failed && r.ok) say("keep awake: " + base + " answers again"); failed = r.ok ? 0 : failed + 1; })
+    .catch(e => { if (!failed++) say("keep awake: " + base + " didn't answer (" + (e && e.message) + ")"); });
+  const t = setInterval(ping, every);
+  if (t.unref) t.unref();
+  say("keep awake: " + base + "/api/health every " + Math.round(every / 60000) + " min");
+  return t;
+}
+
 function watchReleases(current, say = log) {
   let told = null;
   const check = () => latestRelease(current).then(rel => {
@@ -1821,7 +1840,7 @@ function watchReleases(current, say = log) {
   setInterval(check, DAY_MS).unref();
 }
 
-module.exports = { createServer, slugify, cleanName, newerVersion, latestRelease, sigV4, s3Request };
+module.exports = { createServer, slugify, cleanName, newerVersion, latestRelease, sigV4, s3Request, keepAwake };
 
 // Readable start-up errors instead of a Node stack trace (exit code 1).
 function startupError(port, err) {
@@ -1866,5 +1885,6 @@ if (require.main === module) {
     log("accounts: " + (srv.accountStore ? "on, kept in " + srv.accountStore + (process.env.ACCOUNT_SECRET ? " (ACCOUNT_SECRET set)" : "") : "off (ACCOUNTS=off: free names)"));
     if (srv.accountWarning) log("WARNING: " + srv.accountWarning);
     if (VERSION && !/^(0|false|no|off)$/i.test(process.env.UPDATE_CHECK || "")) watchReleases(VERSION);
+    keepAwake();
   });
 }

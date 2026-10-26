@@ -5,7 +5,7 @@
 const assert = require("assert");
 const fs = require("fs"), os = require("os"), path = require("path"), vm = require("vm");
 const SRC = path.join(__dirname, "..", "src");
-const { newerVersion, latestRelease } = require("../server.js");
+const { newerVersion, latestRelease, keepAwake } = require("../server.js");
 const { runPage } = require("./page-env.js");
 const { manifest } = require("../tools/updater-manifest.js");
 
@@ -133,6 +133,28 @@ const ok = msg => { n++; console.log("  ok  " + msg); };
       "the lines tools/flatpak-update.js rewrites are there");
   }
   ok("the Flatpak: the metainfo lists this version, the manifest's sources (x-checker-data, the lines the release job rewrites)");
+
+  // keep awake (Render's free plan sleeps after 15 idle minutes): the server asks its own public address for /api/health
+  // now and then - only where RENDER_EXTERNAL_URL / KEEP_AWAKE_URL is set, never with KEEP_AWAKE=0
+  {
+    const http = require("http"), hits = [];
+    const srv = http.createServer((q, r) => { hits.push(q.url); r.end("{}"); });
+    const port = await new Promise(r => srv.listen(0, () => r(srv.address().port)));
+    const env = { ...process.env };
+    delete process.env.KEEP_AWAKE_URL; delete process.env.RENDER_EXTERNAL_URL; delete process.env.KEEP_AWAKE;
+    assert.strictEqual(keepAwake(() => {}, 20), null, "no public address: nothing");
+    process.env.RENDER_EXTERNAL_URL = "http://127.0.0.1:" + port + "/";
+    process.env.KEEP_AWAKE = "0";
+    assert.strictEqual(keepAwake(() => {}, 20), null, "KEEP_AWAKE=0: off");
+    delete process.env.KEEP_AWAKE;
+    const said = [], t = keepAwake(m => said.push(m), 20);
+    await new Promise(r => setTimeout(r, 120));
+    clearInterval(t); srv.close();
+    Object.keys(process.env).forEach(k => { if (!(k in env)) delete process.env[k]; }); Object.assign(process.env, env);
+    assert(t && hits.length >= 2 && hits.every(u => u === "/api/health") && /keep awake: http:\/\/127\.0\.0\.1:\d+\/api\/health/.test(said[0]),
+      "RENDER_EXTERNAL_URL: its /api/health asked again and again (" + hits.length + " times; " + said[0] + ")");
+  }
+  ok("keep awake: the server's own public address asked now and then (Render), off without one or with KEEP_AWAKE=0");
 
   console.log(`update-check: ${n} ok`);
 })().catch(e => { console.error(e); process.exit(1); });

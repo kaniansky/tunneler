@@ -66,7 +66,8 @@ may be redesigned, but always in the original's DOS look.
   `X.Y` / short sha, amd64 + arm64, the homepage upload; pushes to main only run CI; release-notes.yml
   rewrites an old release's notes by hand), docker-publish (manual image build
   only), keep-awake (pings the live server every 10 minutes: Render's free plan sleeps after 15 idle
-  minutes), dependabot. So pushing to main publishes - another reason never to push unasked.
+  minutes - GitHub throttles scheduled jobs to hours apart, so the server also keeps itself awake: server.js
+  `keepAwake`, its own RENDER_EXTERNAL_URL's /api/health every 10 minutes; KEEP_AWAKE=0 off), dependabot. So pushing to main publishes - another reason never to push unasked.
 - `docs/DESIGN-8P.md` - the design of everything beyond the original (extended mode, slots / teams,
   online lobby, views, sound, map sizes, languages...), in the owner's numbered requests; later sections
   win over earlier ones.
