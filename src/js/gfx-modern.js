@@ -227,7 +227,8 @@ void main() {
     // round barrel; lit from the top left, fixed in the world (the light doesn't turn with the tank)
     vec2 Lw = normalize(vec2(-0.6, -0.8)), Ll = vec2(dot(Lw, r), -dot(Lw, f));
     // the tracks: links rolling with the tank (uTread), the guide teeth along the middle
-    float dTr = min(sdBox(l, vec2(-2.0, 0.5), vec2(0.64, 3.08), 0.5), sdBox(l, vec2(2.0, 0.5), vec2(0.64, 3.08), 0.5));
+    // (owner, 2026-10-26: the front a little shorter - tracks from -2.25, hull from -1.6 - and the turret wider)
+    float dTr = min(sdBox(l, vec2(-2.0, 0.665), vec2(0.64, 2.915), 0.5), sdBox(l, vec2(2.0, 0.665), vec2(0.64, 2.915), 0.5));
     float side = clamp(abs(abs(l.x) - 2.0) / 0.64, 0.0, 1.0);
     float link = fract((l.y + uTread[i] / uTS) * 2.4);
     float gap = smoothstep(0.0, 0.14, link) * smoothstep(1.0, 0.8, link);
@@ -235,22 +236,22 @@ void main() {
     steel += vec3(0.07) * (1.0 - smoothstep(0.0, 0.18, abs(side - 0.5))) * gap;
     col = mix(col, steel, clamp(0.5 - dTr / ta, 0.0, 1.0));
     // the hull: its edges bevelled (lit or in shadow by which way they face), the front plate, the engine deck's slats
-    vec2 hc = vec2(0.0, 0.45), hh = vec2(1.5, 2.35);
+    vec2 hc = vec2(0.0, 0.6), hh = vec2(1.5, 2.2);
     float e = 0.06, dH = sdBox(l, hc, hh, 0.3);
     vec2 g = vec2(sdBox(l + vec2(e, 0.0), hc, hh, 0.3) - sdBox(l - vec2(e, 0.0), hc, hh, 0.3),
                   sdBox(l + vec2(0.0, e), hc, hh, 0.3) - sdBox(l - vec2(0.0, e), hc, hh, 0.3));
     g = dot(g, g) > 0.0 ? normalize(g) : vec2(0.0);
     float rim = 1.0 - clamp(-dH / 0.32, 0.0, 1.0);
-    vec3 hull = body * (0.84 + 0.36 * rim * dot(g, Ll)) * (l.y < -1.35 ? 1.08 : 1.0);
+    vec3 hull = body * (0.84 + 0.36 * rim * dot(g, Ll)) * (l.y < -1.05 ? 1.08 : 1.0);
     if (l.y > 1.55 && l.y < 2.55 && abs(l.x) < 1.05) hull *= 0.76 + 0.24 * smoothstep(0.35, 0.55, fract(l.y * 4.0));
     col = mix(col, hull, clamp(0.5 - dH / ta, 0.0, 1.0));
     // the turret: lit like a dome, a ring for the commander's hatch
-    vec2 tcn = vec2(0.0, 0.7), tq = (l - tcn) / vec2(1.5, 1.15);
-    float dT = sdBox(l, tcn, vec2(1.45, 1.1), 0.75), dome = sqrt(max(0.0, 1.0 - dot(tq, tq)));
+    vec2 tcn = vec2(0.0, 0.7), tq = (l - tcn) / vec2(1.75, 1.15);
+    float dT = sdBox(l, tcn, vec2(1.7, 1.1), 0.75), dome = sqrt(max(0.0, 1.0 - dot(tq, tq)));
     vec3 tur = body * (0.66 + 0.26 * dome + 0.4 * clamp(dot(tq, Ll), 0.0, 1.0));
-    float dHa = abs(length(l - tcn - vec2(0.75, 0.35)) - 0.3) - 0.05;
+    float dHa = abs(length(l - tcn - vec2(0.9, 0.35)) - 0.3) - 0.05;
     tur *= 1.0 - 0.35 * clamp(0.5 - dHa / ta, 0.0, 1.0);
-    col *= 1.0 - 0.35 * clamp(0.5 - sdBox(l - Ll * 0.25, tcn, vec2(1.45, 1.1), 0.75) / 0.4, 0.0, 1.0) * (1.0 - clamp(0.5 - dT / ta, 0.0, 1.0));
+    col *= 1.0 - 0.35 * clamp(0.5 - sdBox(l - Ll * 0.25, tcn, vec2(1.7, 1.1), 0.75) / 0.4, 0.0, 1.0) * (1.0 - clamp(0.5 - dT / ta, 0.0, 1.0));
     col = mix(col, tur, clamp(0.5 - dT / ta, 0.0, 1.0));
     // the gun: the mantlet, the barrel (round: bright along its middle), the fume extractor, the muzzle brake
     float dM = sdBox(l, vec2(0.0, -0.4), vec2(0.42, 0.28), 0.12);
@@ -263,7 +264,7 @@ void main() {
     vec3 gc = body * 0.56 * (0.5 + 0.65 * sqrt(cyl)) + vec3(0.1) * pow(cyl, 6.0);
     col = mix(col, gc, clamp(0.5 - dG / ta, 0.0, 1.0));
     // the headlights (on while its lamp shines)
-    float dL = min(length(l - vec2(-1.12, -1.75)), length(l - vec2(1.12, -1.75))) - 0.16;
+    float dL = min(length(l - vec2(-1.12, -1.45)), length(l - vec2(1.12, -1.45))) - 0.16;
     col = mix(col, uTank[i].w > 0.5 ? vec3(1.0, 0.94, 0.7) : vec3(0.35, 0.33, 0.28), clamp(0.5 - dL / ta, 0.0, 1.0));
   }
 
