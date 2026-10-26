@@ -32,7 +32,8 @@
 // the page when changed through Speaker.setOption - or by another tab, via the storage event):
 //   volume - "tunneler.volume" 0..100 in steps of 10 (default 100): a master gain over everything (the PC
 //            speaker too), (volume / 100)^2 (Speaker.volumeGain: halving the setting is about -12 dB,
-//            which sounds like half as loud)
+//            which sounds like half as loud); a phone / tablet (GameScreen.mobile()) always 100 - its volume
+//            buttons set the loudness
 //   stereo - "tunneler.stereo" "1" / "0" (default "1"): "0" = every sound centred (no panning)
 //   fade   - "tunneler.fade" "1" / "0" (default "1"): "0" = no distance fading (full volume however far;
 //            Speaker.attenuation itself stays as it is, play() skips it; a {mute: true} listener is
@@ -45,6 +46,7 @@
 //   Speaker.getOption(name) (volume a number, the others "on" / "off"), Speaker.setOption(name, value)
 //   (stores it, applies it to every live Speaker and the preview; returns the value set)
 import { Scope } from "./scope.js";
+import { GameScreen } from "./screen.js";
 const root = globalThis;
 
 const NEAR = 40, FAR = 240;
@@ -138,6 +140,7 @@ function normOption(name, v) {
 }
 function getOption(name) {
   if (!(name in OPTIONS)) return undefined;
+  if (name === "volume" && GameScreen.mobile()) return 100;       // (a phone / tablet: its volume buttons - owner, 2026-10-26)
   const ls = storage();
   let v = null;
   try { if (ls) v = ls.getItem(OPTION_KEYS[name]); } catch (e) { /* private mode */ }

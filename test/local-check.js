@@ -927,7 +927,15 @@ function play(search) {
   }
   // Settings: one column of categories; one opens its own screen with Back
   ui.sel = ui.spec.items.findIndex(i => i.key === "settings"); env.key("Enter");
-  same(ui.spec.items.map(i => i.key), ["cat-display", "cat-graphics", "cat-sound", "cat-controls", "cat-online", "gap", "lang", "gap2", "back"], "the categories, Language, Back");
+  same(ui.spec.items.map(i => i.key), ["cat-display", "cat-graphics", "cat-sound", "cat-online", "gap", "lang", "gap2", "back"], "the categories (no Controls), Language, Back");
+  ui.sel = 0; env.key("Enter");
+  same(ui.spec.items.map(i => i.key).filter(k => /^touch|^key-/.test(k)), ["touchsize", "touchleft"], "Display: the touch controls' rows, no keys");
+  env.key("Escape");
+  ui.sel = 2; env.key("Enter");
+  assert(!ui.spec.items.some(i => i.key === "volume") && ui.spec.items.some(i => i.key === "stereo"), "Sound: no Volume (the phone's buttons), Stereo stays");
+  env.win.localStorage.setItem("tunneler.volume", "30");
+  assert.strictEqual(env.win.Speaker.getOption("volume"), 100, "the volume is always 100 on a phone");
+  env.key("Escape");
   ui.sel = 1; env.key("Enter");
   assert(ui.spec.items.some(i => i.key === "gfx") && ui.spec.items[ui.spec.items.length - 1].key === "back-cat", "Graphics, with Back");
   env.key("Escape");

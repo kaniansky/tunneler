@@ -250,7 +250,8 @@ export function mount() {
   // categories (owner, 2026-10-24): Display, Graphics (the original's or the modern's settings), Sound,
   // Controls, Online, Language
   // (Language is no category: a switch of its own below them - owner, 2026-10-25)
-  const cats = () => ["display", "graphics", "sound", "controls", "online"];
+  // (a phone / tablet: no Controls - its keys are a keyboard's; the touch controls' rows are in Display - owner, 2026-10-26)
+  const cats = () => MOBILE ? ["display", "graphics", "sound", "online"] : ["display", "graphics", "sound", "controls", "online"];
   const langRow = () => ({ key: "lang", label: T("home.lang") + Lang.name(Lang.code), info: [T("home.lang.i1"), T("home.lang.i2")],
     go: () => setLang(1), change: setLang });
   let setCat = "display";
@@ -296,6 +297,13 @@ export function mount() {
   }
   // (Alt+Enter, or leaving fullscreen with the browser's Esc: the Fullscreen row follows)
   GameScreen.onChange(() => { if (ui.spec && ui.spec.items && ui.spec.items.some(i => i.key === "fullscreen")) settings(true); });
+  // the touch controls' size and side (Controls; on a phone / tablet: Display)
+  function touchRows(L) {                                 // (L: the category's row maker)
+    if (!PADS()) return [];
+    const t = (k, d) => { Pads.setTouch(k, step(Pads.TOUCH[k], Pads.getTouch(k), d)); settings(true); };
+    return [L("touchsize", pad("touch.size") + T("touch.size." + Pads.getTouch("size")), [T("touch.size.i"), T("touch.i2")], d => t("size", d)),
+      L("touchleft", pad("touch.left") + onOffT(Pads.getTouch("left") === "on"), [T("touch.left.i"), T("touch.i2")], d => t("left", d))];
+  }
   // the settings of category c
   // a category's rows line up on their ": " within the category (owner, 2026-10-25: the value gets the room a
   // longer label elsewhere would take): the padding every aligned row shares is taken off, click zones with it
@@ -325,10 +333,10 @@ export function mount() {
         // (the volume as a meter of 10 cells - a click on a cell sets it there, a right click one less)
         const vol = Speaker.getOption("volume"), at = UniText.cols(pad("set.volume"));
         const setVol = v => { Speaker.setOption("volume", v); if (Speaker.preview) try { Speaker.preview(soundStyle()); } catch (e) { /* no audio */ } settings(true); };
-        rows.push(L("volume", pad("set.volume") + "\xDB".repeat(vol / 10) + "\xB0".repeat(10 - vol / 10) + " " + vol + " %",
+        if (!MOBILE) rows.push(L("volume", pad("set.volume") + "\xDB".repeat(vol / 10) + "\xB0".repeat(10 - vol / 10) + " " + vol + " %",
           [T("set.volume.i"), T("home.lang.i2")], d => opt("volume", d),
-          { slide: true, zones: Array.from({ length: 10 }, (_, i) => ({ from: at + i, to: at + i + 1, click: dir => setVol(dir > 0 ? (i + 1) * 10 : i * 10) })) }),
-          L("stereo", pad("set.stereo") + onOffT(Speaker.getOption("stereo") === "on"), [T("set.stereo.i"), T("home.lang.i2")], d => opt("stereo", d)),
+          { slide: true, zones: Array.from({ length: 10 }, (_, i) => ({ from: at + i, to: at + i + 1, click: dir => setVol(dir > 0 ? (i + 1) * 10 : i * 10) })) }));
+        rows.push(L("stereo", pad("set.stereo") + onOffT(Speaker.getOption("stereo") === "on"), [T("set.stereo.i"), T("home.lang.i2")], d => opt("stereo", d)),
           L("fade", pad("set.fade") + onOffT(Speaker.getOption("fade") === "on"), [T("set.fade.i"), T("home.lang.i2")], d => opt("fade", d)));
       }
       return rows;
@@ -354,6 +362,7 @@ export function mount() {
         rows.push(L("tankcolors", pad("set.tankcolors") + T("tc." + now), [T("tc." + now + ".i"), T("set.tankcolors.i")],
           d => { save("tunneler.tankcolors", step(Display.TANK_COLOR_MODES, now, d)); settings(true); }));
       }
+      if (MOBILE) rows.push(...touchRows(L));
       return rows;
     }
     if (c === "graphics") {
@@ -364,12 +373,13 @@ export function mount() {
         rows.push(L("gfx", pad("set.gfx") + T("gfx." + mode), [T("gfx.i1"), ok ? T("gfx.i2") : { text: T("gfx.none"), color: 12 }],
           d => setGfx(mode, d)), { key: "gap-g", label: "", disabled: true });
       }
+      // (a phone / tablet: no "Display only: ..." line - the info took the room the rows and Back need - owner, 2026-10-26)
       if (!modernOn()) rows.push(L("smooth", pad("set.smooth") + onOffT(load("tunneler.smooth", "1") !== "0"),
-        [T("set.smooth.i1"), T("set.smooth.i2")], toggleSmooth));
+        [T("set.smooth.i1"), ...(MOBILE ? [] : [T("set.smooth.i2")])], toggleSmooth));
       else {
         const m = Gfx.modern();
         for (const k of Object.keys(Gfx.MODERN)) {
-          rows.push(L(k, pad("mod." + k) + Lang.enc(modValue(k, m[k])), [T("mod." + k + ".i1"), T(k === "style" ? "mod.style.i2" : "mod.i2")],
+          rows.push(L(k, pad("mod." + k) + Lang.enc(modValue(k, m[k])), [T("mod." + k + ".i1"), ...(MOBILE && k !== "style" ? [] : [T(k === "style" ? "mod.style.i2" : "mod.i2")])],
             d => setModern(k, d)));
           if (k === "style") rows.push({ key: "gap-m", label: "", disabled: true });
         }
@@ -390,12 +400,7 @@ export function mount() {
         }
         rows.push({ key: "keys-reset", label: T("ctl.reset"), info: [T("ctl.reset.i")], go: () => { Controls.reset(); settings(true); } });
       }
-      if (PADS()) {
-        const t = (k, d) => { Pads.setTouch(k, step(Pads.TOUCH[k], Pads.getTouch(k), d)); settings(true); };
-        rows.push({ key: "gap-t", label: "", disabled: true },
-          L("touchsize", pad("touch.size") + T("touch.size." + Pads.getTouch("size")), [T("touch.size.i"), T("touch.i2")], d => t("size", d)),
-          L("touchleft", pad("touch.left") + onOffT(Pads.getTouch("left") === "on"), [T("touch.left.i"), T("touch.i2")], d => t("left", d)));
-      }
+      if (PADS()) rows.push({ key: "gap-t", label: "", disabled: true }, ...touchRows(L));
       return rows;
     }
     if (c === "online") {
