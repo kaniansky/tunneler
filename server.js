@@ -969,7 +969,7 @@ function createServer(opts = {}) {
     // (accounts on: the session's account is the entry's key and name - ?cid=&name= don't count; docs/v6/ACCOUNTS.md)
     const acc = accounts ? await needSession(req, res) : null;
     if (accounts && !acc) return;
-    const cid = acc ? accountKey(acc) : clientId(u.searchParams.get("cid")) || "", name = acc ? acc.name : cleanPlayerName(u.searchParams.get("name"));
+    const cid = acc ? accountKey(acc) : clientId(u.searchParams.get("cid")) || "", name = acc ? accounts.shown(acc) : cleanPlayerName(u.searchParams.get("name"));
     if (!/^[A-Za-z0-9_-]{8,64}$/.test(cid)) return challengeError(res, "bad", "bad client id");
     if (!name) return challengeError(res, "name", "a name is needed");
     let bytes;
@@ -1358,7 +1358,8 @@ function createServer(opts = {}) {
     ws.wantsPlay = room.qp && !watch;               // (quick play: came to play - gets a tank / seat when one is free)
     // (accounts: the username - unique on this server; the same account in two tabs keeps its one name)
     ws.acc = account ? account.id : null;
-    ws.name = account ? account.name : uniqueName(room, q.get("name") || "", ws);
+    // (an account: its display name - two accounts may share one, so a number makes it unique in the room as without)
+    ws.name = uniqueName(room, account ? accounts.shown(account) : q.get("name") || "", ws);
     // the host key makes this connection the host - unless another one already is (a second tab of the
     // same browser has the same key: it joins as a player; it hosts if the host leaves - ensureHost); a
     // replaced connection's host role goes to its page's new one

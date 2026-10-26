@@ -228,12 +228,26 @@ export function mount() {
     if (i >= 0) { ui.sel = i; ui.draw(); }
   }
   const openLogin = () => { accNote = null; Login.ask(ui, { done: () => toAccount(), back: () => toAccount(), backKey: "set.back" }); };
+  // the account's display name (owner, 2026-10-26: changeable when logged in; the username stays the login)
+  const dispForm = { value: "", max: DosUI.NAME_MAX, width: DosUI.NAME_MAX };
+  async function saveDisplay() {
+    const v = dispForm.value.trim();
+    if (!v || v === Account.display()) return;
+    const r = await Account.setName(v);
+    if (r.ok) return toAccount({ text: T("set.dname.ok"), color: 10 }), focusRow("dname");
+    dispForm.value = Account.display();
+    toAccount({ text: T(r.code === "taken" ? "set.dname.taken" : r.code === "name" ? "set.dname.bad" : "acc.err." + (["net", "busy", "session", "storage"].includes(r.code) ? r.code : "server"), { msg: r.msg || "" }), color: 12 });
+    focusRow("dname");
+  }
+  const focusRow = key => { const i = ui.spec.items.findIndex(it => it.key === key); if (i >= 0) { ui.sel = i; ui.draw(); } };
   function accountRows() {
     const s = Account.session();
+    if (s && dispForm.for !== Account.display()) dispForm.value = dispForm.for = Account.display();   // (a new name: the field shows it; typing stays)
     const rows = [{ key: "account", align: "left", label: pad("set.account") + (s ? Lang.enc(s.name) : T("set.account.none")),
       info: [accNote || (s ? T("set.account.i1") : T("set.account.in.i")), T("set.account.i2")], go: () => { if (!s) openLogin(); } }];
     if (!s) rows.push({ key: "login", label: T("acc.login.go"), info: [T("set.account.in.i"), T("set.account.i2")], go: openLogin });
-    else rows.push({ key: "logout", label: T("acc.logout"), info: [T("acc.logout.i")], go: () => { Account.logout(); toAccount({ text: T("acc.out"), color: 10 }); } },
+    else rows.push({ key: "dname", label: pad("set.name"), input: dispForm, align: "left", info: [T("set.dname.i1"), T("set.name.i2")], go: saveDisplay },
+      { key: "logout", label: T("acc.logout"), info: [T("acc.logout.i")], go: () => { Account.logout(); toAccount({ text: T("acc.out"), color: 10 }); } },
       { key: "chpw", label: T("acc.change"), info: [T("acc.change.i"), T("acc.change.i2")],
         go: () => Login.change(ui, { done: () => toAccount({ text: T("acc.changed"), color: 10 }), back: () => toAccount() }) },
       { key: "delacc", label: T("acc.delete"), info: [T("acc.delete.i")],

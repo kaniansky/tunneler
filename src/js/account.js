@@ -1,12 +1,13 @@
 // Player accounts on the game's server (docs/v6/ACCOUNTS.md) - the page's side, no DOM. Accounts are per server:
 // the one Endpoint names (the page's own site; the desktop / Android app's Server setting). This module keeps
-//   the session:  localStorage "tunneler.session.<origin>" = {token, id, name}
+//   the session:  localStorage "tunneler.session.<origin>" = {token, id, name, display}
 //   the server's answer whether online play needs an account: "tunneler.accounts.<origin>" = "1" / "0"
 // and talks to the server's /api/account*, /api/ticket and /api/config. Every call answers {ok: true, ...} or
 // {ok: false, code, wait?, msg?} (code "net": no connection).
 //   Account.required()       true / false (the server said so - remembered) / null (never asked)
 //   Account.config()         asks the server (once per page life and server) -> true / false / null (no answer)
-//   Account.session()        {token, id, name} | null;  Account.name() the username ("" = none)
+//   Account.session()        {token, id, name, display} | null;  Account.name() the username ("" = none), Account.display()
+//                            the name players see (the username unless changed: Account.setName)
 //   Account.check()          GET /api/account: a dead session is dropped, an old token renewed -> the session | null
 //   Account.signup / login / reset / changePassword / remove / logout
 //   Account.ticket()         a one-time ticket for the websocket (null: this server has no accounts; throws
@@ -30,7 +31,7 @@ function session() {
     return s && typeof s === "object" && typeof s.token === "string" && typeof s.name === "string" ? s : null;
   } catch (e) { return null; }
 }
-const keep = (token, account) => { store.set(sessionKey(), JSON.stringify({ token, id: account.id, name: account.name })); return session(); };
+const keep = (token, account) => { store.set(sessionKey(), JSON.stringify({ token, id: account.id, name: account.name, display: account.display || account.name })); return session(); };
 const logout = () => store.del(sessionKey());
 function required() { const v = store.get(configKey()); return v === "1" ? true : v === "0" ? false : null; }
 const remember = on => store.set(configKey(), on ? "1" : "0");
@@ -90,6 +91,15 @@ async function changePassword(password, newPassword) {
   else if (r.code === "session") logout();
   return r;
 }
+// the name players see (owner, 2026-10-26): the server checks it (the username's rules, not another account's username)
+async function setName(name) {
+  const s = session();
+  if (!s) return { ok: false, code: "session" };
+  const r = await call("POST", "/api/account/name", { name }, true);
+  if (r.ok && r.account) keep(s.token, r.account);
+  else if (r.code === "session") logout();
+  return r;
+}
 async function remove(password) {
   const r = await call("POST", "/api/account/delete", { password }, true);
   if (r.ok || r.code === "session") logout();
@@ -115,5 +125,6 @@ async function ticket() {
 
 export const Account = {
   origin, host: () => origin().replace(/^[a-z]+:\/\//i, ""), required, config, session, name: () => (session() || {}).name || "",
-  check, signup, login, reset, changePassword, remove, logout, ticket, auth,
+  display: () => { const s = session() || {}; return s.display || s.name || ""; },
+  check, signup, login, reset, changePassword, setName, remove, logout, ticket, auth,
 };

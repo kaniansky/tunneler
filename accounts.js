@@ -293,6 +293,26 @@ function createAccounts(opts) {
     say("account password reset", JSON.stringify(acct.name));
     return { account: acct, recovery: showRecovery(fresh) };
   }
+  // the name players see (owner, 2026-10-26: changeable when logged in - the username stays the login): a.display,
+  // else the username. The username's rules; never another account's username (nobody shows up as somebody else);
+  // the own username = no display name
+  const shown = a => typeof a.display === "string" && a.display ? a.display : a.name;
+  async function setDisplay(a, name) {
+    const nm = cleanUsername(name);
+    if (!nm) fail(400, "name");
+    const key = usernameKey(nm);
+    if (key !== a.key) { const idx = await store.get(nameFile(key)); if (idx && idx.id && idx.id !== a.id) fail(409, "taken"); }
+    let acct = a;
+    await serial("a:" + a.id, async () => {
+      const cur = cache.get(a.id) || (await store.get(a.id)) || a;
+      if (cur.deleted || gone.has(a.id)) fail(401, "session");
+      if (key === cur.key) delete cur.display; else cur.display = nm;
+      await save(cur);
+      acct = cur;
+    });
+    say("account display name", JSON.stringify(acct.name), "->", JSON.stringify(shown(acct)));
+    return acct;
+  }
   async function changePassword(a, old, password) {
     const pp = passwordProblem(password);
     if (pp) fail(400, pp);
@@ -371,7 +391,7 @@ function createAccounts(opts) {
   const L = opts.limits || {};                 // (tests: other limits per address)
   const allowSignup = rateLimiter(L.signups || MAX_SIGNUPS, SIGNUP_WINDOW, now0), allowLogin = rateLimiter(L.logins || MAX_LOGINS, LOGIN_WINDOW, now0);
   const allowReset = rateLimiter(MAX_RESETS, RESET_WINDOW, now0), allowSession = rateLimiter(MAX_SESSION_CALLS, 60000, now0);
-  const pub = a => ({ id: a.id, name: a.name, created: a.created });
+  const pub = a => ({ id: a.id, name: a.name, display: shown(a), created: a.created });
   const str = (v, max) => typeof v === "string" && v.length <= max ? v : null;
   async function body(req) {
     let b;
@@ -425,6 +445,13 @@ function createAccounts(opts) {
         await changePassword(a, pwField(b.password), pwField(b.newPassword));
         return json(res, 200, { token: await token(a), account: pub(a) });
       }
+      if (p === "/api/account/name" && req.method === "POST") {
+        const b = await body(req);
+        if (!allowSession(addr)) fail(429, "busy");
+        const a = await sessionOf(req);
+        if (!a) fail(401, "session");
+        return json(res, 200, { account: pub(await setDisplay(a, str(b.name, 100))) });
+      }
       if (p === "/api/account/delete" && req.method === "POST") {
         const b = await body(req);
         if (!allowLogin(addr)) fail(429, "busy");
@@ -441,7 +468,7 @@ function createAccounts(opts) {
     }
   }
 
-  return { api, sessionOf, useTicket, verifyToken, token, ticket, signup, login, reset, changePassword, remove, load, byName, keys,
+  return { api, sessionOf, useTicket, verifyToken, token, ticket, signup, login, reset, changePassword, setDisplay, shown, remove, load, byName, keys,
     store, get storeName() { return store.name; }, get persistent() { return store.persistent; } };
 }
 

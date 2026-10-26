@@ -6,6 +6,10 @@ those releases are tagged `online-vX.Y.Z`, their changes are in [docs/CHANGELOG-
 
 ## Unreleased
 
+- Accounts: a display name, changeable when logged in (Settings, Online, Name) - the name other players see; the
+  username stays the login. It can't be another account's username.
+- Accounts: a recovery code really works only once - two password resets with the same code at the same moment
+  could both get through.
 - Maps: a new map can start from rock everywhere or empty too (besides dirt and a random world); the editor's
   "Fill everything with" is gone.
 - Modern graphics: the simple tanks (the retro style) have square corners - tracks, body, turret, gun and shadow.

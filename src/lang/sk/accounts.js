@@ -60,6 +60,7 @@ Lang.extend("sk", {
   "set.account": "Účet: ", "set.account.none": "neprihlásený",
   "set.account.i1": "Tvoj účet na tomto serveri: online hry ho potrebujú.",
   "set.account.i2": "Účty sú pre každý server - iný server chce vlastný.",
+  "set.dname.i1": "Meno, ktoré vidia ostatní hráči. Prihlasuješ sa ďalej menom účtu.", "set.dname.ok": "Meno uložené - hráči ho odteraz vidia.", "set.dname.taken": "To je meno účtu iného hráča - vyber si iné.", "set.dname.bad": "Písmená alebo číslice, najviac 12 znakov.",
   "set.account.in.i": "<ENTER>: prihlásiť sa alebo vytvoriť účet.",
   "acc.logout": "Odhlásiť sa", "acc.logout.i": "Zabudne prihlásenie na tomto zariadení (účet zostáva).",
   "acc.change": "Zmeniť heslo", "acc.change.i": "Vyber si nové heslo.",

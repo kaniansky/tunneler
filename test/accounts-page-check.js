@@ -50,6 +50,12 @@ function fakeServer(accounts) {
         u.password = body.newPassword; u.token = u.token.replace(/\d+$/, n => String(+n + 1));
         return res(200, { token: u.token, account: { id: u.id, name: u.name } });
       }
+      if (p === "/api/account/name") {                       // (the display name - another account's username: taken)
+        const o = s.users.get(String(body.name).toLowerCase());
+        if (o && o !== u) return res(409, { code: "taken" });
+        u.display = body.name;
+        return res(200, { account: { id: u.id, name: u.name, display: u.display } });
+      }
       if (p === "/api/account/delete") {
         if (body.password !== u.password) return res(401, { code: "wrong" });
         s.users.delete(u.name.toLowerCase());
@@ -248,6 +254,16 @@ const go = (ui, k) => { const it = item(ui, k); assert(it, "no item " + k + " in
     const label = k => win.Lang.decode(String(item(ui, k).label));
     ok(/Account: Norko/.test(label("account")) && item(ui, "logout") && item(ui, "chpw") && item(ui, "delacc") && !item(ui, "name"),
       where + ": Settings, Online - Account: Norko, Log out, Change password, Delete account (no Name row)");
+    // the display name: its own row, the username in it until changed; another account's username refused
+    srv.users.set("eli", { id: "id9", name: "Eli", password: "x", token: "tok-Eli-1" });
+    ok(item(ui, "dname") && item(ui, "dname").input.value === "Norko", where + ": the display name's row (the username until changed)");
+    item(ui, "dname").input.value = "Sheriff"; go(ui, "dname");
+    await waitFor(() => JSON.parse(env.storage.get(SESSION)).display === "Sheriff");
+    ok(win.Account.display() === "Sheriff" && win.Account.name() === "Norko" && /Name saved/.test(JSON.stringify(item(ui, "account").info)),
+      where + ": saved - the server's answer kept, the username stays");
+    item(ui, "dname").input.value = "Eli"; go(ui, "dname");
+    await waitFor(() => /another player/.test(JSON.stringify(item(ui, "account").info)));
+    ok(win.Account.display() === "Sheriff" && item(ui, "dname").input.value === "Sheriff", where + ": another account's username - refused, the field back to the name");
     go(ui, "logout");
     ok(!env.storage.get(SESSION) && /not logged in/.test(label("account")) && item(ui, "login") && /Logged out/.test(JSON.stringify(item(ui, "account").info)),
       where + ": Log out - the session gone, \"not logged in\", Log in");

@@ -73,9 +73,14 @@ the page's own site: accounts are per server, the screens name it.
 
 ### Everywhere online
 
-The username is the player's name: in the room lobby, the chat, the round title, the views' labels, the
-statistics, the games list and the daily leaderboard. With accounts on, the server ignores a page's
-`&name=` and `{t:"me", name}`; nobody can pose as somebody else.
+The account's **display name** is the player's name: in the room lobby, the chat, the round title, the views'
+labels, the statistics, the games list and the daily leaderboard. It is the username until changed (owner,
+2026-10-26): Settings, Online, Name while logged in -> `POST /api/account/name {name}` (Bearer) ->
+`{account: {id, name, display, created}}`; the username's rules (`cleanUsername`: 400 `name`), never another
+account's username (409 `taken` - nobody shows up as somebody else), the own username = no display name
+(`a.display` removed). The username stays the login. Two accounts may share a display name: in a room the server
+makes it unique as it does without accounts ("Zed 2"). With accounts on, the server ignores a page's `&name=` and
+`{t:"me", name}`. (Not covered: a display name taken first, then signed up as somebody's username.)
 
 All screens are DosUI screens: keyboard, mouse, gamepad, touch; desktop (80 columns) and the phone held
 upright (the narrow layout re-wraps the lines and stacks the box); both Graphics settings.

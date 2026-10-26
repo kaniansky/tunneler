@@ -163,6 +163,30 @@ function record(day) {
     s.close();
   }
   {
+    // the display name (owner, 2026-10-26): changeable when logged in, the username stays the login
+    console.log("display name");
+    const { s, port } = await start();
+    const a = (await signup(port, "Dora", "dora password")).j;
+    await signup(port, "Eli", "eli password");
+    let r = await api(port, "POST", "/api/account/name", { name: "Sheriff" });
+    ok(r.status === 401, "a display name needs a session");
+    r = await api(port, "POST", "/api/account/name", { name: "Sheriff" }, a.token);
+    ok(r.status === 200 && r.j.account.display === "Sheriff" && r.j.account.name === "Dora", "set: the display name, the username stays");
+    r = await api(port, "GET", "/api/account", null, a.token);
+    ok(r.j.account.display === "Sheriff" && (await login(port, "Dora", "dora password")).status === 200, "kept; logging in is still by the username");
+    r = await api(port, "POST", "/api/account/name", { name: "eli" }, a.token);
+    ok(r.status === 409 && r.j.code === "taken", "another account's username (any case): taken");
+    const bad = await Promise.all(["  ", "admin", "x".repeat(40), "a<b"].map(name => api(port, "POST", "/api/account/name", { name }, a.token)));
+    ok(bad.every(x => x.status === 400 && x.j.code === "name"), "empty / reserved / too long / bad characters: name (" + bad.map(x => x.status) + ")");
+    r = await api(port, "POST", "/api/rooms", { name: "Names", version: "dev", seats: [{ kind: "open", team: 1 }, { kind: "open", team: 2 }] }, a.token);
+    const c = new Client(port, r.j.id), m = await c.connect("&ticket=" + encodeURIComponent(await ticketOf(port, a.token)));
+    ok(m.t === "hello" && m.you.name === "Sheriff", "a game room shows the display name: " + (m.you && m.you.name));
+    await c.close();
+    r = await api(port, "POST", "/api/account/name", { name: "DORA" }, a.token);
+    ok(r.status === 200 && r.j.account.display === "Dora", "the own username (any case): no display name any more - the username");
+    s.close();
+  }
+  {
     // change the password, reset with the recovery code, delete
     console.log("change, reset, delete");
     const { s, port } = await start();

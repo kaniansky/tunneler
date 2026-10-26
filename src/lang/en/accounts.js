@@ -63,6 +63,7 @@ Lang.extend("en", {
   "set.account": "Account: ", "set.account.none": "not logged in",
   "set.account.i1": "Your account on this server: online games need it.",
   "set.account.i2": "Accounts are per server - another server needs its own.",
+  "set.dname.i1": "The name other players see. Your username stays your login.", "set.dname.ok": "Name saved - players see it from now on.", "set.dname.taken": "That is another player's username - choose another name.", "set.dname.bad": "Letters or digits, up to 12 characters.",
   "set.account.in.i": "<ENTER>: log in, or create an account.",
   "acc.logout": "Log out", "acc.logout.i": "Forget the login on this device (the account stays).",
   "acc.change": "Change password", "acc.change.i": "Choose a new password.",

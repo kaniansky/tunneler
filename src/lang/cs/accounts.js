@@ -60,6 +60,7 @@ Lang.extend("cs", {
   "set.account": "Účet: ", "set.account.none": "nepřihlášen",
   "set.account.i1": "Tvůj účet na tomto serveru: online hry ho potřebují.",
   "set.account.i2": "Účty jsou pro každý server - jiný server chce vlastní.",
+  "set.dname.i1": "Jméno, které vidí ostatní hráči. Přihlašuješ se dál jménem účtu.", "set.dname.ok": "Jméno uloženo - hráči ho odteď vidí.", "set.dname.taken": "To je jméno účtu jiného hráče - vyber si jiné.", "set.dname.bad": "Písmena nebo číslice, nejvýš 12 znaků.",
   "set.account.in.i": "<ENTER>: přihlásit se nebo vytvořit účet.",
   "acc.logout": "Odhlásit se", "acc.logout.i": "Zapomene přihlášení na tomto zařízení (účet zůstává).",
   "acc.change": "Změnit heslo", "acc.change.i": "Vyber si nové heslo.",
