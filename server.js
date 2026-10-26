@@ -1023,7 +1023,8 @@ function createServer(opts = {}) {
       let matches = 0;
       for (const r of rooms.values()) if (r.match) matches++;
       return json(res, closing ? 503 : 200, { ok: !closing, version, uptime: Math.round((Date.now() - startedAt) / 1000), rooms: rooms.size, matches,
-        errors: processErrors.count, accounts: accountsOn });
+        errors: processErrors.count, accounts: accountsOn,
+        you: addressOf(req) });   // (the caller's own address as the limits see it: checks TRUST_PROXY behind a proxy)
     }
     // what pages need to know about this server: whether online play needs an account (docs/v6/ACCOUNTS.md)
     if (p === "/api/config" && (req.method === "GET" || req.method === "HEAD")) return json(res, 200, { version, accounts: accountsOn });
