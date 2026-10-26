@@ -228,8 +228,9 @@ function stats(e) { e.textMode(); e.menuShift = -20; e.showMainMenu(); return sc
   const right = box.map(l => colOf(l, l.lastIndexOf("│")) - colOf(l, l.indexOf("│")));
   assert(right.every(v => v === right[0]), "box borders line up (wide characters counted): " + right);
   // the cursor sits after the value, by display columns
-  const row = sc.findIndex(l => l.includes("Name: 🐙Octo")), cells = U.cells(U.fromRaw(Array.from(sc[row]).slice(0, Array.from(sc[row]).indexOf("_")).join("")));
-  assert.strictEqual(snap.vram[row * 160 + cells.length * 2], 0x5F, "cursor after the value");
+  // (the caret is the screen's cursor - Display / gfx-text draw it: the cell right after the value's last character)
+  const row = sc.findIndex(l => l.includes("Name: 🐙Octo")), end = sc[row].indexOf("Name: 🐙Octo") + "Name: 🐙Octo".length;
+  assert(snap.cursor && snap.cursor.row === row && snap.cursor.col === U.rawCols(sc[row].slice(0, end)), "cursor after the value: " + JSON.stringify(snap.cursor));
   // typing: any printable characters, max in display columns, no control / bidi / private use
   name.value = "";
   assert(ui.typed(name, "王小明王小明王小明"));
@@ -240,7 +241,21 @@ function stats(e) { e.textMode(); e.menuShift = -20; e.showMainMenu(); return sc
   name.value = "";
   ui.typed(name, "Žofia");
   assert.strictEqual(name.value, "Žofia", "NFC");
-  ok("DosUI: room names / raw text / inputs / labels with names in any letters, widths in columns, any printable input");
+  // the caret (owner, 2026-10-26): a full value shows its first letter; Left / Right / Home / End move it; typing,
+  // Backspace and Delete work where it is
+  const press = (key, code) => ui.key({ key, code: code || key, preventDefault() {}, target: null });
+  const line = () => snapScreen(snap).find(l => l.includes("Name: ")) || "";
+  name.value = ""; name.caret = null; name.width = 12; ui.typed(name, "Octopus12345"); ui.draw();
+  assert(line().includes("Name: Octopus12345"), "a full value (12 of 12) from its first letter: " + line());
+  press("ArrowLeft"); press("ArrowLeft"); press("Backspace");
+  assert.strictEqual(name.value, "Octopus1245", "Backspace: the character before the caret");
+  ui.typed(name, "X"); assert.strictEqual(name.value, "Octopus12X45", "typing: at the caret");
+  press("Home"); press("Delete"); assert.strictEqual(name.value, "ctopus12X45", "Home, Delete: the first character");
+  ui.typed(name, "Ž"); assert.strictEqual(name.value, "Žctopus12X45", "typing at the start");
+  press("End"); press("ArrowRight"); ui.typed(name, "!"); assert.strictEqual(name.value, "Žctopus12X45!".slice(0, 12), "End: no room left - nothing added");
+  name.value = "Ab"; name.caret = null; press("ArrowLeft"); press("ArrowLeft"); press("ArrowLeft"); ui.typed(name, "<"); ui.draw();
+  assert(name.value === "<Ab" && snapScreen(snap).some(l => l.includes("Name: <Ab")), "Left stops at the start");
+  ok("DosUI: room names / raw text / inputs / labels with names in any letters, widths in columns, any printable input, the caret");
 }
 
 // ---------------------------------------------------------------- status line

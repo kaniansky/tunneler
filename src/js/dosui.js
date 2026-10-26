@@ -77,6 +77,8 @@ const titleColor = () => modernUI() ? 7 : 13;
 const PAGE_KEYS = { ArrowUp: "up", ArrowDown: "down", PageUp: "pgup", PageDown: "pgdn", Home: "home", End: "end" };
 const U = UniText;
 // characters an input never takes: control, bidi, zero-width, private use (see NetProto's cleaning)
+// an input's caret: a character index (input.caret, set by the keys / typing), its end when not set or past it
+const caretOf = (input, n) => input.caret == null || input.caret > n || input.caret < 0 ? n : input.caret;
 const BAD_INPUT = /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff\ue000-\uf8ff\ufe00-\ufe0f]/;
 // the phone layout (drawNarrow): the screen's columns, and every box's place (left border column, interior width)
 // the phone layout: NC columns; the rows one can tap (menu items) LINE_H times as tall as the others (the text
@@ -403,12 +405,23 @@ class DosUI {
     // (the room left of the box's edge after the label: the phone layout's narrow boxes have less than
     // input.width - a placeholder that doesn't fit ends in "..")
     const room = b.w - 1 - U.cols(it.label), width = inp ? Math.min(inp.width || room, room) : 0;
-    if (inp && inp.value && U.cols(value) >= width) {
+    // a typed value: from its first letter while it fits, else a window that keeps the caret in view (inp.scroll =
+    // the first character shown); caretCol = the caret's column in it (owner, 2026-10-26: a long name lost its first
+    // letter; Left / Right move inside the value)
+    let caretCol = -1;
+    if (inp && inp.value) {
       const ch = [];
       U.each(value, (bt, cp, w, a, z) => { ch.push([a, z, w]); });
-      let n = 0, k = ch.length;
-      while (k > 0 && n + ch[k - 1][2] <= width - 1) n += ch[--k][2];
-      value = value.slice(k < ch.length ? ch[k][0] : value.length);
+      const n = ch.length, c = caretOf(inp, n);
+      const cols = (from, to) => { let k = 0; for (let j = from; j < to; j++) k += ch[j][2]; return k; };
+      let s0 = Math.min(inp.scroll || 0, c);
+      if (cols(0, n) <= width) s0 = 0;
+      else while (s0 < c && cols(s0, c) + (c < n ? ch[c][2] : 1) > width) s0++;
+      inp.scroll = s0;
+      let e0 = s0;
+      for (let k = 0; e0 < n && k + ch[e0][2] <= width; e0++) k += ch[e0][2];
+      value = value.slice(s0 < n ? ch[s0][0] : value.length, e0 < n ? ch[e0][0] : value.length);
+      caretCol = cols(s0, c);
     } else if (inp && !inp.value && room > 3 && U.cols(value) > room - 1) value = U.slice(value, room - 3) + "..";
     const labelW = U.cols(it.label), valueW = U.cols(value);
     let text = it.label + value;
@@ -447,9 +460,9 @@ class DosUI {
       for (let c = x0; c < Math.min(b.w, x0 + valueW); c++) t.vram[o + c * 2 + 1] = i === this.sel ? 0x57 : DISABLED;
     if (it.input && i === this.sel && !it.input.value && value && x0 < b.w)
       this.cursor = { col: b.x + x0, row: row - 1 };     // empty: a blinking underline under the placeholder's first letter (Display)
-    else if (it.input && i === this.sel) {                // blinking cursor after the text
-      const at = x0 + valueW;
-      if (at < b.w) { t.vram[o + at * 2] = 0x5F; t.vram[o + at * 2 + 1] = SEL | 0x80; t.uni[(o >> 1) + at] = 0; }
+    else if (it.input && i === this.sel) {                // the caret: a blinking underline (after the text, or under a letter)
+      const at = x0 + (caretCol >= 0 ? caretCol : valueW);
+      if (at < b.w) this.cursor = { col: b.x + at, row: row - 1 };
     }
   }
 
@@ -821,9 +834,19 @@ class DosUI {
     else if (k === "ArrowDown" || (k === "Tab" && it && it.input)) this.move(1);
     else if (k === "Tab" && s.boxes) this.nextBox(e.shiftKey ? -1 : 1);
     else if (k === "Enter" || (e.code === "Space" && !(it && it.input))) { if (it && !it.disabled) it.go(); }
+    else if (it && it.input && !it.disabled && ["ArrowLeft", "ArrowRight", "Home", "End"].includes(k)) {   // (the caret)
+      const n = Array.from(it.input.value || "").length, c = caretOf(it.input, n);
+      it.input.caret = k === "Home" ? 0 : k === "End" ? n : Math.max(0, Math.min(n, c + (k === "ArrowLeft" ? -1 : 1)));
+      this.draw();
+    }
     else if ((k === "ArrowLeft" || k === "ArrowRight") && it && it.change) it.change(k === "ArrowLeft" ? -1 : 1);
     else if (e.code === "Escape") { if (s.back) s.back(); }
-    else if (it && it.input && e.code === "Backspace") { it.input.value = Array.from(it.input.value).slice(0, -1).join(""); this.draw(); }
+    else if (it && it.input && (e.code === "Backspace" || e.code === "Delete")) {   // (before / after the caret)
+      const a = Array.from(it.input.value || ""), c = caretOf(it.input, a.length), at = e.code === "Backspace" ? c - 1 : c;
+      if (at < 0 || at >= a.length) return;
+      a.splice(at, 1); it.input.value = a.join(""); it.input.caret = at;
+      this.draw();
+    }
     else if (it && it.input && e.key && Array.from(e.key).length === 1 &&
       (!(e.ctrlKey || e.metaKey || e.altKey) || (e.getModifierState && e.getModifierState("AltGraph")))) {   // (AltGr letters too)
       if (!this.typed(it.input, e.key)) return;
@@ -836,7 +859,7 @@ class DosUI {
   softTyped() {
     const it = this.spec && !this.spec.page ? this.spec.items[this.sel] : null;
     if (!it || !it.input || it.input !== this.softFor) return;
-    it.input.value = "";
+    it.input.value = ""; it.input.caret = null;
     this.typed(it.input, soft.value.replace(/\s+/g, " "));
     if (soft.value !== it.input.value) soft.value = it.input.value;
     this.draw();
@@ -857,15 +880,19 @@ class DosUI {
   // adds text to an input (any printable characters, as many as fit its max display columns); true when
   // something was added
   typed(input, str) {
-    let v = String(input.value || ""), n = U.rawCols(v), added = false;
+    const a = Array.from(String(input.value || "")), c = caretOf(input, a.length);
+    let n = U.rawCols(a.join("")), ins = "", k = 0;
     for (const ch of String(str).normalize("NFC")) {
       if (BAD_INPUT.test(ch)) continue;
       const w = U.charCols(ch.codePointAt(0));
       if (n + w > input.max) break;
-      v += ch; n += w; added = true;
+      ins += ch; n += w; k++;
     }
-    if (added) input.value = v.normalize("NFC");
-    return added;
+    if (!k) return false;
+    const v = (a.slice(0, c).join("") + ins + a.slice(c).join("")).normalize("NFC");
+    input.value = v;
+    input.caret = Math.min(Array.from(v).length, c + k);   // (at the caret - after what was added)
+    return true;
   }
   // pasting into the selected input
   paste(e) {

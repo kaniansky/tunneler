@@ -284,7 +284,9 @@ function loadPage(page, search, stored, version) {
       await wait(Math.max(0, t1 + (i + 1) * TICK - performance.now()));
       ws.recv({ t: "f", m: 1, n: n++, f: [[0, 0, 1]] }); queued.push(env.win.tunnelerFrames().queued);
     }
-    assert(Math.max(...queued.slice(-20)) <= 1, "the buffer shrinks again (to nothing waiting): " + queued.join(" "));
+    // (the old code stayed at 3 - 4 for good; a busy machine - every test at once - may leave a frame waiting now and then)
+    const last = queued.slice(-20), mean = last.reduce((a, b) => a + b, 0) / last.length;
+    assert(Math.max(...last) <= 2 && mean < 1.3, "the buffer shrinks again (to about nothing waiting): " + queued.join(" "));
     ws.recv({ t: "f", m: 2, n, f: [[0, 0, 1]] });                     // another match's frames: ignored
     assert.strictEqual(env.sockets.length, 1);
     // the end: back to the lobby

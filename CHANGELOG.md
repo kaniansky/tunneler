@@ -6,6 +6,9 @@ those releases are tagged `online-vX.Y.Z`, their changes are in [docs/CHANGELOG-
 
 ## Unreleased
 
+- Text fields: Left / Right (and Home / End) move inside the text; typing, Backspace and Delete work where the cursor
+  is. A name that fills its field shows its first letter.
+- Privacy policy: the display name, and that shared replay links stay after an account is deleted.
 - Settings: the rows are centred in their box (lined up on the ":"), moved left only when a long name or value needs
   the room.
 - Accounts: a display name, changeable when logged in (Settings, Online, Name) - the name other players see; the
