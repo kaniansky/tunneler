@@ -196,30 +196,29 @@ void main() {
   float aa = 1.0 / pw;
   for (int i = 0; i < 8; i++) {
     if (i >= uNT) break;
-    // (Tunnel edges "pixel" - the retro style: sampled on the world's pixel grid with hard edges, blocky like the
-    // terrain - owner, 2026-10-26)
-    vec2 d = ((uEdges == 1 ? floor(wp) + 0.5 : wp) - (uTank[i].xy + 0.5)) / uTS;
+    vec2 d = (wp - (uTank[i].xy + 0.5)) / uTS;
     if (dot(d, d) > 30.0) continue;
     float a = uTank[i].z;
     vec2 f = vec2(sin(a), -cos(a)), r = vec2(cos(a), sin(a));
     vec2 l = vec2(dot(d, r), -dot(d, f));                // u to the right, v backwards (forward = -v)
     vec2 ls = vec2(dot(d - vec2(0.45, 0.6), r), -dot(d - vec2(0.45, 0.6), f));
-    float ta = uEdges == 1 ? 0.0001 : aa / uTS;
-    float dShadow = min(sdBox(ls, vec2(0.0, 0.5), vec2(2.5, 3.0), 0.8), sdBox(ls, vec2(0.0, -1.8), vec2(0.35, 1.8), 0.3));
+    float ta = aa / uTS;
+    float sr = uTankStyle == 0 ? 0.0 : 1.0;                // (the simple tank's shadow square too)
+    float dShadow = min(sdBox(ls, vec2(0.0, 0.5), vec2(2.5, 3.0), 0.8 * sr), sdBox(ls, vec2(0.0, -1.8), vec2(0.35, 1.8), 0.3 * sr));
     col *= 1.0 - 0.5 * clamp(0.5 - dShadow / 1.2, 0.0, 1.0);
     vec3 body = uTankCol[i * 3], tread = uTankCol[i * 3 + 1], gun = uTankCol[i * 3 + 2];
     if (uTankStyle == 0) {
-      // simple: flat shapes
-      float dTr = min(sdBox(l, vec2(-2.0, 0.5), vec2(0.62, 3.05), 0.45), sdBox(l, vec2(2.0, 0.5), vec2(0.62, 3.05), 0.45));
+      // simple: flat shapes, square corners (owner, 2026-10-26: no rounded corners)
+      float dTr = min(sdBox(l, vec2(-2.0, 0.5), vec2(0.62, 3.05), 0.0), sdBox(l, vec2(2.0, 0.5), vec2(0.62, 3.05), 0.0));
       float stripe = 0.82 + 0.25 * step(0.5, fract((l.y + uTread[i] / uTS) * 1.6));
       col = mix(col, tread * stripe, clamp(0.5 - dTr / ta, 0.0, 1.0));
-      float dBody = sdBox(l, vec2(0.0, 0.5), vec2(1.45, 2.05), 0.55);
+      float dBody = sdBox(l, vec2(0.0, 0.5), vec2(1.45, 2.05), 0.0);
       vec3 bc3 = body * (1.15 - 0.3 * clamp((l.y + 1.5) / 4.0, 0.0, 1.0));
       col = mix(col, bc3, clamp(0.5 - dBody / ta, 0.0, 1.0));
-      float dTur = length(l - vec2(0.0, 0.6)) - 1.05;
+      float dTur = sdBox(l, vec2(0.0, 0.6), vec2(0.95, 0.95), 0.0);
       vec3 tc = body * 0.78 + 0.25 * (1.0 - smoothstep(0.0, 0.9, length(l - vec2(-0.35, 0.25))));
       col = mix(col, tc, clamp(0.5 - dTur / ta, 0.0, 1.0));
-      float dGun = sdBox(l, vec2(0.0, -1.75), vec2(0.34, 1.85), 0.3);
+      float dGun = sdBox(l, vec2(0.0, -1.75), vec2(0.34, 1.85), 0.0);
       col = mix(col, gun * (1.0 - 0.2 * clamp(-l.y / 3.5, 0.0, 1.0)), clamp(0.5 - dGun / ta, 0.0, 1.0));
       continue;
     }
