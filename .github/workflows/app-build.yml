@@ -220,6 +220,10 @@ jobs:
           } > src-tauri/gen/android/keystore.properties
 
       - name: Build the app
+        # (the library unstripped here: Gradle puts its symbol table into the AAB for Google Play's crash reports -
+        # ndk debugSymbolLevel - and strips what goes into the APKs; the desktop builds keep strip = true)
+        env:
+          CARGO_PROFILE_RELEASE_STRIP: "false"
         run: npx --yes @tauri-apps/cli@2 android build --apk --aab --ci --target aarch64 armv7 x86_64
 
       - name: Collect the files

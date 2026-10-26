@@ -79,6 +79,12 @@ editor, 8 a replay.
   user cannot update a GitHub-APK install from Play (or the other way round) without uninstalling first -
   different certificates. Worth a line on the homepage once the Play version is out.
 
+### Native debug symbols
+
+- The AAB carries the Rust library's symbol table (`ndk { debugSymbolLevel = "SYMBOL_TABLE" }` in
+  `app/build.gradle.kts`, the library built unstripped in CI), so Play Console shows readable native crash stacks
+  and no "no debug symbols" warning. The APKs stay stripped.
+
 ### versionCode
 
 - Nothing in the repository sets a versionCode by hand. `src-tauri/tauri.conf.json` takes the version from

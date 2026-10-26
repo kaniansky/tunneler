@@ -6,6 +6,7 @@ those releases are tagged `online-vX.Y.Z`, their changes are in [docs/CHANGELOG-
 
 ## Unreleased
 
+- Android: the app bundle carries native debug symbols (readable crash reports on Google Play).
 - Text fields: Left / Right (and Home / End) move inside the text; typing, Backspace and Delete work where the cursor
   is. A name that fills its field shows its first letter.
 - Privacy policy: the display name, and that shared replay links stay after an account is deleted.
