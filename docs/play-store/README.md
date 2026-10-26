@@ -81,13 +81,15 @@ editor, 8 a replay.
 
 ### Native debug symbols
 
-- Play Console warns that the bundle has native code without debug symbols. 1.1.0 tried to include them
-  (`ndk { debugSymbolLevel = "SYMBOL_TABLE" }`, the library built unstripped in CI) - Gradle found no NDK to
-  extract the symbols and strip the libraries with, so the APK grew from 15.6 to 38.4 MB and the AAB had no
-  symbols. 1.1.1 is back to stripped libraries. To try again: give Gradle the NDK the Tauri build uses (`ndkPath` /
-  `ndkVersion` in `app/build.gradle.kts`, from `NDK_HOME`) and check the AAB for
-  `BUNDLE-METADATA/com.android.tools.build.debugsymbols/` and the APK's size before releasing. The warning is
-  harmless - only crash stacks are less readable.
+- Since 1.1.1 every CI build makes them: the Rust library is built unstripped (`CARGO_PROFILE_RELEASE_STRIP=false`,
+  with a build id - `-Wl,--build-id=sha1` in `RUSTFLAGS`), `app/build.gradle.kts` task `stripRustRelease` saves
+  it as `<abi>/libtunneler_lib.so` in `build/outputs/native-debug-symbols/universalRelease/native-debug-symbols.zip`
+  and strips the copy that gets packed (the NDK's `llvm-strip --strip-unneeded`; the build ids stay the same).
+  Gradle's own `ndk { debugSymbolLevel }` neither stripped nor extracted anything here (1.1.0: a 38.4 MB APK).
+- The zip is the run's private artifact `android-symbols` (Actions, the release's "Desktop and Android app" run;
+  kept 90 days) - never attached to the GitHub release. Upload it with the AAB: Play Console, Test and release,
+  App bundle explorer, the version, Downloads, Native debug symbols, upload (`tunneler-<v>-android-native-debug-symbols.zip`).
+  Without it the warning stays - harmless, only native crash stacks are less readable.
 
 ### versionCode
 

@@ -220,9 +220,12 @@ jobs:
           } > src-tauri/gen/android/keystore.properties
 
       - name: Build the app
-        # (no native debug symbols for Play: 1.1.0 built the library unstripped for them, but Gradle found no NDK to
-        # extract / strip with - the APK went from 15.6 to 38.4 MB and the AAB had no symbols; see docs/ANDROID.md)
+        # (the library unstripped: build.gradle.kts keeps a copy with the symbols for Play Console and strips the one
+        # it packs; 1.1.0 packed it unstripped - a 38 MB APK)
         env:
+          CARGO_PROFILE_RELEASE_STRIP: "false"
+          # a build id in the library: Play Console matches a crash to the uploaded symbols by it
+          RUSTFLAGS: "-C link-arg=-Wl,--build-id=sha1"
           # Google Play Games sign-in: repository variables (Settings, Secrets and variables, Actions, Variables) -
           # unset = a build without it
           PLAY_GAMES_APP_ID: ${{ vars.PLAY_GAMES_APP_ID }}
@@ -242,12 +245,22 @@ jobs:
             cp "$out/bundle/universalRelease/app-universal-release.aab" "dist/tunneler-$v-android-unsigned.aab"
           fi
           rm -f src-tauri/gen/android/keystore.properties "$RUNNER_TEMP/upload.jks"
-          ls -la dist
+          mkdir symbols
+          cp "$out/native-debug-symbols/universalRelease/native-debug-symbols.zip" "symbols/tunneler-$v-android-native-debug-symbols.zip"
+          ls -la dist symbols
 
       - uses: actions/upload-artifact@v7
         with:
           name: android
           path: dist/*
+
+      # the native debug symbols for Play Console (App bundle explorer, the version, Downloads, Native debug symbols):
+      # only this run's artifact, never attached to the release
+      - uses: actions/upload-artifact@v7
+        with:
+          name: android-symbols
+          path: symbols/*
+          retention-days: 90
 
       - name: Attach to the release
         if: inputs.tag != ''

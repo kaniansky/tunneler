@@ -122,6 +122,10 @@ tag; a push to an `app/**` branch or a manual run builds workflow artifacts only
   - `ANDROID_KEY_PASSWORD` (optional; the keystore password when missing)
 - or, without `ANDROID_KEYSTORE`, `...-android-unsigned.apk` / `.aab` (an unsigned APK doesn't install).
 
+The run's artifact `android-symbols` (not attached to the release) holds
+`tunneler-<v>-android-native-debug-symbols.zip`: the unstripped Rust libraries for Play Console (the packed ones are
+stripped by `app/build.gradle.kts` `stripRustRelease`; docs/play-store/README.md, Native debug symbols).
+
 The desktop updater's latest.json (updater-manifest.yml) only lists `.sig` files, so the Android files
 don't touch it.
 

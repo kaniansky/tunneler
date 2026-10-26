@@ -9,8 +9,8 @@ those releases are tagged `online-vX.Y.Z`, their changes are in [docs/CHANGELOG-
 - Android: "Sign in with Google Play" - a Google Play Games account signs in (the first time it picks a username;
   such an account has no password until it sets one), and a logged-in account can link its Google Play in Settings.
   Needs the server's Google client and the app's Play Games project (docs/v6/ACCOUNTS.md section 6).
-- Android: the APK and the app bundle are small again. 1.1.0 built them with unstripped native libraries (the APK
-  38.4 MB instead of 15.6 MB) for debug symbols that didn't make it into the bundle anyway.
+- Android: the APK and the app bundle are small again (the APK 16.7 MB; 1.1.0's were 38.4 MB with unstripped native
+  libraries), and the native debug symbols for Google Play are a file of their own.
 - Versions with the same major.minor play together online from now on (a patch release never changes the game):
   a 1.1.1 server takes 1.1.0 apps and pages (a 1.1.0 app's own list of games still shows 1.1.1 games as another
   version - its Quick play and invite links work).

@@ -1,4 +1,6 @@
 import java.util.Properties
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -57,12 +59,6 @@ android {
             isDebuggable = true
             isJniDebuggable = true
             isMinifyEnabled = false
-            packaging {
-                jniLibs.keepDebugSymbols.add("*/arm64-v8a/*.so")
-                jniLibs.keepDebugSymbols.add("*/armeabi-v7a/*.so")
-                jniLibs.keepDebugSymbols.add("*/x86/*.so")
-                jniLibs.keepDebugSymbols.add("*/x86_64/*.so")
-            }
         }
         getByName("release") {
             signingConfigs.findByName("release")?.let { signingConfig = it }
@@ -86,6 +82,56 @@ android {
         // the Play Games ids above (AGP 9 has resource values off by default)
         resValues = true
     }
+}
+
+// debug builds keep their libraries' symbols (the Tauri template's packaging block did this inside
+// getByName("debug"), but there it set android.packaging - every build type: 1.1.0's release APK was 38 MB)
+androidComponents {
+    onVariants(selector().withBuildType("debug")) { variant ->
+        variant.packaging.jniLibs.keepDebugSymbols.addAll(listOf("*/arm64-v8a/*.so", "*/armeabi-v7a/*.so", "*/x86/*.so", "*/x86_64/*.so"))
+    }
+}
+
+// Release builds: the Rust library comes unstripped (CI: CARGO_PROFILE_RELEASE_STRIP=false); before Gradle packs
+// it, its copy with the symbols goes into build/outputs/native-debug-symbols/universalRelease/native-debug-symbols.zip
+// (<abi>/<lib>.so - Play Console's "native debug symbols", uploaded with the AAB; never published) and the packed one
+// is stripped with the NDK's llvm-strip (NDK_HOME). Gradle's own ndk.debugSymbolLevel didn't strip nor extract here.
+val stripRustRelease = tasks.register("stripRustRelease") {
+    dependsOn("rustBuildUniversalRelease")
+    // (locals: doLast may hold no reference to the build script - the configuration cache)
+    val ndkHome: String? = System.getenv("NDK_HOME")
+    val jniLibsDir = file("src/main/jniLibs")
+    val rustSymbolsDir = layout.buildDirectory.dir("intermediates/rust-symbols").get().asFile
+    val rustSymbolsZip = layout.buildDirectory.file("outputs/native-debug-symbols/universalRelease/native-debug-symbols.zip").get().asFile
+    doLast {
+        val ndk = ndkHome ?: return@doLast
+        val strip = File(ndk, "toolchains/llvm/prebuilt").listFiles()?.map { File(it, "bin/llvm-strip") }
+            ?.firstOrNull { it.exists() } ?: throw GradleException("no llvm-strip in $ndk")
+        rustSymbolsDir.deleteRecursively()
+        jniLibsDir.walk().filter { it.name.endsWith(".so") }.forEach { lib ->
+            // the jniLibs entry is a symlink into target/ (Tauri makes it again every build): keep target/'s file
+            // unstripped, put a stripped file in the link's place
+            val real = lib.canonicalFile
+            real.copyTo(File(rustSymbolsDir, "${lib.parentFile.name}/${lib.name}"))
+            val stripped = File(lib.parentFile, "${lib.name}.stripped")
+            val code = ProcessBuilder(strip.path, "--strip-unneeded", "-o", stripped.path, real.path).inheritIO().start().waitFor()
+            if (code != 0) throw GradleException("llvm-strip $real: exit $code")
+            lib.delete()
+            stripped.renameTo(lib)
+        }
+        rustSymbolsZip.parentFile.mkdirs()
+        rustSymbolsZip.delete()
+        ZipOutputStream(rustSymbolsZip.outputStream()).use { out ->
+            rustSymbolsDir.walk().filter { it.isFile }.forEach { f ->
+                out.putNextEntry(ZipEntry(f.relativeTo(rustSymbolsDir).invariantSeparatorsPath))
+                f.inputStream().use { it.copyTo(out) }
+                out.closeEntry()
+            }
+        }
+    }
+}
+tasks.configureEach {
+    if (name == "mergeUniversalReleaseJniLibFolders") dependsOn(stripRustRelease)
 }
 
 kotlin {
