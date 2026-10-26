@@ -6,6 +6,8 @@ those releases are tagged `online-vX.Y.Z`, their changes are in [docs/CHANGELOG-
 
 ## Unreleased
 
+- Settings: the rows are centred in their box (lined up on the ":"), moved left only when a long name or value needs
+  the room.
 - Accounts: a display name, changeable when logged in (Settings, Online, Name) - the name other players see; the
   username stays the login. It can't be another account's username.
 - Accounts: a recovery code really works only once - two password resets with the same code at the same moment

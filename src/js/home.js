@@ -327,6 +327,19 @@ export function mount() {
   // On the phone layout, a category whose lined-up rows don't fit its width (a long label in some language) goes
   // left-aligned instead: each label right before its value (owner, 2026-10-25: "sound settings in russian on
   // phone are unusable")
+  // (desktop - owner, 2026-10-26: the lined-up rows centred in the box on their ": ", moved left only as far as the
+  // longest name and value need to fit)
+  function centred(rows, lead) {
+    const keyW = it => UniText.cols(it.label.slice(0, it.label.indexOf(": ") + 2));
+    const valW = it => it.input ? it.input.width + 1 : UniText.cols(it.label) - keyW(it);
+    const aligned = rows.filter(it => lead(it) >= 0);
+    if (!aligned.length) return rows;
+    const K = Math.max(...aligned.map(keyW)), V = Math.max(...aligned.map(valW)), W = settingsWidth() - 4;
+    const off = Math.max(0, Math.min((W >> 1) - K, W - K - V));
+    if (!off) return rows;
+    return rows.map(it => lead(it) < 0 ? it : Object.assign({}, it, { label: " ".repeat(off) + it.label,
+      zones: it.zones ? it.zones.map(z => Object.assign({}, z, { from: z.from + off, to: z.to + off })) : it.zones }));
+  }
   function catItems(c) {
     const rows = catRows(c), lead = it => typeof it.label === "string" && it.label.includes(": ") ? it.label.length - it.label.replace(/^ +/, "").length : -1;
     const shift = (it, n) => n > 0 ? Object.assign({}, it, { label: it.label.slice(n),
@@ -334,8 +347,9 @@ export function mount() {
     let cut = Math.min(...rows.map(lead).filter(n => n >= 0));
     if (!(cut > 0) || cut === Infinity) cut = 0;
     const out = rows.map(it => lead(it) < cut ? it : shift(it, cut));
+    if (!ui.isNarrow() && !MOBILE) return centred(out, lead);
     const room = DosUI.NARROW_W - 1;                     // (the phone layout's box less its leading space)
-    if (!ui.isNarrow() || !out.some(it => lead(it) >= 0 && UniText.cols(it.label) > room)) return out;
+    if (!out.some(it => lead(it) >= 0 && UniText.cols(it.label) > room)) return out;
     return out.map(it => lead(it) > 0 ? shift(it, lead(it)) : it);
   }
   function catRows(c) {
