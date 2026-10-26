@@ -414,7 +414,7 @@ function loadPage(page, search, stored, version) {
     console.log("  ok  online.js quick play: the countdown, read-only settings, a computer seat; handed a tank mid-match, the marker, handed back");
   }
   {
-    // quick play from the main menu (/games?quick=1): POST /api/quickplay, then straight to the game (its host key
+    // quick play (/games?quick=1): POST /api/quickplay, then straight to the game (its host key
     // kept); a server that doesn't answer: the reason in red, Try again
     const env = loadPage("lobby.html", "?quick=1", { "tunneler.name": "Cleo" });
     env.byId.set("new-game", { id: "new-game", name: "Quick play", qp: true });   // (the list's polling keeps the key of a game that exists)

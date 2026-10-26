@@ -41,6 +41,7 @@ uniform float uTime;
 uniform int uNT;
 uniform vec4 uTank[8];        // x, y, angle (radians), lamp (1 = its headlight shines)
 uniform vec3 uTankCol[24];    // per tank: body, treads, gun
+uniform float uTread[8];      // per tank: how far it has driven (world pixels) - its treads roll with it
 uniform float uTS;            // tank size
 uniform int uNL;
 uniform vec4 uLt[32];         // lights: x, y, radius, intensity
@@ -187,7 +188,7 @@ void main() {
     col *= 1.0 - 0.5 * clamp(0.5 - dShadow / 1.2, 0.0, 1.0);
     vec3 body = uTankCol[i * 3], tread = uTankCol[i * 3 + 1], gun = uTankCol[i * 3 + 2];
     float dTr = min(sdBox(l, vec2(-2.0, 0.5), vec2(0.62, 3.05), 0.45), sdBox(l, vec2(2.0, 0.5), vec2(0.62, 3.05), 0.45));
-    float stripe = 0.82 + 0.25 * step(0.5, fract(l.y * 1.6));
+    float stripe = 0.82 + 0.25 * step(0.5, fract((l.y + uTread[i] / uTS) * 1.6));
     col = mix(col, tread * stripe, clamp(0.5 - dTr / ta, 0.0, 1.0));
     float dBody = sdBox(l, vec2(0.0, 0.5), vec2(1.45, 2.05), 0.55);
     vec3 bc3 = body * (1.15 - 0.3 * clamp((l.y + 1.5) / 4.0, 0.0, 1.0));
@@ -313,7 +314,7 @@ function create(gl) {
   const u = {}, pu = {};
   for (const n of ["uWorld", "uVis", "uWorldPx", "uRowOff", "uRows", "uOutside", "uSize", "uOut", "uWin", "uCam", "uScale", "uPal",
     "uCls", "uTerrain", "uEdges", "uGlow", "uLight", "uFog", "uVisOn", "uStatic", "uMap", "uVisOrg", "uTime", "uNT", "uTank",
-    "uTankCol", "uTS", "uNL", "uLt", "uLc", "uNS", "uShot"]) u[n] = gl.getUniformLocation(prog, n);
+    "uTankCol", "uTread", "uTS", "uNL", "uLt", "uLc", "uNS", "uShot"]) u[n] = gl.getUniformLocation(prog, n);
   if (pprog) for (const n of ["uCam", "uScale", "uSize", "uOut", "uWin"]) pu[n] = gl.getUniformLocation(pprog, n);
   const worldTex = texture(gl), visTex = texture(gl);
   gl.bindTexture(gl.TEXTURE_2D, visTex);
@@ -421,10 +422,15 @@ function create(gl) {
     for (let p = 1; p <= e.nPlayers; p++) {
       const t = S.tanks[p];
       if (!t) continue;
+      const ox = t.x, oy = t.y;
       t.x = smooth ? t.px + (t.cx - t.px) * f : t.cx;
       t.y = smooth ? t.py + (t.cy - t.py) * f : t.cy;
       const target = (e.tankDir[p] & 7) * Math.PI / 4;
       t.ang = smooth ? t.ang + angDiff(t.ang, target) * Math.min(1, dt * 16) : target;
+      // the treads: the way driven along its facing (backwards negative; a jump - a new round - not driven);
+      // kept below 1100 px = 800 tread links at a view's scale, so the wrap doesn't show
+      if (ox !== undefined && Math.abs(t.x - ox) < 6 && Math.abs(t.y - oy) < 6)
+        t.tr = ((t.tr || 0) + (t.x - ox) * Math.sin(t.ang) - (t.y - oy) * Math.cos(t.ang)) % 1100;
       S.shake[p] = (S.shake[p] || 0) * Math.exp(-dt * 7);
     }
     for (const q of S.parts) {
@@ -481,20 +487,21 @@ function create(gl) {
   }
   // tanks (and their lamps) for a view: own view (p), or everyone (p 0); with line of sight only those seen
   function tanksFor(e, p, pal, lamps, scale) {
-    const tanks = [], cols = [], lights = [], lcols = [];
+    const tanks = [], cols = [], lights = [], lcols = [], treads = [];
     for (let q = 1; q <= e.nPlayers && tanks.length < 32; q++) {
       const t = S.tanks[q], sp = e.alive[q] ? sprite(e, q, 0) : null;
       if (!sp || !t || t.x === undefined) continue;
       if (p && q !== p && e.sight && e.sight !== "full" && !e.sightSees(p, e.tankX[q], e.tankY[q])) continue;
       tanks.push(t.x, t.y, t.ang, lamps ? 1 : 0);
+      treads.push(t.tr || 0);
       for (const v of [sp[4][2], sp[1][1], sp[0][3]]) cols.push(...pal[v & 15].map(c => c / 255));
       if (lamps) { lights.push(t.x + 0.5, t.y + 0.5, 30 * scale, 0.75); lcols.push(1, 0.9, 0.75); }
     }
-    return { tanks, cols, lights, lcols };
+    return { tanks, cols, lights, lcols, treads };
   }
   function setTanks(T) {
     gl.uniform1i(u.uNT, T.tanks.length / 4);
-    if (T.tanks.length) { gl.uniform4fv(u.uTank, T.tanks); gl.uniform3fv(u.uTankCol, T.cols); }
+    if (T.tanks.length) { gl.uniform4fv(u.uTank, T.tanks); gl.uniform3fv(u.uTankCol, T.cols); gl.uniform1fv(u.uTread, T.treads); }
   }
   function setLights(e, p, T, on) {
     if (!on) { gl.uniform1i(u.uLight, 0); return; }

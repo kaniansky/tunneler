@@ -16,4 +16,4 @@ Lang.extend("en", {
   "qp.took": "You drive the {name} tank now", "qp.again": "Try again",
 });
 const S = STRINGS_EN.info.sections;
-S.splice(S.length - 2, 0, ["Quick play:  ", "Quick play on the main menu (or in the list of games) puts you straight into an online game: computer tanks fill its four seats, the matches start by themselves, and you take a computer tank over - even in the middle of a match.  When you leave, the computer drives your tank again - come back within 15 seconds and it is yours again."]);
+S.splice(S.length - 2, 0, ["Quick play:  ", "Quick play in the list of games (Online game) puts you straight into an online game: computer tanks fill its four seats, the matches start by themselves, and you take a computer tank over - even in the middle of a match.  When you leave, the computer drives your tank again - come back within 15 seconds and it is yours again."]);

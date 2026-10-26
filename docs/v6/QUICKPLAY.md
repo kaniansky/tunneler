@@ -8,8 +8,8 @@ existing game behave exactly as before. The engine is not changed at all (see "D
 
 ## 1. What the player sees
 
-**Main menu** (home.js): a new item **Quick play** right below Skirmish (above Online game). It asks for
-a name first when there is none (as Online game does), then goes to the games list's quick-play screen.
+**Main menu** (home.js): no item of its own any more (owner, 2026-10-26: only in the games list, under Online
+game). It had one right below Skirmish; `/games?quick=1` still goes straight to the quick-play screen.
 
 **Games list** (lobby.js): a new item **Quick play** between the games and "Create a new game". Both
 entries open the same screen:

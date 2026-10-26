@@ -926,7 +926,7 @@ none, i.e. a page from before 2.0 - is refused (POST 409 `{code:
   `tunnelerApp.routes` for tests). `Lang.extend(code, {...})`: a feature's texts in `src/lang/<code>/<feature>.js`
   (here reliability.js, `rel.*`). Tests: test/reliability-check.js, app-check (chunk / crash), layout-check (status
   screens).
-- **Quick play** (docs/v6/QUICKPLAY.md, version 6): main menu / games list "Quick play" -> lobby.js `quick()` (`/games?quick=1`)
+- **Quick play** (docs/v6/QUICKPLAY.md, version 6): the games list's "Quick play" (not on the main menu - owner, 2026-10-26) -> lobby.js `quick()` (`/games?quick=1`)
   -> `POST /api/quickplay {version, name}` -> `{id, created, hostKey?}` (server.js `quickRoom`: a public quick-play room with a
   place for one more human - a seat nobody sits on, or a computer-driven tank of its running match -, the most humans first;
   else `createRoom(..., qp)`: `NetProto.quickSettings()` = 4 tanks free-for-all, computer level "normal", fixed settings).

@@ -173,7 +173,7 @@ const go = (ui, k) => { const it = item(ui, k); assert(it, "no item " + k + " in
     ok(!!item(ui, "quick") && JSON.parse(env.storage.get(SESSION)).name === "Zed", "the right one: logged in (the name as the server has it), the list");
   }
   {
-    // quick play from the main menu: LOG IN first, then the search (with the token)
+    // quick play (/games?quick=1): LOG IN first, then the search (with the token)
     const srv = fakeServer(true);
     srv.users.set("ann", { id: "id1", name: "Ann", password: "ann password", token: "tok-Ann-1" });
     const env = makeEnv("/games", "?quick=1", srv, { [KNOWN]: "1" });

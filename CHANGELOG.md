@@ -4,6 +4,14 @@ All notable changes to Tunneler. Versions follow [semantic versioning](https://s
 by pushing a version tag (see CONTRIBUTING.md). Up to its version 6.0.1 the game was called Tunneler Online:
 those releases are tagged `online-vX.Y.Z`, their changes are in [docs/CHANGELOG-online.md](docs/CHANGELOG-online.md).
 
+## Unreleased
+
+- Modern graphics: the tanks' treads roll as they drive (forwards and backwards).
+- Quick play is in the list of games (Online game) only - no longer on the main menu.
+- Phones and tablets: Settings has no Controls category (its keys are a keyboard's; the touch controls' size and
+  left-handed rows are in Display) and no Volume row (always 100 %: the phone's buttons set the loudness), and the
+  Graphics rows leave out the "Display only" line, so everything fits above Back.
+
 ## 1.0.0
 
 Tunneler starts again at 1.0.0: it is Tunneler Online 6.0.1 under a new name, with every game, mode and setting

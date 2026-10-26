@@ -185,8 +185,6 @@ export function mount() {
     const items = [
       ...(MOBILE ? [] : [{ key: "split", label: T("home.split"), info: [T("home.split.i1"), T("home.split.i2")], go: () => split() }]),
       { key: "cpu", label: T("home.cpu"), info: [T(MOBILE ? "home.cpu.i1m" : "home.cpu.i1n"), T("home.cpu.i2")], go: () => cpu() },
-      // quick play (docs/v6/QUICKPLAY.md): the games list's page finds / makes a quick-play game and goes to it
-      { key: "quick", label: T("home.quick"), info: [T("home.quick.i1"), T("home.quick.i2")], go: () => { Nav.go(Links.games() + "?quick=1"); } },
       { key: "online", label: T("home.online"), info: [T("home.online.i1"), T("home.online.i2")],
         go: () => { Nav.go(Links.games()); } },
       { key: "challenge", label: T("home.challenge"), info: [T("home.challenge.i")], go: () => { Nav.go(Links.challenge()); } },   // (docs/v6/CHALLENGE.md)

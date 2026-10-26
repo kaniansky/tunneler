@@ -7,7 +7,7 @@
 // presents it, which makes this browser the game's host. A game with a password has a lock before its
 // name; online.js asks for the password (the host never needs it).
 // /lobby.html?room=<id> (old links) goes straight to that game's lobby.
-// Quick play (docs/v6/QUICKPLAY.md; the main menu goes to /games?quick=1, the list has the item too): the server
+// Quick play (docs/v6/QUICKPLAY.md; the list's item - no longer on the main menu, owner 2026-10-26): the server
 // finds a quick-play game with a place for one more (or makes one) - POST /api/quickplay - and this page goes to it.
 // Accounts (docs/v6/ACCOUNTS.md): on a server that needs them, LOG IN (login.js) instead of the name prompt - before
 // the list or quick play -, and the session's token on creating a game / quick play.
