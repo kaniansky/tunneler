@@ -4,11 +4,14 @@ All notable changes to Tunneler. Versions follow [semantic versioning](https://s
 by pushing a version tag (see CONTRIBUTING.md). Up to its version 6.0.1 the game was called Tunneler Online:
 those releases are tagged `online-vX.Y.Z`, their changes are in [docs/CHANGELOG-online.md](docs/CHANGELOG-online.md).
 
-## Unreleased
+## 1.1.4
 
-- Settings, Online, Name: the answer shows under the Name row - "saved", or why the server refused the name (another
-  player's username, wrong letters). It went to the Account row's info, which isn't shown while Name is selected, so a
-  refused name just went back to the old one without a word.
+- Screens no longer jump: Settings keeps its place whichever category is chosen (pressing one on a phone held
+  sideways moved everything), the list of games stays put as games come and go, and a message or a description that
+  appears under a menu on a touch screen no longer pushes the menu up.
+- A phone held upright: the screen reaches the bottom edge too (a drag starting there scrolls).
+- Map editor: with a gamepad the status line shows its buttons (A paint, Y tool, LB / RB brush, LT / RT zoom, B done).
+- Plays together with 1.1.0 - 1.1.3: nothing in the game changed.
 
 ## 1.1.3
 
@@ -33,6 +36,9 @@ Plays together with 1.1.0 - 1.1.2: nothing in the game changed.
 
 **Menus**
 - Every menu screen is centred vertically, on computers too (they began at the top).
+- Settings, Online, Name: the answer shows under the Name row - "saved", or why the server refused the name (another
+  player's username, wrong letters). It went to the Account row's info, which isn't shown while Name is selected, so a
+  refused name just went back to the old one without a word.
 
 **Maps**
 - The map editor has no menu: Esc or Done goes to the map's screen, which has the map's name. Changes aren't saved by

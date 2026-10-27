@@ -33,7 +33,7 @@ Lang.extend("en", {
   "map.t.tunnel": "Tunnel", "map.t.dirt": "Dirt", "map.t.rock": "Rock", "map.t.base": "Base",
   "map.brush": "Brush", "map.zoom": "Zoom", "map.undo": "Undo", "map.done": "Done",
   "map.pos": "X {x}  Y {y}", "map.bases": "Bases: {n} of 8",
-  "map.keys": "SPACE: paint  ESC: done", "map.keys.touch": "1 finger paints, 2 move",
+  "map.keys": "SPACE: paint  ESC: done", "map.keys.touch": "1 finger paints, 2 move", "map.keys.pad": "A: paint  Y: tool  LB RB: brush  LT RT: zoom  B: done",
   "map.err.max": "8 bases at most.", "map.err.edge": "Too close to the edge for a base.",
   "map.err.near": "Too close to another base.",
   // the map's screen (Edit: which bases a tank can't get to; ready: the ones the game digs out)

@@ -28,7 +28,7 @@ Lang.extend("uk", {
   "map.t.tunnel": "Тунель", "map.t.dirt": "Ґрунт", "map.t.rock": "Скеля", "map.t.base": "База",
   "map.brush": "Пензель", "map.zoom": "Масштаб", "map.undo": "Назад", "map.done": "Готово",
   "map.pos": "X {x}  Y {y}", "map.bases": "Бази: {n} з 8",
-  "map.keys": "ПРОБІЛ: малювати", "map.keys.touch": "1 палець малює, 2 зсувають",
+  "map.keys": "ПРОБІЛ: малювати", "map.keys.touch": "1 палець малює, 2 зсувають", "map.keys.pad": "A: малювати  Y: інструмент  LB RB: пензель  LT RT: масштаб  B: готово",
   "map.err.max": "Не більше 8 баз.", "map.err.edge": "Надто близько до краю для бази.",
   "map.err.near": "Надто близько до іншої бази.",
   "map.walled": "Замурована скелями: база {list} (гра прокопає вихід).",

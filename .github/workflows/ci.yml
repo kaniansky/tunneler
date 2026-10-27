@@ -6,9 +6,11 @@ on:
   pull_request:
     branches: ["main"]
 
+# (the runner images pinned - ubuntu-24.04 here and in every workflow, not ubuntu-latest: a new image comes when we
+# move to it, not by itself - owner, 2026-10-27; a silent image change had broken the app builds' Rust cache)
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
 
@@ -22,7 +24,7 @@ jobs:
       - run: npm test
 
   docker:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
 

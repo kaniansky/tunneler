@@ -28,7 +28,7 @@ env:
 
 jobs:
   release:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
@@ -83,7 +83,7 @@ jobs:
   # updater, releases/latest/download/latest.json, now see it)
   publish:
     needs: [release, app, updater]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     env:
@@ -112,7 +112,7 @@ jobs:
   # manifest's x-checker-data).
   flatpak:
     needs: [release, publish]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
@@ -156,7 +156,7 @@ jobs:
 
   docker:
     needs: release
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
 

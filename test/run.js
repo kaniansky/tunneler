@@ -5,7 +5,10 @@
 // folders, localStorage stubs, vm sandboxes), so the order doesn't matter.
 //   node test/run.js [--serial] [-j N] [word ...]
 //   --serial: one after another (npm run test:serial); -j N: at most N at a time; words: only the tests
-//   whose command contains one of them (e.g. "node test/run.js net modes")
+//   whose command contains one of them (e.g. "node test/run.js net modes"); --no-retry: below
+// A test that fails is run once more, alone (owner, 2026-10-27: one failed now and then under load and nobody could
+// tell which): passing then, it is reported as FLAKY with its first run's output - and on GitHub as a warning - but
+// doesn't fail the run; failing again, it fails it.
 const { spawn } = require("child_process"), os = require("os"), path = require("path");
 
 // every game mode's matches + its own test (test/modes/<mode>.js) in a process of its own, then the rest
@@ -45,7 +48,7 @@ const TESTS = [
 ];
 
 const args = process.argv.slice(2);
-const serial = args.includes("--serial");
+const serial = args.includes("--serial"), retry = !args.includes("--no-retry");
 const j = args.indexOf("-j");
 const words = args.filter((a, i) => !a.startsWith("-") && !(j >= 0 && i === j + 1));
 const jobs = serial ? 1 : j >= 0 ? Math.max(1, parseInt(args[j + 1], 10) || 1) : Math.max(1, os.cpus().length);
@@ -69,9 +72,20 @@ const run = t => new Promise(done => {
   await Promise.all(Array.from({ length: Math.min(jobs, queue.length) }, async () => {
     while (queue.length) results.push(await run(queue.shift()));
   }));
-  const failed = results.filter(r => r.code);
+  let failed = results.filter(r => r.code);
+  const flaky = [];
+  if (retry && failed.length) {
+    console.log("\nagain, alone: " + failed.map(r => r.t).join(", "));
+    for (const r of failed) if (!(await run(r.t)).code) flaky.push(r);
+    failed = failed.filter(r => !flaky.includes(r));
+  }
+  for (const r of flaky) {
+    console.log("\n---- FLAKY: " + r.t + " (failed, then passed alone; the failed run's output:)\n" + r.out.slice(-4000));
+    if (process.env.GITHUB_ACTIONS) console.log("::warning title=flaky test::" + r.t + " failed once, then passed alone (its output: the test step's log)");
+  }
   for (const r of failed) console.log("\n---- " + r.t + " (exit " + r.code + ")\n" + r.out.slice(-4000));
   console.log("\n" + (failed.length ? failed.length + " of " + results.length + " FAILED" : "all " + results.length + " passed") +
+    (flaky.length ? " (" + flaky.length + " FLAKY: " + flaky.map(r => r.t).join(", ") + ")" : "") +
     " in " + ((Date.now() - t0) / 1000).toFixed(1) + " s (" + (serial ? "one after another" : jobs + " at a time") + ")");
   process.exit(failed.length ? 1 : 0);
 })();

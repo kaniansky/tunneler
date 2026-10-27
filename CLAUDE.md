@@ -74,7 +74,9 @@ may be redesigned, but always in the original's DOS look.
 - `docs/DESIGN-8P.md` - the design of everything beyond the original (extended mode, slots / teams,
   online lobby, views, sound, map sizes, languages...), in the owner's numbered requests; later sections
   win over earlier ones.
-- `test/` - `npm test` runs all (no browser needed) through `test/run.js`: every test its own node process,
+- `test/` - `npm test` runs all (no browser needed) through `test/run.js`: every test its own node process (a failed
+  one runs once more alone - passing then it is reported FLAKY, with its first output and a GitHub warning, and
+  doesn't fail the run; `--no-retry`),
   `test/src.js` = the modules for node tests (`const { TunnelerEngine, TunnelerAI, NetProto, Lang } =
   require("./src.js")`: every language and game mode loaded, Unifont blocks read from disk), `test/page-env.js`
   = the pages in a vm with a stub DOM: esbuild bundles modules in memory into one script that also puts every
@@ -351,7 +353,9 @@ joystick drives the tank, the end map / menu without them, a tap beside the map 
 - `dosui.js` - every 80 x 25 screen centred vertically (owner, 2026-10-27; `centreRows`: the rows it drew - the
   info's place kept for its items' longest info with a keyboard / mouse - moved to the middle of rows 1-23, a phone /
   tablet all 25; `vshift`, and `cellAt(ev)` maps clicks back - DosUI code uses it, never `display.cellAt`; tests read
-  rows / click at `+ ui.vshift`). Centred items line up as a block (`centreStart`: the widest centred item of a box is
+  rows / click at `+ ui.vshift`; worked out before the info is drawn - an info that comes and goes on a touch screen
+  moves nothing; `spec.block` = [first, last] rows a screen can span - Settings' tallest category, the games list's
+  full box - so a box that grows doesn't move it). Centred items line up as a block (`centreStart`: the widest centred item of a box is
   centred, a narrower one starts half the difference later, rounded down - one column narrower = the same
   start). Shared DOS menu screen (`showPage("instructions"|"information", uiMode, back)` shows the
   game's own page full screen, scrolled with Up / Down, PgUp / PgDn, Home / End, the wheel (3 rows a
@@ -885,7 +889,8 @@ page from before 2.0 - is refused (POST 409 `{code:
   pages: rule + hint); `snap.view = {rows, units, top}`
   = the content shown in a window `units` high from `top` (any fraction; negative = rows shifted down: a screen that
   fits has its used rows - the title through the last box - centred on the screen, ending above the info at most;
-  `narrow.minTop`, owner 2026-10-27) - the screen is always the same height
+  `narrow.minTop`, owner 2026-10-27; a touch screen lays it out as if no info showed - `LAY` - and the info strip
+  covers the bottom instead of moving it; `narrowRows()` a fraction too: the canvas reaches the bottom edge) - the screen is always the same height
   (an info longer than 4 rows takes rows from the window: up to 7).
   Smooth scrolling: `presentNarrowAt(top)` re-presents with a new view (`nbase`), `scrollNarrow(to, animate)`
   glides (the selection moved out of view), a drag follows the finger (`ndrag`, units per px), a flick keeps

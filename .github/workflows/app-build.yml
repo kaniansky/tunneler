@@ -171,7 +171,7 @@ jobs:
   # Android (src-tauri/gen/android, docs/ANDROID.md): one universal APK + AAB with arm64, armv7 and x86_64 (no 32-bit
   # x86 - old emulators, next to no phones; owner, 2026-10-25: a minute less per release)
   android:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # (the build's Rust settings here, not on its step: rust-cache's key hashes the CARGO* / RUST* variables it sees -
     # set on the step, a change to them (1.1.1's) kept the old key, and every build since restored crates compiled with
     # the old settings and compiled them all again)

@@ -155,7 +155,8 @@ language).
 - Mouse: the cursor follows it, left button paints / places, right button drags the view, the wheel zooms.
 - Touch: one finger paints (or places a base); two fingers drag and pinch the view.
 - Gamepad (pads.js: arrows, Enter, Esc; Y = Tab - the next tool, LB / RB = [ ] - the brush, LT / RT = - + - the zoom):
-  moves, paints, changes the tool / the brush / the zoom; Esc = Done (owner, 2026-10-27).
+  moves, paints, changes the tool / the brush / the zoom; Esc = Done (owner, 2026-10-27); once one is connected the status line
+  names its buttons instead of the keys - `map.keys.pad`).
 - Base tool: on an empty spot a new base (if there is room and fewer than 8), on a base it removes it;
   dragging a base moves it. Bases are drawn in the tank colours of their number.
 - Zoom: 1/4, 1/2, 1:1, 2, 4 screen pixels per cell; the view follows the cursor.

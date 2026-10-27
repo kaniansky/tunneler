@@ -518,6 +518,8 @@ export function mount() {
     ui.show({
       lines: [{ row: Math.max(1, y - 2), text: T("set.title"), color: 12 }],
       boxes: [{ y, items: left, wrap: true }, { y, w: settingsWidth(), title: T("set.cat." + setCat), items: right, wrap: true }],
+      // (centred as the tallest category: another category's box moves nothing - owner, 2026-10-27)
+      block: [Math.max(1, y - 2), y + rows + 1],
       sel: CATS.indexOf(setCat), infoRow: y + rows + 3,
       onSel: i => { if (i < CATS.length && CATS[i] !== setCat) { stopCapture(); setCat = CATS[i]; settings(true); } },
       // (Esc: from the settings back to their category, from the categories to the main menu)

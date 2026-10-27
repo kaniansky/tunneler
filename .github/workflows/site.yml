@@ -27,7 +27,7 @@ permissions:
 
 jobs:
   site:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       FTP_HOST: ${{ secrets.SITE_FTP_HOST || 'ing.r4.websupport.sk' }}
       FTP_USER: ${{ secrets.SITE_FTP_USER }}

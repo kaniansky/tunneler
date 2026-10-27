@@ -28,7 +28,7 @@ Lang.extend("ru", {
   "map.t.tunnel": "Туннель", "map.t.dirt": "Грунт", "map.t.rock": "Скала", "map.t.base": "База",
   "map.brush": "Кисть", "map.zoom": "Масштаб", "map.undo": "Назад", "map.done": "Готово",
   "map.pos": "X {x}  Y {y}", "map.bases": "Базы: {n} из 8",
-  "map.keys": "ПРОБЕЛ: рисовать", "map.keys.touch": "1 палец рисует, 2 двигают",
+  "map.keys": "ПРОБЕЛ: рисовать", "map.keys.touch": "1 палец рисует, 2 двигают", "map.keys.pad": "A: рисовать  Y: инструмент  LB RB: кисть  LT RT: масштаб  B: готово",
   "map.err.max": "Не больше 8 баз.", "map.err.edge": "Слишком близко к краю для базы.",
   "map.err.near": "Слишком близко к другой базе.",
   "map.walled": "Замурована скалами: база {list} (игра прокопает выход).",

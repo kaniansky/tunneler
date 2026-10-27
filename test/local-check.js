@@ -496,6 +496,12 @@ function play(search) {
   const keys = () => ui().spec.items.map(i => i.key), sel = () => ui().spec.items[ui().sel].key;
   const right = () => keys().slice(keys().indexOf("back") + 1);
   same(keys().filter(k => /^cat-/.test(k)), ["cat-display", "cat-graphics", "cat-sound", "cat-controls", "cat-online"], "categories");
+  {                                                       // (centred as the tallest category: no category moves the screen)
+    const shifts = new Set();
+    for (const c of ["cat-display", "cat-graphics", "cat-sound", "cat-controls", "cat-online"]) { ui().sel = keys().indexOf(c); ui().draw(); shifts.add(ui().vshift); }
+    assert.strictEqual(shifts.size, 1, "the same centring for every category: " + [...shifts]);
+    ui().sel = keys().indexOf("cat-display"); ui().draw();
+  }
   // Language: no category - a centred switch below them (owner, 2026-10-25)
   {
     const it = () => ui().spec.items.find(i => i.key === "lang"), before = env.win.Lang.code;

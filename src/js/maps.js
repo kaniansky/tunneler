@@ -401,6 +401,9 @@ export function mount() {
     for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) if (inBrush(dx, dy, r)) out.push([dx, dy]);
     return out;
   }
+  // a gamepad the browser shows the page (after one of its buttons was pressed); the status line follows them
+  const padOn = () => { try { return Array.from((navigator.getGamepads && navigator.getGamepads()) || []).some(g => g && g.connected !== false); } catch (e) { return false; } };
+  for (const t of ["gamepadconnected", "gamepaddisconnected"]) window.addEventListener(t, () => { if (ed) renderBar(); });
   function renderBar() {
     if (!ed) return;
     if (!ed.reach) reachSoon();
@@ -422,9 +425,11 @@ export function mount() {
     // after a change: reachSoon)
     const bases = { text: T("map.bases", { n: m.bases.length }), attr: m.bases.length >= MapData.MIN_BASES && (ed.reachShown || {}).ok !== false ? 0x0A : 0x0C, prio: 1 };
     const msg = ed.msg ? [{ text: ed.msg, attr: 0x0C, prio: 0 }] : [];
-    if (phone) return [tools, brush.concat(acts), zoom.concat([bases], msg.length ? msg : [{ text: T("map.keys.touch"), attr: 0x08, prio: 5 }])];
+    // (a gamepad connected: its buttons instead of the keys / fingers - owner, 2026-10-27)
+    const pad = padOn() ? T("map.keys.pad") : "";
+    if (phone) return [tools, brush.concat(acts), zoom.concat([bases], msg.length ? msg : [{ text: pad || T("map.keys.touch"), attr: 0x08, prio: 5 }])];
     // (a desktop: the keys beside the tools - the row with room for them -, a message on the second row)
-    return [tools.concat(acts, [{ text: T("map.keys"), attr: 0x08, prio: 5 }]),
+    return [tools.concat(acts, [{ text: pad || T("map.keys"), attr: 0x08, prio: 5 }]),
       brush.concat(zoom, [{ text: T("map.pos", { x: ed.cx * MapData.CELL, y: ed.cy * MapData.CELL }), attr: 0x07, prio: 4 }, bases], msg)];
   }
   const say = msg => { ed.msg = msg; clearTimeout(ed.msgTimer); ed.msgTimer = setTimeout(() => { if (ed) { ed.msg = null; renderBar(); } }, 3000); };

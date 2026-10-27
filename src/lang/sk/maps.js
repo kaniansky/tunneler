@@ -28,7 +28,7 @@ Lang.extend("sk", {
   "map.t.tunnel": "Tunel", "map.t.dirt": "Hlina", "map.t.rock": "Skala", "map.t.base": "Základňa",
   "map.brush": "Štetec", "map.zoom": "Zoom", "map.undo": "Späť", "map.done": "Hotovo",
   "map.pos": "X {x}  Y {y}", "map.bases": "Základne: {n} z 8",
-  "map.keys": "MEDZERNÍK: kresliť", "map.keys.touch": "1 prst kreslí, 2 posúvajú",
+  "map.keys": "MEDZERNÍK: kresliť", "map.keys.touch": "1 prst kreslí, 2 posúvajú", "map.keys.pad": "A: kresliť  Y: nástroj  LB RB: štetec  LT RT: zoom  B: hotovo",
   "map.err.max": "Najviac 8 základní.", "map.err.edge": "Príliš blízko okraja na základňu.",
   "map.err.near": "Príliš blízko inej základne.",
   "map.walled": "Uzavretá skalou: základňa {list} (hra vykope cestu von).",

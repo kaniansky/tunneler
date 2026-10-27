@@ -49,6 +49,7 @@
 // than the screen scrolls: Up / Down, PgUp / PgDn, Home / End, the mouse wheel, or dragging it on a
 // touch screen (engine.pageScroll; the engine draws the scroll bar).
 //   spec.infoRow: row of the selected item's info lines (cyan, centred)
+//   spec.block:  [first, last] rows (1-based) the screen can span at most - the vertical centring keeps to it
 //   spec.hint:   bottom line text;  spec.back: Esc handler;  spec.sel: initially selected item
 //   spec.footer: a short text at the bottom left (the main menu: the version)
 //
@@ -604,17 +605,22 @@ class DosUI {
       if (this.top > 0) { t.gotoXY(b.x + b.w - 1, b.y + (s.header ? 2 : 0)); t.write("\x18"); }
       if (this.top + this.scrollRows < this.scrollN) { t.gotoXY(b.x + b.w - 1, moreRow || row); t.write("\x19"); }
     }
-    // info about the selected item
+    // the screen centred (centreRows) before the info is drawn: an info that comes and goes - a touch screen's
+    // message, the description while a finger presses an item - lands in its place and moves nothing (owner,
+    // 2026-10-27); it goes as far down as its rows fit
     this.links = [];
     this.infoAt = s.infoRow || row + 3;
-    this.infoOfSel().forEach((l, i) => {
+    const shift = this.vshift = this.centreRows(t, s), info = this.infoOfSel();
+    const bottom = GameScreen.mobile() ? 25 : 23, lift = Math.max(0, this.infoAt + shift + info.length - 1 - bottom);
+    info.forEach((l, i) => {
       t.textColor(l.color == null ? 3 : l.color);
       const text = typeof l === "string" ? l : l.text;
-      const x = Math.max(1, 41 - (U.cols(text) >> 1)), y = (s.infoRow || row + 3) + i;
-      this.centres.push([y - 1, 0, 80]);
+      const x = Math.max(1, 41 - (U.cols(text) >> 1)), y = this.infoAt + shift - lift + i;
       t.gotoXY(x, y);
       t.write(U.slice(text, 79));
-      if (l.onClick) this.links.push({ x, y, w: Math.min(U.cols(text), 79), onClick: l.onClick });
+      // (in the screen's rows as laid out - before the shift: clicks map back through it, cellAt)
+      this.centres.push([y - 1 - shift, 0, 80]);
+      if (l.onClick) this.links.push({ x, y: y - shift, w: Math.min(U.cols(text), 79), onClick: l.onClick });
     });
     // bottom line, like the game's "Press <ENTER> for main menu." (a phone / tablet: none - the room is the
     // screen's; owner, 2026-10-27)
@@ -625,7 +631,6 @@ class DosUI {
       t.textColor(15); t.gotoXY(80 - U.cols(hint), 25); t.write(hint);
       if (s.footer) { t.textColor(8); t.gotoXY(2, 25); t.write(" " + U.slice(s.footer, 78 - U.cols(hint) - 2) + " "); }   // (bottom left)
     }
-    const shift = this.vshift = this.centreRows(t, s);
     const snap = { t: 0, mode: "text", screen: "text", vram: t.vram.slice(0, 16000) };
     t.snapUni(snap);
     if (this.cursor) snap.cursor = Object.assign({}, this.cursor, { row: this.cursor.row + shift });
@@ -643,6 +648,9 @@ class DosUI {
     while (a < R && !used(a)) a++;
     if (a >= R) return 0;
     while (b > a && !used(b)) b--;
+    // (spec.block = [first, last] 1-based rows the screen can span - Settings' tallest category, the games list's
+    // full box: a box that grows or shrinks moves nothing)
+    if (s.block) { a = Math.max(0, Math.min(a, s.block[0] - 1)); b = Math.min(R - 1, Math.max(b, s.block[1] - 1)); }
     if (!GameScreen.mobile() || this.keyNav) {
       const most = Math.max(0, ...s.items.map(it => (it.info || []).length));
       if (most) b = Math.max(b, Math.min(R - 1, this.infoAt - 2 + most));
@@ -718,7 +726,9 @@ class DosUI {
       }
     } catch (e) { /* no layout (tests): the default */ }
     const w = Math.max(160, (root.innerWidth || 390) - padX), h = Math.max(200, (root.innerHeight || 844) - pad);
-    return Math.max(25, Math.min(100, Math.floor(h / (w / NC * 16 * 1.35 / 9))));   // (rows of the DOS screen's height: display.js)
+    // (rows of the DOS screen's height: display.js; a fraction too - the window is that many rows high, so the canvas
+    // fills the screen to its bottom edge: whole rows left a strip below it a drag couldn't start on; owner, 2026-10-27)
+    return Math.max(25, Math.min(100, h / (w / NC * 16 * 1.35 / 9)));
   }
   narrowBox(i) {
     const g = this.spec.boxes ? this.boxOf(i) : { start: 0, end: this.spec.items.length };
@@ -791,14 +801,18 @@ class DosUI {
     const used = r => { const o = (r - 1) * 160; for (let c = 0; c < NC; c++) { const ch = t.vram[o + c * 2]; if ((ch !== 0x20 && ch !== 0) || (t.vram[o + c * 2 + 1] & 0x70)) return true; } return false; };
     let first = 1;
     while (first < height && !used(first)) first++;
+    // (a touch screen lays the content out as if no info showed - LAY: an info that comes and goes covers the screen's
+    // bottom instead of moving the content; owner, 2026-10-27 - the window shorter by it can still scroll that far)
+    const LAY = this.keyNav || !GameScreen.mobile() ? VIEW : R;
     const total = start[height], block = total - start[first - 1];
-    const minTop = block < VIEW ? Math.max(start[first - 1] - (R - block) / 2, total - VIEW) : 0, maxTop = block < VIEW ? minTop : Math.max(0, total - VIEW);
+    const minTop = block < LAY ? Math.max(start[first - 1] - (R - block) / 2, total - LAY) : 0;
+    const maxTop = Math.max(minTop, total - VIEW);
     const selRow = +Object.keys(rowItem).find(r => rowItem[r] === this.sel) || 0;
     const fresh = this.nspec !== this.spec && !this.nkeep;
     // (the view follows the selection when it moved or on a new screen - not on a refresh: the online lobby's
     // pings and chat redraw it, and a drag away from the selection stays where it is)
     if (this.nsel !== this.sel || fresh) { this.nfollow = true; this.nsel = this.sel; }
-    if (fresh) { this.ntopU = 0; this.nanim = null; }
+    if (fresh) { this.ntopU = minTop; this.nanim = null; }
     this.nspec = this.spec;
     let target = Math.max(minTop, Math.min(this.ntopU || 0, maxTop));
     if (this.nfollow && selRow) {                        // (the selection in view, a row of room around it)

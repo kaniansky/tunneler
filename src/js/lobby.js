@@ -156,6 +156,9 @@ export function mount() {
       header: UniText.padEnd(" " + UniText.slice(T("lobby.name"), cols()[0] - 1), cols()[0] + 1) + [T("lobby.mode"), T("lobby.players")].map((h, i) => cols()[i + 1] ? UniText.padEnd(UniText.slice(h, cols()[i + 1] - 1), cols()[i + 1]) : "").join("") +
         T("lobby.state"),
       items, infoRow: bottom + 2, back: home,
+      // (centred as with every row of games and its info below: games coming and going move nothing - owner,
+      // 2026-10-27)
+      block: [2, 3 + 3 + ROWS + FIXED + 1 + Math.max(0, ...items.map(it => (it.info || []).length))],
     }, keep);
   }
 

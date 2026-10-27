@@ -687,6 +687,13 @@ const ticks = async (n = 8) => { for (let i = 0; i < n; i++) await tick(); };
     api.reachOf();
     const basesSeg = () => api.barRows(false)[1].find(g => g.text === T("map.bases", { n: 2 }));
     assert.strictEqual(basesSeg().attr, 0x0C, "the bases red");
+    // a gamepad connected: its buttons on the status line instead of the keys
+    const hint = phone => api.barRows(phone).flat().map(g => g.text);
+    assert(hint(false).includes(T("map.keys")) && !hint(false).includes(T("map.keys.pad")), "the keys");
+    const nav = w.navigator, gp = nav.getGamepads;
+    nav.getGamepads = () => [null, { connected: true }];
+    assert(hint(false).includes(T("map.keys.pad")) && hint(true).includes(T("map.keys.pad")), "a gamepad: its buttons (desktop and phone)");
+    nav.getGamepads = gp;
     // a way dug through the wall (tunnel, a brush 3 cells tall): ready to play, green
     api.setTool("tunnel"); api.setBrush(-9); api.setBrush(1);
     api.stamp(63, 32); api.stamp(64, 32);
