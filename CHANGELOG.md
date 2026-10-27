@@ -4,6 +4,12 @@ All notable changes to Tunneler. Versions follow [semantic versioning](https://s
 by pushing a version tag (see CONTRIBUTING.md). Up to its version 6.0.1 the game was called Tunneler Online:
 those releases are tagged `online-vX.Y.Z`, their changes are in [docs/CHANGELOG-online.md](docs/CHANGELOG-online.md).
 
+## Unreleased
+
+- Settings, Online, Name: the answer shows under the Name row - "saved", or why the server refused the name (another
+  player's username, wrong letters). It went to the Account row's info, which isn't shown while Name is selected, so a
+  refused name just went back to the old one without a word.
+
 ## 1.1.2
 
 - Android: Sign in with Google Play works (1.1.1's app on Google Play was built before its Play Games project was

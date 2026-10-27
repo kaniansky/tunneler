@@ -301,11 +301,13 @@ const go = (ui, k) => { const it = item(ui, k); assert(it, "no item " + k + " in
     ok(item(ui, "dname") && item(ui, "dname").input.value === "Norko", where + ": the display name's row (the username until changed)");
     item(ui, "dname").input.value = "Sheriff"; go(ui, "dname");
     await waitFor(() => JSON.parse(env.storage.get(SESSION)).display === "Sheriff");
-    ok(win.Account.display() === "Sheriff" && win.Account.name() === "Norko" && /Name saved/.test(JSON.stringify(item(ui, "account").info)),
-      where + ": saved - the server's answer kept, the username stays");
+    ok(win.Account.display() === "Sheriff" && win.Account.name() === "Norko" && /Name saved/.test(JSON.stringify(item(ui, "dname").info))
+      && ui.spec.items[ui.sel].key === "dname",
+      where + ": saved - the server's answer kept, the username stays (said under the Name row, which stays selected)");
     item(ui, "dname").input.value = "Eli"; go(ui, "dname");
-    await waitFor(() => /another player/.test(JSON.stringify(item(ui, "account").info)));
-    ok(win.Account.display() === "Sheriff" && item(ui, "dname").input.value === "Sheriff", where + ": another account's username - refused, the field back to the name");
+    await waitFor(() => /another player/.test(JSON.stringify(item(ui, "dname").info)));
+    ok(win.Account.display() === "Sheriff" && item(ui, "dname").input.value === "Sheriff" && ui.spec.items[ui.sel].key === "dname",
+      where + ": another account's username - refused, the field back to the name, the reason under the Name row (selected: it shows)");
     go(ui, "logout");
     ok(!env.storage.get(SESSION) && /not logged in/.test(label("account")) && item(ui, "login") && /Logged out/.test(JSON.stringify(item(ui, "account").info)),
       where + ": Log out - the session gone, \"not logged in\", Log in");

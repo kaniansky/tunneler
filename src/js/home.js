@@ -218,13 +218,15 @@ export function mount() {
   Account.config().then(on => { if (on && onOnline()) settings(true); });
   if (Account.session()) Account.check().then(() => { if (onOnline()) settings(true); });
   let accNote = null;                                     // {text, color}: what just happened (logged out, deleted...)
-  // back to Settings, Online, on the account's row
-  function toAccount(note) {
-    accNote = note || null;
+  let nameNote = null;                                    // the same for the Name row: what saving the name answered
+  // back to Settings, Online, on the account's row (or another row, with its own note: only the selected row's info shows)
+  function toAccount(note, row = "account", rowNote = null) {
+    accNote = row === "account" ? note || null : null;
+    nameNote = row === "dname" ? rowNote : null;
     setCat = "online";
     if (MOBILE) setOpen = "online";
     settings();
-    const i = ui.spec.items.findIndex(it => it.key === "account");
+    const i = ui.spec.items.findIndex(it => it.key === row);
     if (i >= 0) { ui.sel = i; ui.draw(); }
   }
   const openLogin = () => { accNote = null; Login.ask(ui, { done: () => toAccount(), back: () => toAccount(), backKey: "set.back" }); };
@@ -232,25 +234,24 @@ export function mount() {
   const dispForm = { value: "", max: DosUI.NAME_MAX, width: DosUI.NAME_MAX };
   async function saveDisplay() {
     const v = dispForm.value.trim();
-    if (!v || v === Account.display()) return;
+    if (!v || v === Account.display()) return toAccount(null, "dname");
     const r = await Account.setName(v);
-    if (r.ok) return toAccount({ text: T("set.dname.ok"), color: 10 }), focusRow("dname");
+    if (r.ok) return toAccount(null, "dname", { text: T("set.dname.ok"), color: 10 });
     dispForm.value = Account.display();
-    toAccount({ text: T(r.code === "taken" ? "set.dname.taken" : r.code === "name" ? "set.dname.bad" : "acc.err." + (["net", "busy", "session", "storage"].includes(r.code) ? r.code : "server"), { msg: r.msg || "" }), color: 12 });
-    focusRow("dname");
+    // (the reason under the Name row itself - on the Account row's info it never showed: the name went back silently)
+    toAccount(null, "dname", { text: T(r.code === "taken" ? "set.dname.taken" : r.code === "name" ? "set.dname.bad" : "acc.err." + (["net", "busy", "session", "storage"].includes(r.code) ? r.code : "server"), { msg: r.msg || "" }), color: 12 });
   }
   async function linkGoogle() {
     const r = await Account.linkGoogle();
     toAccount(r.ok ? { text: T("set.glink.ok"), color: 10 } : r.code === "cancel" ? null : { text: Login.errText(r), color: 12 });
   }
-  const focusRow = key => { const i = ui.spec.items.findIndex(it => it.key === key); if (i >= 0) { ui.sel = i; ui.draw(); } };
   function accountRows() {
     const s = Account.session();
     if (s && dispForm.for !== Account.display()) dispForm.value = dispForm.for = Account.display();   // (a new name: the field shows it; typing stays)
     const rows = [{ key: "account", align: "left", label: pad("set.account") + (s ? Lang.enc(s.name) : T("set.account.none")),
       info: [accNote || (s ? T("set.account.i1") : T("set.account.in.i")), T("set.account.i2")], go: () => { if (!s) openLogin(); } }];
     if (!s) rows.push({ key: "login", label: T("acc.login.go"), info: [T("set.account.in.i"), T("set.account.i2")], go: openLogin });
-    else rows.push({ key: "dname", label: pad("set.name"), input: dispForm, align: "left", info: [T("set.dname.i1"), T("set.name.i2")], go: saveDisplay },
+    else rows.push({ key: "dname", label: pad("set.name"), input: dispForm, align: "left", info: [nameNote || T("set.dname.i1"), T("set.name.i2")], go: saveDisplay },
       { key: "logout", label: T("acc.logout"), info: [T("acc.logout.i")], go: () => { Account.logout(); toAccount({ text: T("acc.out"), color: 10 }); } },
       // (Google Play, the Android app: link it - then either way signs in)
       ...(Account.google() && !s.google ? [{ key: "glink", label: T("set.glink"), info: [T("set.glink.i")], go: linkGoogle }] : []),
