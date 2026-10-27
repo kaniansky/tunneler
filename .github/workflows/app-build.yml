@@ -27,6 +27,9 @@ name: Desktop and Android app
 # that changes the Rust dependencies or this file builds once to fill them (the Rust caches are saved only
 # there - a tag's own caches can't be used by the next tag). The Rust version is pinned (RUST_TOOLCHAIN): a new
 # one would make every cached crate useless - raise it on purpose (it fills the caches again).
+# The cache key hashes the Rust toolchains installed and the CARGO* / RUST* variables its step sees: the jobs keep only
+# the pinned toolchain, and the build's Rust settings are job variables (owner, 2026-10-27: 1.1.3's Android and Linux
+# builds compiled every crate - a stale key, a missed one).
 
 on:
   workflow_call:
@@ -98,6 +101,12 @@ jobs:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
           targets: ${{ matrix.target }}
 
+      # (only the pinned Rust: rust-cache's key hashes every toolchain installed - a runner image that drops or adds
+      # its own preinstalled one changed the key and the cache was missed; 1.1.3's Linux builds compiled everything)
+      - name: Only the pinned Rust
+        shell: bash
+        run: for t in $(rustup toolchain list | awk '{print $1}' | grep -v "^${RUST_TOOLCHAIN}-"); do rustup toolchain uninstall "$t"; done
+
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri -> target
@@ -163,6 +172,15 @@ jobs:
   # x86 - old emulators, next to no phones; owner, 2026-10-25: a minute less per release)
   android:
     runs-on: ubuntu-latest
+    # (the build's Rust settings here, not on its step: rust-cache's key hashes the CARGO* / RUST* variables it sees -
+    # set on the step, a change to them (1.1.1's) kept the old key, and every build since restored crates compiled with
+    # the old settings and compiled them all again)
+    # the library unstripped: build.gradle.kts keeps a copy with the symbols for Play Console and strips the one it
+    # packs (1.1.0 packed it unstripped - a 38 MB APK); a build id in the library: Play Console matches a crash to the
+    # uploaded symbols by it
+    env:
+      CARGO_PROFILE_RELEASE_STRIP: "false"
+      RUSTFLAGS: "-C link-arg=-Wl,--build-id=sha1"
     steps:
       - uses: actions/checkout@v7
         with:
@@ -196,6 +214,9 @@ jobs:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
           targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
 
+      - name: Only the pinned Rust
+        run: for t in $(rustup toolchain list | awk '{print $1}' | grep -v "^${RUST_TOOLCHAIN}-"); do rustup toolchain uninstall "$t"; done
+
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri -> target
@@ -220,12 +241,8 @@ jobs:
           } > src-tauri/gen/android/keystore.properties
 
       - name: Build the app
-        # (the library unstripped: build.gradle.kts keeps a copy with the symbols for Play Console and strips the one
-        # it packs; 1.1.0 packed it unstripped - a 38 MB APK)
+        # (the Rust settings: the job's env)
         env:
-          CARGO_PROFILE_RELEASE_STRIP: "false"
-          # a build id in the library: Play Console matches a crash to the uploaded symbols by it
-          RUSTFLAGS: "-C link-arg=-Wl,--build-id=sha1"
           # Google Play Games sign-in: repository variables (Settings, Secrets and variables, Actions, Variables) -
           # unset = a build without it
           PLAY_GAMES_APP_ID: ${{ vars.PLAY_GAMES_APP_ID }}
