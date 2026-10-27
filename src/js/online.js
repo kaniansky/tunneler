@@ -41,6 +41,7 @@ import { Report, Reload } from "./report.js";
 import { Runner } from "./runner.js";
 import { Speaker } from "./speaker.js";
 import { StatusLine } from "./statusline.js";
+import { TankView } from "./tankview.js";
 import { UniText } from "./unitext.js";
 import { VERSION } from "./version.js";
 import { ViewModes } from "./views.js";
@@ -352,7 +353,9 @@ export function mount() {
   // gamepads / touch controls (pads.js): turned into the same keys as the keyboard - a player's tank
   // during play (any gamepad, the on-screen joystick + FIRE), arrows / Enter / Esc everywhere else
   Pads.start({ menu: () => !isPlayer() || !inPlay() || !!lobby, gamepadSet: () => "blue", touchSet: "blue",
-    hideTouch: () => !!lobby || !!msgSnap || !isPlayer() || !engine || engine.screen !== "play" });   // (the touch controls only while playing - not under a status screen)
+    hideTouch: () => !!lobby || !!msgSnap || !isPlayer() || !engine || engine.screen !== "play",
+    escLabel: "touch.leave", touchTank: TankView.provider(() => engine, () => player + 1),
+    touchDead: () => !!engine && player >= 0 && engine.screen === "play" && !engine.alive[player + 1] });   // (the touch controls only while playing - not under a status screen)
 
   function sendKeys() {
     const keys = keyboard.takeKeys();

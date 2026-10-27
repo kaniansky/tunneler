@@ -217,7 +217,7 @@ function stats(e) { e.textMode(); e.menuShift = -20; e.showMainMenu(); return sc
       { key: "kick", label: W.Lang.t("pg.kick.pick", { name: "BLUE (王小明)" }), go() {} },
       { key: "back", label: "Back", go() {} }],
   });
-  const sc = snapScreen(snap);
+  const sc = snapScreen(snap).slice(ui.vshift || 0);     // (the screen centred vertically: its rows as laid out)
   assert(sc[0].includes(ROOM), "room name: " + sc[0]);
   assert.strictEqual(sc[0].indexOf(ROOM), 41 - (12 >> 1) - 1, "centred by display columns");
   assert(sc[2].includes("Дмитро: 你好 👋"), "raw text item");
@@ -230,7 +230,7 @@ function stats(e) { e.textMode(); e.menuShift = -20; e.showMainMenu(); return sc
   // the cursor sits after the value, by display columns
   // (the caret is the screen's cursor - Display / gfx-text draw it: the cell right after the value's last character)
   const row = sc.findIndex(l => l.includes("Name: 🐙Octo")), end = sc[row].indexOf("Name: 🐙Octo") + "Name: 🐙Octo".length;
-  assert(snap.cursor && snap.cursor.row === row && snap.cursor.col === U.rawCols(sc[row].slice(0, end)), "cursor after the value: " + JSON.stringify(snap.cursor));
+  assert(snap.cursor && snap.cursor.row === row + (ui.vshift || 0) && snap.cursor.col === U.rawCols(sc[row].slice(0, end)), "cursor after the value: " + JSON.stringify(snap.cursor));
   // typing: any printable characters, max in display columns, no control / bidi / private use
   name.value = "";
   assert(ui.typed(name, "王小明王小明王小明"));

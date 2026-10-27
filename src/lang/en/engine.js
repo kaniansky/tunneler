@@ -82,8 +82,10 @@ const STRINGS_EN = {
         "\"Gamepad 1 connected\"); then it drives a tank too (split screen: gamepad 1 " +
         "{9}BLUE{3}, gamepad 2 {10}GREEN{3}; otherwise any gamepad drives yours) - the stick or the " +
         "d-pad moves, any button fires, Start is <ESC>; in the menus the d-pad and A / B work as the " +
-        "arrows, <ENTER> and <ESC>.  On phones and tablets an on-screen joystick and the FIRE and ESC " +
-        "buttons appear with the first touch; names and chat still need a keyboard."],
+        "arrows, <ENTER> and <ESC>, Y as <TAB>, LB / RB and LT / RT as [ ] and - + (the map editor's tool, " +
+        "brush and zoom; a replay's speed).  On phones and tablets an on-screen joystick and the FIRE and " +
+        "ESC buttons appear with the first touch (ESC says QUIT in a skirmish, LEAVE online; while your " +
+        "tank is destroyed only it stays); names and chat still need a keyboard."],
       ["Winning:  ", "The first tank (or team) to win the chosen number of rounds - 1 to 9, the " +
         "original is 3 - wins the match.  A round can also have a time limit of 2, 3, 5 or 10 minutes " +
         "(the last 30 seconds count down beside the instrument panel).  When the time is up, the side " +
@@ -133,7 +135,7 @@ const STRINGS_EN = {
       ["Sound:  ", "Settings chooses its style: original (the PC " +
         "speaker beeps of 1991), realistic (tank noises), recorded (real recordings), cartoony (boings and pops), or muted; volume, stereo and distance fade too.  " +
         "The sounds of the other tanks fade with their distance from yours and come from their side (stereo)."],
-      ["Settings:  ", "Display (fullscreen - also <ALT>+<ENTER> -, screen size, tank colors: normal, color-blind or you blue / team green / enemies red), Graphics (original or modern, then that look's settings), Sound (style, volume, stereo, distance fade), Controls (both tanks' keys, the touch controls), Online (your account - or your name -, preferred color, show chat, chat sound, show ping; in the desktop app the server) and Language."],
+      ["Settings:  ", "Display (fullscreen - also <ALT>+<ENTER> -, screen size, tank colors: normal, color-blind or you blue / team green / enemies red), Graphics (original or modern, then that look's settings), Sound (style, volume, stereo, distance fade), Controls (both tanks' keys; the touch controls' size, side and look - plain or your own tank), Online (your account - or your name -, preferred color, show chat, chat sound, show ping; in the desktop app the server) and Language."],
       ["Graphics:  ", "Settings chooses original (the DOS screen of 1991) or modern (the default): the same game drawn at your screen's resolution - smooth tunnels, textured dirt and rock, dark tunnels lit by the tanks' lamps, glowing shots, dust, sparks and fire, a new panel and menus in a modern font.  Modern graphics settings: style (clean or retro), quality, terrain, tunnel edges, lighting, particles, glow, screen shake, camera (smooth: tanks glide between steps) and UI, and the fog of war of the line of sight.  Only the look changes, never the game - also online."],
     ],
   },
@@ -157,7 +159,7 @@ const STRINGS_EN = {
       ["Two looks:  ", "the original DOS screen, or modern graphics in high resolution with light, particles and a modern font (Settings, Graphics) - the same game either way."],
       ["Replays:  ", "every match you play or watch is kept (the newest 20, main menu, Replays): watch it again like a spectator - every view, the live map or one tank, paused, faster or slower - or send it to someone as a link or a file."],
       ["Daily challenge:  ", "every day (midnight to midnight, UTC) everyone gets the same skirmish - the same world, mode and computer tanks (main menu, Daily challenge).  Send your result: the server plays your match's replay again, and only what really happened goes on the day's leaderboard, where anyone can watch the best matches.  The leaderboard also shows the 30 days before (left / right), and any past day can be played again as practice - its results don't count.  Tomorrow brings a new one."],
-      ["Your own maps:  ", "paint a world - rock, dirt and tunnels - and place up to 8 bases (main menu, Maps) - a tank has to be able to drive between all of them (rock stops it); play it in a skirmish or an online game, or send it to someone as a link or a file."],
+      ["Your own maps:  ", "paint a world - rock, dirt and tunnels - and place up to 8 bases (main menu, Maps) - a tank has to be able to drive between all of them (rock stops it); play it in a skirmish or an online game, or send it to someone as a link or a file.  The editor doesn't save by itself: back on the map's screen, using or leaving the map asks whether to save the changes or revert them."],
       ["The desktop app:  ", "Tunneler also comes as a small program for Windows, Linux and " +
         "macOS - download it from the releases page on GitHub " +
         "(github.com/kaniansky/tunneler/releases).  It plays split screen and skirmish " +

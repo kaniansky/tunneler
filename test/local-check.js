@@ -410,8 +410,9 @@ function play(search) {
     const ui = en.win.tunnelerHomeUI();
     const at = (key, labelCol) => {
       const i = ui.spec.items.findIndex(it => it.key === key), b = ui.boxOf(i);
-      return { clientX: (b.x + 1 + labelCol) * 9 + 4, clientY: (b.y + (i - b.start)) * 16 + 8 };
+      return { clientX: (b.x + 1 + labelCol) * 9 + 4, clientY: (b.y + (i - b.start) + (ui.vshift || 0)) * 16 + 8 };   // (vshift: the screen centred)
     };
+    assert(ui.vshift > 0, "the skirmish (its boxes from row 1) centred vertically: " + ui.vshift);
     const zone = (key, z) => ui.spec.items.find(it => it.key === key).zones[z].from;
     const saved = () => JSON.parse(st.get("tunneler.cpu.slots"));
     ui.click(at("slot1", zone("slot1", 1)));
@@ -571,6 +572,7 @@ function play(search) {
     env.key("ArrowUp"); env.key("ArrowUp"); env.key("ArrowUp");   // Controls
     assert.strictEqual(sel(), "cat-controls");
     env.key("Enter"); assert.strictEqual(sel(), "key-blue-up");
+    assert(!ui().spec.items.some(i => i.key === "touchsize"), "no touch screen: no touch controls' rows");
     env.key("Enter");
     assert.ok(ui().spec.items[ui().sel].label.includes(env.win.Lang.t("ctl.press")), "waiting for a key");
     env.key("Escape");
@@ -874,13 +876,25 @@ function play(search) {
 
 // ---------------------------------------------------------------- a phone / tablet (touch screen without a mouse)
 {
-  // no split screen, no skirmish player 2 (your slot: "you"), the touch hint; a link's player 2 = a computer tank
+  // no split screen, no skirmish player 2 (your slot: "you"), no rule / hint at the bottom; a link's player 2 = a computer tank
   const touch = q => ({ matches: /coarse/.test(q) });          // (pointer: coarse, no fine pointer)
   const env = makeEnv("");
-  env.win.matchMedia = touch;
+  Object.assign(env.win, { matchMedia: touch, innerWidth: 390, innerHeight: 844 });   // (held upright)
   env.page("index.html");
   const ui = env.win.tunnelerHomeUI(), keys = () => ui.spec.items.map(i => i.key);
   assert(!keys().includes("split") && keys().includes("cpu"), "no split screen: " + keys());
+  // no highlight bar on a phone - until arrow keys (a keyboard / gamepad) move the selection
+  const bars = () => { const v = ui.display.snap.vram; let n = 0; for (let k = 1; k < v.length; k += 2) if (v[k] === 0x5F) n++; return n; };
+  const screenText = () => { const v = ui.display.snap.vram; let t = ""; for (let k = 0; k < v.length; k += 2) t += String.fromCharCode(v[k]); return t; };
+  const desc = ui.spec.items[ui.sel].info[0];
+  assert(bars() === 0, "no highlight bar on a phone: " + bars());
+  // (held upright: the description wrapped - its first words; nothing below the menu without it: no empty strip)
+  const start = d => d.slice(0, 12);
+  assert(typeof desc === "string" && !screenText().includes(start(desc)), "no description without the bar: " + desc);
+  assert.strictEqual(ui.display.snap.view.rows, ui.display.snap.rows, "no strip for the info below the menu");
+  env.key("ArrowDown");
+  assert(bars() > 0, "arrow keys show the highlight bar");
+  assert(screenText().includes(start(ui.spec.items[ui.sel].info[0])), "and the description");
   ui.sel = keys().indexOf("cpu"); env.key("Enter");
   const row = () => ui.spec.items.find(i => i.key === "slot1");
   const seen = new Set();
@@ -889,7 +903,7 @@ function play(search) {
   assert(![...seen].some(l => l.includes(L.t("lc.p2"))), "no player 2: " + [...seen].join(" | "));
   assert(ui.spec.items.find(i => i.key === "slot0").label.includes(L.t("lc.me")), "your slot: you");
   const snap = ui.display.snap, bottom = Array.from({ length: 80 }, (_, c) => String.fromCharCode(snap.vram[24 * 160 + c * 2])).join("");
-  assert(bottom.includes(L.t("ui.hint.touch")), "the touch hint: " + bottom);
+  assert(!bottom.includes(L.t("ui.hint.touch")) && !bottom.includes("\x5F\x5F\x5F"), "no rule / hint at the bottom on a phone: " + bottom);
   // the settings: a submenu (the Game box's Settings item), its Back returns to Settings
   assert(!keys().includes("mode") && keys().includes("settings"), "the skirmish's settings in a submenu: " + keys());
   ui.sel = keys().indexOf("settings"); env.key("Enter");
@@ -904,7 +918,7 @@ function play(search) {
   pe.page("play.html");
   const e = pe.win.tunnelerEngine();
   assert(e.nPlayers === 3 && pe.win.tunnelerAIs().filter(Boolean).length === 2, "player 2 in a link: a computer tank");
-  ok("a phone / tablet: no split screen, no player 2, the touch hint, the skirmish's settings in a submenu; a link's player 2 plays as a computer tank");
+  ok("a phone / tablet: no split screen, no player 2, no footer, the skirmish's settings in a submenu; a link's player 2 plays as a computer tank");
 }
 
 // ---------------------------------------------------------------- the phone layout (DosUI narrow, Display zoom)
@@ -914,7 +928,16 @@ function play(search) {
   const env = phone();
   env.page("index.html");
   const ui = env.win.tunnelerHomeUI(), snap = () => ui.display.snap;
-  assert(snap().view && snap().view.rows + 7 === snap().rows && snap().view.top === 0, "the content in a window: " + JSON.stringify(snap().view));
+  assert(snap().view && snap().view.rows === snap().rows, "the content in a window (no info strip without info): " + JSON.stringify(snap().view));
+  {                                                   // (it fits: the title through the last box in the window's middle)
+    const v = snap().view, h = snap().rowH, used = r => { for (let c = 0; c < 36; c++) { const ch = snap().vram[r * 160 + c * 2]; if (ch !== 0x20 && ch !== 0) return true; } return false; };
+    let first = 0;
+    while (!used(first)) first++;
+    const above = h.slice(0, first).reduce((a, b) => a + b, 0) - v.top, end = h.slice(0, v.rows).reduce((a, b) => a + b, 0) - v.top;
+    const below = v.units + h.slice(v.rows).reduce((a, b) => a + b, 0) - end;   // (to the screen's bottom)
+    assert(v.top < 0 && end <= v.units + 0.01 && (Math.abs(above - below) < 0.01 || Math.abs(end - v.units) < 0.01),
+      "a screen that fits: centred on the screen (its title too), above the info: " + above + " / " + below);
+  }
   assert(snap().cols === 36 && snap().rowH && snap().rowH.length === snap().rows && snap().rowH.some(m => m > 1) && snap().rowH.some(m => m === 1) && snap().rows >= 16 && snap().rows < 60, "a narrow, tall screen: " + snap().cols + " x " + snap().rows);
   const rowOf = key => +Object.keys(ui.narrow.items).find(r => ui.spec.items[ui.narrow.items[r]].key === key);
   // a tap on a row (the canvas 720 x 400 here): that item
@@ -924,30 +947,60 @@ function play(search) {
     return { clientX: 360, clientY: (above + h[r - 1] / 2) / total * 400 };
   };
   assert.strictEqual(ui.spec.items[ui.itemAt(tap("settings"))].key, "settings", "a tap on a row = its item");
-  // a finger on an item: highlighted; moved over another: the highlight follows (no scrolling); let go there: chosen.
-  // Put down beside the items: a drag scrolls (owner, 2026-10-25)
+  // a finger on an item: highlighted; a drag scrolls and that item stays highlighted, let go = nothing; let go
+  // without moving = a tap (the browser's click). Put down beside the items: a drag scrolls (owner, 2026-10-27)
   {
     const cv = ui.canvas, finger = p => ({ touches: [p] }), keyAt = () => ui.spec.items[ui.sel].key;
-    cv.fire("touchstart", finger(tap("settings")));
-    assert(ui.tpick && keyAt() === "settings" && !ui.ndrag, "a finger on Settings: highlighted, no scroll drag");
-    const over = tap("info");
+    const bars = () => { const v = snap().vram; let n = 0; for (let k = 1; k < v.length; k += 2) if (v[k] === 0x5F) n++; return n; };
+    const at = tap("settings");
+    cv.fire("touchstart", finger(at));
+    assert(ui.tpick && keyAt() === "settings" && ui.ndrag && bars() > 0, "a finger on Settings: highlighted, a drag may scroll");
+    const top0 = ui.ntopU || 0, over = { clientX: at.clientX, clientY: at.clientY - 150 };
     cv.fire("touchmove", finger(over));
-    assert.strictEqual(keyAt(), "info", "moved over Information: the highlight follows");
+    assert(keyAt() === "settings" && bars() > 0 && ui.dragged, "dragged: Settings stays highlighted");
+    assert(ui.narrow.maxTop <= ui.narrow.minTop || (ui.ntopU || 0) > top0, "the drag scrolls: " + top0 + " -> " + ui.ntopU);
     cv.fire("touchend", {});
-    assert(ui.spec.page, "let go there: Information opens");
     ui.click({ clientX: over.clientX, clientY: over.clientY });
-    assert(ui.spec.page, "the browser's click after it doesn't count twice (the page stays)");
+    assert(!ui.spec.page && keyAt() === "settings" && bars() === 0, "let go after a drag: nothing chosen, no bar");
+    env.key("Escape");
+    ui.ntopU = 0; ui.draw();
+    cv.fire("touchstart", finger(tap("info")));
+    cv.fire("touchend", {});
+    assert(ui.spec.page, "let go without moving (however long held - no browser click needed): Information opens");
+    ui.click(tap("info"));
+    assert(ui.spec.page, "the browser's click after it doesn't count again (the page stays)");
     env.key("Escape");
     cv.fire("touchstart", finger({ clientX: 2, clientY: tap("settings").clientY }));
     assert(!ui.tpick && ui.ndrag, "put down beside the items: a drag scrolls");
     cv.fire("touchend", {});
   }
   // Settings: one column of categories; one opens its own screen with Back
-  ui.sel = ui.spec.items.findIndex(i => i.key === "settings"); env.key("Enter");
-  same(ui.spec.items.map(i => i.key), ["cat-display", "cat-graphics", "cat-sound", "cat-online", "gap", "lang", "gap2", "back"], "the categories (no Controls), Language, Back");
-  ui.sel = 0; env.key("Enter");
-  same(ui.spec.items.map(i => i.key).filter(k => /^touch|^key-/.test(k)), ["touchsize", "touchleft"], "Display: the touch controls' rows, no keys");
+  // (by taps - go(): a key press here would be a keyboard's)
+  const go = key => ui.spec.items.find(i => i.key === key).go(), ctlRows = () => ui.spec.items.map(i => i.key).filter(k => /^touch|^key-/.test(k));
+  go("settings");
+  same(ui.spec.items.map(i => i.key), ["cat-display", "cat-graphics", "cat-sound", "cat-controls", "cat-online", "gap", "lang", "gap2", "back"], "the categories, Language, Back");
+  assert.strictEqual(ui.spec.items[3].info[0], env.win.Lang.t("set.cat.controls.it"), "Controls: the touch controls only");
+  go("cat-display");
+  same(ctlRows(), [], "Display: no touch controls' rows");
+  go("back-cat"); go("cat-controls");
+  same(ctlRows(), ["touchsize", "touchleft", "touchlook"], "Controls without a keyboard: only the touch controls");
+  env.key("ArrowDown");
+  assert(ctlRows().filter(k => /^key-/.test(k)).length === 10 && ctlRows().includes("touchsize"), "a keyboard's key: the keys' rows too: " + ctlRows());
+  {                                                   // (a screen taller than a short phone: a drag on a row scrolls it)
+    const cv = ui.canvas, finger = p => ({ touches: [p] }), keyAt = () => ui.spec.items[ui.sel].key;
+    const bars = () => { const v = snap().vram; let n = 0; for (let k = 1; k < v.length; k += 2) if (v[k] === 0x5F) n++; return n; };
+    env.win.innerHeight = 600; ui.draw();
+    assert(ui.narrow.maxTop > 0, "Controls scrolls on a short phone");
+    const at2 = tap("key-blue-left");
+    cv.fire("touchstart", finger(at2));
+    cv.fire("touchmove", finger({ clientX: at2.clientX, clientY: at2.clientY - 100 }));
+    assert((ui.ntopU || 0) > 0 && keyAt() === "key-blue-left" && bars() > 0, "dragged on a row: scrolled " + ui.ntopU + ", the row stays highlighted");
+    cv.fire("touchend", {});
+    env.win.innerHeight = 844; ui.ntopU = 0; ui.draw();
+  }
+
   env.key("Escape");
+  assert.strictEqual(ui.spec.items[3].info[0], env.win.Lang.t("set.cat.controls.i"), "Controls: the keys and the touch controls");
   ui.sel = 2; env.key("Enter");
   assert(!ui.spec.items.some(i => i.key === "volume") && ui.spec.items.some(i => i.key === "stereo"), "Sound: no Volume (the phone's buttons), Stereo stays");
   env.win.localStorage.setItem("tunneler.volume", "30");

@@ -224,7 +224,7 @@ export function mount() {
     accNote = row === "account" ? note || null : null;
     nameNote = row === "dname" ? rowNote : null;
     setCat = "online";
-    if (MOBILE) setOpen = "online";
+    if (ui.isNarrow()) setOpen = "online";
     settings();
     const i = ui.spec.items.findIndex(it => it.key === row);
     if (i >= 0) { ui.sel = i; ui.draw(); }
@@ -271,8 +271,12 @@ export function mount() {
   // categories (owner, 2026-10-24): Display, Graphics (the original's or the modern's settings), Sound,
   // Controls, Online, Language
   // (Language is no category: a switch of its own below them - owner, 2026-10-25)
-  // (a phone / tablet: no Controls - its keys are a keyboard's; the touch controls' rows are in Display - owner, 2026-10-26)
-  const cats = () => MOBILE ? ["display", "graphics", "sound", "online"] : ["display", "graphics", "sound", "controls", "online"];
+  // (Controls: the keys - on a phone / tablet only once a keyboard was used on it - and the touch controls - only on a
+  // touch screen; owner, 2026-10-27)
+  const cats = () => ["display", "graphics", "sound", "controls", "online"];
+  const showKeys = () => !!CTL() && (!MOBILE || Controls.keyboardSeen());
+  const showTouch = () => !!PADS() && GameScreen.touch();
+  const catInfo = c => T("set.cat." + c + ".i" + (c !== "controls" || (showKeys() && showTouch()) ? "" : showKeys() ? "k" : "t"));
   const langRow = () => ({ key: "lang", label: T("home.lang") + Lang.name(Lang.code), info: [T("home.lang.i1"), T("home.lang.i2")],
     go: () => setLang(1), change: setLang });
   let setCat = "display";
@@ -292,7 +296,7 @@ export function mount() {
   // a key row's label: "BLUE up: "
   const keyLabel = (set, a) => Lang.raw(set) + " " + Lang.raw("ctl." + a) + ": ";
   const rowLabels = () => ["set.name", "set.account", "home.lang", "set.sound", "set.volume", "set.stereo", "set.fade", "set.gfx", "set.fullscreen",
-    "set.scale", "set.tankcolors", "set.smooth", "set.ping", "set.prefer", "set.chatsound", "set.showchat", "touch.size", "touch.left"]
+    "set.scale", "set.tankcolors", "set.smooth", "set.ping", "set.prefer", "set.chatsound", "set.showchat", "touch.size", "touch.left", "touch.look"]
     .concat(isApp() ? ["set.server"] : [], Object.keys(Gfx.MODERN).map(k => "mod." + k))
     .map(k => Lang.raw(k) || "").concat(CTL() ? Controls.SETS.flatMap(st => Controls.ACTIONS.map(a => keyLabel(st, a))) : []);
   const labelW = () => Math.max(...rowLabels().map(l => UniText.cols(l)));
@@ -321,12 +325,25 @@ export function mount() {
   }
   // (Alt+Enter, or leaving fullscreen with the browser's Esc: the Fullscreen row follows)
   GameScreen.onChange(() => { if (ui.spec && ui.spec.items && ui.spec.items.some(i => i.key === "fullscreen")) settings(true); });
-  // the touch controls' size and side (Controls; on a phone / tablet: Display)
+  // (turning a phone: the other layout - upright one column, sideways the desktop's boxes: Settings (an open
+  // category stays chosen), the skirmish (its Game settings screen closes))
+  let wasNarrow = ui.isNarrow();
+  window.addEventListener("resize", () => {
+    const n = ui.isNarrow(), keys = ui.spec && ui.spec.items ? ui.spec.items.map(i => i.key) : [];
+    if (n === wasNarrow) return;
+    wasNarrow = n;
+    if (keys.some(k => /^cat-/.test(k) || k === "back-cat")) { if (setOpen) { setCat = setOpen; setOpen = null; } settings(); }
+    else if (keys.includes("slot0") || keys.includes("back-set")) { cpuSetOpen = false; cpu(true); }
+  });
+  // (a phone / tablet: the first key of a keyboard - Controls gets the keys' rows)
+  Controls.onChange(() => { if (MOBILE && ui.spec && ui.spec.items && ui.spec.items.some(i => i.key === "cat-controls" || i.key === "touchsize")) settings(true); });
+  // the touch controls' size and side (Controls)
   function touchRows(L) {                                 // (L: the category's row maker)
     if (!PADS()) return [];
     const t = (k, d) => { Pads.setTouch(k, step(Pads.TOUCH[k], Pads.getTouch(k), d)); settings(true); };
     return [L("touchsize", pad("touch.size") + T("touch.size." + Pads.getTouch("size")), [T("touch.size.i"), T("touch.i2")], d => t("size", d)),
-      L("touchleft", pad("touch.left") + onOffT(Pads.getTouch("left") === "on"), [T("touch.left.i"), T("touch.i2")], d => t("left", d))];
+      L("touchleft", pad("touch.left") + onOffT(Pads.getTouch("left") === "on"), [T("touch.left.i"), T("touch.i2")], d => t("left", d)),
+      L("touchlook", pad("touch.look") + T("touch.look." + Pads.getTouch("look")), [T("touch.look.i"), T("touch.i2")], d => t("look", d))];
   }
   // the settings of category c
   // a category's rows line up on their ": " within the category (owner, 2026-10-25: the value gets the room a
@@ -354,7 +371,7 @@ export function mount() {
     let cut = Math.min(...rows.map(lead).filter(n => n >= 0));
     if (!(cut > 0) || cut === Infinity) cut = 0;
     const out = rows.map(it => lead(it) < cut ? it : shift(it, cut));
-    if (!ui.isNarrow() && !MOBILE) return centred(out, lead);
+    if (!ui.isNarrow()) return centred(out, lead);
     const room = DosUI.NARROW_W - 1;                     // (the phone layout's box less its leading space)
     if (!out.some(it => lead(it) >= 0 && UniText.cols(it.label) > room)) return out;
     return out.map(it => lead(it) > 0 ? shift(it, lead(it)) : it);
@@ -400,7 +417,6 @@ export function mount() {
         rows.push(L("tankcolors", pad("set.tankcolors") + T("tc." + now), [T("tc." + now + ".i"), T("set.tankcolors.i")],
           d => { save("tunneler.tankcolors", step(Display.TANK_COLOR_MODES, now, d)); settings(true); }));
       }
-      if (MOBILE) rows.push(...touchRows(L));
       return rows;
     }
     if (c === "graphics") {
@@ -426,7 +442,7 @@ export function mount() {
     }
     if (c === "controls") {
       const rows = [];
-      if (CTL()) {
+      if (showKeys()) {
         for (const set of Controls.SETS) {
           for (const a of Controls.ACTIONS) {
             const on = capture && capture.set === set && capture.action === a;
@@ -438,7 +454,7 @@ export function mount() {
         }
         rows.push({ key: "keys-reset", label: T("ctl.reset"), info: [T("ctl.reset.i")], go: () => { Controls.reset(); settings(true); } });
       }
-      if (PADS()) rows.push({ key: "gap-t", label: "", disabled: true }, ...touchRows(L));
+      if (showTouch()) rows.push(...(rows.length ? [{ key: "gap-t", label: "", disabled: true }] : []), ...touchRows(L));
       return rows;
     }
     if (c === "online") {
@@ -469,7 +485,7 @@ export function mount() {
     const values = [...Lang.codes.map(l => (Lang.data[l] || {}).name || l), ...SOUNDS.map(v => R("sound." + v)),
       R("set.ping.on"), R("set.ping.off"), R("ctl.press"), R("set.prefer.none"), "x".repeat(10) + " 100 %",
       ...COLORS8.map(k => R(k)), ...["fit", "integer"].map(v => R("scale." + v)), ...["normal", "colorblind", "relation"].map(v => R("tc." + v)),
-      ...["small", "medium", "large"].map(v => R("touch.size." + v)),
+      ...["small", "medium", "large"].map(v => R("touch.size." + v)), ...["plain", "tank"].map(v => R("touch.look." + v)),
       ...Gfx.MODES.map(v => R("gfx." + v)),
       ...Object.keys(Gfx.MODERN).flatMap(k => Gfx.MODERN[k].map(v => modValue(k, v, c) || "")),
       ...(CTL() ? ["W", "L Shift", "Num 8", "R Ctrl", "Space"] : []), R("set.account.none")];
@@ -483,9 +499,12 @@ export function mount() {
     const leave = () => { stopCapture(); saveName(); if (isApp()) saveServer(); main("settings"); };
     const CATS = cats();
     if (!CATS.includes(setCat)) setCat = CATS[0];
-    if (MOBILE) return settingsMobile(keep, leave, CATS);
+    // (a phone / tablet held upright: one column, a category on a screen of its own; sideways it has the 80 x 25 screen:
+    // the two boxes as on a desktop - owner, 2026-10-27)
+    if (ui.isNarrow()) return settingsMobile(keep, leave, CATS);
+    setOpen = null;
     // (the category shown on the right in white - it stays marked while the selection is in the settings)
-    const catRows = CATS.map(c => ({ key: "cat-" + c, label: T("set.cat." + c), info: [T("set.cat." + c + ".i")], attr: c === setCat ? 0x0F : 0,
+    const catRows = CATS.map(c => ({ key: "cat-" + c, label: T("set.cat." + c), info: [catInfo(c)], attr: c === setCat ? 0x0F : 0,
       go: () => ui.nextBox(1), change: d => { if (d > 0) ui.nextBox(1); } }));
     const left = catRows.concat({ key: "gap", label: "", disabled: true }, langRow(), { key: "gap2", label: "", disabled: true },
       { key: "back", label: T("back.main"), info: [T("back.main.i")], go: leave });
@@ -514,7 +533,7 @@ export function mount() {
     if (!setOpen) {
       ui.show({
         lines: [{ row: 2, text: T("set.title"), color: 12 }], box: { y: 5 }, sel: Math.max(0, CATS.indexOf(setCat)), infoRow: 19,
-        items: CATS.map(c => ({ key: "cat-" + c, label: T("set.cat." + c), info: [T("set.cat." + c + ".i")],
+        items: CATS.map(c => ({ key: "cat-" + c, label: T("set.cat." + c), info: [catInfo(c)],
           go: () => { setCat = c; setOpen = c; settings(); } }))
           .concat({ key: "gap", label: "", disabled: true }, langRow(), { key: "gap2", label: "", disabled: true },
             { key: "back", label: T("back.main"), info: [T("back.main.i")], go: leave }),
@@ -674,7 +693,9 @@ export function mount() {
       { key: "gap2", label: "", disabled: true },
       { key: "back", label: T("back.main"), info: [T("back.main.i")], go: () => main("cpu") },
     ];
-    if (MOBILE) {
+    // (a phone held upright: the settings on a screen of their own; sideways it has the 80-column screen - the
+    // desktop's boxes; owner, 2026-10-27)
+    if (ui.isNarrow()) {
       const close = () => { cpuSetOpen = false; cpu(false, "settings"); };
       if (cpuSetOpen) {
         ui.show({
@@ -689,8 +710,6 @@ export function mount() {
       acts.splice(1, 0, { key: "settings", label: T("lc.gameset"), info: [T("lc.set.i"), T("lc.set.i2")],
         go: () => { cpuSetOpen = true; cpu(false, "mode"); } });
       const mItems = slotItems.concat(acts);
-      // (held sideways a phone shows the 80-column screen: the boxes need their places there - centred, the
-      // Game box below the slots)
       const sw = DosUI.boxWidth(slotItems), aw = DosUI.boxWidth(acts);
       ui.show({
         boxes: [{ x: 41 - ((sw + 2) >> 1), y: 1, w: sw, title: T("cpu.title"), items: slotItems },

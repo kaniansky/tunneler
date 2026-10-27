@@ -313,6 +313,7 @@ class TunnelerEngine {
     this.worldReady = false; this.quitProgram = false; this.menuShift = 0;
     this.menuSel = 0;                             // highlighted main menu item
     this.menuShown = false;                       // its items are on the screen (display only: mouse / bar)
+    this.menuBar = true;                          // the highlight bar shown (display only: play.js, a phone)
     this.menuTop = 11;                              // the menu box's top row (showMainMenu)
     this.statsLeft = 43; this.statsFull = false;    // where the statistics go (showStatsPage: centred)
     this.menuPage = "menu";                       // "menu", "instructions" or "information"
@@ -2675,7 +2676,7 @@ class TunnelerEngine {
     if (!this.menuShown) return;
     for (let i = 0; i < this.menuScans.length; i++) {
       const o = (this.menuTop + this.menuRows[i]) * 160 + this.menuX * 2;
-      for (let c = 0; c < this.menuW; c++) this.vram[o + c * 2 + 1] = i === this.menuSel ? MENU_SEL_ATTR : MENU_ATTR;
+      for (let c = 0; c < this.menuW; c++) this.vram[o + c * 2 + 1] = i === this.menuSel && this.menuBar ? MENU_SEL_ATTR : MENU_ATTR;
     }
     this.dirty = true;
   }

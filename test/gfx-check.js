@@ -221,6 +221,24 @@ function makeEnv(store, webgl, more) {
   ok("gfx-modern.js / gfx-hud.js / gfx-text.js register themselves");
 }
 
+// ---------------------------------------------------------------- the touch controls' tank (tankview.js)
+{
+  const { win } = makeEnv(new Map([["tunneler.gfx", "modern"]]), true, ["js/tankview.js"]), TV = win.TankView, N = TV.N;
+  const blue = [0, 0, 1], gray = [0.4, 0.4, 0.4], yellow = [1, 1, 0];
+  for (const realistic of [false, true]) {
+    const up = TV.modernTank(realistic, blue, gray, yellow, 0, false), right = TV.modernTank(realistic, blue, gray, yellow, 2, false);
+    const alpha = (img, x, y) => img[(y * N + x) * 4 + 3];
+    const at = u => Math.floor((u / TV.HALF + 1) / 2 * N);  // (tank units -> pixel)
+    assert(alpha(up, N >> 1, N >> 1) > 200 && alpha(up, 0, 0) === 0, "solid in the middle, nothing in the corner");
+    assert(alpha(up, N >> 1, at(-3.3)) > 200 && alpha(up, at(-2.2), at(-3.3)) < 40, "the gun points up (dir 0), no tracks that far");
+    assert(alpha(right, at(3.3), N >> 1) > 200 && alpha(right, N >> 1, at(-3.3)) < 40, "dir 2: the gun points right");
+    let diff = 0;                                         // (dir 2 = dir 0 turned a quarter clockwise; the light and the shadow stay)
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) diff += (alpha(up, x, y) > 200) !== (alpha(right, N - 1 - y, x) > 200) ? 1 : 0;
+    assert(diff < N * 2, "dir 2 is dir 0 turned: " + diff + " pixels differ");
+  }
+  ok("tankview.js: the modern tank (simple, realistic) on the CPU - its shape, the gun's way, 8 directions");
+}
+
 // ---------------------------------------------------------------- engine.cams: display only
 {
   // every view's top-left world pixel as blitView drew it (smooth scrolling: one more on odd x), the

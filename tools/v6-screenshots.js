@@ -44,8 +44,11 @@ async function fillBoard() {
   for (const [name, level, seed] of PLAYERS) {
     const body = zlib.gzipSync(Buffer.from(JSON.stringify(record(level, seed))));
     for (;;) {
+      // (a fresh connection each time: playing the match takes about as long as the server keeps an idle one open - a
+      // reused one could be closed under the request)
       const res = await fetch(B + "/api/challenge/" + day + "?cid=" + cidOf(seed) + "&name=" + encodeURIComponent(name),
-        { method: "POST", body, headers: { "Content-Type": "application/octet-stream" } });
+        { method: "POST", body, headers: { "Content-Type": "application/octet-stream", Connection: "close" } }).catch(() => null);
+      if (!res) { await sleep(500); continue; }
       if (res.status !== 429) { console.log("board:", name, res.status); break; }
       await sleep(10000);                                       // (6 a minute: wait)
     }

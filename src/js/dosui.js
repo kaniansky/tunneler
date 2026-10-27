@@ -155,34 +155,41 @@ class DosUI {
     for (const t of ["pointerup", "pointercancel"]) canvas.addEventListener(t, () => { this.slide = null; });
     canvas.addEventListener("contextmenu", e => { if (this.active() && (this.zoneClick(e, -1) || this.backClick(e))) e.preventDefault(); });
     canvas.addEventListener("wheel", e => { if (this.active() && this.wheel(e)) e.preventDefault(); }, { passive: false });
-    // touch screens: a finger put down on an item highlights it, and the highlight follows the finger over the
-    // items (no scrolling - the view follows the highlight to the edges); let go on an item = a tap there, off them =
-    // nothing. Put down anywhere else, a drag scrolls (the phone layout, below). (owner, 2026-10-25)
+    // touch screens: a finger put down on an item highlights it; a drag scrolls (the phone layout: below; a screen's
+    // scrolling box: whole rows here) and that item stays highlighted; let go without moving = a tap there - however
+    // long it was held (a browser sends no click after a long press; its click after a short one is ignored), after a
+    // drag = nothing. (owner, 2026-10-27 - the highlight followed the finger before)
     canvas.addEventListener("touchstart", e => {
       this.tpick = null;
+      this.keyNav = false;
+      this.noClickUntil = 0;                            // (a new touch: the last drag's click can't come any more)
       if (!this.active() || !this.spec || this.spec.page || e.touches.length !== 1) return;
       const f = e.touches[0], i = this.itemAt(f);
       if (i < 0 || this.spec.items[i].slide) return;
-      this.tpick = { x: f.clientX, y: f.clientY, over: i, moved: false };
+      this.tpick = { x: f.clientX, y: f.clientY, moved: false, top0: this.top };
       this.nanim = null; this.dragged = false;
-      if (i !== this.sel) { this.sel = i; this.draw(); }
+      this.sel = i;
+      this.draw();
     }, { passive: true });
     canvas.addEventListener("touchmove", e => {
       const p = this.tpick;
       if (!p || !this.active() || e.touches.length !== 1) return;
       const f = e.touches[0];
       if (Math.abs(f.clientX - p.x) > 6 || Math.abs(f.clientY - p.y) > 6) p.moved = true;
-      p.x = f.clientX; p.y = f.clientY;
-      p.over = this.itemAt(f);
-      if (p.over >= 0 && p.over !== this.sel) { this.sel = p.over; this.draw(); }
+      if (p.moved && !this.narrow && this.boxScrolls()) {   // (a row of the 25 per row's height dragged)
+        const h = (canvas.getBoundingClientRect().height || 400) / 25;
+        const top = Math.max(0, Math.min(this.scrollN - this.scrollRows, p.top0 + Math.round((p.y - f.clientY) / h)));
+        if (top !== this.top) { this.top = top; this.freeTop = true; this.draw(); }
+      }
       e.preventDefault();
     }, { passive: false });
     canvas.addEventListener("touchend", () => {
       const p = this.tpick;
       this.tpick = null;
-      if (!p || !p.moved || !this.active()) return;     // (not moved: the browser's own click - a tap)
-      this.noClickUntil = performance.now() + 500;      // (the browser's click after it, if any, is this one)
-      if (p.over >= 0) this.click({ clientX: p.x, clientY: p.y, pointerType: "touch", picked: true });
+      if (!p || !this.active()) return;
+      this.noClickUntil = performance.now() + 500;      // (the browser's click after it, if any, is this one / no tap)
+      this.draw();                                      // (the finger's highlight goes on a phone - barSel)
+      if (!p.moved) this.click({ clientX: p.x, clientY: p.y, pointerType: "touch", picked: true });
     });
     // touch screens: dragging a page scrolls it (a tap still goes back) - the engine's 80 x 25 page by rows; the
     // phone layout's pages scroll smoothly like its menus (below)
@@ -200,7 +207,7 @@ class DosUI {
     window.addEventListener("resize", () => { if (this.active() && this.spec && !this.spec.page) this.draw(); });
     // (a drag moves the content with the finger - fractions of a row: smooth; let go while moving: it glides on)
     canvas.addEventListener("touchstart", e => {
-      if (this.tpick || !this.active() || !this.narrow || e.touches.length !== 1 || (this.spec && this.spec.page && !this.spec.nlines)) return;
+      if (!this.active() || !this.narrow || e.touches.length !== 1 || (this.spec && this.spec.page && !this.spec.nlines)) return;
       this.ndrag = { y0: e.touches[0].clientY, top0: this.ntopU || 0, y: e.touches[0].clientY, t: performance.now(), v: 0 };
       this.nanim = null; this.dragged = false;
     }, { passive: true });
@@ -231,7 +238,7 @@ class DosUI {
         const top = (this.ntopU || 0) + v * dt;
         this.presentNarrowAt(top);
         v *= Math.pow(0.994, dt);
-        if (Math.abs(v) > 0.0015 && top > 0 && top < this.narrow.maxTop) requestAnimationFrame(step); else this.nanim = null;
+        if (Math.abs(v) > 0.0015 && top > (this.narrow.minTop || 0) && top < this.narrow.maxTop) requestAnimationFrame(step); else this.nanim = null;
       };
       requestAnimationFrame(step);
     });
@@ -298,7 +305,7 @@ class DosUI {
     this.nkeep = !!keepSel;                    // (the same screen with fresh data: the phone layout keeps its scroll)
     if (spec.boxes) spec.items = [].concat(...spec.boxes.map(b => b.items));   // one selection over all boxes
     const n = spec.items.length;
-    if (!keepSel) { this.sel = spec.sel || 0; this.top = 0; }
+    if (!keepSel) { this.sel = spec.sel || 0; this.top = 0; this.freeTop = false; }
     else { const i = spec.items.findIndex(it => keyOf(it) === prev); if (i >= 0) this.sel = i; }
     this.sel = Math.min(Math.max(this.sel, 0), n - 1);
     if (!this.enabled(this.sel)) this.move(1, true);
@@ -351,6 +358,7 @@ class DosUI {
       return true;
     }
     if (!s || s.page || s.boxes || !s.box || !(this.scrollRows < this.scrollN)) return false;
+    this.freeTop = false;
     this.wheelAcc = (this.wheelAcc || 0) + ev.deltaY * (ev.deltaMode === 1 ? 40 : ev.deltaMode === 2 ? 400 : 1);
     while (Math.abs(this.wheelAcc) >= 50) {
       const d = Math.sign(this.wheelAcc);
@@ -378,11 +386,14 @@ class DosUI {
     return { x: b.x || 41 - ((w + 2) >> 1), y: b.y, w, rows: b.rows };
   }
 
+  // a single box with more items than rows (they scroll)
+  boxScrolls() { const s = this.spec; return !!(s && !s.page && !s.boxes && s.box && this.scrollRows < this.scrollN); }
+
   // item index shown on each box row: a scrolling window over the items, then the fixed ones
   rowItems() {
     const s = this.spec, n = s.items.length, fixed = s.fixed || 0, scrollN = n - fixed;
     const rows = Math.min(scrollN, this.geom().rows || scrollN);
-    if (this.sel < scrollN) {
+    if (this.sel < scrollN && !this.freeTop) {          // (freeTop: a touch drag scrolled it - the selection may be out of view)
       if (this.sel < this.top) this.top = this.sel;
       if (this.sel >= this.top + rows) this.top = this.sel - rows + 1;
     }
@@ -395,9 +406,23 @@ class DosUI {
   }
   firstItemRow() { return this.spec.box.y + 1 + (this.spec.header ? 2 : 0); }   // 1-based
 
+  // the highlight bar on item i: the selected one - on a phone / tablet (GameScreen.mobile) only while a finger
+  // presses it, or once arrow keys move the selection (a keyboard / gamepad: keyNav) (owner, 2026-10-27: no item
+  // highlighted on a phone)
+  barSel(i) { return i === this.sel && (!GameScreen.mobile() || !!this.tpick || !!this.keyNav); }
+  // the selected item's info lines - without the highlight bar (barSel) only when they hold a message (a line in its
+  // own colour: an error, "Saved", a confirmation, the invite link), not a plain description (owner, 2026-10-27)
+  // (a phone held upright: not while a finger presses the item either - letting go taps it, and the screen keeps
+  // still under the finger: the strip for the info is there only while it shows something - drawNarrow)
+  infoOfSel() {
+    const it = this.spec.items[this.sel], info = it && it.info || [];
+    const bar = this.barSel(this.sel) && !(this.tpick && !this.keyNav && this.isNarrow());
+    return bar || info.some(l => l && typeof l === "object" && l.color != null) ? info : [];
+  }
+
   // item i on screen row `row` of box b (label, input value, colors, cursor)
   drawItem(i, row, b) {
-    const t = this.t, it = this.spec.items[i];
+    const t = this.t, it = this.spec.items[i], bar = this.barSel(i);
     // an empty input shows its placeholder (dimmed; the first key typed replaces it); a value wider
     // than the input's width shows its end
     const inp = it.input;
@@ -437,13 +462,13 @@ class DosUI {
     text = U.padEnd(U.slice(text, b.w), b.w);
     t.gotoXY(b.x, row); t.write("\xB3" + text + "\xB3");
     const o = (row - 1) * 160 + b.x * 2;
-    const attr = it.static ? it.attr || 0x07 : i === this.sel ? SEL : it.disabled ? DISABLED : it.attr || labelAttr();
+    const attr = it.static ? it.attr || 0x07 : bar ? SEL : it.disabled ? DISABLED : it.attr || labelAttr();
     for (let c = 0; c < b.w; c++) t.vram[o + c * 2 + 1] = attr;
     const x0 = (it.align === "left" ? 1 : this.centreStart(i, b, labelW + valueW)) + labelW;
     // values in their own colors (not on the highlight bar, not when disabled): it.spans = [[from, to,
     // attr], ...] label columns; a switch's value (the label after its first ": ") white, a read-only
     // one (valueAttr, e.g. 7) light gray; an input's typed text white
-    if (i !== this.sel && !it.disabled) {
+    if (!bar && !it.disabled) {
       const L = x0 - labelW;
       const paint = (from, to, a) => { for (let c = Math.max(0, L + from); c < Math.min(b.w, L + to); c++) t.vram[o + c * 2 + 1] = a; };
       if (it.spans) for (const [from, to, a] of it.spans) paint(from, to, a);
@@ -454,10 +479,10 @@ class DosUI {
       if (inp && inp.value) paint(labelW, labelW + valueW, 0x0F);
     }
     // it.dim = [from, to]: label columns shown gray (disabled), e.g. a column that doesn't apply now
-    if (it.dim && i !== this.sel)
+    if (it.dim && !bar)
       for (let c = x0 - labelW + it.dim[0]; c < Math.min(b.w, x0 - labelW + it.dim[1]); c++) t.vram[o + c * 2 + 1] = DISABLED;
     if (it.input && !it.input.value && value)
-      for (let c = x0; c < Math.min(b.w, x0 + valueW); c++) t.vram[o + c * 2 + 1] = i === this.sel ? 0x57 : DISABLED;
+      for (let c = x0; c < Math.min(b.w, x0 + valueW); c++) t.vram[o + c * 2 + 1] = bar ? 0x57 : DISABLED;
     if (it.input && i === this.sel && !it.input.value && value && x0 < b.w)
       this.cursor = { col: b.x + x0, row: row - 1 };     // empty: a blinking underline under the placeholder's first letter (Display)
     else if (it.input && i === this.sel) {                // the caret: a blinking underline (after the text, or under a letter)
@@ -580,9 +605,9 @@ class DosUI {
       if (this.top + this.scrollRows < this.scrollN) { t.gotoXY(b.x + b.w - 1, moreRow || row); t.write("\x19"); }
     }
     // info about the selected item
-    const it = s.items[this.sel];
     this.links = [];
-    (it && it.info || []).forEach((l, i) => {
+    this.infoAt = s.infoRow || row + 3;
+    this.infoOfSel().forEach((l, i) => {
       t.textColor(l.color == null ? 3 : l.color);
       const text = typeof l === "string" ? l : l.text;
       const x = Math.max(1, 41 - (U.cols(text) >> 1)), y = (s.infoRow || row + 3) + i;
@@ -591,23 +616,57 @@ class DosUI {
       t.write(U.slice(text, 79));
       if (l.onClick) this.links.push({ x, y, w: Math.min(U.cols(text), 79), onClick: l.onClick });
     });
-    // bottom line, like the game's "Press <ENTER> for main menu."
-    t.drawBottomRule();
-    const T = k => Lang.t(k);
-    // (a phone / tablet: no keys to name - tap; GameScreen.mobile)
-    // (a phone: the footer - the main menu's version - instead of "Tap to choose"; owner, 2026-10-25)
-    const hint = GameScreen.mobile() && s.footer ? "" : " " + (GameScreen.mobile() ? T("ui.hint.touch") : s.hint || T("ui.hint", "\x18\x19 and <ENTER>, or the mouse.") + (s.back ? "  " + T("ui.back", "<ESC> back.") : ""));
-    if (hint) { t.textColor(15); t.gotoXY(80 - U.cols(hint), 25); t.write(hint); }
-    if (s.footer) { t.textColor(8); t.gotoXY(2, 25); t.write(" " + U.slice(s.footer, 78 - U.cols(hint) - 2) + " "); }   // (bottom left)
+    // bottom line, like the game's "Press <ENTER> for main menu." (a phone / tablet: none - the room is the
+    // screen's; owner, 2026-10-27)
+    if (!GameScreen.mobile()) {
+      t.drawBottomRule();
+      const T = k => Lang.t(k);
+      const hint = " " + (s.hint || T("ui.hint", "\x18\x19 and <ENTER>, or the mouse.") + (s.back ? "  " + T("ui.back", "<ESC> back.") : ""));
+      t.textColor(15); t.gotoXY(80 - U.cols(hint), 25); t.write(hint);
+      if (s.footer) { t.textColor(8); t.gotoXY(2, 25); t.write(" " + U.slice(s.footer, 78 - U.cols(hint) - 2) + " "); }   // (bottom left)
+    }
+    const shift = this.vshift = this.centreRows(t, s);
     const snap = { t: 0, mode: "text", screen: "text", vram: t.vram.slice(0, 16000) };
     t.snapUni(snap);
-    if (this.cursor) snap.cursor = this.cursor;
-    if (this.centres.length) snap.centres = this.centres;
+    if (this.cursor) snap.cursor = Object.assign({}, this.cursor, { row: this.cursor.row + shift });
+    if (this.centres.length) snap.centres = this.centres.map(([r, a, z]) => [r + shift, a, z]);
     this.present(snap);
+  }
+  // Every 80 x 25 menu screen centred vertically (owner, 2026-10-27: they began at the top): the rows it uses - the
+  // info's place kept for its items' longest info (with a keyboard or a mouse, so a new selection doesn't move the
+  // screen; a touch screen shows info only now and then) - moved to the middle of the rows above the bottom rule (a
+  // phone / tablet: all 25). Clicks and taps map back through vshift (cellAt). Returns the rows moved down.
+  centreRows(t, s) {
+    const R = GameScreen.mobile() ? 25 : 23;
+    const used = r => { const o = r * 160; for (let c = 0; c < 80; c++) { const ch = t.vram[o + c * 2]; if ((ch !== 0x20 && ch !== 0) || (t.vram[o + c * 2 + 1] & 0x70)) return true; } return false; };
+    let a = 0, b = R - 1;
+    while (a < R && !used(a)) a++;
+    if (a >= R) return 0;
+    while (b > a && !used(b)) b--;
+    if (!GameScreen.mobile() || this.keyNav) {
+      const most = Math.max(0, ...s.items.map(it => (it.info || []).length));
+      if (most) b = Math.max(b, Math.min(R - 1, this.infoAt - 2 + most));
+    }
+    const shift = Math.max(-a, Math.min(R - 1 - b, ((R - (b - a + 1)) >> 1) - a));
+    if (!shift) return 0;
+    const rows = t.vram.slice(0, R * 160);
+    for (let i = 0; i < R * 160; i += 2) { t.vram[i] = 0x20; t.vram[i + 1] = 0x07; }
+    for (let r = a; r <= b; r++) t.vram.set(rows.subarray(r * 160, r * 160 + 160), (r + shift) * 160);
+    if (t.uniUsed) {
+      const u = t.uni.slice(0, R * 80);
+      t.uni.fill(0, 0, R * 80);
+      for (let r = a; r <= b; r++) t.uni.set(u.subarray(r * 80, r * 80 + 80), (r + shift) * 80);
+    }
+    return shift;
+  }
+  // the text cell under a mouse / touch event, in the screen as drawn before centreRows moved it
+  cellAt(ev) {
+    const c = this.display.cellAt(ev);
+    return c && !this.narrow && this.vshift ? [c[0], c[1] - this.vshift] : c;
   }
 
   // ---------------------------------------------------------------- the phone layout (docs/DESIGN-8P.md 32)
-  // A phone held upright (GameScreen.mobile, portrait): the same spec laid out on a text screen NC columns
+  // A phone held upright (GameScreen.narrow): the same spec laid out on a text screen NC columns
   // wide and as tall as the phone allows - twice the text size of the 80-column screen. The rows / columns
   // given in the spec are left aside: its lines (wrapped, in their order), then every box full width, one
   // below the other (titles in their borders, all items - no box scrolls), scrolling with the selection or
@@ -645,19 +704,20 @@ class DosUI {
     this.presentNarrowAt(this.ntopU || 0);
   }
 
-  isNarrow() {
-    const w = root.innerWidth || 0, h = root.innerHeight || 0;
-    return GameScreen.mobile() && h > w && w > 0;
-  }
+  isNarrow() { return GameScreen.narrow(); }
   narrowRows() {
     // the height the page leaves the canvas: the window less the screen's padding - on a phone that includes the
     // safe area at the top (the camera cutout / status bar strip: env(safe-area-inset-top), style.css)
-    let pad = 16;
+    let pad = 16, padX = 16;
     try {
       const box = this.canvas.closest && this.canvas.closest(".screen");
-      if (box && root.getComputedStyle) { const cs = root.getComputedStyle(box); pad = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0); }
+      if (box && root.getComputedStyle) {
+        const cs = root.getComputedStyle(box);
+        pad = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+        padX = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0);
+      }
     } catch (e) { /* no layout (tests): the default */ }
-    const w = Math.max(160, (root.innerWidth || 390) - 16), h = Math.max(200, (root.innerHeight || 844) - pad);
+    const w = Math.max(160, (root.innerWidth || 390) - padX), h = Math.max(200, (root.innerHeight || 844) - pad);
     return Math.max(25, Math.min(100, Math.floor(h / (w / NC * 16 * 1.35 / 9))));   // (rows of the DOS screen's height: display.js)
   }
   narrowBox(i) {
@@ -712,17 +772,27 @@ class DosUI {
     const height = Math.min(row - 2, 592);                // (to the last box's bottom border: no empty row after it)
     // each content row's height: an item one can pick LINE_H, the rest 1 (in rows of the DOS screen's height)
     const H = r => { const it = rowItem[r] != null ? items[rowItem[r]] : null; return it && !it.static && !(it.disabled && !it.label) ? LINE_H : 1; };
-    // the snapshot: every content row, then the info, the rule and the hint (7 rows); the renderer shows the
-    // content in a window VIEW rows high from view.top (units: rows of the DOS screen's height - any fraction:
-    // smooth scrolling), the rest below it - so the screen is always R rows high (owner, 2026-10-25)
+    // the snapshot: every content row, then the info (5 rows, or none - below); the renderer shows the content in a window VIEW rows
+    // high from view.top (units: rows of the DOS screen's height - any fraction: smooth scrolling), the rest below
+    // it - so the screen is always R rows high (owner, 2026-10-25)
     // the area below the window: an empty row, the info (4 rows; 5 - 7 when the selected item's info needs them:
-    // the window gets that much shorter, the screen stays as tall), the rule, the hint
-    const selInfo = items[this.sel] && items[this.sel].info || [];
+    // the window gets that much shorter, the screen stays as tall); no rule / hint at the bottom (owner, 2026-10-27:
+    // the room is the menu's)
+    const selInfo = this.infoOfSel();
     const infoLines = Math.min(7, selInfo.reduce((n, l) => n + wrapCols(typeof l === "string" ? l : l.text, NC - 2).length, 0));
-    const BOTTOM = infoLines > 4 ? infoLines + 2 : 7;
+    // (an empty row and the info's 4: kept with a keyboard - the selection moves through items with and without info;
+    // on a touch screen only while there is info to show - owner, 2026-10-27: the room is the menu's)
+    const BOTTOM = this.keyNav || !GameScreen.mobile() ? (infoLines > 4 ? infoLines : 5) : infoLines ? infoLines + 1 : 0;
     const VIEW = R - BOTTOM, start = [0];
     for (let r = 1; r <= height; r++) start.push(start[r - 1] + H(r));   // (row r from start[r - 1] to start[r])
-    const total = start[height], maxTop = Math.max(0, total - VIEW);
+    // a screen that fits: its used rows (the title through the last box) in the middle of the screen - as long as they
+    // end above the info, else just above it - the window's top above the content (negative: Display / gfx-text.js
+    // shift the rows down; owner, 2026-10-27)
+    const used = r => { const o = (r - 1) * 160; for (let c = 0; c < NC; c++) { const ch = t.vram[o + c * 2]; if ((ch !== 0x20 && ch !== 0) || (t.vram[o + c * 2 + 1] & 0x70)) return true; } return false; };
+    let first = 1;
+    while (first < height && !used(first)) first++;
+    const total = start[height], block = total - start[first - 1];
+    const minTop = block < VIEW ? Math.max(start[first - 1] - (R - block) / 2, total - VIEW) : 0, maxTop = block < VIEW ? minTop : Math.max(0, total - VIEW);
     const selRow = +Object.keys(rowItem).find(r => rowItem[r] === this.sel) || 0;
     const fresh = this.nspec !== this.spec && !this.nkeep;
     // (the view follows the selection when it moved or on a new screen - not on a refresh: the online lobby's
@@ -730,11 +800,11 @@ class DosUI {
     if (this.nsel !== this.sel || fresh) { this.nfollow = true; this.nsel = this.sel; }
     if (fresh) { this.ntopU = 0; this.nanim = null; }
     this.nspec = this.spec;
-    let target = Math.max(0, Math.min(this.ntopU || 0, maxTop));
+    let target = Math.max(minTop, Math.min(this.ntopU || 0, maxTop));
     if (this.nfollow && selRow) {                        // (the selection in view, a row of room around it)
       if (start[selRow - 1] - 1 < target) target = start[selRow - 1] - 1;
       if (start[selRow] + 1 > target + VIEW) target = start[selRow] + 1 - VIEW;
-      target = Math.max(0, Math.min(target, maxTop));
+      target = Math.max(minTop, Math.min(target, maxTop));
     }
     const R2 = height + BOTTOM, o = this.t2 || (this.t2 = new TextBuf());
     o.textMode(R2); o.window(1, 1, 80, R2); o.textBackground(0); o.clearScreen();
@@ -748,12 +818,11 @@ class DosUI {
     this.centres = [];
     for (const [r, a, z] of centres.concat(itemCentres)) if (r >= 0 && r < height) this.centres.push([r, a, z]);
     const cursor = this.cursor && this.cursor.row >= 0 && this.cursor.row < height ? this.cursor : null;
-    const it = items[this.sel];
-    let ir = infoLines > 4 ? height + 1 : height + 2;   // (a long info: no empty row above it)
-    (it && it.info || []).forEach(l => {
+    let ir = BOTTOM >= infoLines + 1 ? height + 2 : height + 1;   // (a long info: no empty row above it)
+    selInfo.forEach(l => {
       const text = typeof l === "string" ? l : l.text;
       for (const part of wrapCols(text, NC - 2)) {
-        if (ir > R2 - 2) return;
+        if (ir > R2) return;
         o.textColor(l.color == null ? 3 : l.color);
         const x = Math.max(1, (NC >> 1) + 1 - (U.cols(part) >> 1));
         o.gotoXY(x, ir); o.write(part);
@@ -762,17 +831,10 @@ class DosUI {
         ir++;
       }
     });
-    o.drawBottomRule(R2 - 1, 1, NC);
-    const footer = this.spec.footer;
-    if (footer && GameScreen.mobile()) { o.textColor(8); o.gotoXY(2, R2); o.write(" " + U.slice(footer, NC - 4) + " "); }   // (the version, bottom left)
-    else {
-      const hint = " " + (GameScreen.mobile() ? Lang.t("ui.hint.touch") : Lang.t("ui.hint")) + " ";
-      o.textColor(15); o.gotoXY(Math.max(1, NC + 1 - U.cols(hint)), R2); o.write(U.slice(hint, NC));
-    }
     // (items: 0-based snapshot row + 1 -> item, as itemAt asks: the content row)
     const items1 = {};
     for (const r in rowItem) if (r <= height) items1[r] = rowItem[r];
-    this.narrow = { rows: R2, units: R, view: VIEW, maxTop, items: items1, links, height };
+    this.narrow = { rows: R2, units: R, view: VIEW, minTop, maxTop, items: items1, links, height };
     const snap = { t: 0, mode: "text", screen: "text", vram: o.vram.slice(0, Math.max(16000, R2 * 160)), cols: NC, rows: R2, rowH };
     o.snapUni(snap);
     if (cursor) snap.cursor = cursor;
@@ -785,7 +847,7 @@ class DosUI {
     // (not over a page a screen put up itself - the online game's statistics after a match: a drag there drew
     // the lobby's old picture back over it)
     if (!this.nbase || !this.narrow || (this.spec && this.spec.page && !this.spec.nlines)) return;
-    this.ntopU = Math.max(0, Math.min(top, this.narrow.maxTop));
+    this.ntopU = Math.max(this.narrow.minTop || 0, Math.min(top, this.narrow.maxTop));
     this.present(Object.assign({}, this.nbase, { view: { rows: this.narrow.height, units: this.narrow.view, top: this.ntopU } }));
   }
   scrollNarrow(to, animate) {
@@ -825,6 +887,9 @@ class DosUI {
       else if ((s.engine || s.nlines) && PAGE_KEYS[e.key]) { e.preventDefault(); this.scrollPage(PAGE_KEYS[e.key]); }
       return;
     }
+    // (arrow keys / Tab - a keyboard or a gamepad: a phone shows the highlight bar from now on - barSel)
+    this.freeTop = false;                                // (keys: the box's view follows the selection again)
+    if (!this.keyNav && e.target !== soft && /^(Arrow|Tab$)/.test(e.key || "")) { this.keyNav = true; if (GameScreen.mobile()) this.draw(); }
     const it = s.items[this.sel];
     // by the produced key, not the physical one: the numeric keypad gives digits with NumLock on and
     // arrows (e.key "ArrowUp"...) with NumLock off
@@ -905,14 +970,14 @@ class DosUI {
 
   // clickable info line (link) under the mouse
   linkAt(ev) {
-    const c = this.display.cellAt(ev);
+    const c = this.cellAt(ev);
     if (!c || !this.spec || this.spec.page) return null;
     if (this.narrow) return (this.narrow.links || []).find(l => c[1] + 1 === l.y && c[0] + 1 >= l.x && c[0] + 1 < l.x + l.w) || null;
     return (this.links || []).find(l => c[1] + 1 === l.y && c[0] + 1 >= l.x && c[0] + 1 < l.x + l.w) || null;
   }
 
   itemAt(ev) {
-    const c = this.display.cellAt(ev);
+    const c = this.cellAt(ev);
     if (!c || !this.spec || this.spec.page) return -1;
     if (this.narrow) {                                   // (the phone layout: the item on that screen row)
       const i = this.narrow.items[c[1] + 1];
@@ -936,7 +1001,7 @@ class DosUI {
     if (i >= 0 && i !== this.sel) { this.sel = i; this.draw(); }
   }
   click(ev) {
-    if (!ev.picked && this.noClickUntil && performance.now() < this.noClickUntil) return;   // (a touch pick's own release did it)
+    if (!ev.picked && this.noClickUntil && performance.now() < this.noClickUntil) return;   // (a touch's own release did it)
     if (this.spec && this.spec.page) {
       if (this.dragged) { this.dragged = false; return; }      // (the end of a touch drag, not a tap)
       this.spec.back(); return;
@@ -955,7 +1020,7 @@ class DosUI {
   }
   // the label column (0-based display column of item i's label text) under the mouse, or -1
   labelColAt(ev, i) {
-    const c = this.display.cellAt(ev), it = this.spec.items[i], b = this.narrow ? this.narrowBox(i) : this.spec.boxes ? this.boxOf(i) : this.geom();
+    const c = this.cellAt(ev), it = this.spec.items[i], b = this.narrow ? this.narrowBox(i) : this.spec.boxes ? this.boxOf(i) : this.geom();
     if (!c) return -1;
     const x = c[0] + 1 - b.x - 1;                          // interior column, 0-based
     const labelW = U.cols(it.label);
@@ -979,7 +1044,7 @@ class DosUI {
     const s = this.slide, i = s ? this.spec.items.findIndex(x => x.key === s.key) : -1;
     if (i < 0) return;
     const it = this.spec.items[i], col = this.labelColAt(ev, i), zs = it.zones;
-    if (col < 0 && !this.display.cellAt(ev)) return;
+    if (col < 0 && !this.cellAt(ev)) return;
     let z = zs.find(q => col >= q.from && col < q.to), dir = 1;
     if (!z) { const first = zs[0], last = zs[zs.length - 1]; if (col < first.from) { z = first; dir = -1; } else if (col >= last.to) z = last; }
     const at = z ? zs.indexOf(z) + ":" + dir : null;

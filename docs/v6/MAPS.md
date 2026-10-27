@@ -125,7 +125,7 @@ Delete (twice to confirm), Back.
 
 **Map files**: a `.tmap` file is the map's `MapData.encode` bytes (the "TM" magic and the format byte make it
 self-describing and versioned; `MapData.fileName(map)` = its name's letters and digits + `.tmap`). Save as a file
-(a map's screen and the editor's menu): a download in a browser and the desktop app; in the Android app (a page's
+(a map's screen): a download in a browser and the desktop app; in the Android app (a page's
 download does nothing in its web view) `window.TunnelerAndroid.saveFile(name, base64)` and "Saved: <where>". Open a
 map file (the list; a hidden file input, at most 64 KB): checked with `MapData.decode` - anything odd: "That file is
 not a map." in red and nothing kept -, then kept as a new map (a new local id, the file's name) and its screen
@@ -154,19 +154,24 @@ language).
   the editor's menu.
 - Mouse: the cursor follows it, left button paints / places, right button drags the view, the wheel zooms.
 - Touch: one finger paints (or places a base); two fingers drag and pinch the view.
-- Gamepad (pads.js: arrows, Enter, Esc): moves, paints, opens the menu (which has the tool and the brush).
+- Gamepad (pads.js: arrows, Enter, Esc; Y = Tab - the next tool, LB / RB = [ ] - the brush, LT / RT = - + - the zoom):
+  moves, paints, changes the tool / the brush / the zoom; Esc = Done (owner, 2026-10-27).
 - Base tool: on an empty spot a new base (if there is room and fewer than 8), on a base it removes it;
   dragging a base moves it. Bases are drawn in the tank colours of their number.
 - Zoom: 1/4, 1/2, 1:1, 2, 4 screen pixels per cell; the view follows the cursor.
 - Undo: the last 30 strokes.
 
-**The editor's menu** (Esc): Back to the map, Name, Tool, Brush size, Fill everything with dirt / rock /
-tunnel (twice to confirm), Undo, Save as a file, Save and back. The info says whether the map is playable: too few
-bases; "No way for a tank to base 3 from the others." + "Rock and base walls stop tanks: dig a way (dirt or
-tunnel)." (the bases outside the biggest group that reach each other); or "2 bases - ready to play." and which
-bases are walled in ("the game digs a way out"). The status line's "Bases: n of 8" is red while the map can't be
-played (worked out 0.4 s after the last change - `reachSoon` - so painting stays smooth). Leaving the editor always
-saves; a map that isn't playable yet is saved too (a map in the works).
+**No editor menu** (owner, 2026-10-27): Esc (a gamepad's B / Start) or the status line's "Done" goes to the map's
+screen; the tool, the brush and Undo are on the status line. **Changes aren't saved by themselves**: the editor's and
+the Name row's (an input, first on the map's screen; the name isn't shown above any more) are a draft - the screen says
+"Changed - not saved yet."; Edit goes on with it; Play, Share a link, Save as a file and Back (Esc) first ask
+("UNSAVED CHANGES": Save the changes / Revert the changes / Cancel); Delete drops it. Leaving some other way (the
+browser's Back, another address, the app closed) keeps the changes - nobody could be asked (`Scope.onEnd`).
+Its Edit row says whether the map is playable: too few bases; "No way for a tank to base 3 from the others." + "Rock
+and base walls stop tanks: dig a way (dirt or tunnel)." (the bases outside the biggest group that reach each other);
+or which bases are walled in ("the game digs a way out"). The status line's "Bases: n of 8" is red while the map can't
+be played (worked out 0.4 s after the last change - `reachSoon` - so painting stays smooth). A map that isn't playable
+yet can be saved too (a map in the works).
 
 **Storage**: IndexedDB database "tunneler-maps", store "maps" (keyPath id): `{id, name, size, bases,
 code, linked, date, shared, sharedAt}` - `linked` = mapReach's `ok` (records from before it get it the first time

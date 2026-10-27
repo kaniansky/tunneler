@@ -5,7 +5,7 @@ Lang.extend("en", {
   "home.maps": "Maps", "home.maps.i": "Make your own worlds, share them as links, play them.",
   // the list
   "map.title": "MAPS", "map.h.name": "NAME", "map.h.size": "SIZE", "map.h.bases": "BASES",
-  "map.info": "A {size} map with {n} bases.", "map.row.i": "<ENTER> opens it: edit, play, share a link, delete.",
+  "map.info": "A {size} map with {n} bases.", "map.info.one": "A {size} map with 1 base.", "map.row.i": "<ENTER> opens it: edit, play, share a link, delete.",
   "map.row.i.touch": "Tap it to open it: edit, play, share, delete.",
   "map.none": "No maps yet.",
   "map.new": "Make a new map", "map.new.i": "Paint your own world - rock, dirt and tunnels - and place up to 8 bases.",
@@ -31,18 +31,15 @@ Lang.extend("en", {
   "map.fetching": "Fetching the map...", "map.gone": "This map link doesn't work: {msg}", "map.gone.404": "the server doesn't have it",
   // the editor
   "map.t.tunnel": "Tunnel", "map.t.dirt": "Dirt", "map.t.rock": "Rock", "map.t.base": "Base",
-  "map.brush": "Brush", "map.zoom": "Zoom", "map.undo": "Undo", "map.menu": "Menu",
+  "map.brush": "Brush", "map.zoom": "Zoom", "map.undo": "Undo", "map.done": "Done",
   "map.pos": "X {x}  Y {y}", "map.bases": "Bases: {n} of 8",
-  "map.keys": "SPACE: paint  ESC: menu", "map.keys.touch": "1 finger paints, 2 move",
+  "map.keys": "SPACE: paint  ESC: done", "map.keys.touch": "1 finger paints, 2 move",
   "map.err.max": "8 bases at most.", "map.err.edge": "Too close to the edge for a base.",
   "map.err.near": "Too close to another base.",
-  // the editor's menu
-  "map.menu.title": "MAP EDITOR", "map.back": "Back to the map",
-  "map.ok": "{n} bases - ready to play.", "map.walled": "Walled in by rock: base {list} (the game digs a way out).",
-  "map.tool": "Tool: ", "map.tool.i": "What the brush does. Keys 1-4; Tab: the next tool.", "map.tool.i.touch": "What a finger does on the map.",
-  "map.brushsize": "Brush size: ", "map.brush.i": "How wide the brush paints. Keys [ and ].", "map.brush.i.touch": "How wide a finger paints.",
-  "map.undo.i": "Takes back the last change (U, Ctrl+Z).",
-  "map.save": "Save and back", "map.save.i": "Keeps the map and goes back to its screen.",
+  // the map's screen (Edit: which bases a tank can't get to; ready: the ones the game digs out)
+  "map.walled": "Walled in by rock: base {list} (the game digs a way out).",
+  "map.changed": "Changed - not saved yet.", "map.ask.title": "UNSAVED CHANGES", "map.ask": "This map has changes that aren't saved.",
+  "map.ask.save": "Save the changes", "map.ask.save.i": "Keeps the map as it is now.", "map.ask.revert": "Revert the changes", "map.ask.revert.i": "The map stays as it was saved.", "map.ask.cancel": "Cancel", "map.ask.cancel.i": "Back to the map's screen; nothing changes.",
   // playing a map: the skirmish, the online lobby
   "lc.map": "Map: ", "lc.map.random": "random", "lc.map.i1": "A random world, or one of your own maps", "lc.map.i2": "(Maps on the main menu: make them, open links).",
   "lc.size.map": "The map decides the size.", "lc.err.bases": "This map has {n} bases: fewer tanks, or another map.",

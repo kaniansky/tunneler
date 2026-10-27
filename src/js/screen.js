@@ -27,6 +27,17 @@ const GameScreen = {
   // a phone or tablet: the Android app, or a touch screen without a mouse - one player, the on-screen controls
   // (no split screen, no skirmish player 2, touch hints instead of keys; owner, 2026-10-24)
   mobile: () => GameScreen.android() || touchOnly(),
+  // the phone layout (DosUI's narrow screens, Display's zoomed engine screens): a phone / tablet held upright and
+  // narrower than the 80-column screen's own 720 pixels - a tablet wider than that keeps the 80 x 25 screen (owner,
+  // 2026-10-27: 1230 x 1333 got a canvas 800 wide - 25 rows of the narrow layout at that width didn't fit the height)
+  NARROW_MAX: 720,
+  narrow: () => { const w = root.innerWidth || 0, h = root.innerHeight || 0; return GameScreen.mobile() && h > w && w > 0 && w < GameScreen.NARROW_MAX; },
+  // a touch screen at all (a phone, a tablet, a laptop's touch screen): Settings' touch controls rows only then
+  // (owner, 2026-10-27)
+  touch: () => {
+    if (GameScreen.mobile()) return true;
+    try { return (root.navigator && root.navigator.maxTouchPoints > 0) || (!!root.matchMedia && root.matchMedia("(any-pointer: coarse)").matches); } catch (e) { return false; }
+  },
   // (a phone / tablet: neither setting - no Fullscreen (the app is full screen; a phone's browser keeps its own
   // bars), the screen always fits the window - owner, 2026-10-25; what a desktop stored stays for it)
   fullscreen: () => !GameScreen.mobile() && GameScreen.fullscreenAvailable() && load("tunneler.fullscreen", "0") === "1",

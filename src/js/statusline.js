@@ -14,6 +14,7 @@ import { UniFont, UniText } from "./unitext.js";
 import { VGA_FONT } from "./vgafont.js";
 import { Scope } from "./scope.js";
 
+const root = globalThis;
 const ASPECT = 1.35;   // vertical / horizontal pixel scale of the game canvas (720x400 shown at 4:3)
 
 class StatusLine {
@@ -33,15 +34,24 @@ class StatusLine {
     setInterval(() => this.layout(), 250);
   }
 
-  set(rows) { this.rows = rows; this.draw(); }
+  set(rows) { this.rows = rows; this.draw(); this.layout(); }
 
   layout() {
     const w = this.game.getBoundingClientRect().width;
     if (!w) return;
-    const cols = this.columnsFn(), lines = this.rows.length || 1;
+    const cols = this.columnsFn(), lines = this.rows.length || 1, k = lines * 16 * ASPECT / (cols * 9);
     this.canvas.style.width = w + "px";
-    this.canvas.style.height = (w * lines * 16 * ASPECT / (cols * 9)) + "px";
+    this.canvas.style.height = (w * k) + "px";
+    // (shown: its height per width of the game canvas and the gap above it - style.css leaves the room for them where
+    // the game canvas fills the screen's height, a phone held sideways; app.js resetScreen clears them)
+    StatusLine.room(this.canvas.style.display === "none" ? 0 : k);
     if (cols !== this.cols) this.draw();
+  }
+  static room(k) {
+    const st = root.document && root.document.body && root.document.body.style;
+    if (!st || !st.setProperty) return;
+    st.setProperty("--status-k", String(k));
+    st.setProperty("--status-gap", k ? "8px" : "0px");
   }
 
   // a segment's cells: the 16 font rows of each byte (+ whether column 9 repeats column 8), or a

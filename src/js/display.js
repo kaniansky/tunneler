@@ -116,14 +116,14 @@ class Display {
 
   // Which 80-column range is shown. Only the split-screen game itself is cropped; menus, the round
   // title and the end-of-match world map are shared by both players.
-  // A phone held upright (GameScreen.mobile, portrait) and an 80 x 25 text screen of the engine's (the round
+  // A phone held upright (GameScreen.narrow) and an 80 x 25 text screen of the engine's (the round
   // title, the statistics, its menu): only the part in use - a column / row around it, at least 40 columns -
   // enlarged to the page's width ("crop"); a screen using both halves (the menu and the rounds left, the
   // statistics right) stacks them 40 columns wide, the menu below the statistics ("stack"). The view:
   // {c0, c1, rows, vram, uni, at(col, row) -> the 80 x 25 cell}; null: the whole screen. (Display only.)
   zoom() {
     const s = this.snap;
-    if (!s || s.mode !== "text" || s.cols || !GameScreen.mobile() || !((root.innerHeight || 0) > (root.innerWidth || 0))) return null;
+    if (!s || s.mode !== "text" || s.cols || !GameScreen.narrow()) return null;
     if (this.zoomOf === s) return this.zoomed;
     this.zoomOf = s;
     const used = (c, r) => { const o = r * 160 + c * 2, ch = s.vram[o]; return (ch !== 0x20 && ch !== 0 && ch !== 0x5F) || ((s.vram[o + 1] >> 4) & 7); };
@@ -262,7 +262,7 @@ class Display {
     if (text && (s.cols || z)) {
       // (as wide as the page, but never taller than the room under the safe area: style.css's .screen padding)
       const ratio = (c1 - c0) * 9 / (scan * 1.35);
-      this.canvas.style.width = "min(calc(100vw - 16px), calc((100dvh - max(8px, env(safe-area-inset-top)) - 8px) * " + ratio.toFixed(4) + "))";
+      this.canvas.style.width = "min(calc(100vw - var(--screen-px, 16px)), calc((100dvh - var(--screen-py, 16px)) * " + ratio.toFixed(4) + "))";
       this.canvas.style.aspectRatio = (c1 - c0) * 9 + " / " + (scan * 1.35).toFixed(1);
       this.shaped = true;
     } else if (this.shaped || this.canvas.style.aspectRatio) {   // (also a shape the previous screen left: app.js)

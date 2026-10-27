@@ -207,10 +207,25 @@ function capture(fn) {
   return done;
 }
 
+// a real keyboard seen on this page (a phone / tablet: Settings' Controls show the keys only then - owner,
+// 2026-10-27): a key press the browser made (not pads.js's synthesized ones: isTrusted false), not typed into a
+// text field (the phone's own keyboard - "Unidentified" too), not Esc (the Android app's Back sends it), not a
+// volume / media key
+let keyboard = false;
+const keyboardSeen = () => keyboard;
+if (root.addEventListener) root.addEventListener("keydown", e => {
+  if (keyboard || e.isTrusted === false || e.keyCode === 229) return;
+  const k = e.key || "", t = e.target;
+  if (!(Array.from(k).length === 1 || /^(Arrow\w+|Enter|Tab|Backspace|Delete|Home|End|Page(Up|Down)|Insert|Shift|Control|Alt|AltGraph|Meta|CapsLock|F\d+)$/.test(k))) return;
+  if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return;
+  keyboard = true;
+  notify();
+}, true);
+
 if (root.addEventListener) root.addEventListener("storage", e => {   // (another tab changed them)
   if (e && e.key !== STORE && e.key !== null) return;
   map = null; ensure(); notify();
 });
 
 export const Controls = { SETS, ACTIONS, DEFAULTS, SCANS, EXTRAS, get, set, reset, isDefault, label, assignable, onChange,
-  scanOf, codesOf, capture };
+  scanOf, codesOf, capture, keyboardSeen };

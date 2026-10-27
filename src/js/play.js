@@ -28,6 +28,7 @@ import { Pads } from "./pads.js";
 import { Replay } from "./replay.js";
 import { LocalClock, Runner } from "./runner.js";
 import { Speaker } from "./speaker.js";
+import { TankView } from "./tankview.js";
 import { ViewModes } from "./views.js";
 import { Nav } from "./nav.js";
 import { GameScreen } from "./screen.js";
@@ -217,33 +218,44 @@ function run(mapRec) {
     if (engine.screen === "text" && engine.menuPage === "menu") choose(engine.menuItemAt(cell[0], cell[1]));
     else clicks.push([13, 0x1C]);
   });
-  // touch: a finger put down on a menu item highlights it, the highlight follows the finger over the items, let go
-  // on one = a tap there (as DosUI's menus)
+  // touch: a finger put down on a menu item highlights it and keeps it highlighted; let go without moving = a tap
+  // there, however long it was held, after a drag = nothing (as DosUI's menus)
   let tpick = null;
   const itemUnder = f => {
     const cell = !engine.kbdInstalled && engine.screen === "text" && engine.menuPage === "menu" ? views.cellAt(f) : null;
     return cell ? engine.menuItemAt(cell[0], cell[1]) : -1;
   };
   const pickOver = i => { if (i >= 0 && i !== engine.menuSel) { engine.menuSel = i; engine.drawMenuSel(); } };
+  // a phone / tablet: no highlight bar but while a finger presses an item, or once arrow keys (a keyboard /
+  // gamepad) move it (owner, 2026-10-27; DosUI barSel)
+  let keyNav = false;
+  const showBar = () => {
+    const on = !GameScreen.mobile() || keyNav || !!tpick;
+    if (engine.menuBar !== on) { engine.menuBar = on; engine.drawMenuSel(); }
+  };
+  showBar();
+  window.addEventListener("keydown", ev => { if (!keyNav && /^Arrow/.test(ev.key || "") && onMenu()) { keyNav = true; showBar(); } }, true);
   canvas.addEventListener("touchstart", ev => {
     const f = ev.touches[0], i = ev.touches.length === 1 ? itemUnder(f) : -1;
-    tpick = i >= 0 ? { x: f.clientX, y: f.clientY, over: i, moved: false } : null;
+    tpick = i >= 0 ? { x: f.clientX, y: f.clientY, moved: false, i } : null;
+    noClickUntil = 0;                                 // (a new touch: the last drag's click can't come any more)
+    keyNav = false;
+    showBar();
     pickOver(i);
   }, { passive: true });
   canvas.addEventListener("touchmove", ev => {
     if (!tpick || ev.touches.length !== 1) return;
     const f = ev.touches[0];
     if (Math.abs(f.clientX - tpick.x) > 6 || Math.abs(f.clientY - tpick.y) > 6) tpick.moved = true;
-    tpick.over = itemUnder(f);
-    pickOver(tpick.over);
     ev.preventDefault();
   }, { passive: false });
   canvas.addEventListener("touchend", () => {
     const p = tpick;
     tpick = null;
-    if (!p || !p.moved) return;
-    noClickUntil = performance.now() + 500;
-    choose(p.over);
+    showBar();
+    if (!p) return;
+    noClickUntil = performance.now() + 500;           // (the browser's click after it, if any: this one / no tap)
+    if (!p.moved) choose(p.i);
   });
   // a tap beside the canvas goes on too (a phone held upright: the world map at the top, the rest black)
   window.addEventListener("click", ev => {
@@ -331,7 +343,7 @@ function run(mapRec) {
   // (the touch controls only during play: the world map's "press any key" is a tap)
   Pads.start({ menu: () => !engine.kbdInstalled, hideTouch: () => !!engine.menuShown || engine.screen !== "play",
     gamepadSet: i => mode === "hotseat" || me2 >= 0 ? ["blue", "green"][i] || null : "blue", touchSet: "blue",
-    namedSets: mode === "hotseat" || me2 >= 0 });            // ("Gamepad 1 connected: BLUE" in split screen)
+    namedSets: mode === "hotseat" || me2 >= 0, escLabel: "touch.quit", touchTank: TankView.provider(() => engine, () => me + 1), touchDead: () => engine.screen === "play" && !engine.alive[me + 1] });            // ("Gamepad 1 connected: BLUE" in split screen)
   window.tunnelerEngine = () => engine;
   window.tunnelerViews = () => views;         // tests / debugging
   window.tunnelerRunner = () => runner;

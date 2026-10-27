@@ -348,7 +348,10 @@ joystick drives the tank, the end map / menu without them, a tap beside the map 
   `window.tunnelerEngine()` (also `tunnelerRunner / tunnelerViews / tunnelerLobbyUI`) for tests.
   Connecting / paused (a classic match while one player is away) / catching up / errors (`kicked`,
   `full`, `busy`, `noroom`, `idle`) are DOS screens too (`DosUI` with `present` override).
-- `dosui.js` - centred items line up as a block (`centreStart`: the widest centred item of a box is
+- `dosui.js` - every 80 x 25 screen centred vertically (owner, 2026-10-27; `centreRows`: the rows it drew - the
+  info's place kept for its items' longest info with a keyboard / mouse - moved to the middle of rows 1-23, a phone /
+  tablet all 25; `vshift`, and `cellAt(ev)` maps clicks back - DosUI code uses it, never `display.cellAt`; tests read
+  rows / click at `+ ui.vshift`). Centred items line up as a block (`centreStart`: the widest centred item of a box is
   centred, a narrower one starts half the difference later, rounded down - one column narrower = the same
   start). Shared DOS menu screen (`showPage("instructions"|"information", uiMode, back)` shows the
   game's own page full screen, scrolled with Up / Down, PgUp / PgDn, Home / End, the wheel (3 rows a
@@ -360,7 +363,9 @@ joystick drives the tank, the end map / menu without them, a tap beside the map 
   `input.width` in display columns; a caret (`input.caret`, owner 2026-10-26): Left / Right / Home / End move it,
   typing / pasting insert there, Backspace / Delete before / after it, drawn as the snapshot's `cursor`; a value is
   shown from its first letter while it fits, else a window around the caret (`input.scroll`).
-- `statusline.js` - the DOS text lines under the game canvas: state only, never "how to play" hints
+- `statusline.js` - (sets body CSS variables `--status-k` (its height per width of the game canvas) / `--status-gap`
+  while shown - style.css's sideways phone layout leaves the room for it; app.js resetScreen clears them) the DOS text
+  lines under the game canvas: state only, never "how to play" hints
   (DESIGN-8P 9): split screen + sound; online room, role, players, connection, ping, sound (a spectator
   also gets a view-mode line). None vs computer and none on the end-of-match world map; a spectator gets it only on the play screen
   (not on the menu / statistics / waiting screens between matches). Same width as the
@@ -380,19 +385,32 @@ joystick drives the tank, the end map / menu without them, a tap beside the map 
   phase, swallowed; Esc = null). input.js asks `Controls.scanOf`; pads.js syncs `Pads.SETS`; online.js's held
   bits use `Controls.codesOf` (Tab only when assigned - online it never was a fire key). Touch: `Pads.TOUCH`
   size small / medium / large ("tunneler.touch.size", CSS `--tpad-k`) and left-handed ("tunneler.touch.left":
-  joystick right, FIRE left; body classes tpad-small / tpad-large / tpad-left). test/input-check.js.
+  joystick right, FIRE left; body classes tpad-small / tpad-large / tpad-left) and look ("tunneler.touch.look" plain /
+  tank, body class tpad-tank; owner, 2026-10-27): plain = a ring with 8 ticks whose sector the tank goes lights up
+  (`--a`, class "go"), a knob, a FIRE disc with an inner ring; tank = your own tank as the knob, as the game draws it
+  now (src/js/tankview.js `TankView.provider(engine, p)` -> `Pads.start({touchTank})` from play.js / online.js: graphics
+  original the 7 x 7 sprite, modern gfx-modern.js's simple / realistic tank - its shader ported to the CPU,
+  `modernTank`, cached per direction -, both in `Display.tankPalette8`'s colours; facing the stick's way or else the
+  game tank's - at once, inside the dead zone too), a shell on FIRE (pixels: `SHELL`; graphics modern: `SHELL_SVG`, shaded,
+  lit from the top left; it doesn't move when pressed). Colours: CSS variables on .tpad - the DOS palette, `html.modern` the
+  modern menus', the tank look dirt / tunnel. Your tank destroyed (`touchDead`): no joystick / FIRE (class "dead"),
+  nothing held - ESC stays. The ESC button says QUIT in a skirmish (`escLabel: "touch.quit"`: Esc ends the match),
+  LEAVE online (`touch.leave`: Esc twice leaves; the game can be joined again). test/input-check.js, gfx-check.
 - Gamepads + touch (`pads.js`; home.js / lobby.js call `Pads.start({ menu: () => true })` = menus only,
   play.js / online.js with the tank's keys): every controller becomes **synthesized KeyboardEvents on window** (so
   Keyboard, DosUI, online.js's held bits / Esc twice take them like real keys - nothing else knows about
   pads; determinism untouched). `Pads.start({menu, gamepadSet(i), touchSet})`: `menu()` true = arrows /
-  Enter (A, X) / Esc (B, Start), held directions repeat; false = the tank's key set (`SETS.blue` W A S D +
+  Enter (A, X) / Esc (B, Start), held directions repeat, Y = Tab, LB / RB = [ ], LT / RT = - + (`MENU_EXTRA`: the map
+  editor's tool / brush / zoom, a replay's speed); false = the tank's key set (`SETS.blue` W A S D +
   Space, `SETS.green` arrows + Enter; any face / shoulder button / trigger fires, Start = Esc). Taps are
   held >= `MIN_HOLD` (120 ms, 2+ ticks). A button held across a play -> menu switch is latched until
   released (no accidental Enter). Stick: 8 sectors, dead zone 0.35 (touch 0.3). play.js: menu =
   `!engine.kbdInstalled`, split screen gamepad 1 BLUE / 2 GREEN, else "blue" (your tank); online.js:
   menu = not on the play screen (spectators: always). Touch controls (joystick left, FIRE right, ESC;
   `touch.fire` / `touch.esc` in every language) and `body.touch` (no scroll / zoom, portrait: game at
-  the top, controls below; landscape: game between them; style.css) appear on the first touch.
+  the top, controls below while they show (pads.js `body.tpad-shown`), everything else centred - no page padding but the safe areas: `--screen-px` / `--screen-py`, which display.js and
+  dosui.js size by; landscape: the play screen between them - views.js `fit`, other screens keep their full size;
+  style.css) appear on the first touch.
   Name / chat inputs still need a real keyboard. `test/input-check.js` (mock `navigator.getGamepads`,
   synthesized pointer events, online.html's held bits and lobby).
 
@@ -728,7 +746,10 @@ page from before 2.0 - is refused (POST 409 `{code:
   (`cats()`: Display = Fullscreen, Screen size, Tank colors; Graphics = Original / modern, a blank row, then
   Smooth scrolling (original) or the modern rows; Sound = style, volume (a meter), stereo, distance fade
   (speaker.js `Speaker.OPTIONS / getOption / setOption`); Controls = both tanks' keys (controls.js
-  `Controls.capture`) + Reset keys + touch size / left-handed (pads.js `Pads.TOUCH`); Online = Name,
+  `Controls.capture`) + Reset keys - on a phone / tablet only once a real keyboard key was pressed on the page
+  (`Controls.keyboardSeen()`: trusted, not Esc / a text field / media keys; home.js redraws on it) - + touch size /
+  left-handed (pads.js `Pads.TOUCH`) - only on a touch screen (`GameScreen.touch()`; owner, 2026-10-27; info
+  `set.cat.controls.i` / `.ik` keys only / `.it` touch only); Online = Name,
   (Server: app), Preferred color ("tunneler.online.color"), Show chat ("tunneler.chat.hide" = "1": hidden),
   Chat sound ("tunneler.chatsound"; grayed out and silent while the chat is hidden), Show ping; then a blank
   row, a centred "Language: X" switch (`langRow`, owner 2026-10-25 - no category any more), a blank row, Back to
@@ -854,12 +875,17 @@ page from before 2.0 - is refused (POST 409 `{code:
   `home.cpu.i1m`, `page.back.touch`, `link.i1.touch`), the skirmish's and the online lobby's settings on a
   "Game settings" screen of their own (home.js `cpuSetOpen`, online.js `lobby.setOpen` / `drawGameSettings`; texts
   `lc.gameset(.title)`, `lc.set.i/i2`, `pg.set.back.i`), no empty rows in the online lobby's Game box.
-  Portrait: DosUI `isNarrow()` -> `drawNarrow()` - `NC` = 36 columns, `narrowRows()` rows of the DOS screen's
+  Portrait: DosUI `isNarrow()` (= `GameScreen.narrow()`: touch, upright and narrower than `NARROW_MAX` 720 px - a
+  wider tablet keeps the 80 x 25 screen; Display's `zoom()` the same) -> `drawNarrow()` - `NC` = 36 columns, `narrowRows()` rows of the DOS screen's
   height (the window less style.css's .screen padding = the safe area at the top); menus draw into their own
   `TextBuf` (textbuf.js, 600 rows): lines re-wrapped (`wrapCols`, long words broken after a "/"), boxes stacked
   (`NB` / `DosUI.NARROW_W` 32 wide), item rows `LINE_H` (1.5) tall, the rest 1 (`snap.rowH`). The snapshot holds
-  every content row plus the info, rule and hint (7 rows; pages: rule + hint); `snap.view = {rows, units, top}`
-  = the content shown in a window `units` high from `top` (any fraction) - the screen is always the same height
+  every content row plus the info strip (with a keyboard: an empty row + 4, more for a long info; touch: only while
+  the info shows something - an empty row + its rows, else none; no rule / hint on a phone - owner, 2026-10-27;
+  pages: rule + hint); `snap.view = {rows, units, top}`
+  = the content shown in a window `units` high from `top` (any fraction; negative = rows shifted down: a screen that
+  fits has its used rows - the title through the last box - centred on the screen, ending above the info at most;
+  `narrow.minTop`, owner 2026-10-27) - the screen is always the same height
   (an info longer than 4 rows takes rows from the window: up to 7).
   Smooth scrolling: `presentNarrowAt(top)` re-presents with a new view (`nbase`), `scrollNarrow(to, animate)`
   glides (the selection moved out of view), a drag follows the finger (`ndrag`, units per px), a flick keeps
@@ -872,15 +898,23 @@ page from before 2.0 - is refused (POST 409 `{code:
   painted; `cellAt` through it), gfx-text.js the same (`geometry` rh / Y per row, two clipped passes - `clipped`,
   `mine` / `seen`); and `zoom()` enlarges the engine's 80 x 25 text screens: crop to the used
   area (>= 40 columns) or stack the halves at a gutter (divider column first; word gaps aren't gutters): the
-  left half's blocks, then the right half, then the left blocks holding a box (the menu below the statistics); `cellAt` maps taps back through `zoom().at`. Settings on mobile: home.js
-  `settingsMobile` (category list + Language -> a category screen ending in "back-cat" `set.back`). Text fields: a tap
+  left half's blocks, then the right half, then the left blocks holding a box (the menu below the statistics); `cellAt` maps taps back through `zoom().at`. Settings on a phone held upright: home.js
+  `settingsMobile` (category list + Language -> a category screen ending in "back-cat" `set.back`); sideways the
+  desktop's two boxes (owner, 2026-10-27; turning the phone switches - a resize listener). Text fields: a tap
   focuses a hidden `<input class="soft-input">` (`softFocus`) so the phone keyboard opens. Pads `hideTouch()`
   (play.js: while the engine's menu shows; online.js: lobby / spectator). Android Back on the main menu:
   `window.tunnelerBackExits`. Touch (every layout, DosUI `tpick`; play.js the engine's menu too): a finger put down
-  on an item highlights it and the highlight follows the finger over the items (no scrolling; the view follows the
-  highlight to the edges), let go on an item = a tap there (`click({picked})`, the browser's own click after it
-  ignored - `noClickUntil`), off the items = nothing; put down anywhere else, a drag scrolls. On a phone a screen
-  with `spec.footer` (the main menu: the version) shows it at the bottom left instead of the touch hint.
+  on an item highlights it; a drag scrolls (the phone layout's `ndrag`; a single scrolling box by rows: `freeTop` - the
+  selection may leave the view until a key / the wheel) and that item stays highlighted (owner, 2026-10-27); let go
+  without moving = a tap, however long held (touchend clicks - `click({picked})`; a browser sends no click after a long
+  press, and its click after a short one is ignored: `noClickUntil`), after a drag = nothing; put down anywhere else, a
+  drag scrolls too. No highlight bar on a phone
+  otherwise (owner, 2026-10-27): DosUI `barSel(i)` (only while a finger presses the item - `tpick` - or after arrow /
+  Tab keys - `keyNav`, a keyboard / gamepad; a touch drops it again), the engine's menu `engine.menuBar` (display
+  only; play.js `showBar`); without the bar the selected item's info shows only when it holds a message (a line with its own colour: an
+  error, "Saved", a confirmation, the invite link - `infoOfSel`), never a plain description. On a phone / tablet no
+  menu screen has the bottom rule, the hint or `spec.footer` (the version) - both layouts (owner, 2026-10-27: the room
+  is the menu's).
   Tests: local-check "a phone / tablet..." and "the phone layout...".
 - **Replays** (DESIGN-8P 33, owner 2026-10-25): `src/js/replay.js` (`Replay`) - `Runner.recorder` gets every step's
   input before it runs (`input(inp)`) and a call after (`stepped()`); play.js and online.js (every match, player or
@@ -993,7 +1027,7 @@ page from before 2.0 - is refused (POST 409 `{code:
 - **Custom maps** (v6, docs/v6/MAPS.md; a map is played only when a tank can drive between ALL its bases - owner:
   `TunnelerEngine.mapReach(map)` -> {ok, groups, walled} on the world a match starts on (painted, openBase, bases
   drawn), the game's own per-direction sprites, an integral image + a flood (large ~60 ms); used by the editor
-  (menu state `map.cut`, status-line bases red, `reachSoon`), MapStore records' `linked` (`fill`, `playable`), the
+  (the map's screen's Edit row `map.cut`, status-line bases red, `reachSoon`), MapStore records' `linked` (`fill`, `playable`), the
   skirmish (home.js `lc.err.path`, play.js `noMap("path")`), the server (`loadMap` info.linked, cached per id;
   NetProto.startProblem "path"); `.tmap` files = MapData.encode bytes (`MapData.fileName`; Save as a file - Android
   `TunnelerAndroid.saveFile` -, Open a map file): `src/js/mapdata.js` (`MapData`: 4 x 4 px cells tunnel / dirt / rock, a
@@ -1004,8 +1038,10 @@ page from before 2.0 - is refused (POST 409 `{code:
   as always; without it nothing changes. `src/js/mapstore.js` (`MapStore`: IndexedDB "tunneler-maps", `share` = POST
   /api/maps - once per server: `sharedAt` / `sharedHere(rec)` -, `fetchShared`). Route `/maps` (`maps.js`; `/maps/<id>`, `/map/<id>` = a shared one; the app:
   `maps.html?id= / ?share=`): the list, a new map (dirt / a random world), a map's screen, open a link, the editor
-  (LORES screen + the clickable status line; keys / mouse / touch - two fingers move and pinch - / gamepad; undo;
-  the editor's menu; leaving saves). Main menu "Maps". Skirmish: Settings row Map (`tunneler.cpu.map`, links
+  (LORES screen + the clickable status line; keys / mouse / touch - two fingers move and pinch - / gamepad; undo; no
+  menu - Esc / "Done" goes to the map's screen, which has the Name row and says on Edit what keeps the map from being
+  played; changes are a `draft` there, "Changed - not saved yet.", and Play / Share / Save as a file / Back ask Save /
+  Revert / Cancel first - `settle`; owner, 2026-10-27). Main menu "Maps". Skirmish: Settings row Map (`tunneler.cpu.map`, links
   `&lmap=<local id>[&map=<shared id>]`, play.js loads it first - `noMap` screen when it can't). Online: the room's
   Settings row Map (the host's maps, uploaded once), `{t:"set", map: id}` -> server `setMap` (loads from the store,
   `st.map = {id, name, size, bases, linked}`, size follows, `cantStart` "path" while not every base is reachable,

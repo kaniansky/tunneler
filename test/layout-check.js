@@ -137,7 +137,7 @@ function check(win, ui, where) {
   }
 }
 
-const SIZES = { desktop: [[1280, 800], false], "phone upright": [[390, 844], true], "phone sideways": [[844, 390], true] };
+const SIZES = { desktop: [[1280, 800], false], "phone upright": [[390, 844], true], "phone sideways": [[844, 390], true], "tablet upright": [[820, 1180], true] };
 const tick = () => new Promise(r => setTimeout(r, 0));
 
 (async () => {
@@ -184,7 +184,7 @@ const tick = () => new Promise(r => setTimeout(r, 0));
         const lines = what => { if (!ui.isNarrow()) for (const l of ui.spec.lines || []) if (win.UniText.cols(String(l.text).replace(/\{\d+\}/g, "")) > 78) problems.push(W + ", " + what + ": a line is too wide: " + win.Lang.decode(l.text)); };
         const at = what => { check(win, ui, W + ", " + what); lines(what); };
         goKey("settings");
-        if (touch) { goKey("cat-online"); at("settings online with an account"); }
+        if (ui.isNarrow()) { goKey("cat-online"); at("settings online with an account"); }
         else { ui.sel = ui.spec.items.findIndex(x => x.key === "cat-online"); ui.draw(); at("settings online with an account"); }
         if (!ui.spec.items.some(x => x.key === "account") || !ui.spec.items.some(x => x.key === "delacc")) problems.push(W + ", settings online: no account rows");
         const none = () => {};
@@ -312,9 +312,11 @@ const tick = () => new Promise(r => setTimeout(r, 0));
         api.newMap(); check(win, ui, W + ", a new map");
         api.openLink(); check(win, ui, W + ", open a map link");
         api.detail(rec); check(win, ui, W + ", a map");
-        api.edit(rec, M.decode(rec.code)); api.openMenu(); check(win, ui, W + ", the map editor's menu");
-        await api.leaveEditor();
-        // a map whose bases aren't all connected (a rock wall across it): the list, its screen, the editor's menu
+        ui.spec.items.find(x => x.key === "name").input.value = "A renamed map";      // (a change: Back asks)
+        ui.spec.items.find(x => x.key === "back").go(); check(win, ui, W + ", unsaved changes");
+        ui.spec.items.find(x => x.key === "cancel").go(); check(win, ui, W + ", a map changed");
+        ui.spec.items.find(x => x.key === "back").go(); ui.spec.items.find(x => x.key === "revert").go();
+        // a map whose bases aren't all connected (a rock wall across it): the list, its screen (Edit says which base)
         const cut = M.blank("medium");
         cut.bases.push({ x: 60, y: 64 }, { x: 190, y: 64 }, { x: 60, y: 30 });
         for (let y = 0; y < cut.h; y++) { cut.cells[y * cut.w + 127] = M.ROCK; cut.cells[y * cut.w + 128] = M.ROCK; }
@@ -325,10 +327,8 @@ const tick = () => new Promise(r => setTimeout(r, 0));
         check(win, ui, W + ", maps with one not connected, a broken file");
         api.detail(crec); check(win, ui, W + ", a map not connected");
         win.TunnelerAndroid = { saveFile: name => "Download/" + name };
-        ui.spec.items.find(x => x.key === "save").go(); check(win, ui, W + ", a map saved as a file (Android)");
+        await ui.spec.items.find(x => x.key === "save").go(); check(win, ui, W + ", a map saved as a file (Android)");
         delete win.TunnelerAndroid;
-        api.edit(crec, M.decode(crec.code)); api.openMenu(); check(win, ui, W + ", the map editor's menu, not connected");
-        await api.leaveEditor();
         // the skirmish with that map chosen (its Map row, the size grayed)
         const h = makeEnv("/", size, touch);
         h.storage.set("tunneler.lang", code);
@@ -452,6 +452,6 @@ const tick = () => new Promise(r => setTimeout(r, 0));
   const unique = [...new Set(problems)];
   for (const p of unique) console.log("  FAIL: " + p);
   failures = unique.length;
-  console.log(failures ? `layout-check: ${failures} problem(s) on ${checked} screens` : `layout-check: ${checked} screens fit (desktop, phone upright and sideways, ${codes.length} languages)`);
+  console.log(failures ? `layout-check: ${failures} problem(s) on ${checked} screens` : `layout-check: ${checked} screens fit (desktop, phone upright and sideways, tablet upright, ${codes.length} languages)`);
   process.exit(failures ? 1 : 0);
 })().catch(e => { console.error(e); process.exit(1); });

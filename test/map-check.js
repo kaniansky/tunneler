@@ -395,7 +395,7 @@ const ticks = async (n = 8) => { for (let i = 0; i < n; i++) await tick(); };
 
 (async () => {
   console.log("pages");
-  await okAsync("the maps screens: the list, a new map (dirt / a random world), the editor: tools, brush, painting, bases, undo, the menu, saving", async () => {
+  await okAsync("the maps screens: the list, a new map (dirt / a random world), the editor: tools, brush, painting, bases, undo, Esc saves; the map's screen: its name", async () => {
     const env = makeEnv("/maps");
     env.page("maps.html");
     await ticks();
@@ -445,30 +445,45 @@ const ticks = async (n = 8) => { for (let i = 0; i < n; i++) await tick(); };
     cv.fire("pointerdown", Object.assign({ button: 0, pointerType: "mouse", pointerId: 1 }, at(target[0], target[1])));
     cv.fire("pointerup", Object.assign({ button: 0, pointerType: "mouse", pointerId: 1 }, at(target[0], target[1])));
     assert.strictEqual(ed.map.cells[target[1] * ed.map.w + target[0]], MapData.ROCK, "a click paints rock at " + target);
-    // Esc: the menu (the editor's key, not the DosUI's - it stays open); its items; Esc again: back to the map
-    env.key("Escape", "Escape");
-    assert(ed.menu && ui.spec.items.some(it => it.key === "save"), "the menu is open");
-    assert.strictEqual(ui.spec.items[0].info[0].text, w.Lang.t("map.ok", { n: 2 }), "2 bases - ready");
-    env.key("Escape", "Escape");
-    assert(!ed.menu, "Esc closes it");
-    env.key("Escape", "Escape");
-    assert(!ui.spec.items.some(it => it.key === "fill"), "no Fill everything with (a new map starts from rock / empty instead)");
-    env.key("Escape", "Escape");
     env.key("KeyZ", "z", { ctrlKey: true });
     assert.notStrictEqual(ed.map.cells[target[1] * ed.map.w + target[0]], MapData.ROCK, "Ctrl+Z: the click's rock gone");
+    // Esc: no menu - the map's screen (the editor's key, not the DosUI's: the screen stays); the changes not saved yet
     env.key("Escape", "Escape");
-    await ui.spec.items.find(it => it.key === "save").go();
     await ticks();
-    assert(!w.tunnelerMapEditor() && ui.spec.items.some(it => it.key === "edit"), "saved: the map's screen");
-    const list = await w.MapStore.list();
-    assert(list.length === 1 && list[0].name === "Čierna diera" && list[0].bases === 2 && MapData.decode(list[0].code), "kept in the store");
+    const item = k => ui.spec.items.find(it => it.key === k), changed = () => ui.spec.lines.some(l => l.text === w.Lang.t("map.changed"));
+    assert(!w.tunnelerMapEditor() && item("edit") && changed(), "Esc: the map's screen, which says it was changed");
+    let list = await w.MapStore.list();
+    assert(list.length === 1 && list[0].name === "Čierna diera" && list[0].bases === 0, "not saved by itself");
+    // its name in the Name row (not above); Back with changes: asked - Cancel, then Save
+    const nm = item("name");
+    assert(ui.spec.items[0] === nm && nm.input.value === "Čierna diera" && !ui.spec.text, "the Name row first, no name above");
+    nm.input.value = "Biela diera";
+    item("back").go();
+    assert(item("keep") && item("revert") && item("cancel") && !item("edit"), "Back: save, revert or cancel");
+    item("cancel").go();
+    assert(item("edit") && changed() && item("name").input.value === "Biela diera", "Cancel: the map's screen, still changed");
+    item("back").go();
+    await item("keep").go();
+    await ticks();
+    list = await w.MapStore.list();
+    assert(list.length === 1 && list[0].name === "Biela diera" && list[0].bases === 2 && MapData.decode(list[0].code).name === "Biela diera", "saved: the name, the bases");
+    // Revert: a change dropped
+    api.detail(list[0]);
+    assert(!changed(), "saved: no change");
+    item("name").input.value = "Iná diera";
+    item("share").go();
+    item("revert").go();
+    await ticks();
+    list = await w.MapStore.list();
+    assert.strictEqual(list[0].name, "Biela diera", "Revert: as saved");
+    api.detail(list[0]);
     // share a link: POST /api/maps, the id kept with it
-    ui.spec.items.find(it => it.key === "share").go();
+    await ui.spec.items.find(it => it.key === "share").go();
     await ticks();
     assert(env.fetches.some(f => /\/api\/maps$/.test(f[0]) && f[1] === "POST"), "POST /api/maps");
     assert.strictEqual((await w.MapStore.list())[0].shared, "sharedid22", "the shared id kept");
     // play in a skirmish: remembered, to the skirmish lobby
-    ui.spec.items.find(it => it.key === "play").go();
+    await ui.spec.items.find(it => it.key === "play").go();
     assert.strictEqual(env.storage.get("tunneler.cpu.map"), list[0].id);
     // a random world
     const env2 = makeEnv("/maps");
@@ -643,7 +658,7 @@ const ticks = async (n = 8) => { for (let i = 0; i < n; i++) await tick(); };
     m.name = "Split";
     return MapData.frame(m);
   };
-  await okAsync("bases a tank can't all reach: the store knows (linked), the list and the map's screen say so, the editor's menu says which and to dig, the status line's bases go red; dug through: ready", async () => {
+  await okAsync("bases a tank can't all reach: the store knows (linked), the list and the map's screen say so, Edit on the map's screen says which and to dig, the editor's status line's bases go red; dug through: ready", async () => {
     const env = makeEnv("/maps");
     env.page("maps.html");
     await ticks();
@@ -663,14 +678,13 @@ const ticks = async (n = 8) => { for (let i = 0; i < n; i++) await tick(); };
     api.detail(rec);
     const play = ui.spec.items.find(it => it.key === "play");
     assert.strictEqual(play.info[0].text, T("map.cut.play"), "Play says why not");
-    play.go();
+    await play.go();
     assert(!env.storage.get("tunneler.cpu.map"), "not played");
-    // the editor: the menu names the base that can't be reached and says to dig; the status line's bases red
+    // the map's screen: Edit names the base that can't be reached and says to dig; the editor's status line: bases red
+    const einfo = ui.spec.items.find(it => it.key === "edit").info;
+    assert(einfo.length === 2 && einfo[0].text === T("map.cut", { list: "2" }) && einfo[1].text === T("map.cut.dig"), "which base, dig a way");
     w.tunnelerMapsOpen(rec);
-    const ed = w.tunnelerMapEditor();
-    api.openMenu();
-    assert.deepStrictEqual([...ui.spec.items[0].info.map(i => i.text)], [T("map.cut", { list: "2" }), T("map.cut.dig")], "which base, dig a way");
-    env.key("Escape", "Escape");
+    api.reachOf();
     const basesSeg = () => api.barRows(false)[1].find(g => g.text === T("map.bases", { n: 2 }));
     assert.strictEqual(basesSeg().attr, 0x0C, "the bases red");
     // a way dug through the wall (tunnel, a brush 3 cells tall): ready to play, green
@@ -678,10 +692,10 @@ const ticks = async (n = 8) => { for (let i = 0; i < n; i++) await tick(); };
     api.stamp(63, 32); api.stamp(64, 32);
     api.reachOf();
     assert.strictEqual(basesSeg().attr, 0x0A, "the bases green again");
-    api.openMenu();
-    assert.strictEqual(ui.spec.items[0].info[0].text, T("map.ok", { n: 2 }), "ready to play");
-    assert(ed.menu);
-    await ui.spec.items.find(it => it.key === "save").go();
+    await api.leaveEditor();
+    assert.strictEqual(ui.spec.items.find(it => it.key === "play").info[0], T("map.play.i"), "ready to play (not saved yet)");
+    ui.spec.items.find(it => it.key === "back").go();
+    await ui.spec.items.find(it => it.key === "keep").go();
     await ticks();
     assert.strictEqual((await w.MapStore.get(rec.id)).linked, true, "saved: linked");
     // the status line works it out by itself a moment after a change (no menu)
@@ -702,7 +716,7 @@ const ticks = async (n = 8) => { for (let i = 0; i < n; i++) await tick(); };
     const saved = [];
     w.TunnelerAndroid = { saveFile: (name, b64) => { saved.push([name, b64]); return "Download/" + name; } };
     api.detail(rec);
-    ui.spec.items.find(it => it.key === "save").go();
+    await ui.spec.items.find(it => it.key === "save").go();
     assert.strictEqual(saved.length, 1);
     assert.strictEqual(saved[0][0], "Moja-mapa-2.tmap", "the name");
     const bytes = Uint8Array.from(Buffer.from(saved[0][1], "base64"));
@@ -710,13 +724,6 @@ const ticks = async (n = 8) => { for (let i = 0; i < n; i++) await tick(); };
     assert.strictEqual(ui.spec.items.find(it => it.key === "save").info[0].text, T("map.saved", { where: "Download/Moja-mapa-2.tmap" }), "says where");
     w.TunnelerAndroid = { saveFile: () => "" };
     assert.strictEqual(api.saveFile(m).text, T("map.save.err"), "an Android error said");
-    // the editor's menu has it too
-    w.tunnelerMapsOpen(rec); api.openMenu();
-    w.TunnelerAndroid = { saveFile: (name, b64) => { saved.push([name, b64]); return "Download/" + name; } };
-    ui.spec.items.find(it => it.key === "tofile").go();
-    assert.strictEqual(saved.length, 2, "saved from the editor");
-    await ui.spec.items.find(it => it.key === "save").go();
-    await ticks();
     // a browser: a download (no note)
     delete w.TunnelerAndroid; w.Blob = Blob;
     assert.strictEqual(api.saveFile(m), null);

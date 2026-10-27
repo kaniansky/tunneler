@@ -10,6 +10,39 @@ those releases are tagged `online-vX.Y.Z`, their changes are in [docs/CHANGELOG-
   player's username, wrong letters). It went to the Account row's info, which isn't shown while Name is selected, so a
   refused name just went back to the old one without a word.
 
+## 1.1.3
+
+Plays together with 1.1.0 - 1.1.2: nothing in the game changed.
+
+**Phones and tablets**
+- Touch controls redesigned: the joystick's ring lights the one of the 8 directions the tank goes, FIRE is a button
+  with a ring inside. A new setting, Touch look: "tank" - your own tank as the joystick, drawn as the graphics draw it
+  (original or modern) and turning the way you push, and a shell on FIRE.
+- While your tank is destroyed the joystick and FIRE go away. The ESC button says QUIT in a skirmish and LEAVE online.
+- Menus: no item is highlighted until a keyboard or a gamepad moves the selection (a finger held on an item highlights
+  it). A drag scrolls a menu wherever it starts - the item under the finger stays highlighted and nothing is chosen;
+  letting go without moving chooses the item, however long it was held. Item descriptions show only with the
+  highlight; messages (an error, "Saved") always.
+- More room: no bottom line and hint, no empty strip under a menu, the screen reaches the edges of a phone held
+  upright (a finger at the edge scrolls too); the map editor and a game watched (spectator, replay) are centred -
+  the game you play stays at the top, above the joystick and FIRE.
+- Held sideways (and on a tablet wider than 720 pixels held upright) Settings and the skirmish use the desktop's
+  boxes. The first touch on a touch laptop no longer shrinks the screen.
+- Settings, Controls: the touch controls' settings (were in Display); the keys only once a keyboard was used. A
+  computer without a touch screen shows no touch settings.
+
+**Menus**
+- Every menu screen is centred vertically, on computers too (they began at the top).
+
+**Maps**
+- The map editor has no menu: Esc or Done goes to the map's screen, which has the map's name. Changes aren't saved by
+  themselves - the screen says so, and Play, Share a link, Save as a file and Back ask to save them, revert them or
+  cancel. The Edit row says what keeps a map from being played.
+- Gamepad in the editor: Y the next tool, LB / RB the brush, LT / RT the zoom (LT / RT also a replay's speed).
+- The maps list is only as wide as the longest name; "1 base", not "1 bases".
+- The editor's tool rows no longer run off the bottom of a phone held sideways or a wide, short window (also a
+  spectator's status line).
+
 ## 1.1.2
 
 - Android: Sign in with Google Play works (1.1.1's app on Google Play was built before its Play Games project was

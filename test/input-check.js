@@ -31,7 +31,7 @@ class KeyboardEvent {
 function mkEl(tag) {
   const on = {}, classes = new Set();
   return { tagName: String(tag).toUpperCase(), style: {}, hidden: false, children: [], textContent: "", width: 720, height: 400,
-    classList: { add: c => classes.add(c), remove: c => classes.delete(c), contains: c => classes.has(c), toggle() {} },
+    classList: { add: c => classes.add(c), remove: c => classes.delete(c), contains: c => classes.has(c), toggle: (c, on) => (on === undefined ? !classes.has(c) : on) ? (classes.add(c), true) : (classes.delete(c), false) },
     appendChild(c) { this.children.push(c); return c; }, setAttribute() {},
     addEventListener: (t, f) => (on[t] = on[t] || []).push(f),
     dispatch(t, props) { const e = Object.assign({ type: t, cancelable: true, preventDefault() {} }, props); for (const f of on[t] || []) f(e); },
@@ -187,7 +187,12 @@ const SC = { W: 0x11, A: 0x1E, X: 0x2D, D: 0x20, BLUEFIRE: 0x1D, GREENFIRE: 0x1C
     assert(!kb.takeKeys().some(k => k[1] === SC.GREENFIRE), "held A does not press Enter on the menu");
     gp[0] = pad(0); ctl.poll(t + 2500); gp[0] = pad(0, [0]); ctl.poll(t + 2600);
     assert(kb.takeKeys().some(k => k[0] === 13), "pressed again: Enter");
-    ok("gamepad in menus: arrows (repeat), A = Enter, B = Esc; a button held across play -> menu acts only after release");
+    // Y = Tab, LB / RB = [ ], LT / RT = - + (the map editor's tool, brush, zoom)
+    const sent = [], ctl2 = env.win.Pads.start({ raf: false, menu: () => true, emit: (type, code) => { if (type === "keydown") sent.push(code); } });
+    gp[0] = pad(0); ctl2.poll(t + 3000);
+    for (const [b, k] of [[3, 9], [4, 10], [5, 11], [6, 12], [7, 13]]) { gp[0] = pad(0, [b]); ctl2.poll(t + 3000 + k * 400); gp[0] = pad(0); ctl2.poll(t + 3000 + k * 400 + 200); }
+    same(sent, ["Tab", "BracketLeft", "BracketRight", "Minus", "Equal"], "Y, LB, RB, LT, RT: " + sent);
+    ok("gamepad in menus: arrows (repeat), A = Enter, B = Esc, Y = Tab, LB / RB = [ ], LT / RT = - +; a button held across play -> menu acts only after release");
   }
 
   // ------------------------------------------------------------ touch: joystick + FIRE -> keys
@@ -196,32 +201,50 @@ const SC = { W: 0x11, A: 0x1E, X: 0x2D, D: 0x20, BLUEFIRE: 0x1D, GREENFIRE: 0x1C
     env.load("lang/index.js", "js/input.js", "js/pads.js");
     const kb = new env.win.Keyboard(env.win);
     let menu = false;
-    const ctl = env.win.Pads.start({ raf: false, menu: () => menu, touchSet: "blue" });
+    // (the tank look: a fake tankview.js provider - the game's tank faces down; its paintings counted)
+    const paints = [], pic = { key: "tank", dir: 4, paint: (cv, d) => paints.push(d) };
+    let dead = false;
+    const ctl = env.win.Pads.start({ raf: false, menu: () => menu, touchSet: "blue", touchTank: () => pic, touchDead: () => dead });
     const tc = ctl.touch;
     assert(tc && env.body.children.includes(tc.root) && tc.root.hidden, "controls added, hidden until touched");
     for (const f of env.listeners.pointerdown) f({ pointerType: "touch" });
     assert(!tc.root.hidden && env.body.classList.contains("touch"), "first touch shows them");
-    assert.strictEqual(tc.fireBtn.textContent, "FIRE");
+    assert.strictEqual(tc.fireBtn.children[0].textContent, "FIRE");
+    assert(/^<svg/.test(tc.fireBtn.children[2].innerHTML), "the modern graphics' shell (SVG)");
     const now = () => performance.now();
     const stick = (type, x, y, id = 1) => tc.base.dispatch(type, { pointerId: id, pointerType: "touch", clientX: x, clientY: y });
     stick("pointerdown", 100, 50);                                  // base 100 x 100: right edge
     same(held(kb), [SC.D], "right: " + held(kb));
+    assert(tc.base.classList.contains("go") && tc.dir === 2 && tc.painted[1] === 2, "right: the ring's sector 2 lit, the tank faces right");
     stick("pointermove", 85, 15);                                   // up-right
     ctl.poll(now() + 200);
     same(held(kb), [SC.W, SC.D].sort((a, b) => a - b), "up-right: " + held(kb));
+    assert(tc.dir === 1 && tc.painted[0] === "tank" && tc.painted[1] === 1 && paints[paints.length - 1] === 1, "up-right: sector 1, the tank turned");
     stick("pointermove", 10, 90); ctl.poll(now() + 400);            // down-left: S = the original's X key
     same(held(kb), [SC.A, SC.X].sort((a, b) => a - b), "down-left: " + held(kb));
     stick("pointermove", 55, 52); ctl.poll(now() + 600);            // back in the dead zone
     same(held(kb), [], "dead zone");
+    assert(!tc.base.classList.contains("go") && tc.dir === -1 && tc.painted[1] === 2, "dead zone: nothing lit, the tank already faces the push (right)");
     stick("pointermove", 50, -400); ctl.poll(now() + 800);          // far outside the base: clamped, still up
     same(held(kb), [SC.W]);
     assert(/translate\(0\.0px, -30\.0px\)/.test(tc.knob.style.transform), "knob drawn at the edge: " + tc.knob.style.transform);
     tc.fireBtn.dispatch("pointerdown", { pointerId: 2, pointerType: "touch" });      // second finger: FIRE
     same(held(kb), [SC.W, SC.BLUEFIRE].sort((a, b) => a - b), "move + fire: " + held(kb));
+    dead = true; ctl.poll(now() + 900);                             // the tank destroyed: nothing held, no joystick / FIRE
+    same(held(kb), [], "destroyed: released");
+    assert(tc.root.classList.contains("dead") && tc.state().fire === false && tc.state().up === false, "destroyed: class dead, no input");
+    tc.fireBtn.dispatch("pointerdown", { pointerId: 9, pointerType: "touch" }); ctl.poll(now() + 950);
+    same(held(kb), [], "destroyed: FIRE does nothing");
+    tc.fireBtn.dispatch("pointerup", { pointerId: 9 });
+    dead = false; ctl.poll(now() + 980);
+    assert(!tc.root.classList.contains("dead"), "alive again (a new round): back");
+    stick("pointerdown", 50, -400);
+    tc.fireBtn.dispatch("pointerdown", { pointerId: 2, pointerType: "touch" });
     stick("pointerup", 50, -400);
     tc.fireBtn.dispatch("pointerup", { pointerId: 2 });
     ctl.poll(now() + 1000);
     same(held(kb), [], "all released");
+    assert.strictEqual(tc.painted[1], 4, "let go: the tank faces as the game's (down)");
     tc.escBtn.dispatch("pointerdown", { pointerId: 3 });
     same(held(kb), [SC.ESC], "ESC");
     tc.escBtn.dispatch("pointerup", { pointerId: 3 }); ctl.poll(now() + 1200);
@@ -234,7 +257,7 @@ const SC = { W: 0x11, A: 0x1E, X: 0x2D, D: 0x20, BLUEFIRE: 0x1D, GREENFIRE: 0x1C
     same(kb.takeKeys(), [[0, SC.DOWN, false], [13, SC.GREENFIRE, false]], "menu: joystick = arrows, FIRE = Enter");
     // labels in every language
     for (const code of env.win.Lang.codes) {
-      for (const k of ["touch.fire", "touch.esc"]) assert(env.win.Lang.data[code][k], code + " " + k);
+      for (const k of ["touch.fire", "touch.esc", "touch.quit", "touch.leave"]) assert(env.win.Lang.data[code][k], code + " " + k);
     }
     ok("touch: joystick (8 directions, dead zone, clamped) + FIRE + ESC -> BLUE's keys; menus: arrows / Enter; shown on the first touch; labels in every language");
   }
@@ -407,7 +430,8 @@ const SC = { W: 0x11, A: 0x1E, X: 0x2D, D: 0x20, BLUEFIRE: 0x1D, GREENFIRE: 0x1C
     const env = makeEnv("");
     env.load("js/controls.js", "js/input.js", "js/pads.js");
     const P = env.win.Pads, cl = env.body.classList;
-    same(P.TOUCH, { size: ["small", "medium", "large"], left: ["off", "on"] });
+    same(P.TOUCH, { size: ["small", "medium", "large"], left: ["off", "on"], look: ["plain", "tank"] });
+    assert.strictEqual(P.getTouch("look"), "plain");
     assert.strictEqual(P.getTouch("size"), "medium"); assert.strictEqual(P.getTouch("left"), "off");
     assert.strictEqual(P.getTouch("nope"), null);
     assert.strictEqual(P.setTouch("size", "huge"), false); assert.strictEqual(P.setTouch("left", "maybe"), false);
@@ -422,6 +446,10 @@ const SC = { W: 0x11, A: 0x1E, X: 0x2D, D: 0x20, BLUEFIRE: 0x1D, GREENFIRE: 0x1C
     assert(cl.contains("tpad-left") && env.win.localStorage.getItem("tunneler.touch.left") === "1" && P.getTouch("left") === "on");
     P.setTouch("left", "off");
     assert(!cl.contains("tpad-left") && env.win.localStorage.getItem("tunneler.touch.left") === "0");
+    assert.strictEqual(P.setTouch("look", "tank"), true);
+    assert(cl.contains("tpad-tank") && env.win.localStorage.getItem("tunneler.touch.look") === "tank" && P.getTouch("look") === "tank", "the tank look");
+    P.setTouch("look", "plain");
+    assert(!cl.contains("tpad-tank") && P.setTouch("look", "fancy") === false, "plain again; no other look");
     // a page opened with them stored
     const env2 = makeEnv("");
     env2.win.localStorage.setItem("tunneler.touch.size", "large"); env2.win.localStorage.setItem("tunneler.touch.left", "1");
@@ -430,9 +458,10 @@ const SC = { W: 0x11, A: 0x1E, X: 0x2D, D: 0x20, BLUEFIRE: 0x1D, GREENFIRE: 0x1C
     assert(env2.body.classList.contains("tpad-large") && env2.body.classList.contains("tpad-left"), "stored options applied at the start");
     const css = fs.readFileSync(path.join(SRC, "css", "style.css"), "utf8");
     for (const re of [/body\.tpad-small\s*\{\s*--tpad-k:/, /body\.tpad-large\s*\{\s*--tpad-k:/, /\.tpad-stick\s*\{[^}]*var\(--tpad-k/,
-      /\.tpad-fire\s*\{[^}]*var\(--tpad-k/, /body\.tpad-left \.tpad-stick\s*\{[^}]*right:/, /body\.tpad-left \.tpad-fire\s*\{[^}]*left:/])
+      /\.tpad-fire\s*\{[^}]*var\(--tpad-k/, /body\.tpad-left \.tpad-stick\s*\{[^}]*right:/, /body\.tpad-left \.tpad-fire\s*\{[^}]*left:/,
+      /body\.tpad-tank \.tpad-tankpic\s*\{[^}]*display: block/, /body\.tpad-tank \.tpad-shell\s*\{[^}]*display: block/, /html\.modern body\.tpad-tank \.tpad-shellm\s*\{[^}]*display: block/, /\.tpad-stick\.go::after\s*\{[^}]*opacity: 1/])
       assert(re.test(css), "style.css: " + re);
-    ok("touch controls: size small / medium / large and the sides stored (tunneler.touch.size / .left), applied live and at the start");
+    ok("touch controls: size small / medium / large, the sides and the look stored (tunneler.touch.size / .left / .look), applied live and at the start");
   }
 
   // ------------------------------------------------------------ the pages

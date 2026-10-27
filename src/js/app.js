@@ -85,6 +85,7 @@ function resetScreen() {
   c.style.cursor = "";
   s.style.display = "none";
   for (const k of ["width", "cursor"]) s.style[k] = "";
+  document.body.style.setProperty("--status-k", "0"); document.body.style.setProperty("--status-gap", "0px");   // (statusline.js room)
 }
 
 async function show() {
