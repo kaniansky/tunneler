@@ -138,7 +138,13 @@ function screen(rows = 25) {
   const B = T.analyse(d.t);
   assert.ok(B.panels.length === 1 && B.panels[0].double && B.panels[0].fg === 14, "double frame");
   assert.strictEqual(T.analyse(Object.assign({}, d.t, { c0: 40, c1: 80 })).panels.length, 0, "cropped off");
-  ok("analysis: panels (title gaps, separators), the highlight, rules, titles, loose pieces, double frames, crop");
+  // a short screen: the phone layout's (a view) has its title; a status line's red text is none
+  const sh = screen();
+  sh.put(1, 10, "Controls", 0x0C);
+  const short = extra => T.analyse(Object.assign({}, sh.t, { rows: 12 }, extra)).titles.length;
+  assert.strictEqual(short({ view: { rows: 12, units: 30, top: 0 } }), 1, "a short phone screen's title");
+  assert.strictEqual(short({}), 0, "no title on a short screen without a view (a status line)");
+  ok("analysis: panels (title gaps, separators), the highlight, rules, titles (short phone screens too), loose pieces, double frames, crop");
 }
 
 // ---------------------------------------------------------------- drawing

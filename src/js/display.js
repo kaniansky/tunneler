@@ -238,7 +238,7 @@ class Display {
       for (let k = inWin ? 0 : lay.n; k < (inWin ? lay.n : lay.y.length); k++) if (y >= lay.y[k]) row = k;
       if (y >= lay.total) row = lay.y.length;
       if (inWin && row >= 0 && y >= lay.y[row] + lay.h[row]) row = -1;   // (below the content)
-    } else row = Math.floor((ev.clientY - r.top) / r.height * (this.snap.mode === "text" ? this.snap.rows || 25 : 100));
+    } else row = Math.floor((ev.clientY - r.top) / r.height * (this.snap.mode === "text" ? this.snap.rows || 25 : this.snap.rows || 100));
     return col >= c0 && col < c1 && row >= 0 ? [col, row] : null;
   }
 
@@ -247,7 +247,7 @@ class Display {
     if (!s) return;
     const blinkOn = Math.floor(now / BLINK_MS) % 2 === 0;
     const [c0, c1] = this.columns();
-    const z = this.zoom(), text = s.mode === "text", rows = z ? z.rows : text ? s.rows || 25 : 100;
+    const z = this.zoom(), text = s.mode === "text", rows = z ? z.rows : text ? s.rows || 25 : s.rows || 100;
     const vram = z ? z.vram : s.vram, uni = z ? z.uni : s.uni;
     const key = c0 + "," + c1 + "," + rows + "," + (z ? 1 : 0) + "," + (text ? blinkOn : "");
     if (key === this.lastKey) return;
@@ -265,11 +265,18 @@ class Display {
       this.canvas.style.width = "min(calc(100vw - var(--screen-px, 16px)), calc((100dvh - var(--screen-py, 16px)) * " + ratio.toFixed(4) + "))";
       this.canvas.style.aspectRatio = (c1 - c0) * 9 + " / " + (scan * 1.35).toFixed(1);
       this.shaped = true;
+    } else if (!text && s.rows && s.rows !== 100) {
+      // (a LORES screen taller than 100 rows - the map editor on a phone held upright: 4 scan lines a row, shown as tall as
+      // the game's)
+      const ratio = (c1 - c0) * 9 / (rows * 4 * 1.35);
+      this.canvas.style.width = "min(calc(100vw - var(--screen-px, 16px)), calc((100dvh - var(--screen-py, 16px)) * " + ratio.toFixed(4) + "))";
+      this.canvas.style.aspectRatio = (c1 - c0) * 9 + " / " + (rows * 4 * 1.35).toFixed(1);
+      this.shaped = true;
     } else if (this.shaped || this.canvas.style.aspectRatio) {   // (also a shape the previous screen left: app.js)
       this.canvas.style.width = ""; this.canvas.style.aspectRatio = ""; this.shaped = false;
     }
 
-    const width = (c1 - c0) * 9, height = text ? scan : 400;
+    const width = (c1 - c0) * 9, height = text ? scan : rows * 4;
     if (this.canvas.width !== width || this.canvas.height !== height) {
       this.canvas.width = width; this.canvas.height = height;
       this.img = null;

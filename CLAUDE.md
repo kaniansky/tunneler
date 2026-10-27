@@ -93,7 +93,8 @@ may be redesigned, but always in the original's DOS look.
   `TESTS` in run.js. `npm run test:engine | test:ext | test:ai | test:net | test:lang | test:local` run parts:
   - `gfx-check.js` / `gfx-text-check.js` - the Graphics setting (original / modern, the modern settings'
     presets), the original painted exactly as before, the presenter (fake WebGL2), `engine.cams`; the modern
-    text renderer (font coverage, decoding, panels, the sliding highlight) - docs/GRAPHICS.md 7.
+    text renderer (font coverage, decoding, panels, the sliding highlight; titles - red rows between blank ones - on
+    whole screens or the phone layout's short ones, `t.view`) - docs/GRAPHICS.md 7.
   - `unicode-check.js` - names / room names / chat in any letters (Slovak, Cyrillic, Greek, CJK, emoji)
     through the Unicode plane: widths, glyph lookup order and lazy blocks, Display.paint of wide glyphs,
     Lang.enc pass-through, engine round title / statistics (classic 9 columns), DosUI, status line, the
@@ -1041,7 +1042,7 @@ page from before 2.0 - is refused (POST 409 `{code:
   option `map` (a code): `paintMapStep` instead of the generator (no Random()), forces the extended engine and the
   map's size, `mapBases` deals N of the K bases with the engine's RNG (K < N: the rest placed at random), `openBase`
   as always; without it nothing changes. `src/js/mapstore.js` (`MapStore`: IndexedDB "tunneler-maps", `share` = POST
-  /api/maps - once per server: `sharedAt` / `sharedHere(rec)` -, `fetchShared`). Route `/maps` (`maps.js`; `/maps/<id>`, `/map/<id>` = a shared one; the app:
+  /api/maps - once per server: `sharedAt` / `sharedHere(rec)` -, `fetchShared`). Route `/maps` (`maps.js`; the editor's LORES screen 100 rows - a phone held upright: as many as fit above its status line (`LR`, `screenRows`; snap.rows -> Display shapes the canvas), a map opening as far in as its height fits; `/maps/<id>`, `/map/<id>` = a shared one; the app:
   `maps.html?id= / ?share=`): the list, a new map (dirt / a random world), a map's screen, open a link, the editor
   (LORES screen + the clickable status line; keys / mouse / touch - two fingers move and pinch - / gamepad; undo; no
   menu - Esc / "Done" goes to the map's screen, which has the Name row and says on Edit what keeps the map from being

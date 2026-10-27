@@ -301,7 +301,9 @@ function analyse(t) {
       s = ch === 0x5F || ch === 0x2D ? c : -1;
     }
   }
-  // titles: a row of bright red text with blank rows above and below (drawn larger)
+  // titles: a row of bright red text with blank rows above and below (drawn larger) - on a whole screen (20+ rows, not
+  // a status line) or the phone layout's (t.view: as short as its content - owner, 2026-10-27: a short phone screen's
+  // title, "Controls", stayed small while "MAP" was large)
   const titles = [];
   const blank = (r, a, b) => {
     if (r < 0 || r >= rows) return true;
@@ -311,7 +313,7 @@ function analyse(t) {
     }
     return true;
   };
-  for (let r = 0; r < rows && rows >= 20; r++) {
+  for (let r = 0; r < rows && (rows >= 20 || t.view); r++) {
     let a = -1, b = -1, ok = true;
     for (let c = c0; c < c1; c++) {
       const i = r * 80 + c, ch = cp[i];

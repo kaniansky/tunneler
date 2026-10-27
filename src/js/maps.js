@@ -28,7 +28,10 @@ const VALUE = { tunnel: MapData.TUNNEL, dirt: MapData.DIRT, rock: MapData.ROCK }
 const BRUSHES = [0, 1, 2, 3, 5, 8];                        // radius in cells (shown as the diameter)
 const ZOOMS = [0.25, 0.5, 1, 2, 4];                       // LORES pixels per cell
 const ZOOM_TEXT = ["1:4", "1:2", "1:1", "2:1", "4:1"];
-const VX0 = 2, VY0 = 1, VW = 156, VH = 98;                // the map's window on the LORES screen (pixels)
+// the map's window on the LORES screen (pixels); LR = the screen's rows: 100, on a phone held upright as many as fit
+// above the status line (screenRows - owner, 2026-10-27: the map was a small strip at the top), VH with them
+const VX0 = 2, VY0 = 1, VW = 156;
+let LR = 100, VH = 98;
 const UNDO_MAX = 30;
 const BASE_COLORS = TunnelerEngine.PLAYER_COLORS;         // base i in tank colour i (extended palette)
 // 3 x 5 pixel digits for the bases' numbers (bit 4 = the left column)
@@ -299,11 +302,24 @@ export function mount() {
   }
 
   // ------------------------------------------------------------ the editor
+  // the LORES screen's rows: a phone held upright - its width's pixels as tall as the game's (4 scan lines shown at
+  // 1.35), the page's height less its three status rows; else the game's 100
+  function screenRows() {
+    if (!GameScreen.narrow()) return 100;
+    const w = window.innerWidth || 390, h = window.innerHeight || 844, row = w / 160 * 1.2, status = w * 3 * 16 * 1.35 / (40 * 9) + 8;
+    return Math.max(100, Math.min(400, Math.floor((h - status) / row)));
+  }
+  function setRows() { LR = screenRows(); VH = LR - 2; }
+  // (turning the phone, a resized window: the editor's screen takes the new height)
+  window.addEventListener("resize", () => { if (ed && screenRows() !== LR) { setRows(); clampView(true); render(); } });
   function edit(rec, map) {
     ed = { rec, map: MapData.copy(map), tool: "rock", brush: 1, zoom: 2, cx: map.w >> 1, cy: map.h >> 1, ox: 0, oy: 0,
       undo: [], msg: null, menu: false, stroke: false, last: null, changed: false, reach: null, reachShown: null };
-    // a medium / large map starts zoomed out so all of it shows
+    setRows();
+    // a medium / large map starts zoomed out so all of it shows; a phone held upright: as far in as its height fits the
+    // tall window (the sides pan)
     while (ed.zoom > 0 && map.w * ZOOMS[ed.zoom] > VW * 1.0001) ed.zoom--;
+    if (LR > 100) while (ed.zoom < ZOOMS.length - 1 && map.h * ZOOMS[ed.zoom + 1] <= VH) ed.zoom++;
     clampView(true);
     statusEl.style.display = "";
     render();
@@ -331,15 +347,15 @@ export function mount() {
     const r = canvas.getBoundingClientRect();
     if (!r.width || !r.height) return null;
     const dot = (ev.clientX - r.left) / r.width * 720, c = Math.floor(dot / 9);
-    return [c * 2 + (dot - c * 9 >= 4 ? 1 : 0), Math.floor((ev.clientY - r.top) / r.height * 100)];
+    return [c * 2 + (dot - c * 9 >= 4 ? 1 : 0), Math.floor((ev.clientY - r.top) / r.height * LR)];
   }
   const inMap = (x, y) => x >= 0 && y >= 0 && x < ed.map.w && y < ed.map.h;
 
   function render() {
     if (!ed) return;
-    const m = ed.map, z = zoomOf(), vram = new Uint8Array(16000);
-    for (let i = 0; i < 16000; i += 2) { vram[i] = 176; vram[i + 1] = 0x01; }   // (the game's dotted frame)
-    const px = new Uint8Array(160 * 100).fill(255);                             // 255 = the frame shows
+    const m = ed.map, z = zoomOf(), vram = new Uint8Array(LR * 160);
+    for (let i = 0; i < vram.length; i += 2) { vram[i] = 176; vram[i + 1] = 0x01; }   // (the game's dotted frame)
+    const px = new Uint8Array(160 * LR).fill(255);                              // 255 = the frame shows
     const k = z < 1 ? Math.round(1 / z) : 1;
     for (let y = VY0; y < VY0 + VH; y++)
       for (let x = VX0; x < VX0 + VW; x++) {
@@ -385,14 +401,14 @@ export function mount() {
         for (let y = 0; y < Math.max(1, z); y++) for (let x = 0; x < Math.max(1, z); x++) plot(x0 + x, y0 + y, 14);
       }
     }
-    for (let y = 0; y < 100; y++)
+    for (let y = 0; y < LR; y++)
       for (let c = 0; c < 80; c++) {
         const a = px[y * 160 + c * 2], b = px[y * 160 + c * 2 + 1];
         if (a === 255 && b === 255) continue;
         vram[y * 160 + c * 2] = 0xDD;
         vram[y * 160 + c * 2 + 1] = ((b === 255 ? 0 : b) << 4) | (a === 255 ? 0 : a);
       }
-    display.setSnapshot({ t: 0, mode: "lores", screen: "editor", palette: "extended", vram });
+    display.setSnapshot({ t: 0, mode: "lores", screen: "editor", palette: "extended", vram, rows: LR });
     renderBar();
   }
   const inBrush = (dx, dy, r) => dx * dx + dy * dy <= r * r + r;
@@ -566,7 +582,7 @@ export function mount() {
     }
     if (pan) {
       const r = canvas.getBoundingClientRect(), z = zoomOf();
-      ed.ox = pan.ox - (ev.clientX - pan.x) / r.width * 160 / z; ed.oy = pan.oy - (ev.clientY - pan.y) / r.height * 100 / z;
+      ed.ox = pan.ox - (ev.clientX - pan.x) / r.width * 160 / z; ed.oy = pan.oy - (ev.clientY - pan.y) / r.height * LR / z;
       clampView(false); render(); return;
     }
     const before = [ed.cx, ed.cy];
@@ -608,10 +624,10 @@ export function mount() {
   function pinchMove() {
     const [a, b] = [...touches.values()], r = canvas.getBoundingClientRect(), z = zoomOf();
     const d = Math.hypot(a.x - b.x, a.y - b.y), mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
-    ed.ox = pinch.ox - (mx - pinch.mx) / r.width * 160 / z; ed.oy = pinch.oy - (my - pinch.my) / r.height * 100 / z;
+    ed.ox = pinch.ox - (mx - pinch.mx) / r.width * 160 / z; ed.oy = pinch.oy - (my - pinch.my) / r.height * LR / z;
     clampView(false);
     if (d / pinch.d > 1.6 || d / pinch.d < 0.6) {           // (a zoom step per pinch of that much, around the fingers)
-      const sx = (mx - r.left) / r.width * 160, sy = (my - r.top) / r.height * 100;
+      const sx = (mx - r.left) / r.width * 160, sy = (my - r.top) / r.height * LR;
       setZoom(d > pinch.d ? 1 : -1, [sx, sy]);
       pinch = pinchState();
     }

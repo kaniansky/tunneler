@@ -4,6 +4,13 @@ All notable changes to Tunneler. Versions follow [semantic versioning](https://s
 by pushing a version tag (see CONTRIBUTING.md). Up to its version 6.0.1 the game was called Tunneler Online:
 those releases are tagged `online-vX.Y.Z`, their changes are in [docs/CHANGELOG-online.md](docs/CHANGELOG-online.md).
 
+## 1.1.5
+
+- The map editor on a phone held upright uses the whole screen above its tools (it was a small strip at the top), and
+  a map opens as far in as its height fits - the sides scroll with two fingers.
+- Modern graphics: the titles of short phone screens ("Controls", "UNSAVED CHANGES") are as large as the others.
+- Plays together with 1.1.0 - 1.1.4: nothing in the game changed.
+
 ## 1.1.4
 
 - Screens no longer jump: Settings keeps its place whichever category is chosen (pressing one on a phone held

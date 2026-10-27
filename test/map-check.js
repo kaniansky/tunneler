@@ -711,6 +711,23 @@ const ticks = async (n = 8) => { for (let i = 0; i < n; i++) await tick(); };
     await new Promise(r => setTimeout(r, 500));
     assert.strictEqual(basesSeg().attr, 0x0C, "red again after a moment");
   });
+  await okAsync("the editor on a phone held upright: a LORES screen as tall as fits above the status line, the map as far in as its height fits", async () => {
+    const env = makeEnv("/maps");
+    env.page("maps.html");
+    await ticks();
+    const w = env.win, api = w.tunnelerMapsApi, ui = w.tunnelerMapsUI();
+    const rec = await w.MapStore.save(testMap("medium", 2));
+    w.tunnelerMapsOpen(rec);
+    assert.strictEqual(ui.display.snap.rows, 100, "a desktop: the game's 100 rows");
+    assert.strictEqual(w.tunnelerMapEditor().zoom, 1, "a medium map zoomed out to its width (1:2)");
+    await api.leaveEditor();
+    Object.assign(w, { matchMedia: q => ({ matches: /coarse/.test(q) }), innerWidth: 390, innerHeight: 844 });
+    w.tunnelerMapsOpen(rec);
+    const snap = ui.display.snap, ed = w.tunnelerMapEditor();
+    assert(snap.rows > 200 && snap.vram.length === snap.rows * 160, "upright: a tall LORES screen (" + snap.rows + " rows)");
+    assert.strictEqual(ed.zoom, 3, "the medium map (128 cells tall) at 2:1 - its height fits");
+    await api.leaveEditor();
+  });
   await okAsync("map files: Save as a file (a download; the Android app's saveFile with the name and the bytes), Open a map file (kept as a new map, its screen); a broken file refused", async () => {
     const env = makeEnv("/maps");
     env.page("maps.html");
