@@ -808,6 +808,9 @@ const ticks = async (n = 8) => { for (let i = 0; i < n; i++) await tick(); };
     assert(!w.Lang.decode(ui.spec.items.find(it => it.key === "map").label).includes("Split"), "Left / Right skip it");
     ui.spec.items.find(it => it.key === "map").go();
     await ticks(4);
+    assert(ui.spec.items.some(it => it.key === "random") && ui.spec.items.some(it => it.key === "layout"), "the picker opens on generated (a generated kind chosen)");
+    ui.spec.items.find(it => it.key === "tab").change(1);   // (generated -> your maps)
+    await ticks(4);
     assert(!ui.spec.items.some(it => it.key === "m:" + split.id) && ui.spec.items.some(it => it.key === "none"), "the picker: not listed");
     ui.spec.items.find(it => it.key === "back").go();
     // (one chosen before - stored): the Map row and Start say why
