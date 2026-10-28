@@ -1,8 +1,8 @@
 # Play Console forms - suggested answers
 
 For Tunneler 1.0.0 (`com.kaniansky.Tunneler`). Play Console -> the app -> Policy and programs ->
-App content. The answers follow what the code does (checked in `server.js`, `src/js/online.js`,
-`src/js/replay.js`, `src/js/endpoint.js`, the Android manifest); the privacy policy
+App content. The answers follow what the code does (checked in `server.js`, `src/js/routes/online.js`,
+`src/js/game/replay.js`, `src/js/net/endpoint.js`, the Android manifest); the privacy policy
 (`site/privacy.html`, https://kaniansky.com/tunneler/privacy.html) says the same in prose. Re-check the
 Data safety form whenever online play or replay sharing changes.
 

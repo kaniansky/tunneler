@@ -1,5 +1,5 @@
 // Player accounts (docs/v6/ACCOUNTS.md): their texts, and their section on the Information page (before the desktop app's).
-import { Lang } from "../../js/lang.js";
+import { Lang } from "../../js/text/lang.js";
 Lang.extend("cs", {
   "acc.server": "Server: {host}", "acc.wait": "Moment...",
   "acc.login.title": "PŘIHLÁŠENÍ",

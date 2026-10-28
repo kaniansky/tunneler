@@ -11,13 +11,19 @@ those releases are tagged `online-vX.Y.Z`, their changes are in [docs/CHANGELOG-
   `S3_REGION`, `S3_BUCKET_REPLAYS` / `_MAPS` / `_ACCOUNTS` / `_CHALLENGES` / `_STATE`), else in its folder in
   `DATA_DIR` (default `data/`; Docker `/app/data`). One bucket for everything let the replays' "delete after 90 days"
   rule delete shared maps and unused accounts too. The old `REPLAY_S3_*`, `REPLAY_DIR`, `MAP_DIR`, `ACCOUNT_DIR`,
-  `ACCOUNT_S3_BUCKET` and `STATE_DIR` are gone (README.md, Hosting).
+  `ACCOUNT_S3_BUCKET` and `STATE_DIR` are gone (README.md, Hosting) - the server's log warns when one is still set.
+  Moving an existing bucket's data: accounts `account-<x>.json` -> `<x>.json` (accounts' bucket), the leaderboards
+  `challenge-<day>.json.gz` -> `<day>.json.gz` (challenges' bucket), shared maps `<id>.map` (maps' bucket); a Docker
+  volume mounted at `/app/replays` -> `/app/data` (its files in `replays/`, `maps/`...). `tools/migrate-buckets.js`
+  copies a 1.1.5 bucket's objects into the new buckets (a dry run first; `--go` copies).
 - Map gallery (Maps, Map gallery): the maps players published on the server, the newest or the most played first, each
   with a picture of the map. A published map can be added to your maps, played in a skirmish or linked; a map's screen
   has "Publish to the gallery" (and "Remove from the gallery" for your own). Only a map that can be played is published.
 - The Map setting (skirmish, the online game's host) opens a map picker: random, your maps or the gallery's, with a
   picture of the selected one; Left / Right still step through your maps. A map that can't be played (too few bases, a
-  base a tank can't reach) is shown gray with the reason and can't be chosen.
+  base a tank can't reach) isn't offered.
+- Skirmish on a phone held upright: the settings are on the skirmish's screen (no separate Game settings screen), all
+  of it fitting the phone.
 - An older server has no gallery: the picker and the gallery say so, everything else works.
 - After a skirmish or a split-screen match the menu has "Watch the replay" between Rematch and Back: the match's
   replay, whose Back (or Esc) returns to the skirmish's / split screen's settings.
@@ -25,10 +31,49 @@ those releases are tagged `online-vX.Y.Z`, their changes are in [docs/CHANGELOG-
   "Skirmish"; a replay's screen says both ("Skirmish, capture the flag").
 - Watching a replay or an online game as a spectator: the views and the status line under them no longer run past the
   bottom of a wide window.
-- Modern graphics: a one-line red message under a menu ("Press again to delete it.") is no longer drawn as large as
-  a screen's title.
+- The game's engine plays only the match now: the screen after a skirmish or a split-screen match (statistics, Rematch,
+  Watch the replay, Back) is the page's own menu, and the Instructions / Information pages need no engine. Every match
+  plays exactly as before: online games with 1.1.0 - 1.1.5 pages and old replays are unchanged.
+- Phones held upright: the replays, the maps, the map gallery, the list of games and the daily leaderboard fit the
+  screen - only their list scrolls. A menu item's description also shows while a finger holds the item.
+- Skirmish: the chosen map's picture under the players, the Game box under the settings. Map pictures show only the
+  inner edge of the map's rock frame.
+- Online game's lobby: the chat under the players, the Game box under the settings; the watchers are the players
+  box's last row ("Watching: Anna, Ben +3"), the players box as wide as the chat (its columns spread out); View - your
+  own choice of what you see - is in the Settings under View limit, always shown ("View: self" grayed when the room
+  allows nothing else). On a phone the lobby's boxes follow one another without an empty row between them.
+- Player names up to 16 columns (were 12; an account's username stays at most 12 - a display name may have 16).
+  Where there is less room - the statistics, the rounds list,
+  the round title of 5+ teams, the leaderboard, a phone's lobby - a longer name is cut.
+- The page draws with one canvas (was two, four with modern graphics): the game, the menus and the status line are
+  layers of it. Modern graphics draw the menus from what the menu says it is (its boxes, title, highlight, rule)
+  instead of guessing from the text: a red message under a menu ("Press again to delete it.") is no longer drawn as
+  large as a title, and titles right above a box (the list of games) are drawn as titles.
 - A replay's screen: the players in a box of their own beside Watch / Share / Save / Delete - with 8 tanks the list
   pushed the descriptions off the bottom of the screen.
+- A setting that doesn't apply now (Friendly fire without a team of two, the map size of a chosen map, the round time
+  in infection, View when the room allows only your own) shows its value gray but can be selected: its description
+  says why.
+- The daily leaderboard: the "more below" arrow sits on a rule under the list (as "more above" does under the
+  header) instead of on the day row.
+- Modern graphics: the RED tank's line on the round title (a skirmish, the daily challenge) is no longer drawn as large
+  as a title. The game's engine draws nothing any more: a screen of its own draws what it shows (every picture exactly
+  as before) and tells modern graphics what each part is - the round title's box, the menu's title - instead of it
+  being guessed.
+- Split screen is a game like any other: a skirmish of player 1 (BLUE) against player 2 (GREEN) with split screen's
+  settings - each player's own view side by side with their name, the settings on the round title, the rounds after the
+  match. It runs the skirmish's rules (it was the 1991 game: a base's shield repair from a teammate and bases dug open
+  now apply, as in every other local game). Old split-screen replays play as they were recorded.
+- The original program's own menu and pages are gone from the game's engine (the site's menus have their own).
+- The Statistics of an online game or a replay in a game mode: the mode's column (gold brought home, seconds on the
+  hill, kills) shows the match's numbers (it showed 0, or the page failed for gold rush, capture the flag, infection,
+  siege and survival).
+- Sound right after another screen (Watch the replay after a match, a game started from a menu) without first
+  clicking or pressing a key: the page keeps one sound output for all its screens.
+- Modern graphics: a moving play screen is drawn once a frame (it was drawn twice), and a graphics card reset (the
+  browser's "context lost") no longer leaves the screen black.
+- Map gallery: at most 50 maps published a day from one address; a gallery index that can't be read is reported, never
+  overwritten.
 - Plays together with 1.1.0 - 1.1.5: nothing in the game changed.
 
 ## 1.1.5

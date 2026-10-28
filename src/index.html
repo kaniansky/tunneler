@@ -13,12 +13,14 @@
 <script>try { if (localStorage.getItem("tunneler.gfx") !== "original") document.documentElement.classList.add("modern"); } catch (e) { document.documentElement.classList.add("modern"); }</script>
 </head>
 <body>
+<!-- the page's one canvas (surface.js, docs/RENDERING.md): it draws #screen and #status where they sit -->
+<canvas id="surface" aria-hidden="true"></canvas>
 <div class="screen">
   <div class="stage">
-    <canvas id="screen" class="game" width="720" height="400" aria-label="Tunneler"></canvas>
+    <div id="screen" class="game" role="img" aria-label="Tunneler"></div>
     <div id="loading" class="loading" role="status"><span>Loading</span><span class="cursor">_</span></div>
   </div>
-  <canvas id="status" class="status" width="720" height="32" style="display: none"></canvas>
+  <div id="status" class="status" style="display: none"></div>
   <noscript><p>TUNNELER needs JavaScript.</p></noscript>
 </div>
 <script type="module" src="/js/app.js"></script>

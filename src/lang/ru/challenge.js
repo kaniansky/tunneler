@@ -1,5 +1,5 @@
-// Тексты ежедневного испытания (docs/v6/CHALLENGE.md; src/js/daily.js, play.js, home.js).
-import { Lang } from "../../js/lang.js";
+// Тексты ежедневного испытания (docs/v6/CHALLENGE.md; src/js/routes/daily.js, play.js, home.js).
+import { Lang } from "../../js/text/lang.js";
 
 Lang.extend("ru", {
   "ch.locale": "ru",                                 // (the date's language: Intl.DateTimeFormat)

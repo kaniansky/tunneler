@@ -1,5 +1,6 @@
 "use strict";
-// Game mode "survival" (docs/DESIGN-8P.md 27, src/js/modes/survival.js): the players (team 1) against waves
+const { MatchText: MT } = require("../src.js");   // (the screens' texts: matchtext.js)
+// Game mode "survival" (docs/DESIGN-8P.md 27, src/js/game/modes/survival.js): the players (team 1) against waves
 // of AI tanks (team 2).
 //   - the sides: seats driven by a TunnelerAI are the waves, the others the players (AI-only: the lowest
 //     team number plays the players' side); teams 1 / 2 whatever the seats' teams were
@@ -142,7 +143,7 @@ for (const goal of [GMIN, 7, GMAX]) {
     "the choices: 3 5 7 10 15 20 (engine and NetProto), default 5");
   const h = setupGame({ teams: [1, 2], levels: [null, "normal"], goal: 15 });
   h.e.showSettings = {};
-  check(h.e.settingsParts().some(x => /waves to win: 15/.test(x)), "settings: \"waves to win: 15\" instead of rounds to win (" + h.e.settingsParts() + ")");
+  check(new MT(h.e).settingsParts().some(x => /waves to win: 15/.test(x)), "settings: \"waves to win: 15\" instead of rounds to win (" + new MT(h.e).settingsParts() + ")");
 }
 {
   // tougher waves beyond wave 5 - bounded: the shield full from wave 7, armor at most MAX_ARMOR halves (wave

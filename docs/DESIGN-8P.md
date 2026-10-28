@@ -38,7 +38,7 @@ grid**, **live map + scores** and **follow one player**.
 | online, 2 slots, both human, free-for-all | classic (as today) |
 | online, any computer slot, or 3-8 slots, or teams | extended |
 
-## 2. Engine API (src/js/engine.js) - implemented
+## 2. Engine API (src/js/game/engine.js) - implemented
 
 ```js
 new TunnelerEngine(seed)                                   // classic, unchanged
@@ -107,7 +107,7 @@ Screens in extended mode:
 - Engine exposes for the AI and spectators: `tankX/tankY/tankDir/energy/shield/alive/baseX/baseY` as
   arrays indexed 1..N (as today, just longer), `nPlayers`, `teams`, `team(i)`.
 
-## 3. Computer players (src/js/ai.js) - implemented
+## 3. Computer players (src/js/game/ai.js) - implemented
 
 `new TunnelerAI(level, player)` works for any player 1..N in both modes; it targets the nearest
 enemy (not its teammates in team mode), avoids teammates' fire lines, refuels at its own base.
@@ -135,7 +135,7 @@ locally each frame, so bot keys never travel over the network. Helper:
 - Each player sees only their own view (`views[me]`). Status line shows their colour.
 - Lobby list shows "3/4" players and the mode.
 
-## 5. Spectator views (new src/js/views.js + online.js integration) - implemented
+## 5. Spectator views (new src/js/draw/views.js + online.js integration) - implemented
 
 Switch with Tab / 1 2 3 (and a status-line hint); Left / Right choose the player in "follow":
 1. **Grid** - every player's view (extended) side by side: columns = min(N, 4), rows = ceil(N / 4);
@@ -340,7 +340,7 @@ vs computer "View: self / team / everyone" (`?view=`, `tunneler.cpu.view`; old `
 
 ## 24. One file per language (owner, 2026-10-14 - after the follow-up workflow) - implemented
 
-Split src/js/lang.js: the core (encoding, font slots, t(), set(), apply()) stays in src/js/lang.js;
+Split src/js/text/lang.js: the core (encoding, font slots, t(), set(), apply()) stays in src/js/text/lang.js;
 each language moves to src/lang/<code>.js (en, sk, cs, uk, ru, genz) as plain scripts calling
 `Lang.register(code, { ...same structure... })` (loaded after lang.js, before page scripts; also
 require()-able from node tests). The language list = registered languages in load order. Adding a
@@ -461,8 +461,8 @@ Modifier (engine, done; "darkness" and "hard rock" were dropped - owner: not fun
 refuel but never repair shields. (Owner, 2026-10-23: the "Base repairs" setting and the noRepair modifier are gone - from the
 lobby, the skirmish screen, links, rooms, the engine and the AI; old `&norepair=1` links and short codes' bit are ignored.)
 
-### The framework (src/js/engine.js, src/js/ai.js, done)
-One file per mode: `src/js/modes/<mode>.js` (joined into `/js/modes.js` by build.js / server.js
+### The framework (src/js/game/engine.js, src/js/game/ai.js, done)
+One file per mode: `src/js/game/modes/<mode>.js` (joined into `/js/modes.js` by build.js / server.js
 `modesBundle`; node: engine.js requires every file there). It registers its hooks:
 ```js
 (function (root) {
@@ -630,7 +630,7 @@ everywhere there is some wait)"; "set to modern graphics as default".
 - The code is ES modules (src/package.json): explicit imports / exports instead of shared globals; esbuild
   bundles them (build.js: one entry, app.js, the routes as lazy chunks). Node >= 20.19 requires them as they
   are (server.js shares netproto.js; the tests: test/src.js, test/page-env.js). Languages and game modes are
-  listed by index modules (src/lang/index.js + one per language, src/js/modes/index.js); the checks fail
+  listed by index modules (src/lang/index.js + one per language, src/js/game/modes/index.js); the checks fail
   when one is left out. The engine is untouched - compare-wasm stays green.
 - One page (index.html) whose screens are routes (app.js): /, /games, /game/<id>[/<colour|watch>], /split,
   /skirmish, and the pre-5.0 page addresses. Going to another screen changes the address without loading a

@@ -1,5 +1,5 @@
-// Texty denní výzvy (docs/v6/CHALLENGE.md; src/js/daily.js, play.js, home.js).
-import { Lang } from "../../js/lang.js";
+// Texty denní výzvy (docs/v6/CHALLENGE.md; src/js/routes/daily.js, play.js, home.js).
+import { Lang } from "../../js/text/lang.js";
 
 Lang.extend("cs", {
   "ch.locale": "cs",                                 // (the date's language: Intl.DateTimeFormat)

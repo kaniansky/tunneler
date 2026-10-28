@@ -1,5 +1,6 @@
 "use strict";
-// Game mode "infection" (docs/DESIGN-8P.md 27; src/js/modes/infection.js) - run by test/modes-check.js.
+const { MatchText: MT, screenOf, statsOf } = require("../src.js");   // (the screens' texts: matchtext.js)
+// Game mode "infection" (docs/DESIGN-8P.md 27; src/js/game/modes/infection.js) - run by test/modes-check.js.
 //   - round start: one random infected tank (team number 1), the rest healthy (team number 2), whatever
 //     the seats' teams; the clock = the goal ("Survive for" minutes, default 3), any round time overridden
 //   - a healthy tank destroyed turns infected and is back at its base at once (its killer scores);
@@ -43,7 +44,7 @@ check(!!M && M.eliminationEnds === false && M.aiAlways === true, "infection: reg
   const u = start(4, { goal: 7 });
   check(u.goal === 3 && u.roundTicks === ticks(3), "infection: a goal that isn't a choice falls back to the default");
   t.showSettings = {};
-  const sp = t.settingsParts().join(", ");
+  const sp = new MT(t).settingsParts().join(", ");
   check(sp.includes("survive 2 min") && !/round time|rounds to win/.test(sp), "infection: the settings show the goal only (" + sp + ")");
   // patient zero differs between rounds / seeds
   const zs = new Set();
@@ -128,9 +129,9 @@ const clearOf = (e, p) => [...Array(e.nPlayers).keys()].map(i => i + 1)
 }
 
 // screen helpers: the text, the rows with blinking letters (the match winners on the statistics)
-const screenText = e => Array.from({ length: 2000 }, (_, k) => String.fromCharCode(e.vram[k * 2])).join("");
+const screenText = e => { const v = screenOf(e).vram; return Array.from({ length: 2000 }, (_, k) => String.fromCharCode(v[k * 2])).join(""); };
 const blinkRows = e => {
-  const v = e.vram, rows = new Set();
+  const v = statsOf(e).vram, rows = new Set();          // (the statistics page: matchtext.js)
   for (let r = 0; r < 25; r++) for (let c = 0; c < 80; c++) if (v[(r * 80 + c) * 2 + 1] & 128 && v[(r * 80 + c) * 2] !== 32) rows.add(r);
   return [...rows].map(r => Array.from({ length: 80 }, (_, c) => String.fromCharCode(v[(r * 80 + c) * 2])).join(""));
 };
@@ -172,7 +173,7 @@ const toStats = e => {
     "infection: patient zero and every tank it turned get the win, the last healthy one nothing (" + e.wins.slice(1) + ")");
   check([1, 2, 3, 4].every(p => e.matchWinner(p) === (p !== 4)), "infection: the match winners = the infected side");
   check(e.modeScore[1] === 1 && e.modeScore[2] === 1 && M.stat(e, 1) === 1, "infection: infections counted for the statistics");
-  const lines = e.matchRoundLines(19);
+  const lines = new MT(e).matchRoundLines(19);
   check(lines.length === 1 && lines[0].text.includes("infected") && /\d:\d\d$/.test(lines[0].text), "infection: the rounds list - one round, won by the infected, its length (" + lines.map(l => l.text.trim()).join(" | ") + ")");
   toStats(e);
   const b = blinkRows(e);
@@ -193,7 +194,7 @@ for (const [goal, n] of [[1, 3], [2, 4]]) {
   check(frames > want && frames < want + 200, "infection: ... at the goal's time (" + frames + " frames, goal " + want + ", the 10 min round time ignored)");
   check(e.wins[2] === 0 && [1, 3].every(p => e.wins[p] === 1) && [1, 2, 3].every(p => e.matchWinner(p) === (p !== 2)),
     "infection: ... the healthy tanks are the winners, the infected one isn't (" + e.wins.slice(1) + ")");
-  const lines = e.matchRoundLines(19).map(l => l.text);
+  const lines = new MT(e).matchRoundLines(19).map(l => l.text);
   check(lines.length === 1 && lines[0].includes("healthy") && lines[0].endsWith(" " + (n - 1) + " left") && !/\d:\d\d/.test(lines[0]),
     "infection: ... the rounds list shows the tanks still healthy, not the round's length (" + lines.join(" | ") + ")");
 }

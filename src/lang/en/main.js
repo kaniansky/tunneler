@@ -2,7 +2,7 @@
 // modes' texts are in modes/<mode>.js beside this file. One folder per language (src/lang/<code>/,
 // its index.js imports its files; src/lang/index.js every language).
 // order: place in the language list (Language: on the main menu); a file without one goes last.
-import { Lang } from "../../js/lang.js";
+import { Lang } from "../../js/text/lang.js";
 Lang.register("en", {
   order: 0,
   name: "English",
@@ -86,6 +86,8 @@ Lang.register("en", {
   "lc.size.i1": "How big the world is. Medium is the original;", "lc.size.i2": "small is a quarter of it, large four times as big.",
   "lc.win": "Rounds to win: ", "lc.win.i1": "How many round wins win the match.", "lc.win.i2": "3 is the original.",
   "lc.ff": "Friendly fire: ", "lc.on": "on", "lc.off": "off",
+  "lc.ff.none": "Friendly fire matters only when a team has two or more tanks.", "lc.time.inf": "Infection has no round time: its goal is a time to survive.",
+  "pg.view.one": "This game's View limit allows only your own view.",
   "lc.ff.i1": "On: your shots hurt your teammates too.", "lc.ff.i2": "Off: they explode on teammates like on a wall.",
   "lc.go.1": "You against one computer tank ({level}).", "lc.go.n": "You against {n} computer tanks, every tank for itself.",
   "lc.go.t": "{t} teams, {n} computer tanks, {m} of them on your team.",

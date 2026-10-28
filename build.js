@@ -3,7 +3,7 @@
 // rebuilt on every run, never edit it by hand.
 //
 // The game is one page (index.html) whose screens are routes (src/js/app.js, docs/DESIGN-8P.md 31). Its code
-// is ES modules (src/js/*.js, src/lang/, src/js/modes/; src/package.json says so): esbuild bundles app.js
+// is ES modules (src/js/*.js, src/lang/, src/js/game/modes/; src/package.json says so): esbuild bundles app.js
 // with everything it imports into public/js/app.js; each route's module (main menu, games list, online game,
 // local game) and the code only they need go into chunks loaded when a route first shows
 // (public/js/chunk-<hash>.js); app.js gets a hash in its name too (public/js/app-<hash>.js, the page's script

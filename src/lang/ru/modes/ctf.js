@@ -1,5 +1,5 @@
-// capture the flag (src/js/modes/ctf.js) in this language - the same keys as ../../en/modes/ctf.js.
-import { Lang } from "../../../js/lang.js";
+// capture the flag (src/js/game/modes/ctf.js) in this language - the same keys as ../../en/modes/ctf.js.
+import { Lang } from "../../../js/text/lang.js";
 Lang.modeTexts("ctf", "ru", {
   stat: "флаги",
   note: "{n} флаг.",

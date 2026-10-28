@@ -156,7 +156,7 @@ import would not help.
   lines, url 200, ua 200, where 40) and control characters are removed. The server logs one line
   `client error v<version> <where>: <msg> | <path> | <ua>` plus the stack, and answers 204. Limits: 10 a
   minute per address, 120 a minute in all. Nothing is stored and there is no GET.
-- `src/js/report.js` (`Report`): `Report.error(where, err)` sends at most 5 different errors per page load
+- `src/js/net/report.js` (`Report`): `Report.error(where, err)` sends at most 5 different errors per page load
   (deduplicated by where + message), and only from built pages (a version) - not from src/ pages or tests.
   `Report.install()` (app.js) catches `error` (only from this site's scripts - not extensions) and
   `unhandledrejection`. Screens report what they catch: a route's `mount()` throwing (app.js, which then

@@ -27,7 +27,7 @@ const path = require("path");
 const JS = path.join(__dirname, "..", "src", "js");
 const { TunnelerEngine: E, TunnelerAI, NetProto: { stateHash }, Speaker } = require("./src.js");
 // a fresh copy of speaker.js (its own sample cache) in this context: its bundle run again
-const freshSpeaker = () => { require("vm").runInThisContext(require("./page-env.js").bundle(["js/speaker.js"])); return globalThis.Speaker; };
+const freshSpeaker = () => { require("vm").runInThisContext(require("./page-env.js").bundle(["js/io/speaker.js"])); return globalThis.Speaker; };
 const K = E.KEYS;
 
 let bad = 0;
@@ -162,7 +162,7 @@ class Store {
 
   globalThis.localStorage = st; st.m.clear();
   st.setItem("tunneler.sound", "realistic");
-  const sp = new Speaker();
+  const sp = (S0 => (S0.forgetContext && S0.forgetContext(), new S0()))(Speaker);
   check(sp.style === "realistic" && !sp.muted, "a new Speaker reads the stored style");
   sp.setMuted(true);
   check(sp.style === "muted" && sp.muted && st.getItem("tunneler.sound") === "muted", "setMuted(true) = muted, stored");
@@ -176,7 +176,7 @@ class Store {
   sp.setStyle("original", true);
   check(sp.style === "original" && st.getItem("tunneler.sound") === "cartoony", "setStyle(s, noSave)");
   st.setItem("tunneler.sound", "muted");
-  const sm = new Speaker();
+  const sm = (S0 => (S0.forgetContext && S0.forgetContext(), new S0()))(Speaker);
   sm.setMuted(false);
   check(sm.style === "realistic", "unmuting a speaker that started muted: the default");
   ok("stored style: default, round trip, migration, throwing storage, setMuted / muted alias");
@@ -228,7 +228,7 @@ class MockCtx {
   globalThis.AudioContext = MockCtx;
   const st = new Store();
   globalThis.localStorage = st;
-  const sp = new Speaker();
+  const sp = (S0 => (S0.forgetContext && S0.forgetContext(), new S0()))(Speaker);
   sp.setStyle("original", true);                    // (the PC speaker: no longer the default)
   sp.unlock();
   check(sp.ctx instanceof MockCtx, "unlock creates the AudioContext");
@@ -290,10 +290,10 @@ class MockCtx {
   const vm = require("vm");
   const ctx = { performance };
   vm.createContext(ctx);
-  require("./page-env.js").run(ctx, ["js/speaker.js"]);
+  require("./page-env.js").run(ctx, ["js/io/speaker.js"]);
   const S = ctx.Speaker;
   check(S.loadStyle() === "realistic" && S.preview("cartoony") === false && S.saveStyle("muted") === "muted", "standalone without AudioContext / storage");
-  const sp = new S();
+  const sp = (S0 => (S0.forgetContext && S0.forgetContext(), new S0()))(S);
   sp.play([{ t: 0, hz: 100 }], 0, null, [{ t: 0, kind: "fire", x: 1, y: 1 }]);
   sp.silence(); sp.setMuted(true);
   ok("speaker.js standalone (no engine, no runner, no AudioContext, no storage)");
@@ -328,7 +328,7 @@ class MockCtx {
   globalThis.AudioContext = MockCtx;
   globalThis.localStorage = new Store();
   made.pans = [];
-  const sp = new Speaker();
+  const sp = (S0 => (S0.forgetContext && S0.forgetContext(), new S0()))(Speaker);
   sp.setStyle("original", true);
   sp.unlock();
   check(sp.panner && made.pans.length === 1, "original: one StereoPannerNode for the speaker voice");
@@ -372,7 +372,7 @@ class MockCtx {
   class NoPanCtx extends MockCtx {}
   NoPanCtx.prototype.createStereoPanner = undefined;
   globalThis.AudioContext = NoPanCtx;
-  const np = new Speaker();
+  const np = (S0 => (S0.forgetContext && S0.forgetContext(), new S0()))(Speaker);
   np.setStyle("original", true);
   np.unlock();
   check(!np.panner, "fallback: no panner");
@@ -438,7 +438,7 @@ const tick = () => new Promise(r => setTimeout(r, 0));
   const L = { x: 100, y: 50 }, FAR_L = { x: 1000, y: 400 };
   {
     st.setItem("tunneler.volume", "30");
-    const sp = new S();
+    const sp = (S0 => (S0.forgetContext && S0.forgetContext(), new S0()))(S);
     check(sp.masterVolume === 30 && sp.stereo && sp.fade, "a new Speaker reads the options");
     sp.unlock();
     const ctx = sp.ctx;
@@ -448,7 +448,7 @@ const tick = () => new Promise(r => setTimeout(r, 0));
     check(ctx.destination.ins.length === 1 && ctx.destination.ins[0] === sp.master, "only the master gain feeds the destination");
     check(sp.panner.ins.includes(sp.gain) && sp.master.ins.includes(sp.panner), "the PC speaker goes through the master gain");
     check(reaches(sp.bus, sp.master) && reaches(sp.recBus, sp.master) && reaches(sp.osc, sp.master), "the synth and recorded buses and the PC speaker go through the master gain");
-    const sp2 = new S();
+    const sp2 = (S0 => (S0.forgetContext && S0.forgetContext(), new S0()))(S);
     S.setOption("volume", 50);
     check(Math.abs(sp.master.gain.value - 0.25) < 1e-12 && sp2.masterVolume === 50, "setOption: live speakers follow at once");
     sp2.unlock();
@@ -652,6 +652,18 @@ const tick = () => new Promise(r => setTimeout(r, 0));
     check(made.samples.length === 1 && made.samples[0].name.startsWith("destroy"), "callback-only decodeAudioData");
     sc.silence();
     ok("recorded: missing samples = synth for that kind, the preview, callback decodeAudioData");
+  }
+  // one AudioContext for the page: a screen opened without a gesture (Watch the replay after a game) sounds at once;
+  // a screen's end takes its nodes off, the context stays
+  {
+    globalThis.AudioContext = MockCtx;
+    S.forgetContext();
+    const a = new S();
+    check(!a.ctx, "no sound before a gesture");
+    a.unlock();
+    const b = new S();
+    check(b.ctx === a.ctx && !!b.master, "the next screen's speaker: the same context, ready without a gesture");
+    ok("one AudioContext for the page: a later screen plays without a new gesture");
   }
   delete globalThis.AudioContext;
   delete globalThis.localStorage;

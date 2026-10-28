@@ -1,12 +1,12 @@
 "use strict";
-// Replays (src/js/replay.js, docs/DESIGN-8P.md 33): the input encoding, recordings of bot matches (classic -
+// Replays (src/js/game/replay.js, docs/DESIGN-8P.md 33): the input encoding, recordings of bot matches (classic -
 // keys held -, extended - net bits -, game modes, survival's computer-driven tanks) played again on a new
 // engine without the computer players: the same state at every check and at the end; a changed input is
 // noticed; the storage (newest MAX kept) and the replay files (gzip'd JSON, plain JSON too).
 const path = require("path");
 const assert = require("assert");
 const { TunnelerEngine: E, TunnelerAI, NetProto } = require("./src.js");
-const { Replay } = require(path.join(__dirname, "..", "src", "js", "replay.js"));
+const { Replay } = require(path.join(__dirname, "..", "src", "js", "game", "replay.js"));
 
 let failures = 0;
 const ok = (cond, msg) => { if (cond) console.log("  ok  " + msg); else { failures++; console.log("  FAIL: " + msg); } };

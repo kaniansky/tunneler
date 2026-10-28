@@ -1,5 +1,5 @@
-// infection (src/js/modes/infection.js) in this language - the same keys as ../../en/modes/infection.js.
-import { Lang } from "../../../js/lang.js";
+// infection (src/js/game/modes/infection.js) in this language - the same keys as ../../en/modes/infection.js.
+import { Lang } from "../../../js/text/lang.js";
 Lang.modeTexts("infection", "ru", {
   note: "{n} здор.",
   stat: "зар.",

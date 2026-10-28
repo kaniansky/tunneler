@@ -12,8 +12,8 @@ const assert = require("assert");
 const fs = require("fs"), os = require("os"), path = require("path"), zlib = require("zlib"), crypto = require("crypto"), http = require("http");
 const WebSocket = require("ws");
 const { TunnelerEngine: E, TunnelerAI } = require("./src.js");
-const { Challenge } = require("../src/js/challenge.js");
-const { Replay } = require("../src/js/replay.js");
+const { Challenge } = require("../src/js/game/challenge.js");
+const { Replay } = require("../src/js/game/replay.js");
 const { createServer, sigV4 } = require("../server.js");
 
 let failures = 0;
@@ -85,7 +85,7 @@ function record(day) {
     r = await signup(port, "norko", "another password");
     const r2 = await signup(port, " NORKO ", "another password");
     ok(r.status === 409 && r.j.code === "taken" && r2.status === 409, "the same name in another case: taken");
-    const bad = ["", "   ", "admin", "Blue", "a<b>", "x".repeat(13), "---", "Player", "a\u200bb", 42];
+    const bad = ["", "   ", "admin", "Blue", "a<b>", "x".repeat(17), "---", "Player", "a\u200bb", 42];
     const res = await Promise.all(bad.map(n => signup(port, n, "long enough")));
     ok(res.every(x => x.status === 400 && x.j.code === "name"), "bad usernames refused (empty, reserved, characters dropped, too long, no letter): " + res.map(x => x.status).join(","));
     const good = await Promise.all(["Zoë", "王小明", "Александра", "Neo 2000"].map(n => signup(port, n, "long enough")));
@@ -195,8 +195,8 @@ function record(day) {
     await signup(port, "Taken", "taken password");
     r = await api(port, "POST", "/api/account/google/signup", { link, name: "taken" });
     ok(r.status === 409 && r.j.code === "taken", "the username taken: 409");
-    r = await api(port, "POST", "/api/account/google/signup", { link: link.replace(/.$/, c => c === "A" ? "B" : "A"), name: "Zedd" });
-    ok(r.status === 401 && r.j.code === "google", "a forged link: 401");
+    r = await api(port, "POST", "/api/account/google/signup", { link: link.slice(0, -10) + (link[link.length - 10] === "A" ? "B" : "A") + link.slice(-9), name: "Zedd" });
+    ok(r.status === 401 && r.j.code === "google", "a forged link: 401");   // (not its last letter: it may hold unused bits)
     r = await api(port, "POST", "/api/account/google/signup", { link, name: "Zedd" });
     ok(r.status === 200 && r.j.token && r.j.account.name === "Zedd" && r.j.account.google === true && r.j.account.password === false, "a new account: Google Play linked, no password");
     const zedd = r.j;

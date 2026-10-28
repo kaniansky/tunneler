@@ -7,8 +7,8 @@ const fs = require("fs"), os = require("os"), path = require("path"), zlib = req
 const { TunnelerEngine: E, TunnelerAI } = require("./src.js");
 const { createServer, sigV4 } = require("../server.js");
 const http = require("http");
-const { Replay } = require(path.join(__dirname, "..", "src", "js", "replay.js"));
-const { Links } = require(path.join(__dirname, "..", "src", "js", "endpoint.js"));
+const { Replay } = require(path.join(__dirname, "..", "src", "js", "game", "replay.js"));
+const { Links } = require(path.join(__dirname, "..", "src", "js", "net", "endpoint.js"));
 
 let failures = 0;
 const ok = (cond, msg) => { if (cond) console.log("  ok  " + msg); else { failures++; console.log("  FAIL: " + msg); } };

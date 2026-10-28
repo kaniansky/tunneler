@@ -216,7 +216,7 @@ async function main() {
   check("private room by id, not listed", () => { assert.strictEqual(priv.status, 200); assert(!list.json.some(r => r.id === pid)); });
   const bad = await http(port, "POST", "/api/rooms", "x".repeat(5000));
   check("oversized body rejected", () => assert.notStrictEqual(bad.status, 200));
-  for (const p of ["/", "/lobby.html", "/online.html", "/js/online.js", "/js/lobby.js", "/js/netproto.js", "/css/style.css"]) {
+  for (const p of ["/", "/lobby.html", "/online.html", "/js/routes/online.js", "/js/routes/lobby.js", "/js/game/netproto.js", "/css/style.css"]) {
     const r = await http(port, "GET", p);
     check("serves " + p, () => assert.strictEqual(r.status, 200));
   }

@@ -13,7 +13,7 @@ server wakes up.)
 
 ## Same game, same look
 
-The original program was decompiled and ported routine by routine (`src/js/engine.js`). Tanks, digging,
+The original program was decompiled and ported routine by routine (`src/js/game/engine.js`). Tanks, digging,
 shots, explosions, energy and shield, sound and the world generator behave exactly like the DOS game - an
 automated test runs the original (compiled to WebAssembly) next to the port and compares every frame.
 Two tanks (BLUE and GREEN) on the medium map, three rounds to win, is the original game byte for byte;
@@ -308,10 +308,12 @@ the server's log (`client error ...`).
 - Each bucket gets the rules its kind wants. **Replays**: R2's Settings -> Object lifecycle rules -> "Delete objects"
   after N days, and `REPLAY_KEEP_DAYS` set to the same N (whoever shares one is told how long the link works; the folder
   deletes older files itself, and keeps the newest 5000). **Challenges**: optional - only the last 30 days are ever
-  read. **Maps, accounts, state: no rule** - maps are kept for good, and an account deleted by a rule is lost.
+  read. **Maps, accounts, state: no rule** - a bucket keeps maps for good (the folder keeps the newest 5000, the
+  gallery's maps always), and an account deleted by a rule is lost.
 
 The map gallery: a published map can be removed by its author, or by anyone sending the header `X-Admin-Key: <key>`
-when the server has `GALLERY_ADMIN_KEY=<key>` (`curl -X POST -H "X-Admin-Key: <key>" <server>/api/gallery/<id>/remove`).
+when the server has `GALLERY_ADMIN_KEY=<key>` (`curl -X POST -H "X-Admin-Key: <key>" <server>/api/gallery/<id>/remove`;
+make the key long and random, e.g. `openssl rand -hex 32`). An address may publish 50 maps a day.
 
 The server's log says where each kind is kept at start (`shared replays: ...`, `shared maps: ...`, `daily challenge
 leaderboards: ...`, `rooms on a restart: ...`, `accounts: ...`). The live server uses R2 buckets: Render's free disk is
@@ -372,22 +374,29 @@ One page (`src/index.html`), its screens are routes (`src/js/app.js`: the main m
 game, a local game - each loaded when first shown); the code is ES modules, bundled by `node build.js`
 (esbuild) into `public/`. The server needs Node.js 20.19 or newer.
 
-- `src/js/engine.js` - the game: the whole DOS program as a deterministic state machine; one `step()` is
+`src/js/` by folder: `game/` the game itself (engine, computer tanks, modes, maps, replays, the daily challenge, the
+online protocol), `draw/` what is drawn (the game's picture, the match's text, the screen, the views, the two looks),
+`ui/` menus and pages, `routes/` the screens (main menu, local game, games list, online game, replays, maps, daily
+challenge), `text/` languages, Unicode and fonts, `io/` keyboard, gamepads, touch, sound, the clock, the screen
+size, `net/` the server's address, accounts, shared maps, error reports; `app.js`, `nav.js`, `scope.js`,
+`version.js` at the top.
+
+- `src/js/game/engine.js` - the game: the whole DOS program as a deterministic state machine; one `step()` is
   one BIOS timer tick (54.9 ms, one game frame). The classic two-tank game runs the original code paths
   unchanged; 3-8 tanks, teams and the other settings run the engine's *extended mode* (design:
   [docs/DESIGN-8P.md](docs/DESIGN-8P.md)).
-- `src/js/display.js`, `vgafont.js`, `speaker.js`, `input.js`, `runner.js` - emulated VGA text screen,
+- `src/js/draw/display.js`, `text/vgafont.js`, `io/speaker.js`, `io/input.js`, `io/runner.js` - emulated VGA text screen,
   PC speaker (sounds fade with distance), keyboard, presentation loop.
-- `src/js/dosui.js`, `statusline.js`, `home.js`, `lobby.js` - DOS-style menus, slot editors and status
+- `src/js/ui/dosui.js`, `draw/statusline.js`, `routes/home.js`, `routes/lobby.js` - DOS-style menus, slot editors and status
   lines.
-- `src/js/views.js` - what a viewer sees during play: one view screen, a grid of several, or the live
+- `src/js/draw/views.js` - what a viewer sees during play: one view screen, a grid of several, or the live
   map with scores.
-- `src/js/lang.js` (core), `src/lang/<code>/` (one folder per language: `main.js`, a file per game mode in `modes/`, and
+- `src/js/text/lang.js` (core), `src/lang/<code>/` (one folder per language: `main.js`, a file per game mode in `modes/`, and
   `en/engine.js` the engine's English text; `src/lang/index.js` imports them all),
   `glyphs.js` - translations; letters the VGA font lacks are loaded from a VGA-style console font into
   unused font slots, and names and chat in the lobby are drawn in any alphabet.
-- `src/js/ai.js` - the computer tanks: deterministic, so every browser runs the same ones.
-- `server.js`, `src/js/netproto.js`, `src/js/online.js` - online play: the server runs the game clock and
+- `src/js/game/ai.js` - the computer tanks: deterministic, so every browser runs the same ones.
+- `server.js`, `src/js/game/netproto.js`, `src/js/routes/online.js` - online play: the server runs the game clock and
   broadcasts every player's keys each tick; every match is its own game (new seed, the lobby's tanks,
   names and settings); every browser runs the same engine and computer tanks (lockstep), so only key
   presses travel over the network.

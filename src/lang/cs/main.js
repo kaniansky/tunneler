@@ -2,7 +2,7 @@
 // modes' texts are in modes/<mode>.js beside this file. One folder per language (src/lang/<code>/,
 // its index.js imports its files; src/lang/index.js every language).
 // order: place in the language list (Language: on the main menu); a file without one goes last.
-import { Lang } from "../../js/lang.js";
+import { Lang } from "../../js/text/lang.js";
 Lang.register("cs", {
   order: 2,
   name: "Česky",
@@ -169,8 +169,8 @@ Lang.register("cs", {
           "(nepřátelský tank zůstane tam, kde jsi ho viděl naposledy).  Skutečný - totéž, ale hlína, " +
           "skála a zdi základen zakryjí, co je za nimi: v tunelu vidíš jen tunel.  Počítačové tanky " +
           "vidí stejně; střední a těžké navíc zhruba slyší, kde je nejbližší nepřítel."],
-        ["Dělená obrazovka:  ", "původní hra - dva hráči na jedné klávesnici, {9}MODRÝ{3} na levé " +
-          "polovině obrazovky a {10}ZELENÝ{3} na pravé.  Nejdřív si zvol velikost mapy, počet kol k " +
+        ["Dělená obrazovka:  ", "dva hráči na jedné klávesnici, {9}MODRÝ{3} proti {10}ZELENÉMU{3}, " +
+          "každý se svým pohledem vedle sebe - potyčka vás dvou.  Nejdřív si zvol velikost mapy, počet kol k " +
           "výhře a čas kola."],
         ["Potyčka:  ", "vlastní hra proti tankům počítače, sám nebo s druhým hráčem na téže klávesnici.  Každá z 8 barev je hráč 1, hráč 2, nikdo nebo tank počítače (lehký, střední, těžký) se svým týmem (1-8) - hráči mohou mít libovolnou barvu; pak režim, velikost mapy, vítězná kola, čas kola, palba do vlastních, pohled, co po smrti a dohled.  Hráč 1 řídí W A S D + SHIFT, hráč 2 šipkami + ENTER (jiné klávesy: Nastavení, Ovládání).  <ESC> během hry ukončí zápas; Odveta nebo <ESC> v menu hry se vrátí k nastavení."],
         ["Hra online:  ", "2 až 8 tanků na různých počítačích, některé z nich mohou být počítačové.  Hra online " +
@@ -243,6 +243,8 @@ Lang.register("cs", {
   "lc.size.i1": "Jak velká je krajina. Střední je původní;", "lc.size.i2": "malá má čtvrtinu, velká je čtyřikrát větší.",
   "lc.win": "Kola k výhře: ", "lc.win.i1": "Kolik vyhraných kol je potřeba k výhře zápasu.", "lc.win.i2": "3 je původní hra.",
   "lc.ff": "Přátelská palba: ", "lc.on": "zapnutá", "lc.off": "vypnutá",
+  "lc.ff.none": "Přátelská palba má smysl, jen když má tým aspoň dva tanky.", "lc.time.inf": "Infekce nemá čas kola: jejím cílem je přežít určitý čas.",
+  "pg.view.one": "Limit pohledu této hry dovoluje jen tvou obrazovku.",
   "lc.ff.i1": "Zapnutá: tvé střely zraňují i spoluhráče.", "lc.ff.i2": "Vypnutá: na spoluhráčích vybuchnou jako na zdi.",
   "lc.go.1": "Ty proti jednomu tanku počítače ({level}).", "lc.go.n": "Ty proti {n} tankům počítače, každý sám za sebe.",
   "lc.go.t": "Týmy: {t}, tanky počítače: {n}, z toho ve tvém týmu: {m}.",

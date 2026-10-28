@@ -1,5 +1,5 @@
 // Quick play (docs/v6/QUICKPLAY.md): its texts, and its section on the Information page (before the desktop app's).
-import { Lang } from "../../js/lang.js";
+import { Lang } from "../../js/text/lang.js";
 Lang.extend("cs", {
   "home.quick": "Rychlá hra", "home.quick.i1": "Rovnou do online hry: zaplní ji počítačové tanky,",
   "home.quick.i2": "jeden převezmeš - i uprostřed zápasu.",

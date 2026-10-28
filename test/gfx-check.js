@@ -1,8 +1,8 @@
 "use strict";
 // Graphics setting (docs/GRAPHICS.md): gfx.js's stored choices and fallbacks, the original look painted
 // exactly as before, LORES tagging (alpha 254 only on 0xDD cells, only while upscaled is on), and the
-// Presenter wiring with a fake WebGL2 (the overlay canvas, the 2D canvas made invisible, a redraw after
-// every putImageData, back to the original).
+// page's one canvas (surface.js) with a fake WebGL2 (layers in framebuffers of their own, a redraw after every
+// putImageData, the original as blits).
 //   node test/gfx-check.js
 const assert = require("assert");
 const { run } = require("./page-env.js");
@@ -44,7 +44,7 @@ function makeEnv(store, webgl, more) {
   };
   win.window = win; win.globalThis = win;
   const ctx = vm.createContext(win);
-  run(ctx, ["js/gfx.js", "js/display.js", ...(more || [])]);
+  run(ctx, ["js/draw/gfx.js", "js/draw/display.js", ...(more || [])]);
   const runFrames = () => { const f = frames.splice(0); f.forEach(g => g(0)); };
   return { win, calls, made, runFrames, mkEl };
 }
@@ -127,50 +127,50 @@ function makeEnv(store, webgl, more) {
   ok("original paints exactly as before; modern tags only LORES pixel cells (alpha 254)");
 }
 
-// ---------------------------------------------------------------- the Presenter
+// ---------------------------------------------------------------- the page's one canvas (surface.js) and its layers
 {
   const store = new Map([["tunneler.gfx", "modern"]]);
-  const { win, calls, runFrames, mkEl } = makeEnv(store, true), G = win.Gfx;
+  const { win, calls, runFrames, mkEl } = makeEnv(store, true), G = win.Gfx, S = win.Surface;
   const canvas = mkEl("screen");
   const disp = new win.Display(canvas);
   assert.strictEqual(G.mode(), "modern");
-  const out = canvas.next;
-  assert.ok(out, "an overlay canvas after the 2D one");
-  assert.strictEqual(canvas.style.opacity, "0", "the 2D canvas invisible (it keeps the events)");
-  assert.strictEqual(out.style.pointerEvents, "none");
+  assert.ok(canvas.surfaceSource && canvas.surfaceSource !== canvas, "the screen paints into a source of its own");
+  assert.strictEqual(canvas.next, undefined, "no overlay canvas any more");
   runFrames();
-  assert.strictEqual(out.width, 1920, "device pixels");
-  assert.strictEqual(out.height, 1440);
-  assert.strictEqual(out.style.left, "10px");
+  const out = S.canvas(), L = S.layers()[0];
+  assert.strictEqual(out.width, 1920, "the surface in device pixels");
+  assert.strictEqual(L.pres.W, 1920, "the layer's framebuffer: its element's box in device pixels");
+  assert.strictEqual(L.pres.H, 1440);
   const draws = () => calls.filter(c => c === "drawArrays").length;
   const d0 = draws();
-  assert.ok(d0 >= 1, "drawn");
+  assert.ok(d0 >= 2, "drawn: the layer, then the surface");
   runFrames();
   assert.strictEqual(draws(), d0, "nothing new drawn: no redraw");
   disp.setSnapshot({ mode: "text", vram: new Uint8Array(4000) });
   disp.draw(0);
-  runFrames();
-  assert.strictEqual(draws(), d0 + 1, "putImageData -> one redraw");
-  assert.strictEqual(canvas.puts, 1, "the page's own putImageData still runs");
+  S.compose(0);
+  assert.strictEqual(draws(), d0 + 2, "putImageData -> the layer drawn again, then the surface");
+  assert.strictEqual(canvas.surfaceSource.puts, 1, "the page's own putImageData still runs");
   G.set("mode", "original");
-  assert.strictEqual(canvas.style.opacity, "", "original: the 2D canvas shown again");
-  assert.strictEqual(out.style.display, "none");
   assert.strictEqual(disp.lastKey, "", "the display redraws");
+  const d1 = draws();
+  S.compose(0);
+  assert.strictEqual(draws(), d1 + 1, "original: only the source onto the surface");
   const tagged = new Uint32Array(1);
   win.Display.paint(tagged, 9, 0, 0, new Uint8Array([0xDD, 0x12]), 0, 1, 1, false, win.Display.paletteOf({ mode: "lores" }), true, win.VGA_FONT);
   assert.strictEqual(tagged[0] >>> 24, 255, "original: no tagging");
   G.set("mode", "modern");
-  assert.strictEqual(canvas.style.opacity, "0");
   G.setModern("quality", "low");
   runFrames();
-  assert.strictEqual(out.width, 960, "quality low: half the device pixels");
-  ok("presenter: overlay in device pixels (quality), redraws only after drawing, back to the original");
+  assert.strictEqual(L.pres.W, 960, "quality low: half the device pixels");
+  assert.strictEqual(out.width, 1920, "the surface stays in device pixels");
+  ok("one canvas: layers drawn into their framebuffers (quality), redrawn only after painting, the original as blits");
 
   // quality auto: the play screen's frame times decide the size
   G.setModern("quality", "auto");
   G.autoReset();
   runFrames();
-  assert.strictEqual(out.width, 1920, "auto: full size at first");
+  assert.strictEqual(L.pres.W, 1920, "auto: full size at first");
   let t = 1000;
   // (each phase after a gap: its own count - a gap starts the count again)
   const frames = (n, ms, playing = true) => { G.autoFrame(t += 1000, false); for (let i = 0; i < n; i++) { t += ms; G.autoFrame(t, playing); } };
@@ -181,7 +181,7 @@ function makeEnv(store, webgl, more) {
   frames(91, 40);
   assert.strictEqual(G.autoQuality(), "medium", "slow frames (40 ms): one step smaller");
   runFrames();
-  assert.strictEqual(out.width, 1440, "auto at medium: 0.75 of the device pixels");
+  assert.strictEqual(L.pres.W, 1440, "auto at medium: 0.75 of the device pixels");
   frames(91, 40);
   assert.strictEqual(G.autoQuality(), "low", "still slow: low");
   frames(91, 40);
@@ -213,7 +213,7 @@ function makeEnv(store, webgl, more) {
 // ---------------------------------------------------------------- the renderers register themselves
 {
   const store = new Map([["tunneler.gfx", "modern"]]);
-  const { win } = makeEnv(store, true, ["js/gfx-modern.js", "js/gfx-hud.js", "js/gfx-text.js"]), G = win.Gfx;
+  const { win } = makeEnv(store, true, ["js/draw/gfx-modern.js", "js/draw/gfx-hud.js", "js/draw/gfx-text.js"]), G = win.Gfx;
   assert.ok(G.Modern && G.Modern.create, "gfx-modern.js");
   assert.ok(G.Hud && G.Hud.draw, "gfx-hud.js");
   assert.ok(G.Text && G.Text.draw, "gfx-text.js");
@@ -223,7 +223,7 @@ function makeEnv(store, webgl, more) {
 
 // ---------------------------------------------------------------- the touch controls' tank (tankview.js)
 {
-  const { win } = makeEnv(new Map([["tunneler.gfx", "modern"]]), true, ["js/tankview.js"]), TV = win.TankView, N = TV.N;
+  const { win } = makeEnv(new Map([["tunneler.gfx", "modern"]]), true, ["js/draw/tankview.js"]), TV = win.TankView, N = TV.N;
   const blue = [0, 0, 1], gray = [0.4, 0.4, 0.4], yellow = [1, 1, 0];
   for (const realistic of [false, true]) {
     const up = TV.modernTank(realistic, blue, gray, yellow, 0, false), right = TV.modernTank(realistic, blue, gray, yellow, 2, false);

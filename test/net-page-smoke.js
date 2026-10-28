@@ -208,7 +208,7 @@ function loadPage(page, search, stored, version) {
     ws.recv(mkSt({ seats: mkSt().seats.map((x, i) => i === 3 ? Object.assign({}, x, { team: 5 }) : x) }));
     await wait(150);
     const ffRow = lui.spec.items.find(it => it.key === "ff");
-    assert(ffRow.static && ffRow.attr === 8, "no team of 2: friendly fire grayed out");
+    assert(!ffRow.change && ffRow.valueAttr === 8 && /team/.test(ffRow.info[0]), "no team of 2: friendly fire's value grayed, its info says why");
     ws.recv(mkSt());
     await wait(150);
     // survival / infection make their own teams: no team column, no team to change
@@ -483,8 +483,8 @@ function loadPage(page, search, stored, version) {
     assert.strictEqual(ui.spec.items[at].input.value, "Žofia Novák", "its text in the canvas input (control characters dropped)");
     si.value = "x".repeat(40);
     for (const f of si.on_input) f({});
-    assert.strictEqual(ui.spec.items[at].input.value.length, 12, "as much as fits (12)");
-    assert.strictEqual(si.value.length, 12, "and the hidden input holds the same");
+    assert.strictEqual(ui.spec.items[at].input.value.length, 16, "as much as fits (16)");
+    assert.strictEqual(si.value.length, 16, "and the hidden input holds the same");
     const before = ui.spec.items[at].input.value;
     for (const f of env.listeners.keydown || []) f({ code: "KeyA", key: "a", target: si, preventDefault() {} });
     assert.strictEqual(ui.spec.items[at].input.value, before, "a key from the hidden input isn't typed twice");

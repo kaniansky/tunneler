@@ -20,8 +20,8 @@ COPY src/js ./src/js
 COPY src/lang ./src/lang
 COPY --from=builder /app/public ./public
 ENV PORT=8050
-# shared replays (POST /api/replays) and maps (POST /api/maps, in its maps/ folder): a folder the server may
-# write - a volume keeps them across restarts
+# replays, maps, accounts, challenges, state (README.md, Where the server keeps things): a folder per kind in
+# DATA_DIR for every kind without an S3 bucket - a volume keeps them across restarts
 ENV DATA_DIR=/app/data
 RUN mkdir -p /app/data && chown node /app/data
 EXPOSE 8050

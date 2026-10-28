@@ -1,6 +1,6 @@
 // English texts of running reliably (docs/v6/RELIABILITY.md): the server restarting, a game gone with it, no
 // network, a desync being repaired, a screen that failed to load or crashed.
-import { Lang } from "../../js/lang.js";
+import { Lang } from "../../js/text/lang.js";
 Lang.extend("en", {
   "rel.restart": "The server is restarting...",
   "rel.restart2": "Your game goes on as soon as it is back.",

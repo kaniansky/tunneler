@@ -1,5 +1,5 @@
 // Slovak texts of running reliably (docs/v6/RELIABILITY.md; see en/reliability.js).
-import { Lang } from "../../js/lang.js";
+import { Lang } from "../../js/text/lang.js";
 Lang.extend("sk", {
   "rel.restart": "Server sa reštartuje...",
   "rel.restart2": "Hra bude pokračovať, hneď ako sa vráti.",

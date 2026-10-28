@@ -10,8 +10,8 @@
 // leaderboard, yesterday's result during the grace only, a remembered weekly result ignored).
 const fs = require("fs"), os = require("os"), path = require("path"), vm = require("vm"), zlib = require("zlib");
 const { TunnelerEngine: E, TunnelerAI, Lang } = require("./src.js");
-const { Challenge } = require(path.join(__dirname, "..", "src", "js", "challenge.js"));
-const { Replay } = require(path.join(__dirname, "..", "src", "js", "replay.js"));
+const { Challenge } = require(path.join(__dirname, "..", "src", "js", "game", "challenge.js"));
+const { Replay } = require(path.join(__dirname, "..", "src", "js", "game", "replay.js"));
 const { createServer } = require(path.join(__dirname, "..", "server.js"));
 const { runPage } = require("./page-env.js");
 
@@ -473,10 +473,11 @@ const copy = rep => JSON.parse(JSON.stringify(rep));
     for (; n < 200000 && e.screen !== "map"; n++) { const inp = { bits: ais.map(ai => TunnelerAI.bitsFor(ai, e)), keys: [] }; rec.input(inp); e.step(inp); rec.stepped(); }
     await tick(10);
     const last = storage.get("tunneler.challenge.last");
-    // on to the game's menu (any key on the map, then the statistics), then Esc = its first item
-    for (let k = 0; k < 400 && !(e.screen === "text" && e.menuPage === "menu" && !e.kbdInstalled && e.menuShown); k++)
+    // on to the screen after the match (any key on the map), then Esc = its first item
+    for (let k = 0; k < 400 && !e.over; k++)
       e.step({ bits: new Array(cfg.slots.length).fill(0), keys: k % 20 === 0 ? [[13, 28]] : [] });
-    const label = win.Lang.decode(e.strings.rematch);
+    runner.onStep(e);
+    const after = win.tunnelerAfter(), label = after ? win.Lang.decode(after.spec.items[0].label) : "";
     env.key("Escape", "Escape");
     const href = String(win.location.href);
     if (practice) ok(e.screen !== "play" && last === kept && posts.length === 0 && label === "Back to the leaderboard" && href.endsWith("/challenge?board=" + day),

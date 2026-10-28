@@ -219,8 +219,8 @@ an older server answers 404 - the pages say "This server has no map gallery" and
   published on), `MapPic.of(map)` (mappic.js: one pixel per cell, bases in their tank colours) drawn in a DOS screen's
   picture region (DosUI `spec.pic` -> `snap.pic`; display.js `paintPic`, gfx-text.js `drawPic` - square on the
   screen, the phone layout puts it under the title), `MapPick.show(ui, {...})` (mappick.js: the list + the selected map's
-  picture; tabs your maps / the gallery, Order newest / most played; a map that can't be played is gray with the reason
-  and can't be chosen).
+  picture; tabs your maps / the gallery, Order newest / most played; a map that can't be played isn't
+  listed).
 - Maps screen: **Map gallery** (below the list) -> MapPick (gallery only) -> a published map's screen: its picture,
   "Published by X - played N times", Add to my maps, Play in a skirmish, Copy a link, Remove from the gallery (yours:
   asks twice), Back. A map's screen: **Publish to the gallery** (gray with the reason while the map can't be played;

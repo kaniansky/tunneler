@@ -1,5 +1,5 @@
 "use strict";
-// src/js/endpoint.js: where online play goes - the page's own site in a browser, the stored server (else
+// src/js/net/endpoint.js: where online play goes - the page's own site in a browser, the stored server (else
 // the public one) in the desktop app; address normalizing; websocket / API / invite URLs
 const assert = require("assert"), vm = require("vm");
 const { run } = require("./page-env.js");
@@ -11,7 +11,7 @@ function load(href, stored) {
     localStorage: { getItem: k => store.has(k) ? store.get(k) : null, setItem: (k, v) => store.set(k, String(v)), removeItem: k => store.delete(k) }, URL };
   win.window = win; win.URLSearchParams = URLSearchParams;
   vm.createContext(win);
-  run(win, ["js/endpoint.js"]);
+  run(win, ["js/net/endpoint.js"]);
   return { E: win.Endpoint, L: win.Links, store };
 }
 let n = 0;

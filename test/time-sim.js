@@ -166,7 +166,7 @@ function digest(opts, seed, steps, bots) {
       }
       e.step({ keyDown: kd });
     }
-    for (const s of e.snapshots) h.update(s.vram);
+    for (const s of e.snapshots) h.update(s.vram || JSON.stringify(s.text));   // (a text screen: the steps that showed it)
     if (e.round !== lastRound) {
       if (dmgBefore) log.push({ round: lastRound, wins: e.wins.slice(1), timedOut: e.timedOut, dmg: dmgBefore.slice(1), alive: aliveBefore.slice(1),
         teams: Array.from({ length: e.nPlayers }, (_, i) => e.team(i + 1)) });

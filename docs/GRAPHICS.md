@@ -45,20 +45,22 @@ how the game and every menu screen are drawn. This file describes what is built.
 
 ## 3. How it is drawn
 
-- `src/js/gfx.js` (`Gfx`, before display.js on every page): one `Presenter` per 2D canvas (`Gfx.attach`
-  from `Display` and `StatusLine`). Pages keep drawing into their 2D canvas exactly as before; in modern
-  that canvas is made invisible (opacity 0 - it still gets the mouse and touch, so every click handler and
-  `cellAt` stay as they are) and a WebGL2 canvas lies over it (fixed, aligned to its box every animation
-  frame, `pointer-events: none`, right after it in the DOM so the online overlay stays above).
-- What was drawn last decides what the overlay shows: `Gfx.painted(canvas, info)` - `{text}` from
+- The page has one canvas (docs/RENDERING.md): `#surface` (`src/js/draw/surface.js`, `Surface`), fixed under
+  everything, no pointer events. `#screen` and `#status` are plain elements - their place on the page and
+  their events; Display / views.js / StatusLine paint into their 2D sources (`Surface.source(el)`, offscreen)
+  exactly as before. The surface draws each where its element sits: WebGL2 for both looks (the original as
+  nearest-pixel blits; no WebGL2: a 2D context), the modern one through a gfx.js `Presenter` per layer that
+  renders into a framebuffer of its own (W x H device pixels times the quality), then onto the surface.
+  Composed in a microtask after a paint and on every animation frame while something moves.
+- What was painted last decides what a layer's Presenter shows: `Surface.painted(el, info)` - `{text}` from
   `Display.draw` (text screens) and the status line, `{lores: snap}` from `Display.draw` (anything else) -
-  and `Gfx.scene(canvas, sc)` from views.js after its own painting (`sceneOf(L)`: the play screen's views,
+  and `Surface.scene(el, sc)` from views.js after its own painting (`sceneOf(L)`: the play screen's views,
   the end-of-match map; the live map reports itself from `drawMap`).
-- Text screens: `src/js/gfx-text.js` (`Gfx.Text.draw(ctx, W, H, t, {style, now})`) draws the cell grid into
+- Text screens: `src/js/draw/gfx-text.js` (`Gfx.Text.draw(ctx, W, H, t, {style, now})`) draws the cell grid into
   a 2D layer at the output's size, which is then blitted (section 4).
 - The play screen: first the 2D canvas enlarged by the contour upscaler (the classic panel's frame, panel
-  and labels), then every view window through `src/js/gfx-modern.js` (section 5), then the HUD layer from
-  `src/js/gfx-hud.js` (section 6) blended over it. gfx-modern.js / gfx-hud.js are loaded by play.html and
+  and labels), then every view window through `src/js/draw/gfx-modern.js` (section 5), then the HUD layer from
+  `src/js/draw/gfx-hud.js` (section 6) blended over it. gfx-modern.js / gfx-hud.js are loaded by play.html and
   online.html, gfx-text.js by every page.
 - The contour upscaler (gfx.js `FS`): every colour of the 4 nearest native pixels gets the cubic
   (Mitchell-Netravali) weight of its pixels in the 4 x 4 around; the heaviest wins, blended with the next
@@ -73,13 +75,18 @@ how the game and every menu screen are drawn. This file describes what is built.
   labels); the instrument panel keeps the normal palette.
 - The page around the game takes the modern style's background (`Gfx.refresh` sets style.css's `--bg` on
   `<html>` from `Gfx.Text.STYLES[style].back`: clean's warm near-black, retro's black); original removes it.
-- Robustness: a lost and restored WebGL context rebuilds the overlay; an error in a frame turns that canvas
-  back to the original; a failed modern shader is not retried every frame.
+- Robustness: a lost and restored WebGL context rebuilds every layer; an error in a layer's frame shows that
+  layer as the original (until the next graphics change); a failed modern shader is not retried every frame.
 
 ## 4. Text screens (gfx-text.js)
 
 - The same grid (80 x 25; more rows on the live map, fewer on the status line), every character in its
   cell - so every mouse mapping stays.
+- What is a panel, a divider, the highlight bar, a rule or a title: a menu (DosUI) says so - its snapshot's model
+  (`snap.ui`, docs/RENDERING.md: the menu renderer; `Text.fromModel`); the engine's own text screens (round title,
+  statistics, its menu and pages) and the status line are analysed from their cells (`Text.analyse`: frames by their
+  corners, the highlight as the widest magenta run, rules as 8+ underscores, titles as short red rows between blank
+  ones).
 - Font: Noto Sans Mono Regular + Bold (OFL-1.1, `src/fonts/modern/`, subset woff2 ~67 KB each, 2192
   characters; `tools/make-modern-font.py` regenerates them and the covered ranges in gfx-text.js). Loaded
   through `FontFace` on the first modern draw (the original never downloads it); a system monospace until

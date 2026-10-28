@@ -9,8 +9,8 @@
 const zlib = require("zlib");
 const { chromium } = require("playwright-core");
 const { TunnelerEngine: E, TunnelerAI } = require("../test/src.js");
-const { Challenge } = require("../src/js/challenge.js");
-const { Replay } = require("../src/js/replay.js");
+const { Challenge } = require("../src/js/game/challenge.js");
+const { Replay } = require("../src/js/game/replay.js");
 const CHROME = process.env.CHROME || (() => {
   const dir = require("path").join(require("os").homedir(), ".cache/ms-playwright");
   const d = require("fs").readdirSync(dir).filter(n => n.startsWith("chromium-")).sort().pop();

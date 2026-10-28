@@ -129,7 +129,7 @@ const choose = async (p, key) => {
       await mapChecks(p, file);
       await sleep(500);
       await p.touchscreen.tap(w >> 1, h >> 1);
-      ok(await until(p, () => tunnelerEngine().menuShown, 10000), "a tap (in the middle of the screen - upright: beside the map): the menu after the match");
+      ok(await until(p, () => !!(window.tunnelerAfter && window.tunnelerAfter()), 10000), "a tap (in the middle of the screen - upright: beside the map): the menu after the match");
       await sleep(500);
       const L = await layout(p);
       await p.screenshot({ path: file("menu") });

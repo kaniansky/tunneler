@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Regenerates the font of the graphics "modern" text screens (docs/GRAPHICS.md 3, src/js/gfx-text.js):
+"""Regenerates the font of the graphics "modern" text screens (docs/GRAPHICS.md 3, src/js/draw/gfx-text.js):
 src/fonts/modern/NotoSansMono-Regular.woff2 + -Bold.woff2 (subsets of Noto Sans Mono, OFL-1.1: Latin,
 Latin Extended-A / B / Additional, Greek, Cyrillic, punctuation, currency, letterlike, arrows, math,
 technical, box drawing, blocks, geometric shapes, ...) and the list of the code points they cover, written
-into src/js/gfx-text.js between the "font-ranges" markers (characters outside it are drawn from the
+into src/js/draw/gfx-text.js between the "font-ranges" markers (characters outside it are drawn from the
 bitmap glyphs: the VGA ROM font, glyphs.js, GNU Unifont).
 
 Needs fontTools + brotli (pip install fonttools brotli). Run from the repository:
@@ -19,7 +19,7 @@ from fontTools.ttLib import TTFont
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "src", "fonts", "modern")
-JS = os.path.join(ROOT, "src", "js", "gfx-text.js")
+JS = os.path.join(ROOT, "src", "js", "draw", "gfx-text.js")
 SRC = sys.argv[1:3] if len(sys.argv) >= 3 else [
     "/usr/share/fonts/truetype/noto/NotoSansMono-Regular.ttf",
     "/usr/share/fonts/truetype/noto/NotoSansMono-Bold.ttf",

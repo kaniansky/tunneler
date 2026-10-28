@@ -10,11 +10,11 @@ plane draws user text with (player names, room names, chat - any language, docs/
                                     then each present glyph in code point order: 16 bytes (8 x 16, one
                                     byte per row) or 32 bytes (16 x 16, two bytes per row, left first);
                                     bit 7 = leftmost pixel
-  src/js/unidata.js               generated: the wide code point ranges (2 text cells) and the list of
+  src/js/text/unidata.js               generated: the wide code point ranges (2 text cells) and the list of
                                   block files - unitext.js (and the server, for name lengths) use it
 
 Only what the program can't draw better already: code points of code page 437 (the VGA ROM font) and of
-src/js/glyphs.js (VGA-style letters from Uni2-VGA16) are left out (they are drawn - and measured - as one
+src/js/text/glyphs.js (VGA-style letters from Uni2-VGA16) are left out (they are drawn - and measured - as one
 8-pixel cell). The Basic Multilingual Plane without surrogates / private use / controls / variation
 selectors, plus U+1F000..U+1FAFF (emoji and symbols) of the supplementary planes.
 
@@ -24,7 +24,7 @@ import gzip, json, os, re, sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.join(HERE, "..")
 OUT = os.path.join(ROOT, "src", "fonts", "unifont")
-DATA = os.path.join(ROOT, "src", "js", "unidata.js")
+DATA = os.path.join(ROOT, "src", "js", "text", "unidata.js")
 
 def wanted(cp):
     if cp < 0x10000:
@@ -36,7 +36,7 @@ def wanted(cp):
 # characters the VGA ROM font (CP437, with its pictures in the control range) or glyphs.js already draw
 CONTROL = list("☺☻♥♦♣♠•◘○◙♂♀♪♫☼►◄↕‼¶§▬↨↑↓→←∟↔▲▼")
 have = set(bytes([b]).decode("cp437") for b in range(0x20, 256)) | set(CONTROL)
-gjs = open(os.path.join(ROOT, "src", "js", "glyphs.js"), encoding="utf-8").read()
+gjs = open(os.path.join(ROOT, "src", "js", "text", "glyphs.js"), encoding="utf-8").read()
 m = re.search(r"const g = (\{.*?\});", gjs)
 assert m, "glyphs.js: EXTRA_GLYPHS table not found"
 have |= set(json.loads(m.group(1)).keys())

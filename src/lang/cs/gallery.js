@@ -1,8 +1,8 @@
 // Galerie map a výběr mapy (docs/v6/MAPS.md): galerie na obrazovce Mapy, Zveřejnit, výběr mapy v šarvátce a v online hře.
-import { Lang } from "../../js/lang.js";
+import { Lang } from "../../js/text/lang.js";
 
 Lang.extend("cs", {
-  "pk.title": "VYBER MAPU", "pk.loading": "Načítám...", "pk.none.mine": "Zatím žádné mapy (Mapy v hlavní nabídce).",
+  "pk.title": "VYBER MAPU", "pk.loading": "Načítám...", "pk.none.mine": "Zatím žádné hratelné mapy (Mapy v hlavní nabídce).",
   "pk.none.gal": "Zatím nic nezveřejněno.", "pk.err.none": "Tento server nemá galerii map.",
   "pk.err.net": "Server neodpovídá - zkus znovu.",
   "pk.random.i": "Svět vytvořený tak, jak ho dělá původní hra.", "pk.mine.i": "Vyber ji a hraj na ní.",

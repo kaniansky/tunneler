@@ -1,7 +1,7 @@
-// gold rush (src/js/modes/gold.js): its texts in English, the fallback for every language.
+// gold rush (src/js/game/modes/gold.js): its texts in English, the fallback for every language.
 // stat: the statistics column, note: the rounds list, instr: its Instructions paragraph, the rest: the
 // score tag beside the instrument panel / team names ({n} value, {g} goal); raw Unicode text.
-import { Lang } from "../../../js/lang.js";
+import { Lang } from "../../../js/text/lang.js";
 Lang.modeTexts("gold", "en", {
   stat: "gold",
   note: "{n} gold",

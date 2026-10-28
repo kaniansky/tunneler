@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generates src/js/glyphs.js: the CP437 byte -> Unicode table and VGA-style 8x16 glyphs for the
+"""Generates src/js/text/glyphs.js: the CP437 byte -> Unicode table and VGA-style 8x16 glyphs for the
 characters code page 437 lacks (Latin-1/Latin Extended-A/B for Slovak, Czech and other Latin languages,
 Cyrillic for Ukrainian and Russian, Greek, common punctuation, currency and a few symbols), taken from the
 Linux console font Uni2-VGA16 (same IBM VGA look as the ROM font). glyphs.js also gets unicodeGlyph(ch):
@@ -68,6 +68,6 @@ export const unicodeGlyph = ch => {
   return EXTRA_GLYPHS[ch] || null;
 };
 ''' % (json.dumps("".join(cp437), ensure_ascii=False), json.dumps(out, ensure_ascii=False), json.dumps(CONTROL, ensure_ascii=False))
-dst = os.path.join(os.path.dirname(__file__), "..", "src", "js", "glyphs.js")
+dst = os.path.join(os.path.dirname(__file__), "..", "src", "js", "text", "glyphs.js")
 open(dst, "w", encoding="utf-8").write(js)
 print("wrote", dst, len(out), "glyphs")

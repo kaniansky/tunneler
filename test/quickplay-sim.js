@@ -10,7 +10,7 @@ process.env.STATIC_DIR = process.env.STATIC_DIR || "src";
 const assert = require("assert");
 const WebSocket = require("ws");
 const { TunnelerEngine, NetProto, TunnelerAI } = require("./src.js");
-const { Replay } = require("../src/js/replay.js");
+const { Replay } = require("../src/js/game/replay.js");
 const { createServer } = require("../server.js");
 const { FrameLog, FrameQueue, frameToInputExt, stateHash, engineOptions, botInputs, aiSlot, readCfg, UP, LEFT, RIGHT, FIRE } = NetProto;
 

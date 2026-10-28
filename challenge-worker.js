@@ -7,12 +7,12 @@
 //   new Worker(__filename, {workerData: {bytes, day, version, name}})
 const { parentPort, workerData } = require("worker_threads");
 const zlib = require("zlib");
-const { TunnelerEngine } = require("./src/js/engine.js");
-const { TunnelerAI } = require("./src/js/ai.js");
-const { Challenge } = require("./src/js/challenge.js");
-const { NetProto } = require("./src/js/netproto.js");
+const { TunnelerEngine } = require("./src/js/game/engine.js");
+const { TunnelerAI } = require("./src/js/game/ai.js");
+const { Challenge } = require("./src/js/game/challenge.js");
+const { NetProto } = require("./src/js/game/netproto.js");
 require("./src/lang/en/index.js");                       // (the game modes' texts: the engine draws them)
-require("./src/js/modes/index.js");
+require("./src/js/game/modes/index.js");
 
 function check({ bytes, day, version, name }) {
   let raw = Buffer.from(bytes);

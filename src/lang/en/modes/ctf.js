@@ -1,7 +1,7 @@
-// capture the flag (src/js/modes/ctf.js): its texts in English, the fallback for every language.
+// capture the flag (src/js/game/modes/ctf.js): its texts in English, the fallback for every language.
 // stat: the statistics column, note: the rounds list, instr: its Instructions paragraph, the rest: the
 // score tag beside the instrument panel / team names ({n} value, {g} goal); raw Unicode text.
-import { Lang } from "../../../js/lang.js";
+import { Lang } from "../../../js/text/lang.js";
 Lang.modeTexts("ctf", "en", {
   stat: "caps",
   note: "{n} caps",

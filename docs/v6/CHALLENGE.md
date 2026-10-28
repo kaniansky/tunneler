@@ -9,7 +9,7 @@ weekly challenge - one per ISO week - and became daily before its release: owner
 - Every UTC day (00:00 UTC to the next midnight) has one challenge. Everybody gets the same world (seed), map size,
   game mode, computer opponents (their levels and teams), rounds to win, round time, line of sight and friendly
   fire. The challenge is a function of the day's date ("2026-10-25") only, defined in one module shared by the pages
-  and the server (`src/js/challenge.js`). Nobody has to set anything up, and nothing is stored to know it.
+  and the server (`src/js/game/challenge.js`). Nobody has to set anything up, and nothing is stored to know it.
 - You play it as a skirmish against the computer, recorded like every match (`replay.js`). After the match you can
   send your result. The server plays the replay again and puts the result on the day's leaderboard: one entry per
   player, the best one counts.
@@ -22,7 +22,7 @@ weekly challenge - one per ISO week - and became daily before its release: owner
 A new item **Daily challenge** after "Online game" (every platform, the phone too). It opens `/challenge`
 (the desktop app: `/challenge.html`, as `Links` builds every address there).
 
-### The challenge screen (`src/js/daily.js`)
+### The challenge screen (`src/js/routes/daily.js`)
 
 Online play needs a name, and so does the leaderboard: without one it asks first ("YOUR NAME",
 `DosUI.askName`, the same name as online). Then, in the DOS look:
@@ -130,7 +130,7 @@ unless a better result of the same day is still waiting there unsent: "Send your
 the last one sent (as long as its replay is among the newest 20 kept). A value without a valid `day` - one the
 weekly challenge left there (`{week: "2026-W43", ...}`) - is ignored.
 
-## 3. The challenge of a day (`src/js/challenge.js`)
+## 3. The challenge of a day (`src/js/game/challenge.js`)
 
 - `dayOf(ms)` -> "YYYY-MM-DD" (the UTC date), `dayStart(day)` / `dayEnd(day)` -> ms (midnight UTC, the next one; NaN
   for anything but a valid day), `validDay(day)`: exactly "YYYY-MM-DD", a real calendar date (no 2026-02-30, no

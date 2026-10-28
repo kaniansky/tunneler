@@ -1,6 +1,6 @@
 "use strict";
 // Game modes (docs/DESIGN-8P.md 27): the framework and every registered mode.
-//   - every mode in TunnelerEngine.MODE_LIST but "standard" is registered (src/js/modes/<mode>.js)
+//   - every mode in TunnelerEngine.MODE_LIST but "standard" is registered (src/js/game/modes/<mode>.js)
 //   - every mode: AI-only matches (free-for-all and teams, small map, 1 round to win) finish, and the same
 //     match twice is identical (bits every frame, the final state hash) - online every client must agree
 //   - then each mode's own test, test/modes/<mode>.js, if there is one
@@ -22,11 +22,11 @@ if (core) {
 const missing = E.MODE_LIST.filter(m => m !== "standard" && !E.MODES[m]);
 check(!missing.length || process.env.MODES_PARTIAL, "every game mode registered" + (missing.length ? " (missing: " + missing.join(", ") + ")" : ""));
 {
-  // src/js/modes/index.js imports every mode file
-  const dir = path.join(__dirname, "..", "src", "js", "modes");
+  // src/js/game/modes/index.js imports every mode file
+  const dir = path.join(__dirname, "..", "src", "js", "game", "modes");
   const listed = [...fs.readFileSync(path.join(dir, "index.js"), "utf8").matchAll(/^import "\.\/([^"]+)";/gm)].map(m => m[1]);
   const files = fs.readdirSync(dir).filter(f => f.endsWith(".js") && f !== "index.js");
-  check(files.every(f => listed.includes(f)), "src/js/modes/index.js imports every mode (" + files.filter(f => !listed.includes(f)).join(", ") + ")");
+  check(files.every(f => listed.includes(f)), "src/js/game/modes/index.js imports every mode (" + files.filter(f => !listed.includes(f)).join(", ") + ")");
 }
 for (const m of Object.keys(E.MODES)) {
   const M = E.MODES[m];

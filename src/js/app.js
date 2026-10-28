@@ -8,28 +8,28 @@
 // desktop app's forms /lobby.html, /online.html?room=, /play.html?mode=, /replays.html[?id=], /challenge.html, /maps.html (endpoint.js
 // Links builds them). Unknown paths show the main menu.
 import "../lang/index.js";
-import "./modes/index.js";
-import "./screen.js";
-import "./gfx-text.js";
-import "./pads.js";
-import { Endpoint } from "./endpoint.js";
-import { Gfx } from "./gfx.js";
-import { Lang } from "./lang.js";
+import "./game/modes/index.js";
+import "./io/screen.js";
+import "./draw/gfx-text.js";
+import "./io/pads.js";
+import { Endpoint } from "./net/endpoint.js";
+import { Gfx } from "./draw/gfx.js";
+import { Lang } from "./text/lang.js";
 import { Nav } from "./nav.js";
-import { Report, Reload } from "./report.js";
+import { Report, Reload } from "./net/report.js";
 import { Scope } from "./scope.js";
 import { VERSION } from "./version.js";
 
 Report.install();                          // (errors nobody would see go to the server - docs/v6/RELIABILITY.md 2.9)
 
 const ROUTES = [
-  { name: "games", re: /^\/(games\/?|lobby\.html)$/, title: "Tunneler - online", load: () => import("./lobby.js") },
-  { name: "online", re: /^\/(game\/.+|online\.html)$/, title: "Tunneler - online", load: () => import("./online.js") },
-  { name: "play", re: /^\/(split|skirmish|vs-computer)\/?$|^\/play\.html$/, title: "Tunneler", load: () => import("./play.js") },
-  { name: "replays", re: /^\/(replays(\/[^/]+)?\/?|replay\/[a-z2-9]{8}\/?|replays\.html)$/, title: "Tunneler - replays", load: () => import("./replays.js") },
-  { name: "challenge", re: /^\/(challenge\/?|challenge\.html)$/, title: "Tunneler - daily challenge", load: () => import("./daily.js") },
-  { name: "maps", re: /^\/(maps(\/[^/]+)?\/?|map\/[a-z2-9]{10}\/?|maps\.html)$/, title: "Tunneler - maps", load: () => import("./maps.js") },
-  { name: "home", re: /^/, title: "Tunneler", load: () => import("./home.js") },
+  { name: "games", re: /^\/(games\/?|lobby\.html)$/, title: "Tunneler - online", load: () => import("./routes/lobby.js") },
+  { name: "online", re: /^\/(game\/.+|online\.html)$/, title: "Tunneler - online", load: () => import("./routes/online.js") },
+  { name: "play", re: /^\/(split|skirmish|vs-computer)\/?$|^\/play\.html$/, title: "Tunneler", load: () => import("./routes/play.js") },
+  { name: "replays", re: /^\/(replays(\/[^/]+)?\/?|replay\/[a-z2-9]{8}\/?|replays\.html)$/, title: "Tunneler - replays", load: () => import("./routes/replays.js") },
+  { name: "challenge", re: /^\/(challenge\/?|challenge\.html)$/, title: "Tunneler - daily challenge", load: () => import("./routes/daily.js") },
+  { name: "maps", re: /^\/(maps(\/[^/]+)?\/?|map\/[a-z2-9]{10}\/?|maps\.html)$/, title: "Tunneler - maps", load: () => import("./routes/maps.js") },
+  { name: "home", re: /^/, title: "Tunneler", load: () => import("./routes/home.js") },
 ];
 const LOADING_DELAY = 150;                 // ms before "Loading..." shows while a route's module arrives
 

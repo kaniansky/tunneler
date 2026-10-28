@@ -1,5 +1,5 @@
 // Czech texts of running reliably (docs/v6/RELIABILITY.md; see en/reliability.js).
-import { Lang } from "../../js/lang.js";
+import { Lang } from "../../js/text/lang.js";
 Lang.extend("cs", {
   "rel.restart": "Server se restartuje...",
   "rel.restart2": "Hra bude pokračovat, jakmile se vrátí.",

@@ -1,5 +1,5 @@
 "use strict";
-// compare-wasm.js - checks the JS port (src/js/engine.js) against the original TUNNELER.EXE compiled
+// compare-wasm.js - checks the JS port (src/js/game/engine.js) against the original TUNNELER.EXE compiled
 // to WebAssembly (test/fixtures/original/: tunneler.wasm + its loader wasmapp.js + TUNNELER.EXE, from
 // the cicoparser C++ transpile of the DOS game).
 //

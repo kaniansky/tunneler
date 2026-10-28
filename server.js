@@ -39,7 +39,7 @@
 //        GET /api/rooms/<id>      one room (also private ones: their ids carry a random suffix)
 //        POST /api/quickplay      {version, name} -> {id, created, hostKey?}: a public quick-play room (docs/v6/QUICKPLAY.md)
 //                                 with a place for one more human (the most humans first), else a new one
-//        POST /api/replays        a replay (src/js/replay.js: gzip'd or plain JSON) -> {id}: shared - kept in the
+//        POST /api/replays        a replay (src/js/game/replay.js: gzip'd or plain JSON) -> {id}: shared - kept in the
 //                                 replays' bucket (S3_BUCKET_REPLAYS), else DATA_DIR/replays (the newest
 //                                 MAX_SHARED), else memory; {id, days} when REPLAY_KEEP_DAYS says how long
 //        GET  /api/replays/<id>   that replay (gzip'd JSON); the page address /replay/<id> plays it
@@ -49,7 +49,7 @@
 //                                 worker thread with the server's own computer players -> {ok, result, best, rank, total,
 //                                 improved} or {error, code}: bad / name / config / differs / unfinished / long (400),
 //                                 day / taken / version (409), busy / storage (503); <day> = "YYYY-MM-DD" (UTC)
-//        POST /api/maps           a custom map (src/js/mapdata.js bytes, docs/v6/MAPS.md) -> {id}: checked,
+//        POST /api/maps           a custom map (src/js/game/mapdata.js bytes, docs/v6/MAPS.md) -> {id}: checked,
 //                                 kept in its canonical form under the hash of its content (the maps' bucket
 //                                 S3_BUCKET_MAPS (<id>.map), else DATA_DIR/maps, else memory) - for good
 //        GET  /api/maps/<id>      that map's bytes; the page address /map/<id> opens it
@@ -108,15 +108,15 @@ const http = require("http"), fs = require("fs"), path = require("path"), crypto
 const { WebSocketServer } = require("ws");
 // shared with the browser; the source copy, so the server never depends on a build (an ES module: node
 // >= 20.19 requires it as it is - package.json engines)
-const { NetProto } = require("./src/js/netproto.js");
+const { NetProto } = require("./src/js/game/netproto.js");
 // the daily challenge (docs/v6/CHALLENGE.md): the day's settings; its replays are checked in a worker thread
 // (challenge-worker.js runs the engine and the computer players)
-const { Challenge } = require("./src/js/challenge.js");
+const { Challenge } = require("./src/js/game/challenge.js");
 const { Worker } = require("worker_threads");
-const { MapData } = require("./src/js/mapdata.js");
+const { MapData } = require("./src/js/game/mapdata.js");
 // the engine only for TunnelerEngine.mapReach (rooms' maps): loaded when first needed
 let engineModule = null;
-const mapEngine = () => (engineModule = engineModule || require("./src/js/engine.js")).TunnelerEngine;
+const mapEngine = () => (engineModule = engineModule || require("./src/js/game/engine.js")).TunnelerEngine;
 // player accounts (docs/v6/ACCOUNTS.md): the store, tokens, tickets, /api/account*
 const Accounts = require("./accounts.js");
 // this server's version (package.json): clients of another version can't create or join its games
@@ -155,7 +155,8 @@ const MAX_MAP_BYTES = 40 * 1024;       // one map, as sent (mapdata.js: at most 
 const GALLERY_KEY = "gallery.json.gz"; // the map gallery's index, beside the maps (their ids are 10 letters / digits)
 const MAX_GALLERY = 10000;             // maps in the gallery
 const MAX_GALLERY_PER_AUTHOR = 100;    // ... published by one author
-const MAX_PUBLISH_PER_MIN = 10;        // POST /api/gallery per address
+const MAX_PUBLISH_PER_MIN = 10;
+const MAX_PUBLISH_PER_DAY = 50;          // ... and a day, per address        // POST /api/gallery per address
 const GALLERY_PLAYS_SAVE_MS = 60 * 1000;   // plays counted: the index written at most this often
 const MAP_LOADS_PER_MIN = 30;          // maps a room's host may choose a minute (each one a lookup in the store)
 const MAX_ROOMS_PER_ADDR = 20;         // rooms created by one address that still exist
@@ -979,6 +980,15 @@ function createServer(opts = {}) {
   const galleryIds = new Set();
   let gallery = null, galleryWrite = Promise.resolve(), playsTimer = null, galleryMem = null;
   const allowPublish = rateLimiter(MAX_PUBLISH_PER_MIN);
+  // (and a day's worth per address: without accounts a client id is anybody's to make up)
+  const publishDay = new Map();
+  const allowPublishDay = addr => {
+    const t = now(), d = publishDay.get(addr);
+    if (!d || t - d.t0 > 24 * 3600 * 1000) { publishDay.set(addr, { t0: t, n: 1 }); if (publishDay.size > 10000) publishDay.clear(); return true; }
+    return ++d.n <= MAX_PUBLISH_PER_DAY;
+  };
+  // pending plays (galleryPlayed) written now - a server stopping
+  const flushGallery = () => playsTimer && gallery ? gallery.then(g => saveGallery(g)).catch(() => {}) : Promise.resolve();
   function loadGallery() {
     if (!gallery) {
       gallery = (async () => {
@@ -987,10 +997,10 @@ function createServer(opts = {}) {
           const r = await s3Request(galleryS3, "GET", GALLERY_KEY);
           if (r.status !== 404 && (r.status < 200 || r.status >= 300)) throw new Error("storage " + r.status);
           if (r.status !== 404) gz = r.body;
-        } else if (galleryDir) try { gz = fs.readFileSync(path.join(galleryDir, GALLERY_KEY)); } catch (e) { gz = null; }
+        } else if (galleryDir) try { gz = fs.readFileSync(path.join(galleryDir, GALLERY_KEY)); } catch (e) { if (e.code !== "ENOENT") throw e; gz = null; }
         else gz = galleryMem;
-        let g = null;
-        try { g = gz ? JSON.parse(zlib.gunzipSync(gz).toString("utf8")) : null; } catch (e) { g = null; }
+        // (an index that can't be read is an error - 503 - never an empty gallery a write would then store over it)
+        const g = gz ? JSON.parse(zlib.gunzipSync(gz).toString("utf8")) : null;
         const list = g && Array.isArray(g.maps) ? g.maps.filter(x => x && NetProto.mapId(x.id) && typeof x.author === "string" && typeof x.name === "string") : [];
         for (const x of list) galleryIds.add(x.id);
         return { maps: list };
@@ -1066,6 +1076,7 @@ function createServer(opts = {}) {
       let bytes;
       try { bytes = await readRaw(req, MAX_MAP_BYTES); } catch (e) { return json(res, 413, { error: "too large" }); }
       if (!allowPublish(addressOf(req))) return json(res, 429, { error: "too many maps published, try again in a minute", code: "busy" });
+      if (!allowPublishDay(addressOf(req))) return json(res, 429, { error: "too many maps published today", code: "busy" });
       const canon = MapData.canonical(bytes), m = canon ? MapData.decode(canon) : null;
       if (!m) return json(res, 400, { error: "not a map", code: "map" });
       const buf = Buffer.from(canon), id = mapIdOf(buf);
@@ -1076,6 +1087,10 @@ function createServer(opts = {}) {
       if (old) return old.author === w.key ? json(res, 200, { id, map: galleryEntry(old, w.key) }) : json(res, 409, { error: "already in the gallery", code: "published" });
       if (g.maps.filter(x => x.author === w.key).length >= MAX_GALLERY_PER_AUTHOR || g.maps.length >= MAX_GALLERY) return json(res, 429, { error: "the gallery is full", code: "full" });
       try { if (!maps.has(id)) await maps.keep(id, buf); } catch (e) { return json(res, 503, { error: "could not store it, try later", code: "storage" }); }
+      // (checked again after the wait: another request may have published it - or filled the gallery - meanwhile)
+      const again = g.maps.find(e => e.id === id);
+      if (again) return again.author === w.key ? json(res, 200, { id, map: galleryEntry(again, w.key) }) : json(res, 409, { error: "already in the gallery", code: "published" });
+      if (g.maps.filter(e => e.author === w.key).length >= MAX_GALLERY_PER_AUTHOR || g.maps.length >= MAX_GALLERY) return json(res, 429, { error: "the gallery is full", code: "full" });
       const x = { id, name: m.name, size: m.size, bases: m.bases.length, author: w.key, by: w.by, date: now(), plays: 0 };
       g.maps.push(x); galleryIds.add(id);
       try { await saveGallery(g); } catch (e) { g.maps = g.maps.filter(e2 => e2 !== x); galleryIds.delete(id); return json(res, 503, { error: "could not store it, try later", code: "storage" }); }
@@ -1303,7 +1318,7 @@ function createServer(opts = {}) {
       if (!res.headersSent) json(res, 500, { error: "server error" });
     });
     if (req.method !== "GET" && req.method !== "HEAD") { res.writeHead(405); return res.end(); }
-    // short addresses for the pages (src/js/endpoint.js Links): the page reads its room / role / mode
+    // short addresses for the pages (src/js/net/endpoint.js Links): the page reads its room / role / mode
     // from the path itself
     for (const [re, page] of PRETTY) if (re.test(p)) { p = page; break; }
     if (p.endsWith("/")) p += "index.html";
@@ -1904,6 +1919,7 @@ function createServer(opts = {}) {
     closing = true;
     server.close();
     for (const r of rooms.values()) if (r.match) { stopClock(r.match); clearTimeout(r.match.aloneTimer); }
+    await flushGallery();                         // (the gallery's plays counted since its last write)
     let saved = false;
     if (stateStore && rooms.size) {
       let timer;
@@ -1938,7 +1954,7 @@ function createServer(opts = {}) {
     // (a handoff snapshot the previous server left is read right away)
     listen(port, cb) { server.listen(port, () => { refreshHandoff(true); loadGallery().catch(() => {}); if (cb) cb(server.address().port); }); return this; },
     close(cb) {
-      clearInterval(heartbeat); clearInterval(idleSweep);
+      clearInterval(heartbeat); clearInterval(idleSweep); clearTimeout(playsTimer);
       for (const w of checkWorkers) w.terminate();
       for (const r of rooms.values()) { if (r.match) { stopClock(r.match); clearTimeout(r.match.aloneTimer); } clearTimeout(r.cleanupTimer); clearTimeout(r.stTimer); clearTimeout(r.qpTimer); }
       for (const ws of wss.clients) ws.terminate();
@@ -2054,6 +2070,17 @@ if (require.main === module) {
     log("rooms on a restart: " + (srv.stateStore ? "handed over through " + srv.stateStore : "lost (no bucket or writable folder)"));
     log("accounts: " + (srv.accountStore ? "on, kept in " + srv.accountStore + (process.env.ACCOUNT_SECRET ? " (ACCOUNT_SECRET set)" : "") : "off (ACCOUNTS=off: free names)"));
     if (s3 && !s3.accessKey) log("WARNING: S3_ENDPOINT is set but not S3_ACCESS_KEY / S3_SECRET_KEY: no bucket is used");
+    // (1.1.6 renamed the storage settings - README.md, Hosting: the old ones are ignored, say so loudly)
+    const legacy = ["REPLAY_S3_ENDPOINT", "REPLAY_S3_BUCKET", "REPLAY_S3_ACCESS_KEY", "REPLAY_S3_SECRET_KEY", "REPLAY_S3_REGION",
+      "REPLAY_DIR", "MAP_DIR", "ACCOUNT_DIR", "ACCOUNT_S3_BUCKET", "STATE_DIR"].filter(k => env[k]);
+    if (legacy.length) log("WARNING: " + legacy.join(", ") + " no longer used (since 1.1.6) - set S3_ENDPOINT, S3_ACCESS_KEY, S3_SECRET_KEY, " +
+      "S3_BUCKET_REPLAYS / _MAPS / _ACCOUNTS / _CHALLENGES / _STATE or DATA_DIR instead (README.md, Hosting); until then this server keeps things in " + srv.mapStore);
+    if (s3 && s3.accessKey) for (const k of ["accounts", "maps", "state", "challenges"])
+      if (!buckets[k]) log("WARNING: S3_ENDPOINT is set but not S3_BUCKET_" + k.toUpperCase() + ": the " + k + " go to the folder (lost with the disk)");
+    if (s3 && buckets.replays) for (const k of ["accounts", "maps", "state"])
+      if (buckets[k] === buckets.replays) log("WARNING: S3_BUCKET_" + k.toUpperCase() + " is the replays' bucket - a lifecycle rule deleting old replays deletes " + k + " too");
+    if (!env.DATA_DIR && fs.existsSync(path.join(__dirname, "shared-replays")) && !fs.existsSync(path.join(__dirname, "data")))
+      log("WARNING: shared-replays/ (before 1.1.6) is not read any more - move its files into data/replays, data/maps, data/accounts, data/challenges (README.md, Hosting)");
     if (VERSION && !/^(0|false|no|off)$/i.test(process.env.UPDATE_CHECK || "")) watchReleases(VERSION);
     keepAwake();
   });

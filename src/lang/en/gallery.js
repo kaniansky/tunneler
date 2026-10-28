@@ -1,10 +1,10 @@
 // The map gallery and the map picker (docs/v6/MAPS.md): the Maps screen's gallery, Publish, the skirmish's and the
 // online lobby's map picker.
-import { Lang } from "../../js/lang.js";
+import { Lang } from "../../js/text/lang.js";
 
 Lang.extend("en", {
   // the map picker (MapPick)
-  "pk.title": "CHOOSE A MAP", "pk.loading": "Loading...", "pk.none.mine": "No maps yet (Maps on the main menu).",
+  "pk.title": "CHOOSE A MAP", "pk.loading": "Loading...", "pk.none.mine": "No maps to play yet (Maps on the main menu).",
   "pk.none.gal": "Nothing published yet.", "pk.err.none": "This server has no map gallery.",
   "pk.err.net": "The server doesn't answer - try again.",
   "pk.random.i": "A world made the way the original game makes it.", "pk.mine.i": "Choose it to play on it.",

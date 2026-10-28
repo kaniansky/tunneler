@@ -20,7 +20,11 @@
 //     Instructions / Information pages scroll (keys, scroll bar, Enter / Esc back)
 //   - the statistics and round title lay out without wrapping in every language, for many team setups
 //   node test/ext-sim.js [quick]
-const { TunnelerEngine: E, Lang } = require("./src.js");
+const { TunnelerEngine: E, Lang, MatchText, screenOf, SRC } = require("./src.js");
+const { Pages } = require(require("path").join(SRC, "js", "ui", "pages.js"));
+// (the match's text screens are drawn by matchtext.js - the engine draws nothing: the statistics as after a match, the
+// round title)
+const summaryOf = e => { const m = new MatchText(e); m.summary(5); return m; };
 
 const quick = process.argv.includes("quick");
 const { UP, DOWN, LEFT, RIGHT, FIRE } = E.BITS;
@@ -390,7 +394,7 @@ function match(seed, opts, label) {
       wins = a.wins.slice(); teamWins = a.teamWins.slice(); round = a.round; prevAliveCount = N;
     }
     if (a.screen === "text" && a.round >= 1 && a.kbdInstalled && !sawTitle) {
-      const txt = screenText(a.vram);
+      const txt = screenText(screenOf(a).vram);
       const names = [];
       for (let p = 1; p <= N; p++) names.push(a.playerName(p));
       if (a.teams) for (let t = 0; t < a.nTeams; t++) names.push(a.teamName(t));
@@ -399,7 +403,7 @@ function match(seed, opts, label) {
     }
     if (a.screen === "map") sawMap = true;
     if (sawMap && a.screen === "text" && !a.kbdInstalled && a.menuShift === -20) {
-      const txt = screenText(a.vram);
+      const txt = screenText(summaryOf(a).vram);
       for (let p = 1; p <= N; p++) if (!txt.includes(a.playerName(p).slice(0, 9))) { fail(label + ": statistics miss " + a.colorName(p) + "\n" + txt); return res; }
       // (the classic screen keeps the original's winner line; extended: the winners blink, no line)
       check(txt.includes(a.strings.stats.winner.trim()) === !a.extended, label + ": statistics winner line only on the classic screen\n" + txt);
@@ -554,13 +558,11 @@ function duel(ff, target) {
 {
   // the whole page (it scrolls): its rows' text, and the rows that wrapped while drawing the screen
   const rowsOf = e => {
-    e.window(1, 1, 80, 24); e.clearScreen();
-    const rows = [], write = e.write.bind(e);
-    e.write = (...a) => { const y = e.cy; write(...a); if (e.cy > y + 1 || (e.cy === y + 1 && e.cx !== e.wx1)) rows.push(y); };
-    e.showInstructions();
-    e.write = write;
-    const long = e.pageRows.filter(r => r.col - 1 + r.text.replace(/\{\d+\}/g, "").length > E.PAGE_W);
-    return { wraps: rows.concat(long), last: 0, text: e.pageRows.map(r => r.text.replace(/\{\d+\}/g, "")).join("\n") };
+    const h = new MatchText(e), rows = [], write = h.write.bind(h), pageRows = e.instructionRows();
+    h.write = (...a) => { const y = h.cy; write(...a); if (h.cy > y + 1 || (h.cy === y + 1 && h.cx !== h.wx1)) rows.push(y); };
+    Pages.show(h, pageRows);                         // (drawn as the site's main menu draws it: pages.js)
+    const long = pageRows.filter(r => r.col - 1 + r.text.replace(/\{\d+\}/g, "").length > E.PAGE_W);
+    return { wraps: rows.concat(long), last: 0, text: pageRows.map(r => r.text.replace(/\{\d+\}/g, "")).join("\n") };
   };
   for (const c of Lang.codes) {
     Lang.set(c);
@@ -586,43 +588,42 @@ function duel(ff, target) {
   ok("instructions: \"{n}\" follows winScore in every language");
 }
 
-// ------------------------------------------------------------------ 8b. the pages scroll
+// ------------------------------------------------------------------ 8b. the pages scroll (pages.js on a text screen, as
+// the site's main menu shows them - the original program's own pages aren't shown any more)
 {
   Lang.set("en");
-  const e = new E(1);
-  e.initTables(); e.textMode();
-  e.showInstructions();
-  const n = e.pageRows.length, max = n - E.PAGE_ROWS, row = y => textRow(e.vram, y);
-  const at = (y, x) => e.vram[y * 160 + x * 2];
+  const e = new E(1), h = new MatchText(e);
+  Pages.show(h, e.instructionRows());
+  const n = h.pageRows.length, max = n - E.PAGE_ROWS, row = y => textRow(h.vram, y);
+  const at = (y, x) => h.vram[y * 160 + x * 2];
+  const key = what => Pages.scroll(h, what);
   check(n > E.PAGE_ROWS * 3, "the instructions are longer than three screens (" + n + " rows)");
-  check(e.pageTop === 0 && row(0).includes("INSTRUCTIONS") && at(0, 79) === 0x18 && at(22, 79) === 0x19, "top: the title, the scroll bar's arrows in column 80");
-  check(e.vram[22 * 160 + 79 * 2 + 1] === 0x0F && e.vram[79 * 2 + 1] === 0x08, "top: only the down arrow is lit");
+  check(h.pageTop === 0 && row(0).includes("INSTRUCTIONS") && at(0, 79) === 0x18 && at(22, 79) === 0x19, "top: the title, the scroll bar's arrows in column 80");
+  check(h.vram[22 * 160 + 79 * 2 + 1] === 0x0F && h.vram[79 * 2 + 1] === 0x08, "top: only the down arrow is lit");
   check(at(1, 79) === 0xDB, "top: the thumb at the top of the bar");
   check(row(24).startsWith(" \x18\x19 PgUp PgDn Home End") && row(24).includes("Press <ENTER> for main menu."), "bottom line: scroll keys + prompt: " + row(24));
-  // the game's own menu loop: scan codes, Enter / Esc still go back
-  const key = (scan, ascii = 0) => e.menuKey([ascii, scan]);
-  const k = key(0x50);
-  check(k[0] === 219 && e.pageTop === 1 && !row(0).includes("INSTRUCTIONS"), "Down: row 2 on top");
-  key(0x48); check(e.pageTop === 0, "Up: back to the top");
-  key(0x48); check(e.pageTop === 0, "Up at the top stays");
-  key(0x51); check(e.pageTop === E.PAGE_ROWS - 1, "PgDn: a screen less one row");
-  key(0x49); check(e.pageTop === 0, "PgUp: back");
-  key(0x4F); check(e.pageTop === max && row(E.PAGE_ROWS - 1).trim().length > 0, "End: the last row at the bottom");
-  check(e.vram[22 * 160 + 79 * 2 + 1] === 0x08 && e.vram[79 * 2 + 1] === 0x0F && at(21, 79) === 0xDB, "end: up arrow lit, thumb at the bottom");
-  key(0x50); check(e.pageTop === max, "Down at the end stays");
-  key(0x47); check(e.pageTop === 0, "Home: the top");
-  check(e.pageScroll(5) && e.pageTop === 5 && !e.pageScroll("nonsense") && e.pageScroll(-99) && e.pageTop === 0, "pageScroll(rows)");
-  const enter = e.menuKey([13, 0x1C]), esc = e.menuKey([27, 1]);
-  check(enter[0] === 27 && esc[0] === 27, "Enter / Esc still leave the page");
+  key("down"); check(h.pageTop === 1 && !row(0).includes("INSTRUCTIONS"), "Down: row 2 on top");
+  key("up"); check(h.pageTop === 0, "Up: back to the top");
+  check(!key("up") && h.pageTop === 0, "Up at the top stays");
+  key("pgdn"); check(h.pageTop === E.PAGE_ROWS - 1, "PgDn: a screen less one row");
+  key("pgup"); check(h.pageTop === 0, "PgUp: back");
+  key("end"); check(h.pageTop === max && row(E.PAGE_ROWS - 1).trim().length > 0, "End: the last row at the bottom");
+  check(h.vram[22 * 160 + 79 * 2 + 1] === 0x08 && h.vram[79 * 2 + 1] === 0x0F && at(21, 79) === 0xDB, "end: up arrow lit, thumb at the bottom");
+  check(!key("down") && h.pageTop === max, "Down at the end stays");
+  key("home"); check(h.pageTop === 0, "Home: the top");
+  check(key(5) && h.pageTop === 5 && !key("nonsense") && key(-99) && h.pageTop === 0, "Pages.scroll(rows)");
+  // the original program's menu loop: Enter / Esc still leave a page
+  e.menuPage = "instructions";
+  check(e.menuKey([13, 0x1C])[0] === 27 && e.menuKey([27, 1])[0] === 27, "Enter / Esc still leave the page");
   // Information fits less tightly but scrolls the same way; the credits close it
-  const g = e.showInformation(); while (!g.next().done);
-  check(e.menuPage === "information" && e.pageTop === 0 && row(0).includes("INFORMATION"), "information: top");
-  e.pageScroll("end");
-  check(textRow(e.vram, E.PAGE_ROWS - 1).includes("Geoffrey Silverton, 1991"), "information: the credits at the end");
+  Pages.show(h, e.informationRows());
+  check(h.pageTop === 0 && row(0).includes("INFORMATION"), "information: top");
+  key("end");
+  check(textRow(h.vram, E.PAGE_ROWS - 1).includes("Geoffrey Silverton, 1991"), "information: the credits at the end");
   // a page that fits: no scroll bar, no scroll keys
-  const s = new E(1); s.initTables(); s.textMode();
-  s.showPageRows("instructions", [{ col: 1, text: "{3}short" }]);
-  check(s.vram[79 * 2] === 0x20 && !textRow(s.vram, 24).includes("PgUp") && !s.pageScroll("down"), "a short page: no scroll bar / keys");
+  const s2 = new MatchText(e);
+  Pages.show(s2, [{ col: 1, text: "{3}short" }]);
+  check(s2.vram[79 * 2] === 0x20 && !textRow(s2.vram, 24).includes("PgUp") && !Pages.scroll(s2, "down"), "a short page: no scroll bar / keys");
   ok("Instructions / Information scroll: Up / Down, PgUp / PgDn, Home / End, scroll bar, Enter / Esc back");
 }
 
@@ -648,31 +649,29 @@ for (const c of Lang.codes) {
       S.colors.forEach(n => check(n.length <= 9, c + ": color name longer than 9: " + n));
       S.stats.head.forEach((h, i) => check(h.length <= [4, 4, 4, 5, 5][i], c + ": stats heading too long: " + h));
       check(S.team.replace("{n}", "8").length <= 18, c + ": team label too long: " + S.team);
-      const write = e.write.bind(e), goto = e.gotoXY.bind(e), rows = [];
+      const m = new MatchText(e);                       // (the statistics / round title: matchtext.js)
+      const write = m.write.bind(m), goto = m.gotoXY.bind(m), rows = [];
       let badGoto = 0;
-      e.write = (...a) => { const y = e.cy; write(...a); if (e.cy > y + 1 || (e.cy === y + 1 && e.cx !== e.wx1)) rows.push(y); };
-      e.gotoXY = (x, y) => { if (x < 1 || y < 1 || e.wx1 + x - 1 > e.wx2 || e.wy1 + y - 1 > e.wy2) badGoto++; goto(x, y); };
+      m.write = (...a) => { const y = m.cy; write(...a); if (m.cy > y + 1 || (m.cy === y + 1 && m.cx !== m.wx1)) rows.push(y); };
+      m.gotoXY = (x, y) => { if (x < 1 || y < 1 || m.wx1 + x - 1 > m.wx2 || m.wy1 + y - 1 > m.wy2) badGoto++; goto(x, y); };
       // statistics: no line may wrap in the 37-column panel
       for (let p = 1; p <= N; p++) { e.shotsFired[p] = 9999; e.shotsHit[p] = 999; e.metersDug[p] = 32767; e.metersMoved[p] = 32767; }
       e.teamWins = e.teamWins.map((w, t) => t === e.nTeams - 1 ? e.winScore : 1);
       for (let p = 1; p <= N; p++) e.wins[p] = e.teamWins[e.team(p)];
-      e.menuShift = -20;
-      e.textBackground(0);
-      e.showMainMenu();
-      const stats = screenText(e.vram);
+      m.summary(5);
+      const stats = screenText(m.vram);
       if (rows.length || badGoto) fail(what + ": statistics wrap at row(s) " + rows.join(",") + "\n" + stats);
       for (let p = 1; p <= N; p++) check(stats.includes(e.playerName(p).slice(0, 9)), what + ": statistics miss player " + p);
       const winner = e.teamMembers(e.nTeams - 1).length === 1 ? e.playerName(e.teamMembers(e.nTeams - 1)[0]) : e.teamName(e.nTeams - 1);
       check(!stats.includes(S.stats.winner) || !winner, what + ": no winner line in the statistics (the winners blink)\n" + stats);
       // round title: everything inside the screen, no wrapping, every player and team
       rows.length = 0; badGoto = 0;
-      e.window(1, 1, 80, 25); e.clearScreen(); e.round = 3;
-      e.roundTitleExt();
-      const txt = screenText(e.vram);
+      m.window(1, 1, 80, 25); m.clearScreen(); e.round = 3;
+      m.roundTitleExt();
+      const txt = screenText(m.vram);
       if (rows.length || badGoto) fail(what + ": round title wraps / leaves the screen\n" + txt);
       for (let p = 1; p <= N; p++) check(txt.includes(e.playerName(p)), what + ": round title misses " + e.playerName(p) + "\n" + txt);
       if (e.teams) for (let t = 0; t < e.nTeams; t++) check(txt.includes(e.teamName(t)), what + ": round title misses " + e.teamName(t) + "\n" + txt);
-      e.write = write; e.gotoXY = goto;
     }
 }
 Lang.set("en");
@@ -702,8 +701,8 @@ ok("extended texts lay out in every language (" + LAYOUTS.length + " team setups
 // 2026-10-24);
 // none of it without the options (the classic screens stay the original's)
 {
-  const title = e => { e.window(1, 1, 80, 25); e.textMode(); e.showRoundTitle().next(); return screenText(e.vram).split("\n"); };
-  const stats = e => { e.menuShift = -20; e.textMode(); e.showMainMenu(); return screenText(e.vram).split("\n"); };
+  const title = e => { const m = new MatchText(e); m.roundTitle(); m.roundTitleCycle(1); return screenText(m.vram).split("\n"); };
+  const stats = e => screenText(summaryOf(e).vram).split("\n");
   const marks = rows => rows.join("").replace(/[^\x10\x11]/g, "").length;
   // classic, defaults: no marker, no settings
   {

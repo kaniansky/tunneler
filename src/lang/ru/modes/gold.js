@@ -1,5 +1,5 @@
-// gold rush (src/js/modes/gold.js) in this language - the same keys as ../../en/modes/gold.js.
-import { Lang } from "../../../js/lang.js";
+// gold rush (src/js/game/modes/gold.js) in this language - the same keys as ../../en/modes/gold.js.
+import { Lang } from "../../../js/text/lang.js";
 Lang.modeTexts("gold", "ru", {
   stat: "зол.",
   note: "{n} золота",

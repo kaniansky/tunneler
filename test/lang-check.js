@@ -5,7 +5,8 @@
 // translated, and a removed language (pirate) falls back to English.   node test/lang-check.js
 const fs = require("fs");
 const path = require("path");
-const { TunnelerEngine: E, Lang, SRC, langFolders, jsIn } = require("./src.js");
+const { TunnelerEngine: E, MatchText, Lang, SRC, langFolders, jsIn } = require("./src.js");
+const { Pages } = require(path.join(SRC, "js", "ui", "pages.js"));
 
 let bad = 0;
 const fail = (c, msg) => { bad++; console.log("  FAIL [" + c + "] " + msg); };
@@ -127,14 +128,15 @@ for (const c of Lang.codes) {
     const st = new E(1, { players: 4, teams: true, size, winScore: 9, roundTime: 10 });
     Lang.apply(st);
     st.showSettings = { view, visible: vsb, watchOut: w };
-    const parts = st.settingsParts();
+    const mt = new MatchText(st);                   // (the round title / statistics: matchtext.js)
+    const parts = mt.settingsParts();
     if (parts.length !== 6) fail(c, "settings: " + parts.length + " parts, not 6");
     parts.forEach(p => fits(c, "settings part", p, 37));
-    fits(c, "settings timeShort", st.settingsParts(1)[4], 37);
+    fits(c, "settings timeShort", mt.settingsParts(1)[4], 37);
     // (the round title has room for the full text; the statistics fall back to the short one / none)
-    if (st.settingsLines(76).join(" ").indexOf(parts[4]) < 0) fail(c, "round title settings lack the round time");
-    stShort[0]++; if (st.settingsLines(37).some(l => l.includes(st.settingsParts(1)[4]) || l.includes(parts[4]))) stShort[1]++;
-    const l37 = st.settingsLines(37), l76 = st.settingsLines(76);
+    if (mt.settingsLines(76).join(" ").indexOf(parts[4]) < 0) fail(c, "round title settings lack the round time");
+    stShort[0]++; if (mt.settingsLines(37).some(l => l.includes(mt.settingsParts(1)[4]) || l.includes(parts[4]))) stShort[1]++;
+    const l37 = mt.settingsLines(37), l76 = mt.settingsLines(76);
     l37.forEach(l => fits(c, "statistics settings line", l, 37)); l76.forEach(l => fits(c, "round title settings line", l, 76));
     if (l37.length > 4) fail(c, "statistics settings take " + l37.length + " lines (max 4): " + l37.join(" / "));
     if (l76.length > 4) fail(c, "round title settings take " + l76.length + " lines (max 4)");
@@ -151,12 +153,12 @@ for (const c of Lang.codes) {
     for (const [mode, e] of [["hotseat", e0], ["cpu", e0], ["online", e0], ["cpu", ex], ["online", ex]]) cases.push([mode, e, ws]);
   for (const [mode, e, ws] of cases) {
     e.winScore = ws;
-    e.uiMode = mode; e.window(1, 1, 80, 24); e.clearScreen();
-    const rows = [];
-    const write = e.write.bind(e);
-    e.write = (...a) => { const y = e.cy; write(...a); if (e.cy > y + 1 || (e.cy === y + 1 && e.cx !== e.wx1)) rows.push(y); };
-    e.showInstructions();
-    e.write = write;
+    e.uiMode = mode;
+    // (the page drawn as the site's main menu draws it: pages.js on a text screen)
+    const h = new MatchText(e), rows = [];
+    const write = h.write.bind(h);
+    h.write = (...a) => { const y = h.cy; write(...a); if (h.cy > y + 1 || (h.cy === y + 1 && h.cx !== h.wx1)) rows.push(y); };
+    Pages.show(h, e.instructionRows());
     const what = "instructions (" + mode + (e.extended ? ", extended" : "") + ", " + ws + " to win)";
     if (e.extended && e.winScoreText) {
       const I = S.instr;
@@ -179,7 +181,6 @@ for (const c of Lang.codes) {
       if (c !== "en" && D.engine && !(D.engine[k] && D.engine[k].sections && D.engine[k].sections[i])) fail(c, k + ".sections[" + i + "] is not translated");
     });
   }
-  e.window(1, 1, 80, 24); e.clearScreen();
   const info = e.informationRows();
   info.forEach(r => fits(c, "information row", " ".repeat(r.col - 1) + r.text, E.PAGE_W));
   for (const l of S.info.credits) if (!info.some(r => r.text.includes(l))) fail(c, "information lacks the credit \"" + l + "\"");
@@ -217,7 +218,7 @@ if (Lang.code !== "en") fail("pirate", "Lang.set(\"pirate\") gives " + Lang.code
   // (a fresh copy of the languages in a vm, as a page that finds "pirate" remembered)
   let written = null;
   const ctx = require("vm").createContext({ atob, localStorage: { getItem: k => k === "tunneler.lang" ? "pirate" : null, setItem: (k, v) => { written = v; } } });
-  require("./page-env.js").run(ctx, ["js/lang.js", "lang/index.js"]);
+  require("./page-env.js").run(ctx, ["js/text/lang.js", "lang/index.js"]);
   if (ctx.Lang.code !== "en" || written !== "en") fail("pirate", "stored \"pirate\" gives " + ctx.Lang.code + " (stored " + written + "), not en");
 }
 // the index modules import every language and every file of each (src/lang/index.js, src/lang/<code>/index.js)

@@ -349,7 +349,7 @@ const go = (ui, k) => { const it = item(ui, k); assert(it, "no item " + k + " in
     const srv = fakeServer(true);
     srv.users.set("norko", { id: "id0", name: "Norko", password: "pw pw pw pw", token: "tok-Norko-1" });
     const env = makeEnv("/challenge", "", srv, { [KNOWN]: "1" });
-    const C = require("../src/js/challenge.js").Challenge, day = C.dayOf(Date.now());
+    const C = require("../src/js/game/challenge.js").Challenge, day = C.dayOf(Date.now());
     srv.board = { day, current: true, ends: C.dayEnd(day), now: Date.now(), total: 0, top: [], you: null };
     env.storage.set("tunneler.challenge.last", JSON.stringify({ day, id: "r-none", result: { rounds: 1, won: true, kills: 2, secs: 100 }, sent: false }));
     env.page("challenge.html");

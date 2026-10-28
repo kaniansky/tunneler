@@ -1,5 +1,5 @@
-// survival (src/js/modes/survival.js) in this language - the same keys as ../../en/modes/survival.js.
-import { Lang } from "../../../js/lang.js";
+// survival (src/js/game/modes/survival.js) in this language - the same keys as ../../en/modes/survival.js.
+import { Lang } from "../../../js/text/lang.js";
 Lang.modeTexts("survival", "cs", {
   stat: "vlny",
   note: "{n}/{g}",

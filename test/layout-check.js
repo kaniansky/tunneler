@@ -115,6 +115,24 @@ function check(win, ui, where) {
       if (!apart) bad("boxes " + (A.title || A.start) + " and " + (B.title || B.start) + " overlap");
     }
   }
+  // the menu renderer's model (snap.ui - docs/RENDERING.md) matches the cells: its boxes on frame corners, the bar on
+  // the highlighted cells, the titles on red text, the rule on the rule
+  const snap = ui.lastSnap;
+  if (!snap || !snap.ui) bad("no model on the snapshot");
+  else {
+    const m = snap.ui, ch = (r, c) => snap.vram[r * 160 + c * 2], at = (r, c) => snap.vram[r * 160 + c * 2 + 1];
+    for (const b of m.boxes) {
+      const corners = [[b.r, b.c, [0xDA]], [b.r, b.c2, [0xBF]], [b.r2, b.c, [0xC0]], [b.r2, b.c2, [0xD9]]];
+      for (const [r, c, want] of corners) if (!want.includes(ch(r, c))) { bad("model box " + [b.c, b.r, b.c2, b.r2] + ": no frame corner at " + c + "," + r); break; }
+      for (const y of b.seps) if (ch(y, b.c) !== 0xC3 || ch(y, b.c2) !== 0xB4) bad("model box " + [b.c, b.r] + ": no separator on row " + y);
+      for (const [a, z] of b.gaps) if (ch(b.r, a) !== 0x20 || ch(b.r, z) !== 0x20) bad("model box " + [b.c, b.r] + ": its title gap " + a + ".." + z + " isn't the title");
+    }
+    // (a scroll arrow - more above / below - may sit on the bar's last cell)
+    if (m.bar) for (let c = m.bar.c; c <= m.bar.c2; c++) if (((at(m.bar.r, c) >> 4) & 7) !== 5 && ch(m.bar.r, c) !== 0x18 && ch(m.bar.r, c) !== 0x19) { bad("model bar on row " + m.bar.r + ": cell " + c + " isn't highlighted"); break; }
+    if (!m.bar && !narrow && !win.GameScreen.mobile() && items.some((it, i) => i === ui.sel && !it.static && !it.disabled && !it.separator)) bad("no bar in the model on a desktop");
+    for (const q of m.titles) for (let c = q.c; c <= q.c2; c++) if (ch(q.r, c) !== 0x20 && (at(q.r, c) & 15) !== 12) { bad("model title on row " + q.r + " isn't red at " + c); break; }
+    if (m.rule && ch(m.rule.r, m.rule.c) !== 0x5F) bad("model rule on row " + m.rule.r + " isn't the rule");
+  }
   // every row fits its box
   for (const b of boxes) for (let i = b.start; i < b.end; i++) {
     const it = items[i];
@@ -141,7 +159,7 @@ const SIZES = { desktop: [[1280, 800], false], "phone upright": [[390, 844], tru
 const tick = () => new Promise(r => setTimeout(r, 0));
 
 (async () => {
-  const codes = require(path.join(SRC, "js", "lang.js")).Lang.codes;
+  const codes = require(path.join(SRC, "js", "text", "lang.js")).Lang.codes;
   for (const [sizeName, [size, touch]] of Object.entries(SIZES)) {
     for (const code of codes) {
       const W = `${sizeName}, ${code}`;
@@ -415,7 +433,7 @@ const tick = () => new Promise(r => setTimeout(r, 0));
       {
         const env = makeEnv("/challenge", size, touch);
         env.storage.set("tunneler.lang", code);
-        const C = require(path.join(SRC, "js", "challenge.js")).Challenge;
+        const C = require(path.join(SRC, "js", "game", "challenge.js")).Challenge;
         // (a day with 4 lines of description: line of sight or friendly fire on)
         let day = "2026-09-30";
         for (let t = Date.UTC(2026, 8, 30), i = 0; i < 600; i++, t += 7 * 86400000) {

@@ -1,5 +1,5 @@
 // Custom maps (docs/v6/MAPS.md): the maps screens, the editor, the Map rows of the skirmish and the online lobby.
-import { Lang } from "../../js/lang.js";
+import { Lang } from "../../js/text/lang.js";
 
 Lang.extend("en", {
   "home.maps": "Maps", "home.maps.i": "Make your own worlds, share them as links, play them.",

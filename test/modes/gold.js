@@ -1,5 +1,6 @@
 "use strict";
-// Game mode "gold" (gold rush, docs/DESIGN-8P.md 27; src/js/modes/gold.js) - run by test/modes-check.js
+const { MatchText: MT } = require("../src.js");   // (the screens' texts: matchtext.js)
+// Game mode "gold" (gold rush, docs/DESIGN-8P.md 27; src/js/game/modes/gold.js) - run by test/modes-check.js
 // (or alone: node test/modes/gold.js):
 //   - the goal: one round decides the match (winScore 1); the nuggets: enough for the goal (2 x goal + 1
 //     with 2 teams, more with more teams), at least about 5 per tank scaled to the map, in reachable dirt,
@@ -37,7 +38,7 @@ function addNugget(e, x, y) { e.GS.gx.push(x); e.GS.gy.push(y); e.GS.noP.push(0)
   const e2 = start(1, { goal: 30 }), e3 = start(1, { goal: 7 });
   e2.showSettings = {};                    // (as the pages set it)
   check(e2.goal === 30 && e3.goal === G.GOAL, "goal 30 taken, 7 (not a choice) -> the default (" + e2.goal + ", " + e3.goal + ")");
-  check(e2.settingsParts().join(" ").includes("gold to win: 30"), "the settings show the goal (" + e2.settingsParts().join(", ") + ")");
+  check(new MT(e2).settingsParts().join(" ").includes("gold to win: 30"), "the settings show the goal (" + new MT(e2).settingsParts().join(", ") + ")");
 }
 
 // ---- the nuggets

@@ -313,19 +313,19 @@ function play(search) {
 {
   const w = play("?mode=hotseat&size=small&win=1");
   const e = w.tunnelerEngine();
-  assert(!e.extended && e.size === "small" && e.winScore === 1 && w.tunnelerAIs().length === 0);
+  assert(e.extended && e.nPlayers === 2 && e.team(1) !== e.team(2) && e.size === "small" && e.winScore === 1 && w.tunnelerAIs().length === 0,
+    "split screen: a skirmish of two players");
   // split screen: full volume, panned between BLUE's tank (left) and GREEN's (right); null off play
   const hl = w.tunnelerRunner().listener;
   const hr = { screen: "play", tankX: [0, 100, 300], tankY: [0, 50, 60] };
   same(hl(hr), { left: { x: 100, y: 50 }, right: { x: 300, y: 60 } }, "split screen listener");
   assert.strictEqual(hl(Object.assign({}, hr, { screen: "map" })), null, "split screen: menus centred");
-  assert.strictEqual(hl(Object.assign({}, hr, { extended: true })), null, "split screen: classic only");
   const d = play("?mode=hotseat").tunnelerEngine();
-  assert(!d.extended && d.size === "medium" && d.winScore === 3 && d.roundTime === 0);
+  assert(d.extended && d.size === "medium" && d.winScore === 3 && d.roundTime === 0);
   assert.strictEqual(play("?mode=hotseat&time=5").tunnelerEngine().roundTime, 5, "&time=5: 5-minute rounds");
   assert.strictEqual(play("?mode=hotseat&time=7").tunnelerEngine().roundTime, 0, "&time=7: not a choice - no limit");
   assert.strictEqual(play("?mode=cpu&slots=0:you:1,2:easy:2&time=10").tunnelerEngine().roundTime, 10, "vs computer &time=10");
-  ok("split screen: classic engine with size / rounds to win from the link, full-volume stereo sound");
+  ok("split screen: a skirmish of two players with size / rounds to win from the link, full-volume stereo sound");
 }
 
 // ---------------------------------------------------------------- home.js settings screens
@@ -396,10 +396,10 @@ function play(search) {
     const st = new Map(), en = makeEnv("", st);
     en.page("index.html"); en.key("ArrowDown"); en.key("Enter");
     const ui = en.win.tunnelerHomeUI(), ff = () => ui.spec.items.find(it => it.key === "ff");
-    assert(ff() && ff().disabled, "the classic game: Friendly fire shown, grayed out");
+    assert(ff() && !ff().change && ff().valueAttr === 8 && !ff().disabled, "the classic game: Friendly fire shown, its value grayed (selectable: its info says why)");
     ui.sel = ui.spec.items.findIndex(it => it.key === "slot2"); ui.draw();
     en.key("ArrowRight"); en.key("Digit1");                  // CYAN: a computer tank in team 1 (with you)
-    assert(ff() && !ff().disabled, "a team of 2: Friendly fire selectable");
+    assert(ff() && ff().change && !ff().valueAttr, "a team of 2: Friendly fire switches");
     ok("vs computer: Friendly fire always listed, grayed out without a team of 2+");
   }
   // mouse on the slot rows (DosUI zones): a click on the who column / the team cycles it forward, a
@@ -412,7 +412,7 @@ function play(search) {
       const i = ui.spec.items.findIndex(it => it.key === key), b = ui.boxOf(i);
       return { clientX: (b.x + 1 + labelCol) * 9 + 4, clientY: (b.y + (i - b.start) + (ui.vshift || 0)) * 16 + 8 };   // (vshift: the screen centred)
     };
-    assert(ui.vshift > 0, "the skirmish (its boxes from row 1) centred vertically: " + ui.vshift);
+    assert(ui.vshift >= 0, "the skirmish (its boxes from row 1) centred vertically: " + ui.vshift);
     const zone = (key, z) => ui.spec.items.find(it => it.key === key).zones[z].from;
     const saved = () => JSON.parse(st.get("tunneler.cpu.slots"));
     ui.click(at("slot1", zone("slot1", 1)));
@@ -611,9 +611,9 @@ function play(search) {
   assert.strictEqual(lines.reduce((a, l) => a + l.length, 0), e.nTeams, "every team listed");
   for (const l of lines) assert(l.reduce((a, [t]) => a + t.length, 0) + 5 * (l.length - 1) <= 78, "team line fits");
   assert.strictEqual(lines[0][1][1], E.PLAYER_TEXT_COLORS[3], "team 2 in its first tank's color (YELLOW)");
-  // classic: BLUE / GREEN as the original
-  const c = play("?mode=hotseat").tunnelerViews();             // (the classic engine: split screen only)
-  same([c.playerColor(0), c.playerColor(1), c.teamLines(c.engine()).length], [9, 10, 0], "classic colors");
+  // split screen: BLUE / GREEN in their slot colours, as every other game (it ran the classic engine)
+  const c = play("?mode=hotseat").tunnelerViews();
+  same([c.playerColor(0), c.playerColor(1)], [E.PLAYER_COLORS[0], E.PLAYER_COLORS[1]], "split screen colors");
   ok("views.js: players colored / named by their slot (BLUE, YELLOW, TEAL...), all teams on the map");
 }
 
@@ -649,9 +649,9 @@ function play(search) {
   le.setNames(["王小明王小明", "Дмитро"]);
   assert.strictEqual(lv.viewLabel(0), lw.UniText.fromRaw("王小明王小明") + "  " + le.teamName(le.team(1)));
   assert.strictEqual(lv.viewLabel(2), le.colorName(3) + "  " + le.teamName(le.team(3)), "no name: the color");
-  // hotseat: the original split screen, no labels
-  const hs = play("?mode=hotseat").tunnelerViews(); hs.snap = { screen: "play", mode: "lores" };
-  same([hs.layout().kind, hs.layout().crop], ["display", null], "hotseat: the original screen");
+  // split screen: both players' own views side by side (BLUE's first), as any game of two players
+  const hs = play("?mode=hotseat").tunnelerViews(); hs.snap = { screen: "play", mode: "lores", views: [new Uint8Array(16000), new Uint8Array(16000)] };
+  same([hs.layout().kind, hs.layout().cells], ["grid", [0, 1]], "split screen: both own views");
   ok("views.js: self / team / everyone - own view first, teammates / others in slot order; classic halves");
 }
 
@@ -672,58 +672,56 @@ function play(search) {
 }
 
 // ---------------------------------------------------------------- play.js: Rematch / Esc after a match -> the lobby
+// (the engine plays the match only - option match: no menu; the page's own screen after it, docs/RENDERING.md)
 {
+  const over = env => { const e = env.win.tunnelerEngine(); e.over = true; env.win.tunnelerRunner().onStep(e); return env.win.tunnelerAfter(); };
   // the game's settings are stored where home.js reads them (a game from a link comes back as it was)
   const st = new Map(), env = makeEnv("?mode=cpu&slots=" + encodeURIComponent("0:normal:1,2:you:2,5:hard:1") +
     "&size=small&win=5&time=3&ff=1&view=team&watch=killer&sight=circle&lv=2", st);
   env.page("play.html");
   const e = env.win.tunnelerEngine();
-  Object.assign(e, { screen: "text", menuPage: "menu", kbdInstalled: false, menuShift: 1, menuSel: 1 });
-  env.key("Enter");
-  assert.strictEqual(env.win.location.href, "", "Enter on Back to main menu: the engine's own item");
-  e.menuSel = 0;
-  env.key("Enter");
+  assert(e.matchOnly && !e.menuShown, "the engine plays the match only");
+  const ui = over(env);
+  assert(ui && ui.spec.items.map(it => it.key).join() === "rematch,gap,back", "after the match: Rematch, Back (no replay kept yet)");
+  assert(ui.spec.backdrop && ui.spec.wide, "the statistics under the menu, the 80 x 25 screen on a phone too");
+  ui.spec.items.find(it => it.key === "rematch").go();
   assert.strictEqual(env.win.location.href, "/#cpu", "Rematch: the skirmish lobby");
   same(JSON.parse(st.get("tunneler.cpu.slots")).map(s => s.kind + s.team),
     ["normal1", "none2", "you2", "none4", "none5", "hard1", "none7", "none8"], "the slots");
   same(["size", "win", "time", "ff", "view", "watch", "sight", "mode"].map(k => st.get("tunneler.cpu." + k)),
     ["small", "5", "3", "1", "team", "killer", "circle", "standard"], "the settings");
+  // Back to main menu: the homepage
+  const env4 = makeEnv("?mode=cpu&slots=" + encodeURIComponent("0:you:1,1:easy:2") + "&lv=2", new Map());
+  env4.page("play.html");
+  over(env4).spec.items.find(it => it.key === "back").go();
+  assert.strictEqual(env4.win.location.href, "/", "Back: the main menu");
   // two players: player 2 comes back as player 2
   const s3 = new Map(), p2 = makeEnv("?mode=cpu&slots=" + encodeURIComponent("0:you:1,1:p2:2,2:easy:1") + "&lv=2", s3);
   p2.page("play.html");
-  Object.assign(p2.win.tunnelerEngine(), { screen: "text", menuPage: "menu", kbdInstalled: false, menuShift: 1, menuSel: 0 });
-  p2.key("Enter");
+  over(p2).spec.items[0].go();
   same(JSON.parse(s3.get("tunneler.cpu.slots")).slice(0, 3).map(x => x.kind + x.team), ["you1", "p22", "easy1"], "player 2 kept");
-  // split screen: its settings, its screen; Esc on the menu does the same
+  // split screen: its settings, its screen; Esc after the match does the same
   const s2 = new Map(), sp = makeEnv("?mode=hotseat&size=large&win=2&time=5", s2);
   sp.page("play.html");
-  Object.assign(sp.win.tunnelerEngine(), { screen: "text", menuPage: "menu", kbdInstalled: false, menuShift: 1, menuSel: 1 });
+  assert(sp.win.tunnelerEngine().matchOnly, "split screen: the match only too");
+  const ui2 = over(sp);
+  assert(ui2.spec.items.some(it => it.key === "rematch"), "split screen: the same screen after the match as a skirmish's");
   sp.key("Escape");
   assert.strictEqual(sp.win.location.href, "/#split");
   same(["size", "win", "time"].map(k => s2.get("tunneler.split." + k)), ["large", "2", "5"]);
-  ok("play.js: Rematch / Esc after a match go to the lobby with the game's settings (skirmish, split screen)");
+  ok("play.js: after the match its own screen - Rematch / Esc go to the lobby with the game's settings (skirmish, split screen), Back home");
 }
 
-// ---------------------------------------------------------------- the engine's menu only acts while it is on the screen
+// ---------------------------------------------------------------- an auto start's "(creating world)"
 {
-  // an auto start (local games): "(creating world)" with no menu - the mouse finds no item there and the
-  // arrows paint no bar on the empty rows
-  const E = NODE.TunnelerEngine;
-  const e = new E(3, { autoStart: true, slots: [{ color: 0, team: 1 }, { color: 1, team: 2 }], extended: true });
-  for (let i = 0; i < 3 && e.screen !== "play"; i++) e.step({ bits: [0, 0], keys: [] });
-  assert.strictEqual(e.screen, "text", "creating the world");
-  const before = e.vram.slice();
-  for (let r = 0; r < 25; r++) for (let c = 0; c < 80; c++) assert.strictEqual(e.menuItemAt(c, r), -1, "no item at " + c + "," + r);
-  e.step({ bits: [0, 0], keys: [[0, 0x50], [0, 0x48]] });          // (Down, Up)
-  let bars = 0;
-  for (let i = 1; i < 4000; i += 2) if (e.vram[i] === 0x5F && before[i] !== 0x5F) bars++;
-  assert.strictEqual(bars, 0, "no highlight bar drawn");
   // a key cuts the world creation short, the auto start runs early - its "(creating world)" line stays steady
-  // (no clearing, no blinking: that is the original's "started before the world is ready" for its menu)
+  // (no clearing, no blinking: that is the original's "started before the world is ready" for its menu); the text is
+  // the steps the engine announces, drawn by matchtext.js
+  const E = NODE.TunnelerEngine;
   const f = new E(3, { autoStart: true, slots: [{ color: 0, team: 1 }, { color: 1, team: 2 }], extended: true });
-  const attr = () => { for (let r = 0; r < 25; r++) { let t = ""; for (let c = 0; c < 80; c++) t += String.fromCharCode(f.vram[r * 160 + c * 2]); const c0 = t.indexOf("(creating"); if (c0 >= 0) return f.vram[r * 160 + c0 * 2 + 1]; } return -1; };
+  const attr = () => { const v = NODE.screenOf(f).vram; for (let r = 0; r < 25; r++) { let t = ""; for (let c = 0; c < 80; c++) t += String.fromCharCode(v[r * 160 + c * 2]); const c0 = t.indexOf("(creating"); if (c0 >= 0) return v[r * 160 + c0 * 2 + 1]; } return -1; };
   for (let i = 0; i < 10; i++) { f.step({ bits: [0, 0], keys: i === 1 ? [[0, 0x48]] : [] }); assert.strictEqual(attr(), 1, "steady at step " + i); }
-  ok("the engine's menu: no items / bar while it isn't on the screen; an auto start's \"(creating world)\" stays steady");
+  ok("an auto start's \"(creating world)\" stays steady");
 }
 
 // ---------------------------------------------------------------- skirmish: two players
@@ -876,7 +874,7 @@ function play(search) {
   assert.strictEqual(play("?mode=cpu&slots=" + encodeURIComponent("0:hard:1,4:you:2")).tunnelerEngine().youPlayer, 2, "you = WHITE (player 2)");
   // split screen: two humans - no marker, no watching; the settings (size / rounds) still listed
   const h = play("?mode=hotseat&size=small"), he = h.tunnelerEngine();
-  assert(he.youPlayer === null && h.tunnelerViews().watchOut === "wreck" && he.showSettings && he.showSettings.watchOut === undefined, "split screen");
+  assert(he.youPlayer === null && h.tunnelerViews().watchOut === "wreck" && he.showSettings && he.showSettings.view === "self", "split screen");
   ok("after death: black = DESTROYED, wreck, others = the killer (chained, else the first alive), back next round; you marker / settings set by play.js");
 }
 
@@ -910,21 +908,19 @@ function play(search) {
   assert(ui.spec.items.find(i => i.key === "slot0").label.includes(L.t("lc.me")), "your slot: you");
   const snap = ui.display.snap, bottom = Array.from({ length: 80 }, (_, c) => String.fromCharCode(snap.vram[24 * 160 + c * 2])).join("");
   assert(!bottom.includes(L.t("ui.hint.touch")) && !bottom.includes("\x5F\x5F\x5F"), "no rule / hint at the bottom on a phone: " + bottom);
-  // the settings: a submenu (the Game box's Settings item), its Back returns to Settings
-  assert(!keys().includes("mode") && keys().includes("settings"), "the skirmish's settings in a submenu: " + keys());
-  ui.sel = keys().indexOf("settings"); env.key("Enter");
-  assert(keys().includes("mode") && keys().includes("watch") && keys().includes("back-set") && !keys().includes("slot0"), "the settings screen: " + keys());
+  // the settings on the skirmish's screen itself, between the slots and the Game box (owner, 2026-10-28)
+  assert(keys().includes("mode") && keys().includes("watch") && keys().includes("slot0") && keys().includes("play") && !keys().includes("settings"),
+    "the skirmish's settings on its screen: " + keys());
+  assert(ui.spec.tight && ui.spec.fit && ui.narrow && ui.narrow.maxTop <= ui.narrow.minTop + 0.01, "it fits the phone (no scrolling)");
   const sizeBefore = ui.spec.items.find(i => i.key === "size").label;
   ui.sel = keys().indexOf("size"); env.key("ArrowRight");
-  assert(ui.spec.items.find(i => i.key === "size").label !== sizeBefore && keys().includes("back-set"), "a setting changes, the screen stays");
-  env.key("Escape");
-  assert(keys().includes("slot0") && ui.spec.items[ui.sel].key === "settings", "Esc / Back: the skirmish again, on Settings");
+  assert(ui.spec.items.find(i => i.key === "size").label !== sizeBefore && keys().includes("slot0"), "a setting changes, the screen stays");
   const pe = makeEnv("?mode=cpu&slots=0:you:1,1:p2:2,2:easy:2");
   pe.win.matchMedia = touch;
   pe.page("play.html");
   const e = pe.win.tunnelerEngine();
   assert(e.nPlayers === 3 && pe.win.tunnelerAIs().filter(Boolean).length === 2, "player 2 in a link: a computer tank");
-  ok("a phone / tablet: no split screen, no player 2, no footer, the skirmish's settings in a submenu; a link's player 2 plays as a computer tank");
+  ok("a phone / tablet: no split screen, no player 2, no footer, the skirmish's settings on its screen; a link's player 2 plays as a computer tank");
 }
 
 // ---------------------------------------------------------------- the phone layout (DosUI narrow, Display zoom)
@@ -1077,17 +1073,13 @@ function play(search) {
   const st = new Map(), env = makeEnv("?mode=cpu&slots=" + encodeURIComponent("0:you:1,1:normal:2") + "&size=small&lv=2", st);
   env.page("play.html");
   const e = env.win.tunnelerEngine();
-  Object.assign(e, { screen: "text", menuPage: "menu", kbdInstalled: false, menuShift: -20, menuSel: 0 });
-  assert.strictEqual(e.menuScans.length, 2, "no replay yet: Rematch, Back");
   e.screen = "map";
   env.win.tunnelerRunner().recorder.stepped();             // (the match reached its world map: its replay is kept)
-  Object.assign(e, { screen: "text", menuSel: 1 });
-  assert.strictEqual(e.menuScans.length, 3, "Rematch, Watch the replay, Back");
-  for (let i = 0; i < 16000; i += 2) { e.vram[i] = 0x20; e.vram[i + 1] = 7; }
-  e.showMainMenu();
-  const box = Array.from({ length: 25 }, (_, r) => Array.from({ length: 80 }, (_, c) => String.fromCharCode(e.vram[r * 160 + c * 2])).join("")).join("\n");
-  assert(box.includes(e.strings.replay) && box.includes(e.strings.rematch), "the menu shows it:\n" + box);
-  env.key("Enter");
+  e.screen = "text"; e.over = true;
+  env.win.tunnelerRunner().onStep(e);
+  const ui = env.win.tunnelerAfter();
+  assert.strictEqual(ui.spec.items.map(it => it.key).join(), "rematch,replay,gap,back", "Rematch, Watch the replay, Back");
+  ui.spec.items.find(it => it.key === "replay").go();
   await new Promise(r => setTimeout(r, 20));
   assert(/^\/replays\/[a-z0-9]+\?from=cpu$/.test(env.win.location.href), "its replay, from the skirmish: " + env.win.location.href);
   assert.strictEqual(st.get("tunneler.cpu.size"), "small", "the game's settings kept (Back comes back to them)");

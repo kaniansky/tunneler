@@ -5,7 +5,7 @@
 #   docker compose pull && docker compose up -d   # update to the latest release
 #
 # Set TUNNELER_PORT to use another port on the host (e.g. TUNNELER_PORT=80 docker compose up -d).
-# Games live in the server's memory: restarting the container ends running games.
+# Running games are written to the data volume when the container stops and go on after it starts again.
 # For HTTPS put a reverse proxy (Caddy, nginx, Traefik...) in front; websockets must be passed through.
 
 services:

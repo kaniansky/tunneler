@@ -7,7 +7,7 @@
 const fs = require("fs"), os = require("os"), path = require("path"), crypto = require("crypto"), http = require("http");
 const { MapData } = require("./src.js");
 const { createServer, sigV4 } = require("../server.js");
-const { Links } = require(path.join(__dirname, "..", "src", "js", "endpoint.js"));
+const { Links } = require(path.join(__dirname, "..", "src", "js", "net", "endpoint.js"));
 
 let failures = 0;
 const ok = (cond, msg) => { if (cond) console.log("  ok  " + msg); else { failures++; console.log("  FAIL: " + msg); } };

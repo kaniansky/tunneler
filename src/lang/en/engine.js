@@ -112,8 +112,8 @@ const STRINGS_EN = {
         "it, in gray (an enemy tank stays where you last saw it).  True - the same, but dirt, rock and " +
         "base walls hide what is behind them: in a tunnel you see only the tunnel.  Computer tanks " +
         "see the same way; medium and hard ones also hear roughly where the nearest enemy is."],
-      ["Split screen:  ", "the original game - two players on one keyboard, {9}BLUE{3} on the left " +
-        "half of the screen and {10}GREEN{3} on the right.  First choose the map size, the rounds to " +
+      ["Split screen:  ", "two players on one keyboard, {9}BLUE{3} against {10}GREEN{3}, each with " +
+        "their own view side by side - a skirmish of the two of you.  First choose the map size, the rounds to " +
         "win and the round time."],
       ["Skirmish:  ", "your own game against computer tanks, alone or with a second player on the same keyboard.  Each of the 8 colors is player 1, player 2, nobody or a computer tank (easy, medium, hard), with its team (1-8) - the players can take any color; then the mode, map size, rounds to win, round time, friendly fire, view, after death and line of sight.  Player 1 drives with W A S D + SHIFT, player 2 with the arrows + ENTER (other keys: Settings, Controls).  <ESC> during play ends the match; Rematch or <ESC> on the game's menu goes back to the settings."],
       ["Online game:  ", "2 to 8 tanks on different computers, some of them may be computer tanks.  Online play " +

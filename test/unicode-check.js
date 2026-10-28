@@ -33,7 +33,7 @@ function makeEnv() {
   };
   win.window = win; win.globalThis = win;
   const ctx = vm.createContext(win);
-  run(ctx, ["lang/index.js", ...["engine.js", "display.js", "views.js", "dosui.js", "statusline.js", "netproto.js"].map(f => "js/" + f)]);
+  run(ctx, ["lang/index.js", ..."game/engine.js draw/display.js draw/views.js ui/dosui.js draw/statusline.js game/netproto.js".split(" ").map(f => "js/" + f)]);
   const loads = [];
   win.UniFont.loader = b => { loads.push(b); return fs.readFileSync(path.join(SRC, "fonts", "unifont", (b < 0x100 ? ("00" + b.toString(16)).slice(-3) : b.toString(16)) + ".bin")); };
   return { win, listeners, loads };
@@ -148,8 +148,9 @@ const snapScreen = s => screen(s.vram, s.uni);
 
 // ---------------------------------------------------------------- engine screens
 const E = W.TunnelerEngine;
-function roundTitle(e) { e.textMode(); e.round = 1; const g = e.showRoundTitle(); g.next(); return screen(e.vram, e.uni); }
-function stats(e) { e.textMode(); e.menuShift = -20; e.showMainMenu(); return screen(e.vram, e.uni); }
+// (the match's text screens: matchtext.js - the engine draws nothing)
+function roundTitle(e) { e.round = 1; const m = new W.MatchText(e); m.roundTitle(); m.roundTitleCycle(1); return screen(m.vram, m.uni); }
+function stats(e) { const m = new W.MatchText(e).statsPage(""); return screen(m.vram, m.uni); }
 {
   W.Lang.set("en");
   const e = new E(7, { players: 5 });
@@ -169,10 +170,9 @@ function stats(e) { e.textMode(); e.menuShift = -20; e.showMainMenu(); return sc
   const tt = roundTitle(t2).join("\n");
   for (const nm of ["王小明", "Дмитро", "🐙Octo", "Ελένη"]) assert(tt.includes(nm), "team round title shows " + nm);
   // a snapshot carries the plane while names are on the screen, and only then
-  e.dirty = true; e.snapshots = []; e.snapshot(0);
-  assert(e.snapshots[0].uni && e.snapshots[0].uni.some(v => v === "王".codePointAt(0)), "snapshot carries the plane");
-  e.textMode(); e.dirty = true; e.snapshots = []; e.snapshot(0);
-  assert(!e.snapshots[0].uni, "cleared screen: no plane");
+  const named = W.MatchText.snapshot({ t: 0, text: [["title", 1, e.wins.slice(), []], ["cycle", 1]] }, e);
+  assert(named.uni && named.uni.some(v => v === "王".codePointAt(0)), "snapshot carries the plane");
+  assert(!W.MatchText.snapshot({ t: 0, text: [] }, e).uni, "cleared screen: no plane");
   // classic: a name instead of BLUE / GREEN, 9 columns at most
   for (const lc of ["en", "uk", "sk"]) {
     W.Lang.set(lc);
@@ -293,7 +293,7 @@ function stats(e) { e.textMode(); e.menuShift = -20; e.showMainMenu(); return sc
 // ---------------------------------------------------------------- cleaning (server)
 {
   const { cleanPlayerName, cleanChat, cleanRoomName } = NetProto;
-  assert.strictEqual(cleanPlayerName("王小明王小明王小明"), "王小明王小明", "12 columns");
+  assert.strictEqual(cleanPlayerName("王小明王小明王小明王小明"), "王小明王小明王小", "16 columns");
   assert.strictEqual(cleanPlayerName("🐙Octo"), "🐙Octo");
   assert.strictEqual(cleanPlayerName(" Žofia‮​ "), "Žofia", "NFC, no bidi / zero-width / private use");
   assert.strictEqual(cleanPlayerName("\uD83Dx"), "x", "lone surrogate");
@@ -313,7 +313,7 @@ function stats(e) { e.textMode(); e.menuShift = -20; e.showMainMenu(); return sc
     W.Lang.set(c);
     for (const kind of ["instructions", "information"]) {
       ui.showPage(kind, "hotseat", () => backs++);
-      const e = ui.spec.engine, max = e.pageRows.length - W.TunnelerEngine.PAGE_ROWS, first = snapScreen(snap)[0];
+      const e = ui.spec.view, max = e.pageRows.length - W.TunnelerEngine.PAGE_ROWS, first = snapScreen(snap)[0];
       assert(max > 0 && e.pageTop === 0, c + " " + kind + ": longer than the screen, shown from the top");
       assert.strictEqual(snap.vram[79 * 2], 0x18, "scroll bar in column 80");
       ui.key(ev("ArrowDown")); assert.strictEqual(e.pageTop, 1, "Down");

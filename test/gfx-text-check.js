@@ -1,5 +1,5 @@
 "use strict";
-// Graphics "modern" text screens (src/js/gfx-text.js, docs/GRAPHICS.md 5.6 A) without a browser: the font's
+// Graphics "modern" text screens (src/js/draw/gfx-text.js, docs/GRAPHICS.md 5.6 A) without a browser: the font's
 // coverage list, font bytes decoded through the current language, the screen analysis (panels with titles
 // and separators, background runs, the highlight bar, rule lines, big titles, loose box pieces), and
 // draw() on a recording 2D context (text runs, blinking, bitmap glyphs for what the font lacks, the
@@ -51,7 +51,7 @@ function makeEnv() {
   };
   win.window = win; win.globalThis = win;
   const ctx = vm.createContext(win);
-  run(ctx, ["lang/index.js", "js/display.js", "js/gfx-text.js"]);
+  run(ctx, ["lang/index.js", "js/draw/display.js", "js/draw/gfx-text.js"]);
   win.Gfx.refresh = () => { refreshes.n++; };          // (counted: gfx-text.js asks for a redraw when its font / a glyph arrives)
   win.UniFont.loader = readBlock;
   return { win, refreshes };
@@ -116,6 +116,7 @@ function screen(rows = 25) {
   s.put(15, 9, "x", 0x07);                                        // a broken box: right edge missing
   s.put(23, 0, "_".repeat(80), 0x08);                             // the bottom rule
   s.put(24, 50, "<ESC> back.", 0x0F);
+  s.put(19, 36, "RED     0", 0x0C);                              // a red tank's score on the round title: no title
   const A = T.analyse(s.t);
   assert.strictEqual(A.panels.length, 1, "one panel (the broken one is not)");
   const p = A.panels[0];
@@ -144,8 +145,9 @@ function screen(rows = 25) {
   const short = extra => T.analyse(Object.assign({}, sh.t, { rows: 12 }, extra)).titles.length;
   assert.strictEqual(short({ view: { rows: 12, units: 30, top: 0 } }), 1, "a short phone screen's title");
   assert.strictEqual(short({}), 0, "no title on a short screen without a view (a status line)");
-  assert.strictEqual(short({ view: { rows: 12, units: 30, top: 0 }, infoRows: [0] }), 1, "other info rows: still the title");
-  assert.strictEqual(short({ view: { rows: 12, units: 30, top: 0 }, infoRows: [1] }), 0, "a menu's red message (an info row): no title");
+  // a menu (DosUI's model, t.ui): only its own titles - a red message isn't one
+  assert.strictEqual(short({ view: { rows: 12, units: 30, top: 0 }, ui: { titles: [], boxes: [] } }), 0, "a menu's red line that its model doesn't call a title");
+  assert.strictEqual(short({ view: { rows: 12, units: 30, top: 0 }, ui: { titles: [{ r: 1, c: 10, c2: 17 }], boxes: [] } }), 1, "the model's title");
   ok("analysis: panels (title gaps, separators), the highlight, rules, titles (short phone screens too), loose pieces, double frames, crop");
 }
 

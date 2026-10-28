@@ -6,7 +6,7 @@
 // pages: the maps screens and the editor (vm), a skirmish link with a map, the skirmish's Map row.
 const assert = require("assert"), path = require("path"), vm = require("vm");
 const { TunnelerEngine: E, TunnelerAI, NetProto, MapData } = require("./src.js");
-const { Replay } = require(path.join(__dirname, "..", "src", "js", "replay.js"));
+const { Replay } = require(path.join(__dirname, "..", "src", "js", "game", "replay.js"));
 const { runPage } = require("./page-env.js");
 
 let failures = 0;
@@ -635,7 +635,7 @@ const ticks = async (n = 8) => { for (let i = 0; i < n; i++) await tick(); };
     assert(w.Lang.decode(row().label).includes(w.Lang.raw("lc.map.random")), "random first");
     row().change(1);
     assert(w.Lang.decode(row().label).includes("Big one"), "then the map");
-    assert(ui.spec.items.find(it => it.key === "size").disabled && w.Lang.decode(ui.spec.items.find(it => it.key === "size").label).includes(w.Lang.raw("lc.size.large")), "its size, grayed");
+    assert(ui.spec.items.find(it => it.key === "size").valueAttr === 8 && !ui.spec.items.find(it => it.key === "size").change && w.Lang.decode(ui.spec.items.find(it => it.key === "size").label).includes(w.Lang.raw("lc.size.large")), "its size, its value grayed");
     assert.strictEqual(env.storage.get("tunneler.cpu.map"), rec.id, "remembered");
     // 3 tanks on a 2-base map: Start says why not
     const slot2 = ui.spec.items.find(it => it.key === "slot2");
@@ -781,11 +781,7 @@ const ticks = async (n = 8) => { for (let i = 0; i < n; i++) await tick(); };
     assert.strictEqual(ui.spec.items.find(it => it.key === "map").label, T("lc.map") + T("lc.map.random"), "Left / Right skip it");
     ui.spec.items.find(it => it.key === "map").go();
     await ticks(4);
-    const row = ui.spec.items.find(it => it.key === "m:" + split.id);
-    assert(row && row.attr === 0x08 && row.info[1].text === T("map.cut.play"), "the picker: grayed, the reason");
-    row.go();
-    await ticks(2);
-    assert(ui.spec.items.some(it => it.key === "m:" + split.id), "not chosen");
+    assert(!ui.spec.items.some(it => it.key === "m:" + split.id) && ui.spec.items.some(it => it.key === "none"), "the picker: not listed");
     ui.spec.items.find(it => it.key === "back").go();
     // (one chosen before - stored): the Map row and Start say why
     // (one chosen while it could be played, then changed - e.g. edited in another tab): the Map row and Start say why
@@ -831,7 +827,7 @@ const ticks = async (n = 8) => { for (let i = 0; i < n; i++) await tick(); };
     await ticks(12);
     const row = ui.spec.items.find(it => it.key === "g:" + id);
     assert(row && ui.spec.items.some(it => it.key === "sort"), "the list");
-    assert(ui.spec.pic && ui.spec.pic.w === good.w && ui.spec.pic.h === good.h, "the selected map's picture");
+    assert(ui.spec.pic && ui.spec.pic.w > good.w * 0.8 && ui.spec.pic.w < good.w && ui.spec.pic.w - ui.spec.pic.h === good.w - good.h, "the selected map's picture (the frame thin)");
     assert(calls.some(([m, u]) => m === "GET" && /\/api\/gallery\?sort=new/.test(u)), "asked for the newest");
     ui.spec.items.find(it => it.key === "sort").go();
     await ticks(12);

@@ -582,7 +582,7 @@ async function pageTests() {
   {
     // client error reports: built pages only, at most 5 per page, each error once
     const env = pageEnv("", { version: "6.0.0" });
-    run(env.ctx, ["js/report.js"], { version: "6.0.0" });
+    run(env.ctx, ["js/net/report.js"], { version: "6.0.0" });
     const R = env.win.Report;
     const e = new Error("boom"); e.stack = "Error: boom\n    at x (http://x.test/js/app-AAAA.js:1:2)";
     R.error("online loop", e); R.error("online loop", e);
@@ -595,14 +595,14 @@ async function pageTests() {
       assert(/app-AAAA/.test(body.stack)); assert.strictEqual(sent[0].o.headers["Content-Type"], "text/plain"); assert(sent[0].o.keepalive);
     });
     const dev = pageEnv("", {});
-    run(dev.ctx, ["js/report.js"], {});
+    run(dev.ctx, ["js/net/report.js"], {});
     dev.win.Report.error("x", new Error("y"));
     check("... not from a development page (no version)", () => assert.strictEqual(dev.fetches.length, 0));
   }
   {
     // the status screens fit (the texts in every language; DosUI centres them, layout-check checks the boxes)
     const env = pageEnv("", {});
-    run(env.ctx, ["js/lang.js", "lang/index.js"]);
+    run(env.ctx, ["js/text/lang.js", "lang/index.js"]);
     const L = env.win.Lang, U = env.win.UniText, bad = [];
     for (const c of L.codes) {
       L.set(c);

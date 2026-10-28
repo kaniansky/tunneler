@@ -1,5 +1,5 @@
 // Свои карты (docs/v6/MAPS.md): экраны карт, редактор, строки Карта в схватке и в онлайн-игре.
-import { Lang } from "../../js/lang.js";
+import { Lang } from "../../js/text/lang.js";
 
 Lang.extend("ru", {
   "home.maps": "Карты", "home.maps.i": "Создавай свои миры, делись ими по ссылке, играй на них.",

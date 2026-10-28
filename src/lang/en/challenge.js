@@ -1,5 +1,5 @@
-// The daily challenge's texts (docs/v6/CHALLENGE.md; src/js/daily.js, play.js, home.js).
-import { Lang } from "../../js/lang.js";
+// The daily challenge's texts (docs/v6/CHALLENGE.md; src/js/routes/daily.js, play.js, home.js).
+import { Lang } from "../../js/text/lang.js";
 
 Lang.extend("en", {
   "ch.locale": "en-US",                                 // (the date's language: Intl.DateTimeFormat)

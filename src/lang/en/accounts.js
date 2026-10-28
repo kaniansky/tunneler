@@ -1,6 +1,6 @@
-// Player accounts (docs/v6/ACCOUNTS.md; src/js/login.js, home.js's Settings, lobby.js, online.js, daily.js): their
+// Player accounts (docs/v6/ACCOUNTS.md; src/js/ui/login.js, home.js's Settings, lobby.js, online.js, daily.js): their
 // texts, and their section on the Information page (before "The desktop app").
-import { Lang } from "../../js/lang.js";
+import { Lang } from "../../js/text/lang.js";
 import { STRINGS_EN } from "./engine.js";
 Lang.extend("en", {
   "acc.server": "Server: {host}", "acc.wait": "One moment...",

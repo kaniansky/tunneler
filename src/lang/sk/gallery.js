@@ -1,8 +1,8 @@
 // Galéria máp a výber mapy (docs/v6/MAPS.md): galéria na obrazovke Mapy, Zverejniť, výber mapy v potýčke a v online hre.
-import { Lang } from "../../js/lang.js";
+import { Lang } from "../../js/text/lang.js";
 
 Lang.extend("sk", {
-  "pk.title": "VYBER MAPU", "pk.loading": "Načítavam...", "pk.none.mine": "Zatiaľ žiadne mapy (Mapy v hlavnom menu).",
+  "pk.title": "VYBER MAPU", "pk.loading": "Načítavam...", "pk.none.mine": "Zatiaľ žiadne hrateľné mapy (Mapy v hlavnom menu).",
   "pk.none.gal": "Zatiaľ nič nezverejnené.", "pk.err.none": "Tento server nemá galériu máp.",
   "pk.err.net": "Server neodpovedá - skús znova.",
   "pk.random.i": "Svet vytvorený tak, ako ho robí pôvodná hra.", "pk.mine.i": "Vyber ju a hraj na nej.",

@@ -1,5 +1,5 @@
-// Тексти щоденного виклику (docs/v6/CHALLENGE.md; src/js/daily.js, play.js, home.js).
-import { Lang } from "../../js/lang.js";
+// Тексти щоденного виклику (docs/v6/CHALLENGE.md; src/js/routes/daily.js, play.js, home.js).
+import { Lang } from "../../js/text/lang.js";
 
 Lang.extend("uk", {
   "ch.locale": "uk",                                 // (the date's language: Intl.DateTimeFormat)

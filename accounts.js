@@ -9,7 +9,7 @@
 // new password / a reset makes the old tokens fail), the recovery code only as a hash. Nothing here ever logs a
 // password, a token, a ticket or a recovery code.
 const crypto = require("crypto"), fs = require("fs"), path = require("path");
-const { NetProto } = require("./src/js/netproto.js");
+const { NetProto } = require("./src/js/game/netproto.js");
 const { cleanUsername, usernameKey, passwordProblem, cleanRecovery, RECOVERY_ALPHABET } = NetProto;
 
 const TOKEN_MS = 90 * 86400000;       // a session token lasts this long ...
@@ -302,7 +302,7 @@ function createAccounts(opts) {
   // the own username = no display name
   const shown = a => typeof a.display === "string" && a.display ? a.display : a.name;
   async function setDisplay(a, name) {
-    const nm = cleanUsername(name);
+    const nm = cleanUsername(name, NetProto.MAX_PLAYER_NAME);   // (a display name: as long as a player's name)
     if (!nm) fail(400, "name");
     const key = usernameKey(nm);
     if (key !== a.key) { const idx = await store.get(nameFile(key)); if (idx && idx.id && idx.id !== a.id) fail(409, "taken"); }

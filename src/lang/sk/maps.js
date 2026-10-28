@@ -1,5 +1,5 @@
 // Vlastné mapy (docs/v6/MAPS.md): obrazovky máp, editor, riadky Mapa v potýčke a v online hre.
-import { Lang } from "../../js/lang.js";
+import { Lang } from "../../js/text/lang.js";
 
 Lang.extend("sk", {
   "home.maps": "Mapy", "home.maps.i": "Vytvor si vlastné svety, zdieľaj ich odkazom, hraj na nich.",

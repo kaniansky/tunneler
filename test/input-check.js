@@ -1,5 +1,5 @@
 "use strict";
-// Gamepads and touch controls (src/js/pads.js): they only make keys - synthesized KeyboardEvents - so
+// Gamepads and touch controls (src/js/io/pads.js): they only make keys - synthesized KeyboardEvents - so
 // these checks drive a mocked navigator.getGamepads() and synthesized pointer events and look at what
 // input.js's Keyboard holds / queues (the PC scan codes the engine gets), what online.js sends as held
 // bits and what the pre-game lobby (DosUI) does with them; and that the pages load pads.js.
@@ -87,7 +87,7 @@ const SC = { W: 0x11, A: 0x1E, X: 0x2D, D: 0x20, BLUEFIRE: 0x1D, GREENFIRE: 0x1C
   // ------------------------------------------------------------ the 8 directions
   {
     const env = makeEnv("");
-    env.load("js/pads.js");
+    env.load("js/io/pads.js");
     const P = env.win.Pads;
     const dir = (x, y, dead = 0.3) => { const d = P.dirOf(x, y, dead); return ["up", "down", "left", "right"].filter(k => d[k]).join("+"); };
     assert.strictEqual(dir(1, 0), "right"); assert.strictEqual(dir(-1, 0), "left");
@@ -102,7 +102,7 @@ const SC = { W: 0x11, A: 0x1E, X: 0x2D, D: 0x20, BLUEFIRE: 0x1D, GREENFIRE: 0x1C
   // ------------------------------------------------------------ "Gamepad 1 connected" (+ its tank in split screen)
   {
     const env = makeEnv("");
-    env.load("js/input.js", "js/pads.js");
+    env.load("js/io/input.js", "js/io/pads.js");
     const ctl = env.win.Pads.start({ raf: false, menu: () => false, namedSets: true, gamepadSet: i => ["blue", "green"][i] || null });
     const toast = () => env.win.document.body.children.find(c => c.className === "pad-toast");
     ctl.poll(100);
@@ -117,7 +117,7 @@ const SC = { W: 0x11, A: 0x1E, X: 0x2D, D: 0x20, BLUEFIRE: 0x1D, GREENFIRE: 0x1C
     ctl.poll(400);
     assert.strictEqual(toast().textContent, "Gamepad 2 disconnected");
     const env2 = makeEnv("");                              // (vs computer / online: no tank name)
-    env2.load("js/input.js", "js/pads.js");
+    env2.load("js/io/input.js", "js/io/pads.js");
     const c2 = env2.win.Pads.start({ raf: false, menu: () => false, gamepadSet: () => "blue" });
     env2.gamepads[0] = pad(0); c2.poll(100);
     assert.strictEqual(env2.win.document.body.children.find(c => c.className === "pad-toast").textContent, "Gamepad 1 connected");
@@ -127,7 +127,7 @@ const SC = { W: 0x11, A: 0x1E, X: 0x2D, D: 0x20, BLUEFIRE: 0x1D, GREENFIRE: 0x1C
   // ------------------------------------------------------------ gamepads -> keyboard keys (split screen)
   {
     const env = makeEnv("");
-    env.load("js/input.js", "js/pads.js");
+    env.load("js/io/input.js", "js/io/pads.js");
     const kb = new env.win.Keyboard(env.win);
     let menu = false;
     const ctl = env.win.Pads.start({ raf: false, menu: () => menu, gamepadSet: i => ["blue", "green"][i] || null });
@@ -198,7 +198,7 @@ const SC = { W: 0x11, A: 0x1E, X: 0x2D, D: 0x20, BLUEFIRE: 0x1D, GREENFIRE: 0x1C
   // ------------------------------------------------------------ touch: joystick + FIRE -> keys
   {
     const env = makeEnv("");
-    env.load("lang/index.js", "js/input.js", "js/pads.js");
+    env.load("lang/index.js", "js/io/input.js", "js/io/pads.js");
     const kb = new env.win.Keyboard(env.win);
     let menu = false;
     // (the tank look: a fake tankview.js provider - the game's tank faces down; its paintings counted)
@@ -268,7 +268,7 @@ const SC = { W: 0x11, A: 0x1E, X: 0x2D, D: 0x20, BLUEFIRE: 0x1D, GREENFIRE: 0x1C
   const release = (win, code) => kev(win, "keyup", code);
   {
     const env = makeEnv("");
-    env.load("js/controls.js", "js/input.js");
+    env.load("js/io/controls.js", "js/io/input.js");
     const C = env.win.Controls, SCAN = env.win.SCAN;
     same(C.SETS, ["blue", "green"]); same(C.ACTIONS, ["up", "down", "left", "right", "fire"]);
     same(C.SETS.map(s => C.ACTIONS.map(a => C.get(s, a))),
@@ -305,16 +305,16 @@ const SC = { W: 0x11, A: 0x1E, X: 0x2D, D: 0x20, BLUEFIRE: 0x1D, GREENFIRE: 0x1C
     // read back by another page (a new load), with junk in the storage ignored
     const env2 = makeEnv("");
     env2.win.localStorage.setItem("tunneler.keys", env.win.localStorage.getItem("tunneler.keys"));
-    env2.load("js/controls.js");
+    env2.load("js/io/controls.js");
     same(env2.win.Controls.SETS.flatMap(s => env2.win.Controls.ACTIONS.map(a => env2.win.Controls.get(s, a))), all, "stored mapping read back");
     const env3 = makeEnv("");
     env3.win.localStorage.setItem("tunneler.keys", JSON.stringify({ blue: { up: "Escape", down: "KeyW", fire: 7 }, green: "x" }));
-    env3.load("js/controls.js");
+    env3.load("js/io/controls.js");
     same(env3.win.Controls.ACTIONS.map(a => env3.win.Controls.get("blue", a)), ["KeyS", "KeyW", "KeyA", "KeyD", "ShiftLeft"],
       "bad entries = defaults, a duplicate swaps");
     const env4 = makeEnv("");
     env4.win.localStorage.setItem("tunneler.keys", "{nope");
-    env4.load("js/controls.js");
+    env4.load("js/io/controls.js");
     assert(env4.win.Controls.isDefault(), "broken JSON = defaults");
     C.reset();
     assert(C.isDefault() && env.win.localStorage.getItem("tunneler.keys") === null && changes === 3, "reset: defaults, nothing stored");
@@ -324,7 +324,7 @@ const SC = { W: 0x11, A: 0x1E, X: 0x2D, D: 0x20, BLUEFIRE: 0x1D, GREENFIRE: 0x1C
     // the default mapping gives exactly the keys of before (input.js without controls.js, BEFORE): every
     // key's held scan codes and keystrokes; so the engine's input is unchanged
     const b = makeEnv("");
-    b.load("js/input.js");
+    b.load("js/io/input.js");
     const kb = new b.win.Keyboard(b.win);
     assert.deepStrictEqual(Object.keys(b.win.SCAN), Object.keys(BEFORE.keyboard), "the same keys");
     for (const code of Object.keys(b.win.SCAN)) {
@@ -339,7 +339,7 @@ const SC = { W: 0x11, A: 0x1E, X: 0x2D, D: 0x20, BLUEFIRE: 0x1D, GREENFIRE: 0x1C
   }
   {
     const env = makeEnv("");
-    env.load("js/controls.js", "js/input.js");
+    env.load("js/io/controls.js", "js/io/input.js");
     const C = env.win.Controls, kb = new env.win.Keyboard(env.win);
     // (the tank keys' scan codes held; any other key's own scan code means nothing to the game)
     const TANK = new Set([SC.W, SC.X, SC.A, SC.D, SC.BLUEFIRE, SC.UP, SC.DOWN, SC.LEFT, SC.RIGHT, SC.GREENFIRE]);
@@ -375,7 +375,7 @@ const SC = { W: 0x11, A: 0x1E, X: 0x2D, D: 0x20, BLUEFIRE: 0x1D, GREENFIRE: 0x1C
   {
     // capturing the next key (the Settings screen): nothing else sees it
     const env = makeEnv("");
-    env.load("js/controls.js", "js/input.js");
+    env.load("js/io/controls.js", "js/io/input.js");
     const C = env.win.Controls, kb = new env.win.Keyboard(env.win);
     const seen = [];
     env.win.addEventListener("keydown", e => seen.push(e.code));     // (like DosUI: a window listener)
@@ -404,7 +404,7 @@ const SC = { W: 0x11, A: 0x1E, X: 0x2D, D: 0x20, BLUEFIRE: 0x1D, GREENFIRE: 0x1C
   {
     // pads.js synthesizes the remapped keys (read when a session starts and on every change)
     const env = makeEnv("");
-    env.load("js/controls.js", "js/input.js", "js/pads.js");
+    env.load("js/io/controls.js", "js/io/input.js", "js/io/pads.js");
     const C = env.win.Controls, kb = new env.win.Keyboard(env.win);
     C.set("blue", "up", "KeyI"); C.set("blue", "fire", "KeyK");
     const ctl = env.win.Pads.start({ raf: false, menu: () => false, gamepadSet: i => ["blue", "green"][i] || null });
@@ -428,7 +428,7 @@ const SC = { W: 0x11, A: 0x1E, X: 0x2D, D: 0x20, BLUEFIRE: 0x1D, GREENFIRE: 0x1C
   {
     // touch controls: size and sides
     const env = makeEnv("");
-    env.load("js/controls.js", "js/input.js", "js/pads.js");
+    env.load("js/io/controls.js", "js/io/input.js", "js/io/pads.js");
     const P = env.win.Pads, cl = env.body.classList;
     same(P.TOUCH, { size: ["small", "medium", "large"], left: ["off", "on"], look: ["plain", "tank"] });
     assert.strictEqual(P.getTouch("look"), "plain");
@@ -453,7 +453,7 @@ const SC = { W: 0x11, A: 0x1E, X: 0x2D, D: 0x20, BLUEFIRE: 0x1D, GREENFIRE: 0x1C
     // a page opened with them stored
     const env2 = makeEnv("");
     env2.win.localStorage.setItem("tunneler.touch.size", "large"); env2.win.localStorage.setItem("tunneler.touch.left", "1");
-    env2.load("js/controls.js", "js/input.js", "js/pads.js");
+    env2.load("js/io/controls.js", "js/io/input.js", "js/io/pads.js");
     env2.win.Pads.start({ raf: false, menu: () => false, touchSet: "blue" });
     assert(env2.body.classList.contains("tpad-large") && env2.body.classList.contains("tpad-left"), "stored options applied at the start");
     const css = fs.readFileSync(path.join(SRC, "css", "style.css"), "utf8");
@@ -470,18 +470,18 @@ const SC = { W: 0x11, A: 0x1E, X: 0x2D, D: 0x20, BLUEFIRE: 0x1D, GREENFIRE: 0x1C
     assert(/user-scalable=no/.test(html), "the page: no zoom");
     for (const [p, route] of Object.entries(ROUTES)) {
       const mods = modulesOf(APP.concat(route));
-      assert(mods.includes("js/pads.js") && mods.includes("js/controls.js"), p + ": pads.js and controls.js");
-      if (p === "play.html" || p === "online.html") assert(mods.includes("js/input.js"), p + ": input.js");
+      assert(mods.includes("js/io/pads.js") && mods.includes("js/io/controls.js"), p + ": pads.js and controls.js");
+      if (p === "play.html" || p === "online.html") assert(mods.includes("js/io/input.js"), p + ": input.js");
     }
   }
   // the menus' pages: a gamepad steers the menus
-  for (const f of ["home.js", "lobby.js"]) assert(fs.readFileSync(path.join(SRC, "js", f), "utf8").includes("Pads.start({ menu: () => true })"), f + ": menu pads");
+  for (const f of ["routes/home.js", "routes/lobby.js"]) assert(fs.readFileSync(path.join(SRC, "js", f), "utf8").includes("Pads.start({ menu: () => true })"), f + ": menu pads");
   {
-    // play.html: split screen - gamepad 1 drives BLUE, 2 GREEN, in the engine's own input (classicInput)
+    // play.html: split screen - a skirmish of player 1 (BLUE) against player 2 (GREEN), the extended engine
     const env = makeEnv("?mode=hotseat");
     env.page("play.html");
     const e = env.win.tunnelerEngine();
-    assert(e && !e.extended, "play.html loads (hotseat)");
+    assert(e && e.extended && e.nPlayers === 2, "play.html loads (hotseat: two players)");
     ok("pages load pads.js (play / online: the tank; index / lobby: menus), no zoom on the game pages");
   }
   {
@@ -495,10 +495,18 @@ const SC = { W: 0x11, A: 0x1E, X: 0x2D, D: 0x20, BLUEFIRE: 0x1D, GREENFIRE: 0x1C
     for (const search of Object.keys(BEFORE.play)) {
       const b = inputs(search);
       const out = r => { const o = r.fn(); return { kd: o.keyDown ? [...o.keyDown] : null, bits: o.bits ? o.bits[0] : null, keys: o.keys }; };
+      // (split screen ran the classic engine when these were recorded - its keys held; now two players' bits: BLUE's
+      // keys player 1's, GREEN's player 2's - the same keys)
+      const asBits = kd => {
+        const set = (u, d, l, r, f) => (kd[u] ? 1 : 0) | (kd[d] ? 2 : 0) | (kd[l] ? 4 : 0) | (kd[r] ? 8 : 0) | (kd[f] ? 16 : 0);
+        return [set(0x11, 0x2D, 0x1E, 0x20, 0x1D) | (kd[1] ? 32 : 0), set(0x48, 0x50, 0x4B, 0x4D, 0x1C)];
+      };
       out(b);
       for (const code of Object.keys(BEFORE.play[search])) {
         press(b.env.win, code);
-        same(out(b), BEFORE.play[search][code], search + " " + code);
+        const want = BEFORE.play[search][code];
+        if (want.kd) { const o = b.fn(); same({ bits: [o.bits[0] | 0, o.bits[1] | 0], keys: o.keys }, { bits: asBits(want.kd), keys: want.keys }, search + " " + code); }
+        else same(out(b), want, search + " " + code);
         release(b.env.win, code);
       }
     }

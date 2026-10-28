@@ -1,7 +1,7 @@
-// infection (src/js/modes/infection.js): its texts in English, the fallback for every language.
+// infection (src/js/game/modes/infection.js): its texts in English, the fallback for every language.
 // stat: the statistics column, note: the rounds list, instr: its Instructions paragraph, the rest: the
 // score tag beside the instrument panel / team names ({n} value, {g} goal); raw Unicode text.
-import { Lang } from "../../../js/lang.js";
+import { Lang } from "../../../js/text/lang.js";
 Lang.modeTexts("infection", "en", {
   note: "{n} left",
   stat: "inf.",

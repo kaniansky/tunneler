@@ -1,5 +1,5 @@
-// shrinking world (src/js/modes/shrink.js) in this language - the same keys as ../../en/modes/shrink.js.
-import { Lang } from "../../../js/lang.js";
+// shrinking world (src/js/game/modes/shrink.js) in this language - the same keys as ../../en/modes/shrink.js.
+import { Lang } from "../../../js/text/lang.js";
 Lang.modeTexts("shrink", "ru", {
   instr: "Безопасная зона (эллипс) вокруг центра карты сжимается каждые 30 секунд, пока через 3 минуты не останется маленький участок. Вне её твой щит тает - с каждым шагом быстрее - а базы вне её ничего не дают. Красные точки отмечают её край, а число у панели приборов отсчитывает время до следующего шага. Раунд выигрывает команда, оставшаяся последней.",
 });

@@ -13,8 +13,8 @@
 const fs = require("fs"), os = require("os"), path = require("path"), zlib = require("zlib");
 const { chromium } = require("playwright-core");
 const { TunnelerEngine: E, TunnelerAI } = require("../test/src.js");
-const { Challenge } = require("../src/js/challenge.js");
-const { Replay } = require("../src/js/replay.js");
+const { Challenge } = require("../src/js/game/challenge.js");
+const { Replay } = require("../src/js/game/replay.js");
 const { createServer } = require("../server.js");
 const CHROME = process.env.CHROME || (() => {
   const dir = path.join(os.homedir(), ".cache/ms-playwright");

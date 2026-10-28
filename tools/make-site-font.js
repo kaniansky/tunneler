@@ -1,15 +1,15 @@
-// Builds a web font from the game's own IBM VGA 8x16 ROM font (src/js/vgafont.js) plus the extra
-// letters of src/js/glyphs.js (Latin Extended, Cyrillic, punctuation): site/fonts/vga.woff.
+// Builds a web font from the game's own IBM VGA 8x16 ROM font (src/js/text/vgafont.js) plus the extra
+// letters of src/js/text/glyphs.js (Latin Extended, Cyrillic, punctuation): site/fonts/vga.woff.
 // Every pixel is a square of 64 units (1/16 em), cells 9 pixels wide as on a VGA text screen.
 // The homepage's headings and title use it (site/index.html).
 //   npm install --no-save opentype.js && node tools/make-site-font.js [out.woff]   (default site/fonts/vga.woff)
 const fs = require("fs"), path = require("path"), zlib = require("zlib");
 const opentype = require("opentype.js");
 const repo = path.join(__dirname, ".."), out = process.argv[2] || path.join(repo, "site", "fonts", "vga.woff");
-const vgaSrc = fs.readFileSync(path.join(repo, "src/js/vgafont.js"), "utf8");
+const vgaSrc = fs.readFileSync(path.join(repo, "src/js/text/vgafont.js"), "utf8");
 const b64 = vgaSrc.match(/const b64 = "([^"]+)"/)[1];
 const rom = Buffer.from(b64, "base64");
-const gSrc = fs.readFileSync(path.join(repo, "src/js/glyphs.js"), "utf8");
+const gSrc = fs.readFileSync(path.join(repo, "src/js/text/glyphs.js"), "utf8");
 const cp437 = JSON.parse(gSrc.match(/CP437_CHARS = ("(?:[^"\\]|\\.)*")/)[1]);
 const extra = JSON.parse(gSrc.match(/const g = (\{[^}]*\})/)[1]);
 

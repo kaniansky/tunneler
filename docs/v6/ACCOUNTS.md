@@ -254,13 +254,13 @@ errors: 400 {code: "bad" | "name" | "short" | "long"}, 401 {code: "wrong" | "ses
 
 ## 3. The pages
 
-- `src/js/account.js` (`Account`, no DOM): the server's origin (`Endpoint.base()` or the page's), the session in
+- `src/js/net/account.js` (`Account`, no DOM): the server's origin (`Endpoint.base()` or the page's), the session in
   localStorage `tunneler.session.<origin>` = `{token, id, name}`, the server's answer cached in
   `tunneler.accounts.<origin>` ("1" / "0"); `required()` (cached, sync), `config()` (asks), `session()`, `name()`,
   `check()` (`GET /api/account`: refreshes or drops the session), `signup / login / reset / changePassword /
   remove / logout`, `ticket()` (null = accounts off), `auth()` (the header). Answers are `{ok, ...}` or
   `{ok: false, code, wait}` (`code: "net"` without a connection).
-- `src/js/login.js` (`Login`): the DosUI screens - `Login.ask(ui, {done, back, backKey})` (LOG IN, CREATE AN
+- `src/js/ui/login.js` (`Login`): the DosUI screens - `Login.ask(ui, {done, back, backKey})` (LOG IN, CREATE AN
   ACCOUNT, YOUR RECOVERY CODE, RESET PASSWORD), `Login.change(ui, {done, back})`, `Login.remove(ui, {done,
   back})`. They draw on any DosUI: the homepage's, the games list's, online.js's overlay DosUI.
 - lobby.js: before the list / quick play, the gate (`required()` true and no session -> LOG IN; unknown -> as

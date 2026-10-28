@@ -1,5 +1,5 @@
 // Власні мапи (docs/v6/MAPS.md): екрани мап, редактор, рядки Мапа в сутичці та в онлайн-грі.
-import { Lang } from "../../js/lang.js";
+import { Lang } from "../../js/text/lang.js";
 
 Lang.extend("uk", {
   "home.maps": "Мапи", "home.maps.i": "Створюй власні світи, ділися ними посиланням, грай на них.",
