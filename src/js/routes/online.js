@@ -115,6 +115,7 @@ export function mount() {
   // one frame runs early - the buffer shrinks to what the connection's jitter needs (0-1 frames on a steady one)
   let spare = Infinity, spareSince = 0;
   let fatal = null, fatal2 = null, desyncAt = -1, lastReport = "";
+  let lastRep = null, lastRepSaved = false;   // the last match's replay: saved here from the room's "Save the replay"
   let lastMatch = null;              // {engine, cfg, player} of the last match played to its end (statistics)
   let statsShown = 0;
   const isPlayer = () => !!engine && player >= 0 && !ended;
@@ -178,9 +179,10 @@ export function mount() {
     names = cfg.names.slice();
     views = makeViews(player >= 0);
     runner = new Runner(engine, views, speaker);
-    // every match played or watched here is recorded (replay.js): kept once it reaches its world map
+    // every match played or watched here is recorded (replay.js): once it reaches its world map saved (Replays, "Save
+    // every match") or held - the room's "Save the replay" saves it
     runner.recorder = Replay.recorder(engine, { kind: "online", seed: m.seed >>> 0, opts, room: roomName || roomId },
-      rep => { Replay.save(rep).catch(e => console.warn("replay:", e)); });
+      rep => { Replay.keep(rep).catch(e => console.warn("replay:", e)); lastRep = Replay.held(rep.id) ? rep : null; lastRepSaved = false; });
     // a player hears the other tanks quieter the farther they are from their own (docs/DESIGN-8P.md 8);
     // spectators hear everything at full volume
     runner.listener = e => player >= 0 && e.screen === "play" ? views.hearAt(player, e) : null;
@@ -724,6 +726,8 @@ export function mount() {
     items.push({ key: "copy", label: T(copied ? "room.copied" : "room.copy"), go: copy,
       info: [T("room.copy.in"), { text: Lang.enc(UniText.truncRaw(invite, 78)), color: 11, onClick: copy }] });
     if (lastMatch) items.push({ key: "stats", label: T("pg.stats"), info: [T("pg.stats.i")], go: showStats });
+    if (lastRep) items.push({ key: "saverep", label: T(lastRepSaved ? "rp.kept" : "rp.keep"), info: [T(lastRepSaved ? "rp.kept.i" : "rp.keep.i")],
+      go: () => { if (lastRepSaved) return; lastRepSaved = true; Replay.save(lastRep).catch(e => console.warn("replay:", e)); drawLobby(true); } });
     items.push({ key: "gapBack", label: "", disabled: true });
     items.push({ key: "back", label: T("back.lobby"), info: [T("back.lobby.i")], go: () => leave(gamesHref) });
     return items;

@@ -1110,19 +1110,45 @@ function play(search) {
 }
 
 // ---------------------------------------------------------------- play.js: "Watch the replay" after a match
+// (owner, 2026-10-28: replays not saved by themselves - "Save the replay" after the match, or Replays' "Save every match")
 (async () => {
-  const st = new Map(), env = makeEnv("?mode=cpu&slots=" + encodeURIComponent("0:you:1,1:normal:2") + "&size=small&lv=2", st);
-  env.page("play.html");
-  const e = env.win.tunnelerEngine();
-  e.screen = "map";
-  env.win.tunnelerRunner().recorder.stepped();             // (the match reached its world map: its replay is kept)
-  e.screen = "text"; e.over = true;
-  env.win.tunnelerRunner().onStep(e);
-  const ui = env.win.tunnelerAfter();
-  assert.strictEqual(ui.spec.items.map(it => it.key).join(), "rematch,replay,gap,back", "Rematch, Watch the replay, Back");
+  const after = async auto => {
+    const st = new Map(auto ? [["tunneler.replays.auto", "1"]] : []);
+    const env = makeEnv("?mode=cpu&slots=" + encodeURIComponent("0:you:1,1:normal:2") + "&size=small&lv=2", st);
+    env.page("play.html");
+    const e = env.win.tunnelerEngine();
+    e.screen = "map";
+    env.win.tunnelerRunner().recorder.stepped();             // (the match reached its world map: its replay is done)
+    e.screen = "text"; e.over = true;
+    env.win.tunnelerRunner().onStep(e);
+    await new Promise(r => setTimeout(r, 20));
+    return { env, st, ui: env.win.tunnelerAfter() };
+  };
+  {
+    const { env, ui } = await after(true);
+    assert.strictEqual(ui.spec.items.map(it => it.key).join(), "rematch,replay,gap,back", "Rematch, Watch the replay, Back");
+    assert.strictEqual((await env.win.Replay.list()).length, 1, "saved by itself");
+    ok("play.js: \"Save every match\" on - the replay saved by itself, the menu: Rematch, Watch the replay, Back");
+  }
+  {
+    const { env, ui } = await after(false);
+    assert.strictEqual(ui.spec.items.map(it => it.key).join(), "rematch,replay,save,gap,back", "Rematch, Watch the replay, Save the replay, Back");
+    assert.strictEqual((await env.win.Replay.list()).length, 0, "not saved yet");
+    const save = () => ui.spec.items.find(it => it.key === "save");
+    assert.strictEqual(save().label, "Save the replay");
+    save().go();
+    await new Promise(r => setTimeout(r, 20));
+    assert.strictEqual(save().label, "Replay saved");
+    assert.strictEqual((await env.win.Replay.list()).length, 1, "saved");
+    ok("play.js: off (the default) - \"Save the replay\" saves it, then says \"Replay saved\"");
+  }
+  const { env, st, ui } = await after(false);
+  const id = env.win.tunnelerAfter() && (await env.win.Replay.list()).length === 0 && ui.spec.items.find(it => it.key === "replay");
+  assert(id, "unsaved");
   ui.spec.items.find(it => it.key === "replay").go();
   await new Promise(r => setTimeout(r, 20));
   assert(/^\/replays\/[a-z0-9]+\?from=cpu$/.test(env.win.location.href), "its replay, from the skirmish: " + env.win.location.href);
+  assert(await env.win.Replay.get(env.win.location.href.split("/")[2].split("?")[0]), "watched unsaved: from the page's memory");
   assert.strictEqual(st.get("tunneler.cpu.size"), "small", "the game's settings kept (Back comes back to them)");
   ok("play.js: after a match \"Watch the replay\" opens its replay (Back: the skirmish)");
   console.log("all " + n + " passed");

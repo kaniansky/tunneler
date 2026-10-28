@@ -1021,7 +1021,13 @@ page from before 2.0 - is refused (POST 409 `{code:
   Tests: local-check "a phone / tablet..." and "the phone layout...".
 - **Replays** (DESIGN-8P 33, owner 2026-10-25): `src/js/game/replay.js` (`Replay`) - `Runner.recorder` gets every step's
   input before it runs (`input(inp)`) and a call after (`stepped()`); play.js and online.js (every match, player or
-  spectator, catch-up included) set `Replay.recorder(engine, {kind, seed, opts, room}, rep => Replay.save(rep))`.
+  spectator, catch-up included) set `Replay.recorder(engine, {kind, seed, opts, room}, rep => Replay.keep(rep))`.
+  Saved only when asked (owner, 2026-10-28, 1.2): `Replay.keep(rep, always)` saves with `always` (the daily challenge:
+  daily.js sends its result from the saved replay) or Replays' "Save every match" (`tunneler.replays.auto` "1",
+  `autoSave()` / `setAutoSave()`, off by default, in CloudSave.SETTINGS), else holds it in the page's memory (the newest
+  `HELD` 4; `get(id)` finds held ones too: "Watch the replay" works unsaved; `held(id)`). play.js's screen after the
+  match: "Save the replay" (`rp.keep`) -> "Replay saved" (`rp.kept`); online.js's room: the same under Statistics
+  (`saverep`, the last match's). Tests: local-check, net-page-smoke, replay-check.
   The whole input is recorded - the computer tanks' bits too (a replay needs no AIs and survives AI changes) -
   run-length encoded strings (`encode`: "b<bits>" / "k<scan codes held>" + "|ascii:scan;..."), from step 1 to
   the first step on the end-of-match world map (`screen === "map"`); `NetProto.stateHash` every `CHECK_EVERY`

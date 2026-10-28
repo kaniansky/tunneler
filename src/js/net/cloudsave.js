@@ -22,7 +22,7 @@ const root = globalThis;
 // the settings kept with the account (not: the session, the server, the client id, host keys, the fullscreen / scale of
 // this screen, the daily challenge's unsent result, old keys only read once)
 const SETTINGS = ["name", "sound", "volume", "stereo", "fade", "chatsound", "ping", "lang", "gfx", "gfx.modern", "smooth", "tankcolors",
-  "keys", "touch.size", "touch.left", "touch.look", "chat.hide", "view", "spec", "replay", "online", "online.color", "levels",
+  "keys", "touch.size", "touch.left", "touch.look", "chat.hide", "view", "spec", "replay", "replays.auto", "online", "online.color", "levels",
   "cpu.slots", "cpu.size", "cpu.win", "cpu.time", "cpu.ff", "cpu.view", "cpu.watch", "cpu.sight", "cpu.mode", "cpu.map", "cpu.goals",
   "split.size", "split.win", "split.time"].map(k => "tunneler." + k);
 const DEBOUNCE = 3000;

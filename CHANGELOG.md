@@ -19,9 +19,15 @@ those releases are tagged `online-vX.Y.Z`, their changes are in [docs/CHANGELOG-
   it, behind the walls between them. A retreat for energy alone goes to the nearest base it can refuel at (any base
   refuels, more slowly than its own) instead of always home: on a large map the last two tanks no longer turn back
   for home before ever meeting. Base siege: a computer tank no longer goes back and forth between the firing spot at
-  a base and a spot to fight its owner from.
+  a base and a spot to fight its owner from. Leaving another tank's base, a computer tank goes out through the doorway
+  its way on leads through (it went out of the top one, back in, out again - for a minute).
 - Replays play only in the version (major.minor) that recorded them: another version's are gray in the list with
   the version that recorded them, can be saved as a file or deleted but not watched or shared, and their links say so.
+- Replays are no longer saved by themselves: after a match "Save the replay" (skirmish / split screen: under Watch
+  the replay; online: in the game's lobby) saves it; Replays, "Save every match: on" saves every one as before. Watch
+  the replay works without saving. The daily challenge's are always saved (your result is sent from it).
+- After death with one view (View: self) and After death: teammates / others, your left / right keys (Settings,
+  Controls) or a tap near the side of the screen switch which tank you watch.
 - Capture the flag: the flag pole is white again (pink since the new tank colours).
 - Base siege: a destroyed base's walls vanish (open ground) instead of turning to dirt.
 

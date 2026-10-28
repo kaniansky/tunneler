@@ -203,7 +203,7 @@ function run(mapRec) {
   }
   // "Watch the replay" (once the match's replay is kept): the replay's screen, whose Back comes back to the screen this
   // game was set up on, as Rematch does (owner, 2026-10-28)
-  let replaySaved = null, replayId = null;
+  let replaySaved = null, replayId = null, replayRep = null;
   async function watchReplay() {
     try { await replaySaved; } catch (e) { /* the page's memory has it */ }
     keepSettings();
@@ -215,17 +215,24 @@ function run(mapRec) {
     if (after) return;
     clock.stop(); runner.stop();                       // (the engine is done: this screen from here)
     const S = engine.strings;
-    const items = [
+    // "Save the replay" while it isn't saved (Replays, "Save every match" off), then "Replay saved"
+    let saved = !Replay.held(replayId);
+    const save = () => { if (saved) return; saved = true; replaySaved = Replay.save(replayRep).catch(e => console.warn("replay:", e)); draw(true); };
+    const items = () => [
       { key: "rematch", label: ch ? Lang.t(practice ? "ch.back.board" : "ch.back") : S.rematch, go: toLobby },
       ...(replayId ? [{ key: "replay", label: S.replay, go: watchReplay }] : []),
+      ...(replayId && (!saved || replayRep) ? [{ key: "save", label: Lang.t(saved ? "rp.kept" : "rp.keep"),
+        info: [Lang.t(saved ? "rp.kept.i" : "rp.keep.i")], go: save }] : []),
       { key: "gap", label: "", disabled: true },
       { key: "back", label: S.menu[2], go: () => leave("/") },
     ];
     // (the statistics and the rounds as the original program laid them out - matchtext.js - under this page's menu)
-    const w = DosUI.boxWidth(items), m = new MatchText(engine), sum = m.summary(items.length + 2);
+    const all = items(), w = Math.max(DosUI.boxWidth(all), ...(replayId ? ["rp.keep", "rp.kept"].map(k => DosUI.boxWidth([{ label: Lang.t(k) }])) : []));
+    const m = new MatchText(engine), sum = m.summary(all.length + 2);
     after = new DosUI(canvas, { display });
-    after.show({ backdrop: { vram: m.vram.slice(0, 4000), uni: m.uniUsed ? m.uni.slice(0, 2000) : null },
-      lines: [], box: { x: Math.max(1, 21 - ((w + 2) >> 1)), y: sum.top, w }, items, back: toLobby, block: [1, 23], wide: true, infoRow: 24 });
+    const draw = keep => after.show({ backdrop: { vram: m.vram.slice(0, 4000), uni: m.uniUsed ? m.uni.slice(0, 2000) : null },
+      lines: [], box: { x: Math.max(1, 21 - ((w + 2) >> 1)), y: sum.top, w }, items: items(), back: toLobby, block: [1, 23], wide: true, infoRow: 24 }, keep);
+    draw(false);
     // (DosUI draws through this page's display: its frames, as the runner did)
     const loop = now => { display.draw(now); requestAnimationFrame(loop); };
     requestAnimationFrame(loop);
@@ -305,7 +312,10 @@ function run(mapRec) {
   delete recOpts.match;
   runner.recorder = Replay.recorder(engine, { kind: mode === "cpu" ? "skirmish" : "split", seed, opts: recOpts, challenge: chDay }, rep => {
     replayId = rep.id;
-    replaySaved = Replay.save(rep).catch(e => console.warn("replay:", e));
+    // (the daily challenge's always: its result is sent from it; else saved with Replays' "Save every match" on, or
+    // after the match - "Save the replay")
+    replaySaved = Replay.keep(rep, !!ch).catch(e => console.warn("replay:", e));
+    if (Replay.held(rep.id)) replayRep = rep;
     // (a better unsent result of the same day stays: "Send your result" sends the best match since the last one sent)
     if (ch && !practice) try {                           // (practice: nothing to send - the remembered result stays)
       const result = Challenge.result(engine, kills, rep.steps);

@@ -414,6 +414,15 @@ function loadPage(page, search, stored, version) {
     assert(!env.win.tunnelerEngine() && lui.active() && !lui.spec.page, "the server's end: still the lobby, no statistics again");
     assert(lui.spec.items.some(it => it.key === "stats"), "Statistics in the lobby");
     console.log("  ok  online.js end of a match: a tap beside the map closes it, the statistics once, then the lobby");
+    // its replay: not saved by itself (Replays, "Save every match" off) - the room's "Save the replay" saves it
+    const sv = () => lui.spec.items.find(it => it.key === "saverep");
+    assert(sv() && sv().label === "Save the replay", "Save the replay in the lobby");
+    assert.strictEqual((await env.win.Replay.list()).length, 0, "not saved yet");
+    sv().go();
+    await wait(20);
+    assert.strictEqual(sv().label, "Replay saved");
+    assert.strictEqual((await env.win.Replay.list()).length, 1, "saved");
+    console.log("  ok  online.js: the last match's replay - \"Save the replay\" in the room saves it, then \"Replay saved\"");
   }
   {
     // quick play (docs/v6/QUICKPLAY.md): the lobby's countdown (no ready), read-only settings, sitting on a computer

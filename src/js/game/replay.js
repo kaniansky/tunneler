@@ -1,11 +1,14 @@
 // Replays (docs/DESIGN-8P.md 33): every match played or watched in this browser is recorded - the engine's
 // input at every step (every tank's keys / net bits, the computer tanks' too, and the keystrokes) from its
-// first step to the end-of-match world map - and kept in IndexedDB (the newest MAX). The engine is
+// first step to the end-of-match world map - and kept in IndexedDB (the newest MAX) when saved: after the match
+// ("Save the replay"), or every match with the setting "Save every match" (AUTO; owner, 2026-10-28: not
+// automatically) - till then held in this page's memory (the newest HELD: watched from there too). The engine is
 // deterministic, so its seed, options and inputs play the same match again - without the computer players,
 // whose bits are in the inputs (so a replay stays right when the AI changes). State hashes every CHECK_EVERY
 // steps show when a replay plays differently (another version's engine). Recording never changes the game.
 //
-//   runner.recorder = Replay.recorder(engine, {kind, seed, opts, room}, rep => Replay.save(rep));
+//   runner.recorder = Replay.recorder(engine, {kind, seed, opts, room}, rep => Replay.keep(rep));
+//   Replay.keep(rep, always) -> saved (always / the setting on) or held; held(id): held, not saved; autoSave() / setAutoSave(on)
 //   const e = Replay.engine(rep, TunnelerEngine), p = Replay.player(rep);
 //   for (let inp; (inp = p.next()); ) { e.step(inp); if (p.check(e) === false) ...plays differently }
 //   Replay.playable(rep) -> recorded by this version (major.minor), minorOf("1.1.5") = "1.1"
@@ -13,7 +16,7 @@
 import { NetProto } from "./netproto.js";
 import { VERSION } from "../version.js";
 
-const FORMAT = 1, MAX = 20, CHECK_EVERY = 256;
+const FORMAT = 1, MAX = 20, CHECK_EVERY = 256, HELD = 4, AUTO = "tunneler.replays.auto";
 const root = typeof window !== "undefined" ? window : globalThis;
 
 // one step's input as a short string: "b<bits per tank>" (extended) or "k<scan codes held>" (classic),
@@ -168,7 +171,7 @@ async function list() {
 }
 async function get(id) {
   const r = await req("readonly", s => s.get(id));
-  return valid(r) ? r : memory && memory.get(id) || null;
+  return valid(r) ? r : memory && memory.get(id) || held.get(id) || null;
 }
 // (every change: the listeners - cloudsave.js keeps the replays with the account)
 const listeners = [];
@@ -182,6 +185,7 @@ async function remove(id) {
 // kept: the newest MAX
 async function save(rep) {
   if (!valid(rep)) return null;
+  held.delete(rep.id);
   await db();
   if (memory) memory.set(rep.id, rep);
   await req("readwrite", s => s.put(rep));
@@ -189,6 +193,17 @@ async function save(rep) {
   for (const old of all.slice(MAX)) await remove(old.id);
   changed();
   return rep.id;
+}
+
+// not saved yet: the newest HELD matches, in this page's memory only
+const held = new Map();
+function autoSave() { try { return root.localStorage.getItem(AUTO) === "1"; } catch (e) { return false; } }
+function setAutoSave(on) { try { root.localStorage.setItem(AUTO, on ? "1" : "0"); } catch (e) { /* no storage */ } }
+// a recorded match at its end: saved (always - the daily challenge sends its result from it - or the setting on), else held
+function keep(rep, always) {
+  if (always || autoSave()) return save(rep);
+  if (valid(rep)) { held.set(rep.id, rep); while (held.size > HELD) held.delete(held.keys().next().value); }
+  return Promise.resolve(null);
 }
 
 // ------------------------------------------------------------------ files: gzip'd JSON (plain JSON read too)
@@ -222,7 +237,7 @@ export const Replay = {
   recorder: (engine, info, onDone) => new Recorder(engine, info, onDone),
   player: rep => new Player(rep),
   engine: makeEngine,
-  list, get, remove, save, toBlob, fromBytes, onChange: fn => { listeners.push(fn); },
+  list, get, remove, save, keep, held: id => held.has(id), autoSave, setAutoSave, toBlob, fromBytes, onChange: fn => { listeners.push(fn); },
   // (tests: forget the storage - the next call opens it again; memory = true: this page's memory only)
   reset(mem) { dbp = mem ? Promise.resolve(null) : null; memory = mem ? new Map() : null; },
 };

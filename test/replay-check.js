@@ -158,6 +158,13 @@ async function viewer(classicRep, extRep) {
     await tick(20);
     const ui = env.win.tunnelerReplayUI();
     ok(ui.spec.items.some(it => it.key === "none") && ui.spec.items.some(it => it.key === "file"), "Replays: none yet, Open a replay file, Back");
+    // "Save every match": off by default (owner, 2026-10-28 - "Save the replay" after a match), Left / Right / Enter switch it
+    const auto = () => ui.spec.items.find(it => it.key === "auto");
+    ok(auto() && /: off$/.test(auto().label) && !env.win.Replay.autoSave(), "Replays: Save every match: off (the default)");
+    auto().change(1); await tick(20);
+    ok(/: on$/.test(auto().label) && env.win.Replay.autoSave() && env.win.localStorage.getItem("tunneler.replays.auto") === "1", "Save every match: on (kept)");
+    auto().go(); await tick(20);
+    ok(/: off$/.test(auto().label) && !env.win.Replay.autoSave(), "Save every match: off again");
     await env.win.Replay.save(Object.assign({}, classicRep, { id: "old", date: 1000 }));
     await env.win.Replay.save(Object.assign({}, extRep, { id: "new", date: 2000 }));
     await env.win.tunnelerReplayList();

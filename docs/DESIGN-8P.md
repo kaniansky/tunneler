@@ -692,7 +692,9 @@ graphics, the settings for it open with back button".
 and replaying a match is fairly cheap").
 
 - Every match played or watched in this browser is recorded and kept (the newest 20): split screen, skirmish,
-  online (players and spectators). Nothing to switch on; a recording never changes the game.
+  online (players and spectators). Nothing to switch on; a recording never changes the game. (1.2, owner
+  2026-10-28: saved only when asked - "Save the replay" after the match - or every one with Replays' "Save every
+  match"; the daily challenge's always.)
 - A recording is the match's seed and settings and the input of every engine step - every tank's keys or
   bits, the computer tanks' included, and the keystrokes - from its start to the end-of-match world map. The
   engine is deterministic, so that plays the same match again, without running the computer players (a
