@@ -15,7 +15,9 @@ SHOTS = ["home", "split-screen", "vs-computer", "online-team", "spectator-grid",
          # the homepage's modern theme: the same screens in the modern look (readme-screenshots.js ... modern)
          "modern-split-screen", "modern-vs-computer", "modern-online-lobby", "modern-spectator-grid", "modern-spectator-map",
          # 6.0's new screens, both looks (v6-screenshots.js)
-         "quickplay", "challenge", "map-editor", "modern-quickplay", "modern-challenge", "modern-map-editor"]
+         "quickplay", "challenge", "map-editor", "modern-quickplay", "modern-challenge", "modern-map-editor",
+         # 1.2: 3D, the map picker (the release's own shots)
+         "modern-3d", "map-picker", "modern-map-picker"]
 
 def crop(src, dst, pad=6):
     im = Image.open(src).convert("RGB")
@@ -33,7 +35,7 @@ def crop(src, dst, pad=6):
         im.save(dst, optimize=True)
     return im.size
 
-JPEG = ["modern-game", "modern-split-screen", "modern-spectator-grid", "modern-spectator-map", "modern-map-editor"]  # lit, textured: much smaller as JPEG
+JPEG = ["modern-game", "modern-split-screen", "modern-spectator-grid", "modern-spectator-map", "modern-map-editor", "modern-3d"]  # lit, textured: much smaller as JPEG
 
 for name in SHOTS:
     ext = ".jpg" if name in JPEG else ".png"

@@ -237,7 +237,7 @@ const copy = rep => JSON.parse(JSON.stringify(rep));
     cut.steps = rep.steps - 60; delete cut.end;
     r = await post(quick, "client-cccc", "Cheat", gz(cut));
     ok(r.status === 400 && r.j.code === "unfinished", "a match that didn't end: refused (unfinished)");
-    r = await post(quick, "client-cccc", "Cheat", gz(Object.assign(copy(rep), { version: "1.2.3" })));
+    r = await post(quick, "client-cccc", "Cheat", gz(Object.assign(copy(rep), { version: "1.1.9" })));
     ok(r.status === 409 && r.j.code === "version", "another version's replay: refused (version)");
     r = await post(quick, "client-cccc", "Cheat", Buffer.from("not a replay"));
     ok(r.status === 400 && r.j.code === "bad", "junk: refused");

@@ -4,7 +4,10 @@ All notable changes to Tunneler. Versions follow [semantic versioning](https://s
 by pushing a version tag (see CONTRIBUTING.md). Up to its version 6.0.1 the game was called Tunneler Online:
 those releases are tagged `online-vX.Y.Z`, their changes are in [docs/CHANGELOG-online.md](docs/CHANGELOG-online.md).
 
-## Unreleased
+## 1.2.0
+
+Online play needs 1.2 on every side (the computer tanks, generated maps and the protocol changed): a 1.1 app or page
+is asked to update. Replays recorded by 1.1 are listed gray: they can be saved as a file or deleted, not watched.
 
 - **3D graphics** (Settings, Graphics, modern: Depth 2D / 3D): the world raised - dirt, rock and base walls with
   height, tunnels carved into the ground, tanks as 3D shapes, shadows - seen from straight above, so every view shows

@@ -30,6 +30,29 @@ screens drawn anew - see below).
 
 ## What's new
 
+New in 1.2:
+
+- **3D** (Settings, Graphics, modern: **Depth 3D**): the world raised - dirt, rock and base walls with height,
+  tunnels carved into the ground, tanks as 3D shapes with shadows - seen from straight above, so every view shows
+  exactly what the 2D one does. Smooth tunnel edges give sculpted terrain; pixel edges (the retro style) voxels.
+- **Generated maps**: the Map setting can be a world made anew for every match - **Fortresses**, **Arena**,
+  **Highlands** or **Caves** - with a fair layout (symmetric) or a natural one, in skirmishes and online games.
+  Teammates get bases near each other on every map. The map picker shows generated maps, your maps and the
+  gallery, each with its picture; a new map in the editor can start from a generated world.
+- **Smarter computer tanks**: they no longer park waiting for an enemy that left, hide behind a base's walls when
+  low on energy or shield, refuel at the nearest base they may use, and find their way out of other tanks' bases.
+- **Teammates marked**: a small triangle in their color over your teammates' tanks (Settings, Gameplay).
+- **Replays when you want them**: "Save the replay" after a match (or Settings, Gameplay, Save every match); a
+  replay plays in the version that recorded it.
+- After death with one view, your left / right keys switch the teammate you watch; split screen's info shows your
+  keys; the skirmish and online lobbies show the map.
+
+| 3D: a team game on generated caves (the triangle marks your teammate) | The map picker: generated maps |
+|---|---|
+| ![3D](screenshots/modern-3d.png) | ![Map picker](screenshots/map-picker.png) |
+
+Earlier:
+
 - **Quick play** (Online game, in the list of games): straight into an online game. The server finds a game with a
   place for you or makes one - eight tanks free-for-all, computer tanks in every seat nobody sits on, matches that
   start by themselves after a short countdown. Join a running match and you take over a computer tank at once;
@@ -76,7 +99,7 @@ dirt and cracked rock, dark tunnels lit by the tanks' lamps and headlights, glow
 fire and debris, a smooth camera that glides with your tank, a new energy and shield panel, and every menu
 in a modern font, flat and warm (no gradients, no glow). Its own settings screen picks a style (clean, or retro with chunky
 pixels and the DOS colors) and quality, terrain, tunnel edges, lighting, particles, glow, screen shake,
-camera, UI and the line of sight's fog of war. Only the look changes - the game, its rules and online
+camera, UI, the line of sight's fog of war and **depth: 2D or 3D** (1.2). Only the look changes - the game, its rules and online
 play stay exactly the same, and every player chooses their own look. **Modern** is the default since 5.0; **Original** is one switch away.
 
 | Modern: the main menu | Modern: its settings |
@@ -208,7 +231,8 @@ The homepage, https://kaniansky.com/tunneler/, comes in the same languages.
 | Fire | Left Shift, Space | Enter, Right Shift |
 
 Online and against the computer you can use either set. Hold two direction keys to move diagonally;
-firing while moving digs faster. Hold **Tab** for the score (players; a spectator's Tab switches the views).
+firing while moving digs faster. Hold **Tab** for the score (players; a spectator's Tab switches the views). The keys can be changed in
+Settings, Controls; after death with one view, your left / right keys watch the next teammate.
 **Esc** ends the match on one computer; online, **Esc twice** leaves the
 game (one player can't end it for everybody). Menus: arrow keys and Enter, number keys 1-8 for teams, or
 the mouse (clicks, the wheel in long lists); Esc goes back.
