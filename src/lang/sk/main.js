@@ -163,7 +163,7 @@ Lang.register("sk", {
           "tvorca limit pohľadu: najviac, čo si v nej hráč môže zvoliť."],
         ["Po smrti:  ", "čo vidíš od zničenia svojho tanku do konca kola: čiernu obrazovku, svoj " +
           "vrak, svojich spoluhráčov, svojho vraha (tank, ktorý ťa zničil, potom ten, ktorý zničil " +
-          "jeho...) alebo všetky tanky, ktoré ešte žijú."],
+          "jeho...) alebo všetky tanky, ktoré ešte žijú.  S pohľadom „len ja“ sa ukazujú po jednom: tvoje klávesy doľava / doprava (Nastavenia, Ovládanie; ťuknutie pri okraji obrazovky) prepnú na ďalšieho."],
         ["Dohľad:  ", "vypnutý - ako v origináli: vidíš celú svoju obrazovku.  Kruh - naživo vidíš len kruh " +
           "okolo svojho tanku; zvyšok obrazovky ukazuje svet tak, ako si ho naposledy videl, v sivej " +
           "(nepriateľský tank ostane tam, kde si ho videl naposledy).  Skutočný - to isté, ale hlina, " +

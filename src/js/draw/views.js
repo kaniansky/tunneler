@@ -192,8 +192,27 @@ class ViewModes {
       this.ghost = e.alive[t + 1] ? t : cells[0];
       return [this.ghost];
     }
+    // a single view (the player's view: self - owner, 2026-10-28): one of them at a time, the one chosen with Left / Right
+    // (cycleWatched) while it lives, else as below
+    this.watchList = cells;
+    if (this.scope.view === "self") {
+      this.ghost = this.picked != null && cells.includes(this.picked) ? this.picked : cells.includes(t) ? t : cells[0];
+      return [this.ghost];
+    }
     this.ghost = cells.includes(t) ? t : cells[0];
     return cells;
+  }
+  // after death in a single view (outCells): watch the next (d 1) / previous (-1) of those it may watch -> true when
+  // there was another to switch to
+  cycleWatched(d) {
+    const L = this.watchList || [];
+    if (!this.scope || this.scope.view !== "self" || !["team", "others"].includes(this.watchOut) || L.length < 2 || this.ghost == null) return false;
+    const e = this.engine();
+    if (!e || !e.alive || e.alive[this.scope.own + 1]) return false;
+    this.picked = L[(L.indexOf(this.ghost) + d + L.length) % L.length];
+    this.ghost = this.picked;
+    this.key = "";
+    return true;
   }
   // whose position sounds fade from (0-based): after death ("team" / "others") the tank that destroyed
   // you if it is shown, else the first one shown; else `own` (alive, or its wreck)

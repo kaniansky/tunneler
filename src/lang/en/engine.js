@@ -106,7 +106,7 @@ const STRINGS_EN = {
         "game its creator sets a view limit, the most any player in it may choose."],
       ["After death:  ", "what you see once your tank is destroyed, until the round ends: a black " +
         "screen, your wreck, your teammates, your killer (the tank that destroyed you, then the one " +
-        "that destroyed it...) or all the tanks still alive."],
+        "that destroyed it...) or all the tanks still alive.  With the view \"self\" they are shown one at a time: your left / right keys (Settings, Controls; a tap near the side of the screen) watch the next."],
       ["Line of sight:  ", "off - the original: you see your whole view screen.  Circle - you see only a circle " +
         "around your tank as it is now; the rest of the view screen shows the world as you last saw " +
         "it, in gray (an enemy tank stays where you last saw it).  True - the same, but dirt, rock and " +

@@ -44,6 +44,7 @@ import { Report, Reload } from "../net/report.js";
 import { Runner } from "../io/runner.js";
 import { Speaker } from "../io/speaker.js";
 import { StatusLine } from "../draw/statusline.js";
+import { GameScreen } from "../io/screen.js";
 import { TankView } from "../draw/tankview.js";
 import { UniText } from "../text/unitext.js";
 import { VERSION } from "../version.js";
@@ -343,6 +344,21 @@ export function mount() {
   window.addEventListener("keydown", updateBits);
   window.addEventListener("keyup", updateBits);
   window.addEventListener("blur", () => setTimeout(updateBits, 0));
+  // a player whose tank is destroyed, one view of a teammate (or anybody - After death, View self): a tank's left / right
+  // keys (Settings, Controls) watch the next one; a touch screen: a tap near the screen's left / right edge
+  const sideKey = code => Controls.SETS.some(s => Controls.codesOf(s, "left").includes(code)) ? -1
+    : Controls.SETS.some(s => Controls.codesOf(s, "right").includes(code)) ? 1 : 0;
+  const deadOne = () => isPlayer() && inPlay() && !lobby && !msgSnap && engine && !engine.alive[player + 1];
+  window.addEventListener("keydown", e => {
+    if (!deadOne()) return;
+    const d = sideKey(e.code);
+    if (d && views.cycleWatched(d)) e.preventDefault();
+  });
+  canvas.addEventListener("click", ev => {
+    if (!deadOne() || !GameScreen.mobile()) return;
+    const r = canvas.getBoundingClientRect(), x = r.width ? (ev.clientX - r.left) / r.width : 0.5;
+    if (x < 0.33 || x > 0.67) views.cycleWatched(x < 0.5 ? -1 : 1);
+  });
   // watching: the view keys
   window.addEventListener("keydown", e => {
     if (isPlayer() || msgSnap || e.ctrlKey || e.altKey || e.metaKey) return;   // (a status screen handles its own keys)

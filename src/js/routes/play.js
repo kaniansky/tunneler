@@ -23,6 +23,7 @@ import { Links } from "../net/endpoint.js";
 import { TunnelerEngine } from "../game/engine.js";
 import { Gfx } from "../draw/gfx.js";
 import { Keyboard } from "../io/input.js";
+import { Controls } from "../io/controls.js";
 import { LiveStats } from "../ui/livestats.js";
 import { Lang } from "../text/lang.js";
 import { Pads } from "../io/pads.js";
@@ -236,7 +237,22 @@ function run(mapRec) {
   // mouse / touch: a click or a tap on the round title / the world map goes on (as Enter); a tap beside the canvas too
   // (a phone held upright: the world map at the top, the rest black)
   const clicks = [];
+  // after death, one view of a teammate (or anybody - setting After death, View self): a tank's left / right keys (as set
+  // in Settings, Controls - a gamepad's stick too) watch the next one; a touch screen: a tap near its left / right edge
+  // (not split screen: there the other set is player 2's)
+  const sideKey = code => Controls.SETS.some(s => Controls.codesOf(s, "left").includes(code)) ? -1
+    : Controls.SETS.some(s => Controls.codesOf(s, "right").includes(code)) ? 1 : 0;
+  const deadOne = () => !after && me2 < 0 && engine.screen === "play" && !engine.alive[me + 1];
+  window.addEventListener("keydown", ev => {
+    if (!deadOne()) return;
+    const d = sideKey(ev.code);
+    if (d && views.cycleWatched(d)) ev.preventDefault();
+  });
   canvas.addEventListener("click", ev => {
+    if (deadOne() && GameScreen.mobile()) {
+      const r = canvas.getBoundingClientRect(), x = r.width ? (ev.clientX - r.left) / r.width : 0.5;
+      if ((x < 0.33 || x > 0.67) && views.cycleWatched(x < 0.5 ? -1 : 1)) return;
+    }
     if (after || engine.kbdInstalled || !views.cellAt(ev)) return;
     clicks.push([13, 0x1C]);
   });

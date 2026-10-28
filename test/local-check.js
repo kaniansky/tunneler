@@ -732,6 +732,27 @@ function play(search) {
   ok("play.js: held Tab = the score, the teams and the settings over the game (display only, no fire)");
 }
 
+// ---------------------------------------------------------------- after death, one view: a tank's side keys switch it
+{
+  const env = makeEnv("?mode=cpu&slots=" + encodeURIComponent("0:you:1,1:easy:1,2:easy:1,3:easy:2") + "&view=self&watch=team&lv=2", new Map());
+  env.page("play.html");
+  const e = env.win.tunnelerEngine(), views = env.win.tunnelerViews();
+  for (let i = 0; i < 3000 && e.screen !== "play"; i++) e.step({ bits: [0, 0, 0, 0], keys: [] });
+  e.alive[1] = false;                                    // (your tank destroyed)
+  const shown = () => views.outCells();
+  const first = shown();
+  assert(first.length === 1 && [1, 2].includes(first[0]), "one teammate's view: " + first);
+  env.key("ArrowRight");                                 // (GREEN's right key: the default arrows)
+  const second = shown();
+  assert(second.length === 1 && [1, 2].includes(second[0]) && second[0] !== first[0], "the other teammate: " + second);
+  env.key("KeyA");                                       // (BLUE's left key: back)
+  same(shown(), first, "back to the first");
+  env.win.Controls.set("blue", "right", "KeyL");         // (remapped: that key does it now)
+  env.key("KeyL");
+  same(shown(), second, "a remapped key");
+  ok("after death, one view (View self, watch team): a tank's left / right keys (Settings, Controls) switch the teammate watched");
+}
+
 // ---------------------------------------------------------------- an auto start's "(creating world)"
 {
   // a key cuts the world creation short, the auto start runs early - its "(creating world)" line stays steady
