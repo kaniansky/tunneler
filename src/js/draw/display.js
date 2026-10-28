@@ -378,9 +378,9 @@ function paletteOf(s, raw) {
 // block grown by that part of a cell on every side (into a frame's cells, short of its line)
 function paintPic(px, W, pic, c0, yOf, lo, hi) {
   const bl = pic.bleed || 0, ex = Math.round(bl * 9), ey = Math.round(bl * 16);
-  const bw = pic.cols * 9 + 2 * ex, bh = pic.rows * 16 + 2 * ey, k = Math.min(bw / pic.w, bh * 1.35 / pic.h);
+  const bw = Math.round(pic.cols * 9) + 2 * ex, bh = Math.round(pic.rows * 16) + 2 * ey, k = Math.min(bw / pic.w, bh * 1.35 / pic.h);
   const dw = Math.max(1, Math.round(pic.w * k)), dh = Math.max(1, Math.round(pic.h * k / 1.35));
-  const ox = (pic.col - c0) * 9 - ex + ((bw - dw) >> 1), oy = ((bh - dh) >> 1) - ey;
+  const ox = Math.round((pic.col - c0) * 9) - ex + ((bw - dw) >> 1), oy = ((bh - dh) >> 1) - ey;   // (a block may start inside a cell)
   const src = new Uint32Array(pic.rgba.buffer, pic.rgba.byteOffset, pic.w * pic.h);
   for (let y = 0; y < dh; y++) {
     const ly = oy + y, r = pic.row + Math.floor(ly / 16), top = yOf(r);

@@ -759,17 +759,19 @@ export function mount() {
     const seatW = DosUI.boxWidth(slotItems), actW = DosUI.boxWidth(acts),
       setW = Math.max(DosUI.boxWidth(sets), DosUI.boxWidth(labels.map(label => ({ label, align: "left" }))));
     const x0 = Math.max(1, 1 + ((80 - (seatW + 2 + 3 + setW + 2)) >> 1));
-    // (owner, 2026-10-28: the Game box under the Settings, as wide as them; the chosen map's picture under the slots,
-    // as wide as them - its rows kept when the world is random, so choosing a map moves nothing)
-    const setX = x0 + seatW + 5, gameY = sets.length + 4, picY = slotItems.length + 4, PIC_ROWS = 8;
-    const pm = rec ? MapData.decode(rec.code) : null;
-    const pic = pm ? Object.assign({ row: picY, col: x0, cols: seatW + 2, rows: PIC_ROWS }, MapPic.of(pm)) : null;
-    const infoRow = Math.max(picY + PIC_ROWS, gameY + acts.length + 2) + 1;
+    // (owner, 2026-10-28: the Game box under the Settings, as wide as them; the chosen map's picture under the slots, in
+    // a frame as wide as their box - always: an example of a random world / a generated kind too, MapPick.preview)
+    const setX = x0 + seatW + 5, gameY = sets.length + 4, frameY = slotItems.length + 3, PIC_ROWS = 6;
+    const pv = MapPick.preview(rec || cpuMap || "", cpuSize, Math.max(2, S.used.length));
+    // (bleed: up and down into the frame's rows; across it stays inside the box - a wide box: the width decides)
+    const pic = pv ? Object.assign({ row: frameY + 1, col: x0 + 1.3, cols: seatW - 0.6, rows: PIC_ROWS, bleed: 0.3 }, pv) : null;
+    const frame = { x: x0, y: frameY, x2: x0 + seatW + 1, y2: frameY + PIC_ROWS + 1 };
+    const infoRow = Math.max(frame.y2 + 1, gameY + acts.length + 2) + 1;
     ui.show({
       boxes: [{ x: x0, y: 1, w: seatW, title: T("cpu.title"), items: slotItems },
         { x: setX, y: 1, w: setW, title: T("box.settings"), items: sets },
         { x: setX, y: gameY, w: setW, title: T("box.game"), items: acts }],
-      pic, block: [1, infoRow + 1],
+      pic, panels: [frame], block: [1, infoRow + 1],
       hint: T("create.hint"),
       sel: Math.max(0, items.findIndex(it => it.key === selKey)), infoRow,
       back: () => main("cpu"),

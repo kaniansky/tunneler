@@ -36,6 +36,23 @@ function randomPic(size, n) {
 }
 const ROWS = 8;                                          // (a desktop: the list's rows - the info fits below them)
 
+// an example of a random world (kind null) or a generated kind (always the same seed), kept
+function examplePic(kind, size, bases, fair) {
+  const key = [kind || "random", size, bases, kind ? fair : ""].join(" ");
+  if (!genPics.has(key)) {
+    if (!kind) genPics.set(key, randomPic(size, bases));
+    else { const m = MapGen.make({ kind, size, bases, seed: 1, fair }); genPics.set(key, m ? MapPic.of(m) : null); }
+  }
+  return genPics.get(key);
+}
+// the picture of a map choice - "" (a random world), a generated kind's id (mapgen.js) or a map record - for size and
+// number of tanks: the skirmish lobby's preview (owner, 2026-10-28: always, also for the generated ones)
+function preview(choice, size, bases) {
+  if (choice && typeof choice === "object") return MapPic.of(MapData.decode(choice.code));
+  const g = MapGen.parse(choice || "");
+  return examplePic(g ? g.kind : null, size, bases, g ? g.fair : true);
+}
+
 function show(ui, opts) {
   const T = Lang.t;
   const tabs = opts.tabs || (opts.random || opts.gen ? ["gen", "mine", "gallery"] : ["mine", "gallery"]);
@@ -70,12 +87,8 @@ function show(ui, opts) {
   function picOf(it) {
     if (!it || !it.map) return null;
     if (it.map.gen || it.map.random) {                   // (an example of the kind: always the same seed)
-      const g = opts.gen || { size: "medium", bases: 2 }, key = [it.map.gen || "random", g.size, g.bases, it.map.random || fair].join(" ");
-      if (!genPics.has(key)) {
-        if (it.map.random) genPics.set(key, randomPic(g.size, g.bases));
-        else { const m = MapGen.make({ kind: it.map.gen, size: g.size, bases: g.bases, seed: 1, fair }); genPics.set(key, m ? MapPic.of(m) : null); }
-      }
-      return genPics.get(key);
+      const g = opts.gen || { size: "medium", bases: 2 };
+      return examplePic(it.map.gen || null, g.size, g.bases, fair);
     }
     if (it.map.rec) return MapPic.of(MapData.decode(it.map.rec.code));
     const id = it.map.entry.id;
@@ -189,4 +202,4 @@ function show(ui, opts) {
   return S;
 }
 
-export const MapPick = { show };
+export const MapPick = { show, preview };

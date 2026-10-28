@@ -43,7 +43,7 @@ function makeEnv(search, store) {
     addEventListener: (t, f, o) => { const c = o === true || !!(o && o.capture); (listeners[t] = listeners[t] || []).push(Object.assign(ev => f(ev), { capture: c, f })); },
     removeEventListener: (t, f, o) => { const c = o === true || !!(o && o.capture); listeners[t] = (listeners[t] || []).filter(g => !(g.f === f && g.capture === c)); },
     requestAnimationFrame: () => 0, cancelAnimationFrame() {},
-    performance, setTimeout, clearTimeout, setInterval: () => 0, clearInterval() {}, console, URLSearchParams, Math, atob, Uint8Array,
+    performance, setTimeout, clearTimeout, setInterval: () => 0, clearInterval() {}, console, URLSearchParams, Math, atob, Uint8Array, TextEncoder, TextDecoder,
   };
   win.window = win; win.globalThis = win;
   const ctx = vm.createContext(win);
