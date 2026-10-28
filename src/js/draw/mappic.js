@@ -1,8 +1,8 @@
 // A custom map as a small picture (the map gallery and the map picker's preview, docs/v6/MAPS.md - owner, 2026-10-28):
 // one pixel per map cell - tunnels black, dirt in the game's two browns, rock gray, each base a square of its tank
 // colour with a black inside - as {w, h, rgba} for a DOS screen's picture region (DosUI spec.pic: Display and
-// gfx-text.js draw it, square on the screen); of the map's rock frame only its inner cell, darker (owner, 2026-10-28:
-// the whole frame was too thick). Kept per map code.
+// gfx-text.js draw it, square on the screen); without the map's rock frame (owner, 2026-10-28: the picture's own box
+// is its border). Kept per map code.
 import { Display } from "./display.js";
 import { MapData } from "../game/mapdata.js";
 import { TunnelerEngine } from "../game/engine.js";
@@ -14,16 +14,16 @@ function of(map) {
   if (!map) return null;
   const key = MapData.code(map);
   if (cache.has(key)) return cache.get(key);
-  // (the frame's cells across, from the left edge on the middle row: all but the innermost one cut off)
+  // (the frame's cells across, from the left edge on the middle row: cut off)
   let F = 0;
   while (F < map.w >> 1 && MapData.inFrame(map.size, F, map.h >> 1)) F++;
-  const k = Math.max(0, F - 1), w = map.w - 2 * k, h = map.h - 2 * k;
+  const k = F, w = map.w - 2 * k, h = map.h - 2 * k;
   const pal = Display.EXT_PALETTE, rgba = new Uint8ClampedArray(w * h * 4);
   const put = (x, y, c) => { if (x < 0 || y < 0 || x >= w || y >= h) return; const o = (y * w + x) * 4, p = pal[c]; rgba[o] = p[0]; rgba[o + 1] = p[1]; rgba[o + 2] = p[2]; rgba[o + 3] = 255; };
   for (let y = 0; y < h; y++)
     for (let x = 0; x < w; x++) {
       const mx = x + k, my = y + k, v = map.cells[my * map.w + mx];
-      put(x, y, v === MapData.ROCK ? (MapData.inFrame(map.size, mx, my) ? 13 : 7) : v === MapData.TUNNEL ? 0 : MapData.dirtAt(mx, my));
+      put(x, y, v === MapData.ROCK ? 7 : v === MapData.TUNNEL ? 0 : MapData.dirtAt(mx, my));
     }
   // a base: its walls (35 world pixels = ~9 cells a side) in its colour, black inside
   map.bases.forEach((b, i) => {
