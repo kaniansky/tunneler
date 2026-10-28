@@ -98,7 +98,7 @@ Lang.extend("cs", {
   "map.ask.cancel": "Zrušit",
   "map.ask.cancel.i": "Zpět na obrazovku mapy, nic se nezmění.",
   "lc.map": "Mapa: ",
-  "lc.map.random": "náhodná",
+  "lc.map.random": "Původní",
   "lc.map.i1": "Náhodný svět, jedna z tvých map nebo z galerie -",
   "lc.map.i2": "vyber řádek a uvidíš je i s obrázky.",
   "lc.size.map": "Velikost určuje mapa.",

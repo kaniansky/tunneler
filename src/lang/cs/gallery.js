@@ -8,6 +8,7 @@ Lang.extend("cs", {
   "pk.none.gal": "Zatím nic nezveřejněno.",
   "pk.err.none": "Tento server nemá galerii map.",
   "pk.err.net": "Server neodpovídá - zkus znovu.",
+  "pk.random": "Původní",
   "pk.random.i": "Svět vytvořený tak, jak ho dělá původní hra.",
   "pk.mine.i": "Vyber ji a hraj na ní.",
   "pk.gal.by": "Zveřejnil(a) {name} - hráno {n}krát.",

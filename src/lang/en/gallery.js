@@ -10,6 +10,7 @@ Lang.extend("en", {
   "pk.none.gal": "Nothing published yet.",
   "pk.err.none": "This server has no map gallery.",
   "pk.err.net": "The server doesn't answer - try again.",
+  "pk.random": "Original",
   "pk.random.i": "A world made the way the original game makes it.",
   "pk.mine.i": "Choose it to play on it.",
   "pk.gal.by": "Published by {name} - played {n} times.",

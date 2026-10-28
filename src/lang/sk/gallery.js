@@ -8,6 +8,7 @@ Lang.extend("sk", {
   "pk.none.gal": "Zatiaľ nič nezverejnené.",
   "pk.err.none": "Tento server nemá galériu máp.",
   "pk.err.net": "Server neodpovedá - skús znova.",
+  "pk.random": "Pôvodná",
   "pk.random.i": "Svet vytvorený tak, ako ho robí pôvodná hra.",
   "pk.mine.i": "Vyber ju a hraj na nej.",
   "pk.gal.by": "Zverejnil(a) {name} - hrané {n}-krát.",

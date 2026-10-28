@@ -105,7 +105,7 @@ Lang.extend("en", {
   "map.ask.cancel.i": "Back to the map's screen; nothing changes.",
   // playing a map: the skirmish, the online lobby
   "lc.map": "Map: ",
-  "lc.map.random": "random",
+  "lc.map.random": "Original",
   "lc.map.i1": "A random world, one of your maps or one from the gallery -",
   "lc.map.i2": "choose the row to see them with their pictures.",
   "lc.size.map": "The map decides the size.",

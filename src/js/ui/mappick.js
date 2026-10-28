@@ -18,11 +18,22 @@ import { MapData } from "../game/mapdata.js";
 import { MapGen } from "../game/mapgen.js";
 import { MapPic } from "../draw/mappic.js";
 import { MapStore } from "../net/mapstore.js";
+import { TunnelerEngine } from "../game/engine.js";
 import { UniText } from "../text/unitext.js";
 
 const U = UniText;
 const maps = new Map();                                  // gallery id -> the decoded map (null while it loads)
 const genPics = new Map();                               // "kind size bases fair" -> a generated example's picture
+// a random world's example (the engine's own generator, seed 1) with its bases, as a map's picture
+function randomPic(size, n) {
+  const g = new TunnelerEngine(1, { size, extended: true, slots: Array.from({ length: n }, (_, i) => ({ color: i, team: i + 1 })) });
+  for (let k = 0; k < 6000 && g.worldStage !== -1; k++) g.step({});
+  g.step({ keys: [[0, 59]] });                           // (F1: the bases are placed as the game starts)
+  for (let k = 0; k < 400 && !g.baseX[1]; k++) g.step({});
+  const m = MapData.fromWorld(size, g.world, g.ws);
+  for (let p = 1; p <= n; p++) m.bases.push({ x: Math.round((g.baseX[p] - 2) / MapData.CELL), y: Math.round((g.baseY[p] - 2) / MapData.CELL) });
+  return MapPic.of(m);
+}
 const ROWS = 8;                                          // (a desktop: the list's rows - the info fits below them)
 
 function show(ui, opts) {
@@ -58,9 +69,12 @@ function show(ui, opts) {
   // the selected map's picture: a map of this browser's at once, a gallery one once fetched
   function picOf(it) {
     if (!it || !it.map) return null;
-    if (it.map.gen) {                                    // (an example of the kind: always the same seed)
-      const g = opts.gen, key = [it.map.gen, g.size, g.bases, fair].join(" ");
-      if (!genPics.has(key)) { const m = MapGen.make({ kind: it.map.gen, size: g.size, bases: g.bases, seed: 1, fair }); genPics.set(key, m ? MapPic.of(m) : null); }
+    if (it.map.gen || it.map.random) {                   // (an example of the kind: always the same seed)
+      const g = opts.gen || { size: "medium", bases: 2 }, key = [it.map.gen || "random", g.size, g.bases, it.map.random || fair].join(" ");
+      if (!genPics.has(key)) {
+        if (it.map.random) genPics.set(key, randomPic(g.size, g.bases));
+        else { const m = MapGen.make({ kind: it.map.gen, size: g.size, bases: g.bases, seed: 1, fair }); genPics.set(key, m ? MapPic.of(m) : null); }
+      }
       return genPics.get(key);
     }
     if (it.map.rec) return MapPic.of(MapData.decode(it.map.rec.code));
@@ -93,12 +107,13 @@ function show(ui, opts) {
     if (closed || (opts.open && !opts.open())) return;
     const items = [];
     if (tab === "gen") {
-      if (opts.random) items.push({ key: "random", label: row(T("lc.map.random"), "", ""), align: "left", spans: [[0, 200, 0x0F]], info: [T("pk.random.i")],
-        go: () => { close(); opts.choose({ random: true }); } });
+      const g = opts.gen;
+      if (opts.random) items.push({ key: "random", label: row(Lang.raw("pk.random"), g ? sizeText(g.size) : "", g ? String(g.bases) : ""), align: "left",
+        map: { random: true }, spans: spans(), info: [T("pk.random.i"), T("gen.i2")], go: () => { close(); opts.choose({ random: true }); } });
       // the generated kinds: a new map of the kind for every match (their example's picture), the layout below
       if (opts.gen) for (const k of MapGen.KINDS)
         items.push({ key: "gen:" + k, label: row(Lang.raw("gen." + k), sizeText(opts.gen.size), String(opts.gen.bases)), align: "left", map: { gen: k },
-          spans: [[0, W()[0], 0x0E]].concat(spans().slice(1)), info: [T("gen." + k + ".i"), T("gen.i2")],
+          spans: spans(), info: [T("gen." + k + ".i"), T("gen.i2")],
           go: () => { close(); opts.choose({ gen: MapGen.id(k, fair) }); } });
     } else if (tab === "mine") {
       // (only the maps that can be played - owner, 2026-10-28: not listed grayed any more)
@@ -142,6 +157,7 @@ function show(ui, opts) {
     const sel = ui.spec && keep && !ui.spec.items.some(x => x.key === "wait") ? ui.spec.items[ui.sel] : null;
     const it = sel ? all.find(x => x.key === sel.key) : all.find(x => x.map && x.map.rec && x.map.rec.id === opts.current)
       || (cur && all.find(x => x.map && x.map.gen === cur.kind))
+      || (opts.current === "" && all.find(x => x.map && x.map.random))
       || all.find(x => x.map && x.map.entry && x.map.entry.id === state.at) || all.find(x => x.map);
     if (it && it.map && it.map.gen) state.genKind = it.map.gen;
     // (on the Layout row: the kind chosen last, in the layout now)
