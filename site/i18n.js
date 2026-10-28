@@ -13,7 +13,7 @@ const L = {
     "hero.by": "by Norko Kaniansky",
     "hero.lead": "Two tanks under the ground. Dig through the dirt, find the other tank and shoot it before your energy runs out. Geoffrey Silverton's DOS game from 1991, rebuilt from its decompiled code so it plays exactly as it did, and extended to eight tanks, teams, computer opponents and online games.",
     "menu.play": "Play in the browser", "menu.play.i": "Nothing to install. Online games need a free account (a username and a password); split screen and skirmish don't. The free server can take up to a minute to wake up.",
-    "menu.dl": "Download the desktop app", "menu.dl.i": "Windows, Linux and macOS, a few MB, and an Android app. Split screen and skirmish work offline too.",
+    "menu.dl": "Download the app", "menu.dl.i": "Windows, Linux and macOS, a few MB, and an Android app. Split screen and skirmish work offline too.",
     "menu.new": "What's new", "menu.new.i": "Quick play, the daily challenge with its leaderboard, your own maps, player accounts.",
     "menu.src": "Source code", "menu.src.i": "On GitHub. Public domain (Unlicense): copy it, change it, run your own server.",
     "hero.alt": "Split screen in the original DOS look: the BLUE and the GREEN tank at the end of winding tunnels dug out of their bases, both firing",
