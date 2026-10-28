@@ -2,6 +2,21 @@
 import { Lang } from "../../js/text/lang.js";
 
 Lang.extend("cs", {
+  "gen.fortress": "Pevnosti",
+  "gen.arena": "Aréna",
+  "gen.highlands": "Vysočina",
+  "gen.caves": "Jeskyně",
+  "gen.fair": "férová",
+  "gen.natural": "přirozená",
+  "gen.label": "{kind}, {layout}",
+  "gen.fortress.i": "Každá základna ve skalním prstenci s branami; mezi nimi volná hlína.",
+  "gen.arena.i": "Velký skalní prstenec uprostřed se čtyřmi branami a otevřeným náměstím.",
+  "gen.highlands.i": "Skalní hřebeny napříč krajinou, základny v údolích.",
+  "gen.caves.i": "Jeskyně už vykopané v hlíně: žádné kopání před bojem.",
+  "gen.i2": "Pro každý zápas nová mapa tohoto druhu.",
+  "pk.layout": "Rozložení: ",
+  "pk.layout.i1": "Férové: stejné pro každou základnu (souměrné). Přirozené: jakékoli.",
+  "pk.layout.i2": "Lichý počet tanků na férové mapě: jedna základna zůstane prázdná.",
   "home.maps": "Mapy", "home.maps.i": "Vytvoř si vlastní světy, sdílej je odkazem, hraj na nich.",
   "map.title": "MAPY", "map.h.name": "NÁZEV", "map.h.size": "VELIKOST", "map.h.bases": "ZÁKLADNY",
   "map.info": "Mapa {size}, základen: {n}.", "map.info.one": "Mapa {size}, základen: {n}.", "map.row.i": "<ENTER> ji otevře: upravit, hrát, sdílet odkaz, smazat.",

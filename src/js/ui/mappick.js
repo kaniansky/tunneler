@@ -1,9 +1,12 @@
 // A list of maps with a picture of the selected one (docs/v6/MAPS.md, the map gallery - owner, 2026-10-28), on a page's
 // DosUI: the map picker of the skirmish and the online game's lobby (your maps / the gallery, and a random world) and
 // the Maps screen's gallery. A map that can't be played (too few bases, a base a tank can't reach) isn't listed.
-//   MapPick.show(ui, {tabs: ["mine", "gallery"] | ["gallery"], tab, random, current, choose(choice), back(), name(),
+//   MapPick.show(ui, {tabs: ["mine", "gallery"] | ["gallery"], tab, random, gen, current, choose(choice), back(), name(),
 //                     title, backLabel, backInfo})
-//     choice: {random: true} | {rec} (a map of this browser's - a gallery map is fetched and kept first) | {entry} (tabs
+//     gen: {size, bases} - the generated kinds too (mapgen.js), their pictures for that size and number of tanks, and a
+//     Layout row (fair / natural)
+//     choice: {random: true} | {gen: "gen:<kind>:<layout>"} | {rec} (a map of this browser's - a gallery map is fetched
+//     and kept first) | {entry} (tabs
 //     ["gallery"] only: a gallery entry, not fetched: the Maps screen opens its own screen)
 //     current: the chosen map's local id ("" = a random world); name(): the player's name (a server without accounts);
 //     open(): false once the page put something else on the screen (nothing drawn any more);
@@ -11,12 +14,14 @@
 import { Endpoint } from "../net/endpoint.js";
 import { Lang } from "../text/lang.js";
 import { MapData } from "../game/mapdata.js";
+import { MapGen } from "../game/mapgen.js";
 import { MapPic } from "../draw/mappic.js";
 import { MapStore } from "../net/mapstore.js";
 import { UniText } from "../text/unitext.js";
 
 const U = UniText;
 const maps = new Map();                                  // gallery id -> the decoded map (null while it loads)
+const genPics = new Map();                               // "kind size bases fair" -> a generated example's picture
 const ROWS = 8;                                          // (a desktop: the list's rows - the info fits below them)
 
 function show(ui, opts) {
@@ -24,6 +29,8 @@ function show(ui, opts) {
   const tabs = opts.tabs || ["mine", "gallery"];
   const state = opts.state || {};
   let tab = tabs.includes(opts.tab) ? opts.tab : tabs[0], sort = state.sort === "plays" ? "plays" : "new";
+  const cur = MapGen.parse(opts.current);
+  let fair = cur ? cur.fair : state.fair !== false;       // (the Layout row: fair by default)
   let mine = null, gal = null, galCode = "", busy = false, closed = false, lastPic = null;
   const S = { open: true };
   const sizeText = s => Lang.raw("lc.size." + s) || s;
@@ -48,6 +55,11 @@ function show(ui, opts) {
   // the selected map's picture: a map of this browser's at once, a gallery one once fetched
   function picOf(it) {
     if (!it || !it.map) return null;
+    if (it.map.gen) {                                    // (an example of the kind: always the same seed)
+      const g = opts.gen, key = [it.map.gen, g.size, g.bases, fair].join(" ");
+      if (!genPics.has(key)) { const m = MapGen.make({ kind: it.map.gen, size: g.size, bases: g.bases, seed: 1, fair }); genPics.set(key, m ? MapPic.of(m) : null); }
+      return genPics.get(key);
+    }
     if (it.map.rec) return MapPic.of(MapData.decode(it.map.rec.code));
     const id = it.map.entry.id;
     if (maps.has(id)) return MapPic.of(maps.get(id));
@@ -80,6 +92,11 @@ function show(ui, opts) {
     if (tab === "mine") {
       if (opts.random) items.push({ key: "random", label: row(T("lc.map.random"), "", ""), align: "left", spans: [[0, 200, 0x0F]], info: [T("pk.random.i")],
         go: () => { close(); opts.choose({ random: true }); } });
+      // the generated kinds: a new map of the kind for every match (their example's picture), the layout below
+      if (opts.gen) for (const k of MapGen.KINDS)
+        items.push({ key: "gen:" + k, label: row(Lang.raw("gen." + k), sizeText(opts.gen.size), String(opts.gen.bases)), align: "left", map: { gen: k },
+          spans: [[0, W()[0], 0x0E]].concat(spans().slice(1)), info: [T("gen." + k + ".i"), T("gen.i2")],
+          go: () => { close(); opts.choose({ gen: MapGen.id(k, fair) }); } });
       // (only the maps that can be played - owner, 2026-10-28: not listed grayed any more)
       const ok = mine ? mine.filter(r => !MapStore.playable(r)) : null;
       if (!ok) items.push({ key: "wait", label: T("pk.loading"), disabled: true });
@@ -106,6 +123,10 @@ function show(ui, opts) {
       const setTab = d => { tab = tabs[(tabs.indexOf(tab) + d + tabs.length) % tabs.length]; lastPic = null; if (tab === "gallery" && !gal) loadGallery(); else draw(); };
       fixed.push({ key: "tab", label: T("pk.show") + T("pk.tab." + tab), info: [T("pk.show.i")], go: () => setTab(1), change: setTab });
     }
+    if (tab === "mine" && opts.gen) {
+      const setFair = () => { fair = state.fair = !fair; draw(true); };
+      fixed.push({ key: "layout", label: T("pk.layout") + Lang.raw("gen." + (fair ? "fair" : "natural")), info: [T("pk.layout.i1"), T("pk.layout.i2")], go: setFair, change: setFair });
+    }
     if (tab === "gallery") {
       const setSort = d => { sort = state.sort = sort === "new" ? "plays" : "new"; loadGallery(); };
       fixed.push({ key: "sort", label: T("pk.order") + T("pk.sort." + sort), info: [T("pk.order.i")], go: () => setSort(1), change: setSort });
@@ -116,8 +137,11 @@ function show(ui, opts) {
     // (the selection kept - but not the row it fell on while the list was loading)
     const sel = ui.spec && keep && !ui.spec.items.some(x => x.key === "wait") ? ui.spec.items[ui.sel] : null;
     const it = sel ? all.find(x => x.key === sel.key) : all.find(x => x.map && x.map.rec && x.map.rec.id === opts.current)
+      || (cur && all.find(x => x.map && x.map.gen === cur.kind))
       || all.find(x => x.map && x.map.entry && x.map.entry.id === state.at) || all.find(x => x.map);
-    const pic = picOf(it && it.map ? it : null) || (it && it.map ? null : lastPic);
+    if (it && it.map && it.map.gen) state.genKind = it.map.gen;
+    // (on the Layout row: the kind chosen last, in the layout now)
+    const pic = picOf(it && it.map ? it : it && it.key === "layout" && state.genKind ? { map: { gen: state.genKind } } : null) || (it && it.map ? null : lastPic);
     lastPic = pic;
     const head = tab === "mine" ? row(T("map.h.name"), T("map.h.size"), T("map.h.bases")) : row(T("map.h.name"), T("pk.h.by"), T("pk.h.plays"));
     // (the info's row and the screen's rows stay where the longest list puts them: a list that loads or another tab

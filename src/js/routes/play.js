@@ -36,6 +36,8 @@ import { GameScreen } from "../io/screen.js";
 import { DosUI } from "../ui/dosui.js";
 import { MatchText } from "../draw/matchtext.js";
 import { MapStore } from "../net/mapstore.js";
+import { MapData } from "../game/mapdata.js";
+import { MapGen } from "../game/mapgen.js";
 import { Scope } from "../scope.js";
 export function mount() {
   const q = new URLSearchParams(location.search), lmap = q.get("lmap"), smap = q.get("map");
@@ -139,10 +141,14 @@ function run(mapRec) {
   const speaker = new Speaker();
   const keyboard = new Keyboard(window);
   const seed = ch ? ch.seed : (Math.random() * 0x100000000) >>> 0;   // (the challenge: the day's world)
+  // a generated map (?gen=gen:<kind>:<fair|natural>, mapgen.js): a new one every match, from its seed, for its tanks
+  const genId = !ch && !mapRec ? query.get("gen") : null, gen = MapGen.parse(genId);
+  const genMap = gen ? MapGen.make({ kind: gen.kind, size, bases: slots.length, seed, fair: gen.fair }) : null;
+  const mapCode = mapRec ? mapRec.code : genMap ? MapData.code(genMap) : null;
   // (escEnds: player 1's Esc ends the match as in the original - the extended engine ignores Esc online)
   // (a skirmish always runs the extended engine - owner, 2026-10-24; match: the engine plays the match only - no menu)
   const opts = { slots: slots.map(s => ({ color: s.color, team: s.team })), size, winScore, roundTime, friendlyFire: ff, escEnds: true, escPlayer: me,
-    autoStart: true, noInstructions: true, match: true, sight, extended: true, mode: gmode, goal, ...(mapRec ? { map: mapRec.code } : {}) };
+    autoStart: true, noInstructions: true, match: true, sight, extended: true, mode: gmode, goal, ...(mapCode ? { map: mapCode } : {}) };
   const engine = new TunnelerEngine(seed, JSON.parse(JSON.stringify(opts)));
   const kills = ch ? Challenge.track(engine) : null;      // (the challenge's result: the enemies you destroyed)
   // display only: views scroll sideways 1 pixel at a time (the homepage's Settings, "tunneler.smooth"; on unless "0";
@@ -185,7 +191,7 @@ function run(mapRec) {
       save("tunneler.cpu.slots", JSON.stringify(all)); save("tunneler.levels", "2");
       save("tunneler.cpu.size", size); save("tunneler.cpu.win", String(winScore)); save("tunneler.cpu.time", String(roundTime));
       save("tunneler.cpu.ff", ff ? "1" : "0"); save("tunneler.cpu.view", view); save("tunneler.cpu.watch", watchOut);
-      save("tunneler.cpu.sight", sight); save("tunneler.cpu.mode", gmode); save("tunneler.cpu.map", mapRec ? mapRec.id : "");
+      save("tunneler.cpu.sight", sight); save("tunneler.cpu.mode", gmode); save("tunneler.cpu.map", mapRec ? mapRec.id : genMap ? genId : "");
       if (gmode !== "standard" && goal) {
         let goals = {};
         try { goals = JSON.parse(localStorage.getItem("tunneler.cpu.goals") || "{}") || {}; } catch (e) { goals = {}; }

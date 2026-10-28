@@ -14,6 +14,7 @@ import { Login } from "../ui/login.js";
 import { MapData } from "../game/mapdata.js";
 import { MapPic } from "../draw/mappic.js";
 import { MapPick } from "../ui/mappick.js";
+import { MapGen } from "../game/mapgen.js";
 import { MapStore } from "../net/mapstore.js";
 import { Pads } from "../io/pads.js";
 import { GameScreen } from "../io/screen.js";
@@ -44,6 +45,8 @@ export function mount() {
   const MAP_COLS = 14;                                    // (a map's name in the Settings box: at most this wide)
   // a map's name and its number of bases ("Crossroads (6)" - owner, 2026-10-26)
   const mapLabel = rec => UniText.slice(UniText.fromRaw(rec.name), MAP_COLS) + (rec.bases ? " (" + rec.bases + ")" : "");
+  // a generated map's kind and layout ("Arena, fair")
+  const genLabel = g => T("gen.label", { kind: Lang.raw("gen." + g.kind), layout: Lang.raw("gen." + (g.fair ? "fair" : "natural")) });
   const step = (list, v, d) => list[(list.indexOf(v) + d + list.length) % list.length];
   // round time limit in minutes (engine option roundTime; 0 = no limit, the original)
   const TIMES = [0, 2, 3, 5, 10];
@@ -73,12 +76,13 @@ export function mount() {
   // line of sight (full / circle / walls): how much of the world around your tank you see live
   const SIGHTS = TunnelerEngine.SIGHTS || ["full"];
   let sight = SIGHTS.includes(load("tunneler.cpu.sight")) ? load("tunneler.cpu.sight") : "full";
-  // a custom map (docs/v6/MAPS.md): one of the maps kept in this browser (its local id; "" = a random world)
+  // a custom map (docs/v6/MAPS.md): one of the maps kept in this browser (its local id; "" = a random world), or a kind of
+  // generated map (mapgen.js: "gen:<kind>:<fair|natural>" - a new one every match)
   let cpuMap = load("tunneler.cpu.map", ""), cpuMaps = [], mapsLoaded = false;
   const mapRec = () => cpuMaps.find(r => r.id === cpuMap) || null;
   const loadMaps = () => MapStore.list().then(l => {
     cpuMaps = l; mapsLoaded = true;
-    if (cpuMap && !mapRec()) cpuMap = "";                // (deleted meanwhile: random)
+    if (cpuMap && !mapRec() && !MapGen.parse(cpuMap)) cpuMap = "";   // (deleted meanwhile: random)
     if (ui.spec && ui.spec.items && ui.spec.items.some(it => it.key === "map")) cpu(true);
   }, () => { mapsLoaded = true; });
   loadMaps();
@@ -618,7 +622,7 @@ export function mount() {
       for (const u of S.used) all[u.color] = { kind: u.kind, team: u.team };
       Nav.go(Links.cpu("g=" + CpuCode.encode({ slots: all, size: cpuSize, win: cpuWin, time: cpuTime, ff: ff && S.teamGame,
         view, watch: watchOut, sight, mode: gmode, goal: GOALS[gmode] ? goalOf(gmode) : undefined }) +
-        (rec ? "&lmap=" + rec.id + (MapStore.sharedHere(rec) ? "&map=" + rec.shared : "") : "")));   // (the map: this browser's copy, else the shared one)
+        (rec ? "&lmap=" + rec.id + (MapStore.sharedHere(rec) ? "&map=" + rec.shared : "") : MapGen.parse(cpuMap) ? "&gen=" + cpuMap : "")));   // (the map: this browser's copy, else the shared one)
     };
     // slot rows: "you                team 1", the who column padded to the longest text in this language,
     // each row in its tank's color (which is all that tells the colors apart - no color name)
@@ -664,18 +668,21 @@ export function mount() {
     const setMode = d => { gmode = step(MODE_LIST, gmode, d); redraw(); };
     // Left / Right: the next map that can be played; Enter: the map picker (your maps with their pictures, the
     // gallery - owner, 2026-10-28)
-    const setMap = d => { cpuMap = step([""].concat(cpuMaps.filter(r => !MapStore.playable(r) || r.id === cpuMap).map(r => r.id)), cpuMap, d); redraw(); };
+    const GEN = MapGen.KINDS.flatMap(k => [MapGen.id(k, true), MapGen.id(k, false)]);
+    const setMap = d => { cpuMap = step([""].concat(GEN, cpuMaps.filter(r => !MapStore.playable(r) || r.id === cpuMap).map(r => r.id)), cpuMap, d); redraw(); };
     const pickMap = () => MapPick.show(ui, { random: true, current: cpuMap, state: pickState, name: () => DosUI.playerName(),
+      gen: { size: cpuSize, bases: Math.max(2, S.used.length) },
       choose: async c => {
-        cpuMap = c.random ? "" : c.rec.id;
+        cpuMap = c.random ? "" : c.gen ? c.gen : c.rec.id;
         if (!c.random && !cpuMaps.some(r => r.id === cpuMap)) { try { cpuMaps = await MapStore.list(); } catch (e) { /* as it was */ } }
         saveCpu(); cpu(false, "map");
       },
       back: () => cpu(false, "map") });
     const options = [
       { key: "mode", label: T("lc.mode") + T("gm." + gmode), info: [T("gm." + gmode + ".i"), T("lc.mode.i")], go: () => setMode(1), change: setMode },
-      { key: "map", label: T("lc.map") + (rec ? mapLabel(rec) : T("lc.map.random")),
-        info: rec && rec.linked === false ? [{ text: T("lc.err.path"), color: 12 }, T("lc.map.i2")] : [T("lc.map.i1"), T("lc.map.i2")],
+      { key: "map", label: T("lc.map") + (rec ? mapLabel(rec) : MapGen.parse(cpuMap) ? genLabel(MapGen.parse(cpuMap)) : T("lc.map.random")),
+        info: rec && rec.linked === false ? [{ text: T("lc.err.path"), color: 12 }, T("lc.map.i2")]
+          : MapGen.parse(cpuMap) ? [T("gen." + MapGen.parse(cpuMap).kind + ".i"), T("gen.i2")] : [T("lc.map.i1"), T("lc.map.i2")],
         go: pickMap, change: setMap },
       // (a map has its own size: shown, grayed)
       // (owner, 2026-10-28: a setting that doesn't apply now - its value gray, the row selectable, its info says why)

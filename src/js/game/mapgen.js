@@ -90,7 +90,7 @@ function placeBases(map, n, fair, rnd) {
 }
 
 // the land of a kind (cells, before the bases' surroundings are cleared)
-function land(map, kind, rnd, seed) {
+function land(map, kind, rnd, seed, fair) {
   const { w, h, cells } = map, f = MapData.FRAME[map.size], k = w / 128;   // (k: the size's scale)
   const N = noise2(seed), set = (x, y, v) => { if (x >= 0 && y >= 0 && x < w && y < h) cells[y * w + x] = v; };
   cells.fill(DIRT);
@@ -153,11 +153,24 @@ function land(map, kind, rnd, seed) {
       }
       open.set(nx);
     }
-    // (the caverns' edges a little rough: the noise moves them by up to a cell)
-    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-      const j = N(x / 3 + 50, y / 3 + 50) > 0.5 ? 1 : 0, bx = Math.min(bw - 1, Math.floor((x + j) / B)), by = Math.min(bh - 1, Math.floor((y + j) / B));
-      if (open[by * bw + bx] && cells[y * w + x] !== ROCK) cells[y * w + x] = TUNNEL;
+    // each cell from its block, then rounded: a few majority passes at the cells' size (no square corners), the edges
+    // a little rough (noise)
+    let co = new Uint8Array(w * h);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) co[y * w + x] = open[Math.min(bh - 1, Math.floor(y / B)) * bw + Math.min(bw - 1, Math.floor(x / B))];
+    // (fair: the field point-symmetric before it is rounded - the caverns run on across the middle, no seam)
+    const sym = a => { if (fair) for (let i = 0; i < w * h; i++) { const j = w * h - 1 - i; if (i > j) a[i] = a[j]; } };
+    for (let it = 0; it < 3; it++) {
+      sym(co);
+      const nx = new Uint8Array(w * h);
+      for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) {
+        let c = 0;
+        for (let v = -2; v <= 2; v++) for (let u = -2; u <= 2; u++) { const yy = y + v, xx = x + u; if (yy >= 0 && xx >= 0 && yy < h && xx < w) c += co[yy * w + xx]; }
+        const sx = fair && y * w + x > (h - 1 - y) * w + (w - 1 - x) ? w - 1 - x : x, sy = sx !== x ? h - 1 - y : y;   // (symmetric jitter)
+        nx[y * w + x] = c + (N(sx / 2.5 + 50, sy / 2.5 + 50) - 0.5) * 6 > 12.5 ? 1 : 0;
+      }
+      co = nx;
     }
+    for (let i = 0; i < w * h; i++) if (co[i] && cells[i] !== ROCK) cells[i] = TUNNEL;
   }
 }
 
@@ -191,7 +204,7 @@ function make({ kind, size, bases, seed, fair }) {
     const s = ((seed >>> 0) + attempt * 0x9E3779B9) >>> 0, rnd = mulberry32(s);
     const map = MapData.blank(size, DIRT);
     if (!placeBases(map, n, fair, rnd)) continue;
-    land(map, kind, rnd, s);
+    land(map, kind, rnd, s, fair);
     const { w, h, cells } = map;
     // around every base: no rock within 3 cells of its walls (its doorways open), the base's own square dug by the
     // engine

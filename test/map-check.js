@@ -610,6 +610,29 @@ const ticks = async (n = 8) => { for (let i = 0; i < n; i++) await tick(); };
     assert(env2.win.tunnelerMapsUI().spec.lines.some(x => /404|doesn't work/.test(env2.win.Lang.decode(x.text)) || /work/.test(x.text)), "an error screen");
   });
 
+  await okAsync("a generated map (mapgen.js, 1.2): chosen on the skirmish's Map row, in Start's link (&gen=), a new map of the kind every match", async () => {
+    const env = makeEnv("/", "");
+    env.page("index.html");
+    const w = env.win, ui = w.tunnelerHomeUI();
+    await w.tunnelerHomeMaps();
+    ui.spec.items.find(it => it.key === "cpu").go();
+    const row = () => ui.spec.items.find(it => it.key === "map");
+    while (!w.Lang.decode(row().label).includes(w.Lang.raw("gen.arena"))) row().change(1);
+    assert.strictEqual(env.storage.get("tunneler.cpu.map"), "gen:arena:fair", "remembered: " + env.storage.get("tunneler.cpu.map"));
+    ui.spec.items.find(it => it.key === "play").go();
+    assert(/[?&]gen=gen(:|%3A)arena(:|%3A)fair/.test(w.location.href), "the link: " + w.location.href);
+    const codes = new Set();
+    for (let k = 0; k < 2; k++) {
+      const p = makeEnv("/skirmish", "?mode=cpu&slots=0:you:1,1:normal:2,2:easy:3&size=small&gen=gen:arena:fair");
+      p.page("play.html");
+      await ticks(6);
+      const e = p.win.tunnelerEngine && p.win.tunnelerEngine();
+      assert(e && e.customMap && e.customMap.name === "arena" && e.customMap.bases.length === 4 && e.size === "small", "a generated arena, 3 tanks: 4 bases (fair)");
+      codes.add(MapData.code(e.customMap));
+    }
+    assert.strictEqual(codes.size, 2, "another map for another match");
+  });
+
   await okAsync("a skirmish link with a map (&map=<shared id>): fetched, the engine plays it; a map that can't be had: a screen saying so", async () => {
     const m = testMap("small", 3), b = MapData.encode(m);
     const env = makeEnv("/skirmish", "?mode=cpu&slots=0:you:1,1:normal:2,2:easy:3&lmap=nothere123&map=abcdefgh23", { abcdefgh23: b });
@@ -633,6 +656,10 @@ const ticks = async (n = 8) => { for (let i = 0; i < n; i++) await tick(); };
     ui.spec.items.find(it => it.key === "cpu").go();
     const row = () => ui.spec.items.find(it => it.key === "map");
     assert(w.Lang.decode(row().label).includes(w.Lang.raw("lc.map.random")), "random first");
+    // (then the generated kinds - mapgen.js, 1.2: each fair, then natural)
+    row().change(1);
+    assert(w.Lang.decode(row().label).includes(w.Lang.raw("gen.fortress")) && w.Lang.decode(row().label).includes(w.Lang.raw("gen.fair")), "then the generated kinds: " + w.Lang.decode(row().label));
+    for (let k = 1; k < 8; k++) row().change(1);
     row().change(1);
     assert(w.Lang.decode(row().label).includes("Big one"), "then the map");
     assert(ui.spec.items.find(it => it.key === "size").valueAttr === 8 && !ui.spec.items.find(it => it.key === "size").change && w.Lang.decode(ui.spec.items.find(it => it.key === "size").label).includes(w.Lang.raw("lc.size.large")), "its size, its value grayed");
@@ -777,8 +804,8 @@ const ticks = async (n = 8) => { for (let i = 0; i < n; i++) await tick(); };
     await w.tunnelerHomeMaps();
     ui.spec.items.find(it => it.key === "cpu").go();
     // (Left / Right and the map picker skip it - owner, 2026-10-28: such a map can't be chosen)
-    ui.spec.items.find(it => it.key === "map").change(1);
-    assert.strictEqual(ui.spec.items.find(it => it.key === "map").label, T("lc.map") + T("lc.map.random"), "Left / Right skip it");
+    ui.spec.items.find(it => it.key === "map").change(-1);   // (from random backwards: past the maps, to the last generated kind)
+    assert(!w.Lang.decode(ui.spec.items.find(it => it.key === "map").label).includes("Split"), "Left / Right skip it");
     ui.spec.items.find(it => it.key === "map").go();
     await ticks(4);
     assert(!ui.spec.items.some(it => it.key === "m:" + split.id) && ui.spec.items.some(it => it.key === "none"), "the picker: not listed");

@@ -2,6 +2,21 @@
 import { Lang } from "../../js/text/lang.js";
 
 Lang.extend("en", {
+  "gen.fortress": "Fortresses",
+  "gen.arena": "Arena",
+  "gen.highlands": "Highlands",
+  "gen.caves": "Caves",
+  "gen.fair": "fair",
+  "gen.natural": "natural",
+  "gen.label": "{kind}, {layout}",
+  "gen.fortress.i": "Every base inside a ring of rock with gates; open dirt between.",
+  "gen.arena.i": "A great rock ring in the middle with four gates and an open plaza.",
+  "gen.highlands.i": "Ridges of rock across the land, the bases in the valleys.",
+  "gen.caves.i": "Caverns already dug out of the dirt: no digging before a fight.",
+  "gen.i2": "A new map of this kind for every match.",
+  "pk.layout": "Layout: ",
+  "pk.layout.i1": "Fair: the same for every base (symmetric). Natural: anything goes.",
+  "pk.layout.i2": "An odd number of tanks on a fair map: one base stays empty.",
   "home.maps": "Maps", "home.maps.i": "Make your own worlds, share them as links, play them.",
   // the list
   "map.title": "MAPS", "map.h.name": "NAME", "map.h.size": "SIZE", "map.h.bases": "BASES",
