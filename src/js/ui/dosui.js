@@ -20,6 +20,8 @@
 //                                                  mouse; e.g. a list of categories showing the chosen one)
 //   spec.fixed:  the last N items always stay visible below the scrolling ones (spec.lead: the first N above them -
 //                the phone layout: only the list between them scrolls)
+//   spec.side:   {x, y, w}                         (with box + fixed, not the phone layout) the fixed items in a box of
+//                their own there (separators left out) - the map picker's switches and Back under its picture
 //   spec.header: "text"                            non-selectable heading row inside the box (yellow)
 //   spec.text:   [{row, col, text, color}]         raw Unicode text (any language, not encoded for the
 //                                                  font; drawn through the Unicode plane), rows / cols 1-based
@@ -429,6 +431,14 @@ class DosUI {
     return out;
   }
   firstItemRow() { return this.spec.box.y + 1 + (this.spec.header ? 2 : 0); }   // 1-based
+  // spec.side (a single box's fixed items in a box of their own; not the phone layout) -> {x, y, w, items} or null
+  sideGeom() {
+    const s = this.spec;
+    if (!s || !s.side || s.boxes || !s.box || !s.fixed || this.isNarrow()) return null;
+    const n = s.items.length, items = [];
+    for (let i = n - s.fixed; i < n; i++) if (!s.items[i].separator) items.push(i);
+    return { x: s.side.x, y: s.side.y, w: s.side.w || DosUI.boxWidth(items.map(i => s.items[i])), items };
+  }
 
   // the highlight bar on item i: the selected one - on a phone / tablet (GameScreen.mobile) only while a finger
   // presses it, or once arrow keys move the selection (a keyboard / gamepad: keyNav) (owner, 2026-10-27: no item
@@ -635,7 +645,8 @@ class DosUI {
         row += 2;
       }
       let moreRow = 0;
-      for (let k = 0; k < shown.length; k++, row++) {
+      const side = this.sideGeom();
+      for (let k = 0; k < (side ? this.scrollRows : shown.length); k++, row++) {
         const i = shown[k], it = s.items[i];
         if (k === this.scrollRows) moreRow = row;
         if (it.separator) { line(row, "\xC3", "\xC4", "\xB4"); m.seps.push(row - 1); continue; }
@@ -648,6 +659,18 @@ class DosUI {
       t.textColor(frameColor());
       if (this.top > 0) { t.gotoXY(b.x + b.w - 1, b.y + (s.header ? 2 : 0)); t.write("\x18"); }
       if (this.top + this.scrollRows < this.scrollN) { t.gotoXY(b.x + b.w - 1, moreRow || row); t.write("\x19"); }
+      if (side) {                                        // (spec.side: the fixed items in their own box)
+        const sm = { c: side.x - 1, r: side.y - 1, c2: side.x + side.w, r2: 0, gaps: [], seps: [] };
+        t.textColor(frameColor());
+        t.gotoXY(side.x, side.y); t.write("\xDA" + "\xC4".repeat(side.w) + "\xBF");
+        let r = side.y + 1;
+        for (const i of side.items) { t.textColor(frameColor()); this.drawItem(i, r++, side); }
+        t.textColor(frameColor());
+        t.gotoXY(side.x, r); t.write("\xC0" + "\xC4".repeat(side.w) + "\xD9");
+        sm.r2 = r - 1;
+        ui.boxes.push(sm);
+        row = Math.max(row, r);
+      }
     }
     // the screen centred (centreRows) before the info is drawn: an info that comes and goes - a touch screen's
     // message, the description while a finger presses an item - lands in its place and moves nothing (owner,
@@ -1145,8 +1168,13 @@ class DosUI {
       }
       return -1;
     }
+    const side = this.sideGeom();
+    if (side) {
+      const k = c[1] + 1 - (side.y + 1), x = c[0] + 1 - side.x;
+      if (k >= 0 && k < side.items.length && x >= 0 && x <= side.w + 1) return this.enabled(side.items[k]) ? side.items[k] : -1;
+    }
     const b = this.geom(), k = c[1] + 1 - this.firstItemRow(), x = c[0] + 1 - b.x;
-    const shown = this.rowItems();
+    const shown = this.rowItems().slice(0, side ? this.scrollRows : undefined);
     if (k < 0 || k >= shown.length || x < 0 || x > b.w + 1) return -1;
     return this.enabled(shown[k]) ? shown[k] : -1;
   }

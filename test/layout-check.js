@@ -97,9 +97,14 @@ function check(win, ui, where) {
       boxes.push({ x: b.x, y: b.y, w: b.w, start: b.start, end: b.end, top: b.y, bottom: b.y + 1 + (b.end - b.start), title: b.title });
     }
   } else {
-    const g = ui.geom(), shown = ui.rowItems().length;
+    const g = ui.geom(), side = ui.sideGeom(), shown = ui.rowItems().length;
     if (!Number.isFinite(g.x) || !Number.isFinite(g.y)) bad("the box has no place");
-    else boxes.push({ x: g.x, y: g.y, w: g.w, start: 0, end: items.length, top: g.y, bottom: ui.firstItemRow() + shown });
+    else if (!side) boxes.push({ x: g.x, y: g.y, w: g.w, start: 0, end: items.length, top: g.y, bottom: ui.firstItemRow() + shown });
+    else {                                                 // (spec.side: the fixed items in a box of their own)
+      const n = items.length - s.fixed;
+      boxes.push({ x: g.x, y: g.y, w: g.w, start: 0, end: n, top: g.y, bottom: ui.firstItemRow() + ui.scrollRows });
+      boxes.push({ x: side.x, y: side.y, w: side.w, start: n, end: items.length, top: side.y, bottom: side.y + 1 + side.items.length, title: "side" });
+    }
   }
   // (wide screens: on the screen, apart, above the info and the rule)
   if (!narrow) {

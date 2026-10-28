@@ -150,6 +150,8 @@ function show(ui, opts) {
       const setSort = d => { sort = state.sort = sort === "new" ? "plays" : "new"; loadGallery(); };
       fixed.push({ key: "sort", label: T("pk.order") + T("pk.sort." + sort), info: [T("pk.order.i")], go: () => setSort(1), change: setSort });
     }
+    // (the side box as tall on every tab: your maps have no second switch)
+    if (tab === "mine" && !narrow()) fixed.push({ key: "pad", label: "", disabled: true });
     fixed.push({ key: "gap", label: "", disabled: true },
       { key: "back", label: T(opts.backLabel || "set.back"), info: [T(opts.backInfo || "pk.back.i")], go: () => { close(); opts.back(); } });
     const all = items.concat(fixed), shown = Math.min(narrow() ? 99 : ROWS, Math.max(1, items.length));
@@ -166,13 +168,18 @@ function show(ui, opts) {
     const head = tab !== "gallery" ? row(T("map.h.name"), T("map.h.size"), T("map.h.bases")) : row(T("map.h.name"), T("pk.h.by"), T("pk.h.plays"));
     // (the info's row and the screen's rows stay where the longest list puts them: a list that loads or another tab
     // moves nothing)
-    const y = 3, bottom = y + 3 + (narrow() ? shown : ROWS) + fixed.length;
+    // (a desktop / a phone held sideways: the switches and Back in a box of their own under the picture - owner,
+    // 2026-10-28; the phone layout: below the list)
+    // (the picture framed like the boxes - owner, 2026-10-28: rows y + 1 .. y + 5 in a frame from y to y + 6)
+    const y = 3, sideY = y + 7, sideN = fixed.filter(x => !x.separator).length;
+    const bottom = narrow() ? y + 3 + shown + fixed.length : Math.max(y + 3 + ROWS, sideY + 1 + sideN);
     ui.show({
       lines: [{ row: 2, text: T(opts.title || "pk.title"), color: 12 }],
       box: { x: 2, y, w: 46, rows: shown }, fixed: fixed.length, header: " " + head,
-      items: all, infoRow: bottom + 2, block: [2, bottom + 4],
+      items: all, infoRow: bottom + 2, block: [2, bottom + 4], side: { x: 50, y: sideY, w: 29 },
+      panels: narrow() ? [] : [{ x: 50, y, x2: 80, y2: y + 6 }],
       sel: Math.max(0, all.indexOf(it)),
-      pic: pic ? Object.assign({ row: y, col: 51, cols: 28, rows: 9 }, pic) : null,
+      pic: pic ? Object.assign({ row: y + 1, col: 51, cols: 29, rows: 5 }, pic) : null,
       onSel: i => { const x = ui.spec.items[i]; if (x && x.map) draw(true); },
       back: () => { close(); opts.back(); },
     }, keep && !!sel);
