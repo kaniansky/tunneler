@@ -29,6 +29,9 @@ those releases are tagged `online-vX.Y.Z`, their changes are in [docs/CHANGELOG-
 - Settings: Gameplay instead of Display - fullscreen, screen size, tank colors, the preferred color (from Online)
   and Save every match. Menu values start with a capital letter like their names (Map size: Medium, Computer (Easy),
   Team 2).
+- Generated maps (skirmish and online games): the Map setting can be a kind of world made anew for every match -
+  Fortresses, Arena, Highlands, Caves - with a fair layout (symmetric; an odd number of tanks gets a base more) or a
+  natural one. Teammates get bases near each other on every map. Instructions / Information explain them.
 - Map picker: Show generated maps (Original - the original game's random world -, Fortresses, Arena, Highlands,
   Caves; Layout), your maps or the gallery; the selected map's picture framed, with the switches and Back in a box
   under it. Making a new map can start from a generated world (its kind, bases and layout).

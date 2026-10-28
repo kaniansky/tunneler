@@ -368,6 +368,16 @@ function createServer(opts = {}) {
   // to agree again. Only in the lobby.
   async function setMap(room, id) {
     id = NetProto.mapId(id);
+    // a generated kind (1.2, "gen:<kind>:<layout>"): nothing to load - a new map of it every match (startMatch), at the
+    // room's size (which stays the host's to set)
+    if (NetProto.genMap(id)) {
+      room.mapWant = id;
+      if (room.match || room.map === id) return;
+      room.map = id; room.mapCode = ""; room.mapInfo = { id, gen: true };
+      unreadyAll(room);
+      sendStatus(room);
+      return;
+    }
     // (each id is a lookup in the store - the bucket: a request; at most MAP_LOADS_PER_MIN a room)
     const now = Date.now();
     room.mapLoads = (room.mapLoads || []).filter(t => now - t < 60000);
@@ -431,17 +441,19 @@ function createServer(opts = {}) {
   // bits, the clock. Classic (BLUE + GREEN players): the original frame format, runs only while both are
   // connected. Extended: runs from the start until it ends (a missing player's tank stands still).
   function startMatch(room) {
-    if (room.map) galleryPlayed(room.map);             // (a published map: one more play)
+    if (room.map && !NetProto.genMap(room.map)) galleryPlayed(room.map);   // (a published map: one more play)
     const slots = slotsNow(room);
     const ext = !isClassic(slots, room);
     for (const s of slots) if (!s.bot) { const ws = room.seats[s.color].occ; s.cid = ws.cid; s.name = ws.name; }
     // quick play: every tank has a computer player on every client (a human's takes over when the human leaves)
     if (room.qp) for (const s of slots) if (!s.level) s.level = room.seats[s.color].ai || NetProto.QUICK_LEVEL;
-    const N = slots.length;
+    const N = slots.length, seed = (Math.random() * 0x100000000) >>> 0;
+    // a generated kind: this match's own map, from its seed, with a base for every tank (MapGen; the clients get its code)
+    const genCode = NetProto.genMap(room.map) ? generatedMap(room.map, room.size, N, seed) : "";
     const m = {
-      room, no: ++room.matches, seed: (Math.random() * 0x100000000) >>> 0, ext, slots, qp: room.qp, drives: [],
+      room, no: ++room.matches, seed, ext, slots, qp: room.qp, drives: [],
       cfg: { ext, players: N, slots: slots.map(s => ({ color: s.color, bot: s.bot, level: s.level, team: s.team })),
-        names: slots.map(s => s.bot ? null : s.name), ...settingsOf(room), ...(room.qp ? { qp: true } : {}), map: room.mapCode || "" },
+        names: slots.map(s => s.bot ? null : s.name), ...settingsOf(room), ...(room.qp ? { qp: true } : {}), map: room.mapCode || genCode },
       log: new FrameLog(), socks: slots.map(s => s.bot ? null : room.seats[s.color].occ),
       held: new Array(N).fill(0), latch: new Array(N).fill(0), keys: [],
       running: false, timer: null, startAt: 0, startN: 0, hashes: new Map(), desyncs: 0, aloneTimer: null,
@@ -871,6 +883,13 @@ function createServer(opts = {}) {
       linkedCache.set(id, !!(r && r.ok));
     }
     return linkedCache.get(id);
+  }
+  // a generated kind's map for a match (mapgen.js - loaded with the engine on the first one): its code
+  let mapGen = null;
+  function generatedMap(id, size, n, seed) {
+    mapGen = mapGen || require("./src/js/game/mapgen.js").MapGen;
+    const g = mapGen.parse(id), map = g && mapGen.make({ kind: g.kind, size, bases: n, seed, fair: g.fair });
+    return map ? MapData.code(map) : "";
   }
   async function loadMap(id) {
     if (!NetProto.mapId(id)) return null;
@@ -1660,7 +1679,7 @@ function createServer(opts = {}) {
           let changed = false;
           if (msg.map !== undefined) setMap(room, msg.map).catch(() => {});   // (async: its own status when loaded)
           for (const k of Object.keys(SETTINGS)) {
-            if (msg[k] === undefined || (k === "size" && room.map)) continue;   // (a map has its own size)
+            if (msg[k] === undefined || (k === "size" && room.map && !NetProto.genMap(room.map))) continue;   // (a map has its own size; a generated one the room's)
             const v = SETTINGS[k](msg[k]);
             if (v !== undefined && v !== room[k]) { room[k] = v; changed = true; }
           }

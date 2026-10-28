@@ -47,7 +47,7 @@ export function mount() {
   // a map's name and its number of bases ("Crossroads (6)" - owner, 2026-10-26)
   const mapLabel = rec => UniText.slice(UniText.fromRaw(rec.name), MAP_COLS) + (rec.bases ? " (" + rec.bases + ")" : "");
   // a generated map's kind and layout ("Arena, fair")
-  const genLabel = g => T("gen.label", { kind: Lang.raw("gen." + g.kind), layout: Lang.raw("gen." + (g.fair ? "fair" : "natural")) });
+  const genLabel = g => T("gen.label", { kind: Lang.raw("gen." + g.kind), layout: Lang.lower(Lang.raw("gen." + (g.fair ? "fair" : "natural"))) });
   const step = (list, v, d) => list[(list.indexOf(v) + d + list.length) % list.length];
   // round time limit in minutes (engine option roundTime; 0 = no limit, the original)
   const TIMES = [0, 2, 3, 5, 10];

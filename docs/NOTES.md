@@ -1144,6 +1144,9 @@ page from before 2.0 - is refused (POST 409 `{code:
   day - `sweepBoards`), today + yesterday for `DAY_GRACE_MS` (2 h) after midnight; `opts.now` for tests. Dockerfile
   copies src/js + src/lang and the worker. Texts `src/lang/<code>/challenge.js` via `Lang.extend`, keys `ch.*`,
   `home.challenge(.i)`. Tests: test/challenge-check.js, layout-check / app-check screens.
+- **Generated maps** (1.2, docs/v6/MAPS.md 5b): `game/mapgen.js` kinds fortress / arena / highlands / caves, fair /
+  natural, a new map every match from its seed (skirmish `?gen=`, online: the server in `startMatch`); Original = the
+  original game's random world (`lc.map.random`, "" as before). Pictures `MapPick.preview`.
 - **Custom maps** (v6, docs/v6/MAPS.md; a map is played only when a tank can drive between ALL its bases - owner:
   `TunnelerEngine.mapReach(map)` -> {ok, groups, walled} on the world a match starts on (painted, openBase, bases
   drawn), the game's own per-direction sprites, an integral image + a flood (large ~60 ms); used by the editor

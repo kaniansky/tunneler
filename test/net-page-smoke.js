@@ -130,6 +130,18 @@ function loadPage(page, search, stored, version) {
     assert.strictEqual(cur(), "start", "the host's selection starts on Start game");
     assert(/Bob/.test(shown()) && /Zed/.test(shown()) && /Open/.test(shown()) && /AI \(Medium\)/.test(shown()) && /Closed/.test(shown()), "seats: " + shown());
     assert(/Watching: Watcher/.test(shown()) && /Map size: Medium/.test(shown()), "spectators and settings: " + shown());
+    // the Map row (the host): after Original the generated kinds (1.2 - the server makes one for every match), the size
+    // still the host's to set
+    {
+      const n = ws.sent.length;
+      lui.spec.items.find(it => it.key === "map").change(1);
+      assert(ws.sent.slice(n).some(m => m.t === "set" && m.map === "gen:fortress:fair"), "Right: Fortresses, fair");
+      ws.recv(mkSt({ settings: Object.assign({}, SETTINGS, { map: "gen:fortress:fair" }), map: { id: "gen:fortress:fair", gen: true } }));
+      await wait(150);
+      assert(/Map: Fortresses, fair/.test(shown()) && lui.spec.items.find(it => it.key === "size").change, "its name; Map size can change: " + shown());
+      ws.recv(mkSt());
+      await wait(150);
+    }
     press(env, "Enter");
     assert(!ws.sent.some(m => m.t === "start"), "no start while somebody isn't ready");
     assert(/every player is ready/.test(shown()), "why not: " + shown());

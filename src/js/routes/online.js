@@ -36,6 +36,7 @@ import { LiveStats } from "../ui/livestats.js";
 import { Lang } from "../text/lang.js";
 import { Login } from "../ui/login.js";
 import { MapData } from "../game/mapdata.js";
+import { MapGen } from "../game/mapgen.js";
 import { MapPic } from "../draw/mappic.js";
 import { MapPick } from "../ui/mappick.js";
 import { MapStore } from "../net/mapstore.js";
@@ -460,8 +461,12 @@ export function mount() {
   let myMaps = [], mapNote = null;
   MapStore.list().then(l => { myMaps = l; if (lobby && st) drawLobby(true); }, () => {});
   const MAP_COLS = 14;
+  // (then the generated kinds - 1.2: the server makes a new map of the kind every match - each fair, then natural)
+  const GEN_IDS = MapGen.KINDS.flatMap(k => [MapGen.id(k, true), MapGen.id(k, false)]);
+  const genLabel = g => T("gen.label", { kind: Lang.raw("gen." + g.kind), layout: Lang.lower(Lang.raw("gen." + (g.fair ? "fair" : "natural"))) });
+  const tanksNow = () => Math.max(2, st.seats.filter(x => x.kind !== "closed").length);
   function mapChoices() {
-    const id = st.settings.map || "", out = [{ id: "" }].concat(myMaps.map(r =>
+    const id = st.settings.map || "", out = [{ id: "" }].concat(GEN_IDS.map(g => ({ id: g })), myMaps.map(r =>
       // (sent to this server already - or the room's map: ids are the content's hash; null = to be sent first)
       ({ id: MapStore.sharedHere(r) || (id && r.shared === id ? id : null), rec: r })));
     if (id && !out.some(o => o.id === id)) out.push({ id, room: true });
@@ -472,6 +477,7 @@ export function mount() {
   function mapName() {
     const id = st.settings.map || "";
     if (!id) return T("os.map.random");
+    if (MapGen.parse(id)) return genLabel(MapGen.parse(id));
     const m = st.map && st.map.id === id ? st.map : myMaps.find(r => r.shared === id) || {};
     return m.name ? mapLabel(m.name, m.bases) : "...";
   }
@@ -507,10 +513,13 @@ export function mount() {
     lobby.page = "map";
     const cur = myMaps.find(r => r.shared && r.shared === st.settings.map);
     const back = () => { if (lobby && lobby.page === "map") drawLobby(false, "map"); };
-    MapPick.show(lobbyUI, { random: true, current: st.settings.map ? cur ? cur.id : "-" : "", state: pickState, name: () => DosUI.playerName(),
+    const gen = MapGen.parse(st.settings.map) ? st.settings.map : null;
+    MapPick.show(lobbyUI, { random: true, gen: { size: st.settings.size, bases: tanksNow() },
+      current: gen || (st.settings.map ? cur ? cur.id : "-" : ""), state: pickState, name: () => DosUI.playerName(),
       open: () => !!lobby && lobby.page === "map",
       choose: async c => {
         if (!lobby || lobby.page !== "map") return;
+        if (c.gen) { lobby.page = "lobby"; if (isHost() && !st.match) useMap({ id: c.gen }); drawLobby(false, "map"); return; }
         if (!c.random && !myMaps.some(r => r.id === c.rec.id)) {
           try { myMaps = await MapStore.list(); } catch (e) { /* as it was */ }
           if (!lobby || lobby.page !== "map") return;           // (closed / reconnected meanwhile)
@@ -532,9 +541,12 @@ export function mount() {
     const back = () => { if (lobby && lobby.page === "map") drawLobby(false, "map"); };
     const show = () => {
       if (!lobby || lobby.page !== "map" || !st) return;
-      const id = st.settings.map || "", tanks = Math.max(2, st.seats.filter(x => x.kind !== "closed").length);
+      const id = st.settings.map || "", tanks = tanksNow(), g = MapGen.parse(id);
       let pic = null, name = Lang.raw("os.map.random"), size = st.settings.size, n = tanks;
-      if (!id) pic = MapPick.preview("", size, tanks);
+      if (!id || g) {                                    // (a random world / a generated kind: an example)
+        pic = MapPick.preview(id, size, tanks);
+        if (g) { name = Lang.decode(genLabel(g)); n = g.fair && tanks % 2 ? tanks + 1 : tanks; }
+      }
       else {
         const m = roomMaps.get(id);
         if (m) { pic = MapPic.of(m); name = m.name; size = m.size; n = m.bases.length; }
@@ -696,7 +708,7 @@ export function mount() {
           : [T("os.map.i1"), T("os.map.i2")], d => stepMap(d)),
         // (not the host: a row to pick - Enter shows the map, owner 2026-10-28)
         host ? { go: pickMap } : { static: false, attr: 5, info: [T("os.map.view.i")], go: viewMap }),
-      s.map ? row("size", T("os.size") + T("os.size." + (st.map && st.map.id === s.map ? st.map.size : s.size)), null, null, "lc.size.map")
+      s.map && !MapGen.parse(s.map) ? row("size", T("os.size") + T("os.size." + (st.map && st.map.id === s.map ? st.map.size : s.size)), null, null, "lc.size.map")
         : row("size", T("os.size") + T("os.size." + s.size), [T("os.size.i1"), T("os.size.i2")], d => setSetting("size", cycle(SIZES, s.size, d))),
       // (a mode with a goal - gold, waves, kills...: the goal instead of rounds to win, one round decides it)
       NetProto.GOALS[mode]

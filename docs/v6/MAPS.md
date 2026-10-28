@@ -226,6 +226,25 @@ an older server answers 404 - the pages say "This server has no map gallery" and
   asks twice), Back. A map's screen: **Publish to the gallery** (gray with the reason while the map can't be played;
   publishing asks to log in / for a name first; unsaved changes are settled first) / Remove from the gallery.
 
+## 5b. Generated maps (1.2, owner 2026-10-28)
+
+`src/js/game/mapgen.js` (`MapGen`): `make({kind, size, bases, seed, fair})` -> a map (MapData), deterministic from the
+seed (mulberry32, value-noise fbm), every base reachable (`TunnelerEngine.mapReach`, passages dug until it is).
+Kinds (`KINDS`): **fortress** (every base in a ring of rock with gates, open dirt between), **arena** (a great rock
+ring in the middle, four gates, an open plaza), **highlands** (ridges of rock, the bases in the valleys), **caves**
+(caverns already dug out: a cellular automaton on blocks). Layout **fair** (point-symmetric map, bases in symmetric
+pairs on an ellipse - an odd number of tanks gets one base more, `symmetric(map, open)` after the passages) or
+**natural** (the best spread of 8 tries). Ids `gen:<kind>:<fair|natural>` (`MapGen.id` / `parse`; NetProto.mapId
+accepts them, `NetProto.genMap(id)`). The engine deals teammates bases near each other (`groupTeams`, any map).
+A new map **every match**: skirmish `?gen=<id>` (play.js: from the match's seed, a base per tank); online the room's
+Map setting may be an id - the server makes the match's map in `startMatch` from the match's seed (`generatedMap`,
+mapgen.js loaded with the engine on the first) and sends its code in `cfg.map` like a shared map's; the room's size
+stays the host's to set (`st.map = {id, gen: true}`). Pictures: `MapPick.preview(choice, size, bases)` - an example
+of a kind (seed 1) or of the original game's random world (`randomPic`: the engine's own generator, its bases after
+the start), kept. The picker's **Show** (generated maps: Original + the kinds + Layout / your maps / the gallery),
+the editor's New map **Start from** a kind (+ Bases, Layout). Tests: mapgen-check, map-check, net-sim ("generated
+map online"), net-page-smoke.
+
 ## 6. Playing a map
 
 **Skirmish** (home.js, `/#cpu`): a Settings row **Map: random / <name>** (Enter / a click: the map picker -

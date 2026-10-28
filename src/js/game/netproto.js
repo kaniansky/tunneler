@@ -144,9 +144,11 @@ const cleanRecovery = s => String(s == null ? "" : s).toUpperCase().replace(/[\s
 const AFTER_DEATH = ["black", "wreck", "team", "killer", "others"];
 const afterDeath = v => v === true || v === "1" ? "others" : AFTER_DEATH.includes(v) ? v : "wreck";
 
-// a shared map's id (POST /api/maps: the content's hash, docs/v6/MAPS.md); "" = no map (a random world)
-const MAP_ID = /^[a-z2-9]{10}$/;
-const mapId = v => typeof v === "string" && MAP_ID.test(v) ? v : "";
+// a shared map's id (POST /api/maps: the content's hash, docs/v6/MAPS.md), or a generated kind's (1.2, mapgen.js
+// MapGen.id: the server makes a new map of it for every match, from the match's seed); "" = no map (a random world)
+const MAP_ID = /^[a-z2-9]{10}$/, GEN_ID = /^gen:(fortress|arena|highlands|caves):(fair|natural)$/;
+const mapId = v => typeof v === "string" && (MAP_ID.test(v) || GEN_ID.test(v)) ? v : "";
+const genMap = v => typeof v === "string" && GEN_ID.test(v);
 
 // a round time limit setting: one of ROUND_TIMES, else 0 (no limit)
 const roundTime = v => ROUND_TIMES.includes(Number(v)) ? Number(v) : 0;
@@ -431,7 +433,7 @@ const NetProto = { TICK_MS, UP, DOWN, LEFT, RIGHT, FIRE, ESC, ALL_BITS, EXT_BITS
   AFTER_DEATH, afterDeath, ROLES, roleIndex, sameGame, MAX_SLOTS, LEVELS, oldLevel, SEAT_KINDS, SIZES, MAX_PLAYER_NAME, MAX_CHAT, VISIBLE, SIGHTS, ROUND_TIMES, roundTime,
   cleanPlayerName, cleanChat, cleanRoomName, MAX_PASSWORD, cleanPassword,
   RESERVED_NAMES, usernameKey, cleanUsername, MAX_USERNAME, MIN_ACCOUNT_PASSWORD, MAX_ACCOUNT_PASSWORD, passwordProblem, RECOVERY_ALPHABET, cleanRecovery, SETTINGS, defaultSeats, roomSettings, matchSlots, startProblem, isClassic, engineOptions, readCfg,
-  MODES, OWN_TEAMS, GOALS, goalOf, QUICK_TANKS, QUICK_LEVEL, quickSettings, aiSlot, readDrives, botInputs, MAP_ID, mapId,
+  MODES, OWN_TEAMS, GOALS, goalOf, QUICK_TANKS, QUICK_LEVEL, quickSettings, aiSlot, readDrives, botInputs, MAP_ID, mapId, genMap,
   frameToInput, frameToInputExt, FrameLog, FrameQueue, HASH_EVERY, stateHash };
 
 export { NetProto };

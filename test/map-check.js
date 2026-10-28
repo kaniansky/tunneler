@@ -674,7 +674,7 @@ const ticks = async (n = 8) => { for (let i = 0; i < n; i++) await tick(); };
     assert(w.Lang.decode(row().label).includes(w.Lang.raw("lc.map.random")), "random first");
     // (then the generated kinds - mapgen.js, 1.2: each fair, then natural)
     row().change(1);
-    assert(w.Lang.decode(row().label).includes(w.Lang.raw("gen.fortress")) && w.Lang.decode(row().label).includes(w.Lang.raw("gen.fair")), "then the generated kinds: " + w.Lang.decode(row().label));
+    assert(w.Lang.decode(row().label).includes(w.Lang.raw("gen.fortress")) && w.Lang.decode(row().label).includes(w.Lang.lower(w.Lang.raw("gen.fair"))), "then the generated kinds: " + w.Lang.decode(row().label));
     for (let k = 1; k < 8; k++) row().change(1);
     row().change(1);
     assert(w.Lang.decode(row().label).includes("Big one"), "then the map");

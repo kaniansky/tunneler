@@ -12,6 +12,7 @@ const assert = require("assert");
 const WebSocket = require("ws");
 const { TunnelerEngine, NetProto, TunnelerAI, MapData } = require("./src.js");
 const { createServer } = require("../server.js");
+const { MapGen } = require("../src/js/game/mapgen.js");
 const { FrameQueue, frameToInput, frameToInputExt, stateHash, HASH_EVERY, UP, RIGHT, FIRE, engineOptions } = NetProto;
 
 // computer players: the real ai.js when it has the N-player API, else a deterministic stand-in
@@ -608,6 +609,43 @@ async function main() {
     await settle();
     check("the map can't change during the match", () => assert.strictEqual(m1.status.settings.map, mapId));
     for (const c of [m1, m2, ms]) await c.close();
+  }
+
+  // ---------------------------------------------------------------- a generated map online (1.2, mapgen.js)
+  console.log("generated map online");
+  {
+    const gr = (await http(port, "POST", "/api/rooms", { name: "Gen room", size: "medium",
+      seats: [{ kind: "open", team: 1 }, { kind: "open", team: 2 }, { kind: "normal", team: 3 }] })).json;
+    const g1 = await new FakeClient(port, gr.id, { name: "G1", host: gr.hostKey }).connect();
+    const g2 = await new FakeClient(port, gr.id, { name: "G2" }).connect();
+    await until(() => g1.status && g1.status.seats.filter(x => x.k).length === 2, "seated (gen room)");
+    g1.send({ t: "set", map: "gen:arena:fair" });
+    await updated(g1, st => st.settings.map === "gen:arena:fair", "the generated kind set");
+    g1.send({ t: "set", size: "large" });
+    await updated(g1, st => st.settings.size === "large", "its size set");
+    check("a generated kind: the room's map, its size still the host's", () =>
+      assert(g1.status.settings.map === "gen:arena:fair" && g1.status.map && g1.status.map.gen && g1.status.settings.size === "large"));
+    g2.send({ t: "ready", v: 1 });
+    await updated(g1, st => st.cant === null, "can start (gen room)");
+    g1.send({ t: "start" });
+    await until(() => g1.match && g2.match, "gen match");
+    const gm = srv.rooms.get(gr.id).match;
+    const want = MapData.code(MapGen.make({ kind: "arena", size: "large", bases: 3, seed: gm.seed, fair: true }));
+    check("the match's own map: made from its seed (a new one every match), 3 tanks on a fair map - 4 bases, large", () => {
+      for (const c of [g1, g2]) {
+        assert.strictEqual(c.cfg.map, want, c.name + " cfg");
+        assert(c.engine.extended && c.engine.customMap && c.engine.size === "large" && MapData.decode(c.cfg.map).bases.length === 4, c.name + " engine");
+      }
+    });
+    g1.bits(UP | FIRE); g2.bits(RIGHT);
+    await until(() => g1.frames > 500, "gen frames", 60000);
+    g1.bits(0); g2.bits(0);
+    const gn = gm.log.length;
+    await until(() => [g1, g2].every(c => c.frames >= gn), "caught up (gen)");
+    for (const c of [g1, g2]) check(c.name + " matches the reference (gen)", () =>
+      assert.deepStrictEqual(fingerprint(reference(gm, c.frames)), fingerprint(c.engine)));
+    check("no desync (gen)", () => assert(![g1, g2].some(c => c.desync) && gm.desyncs === 0));
+    for (const c of [g1, g2]) await c.close();
   }
 
   // ---------------------------------------------------------------- kick, host handover, no spectators
