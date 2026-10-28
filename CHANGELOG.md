@@ -4,7 +4,7 @@ All notable changes to Tunneler. Versions follow [semantic versioning](https://s
 by pushing a version tag (see CONTRIBUTING.md). Up to its version 6.0.1 the game was called Tunneler Online:
 those releases are tagged `online-vX.Y.Z`, their changes are in [docs/CHANGELOG-online.md](docs/CHANGELOG-online.md).
 
-## Unreleased
+## 1.1.6
 
 - Hosting: each kind of data the server keeps - shared replays, shared maps, accounts, the daily leaderboards, the
   games handed over on a restart - in a bucket of its own (`S3_ENDPOINT`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`,
@@ -74,7 +74,8 @@ those releases are tagged `online-vX.Y.Z`, their changes are in [docs/CHANGELOG-
   browser's "context lost") no longer leaves the screen black.
 - Map gallery: at most 50 maps published a day from one address; a gallery index that can't be read is reported, never
   overwritten.
-- Plays together with 1.1.0 - 1.1.5: nothing in the game changed.
+- Plays together with 1.1.0 - 1.1.5: online games and replays play exactly as before (only split screen, a local game,
+  now runs the skirmish's rules).
 
 ## 1.1.5
 
