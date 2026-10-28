@@ -1159,12 +1159,40 @@ class TunnelerEngine {
       }
       if (ok) break;
     }
+    this.groupTeams();
     this.baseMinDist = minDist;
     this.baseCarved = 0;
     for (let i = 1; i <= N; i++) this.baseCarved += this.openBase(this.baseX[i], this.baseY[i]);
     this.modeScore = new Array(N + 1).fill(0);      // the game mode's score per player (gold, points, kills...)
     this.GS = {};
     if (this.GM && this.GM.init) this.GM.init(this);
+  }
+
+  // Teammates on bases near each other (owner, 2026-10-28, 1.2: "team players should be closer together"): the bases as
+  // dealt (their order - the RNG's), then each team in turn (the biggest first, then by number) takes the first base
+  // still free and, for its other tanks, the free ones nearest to it. No RNG: everyone for themselves deals as before.
+  groupTeams() {
+    const N = this.nPlayers;
+    if (!this.teams || !this.nTeams) return;
+    const teams = [];
+    for (let t = 0; t < this.nTeams; t++) teams.push(this.teamMembers(t));
+    if (!teams.some(m => m.length > 1)) return;
+    const pos = [];
+    for (let p = 1; p <= N; p++) pos.push([this.baseX[p], this.baseY[p]]);
+    const free = pos.map((b, i) => i), got = [];
+    teams.map((m, t) => [m, t]).sort((a, b) => b[0].length - a[0].length || a[1] - b[1]).forEach(([m]) => {
+      if (!m.length) return;
+      const a = free.shift();
+      got[m[0]] = a;
+      for (const p of m.slice(1)) {
+        let k = 0;
+        for (let i = 1; i < free.length; i++)
+          if (Math.max(Math.abs(pos[free[i]][0] - pos[a][0]), Math.abs(pos[free[i]][1] - pos[a][1])) <
+              Math.max(Math.abs(pos[free[k]][0] - pos[a][0]), Math.abs(pos[free[k]][1] - pos[a][1]))) k = i;
+        got[p] = free.splice(k, 1)[0];
+      }
+    });
+    for (let p = 1; p <= N; p++) if (got[p] !== undefined) { this.baseX[p] = pos[got[p]][0]; this.baseY[p] = pos[got[p]][1]; }
   }
 
   // A custom map's bases (docs/v6/MAPS.md): N of its K bases, drawn with the engine's RNG (a partial

@@ -318,7 +318,7 @@ function doorwayOut(e, p, side) {
 }
 
 // ------------------------------------------------------------------ 5. matches
-const FRAME_CAP = quick ? 80000 : 160000;
+const FRAME_CAP = quick ? 120000 : 160000;   // (1.2, teammates on bases near each other: "4 teams of 2" took 90 621)
 function match(seed, opts, label) {
   const a = startEngine(seed, opts), b = startEngine(seed, opts);
   const N = a.nPlayers, drv = new Driver(seed, N), ws = a.winScore;

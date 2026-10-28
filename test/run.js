@@ -22,6 +22,7 @@ const TESTS = [
   "quickplay-sim.js",
   "accounts-check.js",
   "cloudsave-check.js",
+  "mapgen-check.js",
   "accounts-page-check.js",
   "ai-sim.js quick",
   "compare-wasm.js",
