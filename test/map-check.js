@@ -491,7 +491,8 @@ const ticks = async (n = 8) => { for (let i = 0; i < n; i++) await tick(); };
     await ticks();
     const ui2 = env2.win.tunnelerMapsUI();
     ui2.spec.items.find(it => it.key === "new").go();
-    ui2.spec.items.find(it => it.key === "from").change(-1);         // (dirt, rock, empty, random: back = random)
+    for (let k = 0; k < 3; k++) ui2.spec.items.find(it => it.key === "from").change(1);   // (dirt, rock, empty, random, the generated kinds)
+    assert(!ui2.spec.items.some(it => it.key === "bases"), "a random world: no Bases row");
     ui2.spec.items.find(it => it.key === "create").go();
     await ticks();
     const ed2 = env2.win.tunnelerMapEditor(), n = [0, 0, 0];
@@ -508,6 +509,21 @@ const ticks = async (n = 8) => { for (let i = 0; i < n; i++) await tick(); };
       const m3 = env3.win.tunnelerMapEditor().map, mid = m3.cells[(m3.h >> 1) * m3.w + (m3.w >> 1)];
       assert(mid === want && m3.cells.every(v => v === want || v === MapData.ROCK), "start from " + (want === MapData.ROCK ? "rock" : "empty"));
     }
+    // a generated world (owner, 2026-10-28): a kind (mapgen.js), Bases and Layout rows; fair: an even number, symmetric
+    const env4 = makeEnv("/maps"); env4.page("maps.html"); await ticks();
+    const ui4 = env4.win.tunnelerMapsUI(), row = k => ui4.spec.items.find(it => it.key === k);
+    row("new").go();
+    for (let k = 0; k < 5; k++) row("from").change(1);              // (dirt -> rock, empty, random, Fortresses, Arena)
+    assert(/Arena/.test(env4.win.Lang.decode(row("from").label)) && row("bases") && row("layout"), "Start from: Arena, Bases, Layout");
+    row("bases").change(1);
+    assert(/: 4$/.test(env4.win.Lang.decode(row("bases").label)), "fair: bases in pairs (2 -> 4): " + JSON.stringify(env4.win.Lang.decode(row("bases").label)));
+    row("layout").change(1); row("bases").change(1);
+    assert(/: 5$/.test(env4.win.Lang.decode(row("bases").label)), "natural: one more");
+    row("layout").change(1);
+    assert(/: 6$/.test(env4.win.Lang.decode(row("bases").label)), "fair again: an even number");
+    row("create").go(); await ticks();
+    const m4 = env4.win.tunnelerMapEditor().map;
+    assert(m4.bases.length === 6 && m4.cells.every((v, i) => v === m4.cells[m4.cells.length - 1 - i]), "a fair arena with 6 bases, point-symmetric");
   });
 
   await okAsync("the editor by pointer: a base dragged to another spot (and back where it can't go), two fingers move the view and paint nothing", async () => {

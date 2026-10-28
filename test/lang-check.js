@@ -234,5 +234,17 @@ if (Lang.code !== "en") fail("pirate", "Lang.set(\"pirate\") gives " + Lang.code
   }
   if (all[0] !== "en/index.js") fail("en", "src/lang/index.js must import English first (the fallback)");
 }
+// a text key given twice in a language's files (the later one wins silently - a new key named like an old one)
+for (const c of fs.readdirSync(path.join(SRC, "lang")).filter(d => fs.statSync(path.join(SRC, "lang", d)).isDirectory())) {
+  const seen = new Map(), dir = path.join(SRC, "lang", c);
+  const files = fs.readdirSync(dir).filter(f => f.endsWith(".js")).map(f => path.join(dir, f));
+  for (const f of files) {
+    const re = /^\s*"([a-z][\w.-]*\.[\w.-]+)":/gm;
+    for (let m; (m = re.exec(fs.readFileSync(f, "utf8"))); ) {
+      const where = path.basename(f);
+      if (seen.has(m[1])) fail(c, m[1] + " twice (" + seen.get(m[1]) + ", " + where + ")"); else seen.set(m[1], where);
+    }
+  }
+}
 console.log(bad ? bad + " problem(s)" : "all languages fit");
 process.exit(bad ? 1 : 0);

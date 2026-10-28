@@ -17,6 +17,7 @@ import { TunnelerEngine } from "../game/engine.js";
 import { Lang } from "../text/lang.js";
 import { Login } from "../ui/login.js";
 import { MapData } from "../game/mapdata.js";
+import { MapGen } from "../game/mapgen.js";
 import { MapPic } from "../draw/mappic.js";
 import { MapPick } from "../ui/mappick.js";
 import { MapStore } from "../net/mapstore.js";
@@ -143,19 +144,32 @@ export function mount() {
   let fileNote = null;                                     // {id, text, color}: what Save as a file did (Android)
 
   // ------------------------------------------------------------ a new map
-  const form = { name: { value: "", max: MapData.MAX_NAME, width: MapData.MAX_NAME }, size: "medium", from: "dirt" };
+  const form = { name: { value: "", max: MapData.MAX_NAME, width: MapData.MAX_NAME }, size: "medium", from: "dirt", bases: 2, fair: true };
+  // (owner, 2026-10-28: also a generated world - mapgen.js's kinds, with its bases and layout - to change in the editor)
+  const FROM = ["dirt", "rock", "empty", "random"].concat(MapGen.KINDS);
   const step = (arr, v, d) => arr[(arr.indexOf(v) + d + arr.length) % arr.length];
   function newMap(keep) {
     form.name.placeholder = T("map.ph.name");
     const setSize = d => { form.size = step(MapData.SIZES, form.size, d); newMap(true); };
     // (owner, 2026-10-26: also rock everywhere and empty - the editor's "Fill everything with" is gone)
-    const setFrom = d => { form.from = step(["dirt", "rock", "empty", "random"], form.from, d); newMap(true); };
+    const setFrom = d => { form.from = step(FROM, form.from, d); newMap(true); };
+    const gen = MapGen.KINDS.includes(form.from);
+    // (a fair layout: bases in pairs - an even number)
+    const even = () => { if (form.fair && form.bases % 2) form.bases = Math.min(MapData.MAX_BASES, form.bases + 1); };
+    const setBases = d => { const k = form.fair ? 2 : 1; form.bases = Math.max(2, Math.min(MapData.MAX_BASES, form.bases + d * k)); even(); newMap(true); };
+    const setFair = () => { form.fair = !form.fair; even(); newMap(true); };
+    const genRows = !gen ? [] : [
+      { key: "bases", label: T("map.gen.bases") + form.bases, info: [T("map.gen.bases.i")], go: () => setBases(form.bases >= MapData.MAX_BASES ? -99 : 1), change: setBases },
+      { key: "layout", label: T("pk.layout") + T("gen." + (form.fair ? "fair" : "natural")), info: [T("pk.layout.i1")], go: setFair, change: setFair },
+    ];
     ui.show({
-      lines: [{ row: 2, text: T("map.new.title"), color: 12 }], box: { y: 7 }, infoRow: 18, back: () => showList(),
+      lines: [{ row: 2, text: T("map.new.title"), color: 12 }], box: { y: 6 }, infoRow: 18, back: () => showList(),
       items: [
         { key: "name", label: T("map.name"), input: form.name, align: "left", info: [T("map.name.i")], go: () => create() },
         { key: "size", label: T("lc.size") + T("lc.size." + form.size), info: [T("map.size.i")], go: () => setSize(1), change: setSize },
-        { key: "from", label: T("map.from") + T("map.from." + form.from), info: [T("map.from.i")], go: () => setFrom(1), change: setFrom },
+        { key: "from", label: T("map.from") + T(gen ? "gen." + form.from : "map.from." + form.from), info: [T("map.from.i"), ...(gen ? [T("gen." + form.from + ".i")] : [])],
+          go: () => setFrom(1), change: setFrom },
+        ...genRows,
         { key: "gap", label: "", disabled: true },
         { key: "create", label: T("map.create"), info: [T("map.create.i")], go: () => create() },
         { key: "gap2", label: "", disabled: true },
@@ -171,7 +185,9 @@ export function mount() {
     return MapData.fromWorld(size, g.world, g.ws);
   }
   async function create() {
-    const map = form.from === "random" ? randomWorld(form.size) : MapData.blank(form.size, { rock: MapData.ROCK, empty: MapData.TUNNEL }[form.from]);
+    const map = form.from === "random" ? randomWorld(form.size)
+      : MapGen.KINDS.includes(form.from) ? MapGen.make({ kind: form.from, size: form.size, bases: form.bases, seed: (Math.random() * 0x100000000) >>> 0, fair: form.fair })
+      : MapData.blank(form.size, { rock: MapData.ROCK, empty: MapData.TUNNEL }[form.from]);
     map.name = MapData.cleanName(form.name.value) || Lang.raw("map.ph.name");
     // (no bases: the player places them - owner, 2026-10-25; a map needs MapData.MIN_BASES to be played)
     form.name.value = "";

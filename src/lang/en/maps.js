@@ -46,7 +46,9 @@ Lang.extend("en", {
   "map.from.rock": "rock everywhere",
   "map.from.empty": "empty",
   "map.from.random": "a random world",
-  "map.from.i": "Dirt or rock everywhere, empty, or a world made the way the game makes its own.",
+  "map.from.i": "Dirt or rock everywhere, empty, the original game's world or a generated one.",
+  "map.gen.bases": "Bases: ",
+  "map.gen.bases.i": "How many bases the generated world gets (fair: an even number).",
   "map.create": "Create the map",
   "map.create.i": "Then paint it. Your maps are kept in this browser.",
   // a map's screen
