@@ -35,6 +35,8 @@ import { Keyboard } from "../io/input.js";
 import { LiveStats } from "../ui/livestats.js";
 import { Lang } from "../text/lang.js";
 import { Login } from "../ui/login.js";
+import { MapData } from "../game/mapdata.js";
+import { MapPic } from "../draw/mappic.js";
 import { MapPick } from "../ui/mappick.js";
 import { MapStore } from "../net/mapstore.js";
 import { NetProto } from "../game/netproto.js";
@@ -521,6 +523,41 @@ export function mount() {
       back });
   }
 
+  // Enter on the Map row (not the host: the host's opens the picker): the room's map as a picture, framed; a random world:
+  // an example of one (MapPick.preview); a shared map fetched from the server once (owner, 2026-10-28)
+  const roomMaps = new Map();                             // shared id -> the decoded map (null while it loads)
+  function viewMap() {
+    if (!st || !lobby) return;
+    lobby.page = "map";
+    const back = () => { if (lobby && lobby.page === "map") drawLobby(false, "map"); };
+    const show = () => {
+      if (!lobby || lobby.page !== "map" || !st) return;
+      const id = st.settings.map || "", tanks = Math.max(2, st.seats.filter(x => x.kind !== "closed").length);
+      let pic = null, name = Lang.raw("os.map.random"), size = st.settings.size, n = tanks;
+      if (!id) pic = MapPick.preview("", size, tanks);
+      else {
+        const m = roomMaps.get(id);
+        if (m) { pic = MapPic.of(m); name = m.name; size = m.size; n = m.bases.length; }
+        else {
+          name = st.map && st.map.id === id ? st.map.name : "...";
+          if (!roomMaps.has(id)) {
+            roomMaps.set(id, null);
+            fetch(Endpoint.api("/api/maps/" + id)).then(r => r.ok ? r.arrayBuffer() : null).then(b => {
+              const d = b ? MapData.decode(new Uint8Array(b)) : null;
+              if (d) roomMaps.set(id, d); else roomMaps.delete(id);
+              show();
+            }, () => roomMaps.delete(id));
+          }
+        }
+      }
+      lobbyUI.show({ text: [{ row: 2, text: name || "?", color: 12 }], panels: [{ x: 2, y: 3, x2: 79, y2: 18 }],
+        pic: pic ? Object.assign({ row: 4, col: 3.3, cols: 75.4, rows: 14, bleed: 0.3 }, pic) : null,
+        box: { y: 19 }, infoRow: 23, back,
+        items: [{ key: "back", label: T("set.back"), info: [T(n === 1 ? "map.info.one" : "map.info", { size: Lang.lower(Lang.raw("lc.size." + size)), n })], go: back }] });
+    };
+    show();
+  }
+
   function seatSet(i, change) {
     if (!st || !isHost() || st.match) return;
     Object.assign(st.seats[i], change);
@@ -656,7 +693,9 @@ export function mount() {
       Object.assign(row("map", T("os.map") + (mapNote ? mapLabel(mapNote.rec.name, mapNote.rec.bases) : mapName()),
         mapNote ? [{ text: mapNote.text, color: mapNote.color }]
           : st.map && st.map.id === s.map && st.map.linked === false ? [{ text: T("os.map.cut"), color: 12 }, T("os.map.i1")]   // (the server's check)
-          : [T("os.map.i1"), T("os.map.i2")], d => stepMap(d)), host ? { go: pickMap } : {}),
+          : [T("os.map.i1"), T("os.map.i2")], d => stepMap(d)),
+        // (not the host: a row to pick - Enter shows the map, owner 2026-10-28)
+        host ? { go: pickMap } : { static: false, attr: 5, info: [T("os.map.view.i")], go: viewMap }),
       s.map ? row("size", T("os.size") + T("os.size." + (st.map && st.map.id === s.map ? st.map.size : s.size)), null, null, "lc.size.map")
         : row("size", T("os.size") + T("os.size." + s.size), [T("os.size.i1"), T("os.size.i2")], d => setSetting("size", cycle(SIZES, s.size, d))),
       // (a mode with a goal - gold, waves, kills...: the goal instead of rounds to win, one round decides it)

@@ -32,6 +32,10 @@ those releases are tagged `online-vX.Y.Z`, their changes are in [docs/CHANGELOG-
 - Map picker: Show generated maps (Original - the original game's random world -, Fortresses, Arena, Highlands,
   Caves; Layout), your maps or the gallery; the selected map's picture framed, with the switches and Back in a box
   under it. Making a new map can start from a generated world (its kind, bases and layout).
+- The skirmish lobby always shows the map (an example of the original game's world or of a generated kind; your
+  map), framed. In an online game's lobby the Map row shows the map to everybody (<ENTER>); the host's still opens
+  the map picker.
+- Split screen's info on the main menu shows the keys as set in Settings, Controls.
 - After death with one view (View: self) and After death: teammates / others, your left / right keys (Settings,
   Controls) or a tap near the side of the screen switch which tank you watch.
 - Capture the flag: the flag pole is white again (pink since the new tank colours).

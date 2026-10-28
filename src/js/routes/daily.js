@@ -28,7 +28,7 @@ const LAST = "tunneler.challenge.last";                  // {day, id, result, se
 // the challenge in up to 4 lines (font text): the mode (+ its goal), the map / rounds / round time, the opponents,
 // line of sight / friendly fire (only when on)
 export function challengeLines(cfg) {
-  const T = Lang.t, levelName = l => Lang.raw("level." + l);
+  const T = Lang.t, levelName = l => Lang.lower(Lang.raw("level." + l));
   const out = [T("lc.mode") + T("gm." + cfg.mode) + (cfg.goal ? "   " + T("goal." + cfg.mode) + (cfg.mode === "infection" ? T("time.n", { n: cfg.goal }) : cfg.goal) : "")];
   out.push(T("lc.size") + T("lc.size." + cfg.size) + (cfg.winScore > 1 ? "   " + T("lc.win") + cfg.winScore : "") + "   " + T("lc.time") + T("time.n", { n: cfg.roundTime }));
   const foes = cfg.slots.filter(s => s.level !== null && s.team !== 1), mate = cfg.slots.find(s => s.level !== null && s.team === 1);

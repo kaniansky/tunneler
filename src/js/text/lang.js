@@ -206,6 +206,8 @@ export const Lang = {
   decode, decodeByte: b => decode(String.fromCharCode(b)),
   codes: CODES, get code() { return code; }, set, t, enc, apply, register, extend, title, version, modeTexts, modeData: MODE_TEXTS,
   name: c => enc(L[c].name), next: () => CODES[(CODES.indexOf(code) + 1) % CODES.length],
+  // a value (they start with a capital letter, like their names - owner, 2026-10-28) inside a sentence
+  lower: s => s ? s.charAt(0).toLocaleLowerCase() + s.slice(1) : s,
   raw: (key, c) => (L[c || code] || {})[key] !== undefined ? L[c || code][key] : (L.en || {})[key], data: L,
   colorKeys: COLOR_KEYS,
   // a room's settings, one short text each: map size, rounds to win, friendly fire (always: the teams

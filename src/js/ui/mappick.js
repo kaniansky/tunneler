@@ -137,7 +137,7 @@ function show(ui, opts) {
         const bad = MapStore.playable(r);
         items.push({ key: "m:" + r.id, label: row(r.name, sizeText(r.size), String(r.bases)), align: "left", map: { rec: r },
           attr: bad ? 0x08 : 0, spans: bad ? null : spans(),
-          info: [T(r.bases === 1 ? "map.info.one" : "map.info", { size: sizeText(r.size), n: r.bases }), bad ? { text: why(r), color: 12 } : T("pk.mine.i")],
+          info: [T(r.bases === 1 ? "map.info.one" : "map.info", { size: Lang.lower(sizeText(r.size)), n: r.bases }), bad ? { text: why(r), color: 12 } : T("pk.mine.i")],
           go: () => choose(items.find(x => x.key === "m:" + r.id)) });
       }
     } else {
@@ -146,7 +146,7 @@ function show(ui, opts) {
       else if (!gal.length) items.push({ key: "none", label: T("pk.none.gal"), disabled: true });
       else for (const e of gal) items.push({ key: "g:" + e.id, label: row(e.name, U.fromRaw(e.by || ""), String(e.plays || 0)), align: "left", map: { entry: e },
         spans: e.mine ? [[0, W()[0], 0x0E]].concat(spans().slice(1)) : spans(),
-        info: [T(e.bases === 1 ? "map.info.one" : "map.info", { size: sizeText(e.size), n: e.bases }),
+        info: [T(e.bases === 1 ? "map.info.one" : "map.info", { size: Lang.lower(sizeText(e.size)), n: e.bases }),
           T("pk.gal.by", { name: e.by || "?", n: e.plays || 0 })].concat(galCode === "fetch" ? [{ text: T("pk.err.net"), color: 12 }] : []),
         go: () => choose(items.find(x => x.key === "g:" + e.id)) });
     }

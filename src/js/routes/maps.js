@@ -61,7 +61,7 @@ export function mount() {
   const toList = () => Nav.go(Links.maps());
   const sizeText = s => Lang.raw("lc.size." + s) || s;
   // "A medium map with 2 bases." (one base: its own text)
-  const infoText = (size, n) => T(n === 1 ? "map.info.one" : "map.info", { size: sizeText(size), n });
+  const infoText = (size, n) => T(n === 1 ? "map.info.one" : "map.info", { size: Lang.lower(sizeText(size)), n });
   const mobile = GameScreen.mobile();
 
   // ------------------------------------------------------------ the list

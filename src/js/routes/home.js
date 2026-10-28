@@ -128,7 +128,7 @@ export function mount() {
     return [{ row: 4, text: Lang.title(), color: 12 }, { row: 6, text: Lang.enc(by), color: 4 }];
   };
   const screenTitle = key => [{ row: 4, text: T(key), color: 12 }];
-  const levelsText = () => LEVELS.map(l => Lang.raw("level." + l)).join(", ");
+  const levelsText = () => LEVELS.map(l => Lang.lower(Lang.raw("level." + l))).join(", ");
 
   function setLang(d) { Lang.set(step(Lang.codes, Lang.code, d)); settings(true); }
 
@@ -669,7 +669,7 @@ export function mount() {
       // (infection / survival make their own sides: the mode's description, not the slots' teams)
       : (TunnelerEngine.OWN_TEAMS || []).includes(gmode) ? [T("gm." + gmode + ".i"), T(view === "everyone" ? "cpu.all" : view === "team" ? "cpu.team" : "cpu.own")]
       : [S.p2 >= 0 ? (S.nCpu ? T(S.teamGame ? "lc.go.2t" : "lc.go.2n", { n: S.nCpu, t: S.nTeams }) : T("lc.go.2"))
-        : S.one ? T("lc.go.1", { level: Lang.raw("level." + S.used.find(u => u.kind !== "you").kind) })
+        : S.one ? T("lc.go.1", { level: Lang.lower(Lang.raw("level." + S.used.find(u => u.kind !== "you").kind)) })
         : S.teamGame ? T("lc.go.t", { t: S.nTeams, n: S.nCpu, m: S.mates }) : T("lc.go.n", { n: S.nCpu }),
       T(view === "everyone" ? "cpu.all" : view === "team" && S.mates > 0 ? "cpu.team" : "cpu.own")];
     const setView = d => { view = step(VIEWS, view, d); redraw(); };

@@ -80,7 +80,7 @@ export function mount() {
   const kindText = r => r.kind === "online" ? UniText.fromRaw(r.room || "") || T("rp.kind.online") : r.kind === "split" ? T("rp.kind.split")
     : r.challenge ? T("home.challenge") : modeText(r);
   const kindLine = r => (r.kind === "online" ? kindText(r) : T(r.kind === "split" ? "rp.kind.split" : r.challenge ? "home.challenge" : "rp.kind.skirmish"))
-    + (r.kind === "split" ? "" : UniText.fromRaw(", " + Lang.raw("gm." + modeOf(r))));
+    + (r.kind === "split" ? "" : UniText.fromRaw(", " + Lang.lower(Lang.raw("gm." + modeOf(r)))));
   const playersText = r => {
     const P = r.meta ? r.meta.players : [];
     return P.length === 2 ? UniText.fromRaw(Lang.raw("rp.vs").replace("{a}", nameOf(P[0])).replace("{b}", nameOf(P[1]))) : T("rp.tanks", { n: P.length });

@@ -56,7 +56,7 @@ function makeEnv(search) {
     addEventListener: (t, f) => (listeners[t] = listeners[t] || []).push(f),
     requestAnimationFrame: f => setTimeout(() => f(performance.now()), 16), cancelAnimationFrame: t => clearTimeout(t),
     WebSocket: FakeWS, performance, setTimeout, setInterval, clearTimeout, clearInterval, console, URLSearchParams, URL,
-    Uint8Array, atob, Buffer, fetch, history: { replaceState() {} },
+    Uint8Array, atob, Buffer, fetch, TextEncoder, TextDecoder, history: { replaceState() {} },
   };
   win.window = win; win.globalThis = win;
   const ctx = vm.createContext(win);
@@ -335,6 +335,17 @@ function loadPage(page, search, stored, version) {
     assert.strictEqual(ui.spec.items[ui.sel].key, "seat2", "a spectator's selection: the free seat");
     assert(!ui.spec.items.some(it => ["start", "ready", "kick", "spec"].includes(it.key)), "no host / ready items");
     assert(ui.spec.items.find(it => it.key === "size").static, "settings read-only");
+    // the Map row (not the host): Enter shows the map - a random world: an example of one, framed; Back: the lobby
+    {
+      const m = ui.spec.items.find(it => it.key === "map");
+      assert(m && !m.static && m.go, "the Map row can be picked");
+      m.go();
+      assert(ui.spec.pic && ui.spec.panels && ui.spec.items.length === 1 && ui.spec.items[0].key === "back", "the map's picture, framed, Back");
+      ui.spec.items[0].go();
+      await wait(50);
+      assert(ui.spec.items.some(it => it.key === "map") && ui.spec.items[ui.sel].key === "map", "Back: the lobby, on the Map row");
+      sel(ui, "seat2");
+    }
     for (const k of ["seat3", "seat5"]) assert(ui.spec.items.find(it => it.key === k).static, k + " read-only");
     press(env, "ArrowRight");
     assert(!ws.sent.some(m => m.t === "seatSet"), "no seat switching");
