@@ -146,8 +146,9 @@ how the game and every menu screen are drawn. This file describes what is built.
   north up, the keys as they are); 3D is a setting of the modern look, with both of its styles: clean -> sculpted
   terrain, retro -> voxel blocks (the terrain shape follows Tunnel edges).
 - A camera straight above the view's middle, `EYE` (36) world pixels up, in perspective, so that the **floor** fills
-  the view exactly like the 2D picture; the world is a heightfield: tunnels 0, dirt `HD` 6, base walls `HW` 7, rock
-  `HR` 7.5 (`hOf`), tanks extruded from their 2D shapes (`tankH`: tracks 1.4, hull 1.9, turret 2.8, gun 2.45). The
+  the view exactly like the 2D picture; the world is a heightfield: tunnels 0, dirt `HD` 3, base walls `HW` 3.5, rock
+  `HR` 3.75 (`hOf`; owner, 2026-10-28: half of the first heights), tanks extruded from their 2D shapes (`tankH`:
+  tracks 1, hull 1.35, turret 2, gun 1.75). The
   main fragment shader (the same one - `uDepth`) marches from the camera through each pixel's floor point - only the
   last stretch (heights are small next to the camera's: at most ~8 px sideways), 16 steps then 7 halvings - and
   shades the surface hit with the 2D materials (`terrainAt`, `tanksAt` at the hit's x, y), sides lit by their normal

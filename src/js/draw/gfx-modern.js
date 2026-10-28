@@ -56,7 +56,7 @@ uniform vec4 uHRect;          // ... its world rectangle: x, y, w, h
 out vec4 outColor;
 
 // 3D: the heights of the materials (world pixels): dirt, rock, base walls; tanks below (tankH)
-const float HD = 6.0, HR = 7.5, HW = 7.0, HMAX = 7.5, HSCALE = 8.0;
+const float HD = 3.0, HR = 3.75, HW = 3.5, HMAX = 3.75, HSCALE = 4.0;   // (owner, 2026-10-28: half of the first ones)
 const vec3 SUN = vec3(-0.45, -0.55, 0.7);                 // (normalized below) the light the 3D shapes are shaded by
 
 int colAt(ivec2 g) {
@@ -283,10 +283,10 @@ float tankH(vec2 wp) {
     float a = uTank[i].z;
     vec2 f = vec2(sin(a), -cos(a)), r = vec2(cos(a), sin(a));
     vec2 l = vec2(dot(d, r), -dot(d, f));
-    if (min(sdBox(l, vec2(-2.0, 0.5), vec2(0.5, 3.03), 0.0), sdBox(l, vec2(2.0, 0.5), vec2(0.5, 3.03), 0.0)) < 0.0) h = max(h, 1.4);
-    if (sdBox(l, vec2(0.0, 0.5), vec2(1.55, 2.0), 0.0) < 0.0) h = max(h, 1.9);
-    if (sdBox(l, vec2(0.0, 0.6), vec2(1.0, 1.0), 0.0) < 0.0) h = max(h, 2.8);
-    if (sdBox(l, vec2(0.0, -1.75), vec2(0.3, 1.85), 0.0) < 0.0) h = max(h, 2.45);
+    if (min(sdBox(l, vec2(-2.0, 0.5), vec2(0.5, 3.03), 0.0), sdBox(l, vec2(2.0, 0.5), vec2(0.5, 3.03), 0.0)) < 0.0) h = max(h, 1.0);
+    if (sdBox(l, vec2(0.0, 0.5), vec2(1.55, 2.0), 0.0) < 0.0) h = max(h, 1.35);
+    if (sdBox(l, vec2(0.0, 0.6), vec2(1.0, 1.0), 0.0) < 0.0) h = max(h, 2.0);
+    if (sdBox(l, vec2(0.0, -1.75), vec2(0.3, 1.85), 0.0) < 0.0) h = max(h, 1.75);
   }
   return h * uTS;
 }
@@ -362,7 +362,7 @@ void main() {
     // shadows: towards the light, anything higher than the ray in the way (the walls' shadows on the floor, the tanks')
     float sh = 0.0;
     for (int k = 1; k <= 8; k++) {
-      vec3 Q = vec3(wp, hz + 0.05) + L * (float(k) * 0.9);
+      vec3 Q = vec3(wp, hz + 0.05) + L * (float(k) * 0.5);
       if (sceneH(Q.xy) > Q.z) { sh = 1.0 - float(k - 1) / 10.0; break; }
     }
     col *= 1.0 - 0.45 * sh;
@@ -428,7 +428,7 @@ void main() {
 
 // 3D, smooth edges: the terrain's height map around a view (uOrg: its world origin, uRes texels per world pixel) -
 // the materials' heights through the same smooth kernel the 2D contours use, steepened between the lowest and the
-// highest around (sculpted walls with round contours), height / 8 in red
+// highest around (sculpted walls with round contours), height / 4 in red
 const HFS = `#version 300 es
 precision highp float;
 precision highp int;
@@ -453,7 +453,7 @@ float mn(float x) {
        : x < 2.0 ? (-7.0 / 3.0 * x * x * x + 12.0 * x * x - 20.0 * x + 32.0 / 3.0) / 6.0 : 0.0;
 }
 vec4 kern(float t) { return vec4(mn(1.0 + t), mn(t), mn(1.0 - t), mn(2.0 - t)); }
-float hOf(int c) { int k = uCls[c]; return k == 1 ? 6.0 : k == 2 ? 7.5 : k == 3 ? 7.0 : 0.0; }
+float hOf(int c) { int k = uCls[c]; return k == 1 ? 3.0 : k == 2 ? 3.75 : k == 3 ? 3.5 : 0.0; }
 void main() {
   vec2 wp = uOrg + gl_FragCoord.xy / uRes;
   vec2 q = wp - 0.5, b = floor(q), t = q - b;
@@ -466,7 +466,7 @@ void main() {
       if (x >= 1 && x <= 2 && y >= 1 && y <= 2) { lo = min(lo, h); hi = max(hi, h); }
     }
   float h = hi - lo < 0.01 ? hi : mix(lo, hi, smoothstep(0.3, 0.7, (sum - lo) / (hi - lo)));
-  outColor = vec4(h / 8.0, 0.0, 0.0, 1.0);
+  outColor = vec4(h / 4.0, 0.0, 0.0, 1.0);
 }`;
 
 // particles: one point each (x, y world pixels, size in world pixels), premultiplied colour
@@ -495,7 +495,7 @@ void main() {
 const CLASS = { tunnel: 0, dirt: 1, rock: 2, wall: 3, ember: 4, trail: 5, other: 6 };
 const MAX_PARTS = { high: 900, low: 300, off: 0 };
 const VIEW_HALF = 38;                     // the view window's tank offset (blitView: x - 38, y - 38)
-const EYE = 36;                           // 3D: the camera's height above the floor (world pixels; the walls are 6 - 7.5)
+const EYE = 36;                           // 3D: the camera's height above the floor (world pixels; the walls are 3 - 3.75)
 
 function program(gl, vs, fs, attribs) {
   const sh = (type, text) => { const s = gl.createShader(type); gl.shaderSource(s, text); gl.compileShader(s); return s; };
