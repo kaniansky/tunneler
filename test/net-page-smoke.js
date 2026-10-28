@@ -128,8 +128,8 @@ function loadPage(page, search, stored, version) {
     const lui = env.win.tunnelerLobbyUI(), cur = () => lui.spec.items[lui.sel].key;
     const shown = () => screenText(env.win, lui.display.snap);
     assert.strictEqual(cur(), "start", "the host's selection starts on Start game");
-    assert(/Bob/.test(shown()) && /Zed/.test(shown()) && /open/.test(shown()) && /AI \(medium\)/.test(shown()) && /closed/.test(shown()), "seats: " + shown());
-    assert(/Watching: Watcher/.test(shown()) && /Map size: medium/.test(shown()), "spectators and settings: " + shown());
+    assert(/Bob/.test(shown()) && /Zed/.test(shown()) && /Open/.test(shown()) && /AI \(Medium\)/.test(shown()) && /Closed/.test(shown()), "seats: " + shown());
+    assert(/Watching: Watcher/.test(shown()) && /Map size: Medium/.test(shown()), "spectators and settings: " + shown());
     press(env, "Enter");
     assert(!ws.sent.some(m => m.t === "start"), "no start while somebody isn't ready");
     assert(/every player is ready/.test(shown()), "why not: " + shown());
@@ -215,7 +215,7 @@ function loadPage(page, search, stored, version) {
     ws.recv(mkSt({ settings: Object.assign({}, SETTINGS, { mode: "survival" }) }));
     await wait(150);
     const own1 = lui.spec.items.find(it => it.key === "seat1");
-    assert(/team \d/.test(shown()) && !own1.digit && own1.zones.length === 1 && own1.dim,
+    assert(/Team \d/.test(shown()) && !own1.digit && own1.zones.length === 1 && own1.dim,
       "survival: the team column stays (gray), no team to choose on your seat: " + shown());
     ws.recv(mkSt());
     await wait(150);
@@ -489,7 +489,7 @@ function loadPage(page, search, stored, version) {
       ext: true, mode: "standard", qp: true, players: 2, places: 4, bots: 2, open: 2, spec: 0, seats: [] });
     await waitFor(() => list.win.tunnelerLobbyUI().spec && list.win.tunnelerLobbyUI().spec.items.some(it => it.key === "room:qp1"), "the list");
     const lui = list.win.tunnelerLobbyUI(), row = lui.spec.items.find(it => it.key === "room:qp1");
-    assert(/^Quick play +quick play +2\+2\/4 +Round/.test(row.label), "a quick-play row (players + computer tanks / its tanks): " + row.label);
+    assert(/^Quick play +Quick play +2\+2\/4 +Round/.test(row.label), "a quick-play row (players + computer tanks / its tanks): " + row.label);
     assert(lui.spec.items.some(it => it.key === "quick"), "Quick play in the list");
     row.go();
     assert.strictEqual(list.win.location.href, "/game/qp1", "Enter on a running quick-play game with a computer tank: joins to play");
@@ -712,7 +712,7 @@ function loadPage(page, search, stored, version) {
     assert.strictEqual(keys, "room:priv1,room:pub1,room:other", "own games first, the private one too: " + keys);
     const row = k => ui.spec.items.find(it => it.key === k).label;
     assert(/MODE +PLAYERS +STATE/.test(text()) && !/WATCHING|AI +STATE/.test(text()), "the columns (computer tanks and spectators in PLAYERS): " + text());
-    assert(/^My secret game +standard +1\+2\/5 \+4 +Lobby$/.test(row("room:priv1").trimEnd()), "a row: " + row("room:priv1"));
+    assert(/^My secret game +Standard +1\+2\/5 \+4 +Lobby$/.test(row("room:priv1").trimEnd()), "a row: " + row("room:priv1"));
     assert(!/you host/.test(text()), "no mark in the rows: " + text());
     assert(/You are this game's host/.test(text()) && !/\(private\)/.test(text()), "the info: only that you host it (and the keys): " + text());
     assert(!env.ls.has("tunneler.host.gone") && env.ls.has("tunneler.host.priv1"), "the stale key dropped");

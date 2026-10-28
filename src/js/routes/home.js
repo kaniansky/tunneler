@@ -14,6 +14,7 @@ import { Login } from "../ui/login.js";
 import { MapData } from "../game/mapdata.js";
 import { MapPic } from "../draw/mappic.js";
 import { MapPick } from "../ui/mappick.js";
+import { Replay } from "../game/replay.js";
 import { MapGen } from "../game/mapgen.js";
 import { MapStore } from "../net/mapstore.js";
 import { Pads } from "../io/pads.js";
@@ -280,13 +281,14 @@ export function mount() {
   // (Language is no category: a switch of its own below them - owner, 2026-10-25)
   // (Controls: the keys - on a phone / tablet only once a keyboard was used on it - and the touch controls - only on a
   // touch screen; owner, 2026-10-27)
-  const cats = () => ["display", "graphics", "sound", "controls", "online"];
+  // (owner, 2026-10-28: Gameplay instead of Display - the display's settings, the replays' and the preferred color)
+  const cats = () => ["gameplay", "graphics", "sound", "controls", "online"];
   const showKeys = () => !!CTL() && (!MOBILE || Controls.keyboardSeen());
   const showTouch = () => !!PADS() && GameScreen.touch();
   const catInfo = c => T("set.cat." + c + ".i" + (c !== "controls" || (showKeys() && showTouch()) ? "" : showKeys() ? "k" : "t"));
   const langRow = () => ({ key: "lang", label: T("home.lang") + Lang.name(Lang.code), info: [T("home.lang.i1"), T("home.lang.i2")],
     go: () => setLang(1), change: setLang });
-  let setCat = "display";
+  let setCat = "gameplay";
   const ONOFF = ["light", "glow", "shake"];
   const modValue = (k, v, c) => ONOFF.includes(k) ? Lang.raw(v === "on" ? "set.ping.on" : "set.ping.off", c) : Lang.raw("mod." + k + "." + v, c);
   const onOffT = v => T(v ? "set.ping.on" : "set.ping.off");
@@ -303,7 +305,7 @@ export function mount() {
   // a key row's label: "BLUE up: "
   const keyLabel = (set, a) => Lang.raw(set) + " " + Lang.raw("ctl." + a) + ": ";
   const rowLabels = () => ["set.name", "set.account", "home.lang", "set.sound", "set.volume", "set.stereo", "set.fade", "set.gfx", "set.fullscreen",
-    "set.scale", "set.tankcolors", "set.smooth", "set.ping", "set.prefer", "set.chatsound", "set.showchat", "touch.size", "touch.left", "touch.look"]
+    "set.scale", "set.tankcolors", "rp.auto", "set.smooth", "set.ping", "set.prefer", "set.chatsound", "set.showchat", "touch.size", "touch.left", "touch.look"]
     .concat(isApp() ? ["set.server"] : [], Object.keys(Gfx.MODERN).map(k => "mod." + k))
     .map(k => Lang.raw(k) || "").concat(CTL() ? Controls.SETS.flatMap(st => Controls.ACTIONS.map(a => keyLabel(st, a))) : []);
   const labelW = () => Math.max(...rowLabels().map(l => UniText.cols(l)));
@@ -403,7 +405,7 @@ export function mount() {
       }
       return rows;
     }
-    if (c === "display") {
+    if (c === "gameplay") {
       const rows = [];
       if (SCR()) {
         const sc = GameScreen;
@@ -416,7 +418,7 @@ export function mount() {
               : fsErr ? [{ text: T("set.fullscreen.err", { msg: fsErr }), color: 12 }, T("set.fullscreen.i2")] : [T("set.fullscreen.i1"), T("set.fullscreen.i2")],
             () => { sc.setFullscreen(!sc.fullscreen()); settings(true); }, { disabled: !fsOk }));
           rows.push(L("scale", pad("set.scale") + T("scale." + sc.scale()), [T("set.scale.i1"), T("set.scale.i2")],
-            d => { sc.setScale(step(sc.SCALES, sc.scale(), d)); settings(true); }));
+            d => { sc.setScale(step(sc.SCALES, sc.scale(), d)); settings(true); }), { key: "gap-d", label: "", disabled: true });
         }
       }
       if (Display.TANK_COLOR_MODES) {
@@ -424,6 +426,12 @@ export function mount() {
         rows.push(L("tankcolors", pad("set.tankcolors") + T("tc." + now), [T("tc." + now + ".i"), T("set.tankcolors.i")],
           d => { save("tunneler.tankcolors", step(Display.TANK_COLOR_MODES, now, d)); settings(true); }));
       }
+      const prefer = storedColor();
+      rows.push(L("prefer", pad("set.prefer") + (prefer ? Lang.enc(Lang.raw(prefer)) : T("set.prefer.none")), [T("set.prefer.i1"), T("set.prefer.i2")],
+        d => { save("tunneler.online.color", step([""].concat(COLORS8), prefer, d)); settings(true); }));
+      // every match's replay saved by itself, or only when asked after it (replay.js; play.js / online.js "Save the replay")
+      const auto = () => { Replay.setAutoSave(!Replay.autoSave()); settings(true); };
+      rows.push(L("autosave", pad("rp.auto") + T(Replay.autoSave() ? "rp.auto.on" : "rp.auto.off"), [T("rp.auto.i1"), T("rp.auto.i2")], auto));
       return rows;
     }
     if (c === "graphics") {
@@ -468,14 +476,11 @@ export function mount() {
       // (a server with accounts: the account's rows instead of the name - docs/v6/ACCOUNTS.md)
       const nameRows = Account.required() === true ? accountRows() : [{ key: "name", label: pad("set.name"), input: nameForm, align: "left", info: [T("set.name.i1"), T("set.name.i2")],
         go: () => { saveName(); settings(true); } }];
-      const prefer = storedColor();
       const shown = load("tunneler.chat.hide", "0") !== "1";          // (Show chat: the stored key says hidden)
       return [
         ...nameRows,
         ...(isApp() ? [{ key: "server", label: pad("set.server"), input: serverForm, align: "left",
           info: [T("set.server.i1"), T("set.server.i2")], go: () => { saveServer(); settings(true); } }] : []),
-        L("prefer", pad("set.prefer") + (prefer ? Lang.enc(Lang.raw(prefer)) : T("set.prefer.none")), [T("set.prefer.i1"), T("set.prefer.i2")],
-          d => { save("tunneler.online.color", step([""].concat(COLORS8), prefer, d)); settings(true); }),
         L("showchat", pad("set.showchat") + onOffT(shown), [T("set.showchat.i"), T("home.lang.i2")],
           () => { save("tunneler.chat.hide", shown ? "1" : "0"); settings(true); }),
         // (the chat hidden: no chat sounds either - grayed out)
@@ -490,7 +495,7 @@ export function mount() {
   const settingsWidth = () => {
     const c = Lang.code, R = k => Lang.raw(k, c) || "", cols = UniText.cols;
     const values = [...Lang.codes.map(l => (Lang.data[l] || {}).name || l), ...SOUNDS.map(v => R("sound." + v)),
-      R("set.ping.on"), R("set.ping.off"), R("ctl.press"), R("set.prefer.none"), "x".repeat(10) + " 100 %",
+      R("set.ping.on"), R("set.ping.off"), R("rp.auto.on"), R("rp.auto.off"), R("ctl.press"), R("set.prefer.none"), "x".repeat(10) + " 100 %",
       ...COLORS8.map(k => R(k)), ...["fit", "integer"].map(v => R("scale." + v)), ...["normal", "colorblind", "relation"].map(v => R("tc." + v)),
       ...["small", "medium", "large"].map(v => R("touch.size." + v)), ...["plain", "tank"].map(v => R("touch.look." + v)),
       ...Gfx.MODES.map(v => R("gfx." + v)),

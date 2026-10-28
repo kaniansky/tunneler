@@ -100,7 +100,7 @@ Lang.extend("en", {
   "acc.err.server": "The server refused: {msg}",
   // Settings, Online
   "set.account": "Account: ",
-  "set.account.none": "not logged in",
+  "set.account.none": "Not logged in",
   "set.account.i1": "Your account on this server: online play, your maps, replays and settings.",
   "set.account.i2": "Accounts are per server - another server needs its own.",
   "set.dname.i1": "The name other players see. Your username stays your login.",

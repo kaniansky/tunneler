@@ -561,7 +561,9 @@ page from before 2.0 - is refused (POST 409 `{code:
   in the footer any more).
 - Title "Tunneler" (owner, 2026-10-26 - was "Tunneler Online"), "by Norko Kaniansky"; the Information page describes this version and still
   credits Geoffrey Silverton for the original.
-- Menu items in **sentence case** ("Start game", "Back to main menu"); tank names BLUE/GREEN in caps.
+- Menu items in **sentence case** ("Start game", "Back to main menu"); tank names BLUE/GREEN in caps. Values start
+  with a capital letter like their names (owner, 2026-10-28: "Map size: Medium", "Computer (Easy)", "Team 2"; not the
+  words inside labels: "BLUE up: W"); the in-game settings lines (engine strings) stay as the original wrote them.
 - Menus: arrow keys + Enter + mouse; switches also with Left/Right; menus auto-size and are centred;
   blank rows/separators to group items; no F keys anywhere.
 - Sound hint shows the current state ("M: sound on" / "M: sound off").
@@ -1023,7 +1025,7 @@ page from before 2.0 - is refused (POST 409 `{code:
   input before it runs (`input(inp)`) and a call after (`stepped()`); play.js and online.js (every match, player or
   spectator, catch-up included) set `Replay.recorder(engine, {kind, seed, opts, room}, rep => Replay.keep(rep))`.
   Saved only when asked (owner, 2026-10-28, 1.2): `Replay.keep(rep, always)` saves with `always` (the daily challenge:
-  daily.js sends its result from the saved replay) or Replays' "Save every match" (`tunneler.replays.auto` "1",
+  daily.js sends its result from the saved replay) or Settings, Gameplay, "Save every match" (`tunneler.replays.auto` "1",
   `autoSave()` / `setAutoSave()`, off by default, in CloudSave.SETTINGS), else holds it in the page's memory (the newest
   `HELD` 4; `get(id)` finds held ones too: "Watch the replay" works unsaved; `held(id)`). play.js's screen after the
   match: "Save the replay" (`rp.keep`) -> "Replay saved" (`rp.kept`); online.js's room: the same under Statistics

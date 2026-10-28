@@ -94,7 +94,7 @@ export function mount() {
   // ------------------------------------------------------------ the list
   const WIDE = [14, 22, 30], NARROW = [14, 0, 10];       // (date, game, players; the length takes the rest)
   const cols = () => ui.isNarrow() ? NARROW : WIDE;
-  const ROWS = 11;
+  const ROWS = 12;
   function rowText(r) {
     const C = cols(), cell = (t, k) => C[k] ? UniText.padEnd(UniText.slice(t, C[k] - 1), C[k]) : "";
     return cell(dateText(r.date), 0) + cell(kindText(r), 1) + cell(playersText(r), 2) + clock(r.steps);
@@ -116,13 +116,9 @@ export function mount() {
     items.push({ key: "sep", separator: true });
     items.push({ key: "file", label: T("rp.file"), info: fileError ? [{ text: T("rp.file.err"), color: 12 }] : [T("rp.file.i")], go: openFile });
     items.push({ key: "link", label: T("rp.link"), info: [T("rp.link.i")], go: () => openLink() });
-    // every match saved by itself, or only when asked after it (play.js / online.js: "Save the replay"; off by default)
-    const auto = () => { Replay.setAutoSave(!Replay.autoSave()); showList(true); };
-    items.push({ key: "auto", label: T("rp.auto") + T(Replay.autoSave() ? "rp.auto.on" : "rp.auto.off"), info: [T("rp.auto.i1"), T("rp.auto.i2")],
-      go: auto, change: auto });
     items.push({ key: "gap", label: "", disabled: true });
     items.push({ key: "back", label: T("back.main"), info: [T("back.main.i")], go: home });
-    const FIXED = 6, shown = Math.max(1, Math.min(items.length - FIXED, ROWS)), bottom = 3 + 3 + shown + FIXED;
+    const FIXED = 5, shown = Math.max(1, Math.min(items.length - FIXED, ROWS)), bottom = 3 + 3 + shown + FIXED;
     const C = cols();
     ui.show({
       lines: [{ row: 2, text: T("rp.title"), color: 12 }],

@@ -682,13 +682,13 @@ const ticks = async (n = 8) => { for (let i = 0; i < n; i++) await tick(); };
     assert.strictEqual(env.storage.get("tunneler.cpu.map"), rec.id, "remembered");
     // 3 tanks on a 2-base map: Start says why not
     const slot2 = ui.spec.items.find(it => it.key === "slot2");
-    while (!/computer/.test(w.Lang.decode(ui.spec.items.find(it => it.key === "slot2").label))) ui.spec.items.find(it => it.key === "slot2").change(1);
+    while (!/computer/i.test(w.Lang.decode(ui.spec.items.find(it => it.key === "slot2").label))) ui.spec.items.find(it => it.key === "slot2").change(1);
     assert(slot2, "slot 2");
     const play = ui.spec.items.find(it => it.key === "play");
     assert.strictEqual(play.info[0].text, w.Lang.t("lc.err.bases", { n: 2 }), "too few bases: " + w.Lang.decode(String(play.info[0].text || play.info[0])));
     play.go();
     assert(!w.location.href.includes("lmap"), "not started");
-    while (!/nobody/.test(w.Lang.decode(ui.spec.items.find(it => it.key === "slot2").label))) ui.spec.items.find(it => it.key === "slot2").change(1);
+    while (!/nobody/i.test(w.Lang.decode(ui.spec.items.find(it => it.key === "slot2").label))) ui.spec.items.find(it => it.key === "slot2").change(1);
     ui.spec.items.find(it => it.key === "play").go();
     assert(/[?&]lmap=/.test(w.location.href) && /[?&]g=/.test(w.location.href), "the link: " + w.location.href);
   });

@@ -495,12 +495,12 @@ function play(search) {
   env.key("ArrowUp"); env.key("Enter");                    // (wraps to the last item) Settings
   const keys = () => ui().spec.items.map(i => i.key), sel = () => ui().spec.items[ui().sel].key;
   const right = () => keys().slice(keys().indexOf("back") + 1);
-  same(keys().filter(k => /^cat-/.test(k)), ["cat-display", "cat-graphics", "cat-sound", "cat-controls", "cat-online"], "categories");
+  same(keys().filter(k => /^cat-/.test(k)), ["cat-gameplay", "cat-graphics", "cat-sound", "cat-controls", "cat-online"], "categories");
   {                                                       // (centred as the tallest category: no category moves the screen)
     const shifts = new Set();
-    for (const c of ["cat-display", "cat-graphics", "cat-sound", "cat-controls", "cat-online"]) { ui().sel = keys().indexOf(c); ui().draw(); shifts.add(ui().vshift); }
+    for (const c of ["cat-gameplay", "cat-graphics", "cat-sound", "cat-controls", "cat-online"]) { ui().sel = keys().indexOf(c); ui().draw(); shifts.add(ui().vshift); }
     assert.strictEqual(shifts.size, 1, "the same centring for every category: " + [...shifts]);
-    ui().sel = keys().indexOf("cat-display"); ui().draw();
+    ui().sel = keys().indexOf("cat-gameplay"); ui().draw();
   }
   // Language: no category - a centred switch below them (owner, 2026-10-25)
   {
@@ -511,8 +511,19 @@ function play(search) {
     it().change(-1);
     assert.strictEqual(env.win.Lang.code, before, "and back");
   }
-  assert.strictEqual(sel(), "cat-display", "on the first category");
-  same(right(), ["fullscreen", "scale", "tankcolors"], "Display: fullscreen, screen size, tank colors");
+  assert.strictEqual(sel(), "cat-gameplay", "on the first category");
+  same(right(), ["fullscreen", "scale", "gap-d", "tankcolors", "prefer", "autosave"], "Gameplay: fullscreen, screen size, a gap, tank colors, preferred color, save every match");
+  {
+    // Save every match (replay.js autoSave): off by default (owner, 2026-10-28 - "Save the replay" after a match), switched here
+    const row = () => ui().spec.items.find(i => i.key === "autosave"), dec = () => env.win.Lang.decode(row().label);
+    assert(/: Off$/.test(dec()) && !env.win.Replay.autoSave(), "Save every match: Off (the default): " + dec());
+    row().change(1);
+    assert(/: On$/.test(dec()) && env.win.Replay.autoSave() && store.get("tunneler.replays.auto") === "1", "Save every match: On (kept)");
+    row().go();
+    assert(/: Off$/.test(dec()) && !env.win.Replay.autoSave(), "and Off again");
+    ui().spec.items.find(i => i.key === "prefer").change(1);   // Preferred color: BLUE (online games' seat)
+    assert.strictEqual(store.get("tunneler.online.color"), "blue");
+  }
   env.key("Enter"); assert.strictEqual(sel(), "fullscreen", "Enter: into the settings");
   // Alt+Enter (GameScreen.toggle) while the row is on screen: it follows
   const fsRow = () => ui().spec.items.find(i => i.key === "fullscreen").label;
@@ -524,8 +535,8 @@ function play(search) {
   assert.strictEqual(store.get("tunneler.scale"), "integer");
   env.key("ArrowDown"); env.key("ArrowRight");             // Tank colors: color-blind
   assert.strictEqual(store.get("tunneler.tankcolors"), "colorblind");
-  env.key("ArrowDown"); assert.strictEqual(sel(), "fullscreen", "Up / Down stay in the box");
-  env.key("Escape"); assert.strictEqual(sel(), "cat-display", "Esc: back to the category");
+  env.key("ArrowDown"); env.key("ArrowDown"); env.key("ArrowDown"); assert.strictEqual(sel(), "fullscreen", "Up / Down stay in the box (past Preferred color, Save every match)");
+  env.key("Escape"); assert.strictEqual(sel(), "cat-gameplay", "Esc: back to the category");
   env.key("ArrowDown"); env.key("ArrowRight");             // Graphics; Right: into its settings
   same(right(), ["gfx", "gap-g", "smooth"], "Graphics (original): graphics, a blank row, smooth scrolling");
   env.key("ArrowRight");                                   // original -> modern (no WebGL2 here: drawn as the original)
@@ -558,15 +569,14 @@ function play(search) {
   assert.strictEqual(store.get("tunneler.volume"), "0", "0 %: down stays");
   delete u.itemAt;
   env.key("Escape"); env.key("ArrowDown"); env.key("ArrowDown");      // Controls, Online
-  same(right(), ["name", "prefer", "showchat", "chatsound", "ping"], "Online: name, preferred color, show chat, chat sound, show ping");
+  same(right(), ["name", "showchat", "chatsound", "ping"], "Online: name, show chat, chat sound, show ping (preferred color: Gameplay)");
   env.key("Tab"); assert.strictEqual(sel(), "name");
-  env.key("ArrowDown"); env.key("ArrowRight");             // Preferred color: BLUE
   env.key("ArrowDown"); env.key("Enter");                  // Show chat: on -> off (hidden)
   assert.strictEqual(store.get("tunneler.chat.hide"), "1");
   assert.ok(ui().spec.items.find(i => i.key === "chatsound").disabled, "no chat: Chat sound grayed out");
   env.key("ArrowDown"); assert.strictEqual(sel(), "ping", "(skipped)");
   env.key("Enter");                                        // Show ping on
-  same(["tunneler.ping", "tunneler.online.color"].map(k => store.get(k)), ["1", "blue"]);
+  assert.strictEqual(store.get("tunneler.ping"), "1");
   env.key("Escape"); env.key("ArrowDown");                 // Language (a switch below the categories)
   assert.strictEqual(sel(), "lang");
   env.key("ArrowRight");
@@ -1021,9 +1031,9 @@ function play(search) {
   // (by taps - go(): a key press here would be a keyboard's)
   const go = key => ui.spec.items.find(i => i.key === key).go(), ctlRows = () => ui.spec.items.map(i => i.key).filter(k => /^touch|^key-/.test(k));
   go("settings");
-  same(ui.spec.items.map(i => i.key), ["cat-display", "cat-graphics", "cat-sound", "cat-controls", "cat-online", "gap", "lang", "gap2", "back"], "the categories, Language, Back");
+  same(ui.spec.items.map(i => i.key), ["cat-gameplay", "cat-graphics", "cat-sound", "cat-controls", "cat-online", "gap", "lang", "gap2", "back"], "the categories, Language, Back");
   assert.strictEqual(ui.spec.items[3].info[0], env.win.Lang.t("set.cat.controls.it"), "Controls: the touch controls only");
-  go("cat-display");
+  go("cat-gameplay");
   same(ctlRows(), [], "Display: no touch controls' rows");
   go("back-cat"); go("cat-controls");
   same(ctlRows(), ["touchsize", "touchleft", "touchlook"], "Controls without a keyboard: only the touch controls");
@@ -1052,7 +1062,7 @@ function play(search) {
   ui.sel = 1; env.key("Enter");
   assert(ui.spec.items.some(i => i.key === "gfx") && ui.spec.items[ui.spec.items.length - 1].key === "back-cat", "Graphics, with Back");
   env.key("Escape");
-  assert(ui.spec.items[0].key === "cat-display" && ui.spec.items[ui.sel].key === "cat-graphics", "Esc: back to the categories, on Graphics");
+  assert(ui.spec.items[0].key === "cat-gameplay" && ui.spec.items[ui.sel].key === "cat-graphics", "Esc: back to the categories, on Graphics");
   // the Instructions: re-wrapped to 38 columns, scrolled by a drag (scrollPage)
   ui.sel = ui.spec.items.findIndex(i => i.key === "back"); env.key("Enter");
   ui.sel = ui.spec.items.findIndex(i => i.key === "instr"); env.key("Enter");

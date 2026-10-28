@@ -97,7 +97,7 @@ Lang.extend("cs", {
   "acc.err.storage": "Server se nedostane k úložišti - zkus to později.",
   "acc.err.server": "Server odmítl: {msg}",
   "set.account": "Účet: ",
-  "set.account.none": "nepřihlášen",
+  "set.account.none": "Nepřihlášen",
   "set.account.i1": "Tvůj účet na tomto serveru: hra online, tvoje mapy, záznamy a nastavení.",
   "set.account.i2": "Účty jsou pro každý server - jiný server chce vlastní.",
   "set.dname.i1": "Jméno, které vidí ostatní hráči. Přihlašuješ se dál jménem účtu.",

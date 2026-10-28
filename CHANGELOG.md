@@ -24,8 +24,14 @@ those releases are tagged `online-vX.Y.Z`, their changes are in [docs/CHANGELOG-
 - Replays play only in the version (major.minor) that recorded them: another version's are gray in the list with
   the version that recorded them, can be saved as a file or deleted but not watched or shared, and their links say so.
 - Replays are no longer saved by themselves: after a match "Save the replay" (skirmish / split screen: under Watch
-  the replay; online: in the game's lobby) saves it; Replays, "Save every match: on" saves every one as before. Watch
+  the replay; online: in the game's lobby) saves it; Settings, Gameplay, "Save every match: On" saves every one as before. Watch
   the replay works without saving. The daily challenge's are always saved (your result is sent from it).
+- Settings: Gameplay instead of Display - fullscreen, screen size, tank colors, the preferred color (from Online)
+  and Save every match. Menu values start with a capital letter like their names (Map size: Medium, Computer (Easy),
+  Team 2).
+- Map picker: Show generated maps (Original - the original game's random world -, Fortresses, Arena, Highlands,
+  Caves; Layout), your maps or the gallery; the selected map's picture framed, with the switches and Back in a box
+  under it. Making a new map can start from a generated world (its kind, bases and layout).
 - After death with one view (View: self) and After death: teammates / others, your left / right keys (Settings,
   Controls) or a tap near the side of the screen switch which tank you watch.
 - Capture the flag: the flag pole is white again (pink since the new tank colours).

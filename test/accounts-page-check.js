@@ -309,7 +309,7 @@ const go = (ui, k) => { const it = item(ui, k); assert(it, "no item " + k + " in
     ok(win.Account.display() === "Sheriff" && item(ui, "dname").input.value === "Sheriff" && ui.spec.items[ui.sel].key === "dname",
       where + ": another account's username - refused, the field back to the name, the reason under the Name row (selected: it shows)");
     go(ui, "logout");
-    ok(!env.storage.get(SESSION) && /not logged in/.test(label("account")) && item(ui, "login") && /Logged out/.test(JSON.stringify(item(ui, "account").info)),
+    ok(!env.storage.get(SESSION) && /Not logged in/.test(label("account")) && item(ui, "login") && /Logged out/.test(JSON.stringify(item(ui, "account").info)),
       where + ": Log out - the session gone, \"not logged in\", Log in");
     go(ui, "login");
     ok(/LOG IN/.test(linesOf(win, ui)), where + ": Log in: its screen");

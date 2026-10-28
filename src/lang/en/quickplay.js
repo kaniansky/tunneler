@@ -9,7 +9,7 @@ Lang.extend("en", {
   "qp.finding": "Looking for a game...",
   "qp.err": "Could not find a game: {msg}",
   "qp.room": "Quick play",
-  "qp.mode": "quick play",
+  "qp.mode": "Quick play",
   "qp.next": "Next match in {s} s",
   "qp.wait": "Waiting for a player",
   "qp.next.i1": "Quick play: the match starts by itself, nobody gets ready.",

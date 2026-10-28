@@ -8,7 +8,7 @@ Lang.extend("cs", {
   "qp.finding": "Hledám hru...",
   "qp.err": "Hru se nepodařilo najít: {msg}",
   "qp.room": "Rychlá hra",
-  "qp.mode": "rychlá hra",
+  "qp.mode": "Rychlá hra",
   "qp.next": "Další zápas za {s} s",
   "qp.wait": "Čeká se na hráče",
   "qp.next.i1": "Rychlá hra: zápas začne sám, nikdo se nepřipravuje.",
