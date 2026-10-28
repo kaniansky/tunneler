@@ -374,16 +374,18 @@ function paletteOf(s, raw) {
 // high one's - drawn gray) or null. Also used by views.js for the multi-view screens and the map's score table.
 // a DOS screen's picture (snap.pic, DosUI spec.pic: a map's preview) in its block of cells, square on the screen (a
 // canvas pixel is 1.35 times as tall as wide), centred in it, nearest pixels; yOf(row) = the row's first scan line,
-// lo / hi (numbers, or functions of the row) = the scan lines it may draw on (the phone layout's window)
+// lo / hi (numbers, or functions of the row) = the scan lines it may draw on (the phone layout's window); pic.bleed: the
+// block grown by that part of a cell on every side (into a frame's cells, short of its line)
 function paintPic(px, W, pic, c0, yOf, lo, hi) {
-  const bw = pic.cols * 9, bh = pic.rows * 16, k = Math.min(bw / pic.w, bh * 1.35 / pic.h);
+  const bl = pic.bleed || 0, ex = Math.round(bl * 9), ey = Math.round(bl * 16);
+  const bw = pic.cols * 9 + 2 * ex, bh = pic.rows * 16 + 2 * ey, k = Math.min(bw / pic.w, bh * 1.35 / pic.h);
   const dw = Math.max(1, Math.round(pic.w * k)), dh = Math.max(1, Math.round(pic.h * k / 1.35));
-  const ox = (pic.col - c0) * 9 + ((bw - dw) >> 1), oy = (bh - dh) >> 1;
+  const ox = (pic.col - c0) * 9 - ex + ((bw - dw) >> 1), oy = ((bh - dh) >> 1) - ey;
   const src = new Uint32Array(pic.rgba.buffer, pic.rgba.byteOffset, pic.w * pic.h);
   for (let y = 0; y < dh; y++) {
     const ly = oy + y, r = pic.row + Math.floor(ly / 16), top = yOf(r);
     if (top == null) continue;
-    const cy = top + (ly % 16), a = typeof lo === "function" ? lo(r) : lo, b = typeof hi === "function" ? hi(r) : hi;
+    const cy = top + (((ly % 16) + 16) % 16), a = typeof lo === "function" ? lo(r) : lo, b = typeof hi === "function" ? hi(r) : hi;
     if (cy < a || cy >= b) continue;
     const srow = Math.floor(y * pic.h / dh) * pic.w;
     for (let x = 0; x < dw; x++) {

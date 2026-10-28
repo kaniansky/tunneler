@@ -777,7 +777,8 @@ function drawPic(ctx, pic, g) {
     x.putImageData(new ImageData(pic.rgba, pic.w, pic.h), 0, 0);
     picCanvases.set(pic.rgba, c);
   }
-  const x0 = g.X(pic.col), x1 = g.X(pic.col + pic.cols), y0 = g.Y(pic.row), y1 = g.Y(pic.row + pic.rows);
+  const bl = pic.bleed || 0;                             // (the block grown into a frame's cells, display.js paintPic)
+  const x0 = g.X(pic.col - bl), x1 = g.X(pic.col + pic.cols + bl), y0 = g.Y(pic.row - bl), y1 = g.Y(pic.row + pic.rows + bl);
   const k = Math.min((x1 - x0) / pic.w, (y1 - y0) / pic.h), w = pic.w * k, h = pic.h * k;
   ctx.save();
   if (g.clip && pic.row < g.nScroll) { ctx.beginPath(); ctx.rect(0, 0, g.W, g.clip); ctx.clip(); }

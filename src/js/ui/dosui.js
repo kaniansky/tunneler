@@ -53,7 +53,8 @@
 // (Pages.scroll; it draws the scroll bar).
 //   spec.infoRow: row of the selected item's info lines (cyan, centred)
 //   spec.block:  [first, last] rows (1-based) the screen can span at most - the vertical centring keeps to it
-//   spec.pic:    a picture in a block of cells {row, col (1-based), cols, rows, w, h, rgba} - drawn square on the screen
+//   spec.pic:    a picture in a block of cells {row, col (1-based), cols, rows, w, h, rgba, bleed} - drawn square on the screen
+//                (bleed: the block grown by that part of a cell on every side - into a frame's cells)
 //                (Display, gfx-text.js); the phone layout puts it under the lines, as wide as the screen (a map's preview)
 //   spec.hint:   bottom line text;  spec.back: Esc handler;  spec.sel: initially selected item
 //   spec.footer: a short text at the bottom left (the main menu: the version)
@@ -701,7 +702,7 @@ class DosUI {
     }
     const snap = { t: 0, mode: "text", screen: "text", vram: t.vram.slice(0, 16000) };
     t.snapUni(snap);
-    if (s.pic && s.pic.rgba) snap.pic = { col: s.pic.col - 1, row: s.pic.row - 1 + shift, cols: s.pic.cols, rows: s.pic.rows, w: s.pic.w, h: s.pic.h, rgba: s.pic.rgba };
+    if (s.pic && s.pic.rgba) snap.pic = { col: s.pic.col - 1, row: s.pic.row - 1 + shift, cols: s.pic.cols, rows: s.pic.rows, w: s.pic.w, h: s.pic.h, rgba: s.pic.rgba, bleed: s.pic.bleed || 0 };
     if (this.cursor) snap.cursor = Object.assign({}, this.cursor, { row: this.cursor.row + shift });
     if (this.centres.length) snap.centres = this.centres.map(([r, a, z]) => [r + shift, a, z]);
     // (the model: the rows as shown - drawn before the screen was centred, but the info and the rule after it)

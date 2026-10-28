@@ -179,7 +179,7 @@ function show(ui, opts) {
       items: all, infoRow: bottom + 2, block: [2, bottom + 4], side: { x: 50, y: sideY, w: 29 },
       panels: narrow() ? [] : [{ x: 50, y, x2: 80, y2: y + 6 }],
       sel: Math.max(0, all.indexOf(it)),
-      pic: pic ? Object.assign({ row: y + 1, col: 51, cols: 29, rows: 5 }, pic) : null,
+      pic: pic ? Object.assign({ row: y + 1, col: 51, cols: 29, rows: 5, bleed: narrow() ? 0 : 0.3 }, pic) : null,
       onSel: i => { const x = ui.spec.items[i]; if (x && x.map) draw(true); },
       back: () => { close(); opts.back(); },
     }, keep && !!sel);
