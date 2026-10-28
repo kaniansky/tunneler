@@ -53,6 +53,8 @@ uniform int uDepth;           // 3D (setting Depth): the world as a heightfield,
 uniform vec3 uEye;            // 3D: the camera - world pixels, z its height above the tunnels' floor
 uniform sampler2D uH;         // 3D, smooth edges: the terrain's heights around the view (HFS), height / HSCALE
 uniform vec4 uHRect;          // ... its world rectangle: x, y, w, h
+uniform sampler2D uHA;        // 3D: the heights per world pixel (HAFS) - voxel blocks
+uniform vec4 uARect;          // ... its world rectangle
 out vec4 outColor;
 
 // 3D: the heights of the materials (world pixels): dirt, rock, base walls; tanks below (tankH)
@@ -294,7 +296,11 @@ float tankH(vec2 wp) {
 // edges: between the pixels' heights, steep in the middle)
 float hOf(int c) { int k = uCls[c]; return k == 1 ? HD : k == 2 ? HR : k == 3 ? HW : 0.0; }
 float terrH(vec2 wp) {
-  if (uEdges == 1) return hOf(colAt(ivec2(floor(wp))));
+  if (uEdges == 1) {
+    ivec2 a = ivec2(floor(wp - uARect.xy));
+    if (uARect.z > 0.0 && a.x >= 0 && a.y >= 0 && a.x < int(uARect.z) && a.y < int(uARect.w)) return texelFetch(uHA, a, 0).r * HSCALE;
+    return hOf(colAt(ivec2(floor(wp))));
+  }
   vec2 hq = (wp - uHRect.xy) / uHRect.zw;
   if (uHRect.z > 0.0 && hq.x >= 0.0 && hq.y >= 0.0 && hq.x <= 1.0 && hq.y <= 1.0) return texture(uH, hq).r * HSCALE;
   vec2 q = wp - 0.5, b = floor(q), t = q - b;
@@ -432,10 +438,11 @@ void main() {
   outColor = vec4(clamp(col, 0.0, 1.0), 1.0);
 }`;
 
-// 3D, smooth edges: the terrain's height map around a view (uOrg: its world origin, uRes texels per world pixel) -
-// the materials' heights through the same smooth kernel the 2D contours use, steepened between the lowest and the
-// highest around (sculpted walls with round contours), height / 4 in red
-const HFS = `#version 300 es
+// 3D: the terrain's heights around a view, in two passes (both: height / 4 in red)
+// A - one texel per world pixel (uOrg: the world pixel of texel 0): its material's height; rock rises from half its
+// height at a tunnel's edge to the full one 3 px in, with bumps where its texture (shade) is high (owner, 2026-10-28: "more
+// like a rock") - voxel blocks use it as it is
+const HAFS = `#version 300 es
 precision highp float;
 precision highp int;
 precision highp usampler2D;
@@ -444,7 +451,6 @@ uniform ivec2 uWorldPx;
 uniform int uRowOff, uRows, uOutside;
 uniform int uCls[16];
 uniform vec2 uOrg;
-uniform float uRes;
 out vec4 outColor;
 int colAt(ivec2 g) {
   if (g.x < 0 || g.y < 0 || g.x >= uWorldPx.x || g.y >= uWorldPx.y) return uOutside;
@@ -453,13 +459,46 @@ int colAt(ivec2 g) {
   uint b = texelFetch(uWorld, ivec2(g.x >> 1, r), 0).r;
   return int((g.x & 1) == 1 ? (b >> 4) & 15u : b & 15u);
 }
+float hash(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+float vnoise(vec2 p) {
+  vec2 i = floor(p), f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y);
+}
+float fbm3(vec2 p) { return vnoise(p) * 0.55 + vnoise(p * 2.07 + 5.3) * 0.28 + vnoise(p * 4.13 + 11.7) * 0.17; }
+void main() {
+  ivec2 g = ivec2(uOrg) + ivec2(gl_FragCoord.xy);
+  int k = uCls[colAt(g)];
+  float h = k == 1 ? 3.0 : k == 3 ? 3.5 : 0.0;
+  if (k == 2) {
+    float d = 4.0;                                     // (the distance to the nearest open pixel - a tunnel -, up to 3:
+    for (int y = -3; y <= 3; y++)                      // next to dirt it stands at its full height)
+      for (int x = -3; x <= 3; x++) {
+        int m = uCls[colAt(g + ivec2(x, y))];
+        if (m == 0 || m >= 4) d = min(d, length(vec2(x, y)));
+      }
+    float ramp = clamp((d - 1.0) / 3.0, 0.0, 1.0);
+    vec2 wp = vec2(g) + 0.5, q = wp * 0.16;             // (the rock texture's own height - shade in the main pass)
+    vec2 w = vec2(vnoise(q * 0.7 + 2.3), vnoise(q * 0.7 + 9.1)) * 0.9;
+    h = 3.75 * (0.5 + 0.5 * ramp) + (fbm3(q + w) - 0.5) * 1.4 * (0.4 + 0.6 * ramp);
+  }
+  outColor = vec4(clamp(h, 0.0, 3.99) / 4.0, 0.0, 0.0, 1.0);
+}`;
+// B - smooth edges: pass A through the 2D contours' kernel, uRes texels per world pixel; steepened between the lowest
+// and highest around where it meets the floor (round tunnel walls), smooth elsewhere (the rock's bumps)
+const HFS = `#version 300 es
+precision highp float;
+uniform sampler2D uA;
+uniform vec2 uOrg, uOrgA, uSizeA;
+uniform float uRes;
+out vec4 outColor;
 float mn(float x) {
   x = abs(x);
   return x < 1.0 ? (7.0 * x * x * x - 12.0 * x * x + 16.0 / 3.0) / 6.0
        : x < 2.0 ? (-7.0 / 3.0 * x * x * x + 12.0 * x * x - 20.0 * x + 32.0 / 3.0) / 6.0 : 0.0;
 }
 vec4 kern(float t) { return vec4(mn(1.0 + t), mn(t), mn(1.0 - t), mn(2.0 - t)); }
-float hOf(int c) { int k = uCls[c]; return k == 1 ? 3.0 : k == 2 ? 3.75 : k == 3 ? 3.5 : 0.0; }
+float hA(ivec2 g) { ivec2 t = clamp(g - ivec2(uOrgA), ivec2(0), ivec2(uSizeA) - 1); return texelFetch(uA, t, 0).r * 4.0; }
 void main() {
   vec2 wp = uOrg + gl_FragCoord.xy / uRes;
   vec2 q = wp - 0.5, b = floor(q), t = q - b;
@@ -467,12 +506,12 @@ void main() {
   float sum = 0.0, lo = 99.0, hi = 0.0;
   for (int y = 0; y < 4; y++)
     for (int x = 0; x < 4; x++) {
-      float h = hOf(colAt(ivec2(b) + ivec2(x - 1, y - 1)));
+      float h = hA(ivec2(b) + ivec2(x - 1, y - 1));
       sum += h * wx[x] * wy[y];
       if (x >= 1 && x <= 2 && y >= 1 && y <= 2) { lo = min(lo, h); hi = max(hi, h); }
     }
-  float h = hi - lo < 0.01 ? hi : mix(lo, hi, smoothstep(0.3, 0.7, (sum - lo) / (hi - lo)));
-  outColor = vec4(h / 4.0, 0.0, 0.0, 1.0);
+  float h = lo > 0.5 || hi - lo < 0.01 ? sum : mix(lo, hi, smoothstep(0.3, 0.7, (sum - lo) / (hi - lo)));
+  outColor = vec4(clamp(h, 0.0, 3.99) / 4.0, 0.0, 0.0, 1.0);
 }`;
 
 // particles: one point each (x, y world pixels, size in world pixels), premultiplied colour
@@ -532,42 +571,63 @@ function create(gl) {
   const prog = program(gl, VS, FS, ["aPos"]);
   if (!prog) return null;
   const pprog = program(gl, PVS, PFS, ["aP", "aC", "aS"]);
-  // 3D: the height pre-pass (smooth edges) into its own texture, HRES texels per world pixel around a view
-  const hprog = program(gl, VS, HFS, ["aPos"]), hu = {};
-  if (hprog) for (const n of ["uWorld", "uWorldPx", "uRowOff", "uRows", "uOutside", "uCls", "uOrg", "uRes"]) hu[n] = gl.getUniformLocation(hprog, n);
-  const HRES = 4, HW_ = 100, HH_ = 96;                 // (the view's 76 x 71 and a margin: rays reach up to ~10 px out)
-  const hTex = gl.createTexture(), hFbo = gl.createFramebuffer();
-  gl.bindTexture(gl.TEXTURE_2D, hTex);
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, HW_ * HRES, HH_ * HRES, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
-  for (const q of [gl.TEXTURE_MIN_FILTER, gl.TEXTURE_MAG_FILTER]) gl.texParameteri(gl.TEXTURE_2D, q, gl.LINEAR);
-  for (const q of [gl.TEXTURE_WRAP_S, gl.TEXTURE_WRAP_T]) gl.texParameteri(gl.TEXTURE_2D, q, gl.CLAMP_TO_EDGE);
-  gl.bindFramebuffer(gl.FRAMEBUFFER, hFbo);
-  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, hTex, 0);
-  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-  // the height map of a view whose camera (top left of the floor it shows) is cam: the world texture now bound to
-  // unit 0 (the world or the player's memory band, rowOff / rows / outside as the main pass) -> its world rectangle
-  function heights(e, cam, rowOff, rows, outside, cls) {
-    if (!hprog) return null;
+  // 3D: the height passes into their own textures - A one texel per world pixel around a view, B (smooth edges) HRES
+  const haprog = program(gl, VS, HAFS, ["aPos"]), hprog = program(gl, VS, HFS, ["aPos"]), hau = {}, hu = {};
+  if (haprog) for (const n of ["uWorld", "uWorldPx", "uRowOff", "uRows", "uOutside", "uCls", "uOrg"]) hau[n] = gl.getUniformLocation(haprog, n);
+  if (hprog) for (const n of ["uA", "uOrg", "uOrgA", "uSizeA", "uRes"]) hu[n] = gl.getUniformLocation(hprog, n);
+  const HRES = 4, HW_ = 100, HH_ = 96;                 // (the view's 76 x 71 and a margin: rays reach a few px out)
+  const target = (w, h, filter) => {
+    const tex = gl.createTexture(), fbo = gl.createFramebuffer();
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    for (const q of [gl.TEXTURE_MIN_FILTER, gl.TEXTURE_MAG_FILTER]) gl.texParameteri(gl.TEXTURE_2D, q, filter);
+    for (const q of [gl.TEXTURE_WRAP_S, gl.TEXTURE_WRAP_T]) gl.texParameteri(gl.TEXTURE_2D, q, gl.CLAMP_TO_EDGE);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    return { tex, fbo };
+  };
+  const hA = target(HW_, HH_, gl.NEAREST), hB = target(HW_ * HRES, HH_ * HRES, gl.LINEAR);
+  // the height maps of a view whose camera (top left of the floor it shows) is cam: the world texture now bound to
+  // unit 0 (the world or the player's memory band, rowOff / rows / outside as the main pass) -> [A's, B's (or null)]
+  // world rectangles; A on unit 3, B on unit 2
+  function heights(e, cam, rowOff, rows, outside, cls, smooth) {
+    if (!haprog || (smooth && !hprog)) return null;
     const org = [Math.floor(cam[0]) - 12, Math.floor(cam[1]) - 12];
     const fb = gl.getParameter(gl.FRAMEBUFFER_BINDING), vp = gl.getParameter(gl.VIEWPORT), sc = gl.isEnabled(gl.SCISSOR_TEST);
-    gl.bindFramebuffer(gl.FRAMEBUFFER, hFbo);
-    gl.viewport(0, 0, HW_ * HRES, HH_ * HRES);
     gl.disable(gl.SCISSOR_TEST);
-    gl.useProgram(hprog);
-    gl.uniform1i(hu.uWorld, 0); gl.uniform2i(hu.uWorldPx, e.worldW, e.worldH);
-    gl.uniform1i(hu.uRowOff, rowOff); gl.uniform1i(hu.uRows, rows); gl.uniform1i(hu.uOutside, outside);
-    gl.uniform1iv(hu.uCls, cls); gl.uniform2f(hu.uOrg, org[0], org[1]); gl.uniform1f(hu.uRes, HRES);
+    gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, null);
+    gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, null);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, hA.fbo);
+    gl.viewport(0, 0, HW_, HH_);
+    gl.useProgram(haprog);
+    gl.uniform1i(hau.uWorld, 0); gl.uniform2i(hau.uWorldPx, e.worldW, e.worldH);
+    gl.uniform1i(hau.uRowOff, rowOff); gl.uniform1i(hau.uRows, rows); gl.uniform1i(hau.uOutside, outside);
+    gl.uniform1iv(hau.uCls, cls); gl.uniform2f(hau.uOrg, org[0], org[1]);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
+    gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, hA.tex);
+    if (smooth) {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, hB.fbo);
+      gl.viewport(0, 0, HW_ * HRES, HH_ * HRES);
+      gl.useProgram(hprog);
+      gl.uniform1i(hu.uA, 3); gl.uniform2f(hu.uOrg, org[0], org[1]); gl.uniform2f(hu.uOrgA, org[0], org[1]);
+      gl.uniform2f(hu.uSizeA, HW_, HH_); gl.uniform1f(hu.uRes, HRES);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+      gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, hB.tex);
+    }
+    gl.activeTexture(gl.TEXTURE0);
     gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
     gl.viewport(vp[0], vp[1], vp[2], vp[3]);
     if (sc) gl.enable(gl.SCISSOR_TEST);
     gl.useProgram(prog);
-    return [org[0], org[1], HW_, HH_];
+    const r = [org[0], org[1], HW_, HH_];
+    return [r, smooth ? r : null];
   }
   const u = {}, pu = {};
   for (const n of ["uWorld", "uVis", "uWorldPx", "uRowOff", "uRows", "uOutside", "uSize", "uOut", "uWin", "uCam", "uScale", "uPal",
     "uCls", "uTerrain", "uEdges", "uGlow", "uLight", "uFog", "uVisOn", "uStatic", "uMap", "uVisOrg", "uTime", "uNT", "uTank",
-    "uTankCol", "uTread", "uTS", "uTankStyle", "uNL", "uLt", "uLc", "uNS", "uShot", "uDepth", "uEye", "uH", "uHRect"]) u[n] = gl.getUniformLocation(prog, n);
+    "uTankCol", "uTread", "uTS", "uTankStyle", "uNL", "uLt", "uLc", "uNS", "uShot", "uDepth", "uEye", "uH", "uHRect", "uHA", "uARect"]) u[n] = gl.getUniformLocation(prog, n);
   if (pprog) for (const n of ["uCam", "uScale", "uSize", "uOut", "uWin"]) pu[n] = gl.getUniformLocation(pprog, n);
   const worldTex = texture(gl), visTex = texture(gl);
   gl.bindTexture(gl.TEXTURE_2D, visTex);
@@ -911,12 +971,12 @@ function create(gl) {
         gl.uniform1i(u.uRowOff, 0); gl.uniform1i(u.uRows, e.worldH); gl.uniform1i(u.uOutside, 7);
         gl.uniform1i(u.uVisOn, 0);
       }
-      // 3D with smooth edges: the height map around this view (its own texture on unit 2)
-      gl.uniform1i(u.uH, 2);
-      const hr = set.depth === "3d" && set.edges !== "pixel" && !cam0.noise
-        ? heights(e, cam, m ? m.y0 : 0, m ? m.rows : e.worldH, m ? 0 : 7, S.cls) : null;
-      gl.uniform4f(u.uHRect, ...(hr || [0, 0, 0, 0]));
-      if (hr) { gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, hTex); gl.activeTexture(gl.TEXTURE0); }
+      // 3D: the height maps around this view (A per world pixel on unit 3; smooth edges: B on unit 2)
+      gl.uniform1i(u.uH, 2); gl.uniform1i(u.uHA, 3);
+      const hr = set.depth === "3d" && !cam0.noise
+        ? heights(e, cam, m ? m.y0 : 0, m ? m.rows : e.worldH, m ? 0 : 7, S.cls, set.edges !== "pixel") : null;
+      gl.uniform4f(u.uARect, ...(hr ? hr[0] : [0, 0, 0, 0]));
+      gl.uniform4f(u.uHRect, ...(hr && hr[1] ? hr[1] : [0, 0, 0, 0]));
       const pal = palFor(w.viewer || w.p);
       const T = tanksFor(e, w.p, pal, set.light === "on", 1);
       setShots(e, w.p);

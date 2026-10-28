@@ -155,9 +155,12 @@ how the game and every menu screen are drawn. This file describes what is built.
   and darker low down, shadows cast towards `SUN` (8 steps). The lamps, headlights, glow, fog of war and particles are
   the 2D ones at the hit's position (particles stay on the floor plane); shells in flight are drawn at `SHOT_H` (1.6,
   the gun's height), projected through the camera.
-- Sculpted: a height map of the view and a margin (`HRES` 4 texels per world pixel, 100 x 96 px) drawn first each
-  frame per view by `HFS` - the materials' heights through the 2D contour kernel, steepened between the lowest and
-  highest around - and sampled linearly (one fetch per step instead of 16). Voxel: each world pixel's height as is.
+- Heights in two passes per view and frame (100 x 96 world px around it): `HAFS` one texel per world pixel - the
+  material's height; rock (owner, 2026-10-28: "more like a rock") rises from half its height at a tunnel's edge to the
+  full one 3 px in (next to dirt it stands full) with bumps from its texture's own noise (`fbm3`, as `shade`) - the
+  voxel blocks use it as it is; `HFS` (smooth edges) 4 texels per world pixel - pass A through the 2D contour kernel,
+  steepened between the lowest and highest around where it meets the floor, smooth elsewhere - sampled linearly (one
+  fetch per ray step).
 - The world maps and the HUD stay 2D.
 
 ## 6. The HUD (gfx-hud.js)
