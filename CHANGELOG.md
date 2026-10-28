@@ -14,6 +14,7 @@ those releases are tagged `online-vX.Y.Z`, their changes are in [docs/CHANGELOG-
 - Replays play only in the version (major.minor) that recorded them: another version's are gray in the list with
   the version that recorded them, can be saved as a file or deleted but not watched or shared, and their links say so.
 - Capture the flag: the flag pole is white again (pink since the new tank colours).
+- Base siege: a destroyed base's walls vanish (open ground) instead of turning to dirt.
 
 ## 1.1.7
 

@@ -597,8 +597,7 @@ page from before 2.0 - is refused (POST 409 `{code:
   (hard, 4 tanks, 6 modes x full / circle): standing >= 2 s 23.7 % -> 12.1 % of their time alive, the rest mostly
   repairing at home and "hold" (hill). Classic AI untouched (screen-check's classic fingerprint unchanged; the
   extended ones re-recorded).
-- Siege rubble (owner, 2026-10-28; for 1.2 - it changes the game): a fallen base's walls turn to dirt (siege.js
-  `fall`, "rubble"); the owner noticed dirt where the walls were - to decide in 1.2 (e.g. walls kept but dead).
+- Siege (owner, 2026-10-28, 1.2): a fallen base's walls vanish - open ground (they turned to dirt, "rubble", before).
 - King of the hill (owner, 2026-10-28): a computer tank stood beside the hill - the same stale-memory `engage` as
   above (fixed in 1.2).
 - Low-energy "static" copies a simulated low-memory image (the original showed real-mode memory).

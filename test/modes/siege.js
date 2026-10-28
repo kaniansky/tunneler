@@ -41,9 +41,9 @@ for (const l of ["en", "sk", "cs", "uk", "ru"])
   check(firstHit >= 0 && firstHit < 10, "an enemy's shot on the wall takes a hit point (first after " + firstHit + " frames)");
   check(e.GS.hp[1] === 0 && e.modeScore[2] === 30, "30 hits and the base falls (hp " + e.GS.hp[1] + ", hits by GREEN " + e.modeScore[2] + ")");
   run(e, 40);
-  let dirt = 0, all = 0;
-  for (let y = by - 16; y <= by + 16; y++) for (const x of [bx - 17, bx + 17]) { all++; if (e.pixelClass[e.getPixel(x, y)] === 1) dirt++; }
-  check(dirt > all * 0.8, "a fallen base's walls turn to dirt (" + dirt + " of " + all + " side wall pixels)");
+  let open = 0, all = 0;
+  for (let y = by - 16; y <= by + 16; y++) for (const x of [bx - 17, bx + 17]) { all++; if (e.getPixel(x, y) === 0) open++; }
+  check(open > all * 0.8, "a fallen base's walls vanish - open ground (" + open + " of " + all + " side wall pixels)");
   check(!GM.baseUsable(e, 1, 1) && GM.baseUsable(e, 2, 2), "baseUsable: false for the fallen base only");
   e.tankX[1] = bx; e.tankY[1] = by; e.shield[1] = 5000; e.energy[1] = 5000;
   run(e, 30);
@@ -272,12 +272,13 @@ for (const s of setups) {
 }
 
 // ---- 8 tanks free-for-all, no round time, medium and large: no endless stalemate (the round time of the
-// mode, 10 minutes, is the safety net; most rounds end before it)
+// mode, 10 minutes, is the safety net; most rounds end before it) - 24 matches: which ones end in time is chaotic
+// (12 gave 8 to 11 for equally good code: fallen walls open or dirt, 2026-10-28; over 40 matches 80 % / 87 %)
 {
   const L = ["easy", "normal", "hard"];
   let early = 0, all = 0;
   for (const size of ["medium", "large"])
-    for (let seed = 1; seed <= 6; seed++) {
+    for (let seed = 1; seed <= 12; seed++) {
       const levels = [0, 1, 2, 3, 4, 5, 6, 7].map(i => L[(i + seed) % 3]);
       const r = runMatch({ mode: "siege", slots: slots([1, 2, 3, 4, 5, 6, 7, 8]), levels, seed, size, winScore: 1, maxFrames: 13000 });
       all++; if (!r.engine.timedOut) early++;

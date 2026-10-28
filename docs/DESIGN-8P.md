@@ -560,7 +560,7 @@ only `ai.rng()`.
   wins the round; at the round time the most captures. Destroyed tanks come back at their base after ~3 s
   (`eliminationEnds: false`). hud: captures.
 - **siege** (base siege): every base has 30 hit points (shown on the hud for the own base); a shot exploding
-  on a base's walls takes one (not its own team's). A base at 0 is destroyed (its walls turn to rubble/dirt,
+  on a base's walls takes one (not its own team's). A base at 0 is destroyed (its walls vanish - open ground from 1.2, dirt before;
   `baseUsable` false); tanks come back at their base after ~3 s while it stands - not after it fell. A team
   with no base and no tank left is out; the last team with a base (or tank) wins the round.
 - **deathmatch**: destroyed tanks come back at their base after ~3 s; a kill of an enemy scores +1 for the

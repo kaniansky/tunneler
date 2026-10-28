@@ -1,7 +1,7 @@
 // Game mode "siege" (base siege, docs/DESIGN-8P.md 27): every base has e.goal hit points (the "Base strength"
 // setting, TunnelerEngine.GOALS.siege, default BASE_HP); a shot exploding
-// on a base's walls takes one (not from the base's own team). A base at 0 falls: its walls turn to dirt
-// (rubble) and it gives nothing any more (baseUsable). A destroyed tank comes back at its own base after
+// on a base's walls takes one (not from the base's own team). A base at 0 falls: its walls vanish (open
+// ground - owner, 2026-10-28; they turned to dirt before 1.2) and it gives nothing any more (baseUsable). A destroyed tank comes back at its own base after
 // ~3 s while that base stands - not after it fell. A team with no base and no tank left is out; the last
 // team in wins the round - and the match: a siege is one round (the engine sets winScore 1). At the round time (no round time set: 10 minutes, OWN_TIME) the team with the
 // most hit points left in its bases wins, then the most hits on enemy bases this round, then the most damage
@@ -194,9 +194,9 @@ E.registerMode("siege", {
   frame(e) {
     const G = e.GS, N = e.nPlayers;
     G.f++;
-    // fallen bases: the walls to rubble (now - the tanks and shots aren't in the world between frames)
+    // fallen bases: the walls gone (now - the tanks and shots aren't in the world between frames)
     for (const q of G.fall) {
-      eachWall(e, q, (x, y) => { if (e.pixelClass[e.getPixel(x, y)] === 3) e.setPixel(x, y, ((x + y) & 3) ? 6 : 8); });
+      eachWall(e, q, (x, y) => { if (e.pixelClass[e.getPixel(x, y)] === 3) e.setPixel(x, y, 0); });
       e.addExplosion(e.baseX[q], e.baseY[q], 20, 40);
       e.queueSound(3, e.baseX[q], e.baseY[q]);
     }
