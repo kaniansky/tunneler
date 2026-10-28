@@ -34,7 +34,7 @@ Lang.register("uk", {
   "ui.back": "<ESC> назад.",
   "home.split": "Розділений екран",
   "home.split.i1": "Двоє гравців за однією клавіатурою, як в оригіналі.",
-  "home.split.i2": "{blue}: W A S D + SHIFT     {green}: стрілки + ENTER",
+  "home.split.i2": "{blue}: {bk}     {green}: {gk}",
   "home.cpu": "Сутичка",
   "home.cpu.i2": "Кольори, команди, режим і складність - на наступному екрані.",
   "home.online": "Гра онлайн",

@@ -487,6 +487,20 @@ function play(search) {
   ok("split-screen settings: default classic, map size, rounds to win and round time, remembered");
 }
 
+// ---------------------------------------------------------------- home.js: split screen's keys as set in Settings, Controls
+{
+  const store = new Map();
+  const env = makeEnv("", store), ui = () => env.win.tunnelerHomeUI();
+  env.page("index.html");
+  const info = () => env.win.Lang.decode(ui().spec.items.find(i => i.key === "split").info[1]);
+  assert(/BLUE: W A S D \+ L Shift +GREEN: ↑ ← ↓ → \+ Enter/.test(info()), "the defaults: " + info());
+  env.win.Controls.set("blue", "fire", "Space");
+  env.win.Controls.set("green", "up", "KeyI");
+  env.key("ArrowUp"); env.key("Enter"); env.key("Escape");  // (Settings and back: the main menu anew)
+  assert(/BLUE: W A S D \+ Space +GREEN: I ← ↓ → \+ Enter/.test(info()), "as set: " + info());
+  ok("home.js: split screen's info - the keys as set in Settings, Controls (" + info() + ")");
+}
+
 // ---------------------------------------------------------------- home.js Settings: categories + their settings
 {
   const store = new Map([["tunneler.gfx", "original"]]);  // (chosen before: modern is the default since 5.0)

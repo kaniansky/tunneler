@@ -193,7 +193,7 @@ export function mount() {
   // sel: an item's index or key (the screen came back from it)
   function main(sel, keep) {
     const items = [
-      ...(MOBILE ? [] : [{ key: "split", label: T("home.split"), info: [T("home.split.i1"), T("home.split.i2")], go: () => split() }]),
+      ...(MOBILE ? [] : [{ key: "split", label: T("home.split"), info: [T("home.split.i1"), splitKeys()], go: () => split() }]),
       { key: "cpu", label: T("home.cpu"), info: [T(MOBILE ? "home.cpu.i1m" : "home.cpu.i1n"), T("home.cpu.i2")], go: () => cpu() },
       { key: "online", label: T("home.online"), info: [T("home.online.i1"), T("home.online.i2")],
         go: () => { Nav.go(Links.games()); } },
@@ -299,6 +299,9 @@ export function mount() {
   const PADS = () => Pads && Pads.getTouch ? Pads : null;              // (touch controls)
   const SCR = () => GameScreen || null;                                 // (fullscreen, screen size: screen.js)
   const COLORS8 = TunnelerEngine.PLAYER_KEYS;
+  // split screen's keys as set in Settings, Controls (owner, 2026-10-28): "BLUE: W A S D + L Shift     GREEN: ↑ ← ↓ → + Enter"
+  function keysOf(set) { return ["up", "left", "down", "right"].map(a => Controls.label(Controls.get(set, a))).join(" ") + " + " + Controls.label(Controls.get(set, "fire")); }
+  function splitKeys() { return T("home.split.i2", { bk: keysOf("blue"), gk: keysOf("green") }); }
   // the preferred colour as stored: the names gone since 2026-10-26 stay their seat (netproto.js roleIndex)
   const OLD_COLORS = { cyan: 2, yellow: 3, violet: 6, teal: 7 };
   const storedColor = () => { const v = load("tunneler.online.color", ""); return COLORS8.includes(v) ? v : OLD_COLORS[v] != null ? COLORS8[OLD_COLORS[v]] : ""; };
@@ -579,7 +582,7 @@ export function mount() {
       lines: screenTitle("lc.split.title"), box: { y: 9 }, sel: sel || 0, infoRow: 20,
       back: () => main("split"),
       items: [
-        { key: "play", label: T("cpu.start"), info: [T("home.split.i1"), T("home.split.i2")], go: start },
+        { key: "play", label: T("cpu.start"), info: [T("home.split.i1"), splitKeys()], go: start },
         { key: "gap1", label: "", disabled: true },
         sizeItem(splitSize, set(v => { splitSize = v; })),
         winItem(splitWin, set(v => { splitWin = v; })),

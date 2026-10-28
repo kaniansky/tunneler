@@ -35,7 +35,7 @@ Lang.register("en", {
   "ui.back": "<ESC> back.",
   "home.split": "Split screen",
   "home.split.i1": "Two players on one keyboard, like the original.",
-  "home.split.i2": "{blue}: W A S D + SHIFT     {green}: arrow keys + ENTER",
+  "home.split.i2": "{blue}: {bk}     {green}: {gk}",
   "home.cpu": "Skirmish",
   "home.cpu.i2": "Colors, teams, mode and difficulty on the next screen.",
   "home.online": "Online game",

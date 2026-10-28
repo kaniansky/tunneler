@@ -34,7 +34,7 @@ Lang.register("ru", {
   "ui.back": "<ESC> назад.",
   "home.split": "Разделённый экран",
   "home.split.i1": "Двое игроков за одной клавиатурой, как в оригинале.",
-  "home.split.i2": "{blue}: W A S D + SHIFT     {green}: стрелки + ENTER",
+  "home.split.i2": "{blue}: {bk}     {green}: {gk}",
   "home.cpu": "Схватка",
   "home.cpu.i2": "Цвета, команды, режим и сложность - на следующем экране.",
   "home.online": "Игра онлайн",

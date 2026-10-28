@@ -34,7 +34,7 @@ Lang.register("sk", {
   "ui.back": "<ESC> späť.",
   "home.split": "Delená obrazovka",
   "home.split.i1": "Dvaja hráči na jednej klávesnici, ako v origináli.",
-  "home.split.i2": "{blue}: W A S D + SHIFT     {green}: šípky + ENTER",
+  "home.split.i2": "{blue}: {bk}     {green}: {gk}",
   "home.cpu": "Potýčka",
   "home.cpu.i2": "Farby, tímy, režim a obtiažnosť na ďalšej obrazovke.",
   "home.online": "Hra online",
