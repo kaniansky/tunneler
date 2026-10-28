@@ -201,6 +201,30 @@ check(homeTotal > 0, "no bot ever went home to refuel");
   check([none, upR, downL].every(([x, y]) => e.distance(Math.abs(x), Math.abs(y)) < 15), "hiding: where the base refuels and repairs");
 }
 
+// ------------------------------------------------------------------ out of an enemy's base the way its path goes
+// owner's replay (fixtures/ai-base-exit.replay, 4v4 on a small generated map): at 143 s SKY, its shield low, is in
+// RED's base and retreats to a fallen teammate's base to the right; its grid is aligned with RED's base, so the path
+// runs through it and out of the bottom gap - the tank left by the top one (its goal is higher than the base) and the
+// path led it back in: up and down for a minute. Recorded input up to then, the bots drive themselves from there.
+{
+  const zlib = require("zlib");
+  const { Replay } = require(path.join(__dirname, "..", "src", "js", "game", "replay.js"));
+  const rep = JSON.parse(zlib.gunzipSync(require("fs").readFileSync(path.join(__dirname, "fixtures", "ai-base-exit.replay"))).toString());
+  const e = Replay.engine(rep, E), p = Replay.player(rep), N = rep.opts.slots.length, SKY = 7;
+  const ais = []; for (let q = 1; q <= N; q++) if (rep.aiDriven[q]) ais[q] = new TunnelerAI("hard", q);
+  const FROM = Math.round(143 * 1193182 / 65536);
+  let play = -1, reached = false;
+  for (let s = 0; play < 0 || s - play < FROM + 360; s++) {
+    let inp = p.next();
+    if (play >= 0 && s - play >= FROM) inp = { bits: (inp ? inp.bits : new Array(N).fill(0)).slice(), keys: [] };
+    for (let q = 1; q <= N; q++) if (ais[q]) { const b = TunnelerAI.bitsFor(ais[q], e); if (play >= 0 && s - play >= FROM) inp.bits[q - 1] = b; }
+    if (e.screen === "play" && play < 0) play = s;
+    e.step(inp);
+    if (play >= 0 && s - play >= FROM && e.distance(Math.abs(e.tankX[SKY] - e.baseX[5]), Math.abs(e.tankY[SKY] - e.baseY[5])) < 15) { reached = true; break; }
+  }
+  check(reached, "retreat out of an enemy's base through the gap its path leaves by: SKY reaches its teammate's base within 20 s (at " + e.tankX[SKY] + "," + e.tankY[SKY] + ")");
+}
+
 // ------------------------------------------------------------------ line of sight: what the bots see
 console.log("\nLine of sight");
 {

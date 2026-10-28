@@ -1088,7 +1088,9 @@ class TunnelerAI {
         // (a tank driving in on its path - the grid sees a base's doorway when it happens to align with it -
         // was sent back out, one pixel later its path took it in again: it spun in the doorway)
         const fy = DY[e.tankDir[this.me]];
-        const side = Math.abs(my - by) > 13 ? (fy || sgn(my - by)) : gy < by ? -1 : 1;
+        // inside: through the gap its path leaves by (a grid aligned with this base plans through it - out of the
+        // top gap and the path led straight back in, owner's replay 2026-10-28-1901: up and down for a minute)
+        const side = Math.abs(my - by) > 13 ? (fy || sgn(my - by)) : this.pathExit(bx, by) || (gy < by ? -1 : 1);
         if (mx !== bx) return { dir: dirOf(sgn(bx - mx), 0) };
         return { dir: dirOf(0, side) };
       }
@@ -1104,6 +1106,20 @@ class TunnelerAI {
       }
     }
     return null;
+  }
+
+  // the gap (-1 top, 1 bottom) the planned path leaves the base at (bx, by) by - after its first point inside (the
+  // last path planned: none is while doorway steers it in a base); 0: it doesn't pass through
+  pathExit(bx, by) {
+    const P = this.path, g = this.grid;
+    if (!P) return 0;
+    let inside = false;
+    for (let i = this.pathIdx; i < P.length; i++) {
+      const dy = g.cy(P[i]) - by;
+      if (Math.abs(g.cx(P[i]) - bx) <= 17 && Math.abs(dy) <= 17) inside = true;
+      else if (inside) return sgn(dy);
+    }
+    return 0;
   }
 
   // straight-line steering with a little obstacle avoidance
