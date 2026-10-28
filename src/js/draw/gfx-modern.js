@@ -979,6 +979,10 @@ function create(gl) {
       gl.uniform4f(u.uHRect, ...(hr && hr[1] ? hr[1] : [0, 0, 0, 0]));
       const pal = palFor(w.viewer || w.p);
       const T = tanksFor(e, w.p, pal, set.light === "on", 1);
+      // marked teammates (views.js teamMarks): where their tanks are drawn in this window - gfx-hud.js draws the marks
+      w.markAt = (w.marks || []).filter(q => S.tanks[q] && S.tanks[q].x !== undefined && e.alive[q] &&
+        !(sight && e.sightSees && !e.sightSees(w.p, e.tankX[q], e.tankY[q])))
+        .map(q => [win[0] + (S.tanks[q].x + 0.5 - cam[0]) * 4.5, win[1] + (S.tanks[q].y + 0.5 - cam[1]) * 4, q]);
       setShots(e, w.p);
       setTanks(T);
       setLights(e, w.p, T, set.light === "on");

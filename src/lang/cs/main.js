@@ -159,6 +159,8 @@ Lang.register("cs", {
   "tc.colorblind.i": "Barvy, které jdou rozlišit i při červeno-zelené barvoslepostí.",
   "tc.relation.i": "Tvůj tank modrý, spoluhráči zelení, nepřátelé červení.",
   "set.tankcolors.i": "Jen herní obrazovka; jména si nechávají své barvy.",
+  "set.teammarks": "Označit spoluhráče: ",
+  "set.teammarks.i": "Malý trojúhelník nad tanky tvých spoluhráčů v týmových hrách.",
   "ctl.up": "nahoru",
   "ctl.down": "dolů",
   "ctl.left": "vlevo",
@@ -457,7 +459,7 @@ Lang.register("cs", {
         ["Zvuk:  ", "V Nastavení zvolíš jeho styl: původní (pípání PC " +
           "speakeru z roku 1991), realistický (zvuky tanků), nahraný (skutečné nahrávky), pohádkový (boing a puk) nebo vypnutý; i hlasitost, stereo a slábnutí se vzdáleností.  " +
           "Zvuky ostatních tanků slábnou se vzdáleností od tvého a znějí z jejich strany (stereo)."],
-        ["Nastavení:  ", "Obraz (celá obrazovka - i <ALT>+<ENTER> -, velikost obrazu, barvy tanků: běžné, pro barvoslepost nebo ty modrý / tým zelený / nepřátelé červení), Grafika (původní nebo moderní, pak nastavení toho vzhledu), Zvuk (styl, hlasitost, stereo, slábnutí se vzdáleností), Ovládání (klávesy obou tanků; dotykové ovládání: velikost, strana a vzhled - jednoduchý nebo tvůj tank), Online (tvůj účet - nebo jméno -, oblíbená barva, chat, zvuk chatu, ping; v desktopové aplikaci server) a Jazyk."],
+        ["Nastavení:  ", "Hra (celá obrazovka - i <ALT>+<ENTER> -, velikost obrazu, barvy tanků: běžné, pro barvoslepost nebo ty modrý / tým zelený / nepřátelé červení, značka nad tanky spoluhráčů, oblíbená barva, ukládat každý zápas), Grafika (původní nebo moderní, pak nastavení toho vzhledu), Zvuk (styl, hlasitost, stereo, slábnutí se vzdáleností), Ovládání (klávesy obou tanků; dotykové ovládání: velikost, strana a vzhled - jednoduchý nebo tvůj tank), Online (tvůj účet - nebo jméno -, chat, zvuk chatu, ping; v desktopové aplikaci server) a Jazyk."],
         ["Grafika:  ", "Nastavení vybírá původní (obrazovka DOSu z roku 1991) nebo moderní (výchozí): tatáž hra nakreslená v rozlišení tvé obrazovky - hladké tunely, texturovaná hlína a skála, tmavé tunely osvětlené světly tanků, zářící střely, prach, jiskry a oheň, nový panel a menu v moderním písmu.  Nastavení moderní grafiky: styl (čistý nebo retro), kvalita, terén, okraje tunelů, osvětlení, částice, záře, otřesy obrazu, kamera (plynulá: tanky kloužou mezi kroky) a rozhraní, a mlha války při výhledu.  Hloubka 3D svět vyvýší: zdi s výškou a stíny, shora stejně jako 2D (okraje tunelů pixely: kostky).  Mění se jen vzhled, nikdy hra - ani online."],
       ],
     },

@@ -308,7 +308,7 @@ export function mount() {
   // a key row's label: "BLUE up: "
   const keyLabel = (set, a) => Lang.raw(set) + " " + Lang.raw("ctl." + a) + ": ";
   const rowLabels = () => ["set.name", "set.account", "home.lang", "set.sound", "set.volume", "set.stereo", "set.fade", "set.gfx", "set.fullscreen",
-    "set.scale", "set.tankcolors", "rp.auto", "set.smooth", "set.ping", "set.prefer", "set.chatsound", "set.showchat", "touch.size", "touch.left", "touch.look"]
+    "set.scale", "set.tankcolors", "set.teammarks", "rp.auto", "set.smooth", "set.ping", "set.prefer", "set.chatsound", "set.showchat", "touch.size", "touch.left", "touch.look"]
     .concat(isApp() ? ["set.server"] : [], Object.keys(Gfx.MODERN).map(k => "mod." + k))
     .map(k => Lang.raw(k) || "").concat(CTL() ? Controls.SETS.flatMap(st => Controls.ACTIONS.map(a => keyLabel(st, a))) : []);
   const labelW = () => Math.max(...rowLabels().map(l => UniText.cols(l)));
@@ -429,6 +429,10 @@ export function mount() {
         rows.push(L("tankcolors", pad("set.tankcolors") + T("tc." + now), [T("tc." + now + ".i"), T("set.tankcolors.i")],
           d => { save("tunneler.tankcolors", step(Display.TANK_COLOR_MODES, now, d)); settings(true); }));
       }
+      // a triangle over the teammates' tanks in team games (views.js teamMarks; display only)
+      const marks = load("tunneler.teammarks", "1") !== "0";
+      rows.push(L("teammarks", pad("set.teammarks") + onOffT(marks), [T("set.teammarks.i"), T("home.lang.i2")],
+        () => { save("tunneler.teammarks", marks ? "0" : "1"); settings(true); }));
       const prefer = storedColor();
       rows.push(L("prefer", pad("set.prefer") + (prefer ? Lang.enc(Lang.raw(prefer)) : T("set.prefer.none")), [T("set.prefer.i1"), T("set.prefer.i2")],
         d => { save("tunneler.online.color", step([""].concat(COLORS8), prefer, d)); settings(true); }));

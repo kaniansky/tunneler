@@ -526,7 +526,7 @@ function play(search) {
     assert.strictEqual(env.win.Lang.code, before, "and back");
   }
   assert.strictEqual(sel(), "cat-gameplay", "on the first category");
-  same(right(), ["fullscreen", "scale", "gap-d", "tankcolors", "prefer", "autosave"], "Gameplay: fullscreen, screen size, a gap, tank colors, preferred color, save every match");
+  same(right(), ["fullscreen", "scale", "gap-d", "tankcolors", "teammarks", "prefer", "autosave"], "Gameplay: fullscreen, screen size, a gap, tank colors, mark teammates, preferred color, save every match");
   {
     // Save every match (replay.js autoSave): off by default (owner, 2026-10-28 - "Save the replay" after a match), switched here
     const row = () => ui().spec.items.find(i => i.key === "autosave"), dec = () => env.win.Lang.decode(row().label);
@@ -549,7 +549,7 @@ function play(search) {
   assert.strictEqual(store.get("tunneler.scale"), "integer");
   env.key("ArrowDown"); env.key("ArrowRight");             // Tank colors: color-blind
   assert.strictEqual(store.get("tunneler.tankcolors"), "colorblind");
-  env.key("ArrowDown"); env.key("ArrowDown"); env.key("ArrowDown"); assert.strictEqual(sel(), "fullscreen", "Up / Down stay in the box (past Preferred color, Save every match)");
+  env.key("ArrowDown"); env.key("ArrowDown"); env.key("ArrowDown"); env.key("ArrowDown"); assert.strictEqual(sel(), "fullscreen", "Up / Down stay in the box (past Mark teammates, Preferred color, Save every match)");
   env.key("Escape"); assert.strictEqual(sel(), "cat-gameplay", "Esc: back to the category");
   env.key("ArrowDown"); env.key("ArrowRight");             // Graphics; Right: into its settings
   same(right(), ["gfx", "gap-g", "smooth"], "Graphics (original): graphics, a blank row, smooth scrolling");
@@ -754,6 +754,33 @@ function play(search) {
   env.key("Tab", "keyup");
   assert(!runner.overlay, "let go: the game again");
   ok("play.js: held Tab = the score, the teams and the settings over the game (display only, no fire)");
+}
+
+// ---------------------------------------------------------------- teammates marked in the views (Settings, Gameplay)
+{
+  const store = new Map();
+  const env = makeEnv("?mode=cpu&slots=" + encodeURIComponent("0:you:1,1:easy:1,2:easy:2,3:easy:2") + "&lv=2", store);
+  env.page("play.html");
+  const e = env.win.tunnelerEngine(), views = env.win.tunnelerViews();
+  for (let i = 0; i < 3000 && e.screen !== "play"; i++) e.step({ bits: [0, 0, 0, 0], keys: [] });
+  same(views.teamMarks(e, 1), [2], "BLUE's teammate RED marked, not the enemies");
+  same(views.teamMarks(e, 3), [4], "as GOLD sees it: PINK");
+  e.alive[2] = false;
+  same(views.teamMarks(e, 1), [], "a destroyed teammate: no mark");
+  e.alive[2] = true;
+  store.set("tunneler.teammarks", "0");
+  same(views.teamMarks(e, 1), [], "Mark teammates: Off");
+  store.delete("tunneler.teammarks");
+  // the original look: the snapshot keeps each view's origin and the tanks (views.js paintMarks draws from them)
+  const snap = e.out.snapshots[e.out.snapshots.length - 1] || {};
+  assert(snap.cams && snap.cams[1] && snap.tanks && snap.tanks[2] && snap.tanks[2][0] === e.tankX[2], "snapshot: cams, tanks");
+  // a teammate 8 pixels right of BLUE in its view: the triangle's pixels in RED's colour above it
+  const s = { cams: [null, [e.tankX[1] - 38, e.tankY[1] - 35]], tanks: [null, null, [e.tankX[1] + 8, e.tankY[1], 1]] };
+  const W = 360, px = new Uint32Array(W * 400), pal = Array.from({ length: 16 }, (_, i) => i + 100);
+  views.paintMarks(px, W, 0, 0, s, 0, e, pal);
+  const at = (wx, wy) => px[(8 + wy * 4 + 1) * W + 9 + Math.round(wx * 4.5) + 1];
+  assert(at(38 + 8, 35 - 9) === pal[e.playerColor(2) & 15] && at(38 + 8, 35 - 6) === pal[0] && at(38, 35) === 0, "the mark: colour, edge; nothing elsewhere");
+  ok("teammates marked (Settings, Gameplay, Mark teammates): the viewer's team but itself, alive; off: none; the original look's triangle");
 }
 
 // ---------------------------------------------------------------- after death, one view: a tank's side keys switch it

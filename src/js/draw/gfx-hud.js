@@ -75,7 +75,29 @@ function drawMap(ctx, W, H, sc, sw, sh, clean) {
   ctx.restore();
 }
 
+// marked teammates (views.js teamMarks, placed by gfx-modern.js - markAt): a triangle over each tank, in its colour (as
+// the view's viewer sees the tanks), a dark edge; clipped to the window - also with the classic panel
+function drawMarks(ctx, sc, kx, ky, clean) {
+  const e = sc.engine, D = Display, pal = e.extended ? D.EXT_PALETTE : D.LORES_PALETTE;
+  for (const c of sc.windows || []) {
+    if (c.black || !c.markAt || !c.markAt.length) continue;
+    const tpal = D.tankPalette8 ? D.tankPalette8(pal, e, c.viewer || c.p) : pal;
+    ctx.save();
+    ctx.beginPath(); ctx.rect((c.x + 9) * kx, (c.y + 8) * ky, 342 * kx, 284 * ky); ctx.clip();
+    for (const [mx, my, q] of c.markAt) {
+      const qc = tpal[e.playerColor(q) & 15] || [200, 200, 200], s = 3.2 * 4.5 * kx, X0 = mx * kx, Y0 = (my - 6 * 4) * ky;
+      ctx.beginPath();
+      ctx.moveTo(X0 - s / 2, Y0 - s * 0.75); ctx.lineTo(X0 + s / 2, Y0 - s * 0.75); ctx.lineTo(X0, Y0); ctx.closePath();
+      ctx.fillStyle = rgb(qc); ctx.fill();
+      ctx.lineWidth = Math.max(1, kx * (clean ? 1.5 : 2)); ctx.lineJoin = clean ? "round" : "miter";
+      ctx.strokeStyle = clean ? BACK : "#000"; ctx.stroke();
+    }
+    ctx.restore();
+  }
+}
+
 function draw(ctx, W, H, sc, sw, sh, set, now, style) {
+  if (!sc.map && sc.engine) drawMarks(ctx, sc, W / sw, H / sh, style !== "retro");
   if (set.panel === "classic") return;
   if (sc.map) { if (sc.map.kind === "end") drawMap(ctx, W, H, sc, sw, sh, style !== "retro"); return; }
   const e = sc.engine, kx = W / sw, ky = H / sh, clean = style !== "retro";

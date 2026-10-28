@@ -160,6 +160,8 @@ Lang.register("en", {
   "tc.colorblind.i": "Colors that stay apart with red-green color blindness.",
   "tc.relation.i": "Your tank blue, your teammates green, the enemies red.",
   "set.tankcolors.i": "Only the game screen; the names keep their colors.",
+  "set.teammarks": "Mark teammates: ",
+  "set.teammarks.i": "A small triangle over your teammates' tanks in team games.",
   "ctl.up": "up",
   "ctl.down": "down",
   "ctl.left": "left",

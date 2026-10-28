@@ -86,6 +86,9 @@ function gridCols(c, room) {
 const load = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
 const save = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* private mode */ } };
 
+// Settings, Gameplay, "Mark teammates" (tunneler.teammarks): on unless "0"
+const markTeammates = () => load("tunneler.teammarks") !== "0";
+
 class ViewModes {
   constructor(canvas, display, getEngine, opts = {}) {
     this.canvas = canvas;                                  // (the page's element: its place, its events)
@@ -342,6 +345,36 @@ class ViewModes {
   // ------------------------------------------------------------ drawing
   // tank colours (Display.tankPalette): whose view decides "you / team / enemy" - a player's own tank (the
   // scope), else the view's own tank (v: player index 0..); null = nobody (the slots' colours)
+  // teammates marked in the views (owner, 2026-10-28: "I need to distinguish enemy tanks from my teammates"; Settings,
+  // Gameplay, "Mark teammates" - on unless "0"): the tanks alive on the viewer's team but its own, in a team game
+  teamMarks(e, viewer) {
+    if (!e || !e.extended || !viewer || !e.alive || !markTeammates()) return [];
+    const out = [];
+    for (let q = 1; q <= e.nPlayers; q++) if (q !== viewer && e.alive[q] && e.team(q) === e.team(viewer)) out.push(q);
+    return out;
+  }
+  // the original look: a small triangle over each marked tank in view v's window (cells 1-38 x rows 2-72, a world
+  // pixel 4.5 x 4), in the tank's colour with a black edge - where the snapshot saw them (s.cams, s.tanks)
+  paintMarks(px, W, x, y, s, v, e, pal) {
+    const cam = s.cams && s.cams[v + 1], viewer = this.viewerOf(v);
+    if (!cam || !s.tanks) return;
+    const SHAPE = ["KKKKKKK", "KCCCCCK", " KCCCK ", "  KCK  ", "   K   "];
+    for (const q of this.teamMarks(e, viewer)) {
+      const t = s.tanks[q];
+      if (!t || !t[2]) continue;
+      if (e.sight && e.sight !== "full" && e.sightSees && !e.sightSees(v + 1, t[0], t[1])) continue;
+      const c = pal[e.playerColor(q) & 15], k = pal[0];
+      SHAPE.forEach((row, r) => {
+        for (let i = 0; i < 7; i++) {
+          if (row[i] === " ") continue;
+          const wx = t[0] - 3 + i - cam[0], wy = t[1] - 10 + r - cam[1];
+          if (wx < 0 || wx >= 76 || wy < 0 || wy >= 71) continue;
+          const x0 = x + 9 + Math.round(wx * 4.5), x1 = x + 9 + Math.round((wx + 1) * 4.5), y0 = y + 8 + wy * 4;
+          for (let yy = y0; yy < y0 + 4; yy++) px.fill(row[i] === "C" ? c : k, yy * W + x0, yy * W + x1);
+        }
+      });
+    }
+  }
   viewerOf(v) {
     if (this.scope && v != null && (this.scope.others || []).includes(v)) return v + 1;   // (player 2's view: theirs)
     return this.scope ? this.scope.own + 1 : v == null ? null : v + 1;
@@ -397,6 +430,7 @@ class ViewModes {
       c.team = teams ? D(e.teamName(e.team(c.p))) : "";
       c.color = this.playerTextColor(c.p - 1) & 15;
       c.viewer = this.viewerOf(c.p - 1);
+      c.marks = this.teamMarks(e, c.viewer);             // (gfx-modern.js places them, gfx-hud.js draws them)
     }
     return { engine: e, cells, windows: cells.filter(c => !c.black), labels: L.kind === "grid" && !!L.labels,
       ping: this.pingText || "", notice: this.noticeText ? D(this.noticeText) : "", cut: this.noticeText ? this.noticeBand() : null,
@@ -510,7 +544,7 @@ class ViewModes {
       if (this.blackedOut(v, e)) {
         for (let r = y + top + 2 * 4; r < y + top + 73 * 4; r++) px.fill(pal[0], r * W + x + 9, r * W + x + 39 * 9);
         this.paintText(px, W, x, y + top + 37 * 4 - 8, T("vw.destroyed"), 0x0C);
-      }
+      } else this.paintMarks(px, W, x, y + top, s, v, e, pal);
       if (L.labels) this.paintLabel(px, W, x, y, v, e);
     });
     this.ctx.putImageData(this.img, 0, 0);

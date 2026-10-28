@@ -1144,6 +1144,11 @@ page from before 2.0 - is refused (POST 409 `{code:
   day - `sweepBoards`), today + yesterday for `DAY_GRACE_MS` (2 h) after midnight; `opts.now` for tests. Dockerfile
   copies src/js + src/lang and the worker. Texts `src/lang/<code>/challenge.js` via `Lang.extend`, keys `ch.*`,
   `home.challenge(.i)`. Tests: test/challenge-check.js, layout-check / app-check screens.
+- **Teammates marked** (owner, 2026-10-28; display only): `views.js teamMarks(e, viewer)` - the viewer's team but itself,
+  alive (`tunneler.teammarks` "0" = off; Settings, Gameplay; CloudSave). Original look: `paintMarks` draws a 7 x 5
+  world-pixel triangle (tank colour, black edge) from the snapshot's `cams` / `tanks` (playscreen snapshotExt);
+  modern: gfx-modern.js places them (`markAt`, smoothed tank, the window's camera), gfx-hud.js `drawMarks` (also with
+  the classic panel). Unseen tanks (line of sight): no mark. Test: local-check "teammates marked".
 - **Generated maps** (1.2, docs/v6/MAPS.md 5b): `game/mapgen.js` kinds fortress / arena / highlands / caves, fair /
   natural, a new map every match from its seed (skirmish `?gen=`, online: the server in `startMatch`); Original = the
   original game's random world (`lc.map.random`, "" as before). Pictures `MapPick.preview`.

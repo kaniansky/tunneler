@@ -165,6 +165,9 @@ class PlayScreen {
     const s = { t: (t - this.e.stepStart) * 1000 / PIT_HZ, mode: this.mode, screen: this.screen, palette: "extended" };
     if (this.screen === "play") {
       s.views = this.views.map(v => v.slice()); s.vram = s.views[0];
+      // (display only: each view's world origin at its blit and where the tanks are - views.js marks teammates)
+      s.cams = this.cams.map(c => c && [c.x, c.y]);
+      s.tanks = Array.from({ length: this.e.nPlayers + 1 }, (_, p) => p ? [this.e.tankX[p], this.e.tankY[p], this.e.alive[p] ? 1 : 0] : null);
       if (this.e.sight !== "full") s.dims = this.viewDims.map(d => d.slice());
     }
     else if (this.mode === "text") s.text = this.textOps.map(o => o.slice());
