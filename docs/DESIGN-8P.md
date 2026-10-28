@@ -322,6 +322,9 @@ spectators first), server relay with cleaning / rate limit / ban check / last 50
 (`snapshot.text`, `Display.paintText`, `unicodeGlyph` in glyphs.js) for chat, lobby player names, the
 Name / Say inputs and the status line's own name. Not done: names inside the engine's own screens (round
 title, statistics, world map) - the engine reports no name positions, so they keep the "?" fallback.
+Update (owner, 2026-10-28): the host can delete a message and a kick deletes the kicked player's messages - they
+show as "*deleted*" for everybody; the kick stays a ban for good (no way to allow back). Details: NOTES.md
+"Lobby chat".
 
 ## 23. Player view: self / team / everyone (owner, 2026-10-14 - after the follow-up workflow) - implemented
 
@@ -487,8 +490,9 @@ Hooks (all optional; `e` = the engine; players are 1..e.nPlayers; teams are inde
 - `timeUp(e)` - the round time ran out: decide the round (`e.endRound(team)`) and return true; else the
   usual damage rule applies.
 - `draw(e)` - draw the mode's objects for this frame with `e.objPut(x, y, colour)` (world pixels, shown in
-  the view screens; restored after the blits - tanks / shots never collide with them; palette: 14 yellow
-  gold, 9 white, 12 red, 15 teal, 5 yellow, a player's own `e.playerColor(p)`).
+  the view screens; restored after the blits - tanks / shots never collide with them; `engine.objsShown` keeps the
+  last frame's for the modern look; palette: 14 yellow gold, 15 white, 12 red, 9 pink, 5 gold, a player's own
+  `e.playerColor(p)` - since the slot colours of 2026-10-26: 9 was white, 15 teal before).
 - `hud(e, p)` -> `{value: 0..99, color}` or null: a number on a black tag beside player p's instrument
   panel (right side; the round clock is on the left).
 - `scoreText(e, p)` -> short text for the spectators' map table ("gold 3"; use `e.mt`).

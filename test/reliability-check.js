@@ -272,6 +272,8 @@ async function main() {
     const A = await start({ stateStore: store, version: "5.9.0" });
     const { room, a } = await playingRoom(A.port, A.s, "Upgrade night");
     await until(() => a.frames > 30, "frames");
+    // (an older server's chat messages have no ids)
+    A.s.rooms.get(room.id).chat = [{ from: { color: 0, name: "Ann" }, text: "old" }, { id: 7, from: { color: 0, name: "Ann" }, text: "new" }];
     await A.s.shutdown();
     const B = await start({ stateStore: store, version: "6.0.0" });
     await until(() => B.s.rooms.has(room.id), "restored at start", 5000);
@@ -281,6 +283,9 @@ async function main() {
       assert.deepStrictEqual(rr.seats.map(x => x.kind), room.seats.map(x => x.kind));
       assert.strictEqual(rr.seats[0].last, a.cid);
       assert.strictEqual(rr.name, "Upgrade night");
+    });
+    check("the chat kept; an older server's messages get ids (after the newest one's)", () => {
+      assert.deepStrictEqual(rr.chat.map(c => [c.id, c.text]), [[8, "old"], [7, "new"]]); assert.strictEqual(rr.chatId, 8);
     });
     a.port = B.port;
     await a.connect(true);

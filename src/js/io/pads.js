@@ -5,7 +5,8 @@
 // own key handlers take exactly like real keys. So the engine, the held bits sent online and the
 // determinism are the same as with the keyboard.
 //   play (the tank):  stick / d-pad = 8 directions -> the tank's keys (BLUE W A S D, GREEN arrows),
-//                     A B X Y / shoulders / triggers = fire (BLUE Left Shift, GREEN Enter), Start = Esc
+//                     A B X Y / shoulders / triggers = fire (BLUE Left Shift, GREEN Enter), Start = Esc,
+//                     Back / Select = Tab (held: the statistics - ui/livestats.js)
 //                     (controls.js: the keys as remapped on the Settings screen)
 //   menus:            stick / d-pad = arrow keys (held: repeats), A / X = Enter, B / Start = Esc, Y = Tab,
 //                     LB / RB = [ ], LT / RT = - + (the map editor's tool, brush, zoom)
@@ -14,7 +15,8 @@
 // Pads.start({menu: () => bool, gamepadSet: i => "blue" | "green" | null, touchSet: "blue" | null, hideTouch: () => bool})
 // Touch controls' options (the homepage's Settings): Pads.getTouch / setTouch("size" | "left" | "look", value);
 // opts.escLabel: the ESC button's text key (a skirmish: "touch.quit" - Esc ends the match; online: "touch.leave" - Esc
-// twice leaves, the game can be joined again; owner, 2026-10-27); opts.touchTank: tankview.js's provider (the tank look's knob); opts.touchDead: () => the player's tank is destroyed
+// twice leaves, the game can be joined again; owner, 2026-10-27); opts.statsLabel: a SCORE button's text key (held = Tab:
+// the statistics - ui/livestats.js; owner, 2026-10-28; none without it); opts.touchTank: tankview.js's provider (the tank look's knob); opts.touchDead: () => the player's tank is destroyed
 // (no joystick / FIRE then).
 
 // the tanks' keys (updated in place from controls.js: when a pad session starts and on every change)
@@ -56,7 +58,7 @@ function dirOf(x, y, dead) {
   return d;
 }
 
-const idle = () => ({ up: false, down: false, left: false, right: false, fire: false, ok: false, back: false, esc: false });
+const idle = () => ({ up: false, down: false, left: false, right: false, fire: false, ok: false, back: false, esc: false, stats: false });
 
 // a gamepad -> controller state (standard mapping; others: first stick + d-pad axes 6 / 7 when present)
 function readGamepad(gp) {
@@ -73,6 +75,7 @@ function readGamepad(gp) {
   s.ok = btn(0) || btn(2);                       // A / X
   s.back = btn(1);                               // B
   s.esc = btn(9);                                // Start
+  s.stats = btn(8);                              // Back / Select (play: the statistics)
   // (menus only: the map editor's tool, brush and zoom keys - Y Tab, LB / RB [ ], LT / RT - + (a replay's speed too);
   // owner, 2026-10-27: the editor's menu with the tool and the brush is gone)
   s.tool = btn(3); s.small = btn(4); s.big = btn(5); s.out = btn(6); s.in = btn(7);
@@ -109,6 +112,7 @@ class VirtualPad {
         if (on("fire")) want.add(keys.fire);
       }
       if (on("esc")) want.add("Escape");
+      if (on("stats")) want.add("Tab");
     }
     for (const [code, h] of [...this.held])
       if (!want.has(code) && now - h.since >= MIN_HOLD) { this.held.delete(code); this.emit("keyup", code, false); }
@@ -182,12 +186,12 @@ const dirIndex = d => d.up ? (d.right ? 1 : d.left ? 7 : 0) : d.down ? (d.right 
 class TouchControls {
   constructor(doc, labels, tank) {
     this.stick = new TouchStick();
-    this.fire = new Set(); this.esc = new Set();     // pointer ids holding the buttons
+    this.fire = new Set(); this.esc = new Set(); this.stats = new Set();   // pointer ids holding the buttons
     this.onChange = null;
     this.tank = tank || (() => null);
     this.dir = -1; this.painted = null; this.dead = false;
     const el = (cls, parent, text, tag) => {
-      const e = doc.createElement(tag || (cls === "tpad-fire" || cls === "tpad-esc" ? "button" : "div"));
+      const e = doc.createElement(tag || (cls === "tpad-fire" || cls === "tpad-esc" || cls === "tpad-stats" ? "button" : "div"));
       e.className = cls;
       if (text) e.textContent = text;
       if (parent) parent.appendChild(e);
@@ -207,6 +211,7 @@ class TouchControls {
     el("tpad-shellm", this.fireBtn, null, "span").innerHTML = SHELL_SVG;
     if (this.fireBtn.setAttribute) this.fireBtn.setAttribute("aria-label", labels.fire);
     this.escBtn = el("tpad-esc", this.root, labels.esc);
+    this.statsBtn = labels.stats ? el("tpad-stats", this.root, labels.stats) : null;   // (held: the statistics)
     const capture = (t, e) => { try { t.setPointerCapture(e.pointerId); } catch (_) { /* (synthesized) */ } };
     const stop = e => { if (e.cancelable && e.preventDefault) e.preventDefault(); };
     const changed = () => { this.drawKnob(); if (this.onChange) this.onChange(); };
@@ -221,6 +226,7 @@ class TouchControls {
     };
     button(this.fireBtn, this.fire);
     button(this.escBtn, this.esc);
+    if (this.statsBtn) button(this.statsBtn, this.stats);
     this.root.addEventListener("contextmenu", stop);
   }
   drawKnob() {
@@ -264,6 +270,7 @@ class TouchControls {
     for (const k of DIRS) s[k] = d[k];
     s.fire = s.ok = !this.dead && this.fire.size > 0;
     s.esc = this.esc.size > 0;
+    s.stats = this.stats.size > 0;
     return s;
   }
 }
@@ -341,7 +348,8 @@ function start(opts) {
     shown();
   }
   if (opts.touchSet && doc && doc.body && typeof doc.body.appendChild === "function" && typeof doc.createElement === "function") {
-    touch = new TouchControls(doc, { fire: T("touch.fire") || "FIRE", esc: T(opts.escLabel || "touch.esc") || "ESC" }, opts.touchTank);
+    touch = new TouchControls(doc, { fire: T("touch.fire") || "FIRE", esc: T(opts.escLabel || "touch.esc") || "ESC",
+      stats: opts.statsLabel ? T(opts.statsLabel) || "SCORE" : null }, opts.touchTank);
     touch.root.hidden = true;
     doc.body.appendChild(touch.root);
     applyTouch(doc);

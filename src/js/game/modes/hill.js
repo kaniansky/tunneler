@@ -39,7 +39,9 @@ function spawnSpot(e, p) {
 
 const cheb = (ax, ay, bx, by) => Math.max(Math.abs(ax - bx), Math.abs(ay - by));
 const inZone = (G, x, y) => { const dx = x - G.cx, dy = y - G.cy; return dx * dx + dy * dy <= G.r * G.r; };
-const teamColor = (e, t) => { const m = e.teamMembers(t); return m.length ? e.playerColor(m[0]) : 9; };
+// (white: 15 - 9 was white in the extended palette until the slot colours of 2026-10-26 made it PINK's)
+const WHITE = 15;
+const teamColor = (e, t) => { const m = e.teamMembers(t); return m.length ? e.playerColor(m[0]) : WHITE; };
 
 // the zone's centre: the middle of the world, or the nearest spot around it (a spiral of candidates, 16
 // directions) clear of every base (and its doorways: no base centre within R + 32, Chebyshev, so no tank
@@ -179,7 +181,7 @@ E.registerMode("hill", {
   draw(e) {
     const G = e.GS, d = G.dots;
     if (!d) return;
-    const c = G.holder >= 0 ? teamColor(e, G.holder) : 9;
+    const c = G.holder >= 0 ? teamColor(e, G.holder) : WHITE;
     // only on free ground / dirt: tanks, shots and explosions on the edge stay on top of the dots
     for (let i = 0; i < d.length; i += 2) {
       const c0 = e.getPixel(d[i], d[i + 1]);

@@ -82,10 +82,10 @@ const STRINGS_EN = {
       ["Gamepads and touch screens:  ", "press any button on a gamepad to connect it (the game shows " +
         "\"Gamepad 1 connected\"); then it drives a tank too (split screen: gamepad 1 " +
         "{9}BLUE{3}, gamepad 2 {10}GREEN{3}; otherwise any gamepad drives yours) - the stick or the " +
-        "d-pad moves, any button fires, Start is <ESC>; in the menus the d-pad and A / B work as the " +
+        "d-pad moves, any button fires, Start is <ESC>, Back / Select shows the score (as <TAB>); in the menus the d-pad and A / B work as the " +
         "arrows, <ENTER> and <ESC>, Y as <TAB>, LB / RB and LT / RT as [ ] and - + (the map editor's tool, " +
-        "brush and zoom; a replay's speed).  On phones and tablets an on-screen joystick and the FIRE and " +
-        "ESC buttons appear with the first touch (ESC says QUIT in a skirmish, LEAVE online; while your " +
+        "brush and zoom; a replay's speed).  On phones and tablets an on-screen joystick and the FIRE, " +
+        "ESC and SCORE buttons appear with the first touch (ESC says QUIT in a skirmish, LEAVE online; while your " +
         "tank is destroyed only it stays); names and chat still need a keyboard."],
       ["Winning:  ", "The first tank (or team) to win the chosen number of rounds - 1 to 9, the " +
         "original is 3 - wins the match.  A round can also have a time limit of 2, 3, 5 or 10 minutes " +
@@ -115,7 +115,7 @@ const STRINGS_EN = {
       ["Split screen:  ", "two players on one keyboard, {9}BLUE{3} against {10}GREEN{3}, each with " +
         "their own view side by side - a skirmish of the two of you.  First choose the map size, the rounds to " +
         "win and the round time."],
-      ["Skirmish:  ", "your own game against computer tanks, alone or with a second player on the same keyboard.  Each of the 8 colors is player 1, player 2, nobody or a computer tank (easy, medium, hard), with its team (1-8) - the players can take any color; then the mode, map size, rounds to win, round time, friendly fire, view, after death and line of sight.  Player 1 drives with W A S D + SHIFT, player 2 with the arrows + ENTER (other keys: Settings, Controls).  <ESC> during play ends the match; Rematch or <ESC> on the game's menu goes back to the settings."],
+      ["Skirmish:  ", "your own game against computer tanks, alone or with a second player on the same keyboard.  Each of the 8 colors is player 1, player 2, nobody or a computer tank (easy, medium, hard), with its team (1-8) - the players can take any color; then the mode, map size, rounds to win, round time, friendly fire, view, after death and line of sight.  Player 1 drives with W A S D + SHIFT, player 2 with the arrows + ENTER (other keys: Settings, Controls).  Hold <TAB> during a match (online too) for the score and the game's settings.  <ESC> during play ends the match; Rematch or <ESC> on the game's menu goes back to the settings."],
       ["Online game:  ", "2 to 8 tanks on different computers, some of them may be computer tanks.  Online play " +
         "needs an account on the game's server (you create one or log in the first time; a server without accounts asks only for a name).  Create a game - its name, an " +
         "optional password (whoever joins or watches has to type it; a lock marks the game in the list), " +
@@ -126,7 +126,7 @@ const STRINGS_EN = {
         "or a click), choose your team (<\x1B> <\x1A>, <1>-<8> or a click on it), chat (Say:) and " +
         "choose \"I am ready!\" (a click on your name leaves the seat to watch).  The host - who created the game, or the next player when the host " +
         "leaves - clicks every seat nobody else sits on through closed, open, the host's own seat (while " +
-        "seated nowhere else) and AI (easy, medium, hard) - a right click goes back -, sets its team, the settings above, can \"Kick a player\" and starts the " +
+        "seated nowhere else) and AI (easy, medium, hard) - a right click goes back -, sets its team, the settings above, can \"Kick a player\" (for good, their chat messages deleted), \"Delete a message\" (it shows as *deleted*) and starts the " +
         "game once everybody seated is ready.  An open seat nobody took gets no tank.  During a " +
         "match only its players play; whoever joins then watches.  After a match the lobby shows " +
         "its Statistics.  Press <ESC> twice to leave an online game."],

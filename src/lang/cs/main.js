@@ -8,7 +8,7 @@ Lang.register("cs", {
   name: "Česky",
   "menu.info": "Informace", "menu.info.i": "O této verzi hry.", "menu.instr": "Návod", "menu.instr.i": "Jak se hraje.", "page.back": "<ENTER> - zpět.", "rd.you1": "Jsi připraven.", "rd.you2": "Čekám na {name}...", "rd.cancel": "<ESC> - přece nejsem připraven",
   blue: "MODRÝ", green: "ZELENÝ",
-  "touch.fire": "PAL", "touch.esc": "ESC", "touch.quit": "KONEC", "touch.leave": "ODEJÍT", "pad.on": "Gamepad {n} připojen", "pad.off": "Gamepad {n} odpojen",
+  "touch.fire": "PAL", "touch.esc": "ESC", "touch.quit": "KONEC", "touch.leave": "ODEJÍT", "touch.stats": "SKÓRE", "pad.on": "Gamepad {n} připojen", "pad.off": "Gamepad {n} odpojen",
   // extended mode (3-8 players): the other tank colours
   red: "ČERVENÝ", gold: "ZLATÝ", pink: "RŮŽOVÝ", lime: "LIMETKOVÝ", sky: "BLANKYTNÝ", white: "BÍLÝ",
   "ui.hint": "↑↓ a <ENTER>, nebo myš.", "ui.back": "<ESC> zpět.",
@@ -137,10 +137,10 @@ Lang.register("cs", {
         ["Gamepady a dotykové obrazovky:  ", "stiskni kterékoli tlačítko gamepadu a připojí se (hra " +
           "ukáže \"Gamepad 1 připojen\"); pak řídí tank i gamepad (dělená obrazovka: gamepad 1 " +
           "{9}MODRÝ{3}, gamepad 2 {10}ZELENÝ{3}; jinak kterýkoli gamepad řídí ten tvůj) - páčka nebo " +
-          "směrový ovladač s ním pohybuje, kterékoli tlačítko střílí, Start je <ESC>; v menu fungují " +
+          "směrový ovladač s ním pohybuje, kterékoli tlačítko střílí, Start je <ESC>, Back / Select ukáže skóre (jako <TAB>); v menu fungují " +
           "směrový ovladač a A / B jako šipky, <ENTER> a <ESC>, Y jako <TAB>, LB / RB a LT / RT jako [ ] " +
           "a - + (nástroj, štětec a zoom v editoru map; rychlost záznamu).  Na telefonech a tabletech se " +
-          "při prvním dotyku objeví joystick na obrazovce a tlačítka PAL a ESC (ESC je v šarvátce KONEC, " +
+          "při prvním dotyku objeví joystick na obrazovce a tlačítka PAL, ESC a SKÓRE (ESC je v šarvátce KONEC, " +
           "online ODEJÍT; dokud je tvůj tank zničený, zůstane jen ono); jména a chat zatím potřebují " +
           "klávesnici."],
         ["Vítězství:  ", "Zápas vyhraje tank (nebo tým), který jako první vyhraje zvolený počet kol " +
@@ -172,7 +172,7 @@ Lang.register("cs", {
         ["Dělená obrazovka:  ", "dva hráči na jedné klávesnici, {9}MODRÝ{3} proti {10}ZELENÉMU{3}, " +
           "každý se svým pohledem vedle sebe - potyčka vás dvou.  Nejdřív si zvol velikost mapy, počet kol k " +
           "výhře a čas kola."],
-        ["Potyčka:  ", "vlastní hra proti tankům počítače, sám nebo s druhým hráčem na téže klávesnici.  Každá z 8 barev je hráč 1, hráč 2, nikdo nebo tank počítače (lehký, střední, těžký) se svým týmem (1-8) - hráči mohou mít libovolnou barvu; pak režim, velikost mapy, vítězná kola, čas kola, palba do vlastních, pohled, co po smrti a dohled.  Hráč 1 řídí W A S D + SHIFT, hráč 2 šipkami + ENTER (jiné klávesy: Nastavení, Ovládání).  <ESC> během hry ukončí zápas; Odveta nebo <ESC> v menu hry se vrátí k nastavení."],
+        ["Potyčka:  ", "vlastní hra proti tankům počítače, sám nebo s druhým hráčem na téže klávesnici.  Každá z 8 barev je hráč 1, hráč 2, nikdo nebo tank počítače (lehký, střední, těžký) se svým týmem (1-8) - hráči mohou mít libovolnou barvu; pak režim, velikost mapy, vítězná kola, čas kola, palba do vlastních, pohled, co po smrti a dohled.  Hráč 1 řídí W A S D + SHIFT, hráč 2 šipkami + ENTER (jiné klávesy: Nastavení, Ovládání).  Podržením <TAB> během zápasu (i online) uvidíš skóre a nastavení hry.  <ESC> během hry ukončí zápas; Odveta nebo <ESC> v menu hry se vrátí k nastavení."],
         ["Hra online:  ", "2 až 8 tanků na různých počítačích, některé z nich mohou být počítačové.  Hra online " +
           "potřebuje účet na serveru hry (vytvoříš si ho nebo se přihlásíš poprvé; server bez účtů chce jen jméno).  Vytvoř hru - její " +
           "jméno, nepovinné heslo (kdo se připojí nebo dívá, ho musí zadat; v seznamu má hra zámek), " +
@@ -184,7 +184,7 @@ Lang.register("cs", {
           "(Řekni:) a zvol \"Jsem připraven!\" (klik na tvé jméno uvolní místo a sleduješ).  Hostitel - ten, kdo hru vytvořil, nebo další hráč, když " +
           "hostitel odejde - proklikává každé místo, kde nesedí nikdo jiný: zavřené, volné, jeho vlastní " +
           "(pokud nesedí jinde) a AI (lehký, střední, těžký) - pravý klik jde zpět -, nastaví mu tým, nastavení výše, může \"Vyhodit " +
-          "hráče\" a spustí hru, když jsou všichni, kdo sedí, připraveni.  Volné místo, které " +
+          "hráče\" (natrvalo, jeho zprávy v chatu se smažou), \"Smazat zprávu\" (ukáže se jako *smazaná*) a spustí hru, když jsou všichni, kdo sedí, připraveni.  Volné místo, které " +
           "nikdo nezabral, nemá tank.  Během zápasu hrají jen jeho hráči; kdo se tehdy připojí, " +
           "sleduje.  Po zápase lobby ukáže jeho statistiku.  Hru online opustíš dvojím stiskem " +
           "<ESC>."],
@@ -267,8 +267,11 @@ Lang.register("cs", {
   "pg.cancel": "Ještě nejsem připraven!", "pg.ready.i": "Jsi připraven. <ENTER> nebo <ESC>: přece ne.",
   "pg.stats": "Statistika", "pg.stats.i": "Statistika posledního zápasu.",
   "pg.kick": "Vyhodit hráče", "pg.kick.i1": "Tuto hru jsi vytvořil ty: vyber hráče nebo diváka",
-  "pg.kick.i2": "a odstraň ho z ní.", "pg.kick.title": "VYHODIT HRÁČE", "pg.kick.who": "{name}", "pg.kick.pick": "<ENTER> odstraní {name} z této hry.", "pg.kick.back": "Zpět do lobby hry", "pg.kick.back.i": "Nikdo nebude odstraněn.",
+  "pg.kick.i2": "a odstraň ho z ní (i jeho zprávy).", "pg.kick.title": "VYHODIT HRÁČE", "pg.kick.who": "{name}", "pg.kick.pick": "<ENTER> odstraní {name} z této hry.", "pg.kick.back": "Zpět do lobby hry", "pg.kick.back.i": "Nikdo nebude odstraněn.",
   "pg.kick.sure": "Stiskni <ENTER> ještě jednou a {name} letí ven.",
+  "pg.chatdel": "Smazat zprávu", "pg.chatdel.i1": "Tuto hru jsi vytvořil ty: vyber zprávu z chatu", "pg.chatdel.i2": "a všem se ukáže jako *smazaná*.",
+  "pg.chatdel.title": "SMAZAT ZPRÁVU", "pg.chatdel.pick": "<ENTER> smaže tuto zprávu.", "pg.chatdel.sure": "Stiskni <ENTER> ještě jednou a zpráva zmizí.",
+  "pg.chatdel.back.i": "Žádná zpráva nebude smazána.", "pg.chat.deleted": "*smazaná*",
   "pg.kicked": "Hostitel tě z této hry vyhodil.",
   "on.idle": "Hra byla zavřena, protože 10 minut nikdo nehrál.",
   // chat v předsíni (online.js, docs/DESIGN-8P.md 22) a co hráč během hry vidí (část 23)

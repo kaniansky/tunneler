@@ -8,7 +8,7 @@ quick play, accounts), daily challenge, replays, map editor.
 **Details live in docs/NOTES.md** (every feature's decisions, names, storage keys, tests) - search it before changing
 a feature. Designs: docs/DESIGN-8P.md (extended mode, lobby, views, numbered owner requests; later sections win),
 docs/RENDERING.md (engine / renderers), docs/GRAPHICS.md (modern look - read before touching gfx*.js), docs/v6/
-(ACCOUNTS, CHALLENGE, MAPS, QUICKPLAY, RELIABILITY), docs/ANDROID.md.
+(ACCOUNTS, CHALLENGE, CLOUDSAVE, MAPS, QUICKPLAY, RELIABILITY), docs/ANDROID.md.
 
 ## Hard rules
 
@@ -64,9 +64,9 @@ docs/RENDERING.md (engine / renderers), docs/GRAPHICS.md (modern look - read bef
   - `text/` - `lang.js`, `unitext.js` (any script, Unicode plane), `unidata.js`, `vgafont.js`, `glyphs.js`.
   - `io/` - `input.js`, `controls.js` (key remapping), `pads.js` (gamepads, touch), `speaker.js`, `runner.js`
     (steps the engine on the clock, presents its snapshots), `screen.js` (fullscreen, phone detection).
-  - `net/` - `endpoint.js` (server address, links), `account.js`, `mapstore.js`, `report.js`.
+  - `net/` - `endpoint.js` (server address, links), `account.js`, `cloudsave.js`, `mapstore.js`, `report.js`.
 - `server.js` (HTTP + websocket lockstep relay, rooms, shared replays / maps, gallery, daily challenge, handoff on
-  restart), `accounts.js`, `challenge-worker.js`. Storage per kind (replays, maps, accounts, challenges, state): an S3
+  restart), `accounts.js`, `cloudsave.js` (an account's maps / replays / settings), `challenge-worker.js`. Storage per kind (replays, maps, accounts, challenges, state): an S3
   bucket each (`S3_*`), else `DATA_DIR/<kind>/`, else memory. `tools/migrate-buckets.js`: 1.1.5 bucket -> per kind.
 - `public/` - generated, gitignored. `site/` - the homepage. `src-tauri/` - desktop / Android app. `flatpak/`.
 

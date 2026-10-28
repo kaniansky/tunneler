@@ -21,7 +21,8 @@
 // none of them has been connected for MATCH_ALONE_MS; then everybody is back in the lobby.
 //
 // Lobby chat (docs/DESIGN-8P.md 22): {t:"chat", text}, cleaned (max 60 characters), limited per
-// connection, relayed to everyone in the room; the last 50 come with "hello". Not part of any game.
+// connection, relayed to everyone in the room; the last 50 come with "hello". Not part of any game. The host
+// deletes a message (its text "*deleted*" for everybody); a kicked player's messages are deleted with the kick.
 // Clients may only send "any key" (ANY_KEY) - never the menu's keys. Limits per address (the socket's peer;
 // behind a reverse proxy set TRUST_PROXY=1 to use the address it appends to X-Forwarded-For): new rooms
 // per minute, live rooms, websocket connections per minute; per match: frames and log entries.
@@ -81,7 +82,8 @@
 //                           connection sitting there or null), specs: [{k, name, host, ping}], cant: why the
 //                           host can't start (null | "tanks" | "human" | "teams" | "ready" | "match"),
 //                           match: null | {no, running, conn: [per tank], names}}
-//                     {t:"chat", from: {color, name} | {spectator: true, name}, text}
+//                     {t:"chat", id, from: {color, name} | {spectator: true, name}, text}  (also in hello's chat: del
+//                           true and text "*deleted*" for a deleted one)  {t:"chatdel", ids}  those messages deleted
 //                     {t:"pong", c}  {t:"desync", n}  {t:"err", msg, code?}   (code "kicked", "full", "busy", "noroom", "version",
 //                           "password", "pwlimit")
 //                     {t:"host", key}  this connection hosts the room now: the host key for its later reconnects
@@ -100,7 +102,8 @@
 //                     map's id, "" = a random world - loaded from the store, then st.map = {id, name, size,
 //                     bases} and the match cfg's map = its code; the room's size follows it) (public /
 //                     spectators only when the game is created; every player
-//                     unready after either), {t:"start"}, {t:"kick", k} (remove + ban by client id)
+//                     unready after either), {t:"start"}, {t:"kick", k} (remove + ban by client id, their chat
+//                     messages *deleted*), {t:"chatdel", id} (a chat message *deleted*; not in quick play)
 //                     match players: {t:"b", v} held bits, {t:"k", a, s} keystroke (relayed as ANY_KEY),
 //                     {t:"h", m, n, h} state hash, {t:"r", screen, playing, round, wins, teamWins} cosmetic
 //                     anybody: {t:"chat", text}, {t:"ping", c}, {t:"rtt", ms} (round-trip time 0..9999)
@@ -119,6 +122,7 @@ let engineModule = null;
 const mapEngine = () => (engineModule = engineModule || require("./src/js/game/engine.js")).TunnelerEngine;
 // player accounts (docs/v6/ACCOUNTS.md): the store, tokens, tickets, /api/account*
 const Accounts = require("./accounts.js");
+const CloudSave = require("./cloudsave.js");
 // this server's version (package.json): clients of another version can't create or join its games
 const VERSION = (() => { try { return require("./package.json").version || null; } catch (e) { return null; } })();
 const { FrameLog, ALL_BITS, EXT_BITS, F10, HASH_EVERY, ROLES, MAX_SLOTS, MAX_PLAYER_NAME, SEAT_KINDS, SETTINGS, cleanPlayerName, cleanChat,
@@ -166,6 +170,7 @@ const MAX_ADMITTED = 500;              // client ids remembered per game with a 
 const MAX_ME_PER_SEC = 10;             // name / team changes per connection
 const CHAT_LOG = 50;                   // chat messages kept per room (sent to joiners)
 const CHAT_MAX = 5, CHAT_WINDOW_MS = 5000;   // chat messages per connection within this time
+const CHAT_DELETED = "*deleted*";      // a deleted chat message's text (a page that knows `del` says it in its language)
 const MATCH_ALONE_MS = 60 * 1000;      // a match none of whose players is connected ends after this long
 // running reliably (docs/v6/RELIABILITY.md)
 const MAX_ERROR_BYTES = 4096;          // one client error report (POST /api/errors)
@@ -341,7 +346,7 @@ function createServer(opts = {}) {
       map: "", mapCode: "", mapInfo: null, mapWant: "",   // a custom map (setMap): its id, code, {id, name, size, bases}
       seats: st.seats.map(s => ({ kind: s.kind, team: s.team, occ: null, last: null, ai: qp && NetProto.LEVELS.includes(s.kind) ? s.kind : null })),
       qp: !!qp, qpTimer: null, qpAt: 0,            // quick play: the next match's timer and when it fires
-      chat: [],                                    // the last CHAT_LOG chat messages [{from, text}]
+      chat: [], chatId: 0,                         // the last CHAT_LOG chat messages [{id, from, text, who, del?}], the last id
       hostKey: crypto.randomBytes(16).toString("hex"), banned: new Set(), serial: 0,
       password: passwordHash(NetProto.cleanPassword(settings && settings.password)),   // null = none
       admitted: new Set(),                         // client ids that got past the password
@@ -591,6 +596,15 @@ function createServer(opts = {}) {
   function broadcast(room, msg) {
     for (const s of room.sockets) if (s.readyState === 1) s.send(msg);
   }
+  // Chat messages: who wrote one is kept as a hash of the client id (its messages go when it is kicked - the id itself
+  // never leaves the server); what the pages get is {id, from, text, del?}, a deleted one's text CHAT_DELETED
+  const chatWho = cid => cid ? crypto.createHash("sha256").update(String(cid)).digest("hex").slice(0, 16) : "";
+  const chatOut = c => c.del ? { id: c.id, from: c.from, text: CHAT_DELETED, del: true } : { id: c.id, from: c.from, text: c.text };
+  function chatDelete(room, list) {
+    const ids = [];
+    for (const c of list) if (!c.del) { c.del = true; c.text = CHAT_DELETED; ids.push(c.id); }
+    if (ids.length) broadcast(room, JSON.stringify({ t: "chatdel", ids }));
+  }
   const pingOf = ws => ws && ws.rtt != null ? ws.rtt : null;
   // the lobby's state, to everyone in the room
   function sendStatus(room) {
@@ -805,6 +819,9 @@ function createServer(opts = {}) {
     // Google Play Games sign-in (the Android app): the game server's OAuth client - off without (docs/v6/ACCOUNTS.md 6)
     google: { clientId: opts.googleClientId !== undefined ? opts.googleClientId : process.env.GOOGLE_CLIENT_ID || null,
       clientSecret: opts.googleClientSecret !== undefined ? opts.googleClientSecret : process.env.GOOGLE_CLIENT_SECRET || null, fetch: opts.googleFetch } });
+  // a player's maps, replays and settings kept with their account (docs/v6/CLOUDSAVE.md), in the accounts' store
+  const cloudSave = !accounts ? null : CloudSave.createCloudSave({ store: accountStore, sessionOf: req => accounts.sessionOf(req),
+    json, readBody, readRaw, now: opts.now, say });
   // the request's account (Bearer token) - or null after answering 401 {code: "session"} (503 when the store fails)
   async function needSession(req, res) {
     let a = null;
@@ -816,6 +833,7 @@ function createServer(opts = {}) {
   // kept replays gone
   async function accountDeleted(a) {
     const key = accountKey(a);
+    await cloudSave.wipe(a).catch(e => say("an account's saved data not all deleted:", e && e.message));
     await galleryForget(key).catch(() => {});        // (its published maps leave the gallery)
     for (const r of rooms.values()) for (const ws of r.sockets) if (ws.cid === key) try { fail(ws, "This account was deleted.", "login"); } catch (e) { /* gone */ }
     const today = Challenge.dayOf(now());
@@ -1205,6 +1223,10 @@ function createServer(opts = {}) {
     }
     // what pages need to know about this server: whether online play needs an account (docs/v6/ACCOUNTS.md)
     if (p === "/api/config" && (req.method === "GET" || req.method === "HEAD")) return json(res, 200, { version, accounts: accountsOn, google: !!(accounts && accounts.googleOn) });
+    if (p === "/api/save" || p.startsWith("/api/save/")) {
+      if (!cloudSave) return json(res, 404, { error: "this server has no accounts", code: "off" });
+      return cloudSave.api(req, res, p);
+    }
     if (p === "/api/ticket" || p === "/api/account" || p.startsWith("/api/account/")) {
       if (!accounts) return json(res, 404, { error: "this server has no accounts", code: "off" });
       return accounts.api(req, res, p);
@@ -1556,7 +1578,7 @@ function createServer(opts = {}) {
       mh = matchHello(m, ws, from);
     }
     ws.send(JSON.stringify({ t: "hello", id: room.id, name: room.name, created: room.created,
-      you: { k: ws.serial, host: ws.host, name: ws.name }, chat: room.chat, match: mh }));
+      you: { k: ws.serial, host: ws.host, name: ws.name }, chat: room.chat.map(chatOut), match: mh }));
     say("room", room.id, ws.name, "connected", seat >= 0 ? "on " + ROLES[seat] : "watching", ws.host ? "(host)" : "");
     ensureHost(room);
     updateClock(room);
@@ -1658,9 +1680,16 @@ function createServer(opts = {}) {
           if (!text) break;
           ws.chatTimes.push(t);
           const from = ws.seat >= 0 ? { color: ws.seat, name: ws.name } : { spectator: true, name: ws.name };
-          room.chat.push({ from, text });
+          const c = { id: ++room.chatId, from, text, who: chatWho(ws.cid) };
+          room.chat.push(c);
           if (room.chat.length > CHAT_LOG) room.chat.splice(0, room.chat.length - CHAT_LOG);
-          broadcast(room, JSON.stringify({ t: "chat", from, text }));
+          broadcast(room, JSON.stringify(Object.assign({ t: "chat" }, chatOut(c))));
+          break;
+        }
+        case "chatdel": {                                  // host: a chat message *deleted* (as kicks: not in quick play)
+          if (!ws.host || room.qp) break;
+          const c = room.chat.find(x => x.id === Number(msg.id));
+          if (c) chatDelete(room, [c]);
           break;
         }
         case "kick": {                                     // host: remove a player / spectator (by its number k)
@@ -1672,6 +1701,7 @@ function createServer(opts = {}) {
           if (!target || target === ws || target.host || target.kicked) break;
           target.kicked = true;
           if (target.cid) room.banned.add(target.cid);
+          if (target.cid) chatDelete(room, room.chat.filter(c => c.who === chatWho(target.cid)));   // (their messages go too)
           if (target.seat >= 0) { room.seats[target.seat].last = null; sit(room, target, -1); }
           say("room", room.id, "host removed", target.name);
           fail(target, KICKED, "kicked");
@@ -1804,7 +1834,7 @@ function createServer(opts = {}) {
   const hex = b => Buffer.from(b).toString("hex");
   // the fields of a room / match this code doesn't know (another feature's data - a custom map...): kept as they
   // are when they are plain JSON data (no sockets, timers, sets); the known ones are written and checked below
-  const ROOM_KNOWN = new Set(["id", "name", "public", "allowSpec", "seats", "chat", "hostKey", "banned", "serial", "password", "admitted",
+  const ROOM_KNOWN = new Set(["id", "name", "public", "allowSpec", "seats", "chat", "chatId", "hostKey", "banned", "serial", "password", "admitted",
     "created", "addr", "sockets", "match", "matches", "report", "stTimer", "cleanupTimer", "lastActive", "restoredFrom", ...Object.keys(settingsOf({}))]);
   const MATCH_KNOWN = new Set(["room", "no", "seed", "ext", "slots", "cfg", "log", "socks", "held", "latch", "keys", "running", "timer", "startAt",
     "startN", "hashes", "desyncs", "aloneTimer", "report", "waitAll", "resumeAt"]);
@@ -1822,7 +1852,7 @@ function createServer(opts = {}) {
   function roomState(r) {
     const m = r.match;
     return { id: r.id, name: r.name, public: r.public, allowSpec: r.allowSpec, settings: settingsOf(r),
-      seats: r.seats.map(s => ({ kind: s.kind, team: s.team, last: s.last })), chat: r.chat, hostKey: r.hostKey,
+      seats: r.seats.map(s => ({ kind: s.kind, team: s.team, last: s.last })), chat: r.chat, chatId: r.chatId, hostKey: r.hostKey,
       banned: [...r.banned], serial: r.serial, password: r.password ? { salt: hex(r.password.salt), hash: hex(r.password.hash) } : null,
       admitted: [...r.admitted], created: r.created, addr: r.addr, matches: r.matches, report: r.report, extra: extras(r, ROOM_KNOWN),
       match: m ? { no: m.no, seed: m.seed, ext: m.ext, slots: m.slots, cfg: m.cfg, log: { entries: m.log.entries, length: m.log.length },
@@ -1877,7 +1907,7 @@ function createServer(opts = {}) {
       id: s.id, name: cleanName(s.name) || "Tunneler", public: !!s.public, allowSpec: !!s.allowSpec, ...settingsOf(st),
       seats: st.seats.map((x, i) => ({ kind: x.kind, team: x.team, occ: null,
         last: s.seats && s.seats[i] && /^[A-Za-z0-9_-]{8,64}$/.test(s.seats[i].last || "") ? s.seats[i].last : null })),
-      chat: Array.isArray(s.chat) ? s.chat.slice(-CHAT_LOG) : [],
+      chat: Array.isArray(s.chat) ? s.chat.slice(-CHAT_LOG) : [], chatId: s.chatId | 0,
       hostKey: typeof s.hostKey === "string" && s.hostKey ? s.hostKey : crypto.randomBytes(16).toString("hex"),
       banned: new Set(Array.isArray(s.banned) ? s.banned : []), serial: s.serial | 0,
       password: s.password && s.password.salt && s.password.hash ? { salt: Buffer.from(s.password.salt, "hex"), hash: Buffer.from(s.password.hash, "hex") } : null,
@@ -1887,6 +1917,9 @@ function createServer(opts = {}) {
       report: s.report && typeof s.report === "object" ? s.report : { round: 0, wins: [], teamWins: [], ext: false, players: 0 },
       stTimer: null, cleanupTimer: null, lastActive: Date.now(), restoredFrom: at,
     };
+    // (an older server's messages have no ids)
+    for (const c of room.chat) if (c && Number.isInteger(c.id) && c.id > room.chatId) room.chatId = c.id;
+    for (const c of room.chat) if (c && !Number.isInteger(c.id)) c.id = ++room.chatId;
     const sm = s.match;
     if (sm && sameVersion && sm.log && Array.isArray(sm.log.entries) && Number.isInteger(sm.log.length) && Array.isArray(sm.slots) && sm.cfg) {
       const N = sm.slots.length, log = new FrameLog();

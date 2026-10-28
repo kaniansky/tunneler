@@ -32,6 +32,7 @@ import { TunnelerEngine } from "../game/engine.js";
 import { MatchText } from "../draw/matchtext.js";
 import { Gfx } from "../draw/gfx.js";
 import { Keyboard } from "../io/input.js";
+import { LiveStats } from "../ui/livestats.js";
 import { Lang } from "../text/lang.js";
 import { Login } from "../ui/login.js";
 import { MapPick } from "../ui/mappick.js";
@@ -122,13 +123,14 @@ export function mount() {
     : { mode: "grid", follow: 0, storageKey: "tunneler.spec", onChange: () => renderBar() });
   let views = makeViews(false);
 
-  // screens shown over the game: a status message (msgSnap) wins over the lobby (menuSnap)
-  let msgSnap = null, menuSnap = null;
+  // screens shown over the game: a status message (msgSnap) wins over the statistics a player holds Tab for
+  // (statsSnap) and the lobby (menuSnap)
+  let msgSnap = null, menuSnap = null, statsSnap = null;
   // The end-of-match world map ("PRESS ANY KEY") is per viewer: it stays on this screen until this
   // player / spectator presses a key or clicks, even when the others already went on to the lobby.
   let mapSnap = null, mapPending = false;
   function presentOverlay() {
-    const snap = msgSnap || (mapPending && (!engine || engine.screen !== "map" || ended) ? mapSnap : null) || menuSnap;
+    const snap = msgSnap || statsSnap || (mapPending && (!engine || engine.screen !== "map" || ended) ? mapSnap : null) || menuSnap;
     if (runner) runner.setOverlay(snap);
     else if (snap) display.setSnapshot(snap);
   }
@@ -308,12 +310,10 @@ export function mount() {
 
   // ------------------------------------------------------------ input
   // either tank's keys drive your tank (controls.js: remappable; defaults W A S D / arrows / keypad 8 2 4 6,
-  // fire Left Shift / Space / Enter / Right Shift / keypad Enter - no Ctrl: Ctrl+W closes the tab; Tab only if assigned)
+  // fire Left Shift / Space / Enter / Right Shift / keypad Enter - no Ctrl: Ctrl+W closes the tab; Tab: the statistics)
   let CODES = {};
   function readCodes() {
-    // (Tab only when assigned on purpose: online it never was a default fire key)
-    const of = a => [].concat(...Controls.SETS.map(s => Controls.codesOf(s, a)))
-      .filter(c => c !== "Tab" || Controls.SETS.some(s => Controls.get(s, a) === "Tab"));
+    const of = a => [].concat(...Controls.SETS.map(s => Controls.codesOf(s, a)));
     CODES = { [UP]: of("up"), [DOWN]: of("down"), [LEFT]: of("left"), [RIGHT]: of("right"), [FIRE]: of("fire"), [ESC]: ["Escape"] };
   }
   readCodes();
@@ -352,11 +352,15 @@ export function mount() {
     else if (views.handleKey(e.code)) { e.preventDefault(); renderBar(); }            // view mode / followed tank
     if (e.code === "Tab" && !lobby) e.preventDefault();                               // (never move the focus)
   });
+  // a player holding Tab (a gamepad's Back, the touch controls' SCORE): the statistics over the game (spectators: Tab
+  // switches their views)
+  LiveStats.attach({ engine: () => engine, allowed: () => isPlayer() && inPlay() && !lobby && !msgSnap,
+    show: snap => { statsSnap = snap; presentOverlay(); } });
   // gamepads / touch controls (pads.js): turned into the same keys as the keyboard - a player's tank
   // during play (any gamepad, the on-screen joystick + FIRE), arrows / Enter / Esc everywhere else
   Pads.start({ menu: () => !isPlayer() || !inPlay() || !!lobby, gamepadSet: () => "blue", touchSet: "blue",
     hideTouch: () => !!lobby || !!msgSnap || !isPlayer() || !engine || engine.screen !== "play",
-    escLabel: "touch.leave", touchTank: TankView.provider(() => engine, () => player + 1),
+    escLabel: "touch.leave", statsLabel: "touch.stats", touchTank: TankView.provider(() => engine, () => player + 1),
     touchDead: () => !!engine && player >= 0 && engine.screen === "play" && !engine.alive[player + 1] });   // (the touch controls only while playing - not under a status screen)
 
   function sendKeys() {
@@ -393,7 +397,8 @@ export function mount() {
   // game settings on the right; the chat to the right of the seats, the spectators below them. Seats and
   // settings are locked while a match is on (the server refuses changes then).
   let lobby = null;                                        // {page: "lobby" | "kick" | "page", key}
-  // chat (docs/DESIGN-8P.md 22): the room's messages [{from: {color, name} | {spectator, name}, text}]
+  // chat (docs/DESIGN-8P.md 22): the room's messages [{id, from: {color, name} | {spectator, name}, text, del?}]
+  // (del: deleted by the host - shown as pg.chat.deleted)
   const chatForm = { value: "", max: MAX_CHAT, width: 16 };
   let chat = [], chatSeq = 0;
   // what this player sees during play: self / team / everyone, at most the room's "visible" (section 23)
@@ -694,6 +699,9 @@ export function mount() {
     // (grayed while there is nobody to remove - the box doesn't jump)
     if (isHost() && !locked && !isQuick()) items.push({ key: "kick", label: T("pg.kick"), disabled: !kickTargets().length,
       info: [T("pg.kick.i1"), T("pg.kick.i2")], go: () => drawKick(false) });
+    // ... and "Delete a message" (the chat's messages to choose from; grayed while there is none)
+    if (isHost() && !isQuick() && !chatHidden()) items.push({ key: "chatdel", label: T("pg.chatdel"), disabled: !chatTargets().length,
+      info: [T("pg.chatdel.i1"), T("pg.chatdel.i2")], go: () => drawChatDel(false) });
     // the invite link (the server's own page: also from the desktop app); "Link copied" for 3 s
     const invite = Endpoint.web(Links.invite(roomId)), copy = () => copyLink(invite);
     if (items.length) items.push({ key: "gap", label: "", disabled: true });   // (none on top of the box: a spectator)
@@ -807,19 +815,19 @@ export function mount() {
     const out = [];                                        // [{name, nameColor, text}] per screen line
     for (const m of chat) {
       const f = m.from || {};
-      const name = f.name || (f.spectator ? Lang.raw("pg.chat.spec") : Lang.raw(ROLES[f.color] || "blue"));
+      const name = chatName(m);
       const nameColor = f.spectator ? 8 : TEXT_COLORS[f.color] || 7;
       const nameLen = Array.from(name).length + 1;           // (with the colon)
       let done = 0;
-      wrapChars(Array.from(name + ": " + m.text), w - 1).forEach(l => {
+      wrapChars(Array.from(name + ": " + chatText(m)), w - 1).forEach(l => {
         const n = Math.max(0, Math.min(l.length, nameLen - done));
         done += l.length;
-        out.push({ name: l.slice(0, n).join(""), nameColor, text: l.slice(n).join("") });
+        out.push({ name: l.slice(0, n).join(""), nameColor, text: l.slice(n).join(""), color: m.del ? 8 : 7 });
       });
     }
     out.slice(-h).forEach((l, k) => {
       if (l.name) text.push({ row: y0 + 1 + k, col: x0 + 2, text: l.name, color: l.nameColor });
-      if (l.text) text.push({ row: y0 + 1 + k, col: x0 + 2 + UniText.rawCols(l.name), text: l.text, color: 7 });
+      if (l.text) text.push({ row: y0 + 1 + k, col: x0 + 2 + UniText.rawCols(l.name), text: l.text, color: l.color });
     });
   }
   // the phone layout's chat box: the last messages as read-only rows of at most w columns ("NAME: text",
@@ -829,18 +837,20 @@ export function mount() {
     const out = [];
     for (const m of chat) {
       const f = m.from || {};
-      const name = f.name || (f.spectator ? Lang.raw("pg.chat.spec") : Lang.raw(ROLES[f.color] || "blue"));
+      const name = chatName(m);
       const nameColor = f.spectator ? 8 : TEXT_COLORS[f.color] || 7, nameLen = Array.from(name).length + 1;
       let done = 0;
-      wrapChars(Array.from(name + ": " + m.text), w - 1).forEach(l => {
+      wrapChars(Array.from(name + ": " + chatText(m)), w - 1).forEach(l => {
         const n = Math.max(0, Math.min(l.length, nameLen - done));
         done += l.length;
         const label = Lang.enc(l.join("")), nw = UniText.cols(Lang.enc(l.slice(0, n).join("")));
-        out.push({ key: "chat-" + out.length, static: true, attr: 7, align: "left", label, spans: [[0, nw, nameColor], [nw, 99, 7]] });
+        out.push({ key: "chat-" + out.length, static: true, attr: 7, align: "left", label, spans: [[0, nw, nameColor], [nw, 99, m.del ? 8 : 7]] });
       });
     }
     return out.slice(-max);
   }
+  const chatName = m => { const f = m.from || {}; return f.name || (f.spectator ? Lang.raw("pg.chat.spec") : Lang.raw(ROLES[f.color] || "blue")); };
+  const chatText = m => m.del ? Lang.raw("pg.chat.deleted") : m.text;
   // characters -> lines of at most w display columns (CJK / emoji take 2), broken after a space where possible
   function wrapChars(ch, w) {
     const out = [], cw = c => UniText.charCols(c.codePointAt(0));
@@ -932,6 +942,45 @@ export function mount() {
     }, keep);
   }
 
+  // the messages the host may delete: the last ones not deleted yet (as many as the screen lists), oldest first
+  const chatTargets = () => isHost() && !isQuick() ? chat.filter(m => !m.del && m.id != null).slice(-10) : [];
+  // The host's "Delete a message" list ("NAME: text", the newest selected): <ENTER> on one asks once more (4 s), a
+  // second <ENTER> deletes it - "*deleted*" for everybody; <ESC> / Back: the lobby again
+  const chatDelKey = () => JSON.stringify([chatTargets().map(m => m.id), kickArm, Lang.code]);
+  function drawChatDel(keep) {
+    const targets = chatTargets();
+    const back = () => { disarm(); drawLobby(false, "chatdel"); };
+    if (!targets.length) return back();
+    lobby.page = "chatdel";
+    lobby.chatDelKey = chatDelKey();
+    const w = (lobbyUI.isNarrow() ? DosUI.NARROW_W : 78) - 6, cw = c => UniText.charCols(c.codePointAt(0));
+    const items = targets.map(m => {
+      const f = m.from || {}, name = chatName(m), nameColor = f.spectator ? 8 : TEXT_COLORS[f.color] || 7, id = "c" + m.id;
+      let ch = Array.from(name + ": " + m.text), n = 0, k = 0;
+      while (k < ch.length && n + cw(ch[k]) <= w) n += cw(ch[k++]);
+      if (k < ch.length) { while (k > 0 && n + 3 > w) n -= cw(ch[--k]); ch = ch.slice(0, k).concat([".", ".", "."]); }
+      const nw = UniText.cols(Lang.enc(Array.from(name + ":").slice(0, ch.length).join("")));
+      return { key: id, label: Lang.enc(ch.join("")), attr: 7, align: "left", spans: [[0, nw, nameColor], [nw, 99, 7]],
+        info: kickArm === id ? [{ text: T("pg.chatdel.sure"), color: 12 }] : [T("pg.chatdel.pick")],
+        go: () => {
+          if (kickArm !== id) {
+            kickArm = id; clearTimeout(kickArmTimer);
+            kickArmTimer = setTimeout(() => { disarm(); if (lobby && lobby.page === "chatdel") drawChatDel(true); }, 4000);
+            drawChatDel(true);
+          } else {
+            disarm();
+            send({ t: "chatdel", id: m.id });
+            drawLobby(false, "chatdel");
+          }
+        } };
+    });
+    items.push({ key: "gap", label: "", disabled: true }, { key: "back", label: T("pg.kick.back"), info: [T("pg.chatdel.back.i")], go: back });
+    lobbyUI.show({
+      lines: [{ row: 1, text: UniText.slice(Lang.enc(roomName || roomId), 78), color: 15 }, { row: 4, text: T("pg.chatdel.title"), color: 14 }],
+      box: { y: 6 }, items, infoRow: 8 + items.length + 2, back, sel: targets.length - 1,
+    }, keep);
+  }
+
   // the last match's statistics, full screen: drawn from that match's finished engine (matchtext.js only reads it - a
   // game mode's own totals too)
   function showStats() {
@@ -964,6 +1013,7 @@ export function mount() {
     else if (!want && lobby) closeLobby();
     else if (lobby && lobby.page === "lobby" && lobby.key !== lobbyKey()) drawLobby(true);
     else if (lobby && lobby.page === "kick" && lobby.kickKey !== kickKey()) drawKick(true);
+    else if (lobby && lobby.page === "chatdel" && lobby.chatDelKey !== chatDelKey()) drawChatDel(true);
     // the statistics of a match that just ended: once, full screen, as soon as this viewer is past its
     // world map (Back: the lobby)
     if (lobby && lobby.page === "lobby" && lastMatch && statsShown !== lastMatch.no) { statsShown = lastMatch.no; showStats(); }
@@ -1139,10 +1189,15 @@ export function mount() {
         break;
       case "chat":                                         // a lobby chat message (not part of the game)
         if (typeof m.text !== "string" || !m.from) break;
-        chat.push({ from: m.from, text: m.text });
+        chat.push({ id: m.id, from: m.from, text: m.text });
         if (chat.length > 50) chat.shift();
         chatSeq++;
         if (!(m.text === sentText && performance.now() - sentAt < 3000)) chatBeep("chat");   // (not the own message coming back)
+        break;
+      case "chatdel":                                      // the host deleted messages (or kicked their author)
+        if (!Array.isArray(m.ids)) break;
+        for (const c of chat) if (m.ids.includes(c.id)) c.del = true;
+        chatSeq++;
         break;
       case "f":
         if (!engine || m.m !== matchNo) break;

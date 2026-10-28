@@ -4,6 +4,28 @@ All notable changes to Tunneler. Versions follow [semantic versioning](https://s
 by pushing a version tag (see CONTRIBUTING.md). Up to its version 6.0.1 the game was called Tunneler Online:
 those releases are tagged `online-vX.Y.Z`, their changes are in [docs/CHANGELOG-online.md](docs/CHANGELOG-online.md).
 
+## 1.1.7
+
+- Logged in, your maps, replays and settings are kept with your account on the game's server: every device you log in
+  on (browser, desktop app, Android app - with a password or Google Play) has them, and a map or replay deleted on one
+  is deleted on the others. Deleting the account deletes them too. Hosting: kept in the accounts' storage
+  (`S3_BUCKET_ACCOUNTS` / `DATA_DIR/accounts`), no new setting (docs/v6/CLOUDSAVE.md).
+- Online game lobby: the host can delete a chat message ("Delete a message" under "Kick a player": the chat's last
+  messages, <ENTER> twice) - it shows as *deleted* for everybody, also to whoever joins later. Kicking a player
+  deletes their messages too. A kick stays for good: the kicked player (their account, or their browser without
+  accounts) can't come back to that game. Not in quick play (as kicks). A 1.1.0 - 1.1.6 page keeps showing a deleted
+  message until it reloads.
+- Modern look: the game modes' marks show in the views again - king of the hill's ring, the flags, gold, infection
+  and siege marks (the modern look drew the world without them). King of the hill's ring is white again while nobody
+  holds the hill (it turned pink with the new tank colours, as if PINK held it).
+- The score during a match: hold Tab - a gamepad's Back / Select, the new SCORE button on a touch screen - for the
+  round, every player's or team's rounds won and the game mode's score, and the game's settings (players only; a
+  spectator's Tab still switches the views). Tab no longer fires (it was one of BLUE's extra fire keys; online it never
+  was) and can't be assigned to a tank in Settings, Controls.
+- Modern look: a game mode's number (seconds held, gold, kills...) and the round clock's last 30 seconds are at the
+  right end of the energy / shield panel - they covered its percentages.
+- Homepage: the banner under the screenshot names the latest release (it said "Tunneler 1.0").
+
 ## 1.1.6
 
 - Hosting: each kind of data the server keeps - shared replays, shared maps, accounts, the daily leaderboards, the

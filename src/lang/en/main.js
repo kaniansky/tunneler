@@ -9,7 +9,7 @@ Lang.register("en", {
   "menu.info": "Information", "menu.info.i": "About this version of the game.", "menu.instr": "Instructions", "menu.instr.i": "How to play.", "page.back": "Press <ENTER> to go back.", "rd.you1": "You are ready.", "rd.you2": "Waiting for {name}...", "rd.cancel": "<ESC> - not ready after all",
   blue: "BLUE", green: "GREEN",
   // touch controls (pads.js): the on-screen buttons
-  "touch.fire": "FIRE", "touch.esc": "ESC", "touch.quit": "QUIT", "touch.leave": "LEAVE", "pad.on": "Gamepad {n} connected", "pad.off": "Gamepad {n} disconnected",
+  "touch.fire": "FIRE", "touch.esc": "ESC", "touch.quit": "QUIT", "touch.leave": "LEAVE", "touch.stats": "SCORE", "pad.on": "Gamepad {n} connected", "pad.off": "Gamepad {n} disconnected",
   // extended mode (3-8 players): the other tank colours
   red: "RED", gold: "GOLD", pink: "PINK", lime: "LIME", sky: "SKY", white: "WHITE",
   "ui.hint": "↑↓ and <ENTER>, or the mouse.", "ui.back": "<ESC> back.",
@@ -110,8 +110,11 @@ Lang.register("en", {
   "pg.cancel": "Not ready yet!", "pg.ready.i": "You are ready. <ENTER> or <ESC>: not ready yet.",
   "pg.stats": "Statistics", "pg.stats.i": "The last match's statistics.",
   "pg.kick": "Kick a player", "pg.kick.i1": "You created this game: choose a player or a spectator",
-  "pg.kick.i2": "and remove them from it.", "pg.kick.title": "KICK A PLAYER", "pg.kick.who": "{name}", "pg.kick.pick": "<ENTER> removes {name} from this game.", "pg.kick.back": "Back to the game lobby", "pg.kick.back.i": "Nobody is removed.",
+  "pg.kick.i2": "and remove them from it (their messages too).", "pg.kick.title": "KICK A PLAYER", "pg.kick.who": "{name}", "pg.kick.pick": "<ENTER> removes {name} from this game.", "pg.kick.back": "Back to the game lobby", "pg.kick.back.i": "Nobody is removed.",
   "pg.kick.sure": "Press <ENTER> again to kick {name}.",
+  "pg.chatdel": "Delete a message", "pg.chatdel.i1": "You created this game: choose a chat message", "pg.chatdel.i2": "and it shows as *deleted* for everybody.",
+  "pg.chatdel.title": "DELETE A MESSAGE", "pg.chatdel.pick": "<ENTER> deletes this message.", "pg.chatdel.sure": "Press <ENTER> again to delete it.",
+  "pg.chatdel.back.i": "No message is deleted.", "pg.chat.deleted": "*deleted*",
   "pg.kicked": "You were removed from this game by the host.",
   "on.idle": "This game was closed because nobody played for 10 minutes.",
   // lobby chat (online.js, docs/DESIGN-8P.md 22) and what a player sees during play (section 23)

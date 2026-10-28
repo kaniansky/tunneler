@@ -1105,6 +1105,7 @@ class TunnelerEngine {
   }
   objRestore() {
     const o = this.objs;
+    this.out.modeObjects(o);                        // (display only: the modern look draws them)
     for (let i = o.length - 3; i >= 0; i -= 3) this.setPixel(o[i], o[i + 1], o[i + 2]);
     this.objs = [];
   }
@@ -1315,6 +1316,7 @@ class TunnelerEngine {
     this.endTimer = -1;
     this.modeWinner = undefined;                    // a game mode's round winner (team index, -1 = nobody)
     this.objs = [];                                 // world pixels covered by mode objects this frame (objPut)
+    this.out.modeObjects(this.objs);
     this.out.resetHud();
     if (this.GM && this.GM.round) this.GM.round(this);
   }
@@ -1943,7 +1945,7 @@ class TunnelerEngine {
 // The game's picture (playscreen.js) through the engine, as before it was its own: pages and tests read engine.vram,
 // views, snapshots, screen, cams... - all of it the screen's (engine.out)
 const SCREEN_STATE = ["vram", "uni", "uniUsed", "mode", "screen", "loresActive", "dirty", "snapshots", "dim", "views", "viewDims",
-  "sightMem", "cams", "shownEnergy", "shownShield", "hudShown", "clockShown", "tickMarker"];
+  "sightMem", "cams", "objsShown", "shownEnergy", "shownShield", "hudShown", "clockShown", "tickMarker"];
 for (const k of SCREEN_STATE)
   Object.defineProperty(TunnelerEngine.prototype, k, { get() { return this.out[k]; }, set(v) { this.out[k] = v; }, configurable: true });
 for (const k of Object.getOwnPropertyNames(PlayScreen.prototype)) {

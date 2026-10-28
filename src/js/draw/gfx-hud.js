@@ -117,10 +117,15 @@ function draw(ctx, W, H, sc, sw, sh, set, now, style) {
     ctx.fillStyle = clean ? PANEL : "#2b2b2b"; ctx.fill();
     ctx.lineWidth = Math.max(1, px(0.8)); ctx.strokeStyle = clean ? LINE : "#777"; ctx.stroke();
     ctx.restore();
+    // the round clock and a game mode's number: tags at the panel's right end (owner, 2026-10-28: beside the
+    // panel they covered its percentages since it is as wide as the window) - room kept for them whenever the game
+    // can show them, so the bars don't jump when the clock appears
+    const TW = 24, slots = (e.roundTicks ? 1 : 0) + (e.GM && e.GM.hud ? 1 : 0);
+    const right = bx + bw - (slots ? px(6 + slots * (TW + 4)) : 0);   // (the bars' and percentages' right end)
     const bars = [[e.energy[p], clean ? HUES[14] : "#ffff55", bolt], [e.shield[p], clean ? HUES[11] : "#55ffff", shield]];
     bars.forEach(([v, cs, icon], i) => {
       const f = Math.max(0, Math.min(1, v / MAX)), y = by + bh * (0.17 + i * 0.44), h = bh * 0.25;
-      const ix = bx + bw * 0.04, isz = h * 1.25, tx = ix + isz + bw * 0.045, tw = bx + bw * 0.74 - tx;   // (a clear gap after the icon)
+      const ix = bx + bw * 0.04, isz = h * 1.25, tx = ix + isz + bw * 0.045, tw = right - bw * 0.26 - tx;   // (a clear gap after the icon)
       ctx.save();
       ctx.fillStyle = cs;
       icon(ctx, ix, y - (isz - h) / 2, isz);
@@ -135,12 +140,12 @@ function draw(ctx, W, H, sc, sw, sh, set, now, style) {
       ctx.save();
       ctx.fillStyle = clean ? TEXT : "#aaaaaa";
       ctx.font = Math.round(Math.min(h * 0.95, bw * 0.19 / 2.6)) + "px " + FONT; ctx.textAlign = "right"; ctx.textBaseline = "middle";
-      ctx.fillText(Math.round(f * 100) + "%", bx + bw * 0.96, y + h / 2);
+      ctx.fillText(Math.round(f * 100) + "%", right - bw * 0.04, y + h / 2);
       ctx.restore();
     });
     // the round clock (left) and a game mode's number (right), as the engine shows them in the frame
     const tag = (x, text, colr) => {
-      const tw = px(24), th = py(40), ty = py(c.y + 318);
+      const tw = px(TW), th = py(40), ty = by + (bh - th) / 2;
       ctx.save();
       ctx.beginPath(); rrect(ctx, x - tw / 2, ty, tw, th, clean ? px(1.5) : 0);
       ctx.fillStyle = clean ? PANEL : "#000"; ctx.fill();
@@ -151,9 +156,9 @@ function draw(ctx, W, H, sc, sw, sh, set, now, style) {
       ctx.restore();
     };
     if (e.roundTicks && e.clockShown >= 0 && e.clockShown <= 30)
-      tag(px(c.x + 14), String(e.clockShown), e.clockShown <= 10 ? (Math.floor(now / 250) % 2 ? hues[12] : hues[15]) : hues[14]);
+      tag(right + px(4 + TW / 2), String(e.clockShown), e.clockShown <= 10 ? (Math.floor(now / 250) % 2 ? hues[12] : hues[15]) : hues[14]);
     const hs = e.hudShown && e.hudShown[p];
-    if (hs) { const [v, k] = hs.split(":"); tag(px(c.x + 346), v, hues[(+k || 14) & 15]); }
+    if (hs) { const [v, k] = hs.split(":"); tag(bx + bw - px(6 + TW / 2), v, hues[(+k || 14) & 15]); }
     // the name on the top border
     if (sc.labels && c.name) {
       const fs = Math.round(py(9)), text = c.name + (c.team ? "  " + c.team : "");

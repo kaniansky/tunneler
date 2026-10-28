@@ -195,6 +195,28 @@ const SC = { W: 0x11, A: 0x1E, X: 0x2D, D: 0x20, BLUEFIRE: 0x1D, GREENFIRE: 0x1C
     ok("gamepad in menus: arrows (repeat), A = Enter, B = Esc, Y = Tab, LB / RB = [ ], LT / RT = - +; a button held across play -> menu acts only after release");
   }
 
+  // ------------------------------------------------------------ SCORE (touch) / Back (gamepad) = Tab during play
+  {
+    const env = makeEnv("");
+    env.load("lang/index.js", "js/io/input.js", "js/io/pads.js");
+    const kb = new env.win.Keyboard(env.win);
+    let menu = false;
+    const ctl = env.win.Pads.start({ raf: false, menu: () => menu, touchSet: "blue", statsLabel: "touch.stats" });
+    const tc = ctl.touch, now = () => performance.now();
+    assert(tc.statsBtn && tc.statsBtn.textContent === "SCORE" && tc.statsBtn.className === "tpad-stats", "a SCORE button");
+    tc.statsBtn.dispatch("pointerdown", { pointerId: 5, pointerType: "touch" });
+    same(held(kb), [0x0F], "held SCORE = Tab held (the statistics - never fire): " + held(kb));
+    tc.statsBtn.dispatch("pointerup", { pointerId: 5 }); ctl.poll(now() + 500);
+    same(held(kb), [], "let go: Tab let go");
+    kb.takeKeys();
+    const sent = [], pad = new env.win.Pads.VirtualPad((type, code) => sent.push(type + " " + code));
+    const st = Object.assign(env.win.Pads.readGamepad({ mapping: "standard", buttons: Array.from({ length: 17 }, (_, i) => ({ pressed: i === 8 })), axes: [0, 0] }));
+    assert(st.stats && !st.fire, "gamepad Back / Select: stats, not fire");
+    pad.update(st, false, "blue", 0);
+    same(sent, ["keydown Tab"], "gamepad Back during play = Tab");
+    ok("SCORE (touch, held) and a gamepad's Back / Select = Tab held during play (the statistics), never fire");
+  }
+
   // ------------------------------------------------------------ touch: joystick + FIRE -> keys
   {
     const env = makeEnv("");
@@ -257,8 +279,9 @@ const SC = { W: 0x11, A: 0x1E, X: 0x2D, D: 0x20, BLUEFIRE: 0x1D, GREENFIRE: 0x1C
     same(kb.takeKeys(), [[0, SC.DOWN, false], [13, SC.GREENFIRE, false]], "menu: joystick = arrows, FIRE = Enter");
     // labels in every language
     for (const code of env.win.Lang.codes) {
-      for (const k of ["touch.fire", "touch.esc", "touch.quit", "touch.leave"]) assert(env.win.Lang.data[code][k], code + " " + k);
+      for (const k of ["touch.fire", "touch.esc", "touch.quit", "touch.leave", "touch.stats"]) assert(env.win.Lang.data[code][k], code + " " + k);
     }
+    assert(!tc.statsBtn && !env.body.children.some(c => c !== tc.root && /tpad-stats/.test(c.className || "")), "no SCORE button unless asked for");
     ok("touch: joystick (8 directions, dead zone, clamped) + FIRE + ESC -> BLUE's keys; menus: arrows / Enter; shown on the first touch; labels in every language");
   }
 
@@ -276,11 +299,12 @@ const SC = { W: 0x11, A: 0x1E, X: 0x2D, D: 0x20, BLUEFIRE: 0x1D, GREENFIRE: 0x1C
     assert(C.isDefault());
     // what can be assigned: input.js's keys without Escape and the lock keys; never F keys / Meta
     for (const code of Object.keys(SCAN))
-      assert.strictEqual(C.assignable(code), !["Escape", "CapsLock", "NumLock", "ScrollLock"].includes(code), code);
+      assert.strictEqual(C.assignable(code), !["Escape", "Tab", "CapsLock", "NumLock", "ScrollLock"].includes(code), code);
     for (const code of ["Escape", "F1", "F5", "F12", "MetaLeft", "OSLeft", "ContextMenu", "", null, undefined, "Bogus"])
       assert(!C.assignable(code), "not assignable: " + code);
-    for (const code of ["KeyQ", "Digit5", "Space", "Enter", "ArrowUp", "Numpad5", "NumpadEnter", "ShiftRight", "ControlLeft", "ControlRight", "AltLeft", "AltRight", "Tab"])
+    for (const code of ["KeyQ", "Digit5", "Space", "Enter", "ArrowUp", "Numpad5", "NumpadEnter", "ShiftRight", "ControlLeft", "ControlRight", "AltLeft", "AltRight"])
       assert(C.assignable(code), "assignable: " + code);
+    assert(!C.assignable("Tab"), "Tab: the statistics, never a tank's key");
     // labels: short, plain
     const L = { KeyW: "W", Digit5: "5", Space: "Space", Enter: "Enter", Tab: "Tab", ShiftLeft: "L Shift", ShiftRight: "R Shift",
       ControlLeft: "L Ctrl", ControlRight: "R Ctrl", AltLeft: "L Alt", AltRight: "R Alt", ArrowUp: "↑", ArrowDown: "↓", ArrowLeft: "←",
@@ -329,13 +353,15 @@ const SC = { W: 0x11, A: 0x1E, X: 0x2D, D: 0x20, BLUEFIRE: 0x1D, GREENFIRE: 0x1C
     assert.deepStrictEqual(Object.keys(b.win.SCAN), Object.keys(BEFORE.keyboard), "the same keys");
     for (const code of Object.keys(b.win.SCAN)) {
       press(b.win, code);
-      same(held(kb), BEFORE.keyboard[code].held, "held " + code);
+      // (but Tab: BLUE's extra fire key before, the statistics now - ui/livestats.js; owner, 2026-10-28)
+      if (code === "Tab") assert(!held(kb).includes(0x1D), "Tab doesn't fire: " + held(kb));
+      else same(held(kb), BEFORE.keyboard[code].held, "held " + code);
       same(kb.takeKeys(), BEFORE.keyboard[code].keys, "keystroke " + code);
       release(b.win, code);
     }
     for (const code of ["KeyW", "Space", "ArrowLeft", "Numpad6", "Tab"]) press(b.win, code);
-    same(held(kb), BEFORE.several, "several at once");
-    ok("default mapping = the original held keys for every key (W A S/X D, L Shift / Space / Tab, arrows, Enter / R Shift / keypad, no Ctrl, no X)");
+    same(held(kb).filter(x => x !== 0x0F), BEFORE.several, "several at once");
+    ok("default mapping = the original held keys for every key (W A S/X D, L Shift / Space, arrows, Enter / R Shift / keypad, no Ctrl, no X; Tab no longer fires)");
   }
   {
     const env = makeEnv("");
@@ -348,8 +374,8 @@ const SC = { W: 0x11, A: 0x1E, X: 0x2D, D: 0x20, BLUEFIRE: 0x1D, GREENFIRE: 0x1C
     same(scanOf("KeyI"), [SC.W], "I = BLUE up"); same(scanOf("KeyW"), [], "W: its old meaning is gone");
     same(C.codesOf("blue", "up"), ["KeyI"]);
     // the extra fire keys: only while the fire key is the default
-    same(scanOf("Space"), [SC.BLUEFIRE]); same(scanOf("Tab"), [SC.BLUEFIRE]);
-    same(C.codesOf("blue", "fire"), ["ShiftLeft", "Space", "Tab"]);
+    same(scanOf("Space"), [SC.BLUEFIRE]); same(scanOf("Tab"), [], "Tab never fires (the statistics)");
+    same(C.codesOf("blue", "fire"), ["ShiftLeft", "Space"]);
     same(C.codesOf("green", "fire"), ["Enter", "ShiftRight", "NumpadEnter"]);
     same(C.codesOf("green", "up"), ["ArrowUp", "Numpad8"]);
     C.set("blue", "fire", "KeyK");
@@ -359,7 +385,7 @@ const SC = { W: 0x11, A: 0x1E, X: 0x2D, D: 0x20, BLUEFIRE: 0x1D, GREENFIRE: 0x1C
     same(C.codesOf("blue", "fire"), ["KeyK"]);
     C.reset();
     C.set("green", "up", "Space");                                   // an extra assigned elsewhere: that is its meaning
-    same(scanOf("Space"), [SC.UP]); same(scanOf("Tab"), [SC.BLUEFIRE], "Tab still fires (BLUE's fire key is the default)");
+    same(scanOf("Space"), [SC.UP]); same(scanOf("ShiftLeft"), [SC.BLUEFIRE], "Left Shift still fires (BLUE's fire key is the default)");
     same(scanOf("ArrowUp"), [], "the old GREEN up key does nothing"); same(scanOf("Numpad8"), [], "nor keypad 8 (GREEN up isn't the default)");
     same(scanOf("Numpad2"), [SC.DOWN], "keypad 2 still GREEN down");
     C.reset();
@@ -504,7 +530,10 @@ const SC = { W: 0x11, A: 0x1E, X: 0x2D, D: 0x20, BLUEFIRE: 0x1D, GREENFIRE: 0x1C
       out(b);
       for (const code of Object.keys(BEFORE.play[search])) {
         press(b.env.win, code);
-        const want = BEFORE.play[search][code];
+        let want = BEFORE.play[search][code];
+        // (Tab: BLUE's extra fire key before, the statistics now - its keystroke stays, its fire bit goes)
+        if (code === "Tab") want = want.kd ? Object.assign({}, want, { kd: want.kd.map((v, i) => i === 0x1D ? 0 : v) })
+          : Object.assign({}, want, { bits: want.bits & ~16 });
         if (want.kd) { const o = b.fn(); same({ bits: [o.bits[0] | 0, o.bits[1] | 0], keys: o.keys }, { bits: asBits(want.kd), keys: want.keys }, search + " " + code); }
         else same(out(b), want, search + " " + code);
         release(b.env.win, code);

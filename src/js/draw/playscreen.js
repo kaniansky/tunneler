@@ -69,6 +69,9 @@ class PlayScreen {
     // graphics "modern" (gfx-modern.js): per player the world pixel at the top left of their view window and
     // whether it shows the static - set by blitView
     this.cams = arr(null);
+    // ... and the game mode's objects (zone marks, flags, gold...) of the last play frame [x, y, colour, ...]: in the
+    // world only while the views are blitted (objPut / objRestore), and that look draws the world after the step
+    this.objsShown = [];
     this.biosModeSet();
   }
 
@@ -117,6 +120,12 @@ class PlayScreen {
   roundEnd() { this.doneLores(); }
   // a tank's gauges start empty (a new round, a respawn): drawn in full by the next frames
   resetGauges(p) { this.shownEnergy[p] = 0; this.shownShield[p] = 0; }
+  // the mode objects' world pixels [x, y, old colour, ...] about to be restored (engine.objRestore)
+  modeObjects(o) {
+    const s = [];
+    for (let i = 0; i < o.length; i += 3) s.push(o[i], o[i + 1], this.e.getPixel(o[i], o[i + 1]));
+    this.objsShown = s;
+  }
   resetHud() { this.hudShown = new Array(this.e.nPlayers + 1).fill(null); }
   // the round clock's seconds (the last 30): drawn when they change
   roundClock(secs) {

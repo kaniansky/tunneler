@@ -297,7 +297,7 @@
       <figcaption><span class="th-o" data-i18n="hero.cap">Split screen in the original DOS look - one switch away in Settings.</span><span class="th-m" data-i18n="hero.cap.m">Split screen in the modern look - the original DOS look is one switch away in Settings.</span></figcaption>
     </figure>
   </div>
-  <div class="bottomline"><span>TUNNELER 2.0 &middot; Geoffrey Silverton &middot; 1991</span><span>Tunneler 1.0 &middot; Norko Kaniansky &middot; 2026</span></div>
+  <div class="bottomline"><span>TUNNELER 2.0 &middot; Geoffrey Silverton &middot; 1991</span><span>Tunneler <span id="relver">1.1</span> &middot; Norko Kaniansky &middot; 2026</span></div>
 </div></div>
 
 <section id="new"><div class="wrap">
@@ -544,6 +544,7 @@ sudo dnf install tunneler</pre>
     put("dl-mac", pick(/macos.*\.dmg$/));
     put("dl-android", pick(/android.*\.apk$/));
     document.getElementById("relinfo").innerHTML = '<a href="' + rel.html_url + '">' + rel.tag_name + "</a>";
+    if (/^v\d+\.\d+\.\d+$/.test(rel.tag_name)) document.getElementById("relver").textContent = rel.tag_name.slice(1);   // (the banner: this release)
   }).catch(() => {});
 </script>
 <script src="i18n.js"></script>

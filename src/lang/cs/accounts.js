@@ -38,7 +38,7 @@ Lang.extend("cs", {
   "acc.change.go": "Změnit heslo", "acc.change.go.i": "Od teď tvoje nové heslo.",
   "acc.delete.title": "ZRUŠENÍ ÚČTU",
   "acc.delete.i1": "Tímto natrvalo zrušíš účet {name} na tomto serveru:",
-  "acc.delete.i2": "jeho přihlášení a tvoje výsledky v denních žebříčcích.",
+  "acc.delete.i2": "jeho přihlášení, uložené mapy, záznamy a nastavení a tvoje denní výsledky.",
   "acc.delete.i3g": "Pro potvrzení stiskni dvakrát <ENTER> na Smazat.",
   "acc.gplay": "Přihlásit se přes Google Play", "acc.gplay.i": "Tvůj účet Google Play Games - bez hesla.",
   "acc.gname.title": "VYBER SI JMÉNO", "acc.gname.i1": "Tvůj účet Google Play je tu nový: vyber si jméno účtu.", "acc.gname.i2": "Ostatní ho vidí ve hrách online (později můžeš ukazovat jiné).",
@@ -65,14 +65,14 @@ Lang.extend("cs", {
   "acc.err.storage": "Server se nedostane k úložišti - zkus to později.",
   "acc.err.server": "Server odmítl: {msg}",
   "set.account": "Účet: ", "set.account.none": "nepřihlášen",
-  "set.account.i1": "Tvůj účet na tomto serveru: online hry ho potřebují.",
+  "set.account.i1": "Tvůj účet na tomto serveru: hra online, tvoje mapy, záznamy a nastavení.",
   "set.account.i2": "Účty jsou pro každý server - jiný server chce vlastní.",
   "set.dname.i1": "Jméno, které vidí ostatní hráči. Přihlašuješ se dál jménem účtu.", "set.dname.ok": "Jméno uloženo - hráči ho odteď vidí.", "set.dname.taken": "To je jméno účtu jiného hráče - vyber si jiné.", "set.dname.bad": "Písmena nebo číslice, nejvýš 12 znaků.",
   "set.account.in.i": "<ENTER>: přihlásit se nebo vytvořit účet.",
   "acc.logout": "Odhlásit se", "acc.logout.i": "Zapomene přihlášení na tomto zařízení (účet zůstává).",
   "acc.change": "Změnit heslo", "acc.change.i": "Vyber si nové heslo.",
-  "acc.delete": "Zrušit účet", "acc.delete.i": "Zruší účet a jeho výsledky na tomto serveru.",
+  "acc.delete": "Zrušit účet", "acc.delete.i": "Zruší účet, co je v něm uložené, a jeho výsledky na tomto serveru.",
   "acc.out": "Odhlášen.", "acc.changed": "Heslo změněno.", "acc.deleted": "Účet byl zrušen.",
 });
 const S = Lang.data.cs.engine.info.sections;
-S.splice(S.length - 2, 0, ["Účty:  ", "online hry a žebříček denní výzvy potřebují účet na serveru hry: jméno - to, které vidí všichni - a heslo.  Vytvoříš si ho, když poprvé jdeš online; v Nastavení, Online se odhlásíš, změníš heslo nebo zrušíš účet.  E-mail není: zapiš si záchranný kód, který dostaneš s účtem - je to jediný způsob, jak si nastavit nové heslo.  Server bez účtů (hra doma) potřebuje jen jméno."]);
+S.splice(S.length - 2, 0, ["Účty:  ", "online hry a žebříček denní výzvy potřebují účet na serveru hry: jméno - to, které vidí všichni - a heslo.  Vytvoříš si ho, když poprvé jdeš online; v Nastavení, Online se odhlásíš, změníš heslo nebo zrušíš účet.  E-mail není: zapiš si záchranný kód, který dostaneš s účtem - je to jediný způsob, jak si nastavit nové heslo.  Když jsi přihlášený, tvoje mapy, záznamy a nastavení se ukládají s účtem - má je každé zařízení, na kterém se přihlásíš.  Server bez účtů (hra doma) potřebuje jen jméno."]);

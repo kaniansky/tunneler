@@ -435,6 +435,12 @@ function create(gl) {
     if (!S.buf || S.buf.length !== e.world.length) S.buf = new Uint8Array(e.world.length);
     const buf = S.buf, ws = e.ws;
     buf.set(e.world);
+    // the game mode's objects (taken out of the world again before the step ended): as the views showed them
+    const o = e.objsShown || [];
+    for (let k = 0; k < o.length; k += 3) {
+      const x = o[k], i = o[k + 1] * ws + (x >> 1);
+      if (i < buf.length) buf[i] = x & 1 ? (buf[i] & 0x0F) | (o[k + 2] << 4) : (buf[i] & 0xF0) | o[k + 2];
+    }
     untank(e, buf, 0);
     gl.bindTexture(gl.TEXTURE_2D, worldTex);
     gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);

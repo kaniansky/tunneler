@@ -13,6 +13,7 @@
 //   Account.ticket()         a one-time ticket for the websocket (null: this server has no accounts; throws
 //                            {code: "login"} when the session is gone, {code: "net"} without an answer)
 //   Account.auth()           the Authorization header of the session ({} without one)
+//   Account.onLogin(fn)      fn() whenever an account logs in here (cloudsave.js)
 import { Endpoint } from "./endpoint.js";
 const root = globalThis;
 
@@ -31,8 +32,15 @@ function session() {
     return s && typeof s === "object" && typeof s.token === "string" && typeof s.name === "string" ? s : null;
   } catch (e) { return null; }
 }
-const keep = (token, account) => { store.set(sessionKey(), JSON.stringify({ token, id: account.id, name: account.name, display: account.display || account.name,
-  password: account.password !== false, google: !!account.google })); return session(); };
+// (logged in - another account than before, or none: the onLogin listeners - cloudsave.js)
+const loginListeners = [];
+const keep = (token, account) => {
+  const before = session();
+  store.set(sessionKey(), JSON.stringify({ token, id: account.id, name: account.name, display: account.display || account.name,
+    password: account.password !== false, google: !!account.google }));
+  if (!before || before.id !== account.id) for (const f of loginListeners) try { f(); } catch (e) { /* theirs */ }
+  return session();
+};
 const logout = () => store.del(sessionKey());
 function required() { const v = store.get(configKey()); return v === "1" ? true : v === "0" ? false : null; }
 const remember = on => store.set(configKey(), on ? "1" : "0");
@@ -175,4 +183,5 @@ export const Account = {
   display: () => { const s = session() || {}; return s.display || s.name || ""; },
   check, signup, login, reset, changePassword, setName, remove, logout, ticket, auth,
   google: googleReady, googleSignIn, googleSignup, linkGoogle, hasPassword: () => (session() || {}).password !== false,
+  onLogin: fn => { loginListeners.push(fn); },
 };

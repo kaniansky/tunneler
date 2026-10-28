@@ -38,7 +38,7 @@ Lang.extend("sk", {
   "acc.change.go": "Zmeniť heslo", "acc.change.go.i": "Odteraz tvoje nové heslo.",
   "acc.delete.title": "ZRUŠENIE ÚČTU",
   "acc.delete.i1": "Týmto natrvalo zrušíš účet {name} na tomto serveri:",
-  "acc.delete.i2": "jeho prihlásenie a tvoje výsledky v denných rebríčkoch.",
+  "acc.delete.i2": "jeho prihlásenie, uložené mapy, záznamy a nastavenia a tvoje denné výsledky.",
   "acc.delete.i3g": "Na potvrdenie stlač dvakrát <ENTER> na Vymazať.",
   "acc.gplay": "Prihlásiť sa cez Google Play", "acc.gplay.i": "Tvoj účet Google Play Games - bez hesla.",
   "acc.gname.title": "VYBER SI MENO", "acc.gname.i1": "Tvoj účet Google Play je tu nový: vyber si meno účtu.", "acc.gname.i2": "Ostatní ho vidia v hrách online (neskôr môžeš ukazovať iné).",
@@ -65,14 +65,14 @@ Lang.extend("sk", {
   "acc.err.storage": "Server sa nedostane k úložisku - skús to neskôr.",
   "acc.err.server": "Server odmietol: {msg}",
   "set.account": "Účet: ", "set.account.none": "neprihlásený",
-  "set.account.i1": "Tvoj účet na tomto serveri: online hry ho potrebujú.",
+  "set.account.i1": "Tvoj účet na tomto serveri: hra online, tvoje mapy, záznamy a nastavenia.",
   "set.account.i2": "Účty sú pre každý server - iný server chce vlastný.",
   "set.dname.i1": "Meno, ktoré vidia ostatní hráči. Prihlasuješ sa ďalej menom účtu.", "set.dname.ok": "Meno uložené - hráči ho odteraz vidia.", "set.dname.taken": "To je meno účtu iného hráča - vyber si iné.", "set.dname.bad": "Písmená alebo číslice, najviac 12 znakov.",
   "set.account.in.i": "<ENTER>: prihlásiť sa alebo vytvoriť účet.",
   "acc.logout": "Odhlásiť sa", "acc.logout.i": "Zabudne prihlásenie na tomto zariadení (účet zostáva).",
   "acc.change": "Zmeniť heslo", "acc.change.i": "Vyber si nové heslo.",
-  "acc.delete": "Zrušiť účet", "acc.delete.i": "Zruší účet a jeho výsledky na tomto serveri.",
+  "acc.delete": "Zrušiť účet", "acc.delete.i": "Zruší účet, čo je v ňom uložené, a jeho výsledky na tomto serveri.",
   "acc.out": "Odhlásený.", "acc.changed": "Heslo zmenené.", "acc.deleted": "Účet bol zrušený.",
 });
 const S = Lang.data.sk.engine.info.sections;
-S.splice(S.length - 2, 0, ["Účty:  ", "online hry a rebríček dennej výzvy potrebujú účet na serveri hry: meno - to, ktoré vidia všetci - a heslo.  Vytvoríš si ho, keď prvý raz ideš online; v Nastaveniach, Online sa odhlásiš, zmeníš heslo alebo zrušíš účet.  E-mail nie je: zapíš si záchranný kód, ktorý dostaneš s účtom - je to jediný spôsob, ako si nastaviť nové heslo.  Server bez účtov (hra doma) potrebuje len meno."]);
+S.splice(S.length - 2, 0, ["Účty:  ", "online hry a rebríček dennej výzvy potrebujú účet na serveri hry: meno - to, ktoré vidia všetci - a heslo.  Vytvoríš si ho, keď prvý raz ideš online; v Nastaveniach, Online sa odhlásiš, zmeníš heslo alebo zrušíš účet.  E-mail nie je: zapíš si záchranný kód, ktorý dostaneš s účtom - je to jediný spôsob, ako si nastaviť nové heslo.  Kým si prihlásený, tvoje mapy, záznamy a nastavenia sa ukladajú s účtom - má ich každé zariadenie, na ktorom sa prihlásiš.  Server bez účtov (hra doma) potrebuje len meno."]);

@@ -115,7 +115,9 @@ how the game and every menu screen are drawn. This file describes what is built.
   tanks (`tankX / tankY / tankDir / alive`, their sprites for the colours), shots, `engine.fx`, the sight
   memory, and `engine.cams[p]` = `{x, y, noise}` (blitView's window origin; display only, not in
   `stateHash`). Never writes the engine (`sightView` only fills its own scratch buffers).
-- Terrain: the world into an R8UI texture once per engine step (2 pixels a byte), the alive tanks' sprite
+- Terrain: the world into an R8UI texture once per engine step (2 pixels a byte), the game mode's objects of the
+  last frame put back in (`engine.objsShown` [x, y, colour, ...]: objPut's pixels are out of the world again when
+  the step ends - before 1.1.7 the modern look showed none: the hill's ring, flags, gold...), the alive tanks' sprite
   pixels taken out. Colour classes: 0 tunnel, 6 / 8 dirt, 7 rock, the players' colours base walls, 12
   shots / embers, 4 shot trails, anything else "other" (glows in its own colour: game modes' objects work
   without modern code). The contour upscaler over the classes (or plain pixels: Tunnel edges "pixel");
@@ -142,7 +144,9 @@ how the game and every menu screen are drawn. This file describes what is built.
 - Flat like the menus (solid fills, 1 px lines, small corners, no gradient, no glow). Panel "modern": per
   view a frame (the background with the window cut out, a 1 px border in the player's colour), the
   instrument panel (energy and shield as icon + solid bar + percent; low values blink rust), the
-  round clock and a game mode's number as tags (`engine.clockShown`, `engine.hudShown[p]`), the name label
+  round clock and a game mode's number as tags at the panel's right end (`engine.clockShown`, `engine.hudShown[p]`;
+  owner, 2026-10-28: beside the panel they covered its percentages - the bars are shorter whenever the game can show
+  a tag: a round time, a mode with a number), the name label
   on the top border (with the team), DESTROYED for blacked-out views; the ping and the notice band across
   the screen; the end-of-match map's frame around the map and the banner (the "PRESS ANY KEY" pixel art
   stays). Panel "classic": nothing - the upscaled original frame, panel and labels show.

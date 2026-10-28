@@ -8,7 +8,7 @@
 //   runner.recorder = Replay.recorder(engine, {kind, seed, opts, room}, rep => Replay.save(rep));
 //   const e = Replay.engine(rep, TunnelerEngine), p = Replay.player(rep);
 //   for (let inp; (inp = p.next()); ) { e.step(inp); if (p.check(e) === false) ...plays differently }
-//   Replay.list() / get(id) / remove(id) / save(rep)   (promises), toBlob(rep) / fromBytes(bytes)
+//   Replay.list() / get(id) / remove(id) / save(rep)   (promises), toBlob(rep) / fromBytes(bytes), onChange(fn): fn() after a change
 import { NetProto } from "./netproto.js";
 import { VERSION } from "../version.js";
 
@@ -164,10 +164,14 @@ async function get(id) {
   const r = await req("readonly", s => s.get(id));
   return valid(r) ? r : memory && memory.get(id) || null;
 }
+// (every change: the listeners - cloudsave.js keeps the replays with the account)
+const listeners = [];
+const changed = () => { for (const f of listeners) try { f(); } catch (e) { /* theirs */ } };
 async function remove(id) {
   await db();                                // (opened first: without IndexedDB that makes the memory store)
   if (memory) memory.delete(id);
   await req("readwrite", s => s.delete(id));
+  changed();
 }
 // kept: the newest MAX
 async function save(rep) {
@@ -177,6 +181,7 @@ async function save(rep) {
   await req("readwrite", s => s.put(rep));
   const all = await list();
   for (const old of all.slice(MAX)) await remove(old.id);
+  changed();
   return rep.id;
 }
 
@@ -211,7 +216,7 @@ export const Replay = {
   recorder: (engine, info, onDone) => new Recorder(engine, info, onDone),
   player: rep => new Player(rep),
   engine: makeEngine,
-  list, get, remove, save, toBlob, fromBytes,
+  list, get, remove, save, toBlob, fromBytes, onChange: fn => { listeners.push(fn); },
   // (tests: forget the storage - the next call opens it again; memory = true: this page's memory only)
   reset(mem) { dbp = mem ? Promise.resolve(null) : null; memory = mem ? new Map() : null; },
 };

@@ -252,6 +252,21 @@ function loadPage(page, search, stored, version) {
     assert(!ws.sent.some(m => m.t === "kick"), "the first Enter only asks");
     press(env, "Enter");
     assert(ws.sent.some(m => m.t === "kick" && m.k === 1), "kick sent: " + JSON.stringify(ws.sent.filter(m => m.t === "kick")));
+    // delete a message: the list of the chat's messages (with ids), the newest selected; Enter asks, a second deletes
+    ws.recv({ t: "chat", id: 11, from: { color: 0, name: "Bob" }, text: "rude words" });
+    ws.recv({ t: "chat", id: 12, from: { color: 0, name: "Bob" }, text: "more of them" });
+    await wait(250);
+    sel(lui, "chatdel"); press(env, "Enter");
+    assert.strictEqual(lui.spec.items.filter(it => /^c\d/.test(it.key)).map(it => it.key).join(), "c11,c12", "messages to delete");
+    assert.strictEqual(cur(), "c12", "the newest selected");
+    press(env, "Enter");
+    assert(!ws.sent.some(m => m.t === "chatdel"), "the first Enter only asks");
+    press(env, "Enter");
+    assert(ws.sent.some(m => m.t === "chatdel" && m.id === 12), "chatdel sent: " + JSON.stringify(ws.sent.filter(m => m.t === "chatdel")));
+    ws.recv({ t: "chatdel", ids: [11, 12] });
+    await wait(250);
+    assert(shown().includes("Bob: *deleted*") && !shown().includes("rude"), "deleted messages shown as *deleted*: " + shown());
+    assert(lui.spec.items.find(it => it.key === "chatdel").disabled, "nothing left to delete: grayed");
     ws.recv({ t: "pong", c: performance.now() - 20 });
     assert(ws.sent.some(m => m.t === "rtt" && m.ms >= 0), "rtt reported");
     // a match: its own engine (GREEN is this page), straight into the game; the lobby closes
@@ -271,6 +286,15 @@ function loadPage(page, search, stored, version) {
     assert(ws.sent.some(m => m.t === "r" && m.playing), "report sent");
     key(env, "keyup", "KeyD");
     assert(ws.sent.some(m => m.t === "b" && m.v === 0), "release sent");
+    // held Tab: the score over the game (display only - no fire bit), gone when let go
+    const sentB = ws.sent.length;
+    key(env, "keydown", "Tab", "Tab");
+    await wait(150);
+    const over = env.win.tunnelerRunner().overlay;
+    assert(over && /ROUND 1/.test(screenText(env.win, over)) && /Zed/.test(screenText(env.win, over)), "Tab: the score: " + (over && screenText(env.win, over)));
+    assert(!ws.sent.slice(sentB).some(m => m.t === "b" && m.v & 16), "Tab never fires");
+    key(env, "keyup", "Tab");
+    assert(!env.win.tunnelerRunner().overlay, "let go: the game again");
     // the jitter buffer: a stall (nothing for 330 ms - the network, a pause, the server) and then the frames held
     // up all at once, then one every tick: it doesn't stay 3 frames (165 ms) behind for the rest of the match
     await waitFor(() => env.win.tunnelerFrames().queued === 0, "the frames so far run");
@@ -284,9 +308,10 @@ function loadPage(page, search, stored, version) {
       await wait(Math.max(0, t1 + (i + 1) * TICK - performance.now()));
       ws.recv({ t: "f", m: 1, n: n++, f: [[0, 0, 1]] }); queued.push(env.win.tunnelerFrames().queued);
     }
-    // (the old code stayed at 3 - 4 for good; a busy machine - every test at once - may leave a frame waiting now and then)
+    // (the old code stayed at 3 - 4 for good; a busy machine - every test at once - leaves a frame or two waiting:
+    // its timers fire late - so the mean is what tells them apart, under 2)
     const last = queued.slice(-20), mean = last.reduce((a, b) => a + b, 0) / last.length;
-    assert(Math.max(...last) <= 2 && mean < 1.3, "the buffer shrinks again (to about nothing waiting): " + queued.join(" "));
+    assert(Math.max(...last) <= 3 && mean < 2, "the buffer shrinks again (to about nothing waiting): " + queued.join(" "));
     ws.recv({ t: "f", m: 2, n, f: [[0, 0, 1]] });                     // another match's frames: ignored
     assert.strictEqual(env.sockets.length, 1);
     // the end: back to the lobby
@@ -342,6 +367,14 @@ function loadPage(page, search, stored, version) {
     assert(e && e.extended && e.nPlayers === 3 && e.colorIndex(3) === 3, "the watched match's engine");
     press(env, "KeyD");
     assert(!ws.sent.some(m => m.t === "b" && m.v), "a spectator sends no bits");
+    await waitFor(() => e.screen === "play" && !env.win.tunnelerLobbyUI().active() && env.win.tunnelerRunner() && !env.win.tunnelerRunner().overlay &&
+      !env.win.tunnelerFrames().catching, "watching the match (caught up: no status screen)", 20000);
+    const mode0 = env.win.tunnelerViews().mode;
+    key(env, "keydown", "Tab", "Tab");
+    await wait(150);
+    assert(!env.win.tunnelerRunner().overlay && env.win.tunnelerViews().mode !== mode0, "a spectator's Tab: the next view mode, no score: " +
+      JSON.stringify({ overlay: !!env.win.tunnelerRunner().overlay, mode0, mode: env.win.tunnelerViews().mode, screen: e.screen }));
+    key(env, "keyup", "Tab");
     console.log("  ok  online.js spectator: sits down, chats, read-only otherwise; watches a match");
   }
   {

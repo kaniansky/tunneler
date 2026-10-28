@@ -77,9 +77,9 @@ body.tpad-tank .tpad { --line: #b95904; --tick: #7a3a02; --hi: rgba(255, 255, 25
   --fire: #000; --fire-on: #3a0d06; }
 html.modern body.tpad-tank .tpad { --line: #8a5a2b; --tick: #5a3a1c; --fill: rgba(10, 8, 6, .8); --fire: #0a0806; --fire-on: #3a120c; }
 body.touch .tpad:not([hidden]) { display: block; }
-.tpad-stick, .tpad-fire, .tpad-esc { position: fixed; z-index: 10; touch-action: none; -webkit-user-select: none; user-select: none;
+.tpad-stick, .tpad-fire, .tpad-esc, .tpad-stats { position: fixed; z-index: 10; touch-action: none; -webkit-user-select: none; user-select: none;
   font-family: "Courier New", ui-monospace, monospace; font-weight: bold; }
-html.modern .tpad-fire, html.modern .tpad-esc { font-family: "TunnelerMono", "Noto Sans Mono", ui-monospace, monospace; }
+html.modern .tpad-fire, html.modern .tpad-esc, html.modern .tpad-stats { font-family: "TunnelerMono", "Noto Sans Mono", ui-monospace, monospace; }
 /* the joystick: a ring, 8 ticks between the directions, the direction the tank goes lit from the knob outwards */
 .tpad-stick { --s: calc(min(38vmin, 170px) * var(--tpad-k, 1)); left: max(14px, env(safe-area-inset-left)); bottom: max(14px, env(safe-area-inset-bottom));
   width: var(--s); height: var(--s); border-radius: 50%; border: 2px solid var(--line); background: var(--fill); }
@@ -109,15 +109,17 @@ body.tpad-tank .tpad-shell { display: block; }
 .tpad-shellm svg { display: block; height: 100%; margin: 0 auto; }
 html.modern body.tpad-tank .tpad-shell { display: none; }
 html.modern body.tpad-tank .tpad-shellm { display: block; }
-/* ESC: a key cap */
-.tpad-esc { right: max(8px, env(safe-area-inset-right)); top: max(8px, env(safe-area-inset-top));
+/* ESC: a key cap; SCORE (held: the statistics) the same, below it (--cap: a key cap's height with the gap) */
+.tpad { --cap: calc(36px * var(--tpad-k, 1) + 8px); }
+.tpad-esc, .tpad-stats { right: max(8px, env(safe-area-inset-right)); top: max(8px, env(safe-area-inset-top));
   padding: calc(5px * var(--tpad-k, 1)) calc(10px * var(--tpad-k, 1)); border-radius: 3px;
   background: var(--fill); color: var(--esc); border: 1px solid var(--esc-edge); border-bottom-width: 3px; font-size: calc(13px * var(--tpad-k, 1)); }
-.tpad-esc.on { color: #fff; border-color: var(--esc); border-bottom-width: 1px; translate: 0 2px; }
+.tpad-stats { top: calc(max(8px, env(safe-area-inset-top)) + var(--cap)); }
+.tpad-esc.on, .tpad-stats.on { color: #fff; border-color: var(--esc); border-bottom-width: 1px; translate: 0 2px; }
 .tpad.dead .tpad-stick, .tpad.dead .tpad-fire { display: none; }   /* (your tank destroyed: ESC only) */
 body.tpad-left .tpad-stick { left: auto; right: max(14px, env(safe-area-inset-right)); }
 body.tpad-left .tpad-fire { right: auto; left: max(14px, env(safe-area-inset-left)); }
-body.tpad-left .tpad-esc { right: auto; left: max(8px, env(safe-area-inset-left)); }
+body.tpad-left .tpad-esc, body.tpad-left .tpad-stats { right: auto; left: max(8px, env(safe-area-inset-left)); }
 /* portrait: the game at the top, the controls below it */
 @media (orientation: portrait) {
   /* (no padding but the safe areas: the canvas to the screen's edges - a finger near an edge still drags it; owner,
@@ -128,9 +130,11 @@ body.tpad-left .tpad-esc { right: auto; left: max(8px, env(safe-area-inset-left)
   /* (the game at the top while the joystick and FIRE are below it - pads.js body.tpad-shown; anything else centred:
      the map editor, a spectator's or a replay's game, the engine's text screens) */
   body.touch.tpad-shown .screen { justify-content: flex-start; }
-  .tpad-esc, body.tpad-left .tpad-esc { top: auto; right: auto; left: 50%; transform: translateX(-50%); bottom: max(28px, env(safe-area-inset-bottom)); }
+  .tpad-esc, body.tpad-left .tpad-esc, .tpad-stats, body.tpad-left .tpad-stats { top: auto; right: auto; left: 50%; transform: translateX(-50%); bottom: max(28px, env(safe-area-inset-bottom)); }
+  .tpad-stats, body.tpad-left .tpad-stats { bottom: calc(max(28px, env(safe-area-inset-bottom)) + var(--cap)); }
   /* (large: no room between the joystick and FIRE - ESC goes just above the joystick's top) */
   body.tpad-large .tpad-esc { bottom: calc(max(14px, env(safe-area-inset-bottom)) + min(38vmin, 170px) * 1.3 + 8px); }
+  body.tpad-large .tpad-stats { bottom: calc(max(14px, env(safe-area-inset-bottom)) + min(38vmin, 170px) * 1.3 + 8px + var(--cap)); }
   body.touch .game:not([style*="width"]) { width: calc(100vw - var(--screen-px)); }
   body.touch .game.half:not([style*="width"]) { width: min(calc(100vw - 16px), calc((100dvh - 46vmin * var(--tpad-k, 1) - 40px) * 2 / 3)); }
 }

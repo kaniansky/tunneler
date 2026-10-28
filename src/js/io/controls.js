@@ -3,7 +3,8 @@
 // defaults. A key assigned to an action makes that action's original scan code for that tank (input.js's
 // Keyboard: Kbd.KeyDown as before, so the engine, the held bits sent online and the determinism don't
 // change); online.js reads the codes of each action, pads.js synthesizes them. No two actions share a key
-// (assigning a key another action has swaps the two). The extra default keys (BLUE fire: Space, Tab; GREEN
+// (assigning a key another action has swaps the two). Tab is never a tank's key: it shows the statistics during a
+// match (ui/livestats.js; owner, 2026-10-28 - it was BLUE's extra fire key). The extra default keys (BLUE fire: Space; GREEN
 // fire: Right Shift, keypad Enter; GREEN's directions: keypad 8 2 4 6) work only while that action has its
 // default key and they aren't assigned to anything; a default key that is no longer assigned does nothing
 // in the game. Menus are not affected (DosUI reads KeyboardEvent.key; the engine's menus the keystrokes).
@@ -23,17 +24,17 @@ const SCANS = {
   green: { up: 0x48, down: 0x50, left: 0x4B, right: 0x4D, fire: 0x1C },
 };
 const EXTRAS = {
-  blue: { fire: ["Space", "Tab"] },
+  blue: { fire: ["Space"] },
   green: { up: ["Numpad8"], down: ["Numpad2"], left: ["Numpad4"], right: ["Numpad6"], fire: ["ShiftRight", "NumpadEnter"] },
 };
 const ACTION_SCANS = new Set([].concat(...SETS.map(s => ACTIONS.map(a => SCANS[s][a]))));
 const STORE = "tunneler.keys";
 
-// every key the game can take (input.js's SCAN without Escape, which leaves games / menus, and the lock
+// every key the game can take (input.js's SCAN without Escape, which leaves games / menus, Tab - the statistics -, and the lock
 // keys, whose key-up a browser doesn't report reliably) -> its short label (at most 10 columns)
 const LABELS = {
   Digit1: "1", Digit2: "2", Digit3: "3", Digit4: "4", Digit5: "5", Digit6: "6", Digit7: "7", Digit8: "8", Digit9: "9", Digit0: "0",
-  Minus: "-", Equal: "=", Backspace: "Backspace", Tab: "Tab",
+  Minus: "-", Equal: "=", Backspace: "Backspace",
   BracketLeft: "[", BracketRight: "]", Enter: "Enter", ControlLeft: "L Ctrl",
   Semicolon: ";", Quote: "'", Backquote: "`", ShiftLeft: "L Shift", Backslash: "\\",
   Comma: ",", Period: ".", Slash: "/", ShiftRight: "R Shift", NumpadMultiply: "Num *", AltLeft: "L Alt", Space: "Space",
@@ -44,7 +45,7 @@ const LABELS = {
   ArrowLeft: "←", ArrowRight: "→", End: "End", ArrowDown: "↓", PageDown: "PgDn", Insert: "Ins", Delete: "Del",
 };
 for (let c = 65; c <= 90; c++) LABELS["Key" + String.fromCharCode(c)] = String.fromCharCode(c);
-const OTHER_LABELS = { Escape: "Esc", CapsLock: "Caps Lock", NumLock: "Num Lock", ScrollLock: "Scr Lock",
+const OTHER_LABELS = { Escape: "Esc", Tab: "Tab", CapsLock: "Caps Lock", NumLock: "Num Lock", ScrollLock: "Scr Lock",
   NumpadDivide: "Num /", MetaLeft: "L Win", MetaRight: "R Win", ContextMenu: "Menu", IntlBackslash: "\\" };
 
 const assignable = code => typeof code === "string" && Object.prototype.hasOwnProperty.call(LABELS, code);

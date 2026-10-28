@@ -48,12 +48,12 @@ function makeEnv(search, store) {
   win.window = win; win.globalThis = win;
   const ctx = vm.createContext(win);
   const page = f => runPage(ctx, f);
-  const key = code => {
+  const key = (code, type = "keydown") => {
     let stop = false;
     const ev = { code, key: keyOf(code), target: {}, preventDefault() {}, stopPropagation() {}, stopImmediatePropagation() { stop = true; } };
-    const all = listeners.keydown || [];
+    const all = listeners[type] || [];
     for (const f of all.filter(g => g.capture).concat(all.filter(g => !g.capture))) {
-      if (!(listeners.keydown || []).includes(f)) continue;     // (removed by an earlier listener)
+      if (!(listeners[type] || []).includes(f)) continue;     // (removed by an earlier listener)
       f(ev); if (stop) break;
     }
   };
@@ -710,6 +710,26 @@ function play(search) {
   assert.strictEqual(sp.win.location.href, "/#split");
   same(["size", "win", "time"].map(k => s2.get("tunneler.split." + k)), ["large", "2", "5"]);
   ok("play.js: after the match its own screen - Rematch / Esc go to the lobby with the game's settings (skirmish, split screen), Back home");
+}
+
+// ---------------------------------------------------------------- play.js: held Tab = the score over the game
+{
+  const env = makeEnv("?mode=cpu&slots=" + encodeURIComponent("0:you:1,1:easy:2,2:easy:1,3:easy:2") + "&gm=gold&size=small&lv=2", new Map());
+  env.page("play.html");
+  const e = env.win.tunnelerEngine(), runner = env.win.tunnelerRunner();
+  for (let i = 0; i < 3000 && e.screen !== "play"; i++) e.step({ bits: [0, 0, 0, 0], keys: [] });
+  const hash = NODE.NetProto.stateHash(e);
+  env.key("Tab");
+  const v = runner.overlay ? runner.overlay.vram : [];
+  let text = "";
+  for (let k = 0; k < v.length; k += 2) text += String.fromCharCode(v[k]);
+  assert(runner.overlay && /ROUND 1/.test(text) && /TEAM 1/.test(text) && /gold 0\/10/.test(text) && /gold rush/.test(text),
+    "Tab: the round, the teams' score, the settings: " + text);
+  assert(!(env.win.tunnelerInput().bits[0] & 16), "Tab never fires");
+  assert.strictEqual(NODE.NetProto.stateHash(e), hash, "display only");
+  env.key("Tab", "keyup");
+  assert(!runner.overlay, "let go: the game again");
+  ok("play.js: held Tab = the score, the teams and the settings over the game (display only, no fire)");
 }
 
 // ---------------------------------------------------------------- an auto start's "(creating world)"

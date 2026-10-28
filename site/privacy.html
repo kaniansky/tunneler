@@ -91,7 +91,7 @@
 
 <main id="main"><div class="wrap measure">
   <h1>Privacy policy</h1>
-  <p class="date">Last updated: 2026-10-26</p>
+  <p class="date">Last updated: 2026-10-28</p>
 
   <p>This policy covers <strong>Tunneler</strong>: the game in the browser, the desktop app and the
   Android app (<code>com.kaniansky.Tunneler</code>), made by Norko Kaniansky. In short: the game has
@@ -106,14 +106,15 @@
   <ul>
     <li>your settings (language, graphics, sound, controls and so on) and the player name you choose for
     online games;</li>
-    <li>the replays of your last matches (the newest 20);</li>
+    <li>the replays of your last matches (the newest 20) and the maps you make in the map editor;</li>
     <li>a random id for this browser or app (on a server without accounts it lets the game server give you your
     seat back after a lost connection) and the keys of the online games you created;</li>
     <li>when you are logged in, the login token (session) of your account for each game server - logging out
     deletes it.</li>
   </ul>
   <p>The browser version can also keep the game's own files in the browser's cache so that it starts
-  without a connection.</p>
+  without a connection. While you are logged in to an account, a copy of your settings, maps and replays is also
+  kept with that account (see Accounts below).</p>
 
   <h2>Online games</h2>
   <p>Split screen and skirmish games run entirely on your device. Only when you choose an online game does
@@ -149,6 +150,9 @@
     <li>your <strong>password</strong> and your <strong>recovery code</strong>, but only as salted one-way hashes
     (scrypt) - nobody, including the server's operator, can read them back;</li>
     <li>a random account id, and when the account was created and last used;</li>
+    <li>while you are logged in: a copy of <strong>your settings, your maps and your replays</strong> (the ones on
+    your device; not the server address, the fullscreen setting or the login itself), so that every device you log in
+    on has them - only you can get them; deleting a map or a replay on one device deletes its copy too;</li>
     <li>the <strong>daily-challenge results</strong> you send: your place, rounds, kills and time on that day's
     leaderboard, and the replay of your best match of the day - shown to everyone who looks at the leaderboard.
     Leaderboards are kept for 30 days.</li>
@@ -156,8 +160,9 @@
   <p>There is no e-mail address and nothing else about you. On the default server the accounts are kept in the
   server's storage (a Cloudflare R2 bucket); they are used only to run the game.</p>
   <p id="delete"><strong>Deleting your account:</strong> in the game (the browser version or the apps), log in, then
-  Settings &rarr; Online &rarr; Delete account, and confirm with your password. The account, its login, its
-  leaderboard entries and their replays are deleted from the server at once. Logging out only forgets the login on
+  Settings &rarr; Online &rarr; Delete account, and confirm with your password. The account, its login, the
+  settings, maps and replays kept with it, its leaderboard entries and their replays are deleted from the server at
+  once. Logging out only forgets the login on
   that device. If you have lost both your password and your recovery code, the account can't be recovered and the
   game can't tell that it is yours; ask on the issues page below and the server's operator deletes it by its
   username.</p>

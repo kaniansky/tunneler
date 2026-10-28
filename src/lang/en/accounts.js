@@ -40,7 +40,7 @@ Lang.extend("en", {
   "acc.change.go": "Change the password", "acc.change.go.i": "Your new password from now on.",
   "acc.delete.title": "DELETE ACCOUNT",
   "acc.delete.i1": "This deletes the account {name} on this server for good:",
-  "acc.delete.i2": "its login and your results on the daily leaderboards.",
+  "acc.delete.i2": "its login, its saved maps, replays and settings, and your daily results.",
   "acc.delete.i3g": "Press <ENTER> twice on Delete to confirm.",
   "acc.gplay": "Sign in with Google Play", "acc.gplay.i": "Your Google Play Games account - no password needed.",
   "acc.gname.title": "CHOOSE A USERNAME", "acc.gname.i1": "Your Google Play account is new here: choose a username.", "acc.gname.i2": "Others see it in online games (you can show another name later).",
@@ -68,14 +68,14 @@ Lang.extend("en", {
   "acc.err.server": "The server refused: {msg}",
   // Settings, Online
   "set.account": "Account: ", "set.account.none": "not logged in",
-  "set.account.i1": "Your account on this server: online games need it.",
+  "set.account.i1": "Your account on this server: online play, your maps, replays and settings.",
   "set.account.i2": "Accounts are per server - another server needs its own.",
   "set.dname.i1": "The name other players see. Your username stays your login.", "set.dname.ok": "Name saved - players see it from now on.", "set.dname.taken": "That is another player's username - choose another name.", "set.dname.bad": "Letters or digits, up to 12 characters.",
   "set.account.in.i": "<ENTER>: log in, or create an account.",
   "acc.logout": "Log out", "acc.logout.i": "Forget the login on this device (the account stays).",
   "acc.change": "Change password", "acc.change.i": "Choose a new password.",
-  "acc.delete": "Delete account", "acc.delete.i": "Delete the account and its results on this server.",
+  "acc.delete": "Delete account", "acc.delete.i": "Delete the account, what it keeps and its results on this server.",
   "acc.out": "Logged out.", "acc.changed": "Password changed.", "acc.deleted": "The account was deleted.",
 });
 const S = STRINGS_EN.info.sections;
-S.splice(S.length - 2, 0, ["Accounts:  ", "online games and the daily challenge's leaderboard need an account on the game's server: a username - the name everybody sees - and a password.  Create one the first time you go online; Settings, Online logs out, changes the password or deletes the account.  There is no e-mail: write down the recovery code you get with the account - it is the only way to set a new password.  A server without accounts (a game at home) needs only a name."]);
+S.splice(S.length - 2, 0, ["Accounts:  ", "online games and the daily challenge's leaderboard need an account on the game's server: a username - the name everybody sees - and a password.  Create one the first time you go online; Settings, Online logs out, changes the password or deletes the account.  There is no e-mail: write down the recovery code you get with the account - it is the only way to set a new password.  Logged in, your maps, replays and settings are kept with the account, so every device you log in on has them.  A server without accounts (a game at home) needs only a name."]);

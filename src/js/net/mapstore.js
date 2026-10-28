@@ -8,6 +8,7 @@
 //   MapStore.list() -> records, newest first (filled)       MapStore.get(id)       MapStore.remove(id)
 //   MapStore.save(map, rec?) -> the record (rec: the one it replaces - its id and shared id, the latter reset
 //                              when the map changed)
+//   MapStore.putRecord(rec) -> a record kept as it is (another device's)     MapStore.onChange(fn): fn() after every change
 //   MapStore.share(rec) -> the shared id (POST /api/maps on the game's server; kept with the record)
 //   MapStore.sharedHere(rec) -> its shared id on the game's server, or "" (not sent there yet)
 //   MapStore.fetchShared(id, origin?) -> the record (GET /api/maps/<id>; one this browser has is reused)
@@ -64,16 +65,26 @@ async function get(id) {
   const r = await req("readonly", s => s.get(id));
   return valid(r) ? r : memory && memory.get(id) || null;
 }
+// (every change: the listeners - cloudsave.js keeps the maps with the account)
+const listeners = [];
+const changed = () => { for (const f of listeners) try { f(); } catch (e) { /* theirs */ } };
 async function put(rec) {
   await db();
   if (memory) memory.set(rec.id, rec);
   await req("readwrite", s => s.put(rec));
+  changed();
   return rec;
 }
 async function remove(id) {
   await db();
   if (memory) memory.delete(id);
   await req("readwrite", s => s.delete(id));
+  changed();
+}
+// a record as it is (cloudsave.js: one from another device) - a valid one only
+async function putRecord(rec) {
+  if (!valid(rec) || typeof rec.name !== "string") return null;
+  return put(rec);
 }
 // can a tank drive between all of the map's bases (the engine's check on the world a match starts on)
 const linkedOf = map => { const r = TunnelerEngine.mapReach(map); return !!(r && r.ok); };
@@ -165,7 +176,8 @@ async function fetchShared(id, origin) {
 }
 
 export const MapStore = {
-  list, get, save, remove, share, sharedHere, byShared, fetchShared, put, fill, playable, gallery, publish, unpublish, published,
+  list, get, save, remove, share, sharedHere, byShared, fetchShared, put, putRecord, fill, playable, gallery, publish, unpublish, published,
+  onChange: fn => { listeners.push(fn); },
   // (tests: forget the storage; mem = true: this page's memory only)
   reset(mem) { dbp = mem ? Promise.resolve(null) : null; memory = mem ? new Map() : null; },
 };

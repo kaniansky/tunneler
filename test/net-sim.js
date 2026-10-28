@@ -68,7 +68,7 @@ class FakeClient {
     this.engine = null; this.match = null; this.frames = 0; this.queue = new FrameQueue(); this.bots = null;
     this.received = [];            // the current match's frames, in order
     this.status = null; this.err = null; this.desync = false; this.hello = null; this.closed = false;
-    this.chat = []; this.ends = []; this.matches = []; this.pongs = new Set();
+    this.chat = []; this.chatdel = []; this.ends = []; this.matches = []; this.pongs = new Set();
     everyClient.add(this);
   }
   sync() {
@@ -118,6 +118,7 @@ class FakeClient {
     else if (m.t === "err") { this.err = m.msg; this.errCode = m.code; this.errVersion = m.version; }
     else if (m.t === "desync") this.desync = true;
     else if (m.t === "chat") this.chat.push(m);
+    else if (m.t === "chatdel") this.chatdel.push(m);
     else if (m.t === "host") this.hostKey = m.key;
     else if (m.t === "pong") this.pongs.add(m.c);
   }
@@ -670,6 +671,32 @@ async function main() {
   for (let i = 0; i < 8; i++) s1.send({ t: "chat", text: "spam " + i });
   await settle();
   check("chat rate limit per connection (5 in 5 s)", () => assert.strictEqual(p1.chat.filter(m => /^spam/.test(m.text)).length, 4));
+  // the host deletes a message ("*deleted*" for everybody, in the history too); a kick deletes its author's messages
+  check("chat messages have ids; who wrote one never leaves the server", () => {
+    assert(p1.chat.every(m => Number.isInteger(m.id)) && new Set(p1.chat.map(m => m.id)).size === p1.chat.length);
+    assert(!JSON.stringify(p1.chat).includes(s1.cid) && p1.chat.every(m => !("who" in m)));
+  });
+  s1.send({ t: "chatdel", id: p1.chat[0].id });
+  p1.send({ t: "chatdel", id: p1.chat[1].id });
+  await until(() => s1.chatdel.length === 1, "chatdel relayed"); await settle();
+  const chatOf = c => c.chat.map(m => (c.chatdel.some(d => d.ids.includes(m.id)) ? "*" : "") + m.text.slice(0, 6));
+  check("only the host deletes a message", () => {
+    assert.deepStrictEqual(s1.chatdel[0].ids, [p1.chat[1].id]);
+    assert.deepStrictEqual(chatOf(s1).slice(0, 2), ["hello ", "*hi fro"]);
+  });
+  const peek = await new FakeClient(port, cr.id, { name: "Peek", role: "watch" }).connect();
+  check("a deleted message comes to a joiner as *deleted*", () => {
+    assert.deepStrictEqual(peek.hello.chat[1], { id: p1.chat[1].id, from: { spectator: true, name: "Bob" }, text: "*deleted*", del: true });
+    assert(!peek.hello.chat[0].del);
+  });
+  p1.send({ t: "kick", k: s1.hello.you.k });
+  await until(() => s1.errCode === "kicked" && peek.chatdel.length === 1, "kick deletes messages");
+  check("a kick deletes the kicked one's messages (only theirs)", () => {
+    const bobs = peek.hello.chat.filter(m => m.from.name === "Bob" && !m.del).map(m => m.id);
+    assert.deepStrictEqual(peek.chatdel[0].ids, bobs); assert(bobs.length === 4);
+    assert(srv.rooms.get(cr.id).chat.filter(m => m.from.name === "Alice").every(m => !m.del));
+  });
+  await peek.close();
   {                                                          // (the room's history, filled in directly: the limit allows 1 a second)
     const chatRoom = srv.rooms.get(cr.id);
     for (let i = 0; i < 60; i++) chatRoom.chat.push({ from: { color: 0, name: "Alice" }, text: "m" + i });

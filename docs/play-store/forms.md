@@ -36,7 +36,7 @@ Overview answers:
 |---|---|
 | Does your app collect or share any of the required user data types? | **Yes** (only when the player uses online games - see below) |
 | Is all of the user data collected by your app encrypted in transit? | **Yes** (the default server is HTTPS / WSS; see the note on custom servers) |
-| Do you provide a way for users to request that their data is deleted? | **Yes** - Settings -> Online -> Delete account deletes the account and everything stored with it (its daily-challenge entries and their replays) at once. |
+| Do you provide a way for users to request that their data is deleted? | **Yes** - Settings -> Online -> Delete account deletes the account and everything stored with it (the settings, maps and replays kept with it, its daily-challenge entries and their replays) at once. |
 | Account creation | **Yes - username and password** ("My app allows users to create an account", method: username and password, in the app). **Account deletion**: in the app (Settings -> Online -> Delete account, confirmed with the password - Google Play requires it in the app) and the **web link** the form asks for: `https://kaniansky.com/tunneler/privacy.html#delete` (it says how; the browser version at https://tunneler-online.onrender.com/ is the same game, so an account can be deleted there without the app). |
 | Independent security review | No |
 
@@ -52,7 +52,7 @@ for Name and User IDs.
 | App activity -> **App interactions** | The keys pressed during an online match (the lockstep game input), relayed to the other players and kept in the server's memory for the match. | Yes is defensible (memory only, for the running match), but **No** is the safer answer |
 | Device or other IDs -> **Device or other IDs** | A random id the game makes once (`tunneler.client` in local storage) - not an Android / hardware id; the server uses it to give a player their seat back after a lost connection and for kicks. | No |
 | Personal info -> **User IDs** | The account: its username (also Personal info -> Name: stored, not ephemeral), a random account id and - when the player signs in with Google Play - the Play Games player id. The password and the recovery code are stored only as scrypt hashes (no Data safety type covers credentials; they serve Account management). Required for online play, optional for the app (everything else works without an account). | No |
-| App activity -> **Other user-generated content** | Shared replays ("Share a link": moves, settings, player names, kept on the server so anyone with the link can watch them) and daily-challenge results sent with the account: the place on the day's leaderboard and the match's replay, public on the leaderboard for 30 days; deleted with the account. | No |
+| App activity -> **Other user-generated content** | Shared replays ("Share a link": moves, settings, player names, kept on the server so anyone with the link can watch them) and daily-challenge results sent with the account: the place on the day's leaderboard and the match's replay, public on the leaderboard for 30 days; deleted with the account. From 1.1.7 also, while logged in: the player's maps, replays and settings kept with the account (private - only that account gets them back) so every device it logs in on has them; deleted with the account. | No |
 
 Not declared, and why:
 

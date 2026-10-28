@@ -31,8 +31,12 @@ for (const size of ["small", "medium", "large"]) {
   check(G.dots.length >= 16 && G.dots.every((v, i) => i & 1 ? Math.abs(v - G.cy) <= R : Math.abs(v - G.cx) <= R), "hill " + size + ": edge dots on the circle (" + G.dots.length / 2 + ")");
   // drawn with objPut in the holder's colour (white when nobody holds it), restored afterwards
   e.GM.draw(e);
-  const white = e.getPixel(G.dots[0], G.dots[1]) === 9;
+  const white = e.getPixel(G.dots[0], G.dots[1]) === 15;   // (9 is PINK since the slot colours of 2026-10-26)
   e.objRestore();
+  // kept for the modern look, which draws the world after the step (the dots are out of it again by then)
+  const shown = e.objsShown;
+  check(shown.length === G.dots.length / 2 * 3 && shown.every((v, i) => i % 3 === 2 ? v === 15 : v === G.dots[i / 3 * 2 + i % 3 | 0]),
+    "hill " + size + ": the dots of the last frame kept for the modern look (engine.objsShown)");
   G.holder = 1; e.GM.draw(e);
   const col = e.getPixel(G.dots[0], G.dots[1]) === e.playerColor(e.teamMembers(1)[0]);
   e.objRestore();
@@ -42,7 +46,7 @@ for (const size of ["small", "medium", "large"]) {
   const [x0, y0, x1, y1] = [G.dots[0], G.dots[1], G.dots[2], G.dots[3]];
   e.setPixel(x0, y0, 1); e.setPixel(x1, y1, 6);
   e.GM.draw(e);
-  const onTop = e.getPixel(x0, y0) === 1 && e.getPixel(x1, y1) === 9;
+  const onTop = e.getPixel(x0, y0) === 1 && e.getPixel(x1, y1) === 15;
   e.objRestore();
   check(onTop && e.getPixel(x0, y0) === 1 && e.getPixel(x1, y1) === 6, "hill " + size + ": dots only on free ground / dirt - a tank on the edge stays on top");
   e.setPixel(x0, y0, 0); e.setPixel(x1, y1, 0);

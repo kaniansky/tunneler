@@ -23,6 +23,7 @@ import { Links } from "../net/endpoint.js";
 import { TunnelerEngine } from "../game/engine.js";
 import { Gfx } from "../draw/gfx.js";
 import { Keyboard } from "../io/input.js";
+import { LiveStats } from "../ui/livestats.js";
 import { Lang } from "../text/lang.js";
 import { Pads } from "../io/pads.js";
 import { Replay } from "../game/replay.js";
@@ -293,13 +294,15 @@ function run(mapRec) {
     } catch (e) { /* no storage */ }
   });
   const clock = new LocalClock(runner, extInput);
+  // holding Tab (a gamepad's Back, the touch controls' SCORE): the statistics, the score and the settings over the game
+  LiveStats.attach({ engine: () => engine, allowed: () => !after && engine.screen === "play", show: snap => runner.setOverlay(snap) });
   // gamepads / touch controls (pads.js) make the same keys as the keyboard: split screen - gamepad 1
   // BLUE (W A S D + Space), gamepad 2 GREEN (arrows + Enter); vs computer - any gamepad your tank;
   // the on-screen joystick + FIRE drive BLUE / your tank; menus: arrows, Enter, Esc
   // (the touch controls only during play: the world map's "press any key" is a tap)
   Pads.start({ menu: () => !engine.kbdInstalled, hideTouch: () => !!after || engine.screen !== "play",
     gamepadSet: i => me2 >= 0 ? ["blue", "green"][i] || null : "blue", touchSet: "blue",
-    namedSets: me2 >= 0, escLabel: "touch.quit", touchTank: TankView.provider(() => engine, () => me + 1), touchDead: () => engine.screen === "play" && !engine.alive[me + 1] });            // ("Gamepad 1 connected: BLUE" in split screen)
+    namedSets: me2 >= 0, escLabel: "touch.quit", statsLabel: "touch.stats", touchTank: TankView.provider(() => engine, () => me + 1), touchDead: () => engine.screen === "play" && !engine.alive[me + 1] });            // ("Gamepad 1 connected: BLUE" in split screen)
   window.tunnelerEngine = () => engine;
   window.tunnelerAfter = () => after;         // (the screen after the match: its DosUI)
   window.tunnelerViews = () => views;         // tests / debugging

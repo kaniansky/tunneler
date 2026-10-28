@@ -404,6 +404,50 @@ export class MatchText extends TextBuf {
     this.showEscPrompt();
   }
 
+  // The score during a match (a player holding Tab / SCORE: ui/livestats.js; owner, 2026-10-28 - "only what is
+  // important, not the whole stats as at the end"): a box in the middle with the round, every player's or team's
+  // rounds won and the mode's score (destroyed tanks gray), and the game's settings. Display only (reads the engine).
+  liveStats() {
+    this.window(1, 1, 80, 25);
+    this.clearScreen();
+    const w = 40, score = this.scoreLines(w), set = this.e.showSettings ? this.settingsLines(w, 3) : [];
+    const rows = [{ text: this.strings.round + " " + this.e.round, color: 14 }, null, ...score, ...(set.length ? [null, ...set.map(text => ({ text, color: 3 }))] : [])];
+    const x = 41 - ((w + 4) >> 1), top = Math.max(1, 13 - ((rows.length + 4) >> 1));
+    this.textColor(5);
+    this.gotoXY(x, top); this.write("\xDA", "\xC4".repeat(w + 2), "\xBF");
+    for (let i = 0; i <= rows.length + 1; i++) { this.gotoXY(x, top + 1 + i); this.write("\xB3", " ".repeat(w + 2), "\xB3"); }
+    this.gotoXY(x, top + rows.length + 3); this.write("\xC0", "\xC4".repeat(w + 2), "\xD9");
+    this.ui.boxes.push({ r: top - 1, c: x - 1, r2: top + rows.length + 2, c2: x + w + 2 });
+    rows.forEach((l, i) => { if (l) { this.textColor(l.color); this.gotoXY(x + 2, top + 2 + i); this.write(UniText.slice(l.text, w)); } });
+    return this;
+  }
+  // the score as lines of at most w columns: [{text, color}] - per team (shared teams: its name, rounds won and the
+  // mode's score, then its members) or per tank: the name, the rounds won (not in a one-round match: king of the
+  // hill...) and the mode's score ("hill 45/60s"); a destroyed tank gray
+  scoreLines(w) {
+    const e = this.e, out = [], teams = e.extended && e.teams && !e.perTankWins(), won = x => e.extended && e.winScore <= 1 ? "" : x;
+    const line = (name, wins, extra, color, indent = "") => {
+      const tail = (wins === "" ? "" : String(wins).padStart(3)) + (extra ? "  " + extra : "");
+      const n = UniText.slice(name, Math.max(4, w - indent.length - visLen(tail) - 1));
+      out.push({ text: UniText.slice(indent + n + " ".repeat(Math.max(1, w - indent.length - visLen(n) - visLen(tail))) + tail, w), color });
+    };
+    const mark = p => (p === e.youPlayer ? "\x10" : ""), col = (p, c) => (e.alive[p] ? c : 8);
+    if (!e.extended) {
+      for (let p = 1; p <= 2; p++) line(mark(p) + e.classicName(p), e.wins[p], "", col(p, p + 8));
+      return out;
+    }
+    if (teams) {
+      for (let t = 0; t < e.nTeams; t++) {
+        const m = e.teamMembers(t);
+        line(e.teamName(t), won(e.teamWins[t]), m.length ? e.modeScoreText(m[0]) : "", 15);
+        for (const p of m) line(mark(p) + e.playerName(p), "", "", col(p, e.playerTextColor(p)), "  ");
+      }
+      return out;
+    }
+    for (let p = 1; p <= e.nPlayers; p++) line(mark(p) + e.playerName(p), won(e.wins[p]), e.modeScoreText(p), col(p, e.playerTextColor(p)));
+    return out;
+  }
+
   // Centre what is drawn in columns c0..c1, rows r0..r1 vertically: the vs computer statistics, the online
   // page (the game's settings are not repeated there any more - owner, 2026-10-24; the round title has them)
   centreStats(c0, c1, r0, r1) {

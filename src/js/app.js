@@ -88,8 +88,10 @@ function resetScreen() {
   document.body.style.setProperty("--status-k", "0"); document.body.style.setProperty("--status-gap", "0px");   // (statusline.js room)
 }
 
+let cloud = null;                          // (cloudsave.js once loaded: a screen left may have changed settings - a sync soon)
 async function show() {
   const n = ++seq;
+  if (cloud) cloud.changed();
   if (scope) { Scope.end(scope); scope = null; resetScreen(); }
   const route = ROUTES.find(r => r.re.test(location.pathname));
   const timer = setTimeout(() => loading(true), LOADING_DELAY);
@@ -124,6 +126,17 @@ Nav.handler = (url, replace) => {
 addEventListener("popstate", show);
 globalThis.tunnelerApp = { routes: ROUTES };   // (tests: a route whose chunk fails to load)
 show();
+// a logged-in player's maps, replays and settings kept with the account (docs/v6/CLOUDSAVE.md) - its code loaded after
+// the first screen; settings that arrived (another device's) show at once on the main menu: it is loaded again (at most
+// once a minute)
+import("./net/cloudsave.js").then(m => Scope.free(() => (cloud = m.CloudSave).start(() => {
+  if (location.pathname !== "/") return;
+  let last = 0;
+  try { last = +sessionStorage.getItem("tunneler.savePulled") || 0; } catch (e) { last = 0; }
+  if (Date.now() - last < 60000) return;
+  try { sessionStorage.setItem("tunneler.savePulled", String(Date.now())); } catch (e) { return; }
+  location.reload();
+}))).catch(e => console.warn("cloud save:", e));
 // the installable app (docs/DESIGN-8P.md 32): its service worker - only when built (src/ has no file list),
 // served over http(s) (not the desktop app)
 if (VERSION && !Endpoint.isApp && navigator.serviceWorker && /^https?:$/.test(location.protocol))

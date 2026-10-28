@@ -294,7 +294,7 @@ the server's log (`client error ...`).
 |---|---|---|---|
 | replays | shared replays (Share a link; the daily leaderboards' matches) | `S3_BUCKET_REPLAYS` | `DATA_DIR/replays` |
 | maps | shared maps (Share a link, maps chosen for online games) and the map gallery's index | `S3_BUCKET_MAPS` | `DATA_DIR/maps` |
-| accounts | player accounts | `S3_BUCKET_ACCOUNTS` | `DATA_DIR/accounts` |
+| accounts | player accounts (and the maps, replays and settings kept with them) | `S3_BUCKET_ACCOUNTS` | `DATA_DIR/accounts` |
 | challenges | the daily challenge's leaderboards (`<day>.json.gz`) | `S3_BUCKET_CHALLENGES` | `DATA_DIR/challenges` |
 | state | the games handed over on a restart | `S3_BUCKET_STATE` | `DATA_DIR/state` |
 

@@ -413,18 +413,32 @@ joystick drives the tank, the end map / menu without them, a tap beside the map 
   game canvas (80 or 40 columns when cropped); drops low-priority segments to fit. A segment with
   `raw: true` is raw Unicode text; font text (Lang.t) shows names in any letters too (wide = 2 cells).
 - Input (`input.js`): browser codes -> PC scan codes. No function keys. BLUE moves with **W A S D** (S is
-  mapped to the original's X scan code, X itself does nothing); BLUE fire also on Left Shift / Space / Tab
+  mapped to the original's X scan code, X itself does nothing); BLUE fire also on Left Shift / Space (Tab was one
+  until 1.1.7: now the score, below)
   (Ctrl+W closes the tab, and two players share the keyboard, so no Ctrl key fires at all); GREEN
   arrows + Enter / Right Shift. M toggles sound (local).
 - **Key remapping** (`src/js/io/controls.js`, `Controls`, before input.js / pads.js on every page; Settings,
   Controls): "tunneler.keys" = only the entries that differ from the defaults ({blue: {up, down, left, right,
   fire}, green: {...}} of KeyboardEvent.code). A key assigned to an action gives that action's original scan
   code (the engine sees exactly what it did before); a key that isn't assigned but would hit a tank action
-  gives nothing; the extra keys (BLUE fire Space / Tab, GREEN fire Right Shift / keypad Enter, GREEN keypad
+  gives nothing; the extra keys (BLUE fire Space, GREEN fire Right Shift / keypad Enter, GREEN keypad
   8 2 4 6) work while their action keeps its default key. Assigning a key another action has swaps them.
-  Not assignable: Escape, F keys, the lock keys, Meta. `Controls.capture(fn)` = the next key press (capture
+  Not assignable: Escape, Tab, F keys, the lock keys, Meta. `Controls.capture(fn)` = the next key press (capture
   phase, swallowed; Esc = null). input.js asks `Controls.scanOf`; pads.js syncs `Pads.SETS`; online.js's held
-  bits use `Controls.codesOf` (Tab only when assigned - online it never was a fire key). Touch: `Pads.TOUCH`
+  bits use `Controls.codesOf`.
+- **Cloud save** (owner, 2026-10-28, 1.1.7; docs/v6/CLOUDSAVE.md): logged in, the maps, replays and settings
+  (`CloudSave.SETTINGS`) are kept with the account on the game's server (`cloudsave.js` on both sides, the accounts'
+  store `save-<id>*`); app.js starts it after the first screen; a pull (the account's settings written here) only at
+  the start / a login, then the main menu reloads. Test: cloudsave-check.
+- **The score during a match** (owner, 2026-10-28, 1.1.7; `src/js/ui/livestats.js`, `LiveStats.attach`): a player
+  holding Tab - a gamepad's Back / Select (`readGamepad` `stats`, play only), the touch controls' SCORE button
+  (`Pads.start({statsLabel: "touch.stats"})`, `.tpad-stats` under ESC / QUIT) - sees `MatchText.liveStats()` over the
+  game (`runner.setOverlay`; online `statsSnap` in `presentOverlay`), rebuilt every 250 ms: a box with the round, every
+  player's (or team's, its members below) rounds won - not in a one-round match - and the mode's score
+  (`modeScoreText`), destroyed tanks gray, and the settings (`settingsLines(40, 3)`). Owner: "only what is important,
+  not the whole stats as at the end". play.js: during play; online.js: `isPlayer() && inPlay()` - a spectator's Tab
+  still switches the views; replays: none. Display only (local-check checks stateHash). Tests: input-check (SCORE /
+  Back = Tab, Tab never fires), local-check, net-page-smoke (player / spectator). Touch: `Pads.TOUCH`
   size small / medium / large ("tunneler.touch.size", CSS `--tpad-k`) and left-handed ("tunneler.touch.left":
   joystick right, FIRE left; body classes tpad-small / tpad-large / tpad-left) and look ("tunneler.touch.look" plain /
   tank, body class tpad-tank; owner, 2026-10-27): plain = a ring with 8 ticks whose sector the tank goes lights up
@@ -518,6 +532,15 @@ rooms removed after 10 minutes, idle rooms closed after 10 minutes.
 Lobby chat (DESIGN-8P 22): `{t:"chat", text}` from anybody (`NetProto.cleanChat`: max 60 characters; 5
 per connection in 5 s; kicked / banned clients can't), broadcast `{t:"chat", from: {color, name} |
 {spectator: true, name}, text}`; the room keeps the last 50 (also in `hello`). Not in any frame stream.
+Deleting (owner, 2026-10-28, 1.1.7): every message has an `id` (`room.chatId`, kept over a handoff; an older
+server's messages get ids when restored) and `who` = a hash of its author's client id (server only - the id never
+leaves it; pages get `{id, from, text, del?}`). The host's `{t:"chatdel", id}` (not in quick play, as kicks) and a
+kick (all of the kicked client id's messages) set `del` and the text to "*deleted*", broadcast `{t:"chatdel", ids}`;
+`hello` sends them as `{text: "*deleted*", del: true}` - a page that knows `del` says `pg.chat.deleted` (gray), an
+older one shows the server's text after a reload. online.js: the host's "Delete a message" (under "Kick a player",
+grayed with nothing to delete, hidden while the chat is) = `drawChatDel`: the last 10 messages not deleted, the
+newest selected, <ENTER> arms it for 4 s (as kicks), a second deletes. Kicks stay a ban for the room's life (owner:
+no way to allow back). Tests: net-sim "chat", net-page-smoke (the host's list), reliability-check (ids on restore).
 `visible` (self / team / everyone): the most a player may choose to see during play - display only.
 Versions: the server's is package.json's (`VERSION`, `createServer({version})` for tests); pages send
 theirs (version.js `VERSION`, put in by build.js; "dev" unbuilt = never
@@ -569,6 +592,10 @@ page from before 2.0 - is refused (POST 409 `{code:
 - Extended AI parking (owner, 2026-10-28; for the next minor - an AI change is never a patch): in a skirmish replay
   from about 0:19 the WHITE computer tank sat still outside a base for seconds, then PINK came and stopped next to it.
   Look for bots idling near a base / near each other (`ditherN` / `unstick` don't fire while the keys stay off).
+- Siege rubble (owner, 2026-10-28; for 1.2 - it changes the game): a fallen base's walls turn to dirt (siege.js
+  `fall`, "rubble"); the owner noticed dirt where the walls were - to decide in 1.2 (e.g. walls kept but dead).
+- King of the hill (owner, 2026-10-28; for 1.2, with the parking above): a computer tank sometimes stood still beside
+  the hill while the owner held it, instead of contesting it.
 - Low-energy "static" copies a simulated low-memory image (the original showed real-mode memory).
 - Sound timing within a frame uses a fixed fake CPU cost model (`CPU_PLAYERS`, `CPU_BLIT`).
 

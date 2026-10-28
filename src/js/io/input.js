@@ -25,7 +25,8 @@ const SCAN = {
 
 // Browser-friendly changes to the held keys (Kbd.KeyDown) come from controls.js (Controls.scanOf): Blue moves
 // with W A S D (S drives the original's "down" key, X scan 0x2D; X itself does nothing), neither Ctrl fires
-// (Ctrl+W closes the browser tab), BLUE fires with Left Shift / Space (Tab), GREEN with Enter / Right Shift -
+// (Ctrl+W closes the browser tab), BLUE fires with Left Shift / Space, GREEN with Enter / Right Shift (Tab: the
+// statistics, ui/livestats.js) -
 // or the keys remapped in Settings.
 
 const NAMED_ASCII = { Enter: 13, NumpadEnter: 13, Escape: 27, Backspace: 8, Tab: 9, Space: 32 };
