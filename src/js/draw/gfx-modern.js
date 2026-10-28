@@ -56,7 +56,7 @@ uniform vec4 uHRect;          // ... its world rectangle: x, y, w, h
 out vec4 outColor;
 
 // 3D: the heights of the materials (world pixels): dirt, rock, base walls; tanks below (tankH)
-const float HD = 3.0, HR = 3.75, HW = 3.5, HMAX = 3.75, HSCALE = 4.0;   // (owner, 2026-10-28: half of the first ones)
+const float HD = 3.0, HR = 3.75, HW = 3.5, HMAX = 3.75, HSCALE = 4.0, SHOT_H = 1.6;   // (owner, 2026-10-28: half of the first ones)
 const vec3 SUN = vec3(-0.45, -0.55, 0.7);                 // (normalized below) the light the 3D shapes are shaded by
 
 int colAt(ivec2 g) {
@@ -317,6 +317,7 @@ void main() {
     return;
   }
   vec2 wp = uCam + (s - uWin.xy) * uScale;                // world pixels (3D: on the tunnels' floor)
+  vec2 wp0 = wp;                                          // (3D: that floor point - the shells fly above it)
   float pw = uOut.x / uSize.x / uScale.x;                 // output pixels per world pixel
   // 3D: from the camera through this pixel's floor point - the first surface it meets (the world's heights are small
   // against the camera's: only the last bit of the way, coarse steps then halving) - and its normal
@@ -409,6 +410,11 @@ void main() {
     for (int i = 0; i < 48; i++) {
       if (i >= uNS) break;
       vec2 hd = wp - (uShot[i].xy + 0.5), tl = wp - (uShot[i].xy - uShot[i].zw + 0.5);
+      if (d3) {                                          // 3D: at the gun's height - where the camera sees that, on its floor
+        float k = uEye.z / (uEye.z - SHOT_H);
+        hd = wp0 - (uEye.xy + (uShot[i].xy + 0.5 - uEye.xy) * k);
+        tl = wp0 - (uEye.xy + (uShot[i].xy - uShot[i].zw + 0.5 - uEye.xy) * k);
+      }
       if (dot(hd, hd) > 40.0) continue;
       float core = 1.0 - smoothstep(0.3, 0.55, max(abs(hd.x), abs(hd.y)));
       float tail = 1.0 - smoothstep(0.3, 0.55, max(abs(tl.x), abs(tl.y)));

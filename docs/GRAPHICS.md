@@ -150,10 +150,11 @@ how the game and every menu screen are drawn. This file describes what is built.
   `HR` 3.75 (`hOf`; owner, 2026-10-28: half of the first heights), tanks extruded from their 2D shapes (`tankH`:
   tracks 1, hull 1.35, turret 2, gun 1.75). The
   main fragment shader (the same one - `uDepth`) marches from the camera through each pixel's floor point - only the
-  last stretch (heights are small next to the camera's: at most ~8 px sideways), 16 steps then 7 halvings - and
+  last stretch (heights are small next to the camera's: at most ~4 px sideways), 16 steps then 7 halvings - and
   shades the surface hit with the 2D materials (`terrainAt`, `tanksAt` at the hit's x, y), sides lit by their normal
   and darker low down, shadows cast towards `SUN` (8 steps). The lamps, headlights, glow, fog of war and particles are
-  the 2D ones at the hit's position (particles stay on the floor plane).
+  the 2D ones at the hit's position (particles stay on the floor plane); shells in flight are drawn at `SHOT_H` (1.6,
+  the gun's height), projected through the camera.
 - Sculpted: a height map of the view and a margin (`HRES` 4 texels per world pixel, 100 x 96 px) drawn first each
   frame per view by `HFS` - the materials' heights through the 2D contour kernel, steepened between the lowest and
   highest around - and sampled linearly (one fetch per step instead of 16). Voxel: each world pixel's height as is.
