@@ -27,6 +27,7 @@ how the game and every menu screen are drawn. This file describes what is built.
   |---|---|
   | Style | clean / retro (custom when a row below differs from the style's preset) |
   | Quality | auto / high / medium / low (the output's size: 1 / 0.75 / 0.5 x the device pixels; auto - the default since 5.0.3 - steps down while the play screen's frames are slow and back up after a fast stretch: gfx.js `AUTO`) |
+  | Depth | 2D / 3D (1.2; not part of the styles' presets - 3D goes with either: its terrain follows Tunnel edges, smooth = sculpted, pixel = voxel blocks; owner, 2026-10-28) |
   | Terrain | textured / smooth / flat |
   | Tunnel edges | smooth / pixel |
   | Fog of war | blurred / dark / gray (line of sight: what is only remembered) |
@@ -138,6 +139,24 @@ how the game and every menu screen are drawn. This file describes what is built.
 - World maps: the end-of-match map (36, 20, 648 x 292 dots: the engine's 144 x 73 samples) and the
   spectators' live map (views' `drawMap` rect, tanks drawn larger) through the same shader.
 - The notice band ("Press <ESC> again...") is cut out of the windows (`sc.cut`).
+
+### 3D (setting Depth; owner, 2026-10-28: "a 3d graphics!")
+
+- The owner's rules: each view shows exactly the field the 2D one shows (no tilted, chase or isometric camera -
+  north up, the keys as they are); 3D is a setting of the modern look, with both of its styles: clean -> sculpted
+  terrain, retro -> voxel blocks (the terrain shape follows Tunnel edges).
+- A camera straight above the view's middle, `EYE` (36) world pixels up, in perspective, so that the **floor** fills
+  the view exactly like the 2D picture; the world is a heightfield: tunnels 0, dirt `HD` 6, base walls `HW` 7, rock
+  `HR` 7.5 (`hOf`), tanks extruded from their 2D shapes (`tankH`: tracks 1.4, hull 1.9, turret 2.8, gun 2.45). The
+  main fragment shader (the same one - `uDepth`) marches from the camera through each pixel's floor point - only the
+  last stretch (heights are small next to the camera's: at most ~8 px sideways), 16 steps then 7 halvings - and
+  shades the surface hit with the 2D materials (`terrainAt`, `tanksAt` at the hit's x, y), sides lit by their normal
+  and darker low down, shadows cast towards `SUN` (8 steps). The lamps, headlights, glow, fog of war and particles are
+  the 2D ones at the hit's position (particles stay on the floor plane).
+- Sculpted: a height map of the view and a margin (`HRES` 4 texels per world pixel, 100 x 96 px) drawn first each
+  frame per view by `HFS` - the materials' heights through the 2D contour kernel, steepened between the lowest and
+  highest around - and sampled linearly (one fetch per step instead of 16). Voxel: each world pixel's height as is.
+- The world maps and the HUD stay 2D.
 
 ## 6. The HUD (gfx-hud.js)
 

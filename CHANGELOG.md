@@ -6,6 +6,9 @@ those releases are tagged `online-vX.Y.Z`, their changes are in [docs/CHANGELOG-
 
 ## Unreleased
 
+- **3D graphics** (Settings, Graphics, modern: Depth 2D / 3D): the world raised - dirt, rock and base walls with
+  height, tunnels carved into the ground, tanks as 3D shapes, shadows - seen from straight above, so every view shows
+  exactly what the 2D one does. Tunnel edges smooth: sculpted terrain; pixel (the retro style): voxel blocks.
 - Computer tanks no longer park (extended games): a remembered enemy that isn't where it was is forgotten or looked
   for instead of waited for on a firing line (up to ~20 s with line of sight), and a retreat ends once the shield is
   back to 8000 instead of full. Computer tanks stand about half as long: 24 % -> 12 % of their time in all-computer

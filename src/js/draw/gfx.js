@@ -21,6 +21,7 @@ const MODES = ["original", "modern"];
 const MODERN = {
   style: ["clean", "retro", "custom"],
   quality: ["auto", "high", "medium", "low"],
+  depth: ["2d", "3d"],                     // (not in the presets: 3D goes with either style - its terrain follows Edges)
   terrain: ["textured", "smooth", "flat"],
   edges: ["smooth", "pixel"],
   fog: ["blurred", "dark", "gray"],
