@@ -8,6 +8,7 @@
 //   runner.recorder = Replay.recorder(engine, {kind, seed, opts, room}, rep => Replay.save(rep));
 //   const e = Replay.engine(rep, TunnelerEngine), p = Replay.player(rep);
 //   for (let inp; (inp = p.next()); ) { e.step(inp); if (p.check(e) === false) ...plays differently }
+//   Replay.playable(rep) -> recorded by this version (major.minor), minorOf("1.1.5") = "1.1"
 //   Replay.list() / get(id) / remove(id) / save(rep)   (promises), toBlob(rep) / fromBytes(bytes), onChange(fn): fn() after a change
 import { NetProto } from "./netproto.js";
 import { VERSION } from "../version.js";
@@ -122,6 +123,11 @@ function makeEngine(rep, Engine) {
   return e;
 }
 
+// a replay plays only in the version (major.minor) that recorded it (owner, 2026-10-28): another version's engine or
+// computer players may play its match differently. "dev" (src/ unbuilt) plays every one.
+const playable = rep => !!rep && NetProto.sameGame(rep.version || "", VERSION || "dev");
+// "1.1.5" -> "1.1"
+const minorOf = v => (/^(\d+\.\d+)\./.exec(v || "") || [null, v || "?"])[1];
 // a replay read from a file / storage: the fields playing it needs, of the right kinds
 function valid(rep) {
   return !!rep && typeof rep === "object" && rep.format === FORMAT && typeof rep.id === "string" && Number.isInteger(rep.steps) &&
@@ -212,7 +218,7 @@ function fileName(rep) {
 }
 
 export const Replay = {
-  FORMAT, MAX, CHECK_EVERY, encode, decode, valid, summary, fileName,
+  FORMAT, MAX, CHECK_EVERY, encode, decode, valid, summary, fileName, playable, minorOf,
   recorder: (engine, info, onDone) => new Recorder(engine, info, onDone),
   player: rep => new Player(rep),
   engine: makeEngine,

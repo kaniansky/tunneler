@@ -145,7 +145,7 @@ function makeEnv(pathname) {
   const ctx = vm.createContext(win);
   const key = (code, k) => { for (const f of listeners.keydown || []) f({ code, key: k || code, target: {}, preventDefault() {} }); };
   const click = () => { for (const f of (elements.screen && elements.screen.on && elements.screen.on.click) || []) f({ clientX: 360, clientY: 200 }); };
-  return { win, key, click, page: f => runPage(ctx, f), stop: () => timers.forEach(clearInterval) };
+  return { win, key, click, page: (f, o) => runPage(ctx, f, o), stop: () => timers.forEach(clearInterval) };
 }
 const tick = ms => new Promise(r => setTimeout(r, ms));
 async function until(cond, ms = 8000) { const t0 = Date.now(); while (!cond() && Date.now() - t0 < ms) await tick(10); return cond(); }
@@ -186,6 +186,31 @@ async function viewer(classicRep, extRep) {
     await tick(20);
     ok(!ui.spec.items.some(it => it.key === "r:new") && ui.spec.items.some(it => it.key === "r:old"), "the second press deletes it");
     env.stop();
+  }
+  // another version's replay (major.minor): gray in the list with its version, its screen without Watch / Share,
+  // its link not played (owner, 2026-10-28)
+  {
+    const env = makeEnv("/replays");
+    env.page("replays.html", { version: "1.2.0" });
+    await tick(20);
+    const ui = env.win.tunnelerReplayUI();
+    await env.win.Replay.save(Object.assign({}, extRep, { id: "cur", date: 2000, version: "1.2.3" }));
+    await env.win.Replay.save(Object.assign({}, extRep, { id: "prev", date: 1000, version: "1.1.5" }));
+    await env.win.tunnelerReplayList();
+    const row = k => ui.spec.items.find(it => it.key === k);
+    ok(JSON.stringify(row("r:prev").spans) === "[[0,200,8]]" && /1\.1\.5.*1\.1/.test(JSON.stringify(row("r:prev").info)) && JSON.stringify(row("r:cur").spans) !== "[[0,200,8]]",
+      "another version's replay: gray in the list, its version said (\"plays only in version 1.1\")");
+    row("r:prev").go();
+    ok(row("watch").disabled && row("share").disabled && !row("save").disabled && !row("delete").disabled && ui.spec.items[ui.sel].key === "save",
+      "its screen: Watch and Share off, Save as a file (selected) and Delete on");
+    env.stop();
+    const env2 = makeEnv("/replays/prev");
+    env2.page("replays.html", { version: "1.2.0" });
+    await env2.win.Replay.save(Object.assign({}, extRep, { id: "prev", version: "1.1.5" }));
+    await tick(200);
+    const ui2 = env2.win.tunnelerReplayUI();
+    ok(!env2.win.tunnelerReplay().watching && !env2.win.tunnelerEngine() && ui2.spec.items.some(it => it.key === "back"), "its link: not played - why, and Back");
+    env2.stop();
   }
   // watching: pause, speed, 30 s on, the end (the world map, any key), the end screen, statistics, again
   {

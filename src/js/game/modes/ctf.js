@@ -14,7 +14,7 @@ const RESPAWN = 55;        // frames until a destroyed tank comes back (~3 s at 
 const DEFEND = 60;         // AI: an enemy this close to the own flag at home is fought (else it drives on)
 const FAR = 100;           // AI: farther than this from home it retreats only with CRIT_S shield / CRIT_E energy left
 const CRIT_S = 2000, CRIT_E = 1200;
-const POLE = 9;            // the flag pole's colour (white); the cloth is the team's colour
+const POLE = 15;           // the flag pole's colour (white - 9 was white until the slot colours of 2026-10-26 made it PINK's); the cloth is the team's colour
 
 const PC = E.PixelClassExt;
 const dist = (e, dx, dy) => e.distance(Math.abs(dx), Math.abs(dy));

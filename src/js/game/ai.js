@@ -116,6 +116,9 @@ const LEVELS = {
             dodge: 1,    retreatE: 3000, retreatS: 5500, leaveAt: 11000, fastDig: 6000, wander: 0,    engage: 80,
             spotEvery: 3, memory: 400 },
 };
+// extended: a retreat ends at home with this much shield (not a full one: it waited at its base ~9 s for the last
+// third - owner, 2026-10-28, "parking"); a remembered enemy not seen for this many frames is looked for, not waited for
+const LEAVE_SHIELD = 8000, STALE = 18;
 // each level's number in the PRNG seeds (from when a weaker "easy" level came first - kept, so every game
 // plays as before)
 const LEVEL_NUMBER = { easy: 1, normal: 2, hard: 3 };
@@ -598,6 +601,17 @@ class TunnelerAI {
       this.mem[q] = { x, y, vx, vy, svx, svy, dir: P.obs[i + 3], t: P.t, exact: true };
       if (vis) { anyVis = true; this.lastSeenT = P.t; if (this.firstSight < 0) this.firstSight = this.t; }
     }
+    // extended: a remembered enemy whose spot it sees with nobody there - not seen when it last looked (P) nor now
+    // (obs: this frame's, so the delay can't make it forget a tank standing right there) - has gone: forgotten (it
+    // stood on a firing line aimed at an empty tunnel for its whole memory, up to ~20 s with line of sight - owner,
+    // 2026-10-28)
+    if (e.extended) for (const q of this.enemies) {
+      const m = this.mem[q];
+      if (!m || m.t >= P.t || !this.visibleFrom(mx, my, m.x, m.y)) continue;
+      let now = false;
+      for (let i = 0; i < obs.length; i += 5) if (obs[i] === q) now = obs[i + 4] === 1;
+      if (!now) this.mem[q] = null;
+    }
     // enemy shots seen: the shooter is somewhere back along the shot line (not the shots of a tank already
     // destroyed - right after a kill they still fly and would send it to the wreck, see huntGoal)
     if (!anyVis && cfg.intel !== "exact")
@@ -690,7 +704,7 @@ class TunnelerAI {
       if (low && this.levelName === "hard" && T && e.energy[me] > 1500 &&
           cheb(mx, my, T.x, T.y) < 40 && e.shield[me] > 3000) low = false;
       if (low) { this.retreating = true; this.path = null; }
-    } else if (atHome && e.energy[me] >= cfg.leaveAt && e.shield[me] >= cfg.leaveAt) {
+    } else if (atHome && e.energy[me] >= cfg.leaveAt && e.shield[me] >= (e.extended ? LEAVE_SHIELD : cfg.leaveAt)) {
       this.retreating = false; this.path = null; this.waypoint = null;
     }
 
@@ -1042,6 +1056,12 @@ class TunnelerAI {
     }
     const S = this.spot;
     if (!S) { this.spot = null; return this.goTo(e, mx, my, E.x, E.y, true); }
+    // extended: not seen for a while - it isn't waiting for it on a line any more but looks where it was (there and
+    // still nobody: forgotten)
+    if (e.extended && !defensive && this.t - cfg.delay - E.t > STALE) {
+      if (cheb(mx, my, E.x, E.y) <= 3) { for (const q of this.enemies) if (this.mem[q] === E) this.mem[q] = null; this.spot = null; }
+      return this.goTo(e, mx, my, E.x, E.y, true);
+    }
     const rx = E.x - mx, ry = E.y - my, d = S.d;
     const along = rx * DX[d] + ry * DY[d], perp = Math.abs(rx * DY[d] - ry * DX[d]);
     const dist = cheb(mx, my, E.x, E.y);

@@ -4,6 +4,17 @@ All notable changes to Tunneler. Versions follow [semantic versioning](https://s
 by pushing a version tag (see CONTRIBUTING.md). Up to its version 6.0.1 the game was called Tunneler Online:
 those releases are tagged `online-vX.Y.Z`, their changes are in [docs/CHANGELOG-online.md](docs/CHANGELOG-online.md).
 
+## Unreleased
+
+- Computer tanks no longer park (extended games): a remembered enemy that isn't where it was is forgotten or looked
+  for instead of waited for on a firing line (up to ~20 s with line of sight), and a retreat ends once the shield is
+  back to 8000 instead of full. Computer tanks stand about half as long: 24 % -> 12 % of their time in all-computer
+  matches, with line of sight 39-45 % -> 13-19 % (king of the hill, capture the flag, deathmatch). The classic game's
+  computer player is unchanged.
+- Replays play only in the version (major.minor) that recorded them: another version's are gray in the list with
+  the version that recorded them, can be saved as a file or deleted but not watched or shared, and their links say so.
+- Capture the flag: the flag pole is white again (pink since the new tank colours).
+
 ## 1.1.7
 
 - Logged in, your maps, replays and settings are kept with your account on the game's server: every device you log in

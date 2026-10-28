@@ -589,13 +589,18 @@ page from before 2.0 - is refused (POST 409 `{code:
   `pickDodge`: class 2 / dirt passable, longer when digging; `evade` after the fight; a volley that would
   destroy it / a dead shooter's shots always side-stepped): ~12 %, ai-ext-sim "Drawn rounds" (at most 25 %).
   What's left: shots landing in the same frame at point-blank range.
-- Extended AI parking (owner, 2026-10-28; for the next minor - an AI change is never a patch): in a skirmish replay
-  from about 0:19 the WHITE computer tank sat still outside a base for seconds, then PINK came and stopped next to it.
-  Look for bots idling near a base / near each other (`ditherN` / `unstick` don't fire while the keys stay off).
+- Extended AI parking (owner, 2026-10-28) - fixed in 1.2: the replay (a 1.1.5 CTF skirmish, 8 hard tanks, line of
+  sight) showed two causes: (1) `engage` standing on a firing line aimed at a remembered position (memory 400 frames)
+  where the enemy no longer was - now `perceive` forgets a remembered spot it sees empty (this frame's obs too, so the
+  delay can't drop a tank standing there) and `engage` goes to a memory older than `STALE` (18) frames instead of
+  waiting; (2) a retreat waiting at home for a full shield - now `LEAVE_SHIELD` 8000 (extended). All-AI matches
+  (hard, 4 tanks, 6 modes x full / circle): standing >= 2 s 23.7 % -> 12.1 % of their time alive, the rest mostly
+  repairing at home and "hold" (hill). Classic AI untouched (screen-check's classic fingerprint unchanged; the
+  extended ones re-recorded).
 - Siege rubble (owner, 2026-10-28; for 1.2 - it changes the game): a fallen base's walls turn to dirt (siege.js
   `fall`, "rubble"); the owner noticed dirt where the walls were - to decide in 1.2 (e.g. walls kept but dead).
-- King of the hill (owner, 2026-10-28; for 1.2, with the parking above): a computer tank sometimes stood still beside
-  the hill while the owner held it, instead of contesting it.
+- King of the hill (owner, 2026-10-28): a computer tank stood beside the hill - the same stale-memory `engage` as
+  above (fixed in 1.2).
 - Low-energy "static" copies a simulated low-memory image (the original showed real-mode memory).
 - Sound timing within a frame uses a fixed fake CPU cost model (`CPU_PLAYERS`, `CPU_BLIT`).
 

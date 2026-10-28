@@ -107,8 +107,11 @@ export function mount() {
   async function showList(keep) {
     try { list = await Replay.list(); } catch (e) { list = []; }
     if (watching) return;
-    const items = list.map(r => ({ key: "r:" + r.id, label: rowText(r), align: "left", spans: rowSpans(),
-      info: [winnerText(r), T(GameScreen.mobile() ? "rp.open.row.touch" : "rp.open.row")], go: () => detail(r) }));
+    // (another version's: gray, its version said - it can be opened to save it as a file or delete it, not watched)
+    const items = list.map(r => Replay.playable(r) ? { key: "r:" + r.id, label: rowText(r), align: "left", spans: rowSpans(),
+      info: [winnerText(r), T(GameScreen.mobile() ? "rp.open.row.touch" : "rp.open.row")], go: () => detail(r) }
+      : { key: "r:" + r.id, label: rowText(r), align: "left", spans: [[0, 200, 0x08]], go: () => detail(r),
+        info: [{ text: oldText(r), color: 12 }, T("rp.old.i")] });
     if (!list.length) items.push({ key: "none", label: T("rp.none"), disabled: true });
     items.push({ key: "sep", separator: true });
     items.push({ key: "file", label: T("rp.file"), info: fileError ? [{ text: T("rp.file.err"), color: 12 }] : [T("rp.file.i")], go: openFile });
@@ -142,21 +145,24 @@ export function mount() {
     inp.click();
   }
 
+  // another version's replay: what the screens say ("Recorded by version 1.1.5 - it plays only in version 1.1.")
+  const oldText = r => T("rp.old", { v: r.version || "?", mm: Replay.minorOf(r.version) });
+
   // ------------------------------------------------------------ one replay: watch, save as a file, delete
   let armed = 0;
   function detail(r, keep) {
-    const P = r.meta ? r.meta.players : [];
+    const P = r.meta ? r.meta.players : [], ok = Replay.playable(r);
     const lines = [{ row: 2, text: T("rp.one.title"), color: 12 },
       { row: 4, text: dateText(r.date) + "  " + kindLine(r) + "  " + clock(r.steps), color: 15 },
-      { row: 5, text: winnerText(r), color: 14 }];
+      { row: 5, text: ok ? winnerText(r) : oldText(r), color: ok ? 14 : 12 }];
     const who = P.map((q, i) => ({ key: "p" + i, static: true, align: "left", attr: TEXT_COLORS[q.color] || 7,
       label: (r.you === i + 1 ? "\x10 " : "  ") + UniText.padEnd(UniText.slice(UniText.fromRaw(nameOf(q)), 18), 19) + (r.meta.teams ? T("rp.team", { n: q.team }) : "") }));   // (\x10 \u25BA: the recorder's own tank)
     const sure = armed && performance.now() < armed;
     // the players on the left, what to do with the replay on the right (owner, 2026-10-28: 8 tanks above the items
     // pushed the info off the screen)
     const acts = [
-        { key: "watch", label: T("rp.watch"), info: [T("rp.watch.i")], go: () => Nav.go(Links.replay(r.id)) },
-        { key: "share", label: T("rp.share"), go: () => shareReplay(r),
+        { key: "watch", label: T("rp.watch"), info: [T("rp.watch.i")], disabled: !ok, go: () => Nav.go(Links.replay(r.id)) },
+        { key: "share", label: T("rp.share"), disabled: !ok, go: () => shareReplay(r),
           info: shareNote && shareNote.id === r.id ? [{ text: shareNote.text, color: shareNote.color }].concat(shareNote.more ? [shareNote.more] : [])
             : [T("rp.share.i1"), T("rp.share.i2")] },
         { key: "save", label: T("rp.save"), go: () => saveFile(r),
@@ -171,7 +177,7 @@ export function mount() {
     ui.show({
       lines, boxes: [{ y: 7, title: T("rp.h.players"), items: who }, { y: 7, items: acts }],
       infoRow: 7 + Math.max(who.length, acts.length) + 3, back: () => { armed = 0; showList(); },
-      sel: keep ? undefined : who.length,
+      sel: keep ? undefined : who.length + (ok ? 0 : 2),
     }, keep);
   }
   // the Android app: its own way into the Downloads folder (MainActivity.kt - a download does nothing in
@@ -294,6 +300,7 @@ export function mount() {
     vt = 0; last = performance.now(); ended = false; differs = false; seekTo = null;
   }
   function watch(r) {
+    if (!Replay.playable(r)) return oldScreen(r);
     rep = r; watching = true; paused = false;
     build();
     renderBar();
@@ -376,6 +383,14 @@ export function mount() {
       renderBar();
     } else togglePause();
   });
+
+  // a replay of another version (a link, a leaderboard's entry, a file): not played - says why
+  function oldScreen(r) {
+    watching = false;
+    ui.show({ lines: [{ row: 2, text: T("rp.one.title"), color: 12 }, { row: 4, text: dateText(r.date) + "  " + kindLine(r), color: 15 },
+      { row: 6, text: oldText(r), color: 12 }, { row: 7, text: T("rp.old.i2"), color: 7 }],
+      box: { y: 10 }, infoRow: 15, back, items: [backItem()] });
+  }
 
   // ------------------------------------------------------------ the end: statistics, watch again, back
   function endScreen(keep) {
