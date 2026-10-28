@@ -2,17 +2,24 @@
 // translate it in their main.js (`engine: {...}`, lang.js engineStrings); "{n}" in a line switches the text
 // colour to n. engine.js imports it.
 const STRINGS_EN = {
-  title: "TUNNELER", by: "by Norko Kaniansky",
+  title: "TUNNELER",
+  by: "by Norko Kaniansky",
   menu: ["Start game", "Instructions", "Back to main menu"],
   rematch: "Rematch",                   // replaces "Start game" after a match (same settings again)
   replay: "Watch the replay",           // after a match in a skirmish / split screen (play.js): its replay
   waiting: ["Waiting for the", "players to start"],
-  creating: "(creating world)", ready: "(world ready)",
-  round: "ROUND", blue: "BLUE", green: "GREEN",
+  creating: "(creating world)",
+  ready: "(world ready)",
+  round: "ROUND",
+  blue: "BLUE",
+  green: "GREEN",
   stats: { title: "Statistics", fired: "shots fired", hit: "shots hit", percent: "percent hit", dug: "meters dug",
-    moved: "meters traveled", winner: "The winner is ",
+    moved: "meters traveled",
+    winner: "The winner is ",
     // the rounds next to the statistics (vs computer, online)
-    rounds: "Rounds", draw: "draw", ended: "ended",
+    rounds: "Rounds",
+    draw: "draw",
+    ended: "ended",
     // extended mode: column headings of the one-row-per-player table (max 4, 4, 4, 5, 5 characters)
     head: ["shot", "hit", "hit%", "dug", "moved"] },
   // extended mode: tank color names (slot color 0..7); "team" labels a team ("{n}" = its number 1..8;
@@ -22,17 +29,39 @@ const STRINGS_EN = {
   team: "TEAM {n}",
   // the game's settings, a compact list (display only, `showSettings`): round title and statistics
   settings: { size: ["map size: small", "map size: medium", "map size: large"], win: "rounds to win: {n}",
-    ff: ["friendly fire: off", "friendly fire: on"], view: "view: {v}", visible: "view limit: {v}",
+    ff: ["friendly fire: off", "friendly fire: on"],
+    view: "view: {v}",
+    visible: "view limit: {v}",
     // the round time limit, only when there is one (option roundTime); the statistics' 37 x 4 area takes
     // timeShort when time does not fit there, and leaves it out when neither does
-    time: "round time: {n} min", timeShort: "time: {n} min",
-    views: ["self", "team", "everyone"], watch: ["after death: black screen", "after death: my wreck", "after death: watch team", "after death: watch killer", "after death: watch all"],
+    time: "round time: {n} min",
+    timeShort: "time: {n} min",
+    views: ["self", "team", "everyone"],
+    watch: ["after death: black screen", "after death: my wreck", "after death: watch team", "after death: watch killer", "after death: watch all"],
     // line of sight when it isn't full (option sight): circle, walls
     sight: ["sight: circle", "sight: true"],
     // game modes (the round title / statistics settings: the mode's name first) and modifiers
-    modes: {"standard": "standard", "gold": "gold rush", "infection": "infection", "survival": "survival", "hill": "king of the hill", "shrink": "shrinking world", "ctf": "capture the flag", "siege": "base siege", "deathmatch": "deathmatch"},
-    goals: { gold: "gold to win: {n}", infection: "survive {n} min", survival: "waves to win: {n}", hill: "seconds to win: {n}",
-      ctf: "captures to win: {n}", siege: "base strength: {n}", deathmatch: "kills to win: {n}" } },
+    modes: {
+      "standard": "standard",
+      "gold": "gold rush",
+      "infection": "infection",
+      "survival": "survival",
+      "hill": "king of the hill",
+      "shrink": "shrinking world",
+      "ctf": "capture the flag",
+      "siege": "base siege",
+      "deathmatch": "deathmatch"
+    },
+    goals: {
+      gold: "gold to win: {n}",
+      infection: "survive {n} min",
+      survival: "waves to win: {n}",
+      hill: "seconds to win: {n}",
+      ctf: "captures to win: {n}",
+      siege: "base strength: {n}",
+      deathmatch: "kills to win: {n}"
+    }
+  },
   // the world map's "PRESS ANY KEY" pixel-art banner (5 rows of '*' / ' ', all the same length); a
   // translation may replace it (see Banner below for the original)
   // banner: [...],
