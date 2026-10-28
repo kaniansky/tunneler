@@ -173,7 +173,7 @@ const copy = rep => JSON.parse(JSON.stringify(rep));
 
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tunneler-challenge-"));
   let clock = Challenge.dayStart(quick) + 9 * 3600000;
-  const mk = (o = {}) => createServer(Object.assign({ quiet: true, replayDir: dir, replayS3: null, now: () => clock, maxChallengePerMin: 1000 }, o));
+  const mk = (o = {}) => createServer(Object.assign({ quiet: true, dataDir: dir, now: () => clock, maxChallengePerMin: 1000 }, o));
   let srv = mk();
   let port = await new Promise(r => srv.listen(0, r));
   const post = (day, cid, name, body) => req(port, "POST", "/api/challenge/" + day + "?cid=" + cid + "&name=" + encodeURIComponent(name), body);
@@ -272,23 +272,24 @@ const copy = rep => JSON.parse(JSON.stringify(rep));
     // ---- the old boards in the folder: older than 30 days (and the weekly challenge's) go once a day
     await new Promise(r => srv.close(r));
     const keepDay = Challenge.dayOf(Challenge.dayStart(quick) - 10 * DAY), goneDay = Challenge.dayOf(Challenge.dayStart(quick) - 40 * DAY);
-    for (const f of ["challenge-" + keepDay + ".json.gz", "challenge-" + goneDay + ".json.gz", "challenge-2026-W43.json.gz"]) fs.writeFileSync(path.join(dir, f), zlib.gzipSync("{}"));
+    const bd = path.join(dir, "challenges");                     // (DATA_DIR/challenges: <day>.json.gz)
+    for (const f of [keepDay + ".json.gz", goneDay + ".json.gz", "2026-W43.json.gz"]) fs.writeFileSync(path.join(bd, f), zlib.gzipSync("{}"));
     clock = Challenge.dayStart(quick) + 12 * 3600000;
     srv = mk();
     port = await new Promise(r => srv.listen(0, r));
     r = await post(quick, "client-iiii", "Sweep", gz(rep));
-    const files = fs.readdirSync(dir).filter(f => f.startsWith("challenge-")).sort();
-    ok(r.status === 200 && files.join() === ["challenge-" + quick + ".json.gz", "challenge-" + keepDay + ".json.gz"].sort().join(),
+    const files = fs.readdirSync(bd).filter(f => f.endsWith(".json.gz")).sort();
+    ok(r.status === 200 && files.join() === [quick + ".json.gz", keepDay + ".json.gz"].sort().join(),
       "the folder: boards older than 30 days and old weekly ones removed, today's and recent ones kept (" + files.join(", ") + ")");
     // ---- the time limit
     clock = Challenge.dayStart(quick) + 3600000;
-    srv = mk({ challengeTimeMs: 5, replayDir: null });
+    srv = mk({ challengeTimeMs: 5, dataDir: null });
     port = await new Promise(r => srv.listen(0, r));
     r = await post(quick, "client-ffff", "Slow", gz(rep));
     ok(r.status === 400 && r.j.code === "long", "checking longer than the limit: stopped (long)");
     // ---- one check at a time per address
     await new Promise(r => srv.close(r));
-    srv = mk({ replayDir: null });
+    srv = mk({ dataDir: null });
     port = await new Promise(r => srv.listen(0, r));
     const both = await Promise.all([post(quick, "client-gggg", "One", gz(rep)), post(quick, "client-hhhh", "Two", gz(rep))]);
     ok(both.map(x => x.status).sort().join() === "200,429" && both.find(x => x.status === 429).j.code === "busy",

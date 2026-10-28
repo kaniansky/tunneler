@@ -285,7 +285,10 @@ class Display {
     const px = new Uint32Array(this.img.data.buffer);
     // (paletteFor: views.js gives the tank colours of the play screen / the world map)
     const pal = !text && this.paletteFor ? this.paletteFor(s) : paletteOf(s);
-    if (!lay) paint(px, width, 0, 0, vram, c0, c1, rows, text, pal, blinkOn, this.font, text ? uni : null, text ? null : s.dim);
+    if (!lay) {
+      paint(px, width, 0, 0, vram, c0, c1, rows, text, pal, blinkOn, this.font, text ? uni : null, text ? null : s.dim);
+      if (text && s.pic && !z) paintPic(px, width, s.pic, c0, r => r * 16, 0, height);
+    }
     else {
       const n = width * rows * 16;
       if (!this.rowBuf || this.rowBuf.length !== n) this.rowBuf = new Uint32Array(n);
@@ -318,6 +321,7 @@ class Display {
         }
       }
     }
+    if (lay && text && s.pic && !z) paintPic(px, width, s.pic, c0, r => lay.y[r], r => r < lay.n ? 0 : lay.clip, r => r < lay.n ? lay.clip : lay.total);
     // a text cursor (DosUI: an empty input) - the VGA's underline: the cell's last two scan lines, bright
     // white, blinking with the text
     const cur = text && blinkOn && s.cursor && !z ? s.cursor : null;
@@ -330,7 +334,7 @@ class Display {
     this.ctx.putImageData(this.img, 0, 0);
     // graphics "modern" (gfx.js): what was drawn - a text screen goes through gfx-text.js
     Gfx.painted(this.canvas, text ? { text: { vram, uni: uni || null, rows, rowH: lay ? s.rowH : null, view: lay ? s.view || null : null, c0, c1, cursor: cur && s.cursor ? cur : null, blinkOn,
-      centres: z ? null : s.centres || null } }
+      centres: z ? null : s.centres || null, pic: z ? null : s.pic || null, infoRows: z ? null : s.infoRows || null } }
       : { lores: s });
   }
 }
@@ -348,6 +352,27 @@ function paletteOf(s, raw) {
 // text mode (blink bit honoured), 4 in LORES. uni: the Unicode plane (text mode; 80 cells per row) or
 // null. dim: the dim plane (LORES, 80 cells per row: 1 = the attribute's low nibble remembered, 2 = the
 // high one's - drawn gray) or null. Also used by views.js for the multi-view screens and the map's score table.
+// a DOS screen's picture (snap.pic, DosUI spec.pic: a map's preview) in its block of cells, square on the screen (a
+// canvas pixel is 1.35 times as tall as wide), centred in it, nearest pixels; yOf(row) = the row's first scan line,
+// lo / hi (numbers, or functions of the row) = the scan lines it may draw on (the phone layout's window)
+function paintPic(px, W, pic, c0, yOf, lo, hi) {
+  const bw = pic.cols * 9, bh = pic.rows * 16, k = Math.min(bw / pic.w, bh * 1.35 / pic.h);
+  const dw = Math.max(1, Math.round(pic.w * k)), dh = Math.max(1, Math.round(pic.h * k / 1.35));
+  const ox = (pic.col - c0) * 9 + ((bw - dw) >> 1), oy = (bh - dh) >> 1;
+  const src = new Uint32Array(pic.rgba.buffer, pic.rgba.byteOffset, pic.w * pic.h);
+  for (let y = 0; y < dh; y++) {
+    const ly = oy + y, r = pic.row + Math.floor(ly / 16), top = yOf(r);
+    if (top == null) continue;
+    const cy = top + (ly % 16), a = typeof lo === "function" ? lo(r) : lo, b = typeof hi === "function" ? hi(r) : hi;
+    if (cy < a || cy >= b) continue;
+    const srow = Math.floor(y * pic.h / dh) * pic.w;
+    for (let x = 0; x < dw; x++) {
+      const v = src[srow + Math.floor(x * pic.w / dw)], xx = ox + x;
+      if (v >>> 24 && xx >= 0 && xx < W) px[cy * W + xx] = v;
+    }
+  }
+}
+
 function paint(px, W, x0, y0, vram, c0, c1, rows, text, pal, blinkOn, font, uni, dim) {
   const lines = text ? 16 : 4;
   const gray = dim ? GRAY_OF.get(pal) || pal : null;

@@ -50,6 +50,8 @@
 // touch screen (engine.pageScroll; the engine draws the scroll bar).
 //   spec.infoRow: row of the selected item's info lines (cyan, centred)
 //   spec.block:  [first, last] rows (1-based) the screen can span at most - the vertical centring keeps to it
+//   spec.pic:    a picture in a block of cells {row, col (1-based), cols, rows, w, h, rgba} - drawn square on the screen
+//                (Display, gfx-text.js); the phone layout puts it under the lines, as wide as the screen (a map's preview)
 //   spec.hint:   bottom line text;  spec.back: Esc handler;  spec.sel: initially selected item
 //   spec.footer: a short text at the bottom left (the main menu: the version)
 //
@@ -610,7 +612,7 @@ class DosUI {
     // 2026-10-27); it goes as far down as its rows fit
     this.links = [];
     this.infoAt = s.infoRow || row + 3;
-    const shift = this.vshift = this.centreRows(t, s), info = this.infoOfSel();
+    const shift = this.vshift = this.centreRows(t, s), info = this.infoOfSel(), infoRows = [];
     const bottom = GameScreen.mobile() ? 25 : 23, lift = Math.max(0, this.infoAt + shift + info.length - 1 - bottom);
     info.forEach((l, i) => {
       t.textColor(l.color == null ? 3 : l.color);
@@ -620,6 +622,7 @@ class DosUI {
       t.write(U.slice(text, 79));
       // (in the screen's rows as laid out - before the shift: clicks map back through it, cellAt)
       this.centres.push([y - 1 - shift, 0, 80]);
+      infoRows.push(y - 1);
       if (l.onClick) this.links.push({ x, y: y - shift, w: Math.min(U.cols(text), 79), onClick: l.onClick });
     });
     // bottom line, like the game's "Press <ENTER> for main menu." (a phone / tablet: none - the room is the
@@ -633,8 +636,10 @@ class DosUI {
     }
     const snap = { t: 0, mode: "text", screen: "text", vram: t.vram.slice(0, 16000) };
     t.snapUni(snap);
+    if (s.pic && s.pic.rgba) snap.pic = { col: s.pic.col - 1, row: s.pic.row - 1 + shift, cols: s.pic.cols, rows: s.pic.rows, w: s.pic.w, h: s.pic.h, rgba: s.pic.rgba };
     if (this.cursor) snap.cursor = Object.assign({}, this.cursor, { row: this.cursor.row + shift });
     if (this.centres.length) snap.centres = this.centres.map(([r, a, z]) => [r + shift, a, z]);
+    if (infoRows.length) snap.infoRows = infoRows;     // (0-based: modern graphics never take a red message for a title)
     this.present(snap);
   }
   // Every 80 x 25 menu screen centred vertically (owner, 2026-10-27: they began at the top): the rows it uses - the
@@ -651,6 +656,7 @@ class DosUI {
     // (spec.block = [first, last] 1-based rows the screen can span - Settings' tallest category, the games list's
     // full box: a box that grows or shrinks moves nothing)
     if (s.block) { a = Math.max(0, Math.min(a, s.block[0] - 1)); b = Math.min(R - 1, Math.max(b, s.block[1] - 1)); }
+    if (s.pic && s.pic.rgba) { a = Math.max(0, Math.min(a, s.pic.row - 1)); b = Math.min(R - 1, Math.max(b, s.pic.row - 2 + s.pic.rows)); }   // (the picture's blank cells)
     if (!GameScreen.mobile() || this.keyNav) {
       const most = Math.max(0, ...s.items.map(it => (it.info || []).length));
       if (most) b = Math.max(b, Math.min(R - 1, this.infoAt - 2 + most));
@@ -757,6 +763,14 @@ class DosUI {
       last = l.row;
     }
     if (lines.length) row++;
+    // a picture (spec.pic): as wide as the boxes, as many rows as its shape needs (a cell is 9 wide, 16 x 1.35 tall)
+    let pic = null;
+    const sp = this.spec.pic;
+    if (sp && sp.rgba) {
+      const cols = NB.w + 2, rows = Math.max(3, Math.min(14, Math.round(cols * 9 * sp.h / sp.w / (16 * 1.35))));
+      pic = { col: NB.x - 1, row: row - 1, cols, rows, w: sp.w, h: sp.h, rgba: sp.rgba };
+      row += rows + 1;
+    }
     // the boxes, full width, one below the other
     const boxes = this.spec.boxes ? this.boxesGeom() : [{ start: 0, end: items.length, title: null }];
     for (const g of boxes) {
@@ -833,6 +847,7 @@ class DosUI {
     for (const [r, a, z] of centres.concat(itemCentres)) if (r >= 0 && r < height) this.centres.push([r, a, z]);
     const cursor = this.cursor && this.cursor.row >= 0 && this.cursor.row < height ? this.cursor : null;
     let ir = BOTTOM >= infoLines + 1 ? height + 2 : height + 1;   // (a long info: no empty row above it)
+    const infoRows = [];
     selInfo.forEach(l => {
       const text = typeof l === "string" ? l : l.text;
       for (const part of wrapCols(text, NC - 2)) {
@@ -841,6 +856,7 @@ class DosUI {
         const x = Math.max(1, (NC >> 1) + 1 - (U.cols(part) >> 1));
         o.gotoXY(x, ir); o.write(part);
         this.centres.push([ir - 1, 0, NC]);
+        infoRows.push(ir - 1);
         if (l.onClick) links.push({ x, y: ir, w: U.cols(part), onClick: l.onClick });
         ir++;
       }
@@ -850,9 +866,11 @@ class DosUI {
     for (const r in rowItem) if (r <= height) items1[r] = rowItem[r];
     this.narrow = { rows: R2, units: R, view: VIEW, minTop, maxTop, items: items1, links, height };
     const snap = { t: 0, mode: "text", screen: "text", vram: o.vram.slice(0, Math.max(16000, R2 * 160)), cols: NC, rows: R2, rowH };
+    if (pic) snap.pic = pic;
     o.snapUni(snap);
     if (cursor) snap.cursor = cursor;
     if (this.centres.length) snap.centres = this.centres;
+    if (infoRows.length) snap.infoRows = infoRows;
     this.nbase = snap;
     this.scrollNarrow(target, !fresh && Math.abs(target - (this.ntopU || 0)) > 0.01);
   }

@@ -32,7 +32,7 @@ const stop = s => new Promise(r => s.close(r));
 (async () => {
   const rep = recorded(), gz = zlib.gzipSync(Buffer.from(JSON.stringify(rep)));
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tunneler-replays-"));
-  let { s, port } = await start({ replayDir: dir });
+  let { s, port } = await start({ dataDir: dir });
 
   const up = await req(port, "POST", "/api/replays", gz);
   const id = JSON.parse(up.bytes.toString()).id;
@@ -48,7 +48,7 @@ const stop = s => new Promise(r => s.close(r));
   ok((await req(port, "POST", "/api/replays", Buffer.alloc(600 * 1024, 32))).status === 413, "too large: 413");
   ok((await req(port, "GET", "/api/replays/zzzzzzzz")).status === 404, "an unknown id: 404");
   ok((await req(port, "GET", "/api/replays/../x")).status === 404 && (await req(port, "GET", "/api/replays/ABCDEFGH")).status === 404, "anything else than an id: 404");
-  ok(fs.existsSync(path.join(dir, id + ".replay")), "kept on disk (REPLAY_DIR)");
+  ok(fs.existsSync(path.join(dir, "replays", id + ".replay")), "kept on disk (DATA_DIR/replays)");
   let limited = false;
   for (let k = 0; k < 12 && !limited; k++) limited = (await req(port, "POST", "/api/replays", gz)).status === 429;
   ok(limited, "too many from one address in a minute: 429");
@@ -56,26 +56,26 @@ const stop = s => new Promise(r => s.close(r));
   await stop(s);
 
   // a restart: still there (from the disk)
-  ({ s, port } = await start({ replayDir: dir }));
+  ({ s, port } = await start({ dataDir: dir }));
   const later = await req(port, "GET", "/api/replays/" + id);
   ok(later.status === 200 && (await Replay.fromBytes(new Uint8Array(later.bytes))).id === rep.id, "after a restart: still there");
   await stop(s);
 
   // REPLAY_KEEP_DAYS: the sharer is told how long; an older file is gone
-  ({ s, port } = await start({ replayDir: dir, replayKeepDays: 90 }));
+  ({ s, port } = await start({ dataDir: dir, replayKeepDays: 90 }));
   const kept = JSON.parse((await req(port, "POST", "/api/replays", gz)).bytes.toString());
   ok(kept.id && kept.days === 90, "kept for 90 days: the answer says so ({id, days: 90})");
   await stop(s);
   const past = (Date.now() - 91 * 86400000) / 1000;
-  fs.utimesSync(path.join(dir, kept.id + ".replay"), past, past);
-  ({ s, port } = await start({ replayDir: dir, replayKeepDays: 90 }));
+  fs.utimesSync(path.join(dir, "replays", kept.id + ".replay"), past, past);
+  ({ s, port } = await start({ dataDir: dir, replayKeepDays: 90 }));
   ok((await req(port, "GET", "/api/replays/" + kept.id)).status === 404 && (await req(port, "GET", "/api/replays/" + id)).status === 200,
     "a file older than 90 days: 404 (a newer one still there)");
   await stop(s);
   ok(!("days" in JSON.parse(up.bytes.toString())), "without REPLAY_KEEP_DAYS: no days in the answer");
 
   // no folder: memory only
-  ({ s, port } = await start({ replayDir: null }));
+  ({ s, port } = await start({ dataDir: null }));
   const m = JSON.parse((await req(port, "POST", "/api/replays", gz)).bytes.toString()).id;
   ok(m && (await req(port, "GET", "/api/replays/" + m)).status === 200, "without a folder: kept in memory");
   await stop(s);
@@ -108,20 +108,20 @@ const stop = s => new Promise(r => s.close(r));
       });
     });
     const fport = await new Promise(r => fake.listen(0, () => r(fake.address().port)));
-    const replayS3 = Object.assign({ endpoint: "http://127.0.0.1:" + fport, bucket: "tunneler-replays" }, cfg);
-    ({ s, port } = await start({ replayS3, replayDir: null }));
+    const s3 = Object.assign({ endpoint: "http://127.0.0.1:" + fport, buckets: { replays: "tunneler-replays" } }, cfg);
+    ({ s, port } = await start({ s3 }));
     ok(s.replayStore.includes("tunneler-replays"), "with a bucket configured: " + s.replayStore);
     const up2 = await req(port, "POST", "/api/replays", gz), bid = JSON.parse(up2.bytes.toString()).id;
     ok(up2.status === 200 && objects.has("/tunneler-replays/" + bid + ".replay") && seen.every(x => !/BAD/.test(x)),
       "an upload goes into the bucket (PUT /tunneler-replays/" + bid + ".replay, signed)");
     await stop(s);
-    ({ s, port } = await start({ replayS3, replayDir: null }));   // (a restart: nothing in memory)
+    ({ s, port } = await start({ s3 }));   // (a restart: nothing in memory)
     const got = await req(port, "GET", "/api/replays/" + bid);
     ok(got.status === 200 && (await Replay.fromBytes(new Uint8Array(got.bytes))).id === rep.id && seen.some(x => x.startsWith("GET")), "after a restart it comes from the bucket");
     ok((await req(port, "GET", "/api/replays/zzzz2345")).status === 404, "not in the bucket: 404");
     await stop(s);
     // the bucket refusing (a wrong key): the sharer is told, nothing breaks
-    ({ s, port } = await start({ replayS3: Object.assign({}, replayS3, { secretKey: "wrong" }), replayDir: null }));
+    ({ s, port } = await start({ s3: Object.assign({}, s3, { secretKey: "wrong" }) }));
     ok((await req(port, "POST", "/api/replays", gz)).status === 503, "the bucket refuses (a wrong key): 503 to the sharer");
     await stop(s);
     fake.close();

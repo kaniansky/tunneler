@@ -170,6 +170,11 @@ function run(mapRec) {
   // 2026-10-24)
   function toLobby() {
     if (ch) { leave(Links.challenge(practice ? chDay : null)); return; }   // (the challenge: back to its screen - practice: that day's board; the skirmish's settings stay)
+    keepSettings();
+    leave(mode === "cpu" ? "/#cpu" : "/#split");
+  }
+  function keepSettings() {
+    if (ch) return;
     const save = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* no storage */ } };
     if (mode === "cpu") {
       const all = [0, 1, 2, 3, 4, 5, 6, 7].map(c => {
@@ -187,9 +192,18 @@ function run(mapRec) {
         save("tunneler.cpu.goals", JSON.stringify(goals));
       }
     } else { save("tunneler.split.size", size); save("tunneler.split.win", String(winScore)); save("tunneler.split.time", String(roundTime)); }
-    leave(mode === "cpu" ? "/#cpu" : "/#split");
   }
   const rematchSelected = () => onMenu() && engine.menuShift !== 0 && engine.menuSel === 0;
+  // "Watch the replay" (after a match, once its replay is kept - engine.replayItem): the replay's screen, whose Back
+  // comes back to the screen this game was set up on, as Rematch does (owner, 2026-10-28)
+  let replaySaved = null, replayId = null;
+  const replaySelected = () => onMenu() && engine.replayShown() && engine.menuSel === 1;
+  async function watchReplay() {
+    try { await replaySaved; } catch (e) { /* the page's memory has it */ }
+    keepSettings();
+    const u = Links.replay(replayId), q = ch ? "challenge=" + chDay : "from=" + (mode === "cpu" ? "cpu" : "split");
+    leave(u + (u.includes("?") ? "&" : "?") + q);
+  }
 
   keyboard.onKey = (code, e) => {
     // Esc on the game's menu: back to the screen this game was set up on; Enter on "Rematch": the same
@@ -197,6 +211,7 @@ function run(mapRec) {
       toLobby();
       return true;
     }
+    if ((code === "Enter" || code === "NumpadEnter") && replaySelected()) { watchReplay(); return true; }
     return false;
   };
 
@@ -209,6 +224,7 @@ function run(mapRec) {
   const clicks = [];
   const choose = i => {
     if (i === 0 && engine.menuShift !== 0) { toLobby(); return; }         // ("Rematch")
+    if (i === 1 && onMenu() && engine.replayShown()) { watchReplay(); return; }   // ("Watch the replay")
     if (i >= 0) { engine.menuSel = i; clicks.push([13, 0x1C]); }
   };
   let noClickUntil = 0;
@@ -326,7 +342,9 @@ function run(mapRec) {
   // the match is recorded (replay.js): kept with the newest replays once it reaches its world map
   // (the challenge: its day on the replay, and the result remembered as this day's last - the challenge screen sends it)
   runner.recorder = Replay.recorder(engine, { kind: mode === "cpu" ? "skirmish" : "split", seed, opts, challenge: chDay }, rep => {
-    Replay.save(rep).catch(e => console.warn("replay:", e));
+    replayId = rep.id;
+    replaySaved = Replay.save(rep).catch(e => console.warn("replay:", e));
+    engine.replayItem = true;
     // (a better unsent result of the same day stays: "Send your result" sends the best match since the last one sent)
     if (ch && !practice) try {                           // (practice: nothing to send - the remembered result stays)
       const result = Challenge.result(engine, kills, rep.steps);

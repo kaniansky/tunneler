@@ -530,6 +530,9 @@ page from before 2.0 - is refused (POST 409 `{code:
   `pickDodge`: class 2 / dirt passable, longer when digging; `evade` after the fight; a volley that would
   destroy it / a dead shooter's shots always side-stepped): ~12 %, ai-ext-sim "Drawn rounds" (at most 25 %).
   What's left: shots landing in the same frame at point-blank range.
+- Extended AI parking (owner, 2026-10-28; for the next minor - an AI change is never a patch): in a skirmish replay
+  from about 0:19 the WHITE computer tank sat still outside a base for seconds, then PINK came and stopped next to it.
+  Look for bots idling near a base / near each other (`ditherN` / `unstick` don't fire while the keys stay off).
 - Low-energy "static" copies a simulated low-memory image (the original showed real-mode memory).
 - Sound timing within a frame uses a fixed fake CPU cost model (`CPU_PLAYERS`, `CPU_BLIT`).
 
@@ -933,8 +936,13 @@ page from before 2.0 - is refused (POST 409 `{code:
   (`JSON.parse(JSON.stringify(opts))`: the engine may keep / change it). Storage: IndexedDB "tunneler" / store
   "replays" (keyPath id), the newest `MAX` (20) kept; no IndexedDB = the page's memory (node tests). Files:
   gzip'd JSON via CompressionStream (`toBlob`, `fromBytes` also reads plain JSON), `fileName` tunneler-<date>.replay.
+  After a skirmish / split-screen match (owner, 2026-10-28) the engine's menu has "Watch the replay" (`strings.replay`;
+  `engine.replayItem`, set by play.js once the recorder kept the replay - display only: `menuScans` / `menuRows` are
+  getters, the Instructions slot) - play.js catches it (`watchReplay`: the settings kept as Rematch does, then
+  `/replays/<id>?from=cpu|split`, a challenge `?challenge=<day>`); replays.js `from`: Back / Esc go to `/#cpu` / `/#split`
+  (`rp.back.cpu` / `rp.back.split`).
   Route `/replays` (replays.js): the list (date, game - the room's name online -, players, length; info: the
-  winner), a replay's screen (players in their colours, "\x10" = the recorder's tank; Watch = `/replays/<id>`, Save
+  winner), a replay's screen (players in their colours in a box of their own left of the actions - `boxes`, "\x10" = the recorder's tank; Watch = `/replays/<id>`, Save
   as a file - a download, in the Android app its `TunnelerAndroid.saveFile` with "Saved: ..." -, Delete - twice), Open a replay file (a file input). Watching: its own engine + Runner + `ViewModes`
   (spectator; phone: follow, edge taps = other tank), a 5 ms pump with virtual time x `SPEEDS` (1/2..8; sound
   only at 1x), Space / Enter / a tap = pause, + / -, PgUp / PgDn = 30 s (back = a new engine + quiet steps),
@@ -946,13 +954,10 @@ page from before 2.0 - is refused (POST 409 `{code:
   `/replays.html?share=<id>`, `Links.sharedReplay`) runs `loadShared(origin, id)`: GET /api/replays/<id>,
   `Replay.save`, watch; "Open a replay link" parses with `Links.parseReplay` (any server's link, the app form,
   a bare id). Server: `validReplay` (gunzip, the replay's fields, re-gzip), `keepShared` / `sharedReplay`
-  (REPLAY_DIR - opts.replayDir, default shared-replays/, null = memory; the Docker image sets /app/shared-replays,
-  docker-compose a volume), `MAX_SHARES_PER_MIN` 10, `MAX_SHARED` 5000, `MAX_REPLAY_BYTES` 512 KB; PRETTY
-  /replay/<id>. An S3-compatible bucket first when configured (owner, 2026-10-25: Cloudflare R2 - Render's free
-  disk is wiped on deploys): `REPLAY_S3_ENDPOINT / _BUCKET / _ACCESS_KEY / _SECRET_KEY / _REGION` (opts.replayS3),
-  `s3Request` (GET / PUT, path-style) signed by `sigV4` (Signature V4 with node's crypto - no SDK; tested against
-  AWS's example), objects `<id>.replay`, a 500-entry memory cache, a failing bucket = 503; the start-up log names
-  the store (`replayStore`). `REPLAY_KEEP_DAYS` (opts.replayKeepDays; the live server: 90, with the R2 bucket's
+  (the replays' store - see **Where the server keeps things** below), `MAX_SHARES_PER_MIN` 10, `MAX_SHARED` 5000,
+  `MAX_REPLAY_BYTES` 512 KB; PRETTY /replay/<id>. `s3Request` (GET / PUT, path-style) signed by `sigV4` (Signature V4
+  with node's crypto - no SDK; tested against AWS's example), objects `<id>.replay`, a 500-entry memory cache, a
+  failing bucket = 503; the start-up log names the store (`replayStore`). `REPLAY_KEEP_DAYS` (opts.replayKeepDays; the live server: 90, with the R2 bucket's
   lifecycle rule doing the deleting): the POST answers `{id, days}` -> `rp.shared.days` under the copied link; the
   folder store drops older files (and won't serve one not swept yet). test/replay-share-check.js (the API) + replay-check (the page). Texts `rp.*`,
   `home.replays`, `back.replays`, an Information section. Test hooks `tunnelerReplay / tunnelerReplayUI /
@@ -960,8 +965,8 @@ page from before 2.0 - is refused (POST 409 `{code:
 - **Running reliably** (v6, docs/v6/RELIABILITY.md - its audit lists what went wrong): server.js listens for every
   socket's `error` (a message over maxPayload used to end the process), logs uncaught exceptions and goes on;
   `shutdown()` on SIGTERM / SIGINT: clocks stopped, the **handoff snapshot** (rooms + matches with their frame logs,
-  gzip'd JSON) written to `stateStore` (the replays' bucket, object `handoff-state.json.gz`; else `STATE_DIR` / the
-  replays' folder; only with `opts.handoff` - the program - or `opts.stateStore`), then `{t:"restart", saved}` +
+  gzip'd JSON) written to `stateStore` (the state's bucket, object `handoff-state.json.gz`; else `DATA_DIR/state`;
+  only with `opts.handoff` - the program - or `opts.stateStore`), then `{t:"restart", saved}` +
   close 1012; the next server restores it at `listen` and, for an unknown room during `HANDOFF_WINDOW_MS`, on demand
   (`refreshHandoff`; Render starts the new instance first); a restored match waits for its players (`waitAll`,
   `RESUME_GRACE_MS`); another version: lobbies only; a room's / match's unknown plain-data fields go along (`extra`). `&sid=` (a page's random id): a new connection with the cid +
@@ -977,6 +982,14 @@ page from before 2.0 - is refused (POST 409 `{code:
   `tunnelerApp.routes` for tests). `Lang.extend(code, {...})`: a feature's texts in `src/lang/<code>/<feature>.js`
   (here reliability.js, `rel.*`). Tests: test/reliability-check.js, app-check (chunk / crash), layout-check (status
   screens).
+- **Where the server keeps things** (owner, 2026-10-28; README.md, Hosting): five kinds - replays (shared ones, a
+  leaderboard's too), maps (shared ones, kept for good), accounts, challenges (`<day>.json.gz` boards), state (the
+  handoff). Each in a bucket of its own when `opts.s3 = {endpoint, accessKey, secretKey, region, buckets: {kind: name}}`
+  names one (`bucketOf(kind)`; the program: `S3_ENDPOINT`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_REGION`,
+  `S3_BUCKET_REPLAYS / _MAPS / _ACCOUNTS / _CHALLENGES / _STATE`), else `opts.dataDir/<kind>/` (`folderOf`; the program:
+  `DATA_DIR`, default `data/`, Docker `/app/data` + a docker-compose volume), else memory - `createServer` reads no
+  storage variables itself, so tests keep their data in memory or a temporary `dataDir`. One bucket for everything let
+  the replays' lifecycle rule (90 days) delete maps and accounts. test: map-share-check "a bucket per kind".
 - **Quick play** (docs/v6/QUICKPLAY.md, version 6): the games list's "Quick play" (not on the main menu - owner, 2026-10-26) -> lobby.js `quick()` (`/games?quick=1`)
   -> `POST /api/quickplay {version, name}` -> `{id, created, hostKey?}` (server.js `quickRoom`: a public quick-play room with a
   place for one more human - a seat nobody sits on, or a computer-driven tank of its running match -, the most humans first;
@@ -1025,7 +1038,7 @@ page from before 2.0 - is refused (POST 409 `{code:
   400 bad) -> `runCheck` in a worker thread (`challenge-worker.js`: version, day, seed + options, the server's own
   TunnelerAIs must give the recorded bits, the state hashes, the world map at the last step; `CHALLENGE_TIME_MS`
   60 s, 1 worker, 6 waiting, 6 a minute and one at a time per address), the board per day
-  (`challenge-<day>.json.gz` in the bucket / REPLAY_DIR / memory, one entry per client id, a name taken by another
+  (`<day>.json.gz` in the challenges' bucket / `DATA_DIR/challenges` / memory, one entry per client id, a name taken by another
   client id refused, an improvement stored as a shared replay; the folder drops boards older than 30 days once a
   day - `sweepBoards`), today + yesterday for `DAY_GRACE_MS` (2 h) after midnight; `opts.now` for tests. Dockerfile
   copies src/js + src/lang and the worker. Texts `src/lang/<code>/challenge.js` via `Lang.extend`, keys `ch.*`,
@@ -1052,14 +1065,23 @@ page from before 2.0 - is refused (POST 409 `{code:
   Settings row Map (the host's maps, uploaded once), `{t:"set", map: id}` -> server `setMap` (loads from the store,
   `st.map = {id, name, size, bases, linked}`, size follows, `cantStart` "path" while not every base is reachable,
   "map" with too few bases), match cfg `map` = the
-  code, `isClassic` false with a map. Server: `sharedStore` (replays and maps: bucket `<id>.map` / folder
-  `MAP_DIR` default `REPLAY_DIR/maps` / memory), map ids = content hash (10 of a-z2-9), `MAX_MAP_BYTES` 40 KB, 20
+  code, `isClassic` false with a map. Server: `sharedStore` (the maps' bucket `<id>.map` / `DATA_DIR/maps` /
+  memory - kept for good), map ids = content hash (10 of a-z2-9), `MAX_MAP_BYTES` 40 KB, 20
   shares / min. `Lang.extend(code, {...})` (lang.js) for feature text files: `src/lang/<code>/maps.js`. Tests:
   map-check.js, map-share-check.js, net-sim "custom map online", layout-check (the maps screens).
+  **Map gallery** (owner, 2026-10-28; MAPS.md 5a; a patch - an older server's 404 = "no map gallery"): maps published on
+  the server (`GET /api/gallery?sort=new|plays`, `POST /api/gallery` - a playable map only, by the session / `cid` +
+  `name` -, `POST /api/gallery/<id>/remove` - its author or `X-Admin-Key` = `GALLERY_ADMIN_KEY`; the index
+  `gallery.json.gz` beside the maps, plays = online matches started on it, published maps `pinned`). Pages: MapStore
+  `gallery / publish / unpublish / published` (`rec.galleryAt`), `MapPic.of(map)` (mappic.js) in a DOS screen's picture
+  region (DosUI `spec.pic` -> `snap.pic`, display.js `paintPic`, gfx-text.js `drawPic`), `MapPick.show` (mappick.js: the
+  list + the selected map's picture, tabs your maps / gallery, order; an unplayable map gray with its reason, never
+  chosen) - the Maps screen's Map gallery (a published map's screen: Add / Play / Copy a link / Remove), a map's Publish /
+  Remove row, the skirmish's and the online host's Map row (Enter = the picker; Left / Right skip unplayable maps;
+  online.js `lobby.page` "map" while it shows). Texts `src/lang/<code>/gallery.js` (`pk.*`, `gal.*`).
 - **Player accounts** (v6, docs/v6/ACCOUNTS.md - owner: "online games will require this"): a username + password per
-  server (Endpoint's). Server `accounts.js` (`createAccounts`: the store - bucket `account-<id>.json` /
-  `account-name-<sha256>.json` / `account-secret.json` (`ACCOUNT_S3_BUCKET`, else the replays' bucket), else
-  `ACCOUNT_DIR` (default `REPLAY_DIR/accounts`), else memory (dev only) -, scrypt N 2^14 (async, 4 at a time;
+  server (Endpoint's). Server `accounts.js` (`createAccounts`: the store - `<id>.json` / `name-<sha256>.json` /
+  `secret.json` in the accounts' bucket, else `DATA_DIR/accounts`, else memory (dev only) -, scrypt N 2^14 (async, 4 at a time;
   `opts.scryptN` for tests), tokens `t1.<payload>.<HMAC>` {a: id, g: password generation, i, e: 90 days} (refreshed by
   GET /api/account after a day; a new password / reset bumps `gen`, deleting removes the account), one-time
   websocket tickets (POST /api/ticket -> `&ticket=`, 60 s, used once, checked before the upgrade), recovery codes

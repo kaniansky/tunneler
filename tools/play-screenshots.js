@@ -83,9 +83,9 @@ function drawMap() {
 
 (async () => {
   fs.mkdirSync(OUT, { recursive: true });
-  // (its own empty store: never the local server's shared-replays/ - an old board there holds replays an older engine recorded)
+  // (its own empty store: never the local server's data/ - an old board there holds replays an older engine recorded)
   const store = fs.mkdtempSync(path.join(os.tmpdir(), "tunneler-play-shots-"));
-  const srv = createServer({ quiet: true, replayDir: store });
+  const srv = createServer({ quiet: true, dataDir: store });
   B = "http://127.0.0.1:" + await new Promise(r => srv.listen(0, r));
   await fillBoard();
   const board = await (await fetch(B + "/api/challenge/" + day)).json();

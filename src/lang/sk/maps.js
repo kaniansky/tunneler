@@ -34,9 +34,9 @@ Lang.extend("sk", {
   "map.walled": "Uzavretá skalou: základňa {list} (hra vykope cestu von).",
   "map.changed": "Zmenená - zatiaľ neuložená.", "map.ask.title": "NEULOŽENÉ ZMENY", "map.ask": "Táto mapa má zmeny, ktoré nie sú uložené.",
   "map.ask.save": "Uložiť zmeny", "map.ask.save.i": "Uloží mapu tak, ako je teraz.", "map.ask.revert": "Zahodiť zmeny", "map.ask.revert.i": "Mapa ostane taká, ako bola uložená.", "map.ask.cancel": "Zrušiť", "map.ask.cancel.i": "Späť na obrazovku mapy, nič sa nezmení.",
-  "lc.map": "Mapa: ", "lc.map.random": "náhodná", "lc.map.i1": "Náhodný svet alebo jedna z tvojich máp", "lc.map.i2": "(Mapy v hlavnom menu: vytvoriť, otvoriť odkaz).",
+  "lc.map": "Mapa: ", "lc.map.random": "náhodná", "lc.map.i1": "Náhodný svet, jedna z tvojich máp alebo z galérie -", "lc.map.i2": "vyber riadok a uvidíš ich aj s obrázkami.",
   "lc.size.map": "Veľkosť určuje mapa.", "lc.err.bases": "Táto mapa má {n} základní: menej tankov alebo iná mapa.",
-  "os.map": "Mapa: ", "os.map.random": "náhodná", "os.map.i1": "Náhodný svet alebo jedna z tvojich máp (Mapy v hlavnom menu):",
+  "os.map": "Mapa: ", "os.map.random": "náhodná", "os.map.i1": "Náhodný svet, jedna z tvojich máp alebo z galérie:",
   "os.map.i2": "pošle sa na server, každý hráč dostane tú istú.", "os.map.sending": "Posielam mapu...", "os.map.err": "Mapu sa nepodarilo poslať: {msg}",
   "pg.cant.map": "Mapa má menej základní, ako je tankov.",
   // cesta medzi základňami (TunnelerEngine.mapReach), súbory s mapami

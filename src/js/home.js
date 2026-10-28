@@ -11,6 +11,7 @@ import { TunnelerEngine } from "./engine.js";
 import { Gfx } from "./gfx.js";
 import { Lang } from "./lang.js";
 import { Login } from "./login.js";
+import { MapPick } from "./mappick.js";
 import { MapStore } from "./mapstore.js";
 import { Pads } from "./pads.js";
 import { GameScreen } from "./screen.js";
@@ -602,6 +603,7 @@ export function mount() {
 
   // a phone: the skirmish's settings on a screen of their own (owner, 2026-10-25), opened from the Game box
   let cpuSetOpen = false;
+  const pickState = {};                                  // (the map picker's gallery order, kept)
   function cpu(keep, sel) {
     const S = cpuSetup();
     // (a map whose bases a tank can't all drive between, or with fewer bases than the skirmish has tanks, can't be played)
@@ -660,12 +662,21 @@ export function mount() {
       T(view === "everyone" ? "cpu.all" : view === "team" && S.mates > 0 ? "cpu.team" : "cpu.own")];
     const setView = d => { view = step(VIEWS, view, d); redraw(); };
     const setMode = d => { gmode = step(MODE_LIST, gmode, d); redraw(); };
-    const setMap = d => { cpuMap = step([""].concat(cpuMaps.map(r => r.id)), cpuMap, d); redraw(); };
+    // Left / Right: the next map that can be played; Enter: the map picker (your maps with their pictures, the
+    // gallery - owner, 2026-10-28)
+    const setMap = d => { cpuMap = step([""].concat(cpuMaps.filter(r => !MapStore.playable(r) || r.id === cpuMap).map(r => r.id)), cpuMap, d); redraw(); };
+    const pickMap = () => MapPick.show(ui, { random: true, current: cpuMap, state: pickState, name: () => DosUI.playerName(),
+      choose: async c => {
+        cpuMap = c.random ? "" : c.rec.id;
+        if (!c.random && !cpuMaps.some(r => r.id === cpuMap)) { try { cpuMaps = await MapStore.list(); } catch (e) { /* as it was */ } }
+        saveCpu(); cpu(false, "map");
+      },
+      back: () => cpu(false, "map") });
     const options = [
       { key: "mode", label: T("lc.mode") + T("gm." + gmode), info: [T("gm." + gmode + ".i"), T("lc.mode.i")], go: () => setMode(1), change: setMode },
       { key: "map", label: T("lc.map") + (rec ? mapLabel(rec) : T("lc.map.random")),
         info: rec && rec.linked === false ? [{ text: T("lc.err.path"), color: 12 }, T("lc.map.i2")] : [T("lc.map.i1"), T("lc.map.i2")],
-        go: () => setMap(1), change: setMap },
+        go: pickMap, change: setMap },
       // (a map has its own size: shown, grayed)
       rec ? { key: "size", label: T("lc.size") + T("lc.size." + rec.size), info: [T("lc.size.map")], disabled: true } : sizeItem(cpuSize, v => { cpuSize = v; redraw(); }),
       GOALS[gmode]                                   // (a mode's goal instead of rounds to win)

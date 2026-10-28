@@ -161,7 +161,7 @@ const ok = msg => { n++; console.log("  ok  " + msg); };
   {
     const { createServer } = require("../server.js");
     const seen = async (trustProxy, headers) => {
-      const s = createServer({ quiet: true, trustProxy, replayDir: null });
+      const s = createServer({ quiet: true, trustProxy });
       const port = await new Promise(r => s.listen(0, r));
       const j = await (await fetch("http://127.0.0.1:" + port + "/api/health?addr=1", { headers })).json();
       await new Promise(r => s.close(r));

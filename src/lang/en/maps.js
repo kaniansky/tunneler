@@ -41,9 +41,9 @@ Lang.extend("en", {
   "map.changed": "Changed - not saved yet.", "map.ask.title": "UNSAVED CHANGES", "map.ask": "This map has changes that aren't saved.",
   "map.ask.save": "Save the changes", "map.ask.save.i": "Keeps the map as it is now.", "map.ask.revert": "Revert the changes", "map.ask.revert.i": "The map stays as it was saved.", "map.ask.cancel": "Cancel", "map.ask.cancel.i": "Back to the map's screen; nothing changes.",
   // playing a map: the skirmish, the online lobby
-  "lc.map": "Map: ", "lc.map.random": "random", "lc.map.i1": "A random world, or one of your own maps", "lc.map.i2": "(Maps on the main menu: make them, open links).",
+  "lc.map": "Map: ", "lc.map.random": "random", "lc.map.i1": "A random world, one of your maps or one from the gallery -", "lc.map.i2": "choose the row to see them with their pictures.",
   "lc.size.map": "The map decides the size.", "lc.err.bases": "This map has {n} bases: fewer tanks, or another map.",
-  "os.map": "Map: ", "os.map.random": "random", "os.map.i1": "A random world, or one of your maps (Maps on the main menu):",
+  "os.map": "Map: ", "os.map.random": "random", "os.map.i1": "A random world, one of your maps or one from the gallery:",
   "os.map.i2": "it goes to the server, every player gets the same.", "os.map.sending": "Sending the map...", "os.map.err": "Could not send the map: {msg}",
   "pg.cant.map": "The map has fewer bases than there are tanks.",
   // a way between the bases (TunnelerEngine.mapReach), map files

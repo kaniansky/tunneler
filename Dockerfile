@@ -22,8 +22,8 @@ COPY --from=builder /app/public ./public
 ENV PORT=8050
 # shared replays (POST /api/replays) and maps (POST /api/maps, in its maps/ folder): a folder the server may
 # write - a volume keeps them across restarts
-ENV REPLAY_DIR=/app/shared-replays
-RUN mkdir -p /app/shared-replays && chown node /app/shared-replays
+ENV DATA_DIR=/app/data
+RUN mkdir -p /app/data && chown node /app/data
 EXPOSE 8050
 USER node
 CMD ["node", "server.js"]

@@ -11,3 +11,5 @@ screenshots
 .gitignore
 src-tauri
 site
+data
+shared-replays

@@ -172,7 +172,7 @@ const updated = (c, cond, what) => until(() => c.status && cond(c.status), what)
 
 async function main() {
   // (log parts of 7 entries: every (re)joining client gets its log in many parts - see sendLog)
-  const srv = createServer({ tickMs: TICK, quiet: true, cleanupMs: 5000, logChunk: 7, matchAloneMs: 1000, mapDir: null });
+  const srv = createServer({ tickMs: TICK, quiet: true, cleanupMs: 5000, logChunk: 7, matchAloneMs: 1000 });
   const port = await new Promise(r => srv.listen(0, r));
   console.log("server on port", port);
 

@@ -200,20 +200,19 @@ before showing it).
 
 ### Storage
 
-The server's store machinery (the S3-compatible bucket - R2 on the live server, whose disk is wiped on every
-deploy -, else a folder, else memory), as small JSON objects:
+The accounts' own S3-compatible bucket (`S3_BUCKET_ACCOUNTS` - R2 on the live server, whose disk is wiped on every
+deploy), else the folder `DATA_DIR/accounts`, else memory (README.md, Hosting), as small JSON objects - the same names
+in the bucket and the folder:
 
-| what | bucket object | folder file (`ACCOUNT_DIR`, default `REPLAY_DIR/accounts`) |
-|---|---|---|
-| an account | `account-<id>.json` | `<id>.json` |
-| a username's index | `account-name-<sha256(key) 32 hex>.json` = `{id}` | `name-<...>.json` |
-| the secret (no `ACCOUNT_SECRET`) | `account-secret.json` | `secret.json` |
+| what | object / file |
+|---|---|
+| an account | `<id>.json` |
+| a username's index | `name-<sha256(key) 32 hex>.json` = `{id}` |
+| a Google Play Games player's index | `google-<sha256(player id) 32 hex>.json` = `{id}` |
+| the secret (no `ACCOUNT_SECRET`) | `secret.json` |
 
-- The bucket: `ACCOUNT_S3_BUCKET` puts accounts in a bucket of their own (same endpoint and keys as the replays').
-  **A lifecycle rule that deletes the replays after N days (the live server: 90) would delete accounts in the same
-  bucket too**; an account is rewritten (`touched`) at most once a day when used, so only accounts unused for N
-  days would go - the start-up log warns when `REPLAY_KEEP_DAYS` is set and accounts share the replays' bucket.
-  The live server should set `ACCOUNT_S3_BUCKET` (a bucket without such a rule) and `ACCOUNT_SECRET`.
+- The bucket: **no lifecycle rule** - an account is rewritten (`touched`) at most once a day when used, so a "delete
+  after N days" rule would delete the accounts unused for N days. The live server also sets `ACCOUNT_SECRET`.
 - The folder: written atomically (a temp file + rename). Never swept.
 - Memory (no bucket, no writable folder): development only - the start-up log says "accounts: ... memory (lost
   on a restart - development only)".
@@ -352,5 +351,5 @@ Tokens, tickets, rooms and boards don't change: they only know the account id.
 - A per-name lockout lets anyone keep a known username locked by guessing wrong (5 minutes at a time); the
   account's sessions keep working meanwhile.
 - No e-mail, no "log out everywhere" button (change the password), no username change, no admin tools (an
-  operator can delete `account-<id>.json` + its index by hand).
-- With a bucket lifecycle rule and no `ACCOUNT_S3_BUCKET`, accounts unused for that many days are lost.
+  operator can delete `<id>.json` + its index by hand).
+- A lifecycle rule on the accounts' bucket would lose the accounts unused for that many days.

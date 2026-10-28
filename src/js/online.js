@@ -33,6 +33,7 @@ import { Gfx } from "./gfx.js";
 import { Keyboard } from "./input.js";
 import { Lang } from "./lang.js";
 import { Login } from "./login.js";
+import { MapPick } from "./mappick.js";
 import { MapStore } from "./mapstore.js";
 import { NetProto } from "./netproto.js";
 import { Pads } from "./pads.js";
@@ -454,7 +455,11 @@ export function mount() {
     const list = mapChoices(), id = st.settings.map || "";
     let at = list.findIndex(o => o.id === id);
     if (mapNote && mapNote.rec) at = list.findIndex(o => o.rec === mapNote.rec);   // (one being sent: on from it)
-    const next = list[((at < 0 ? 0 : at) + d + list.length) % list.length];
+    // (Left / Right: only the maps that can be played - and the room's own)
+    const ok = list.filter((o, i) => !o.rec || !MapStore.playable(o.rec) || i === at);
+    useMap(ok[((Math.max(0, ok.indexOf(list[at]))) + d + ok.length) % ok.length]);
+  }
+  function useMap(next) {
     mapNote = null;
     if (next.id !== null) return setSetting("map", next.id);
     mapNote = { rec: next.rec, text: T("os.map.sending"), color: 7 };
@@ -466,8 +471,28 @@ export function mount() {
     }, e => {
       if (!mapNote || mapNote.rec !== next.rec) return;
       mapNote = { rec: next.rec, text: T("os.map.err", { msg: String(e.message || e).slice(0, 40) }), color: 12 };
-      if (lobby && st) drawLobby(true);
+      if (lobby && st && lobby.page === "lobby") drawLobby(true);
     });
+  }
+  // Enter on the Map row: the map picker (the host's maps with their pictures, the gallery - owner, 2026-10-28); the
+  // lobby isn't redrawn over it (lobby.page "map"), a match starting closes it
+  const pickState = {};
+  function pickMap() {
+    if (!st || !isHost() || st.match || !lobby) return;
+    lobby.page = "map";
+    const cur = myMaps.find(r => r.shared && r.shared === st.settings.map);
+    const back = () => { if (lobby && lobby.page === "map") drawLobby(false, "map"); };
+    MapPick.show(lobbyUI, { random: true, current: st.settings.map ? cur ? cur.id : "-" : "", state: pickState, name: () => DosUI.playerName(),
+      open: () => !!lobby && lobby.page === "map",
+      choose: async c => {
+        if (!lobby || lobby.page !== "map") return;
+        if (!c.random && !myMaps.includes(c.rec)) { try { myMaps = await MapStore.list(); } catch (e) { /* as it was */ } }
+        const rec = c.random ? null : myMaps.find(r => r.id === c.rec.id) || c.rec;
+        lobby.page = "lobby";
+        if (isHost() && !st.match) useMap(c.random ? { id: "" } : { id: MapStore.sharedHere(rec) || null, rec });
+        drawLobby(false, "map");
+      },
+      back });
   }
 
   function seatSet(i, change) {
@@ -595,10 +620,10 @@ export function mount() {
       // the game mode first (docs/DESIGN-8P.md 27); the modifiers at the end
       row("mode", T("lc.mode") + T("gm." + mode), [T("gm." + mode + ".i"), T("lc.mode.i")], d => setSetting("mode", cycle(ML, mode, d))),
       // the map (docs/v6/MAPS.md): random or a shared one - its own size then (grayed)
-      row("map", T("os.map") + (mapNote ? mapLabel(mapNote.rec.name, mapNote.rec.bases) : mapName()),
+      Object.assign(row("map", T("os.map") + (mapNote ? mapLabel(mapNote.rec.name, mapNote.rec.bases) : mapName()),
         mapNote ? [{ text: mapNote.text, color: mapNote.color }]
           : st.map && st.map.id === s.map && st.map.linked === false ? [{ text: T("os.map.cut"), color: 12 }, T("os.map.i1")]   // (the server's check)
-          : [T("os.map.i1"), T("os.map.i2")], d => stepMap(d)),
+          : [T("os.map.i1"), T("os.map.i2")], d => stepMap(d)), host ? { go: pickMap } : {}),
       s.map ? { key: "size", label: T("os.size") + T("os.size." + (st.map && st.map.id === s.map ? st.map.size : s.size)), align: "left", static: true, attr: 8 }
         : row("size", T("os.size") + T("os.size." + s.size), [T("os.size.i1"), T("os.size.i2")], d => setSetting("size", cycle(SIZES, s.size, d))),
       // (a mode with a goal - gold, waves, kills...: the goal instead of rounds to win, one round decides it)

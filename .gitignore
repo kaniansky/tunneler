@@ -3,3 +3,4 @@ public
 .claude/worktrees/
 .flatpak-builder/
 shared-replays/
+data/

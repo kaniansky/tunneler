@@ -192,14 +192,45 @@ No IndexedDB: the page's memory.
 - Page address `/map/<id>` (the desktop app: `/maps.html?share=<id>`): fetches, keeps it in your maps,
   opens its screen.
 - Storage: the shared replays' store, generalised (`sharedStore(kind)` in server.js): the S3-compatible
-  bucket when configured (objects `<id>.map` beside the replays' `<id>.replay`), else a folder (`MAP_DIR` / opts.mapDir, default
-  `<REPLAY_DIR>/maps`, the newest `MAX_SHARED_MAPS` 5000 kept), else memory; a 500-entry memory cache in front
+  maps' own bucket when configured (`S3_BUCKET_MAPS`, objects `<id>.map`; no lifecycle rule - maps are kept for good),
+  else `DATA_DIR/maps` (the newest `MAX_SHARED_MAPS` 5000 kept), else memory; a 500-entry memory cache in front
   of the bucket and the folder (only the memory store keeps everything in memory). Replays keep their own limits and their keep-days; maps are never expired by age.
+
+## 5a. The map gallery (owner, 2026-10-28)
+
+Maps players **published** on the server (sharing a link publishes nothing): a list everybody can browse, newest or
+most played first, each with a picture; a published map can be played, added to your maps, linked. A patch release:
+an older server answers 404 - the pages say "This server has no map gallery" and everything else works as before.
+
+- `GET /api/gallery?sort=new|plays&from=&n=` (+ `mine=1`; who asks: `Authorization: Bearer` / `cid`) -> `{sort, total,
+  from, maps: [{id, name, size, bases, by, date, plays, mine}]}` (n at most 50, default 20).
+- `POST /api/gallery` (the map's bytes; a server with accounts: a session, the display name is `by`; without: `?cid=&name=`)
+  -> `{id, map}`. Only a map that can be played: `MapData.canonical`, at least `MIN_BASES` bases (400 `bases`), a way
+  between all of them (`mapReach`, 400 `path`). The map is kept like a shared one (its id = the content's hash). The same
+  map again by its author: the same entry; by somebody else: 409 `published`. Limits: `MAX_PUBLISH_PER_MIN` 10 per
+  address (429 `busy`), `MAX_GALLERY_PER_AUTHOR` 100 and `MAX_GALLERY` 10000 (429 `full`).
+- `POST /api/gallery/<id>/remove` - its author (the session / cid), or `X-Admin-Key` = `GALLERY_ADMIN_KEY` (opts
+  `galleryAdminKey`): 403 `author` otherwise, 404 `none`. The map's bytes stay (links keep working).
+- The index: one gzip'd JSON (`gallery.json.gz`) in the maps' bucket / `DATA_DIR/maps` / memory, written after every
+  change; plays (`galleryPlayed`: every online match started on a published map) at most every minute. A published map
+  is never dropped by the folder's 5000-map limit (`pinned`). A deleted account's maps leave the gallery; a new display
+  name shows on its maps.
+- Pages: `MapStore.gallery / publish / unpublish / published` (mapstore.js; a record's `galleryAt` = the server it is
+  published on), `MapPic.of(map)` (mappic.js: one pixel per cell, bases in their tank colours) drawn in a DOS screen's
+  picture region (DosUI `spec.pic` -> `snap.pic`; display.js `paintPic`, gfx-text.js `drawPic` - square on the
+  screen, the phone layout puts it under the title), `MapPick.show(ui, {...})` (mappick.js: the list + the selected map's
+  picture; tabs your maps / the gallery, Order newest / most played; a map that can't be played is gray with the reason
+  and can't be chosen).
+- Maps screen: **Map gallery** (below the list) -> MapPick (gallery only) -> a published map's screen: its picture,
+  "Published by X - played N times", Add to my maps, Play in a skirmish, Copy a link, Remove from the gallery (yours:
+  asks twice), Back. A map's screen: **Publish to the gallery** (gray with the reason while the map can't be played;
+  publishing asks to log in / for a name first; unsaved changes are settled first) / Remove from the gallery.
 
 ## 6. Playing a map
 
-**Skirmish** (home.js, `/#cpu`): a Settings row **Map: random / <name>** (Left / Right / a click step
-through random and your maps; on a phone in the Game settings screen). With a map the Map size row shows the
+**Skirmish** (home.js, `/#cpu`): a Settings row **Map: random / <name>** (Enter / a click: the map picker -
+random, your maps, the gallery; Left / Right step through random and your maps that can be played; on a phone in the
+Game settings screen). A gallery map chosen is kept with your maps first. With a map the Map size row shows the
 map's size and can't be changed; a map whose bases aren't all connected turns the Map row's info and Start red
 ("A tank can't reach every base of this map: dig a way (Maps)."), a map with fewer bases than the skirmish has
 tanks turns Start red ("This map has 2 bases - fewer tanks or another map"). play.js checks the map again before a
@@ -210,7 +241,8 @@ anywhere: play.js fetches it from the server and keeps it). Old links (no map) a
 `g=` code stays 13 characters (the map is a parameter of its own). Rematch remembers the map.
 
 **Online** (online.js, the room's Settings box; the phone's Game settings): **Map: random / <name>**. The host
-steps through random and their own maps; choosing one uploads it (once per server - its shared id is kept with it) and
+opens the map picker (Enter / a click: random, their maps, the gallery - the lobby isn't redrawn over it, a match
+starting closes it) or steps through random and their own playable maps (Left / Right); choosing one uploads it (once per server - its shared id is kept with it) and
 sends `{t:"set", map: <id>}`. The server loads it from its store (async), keeps the canonical code with the
 room and shows `st.map = {id, name, size, bases, linked}` (others see the name, read-only; `linked` = the server's
 own mapReach, cached per id - the id is the content's hash). The room's size follows the map. `cantStart` gives
@@ -239,7 +271,8 @@ New files `src/lang/<code>/maps.js` (en, sk, cs, uk, ru) with `Lang.extend(code,
 lang.js (merges into a registered language; the chosen language's letters are loaded again). Keys `map.*`
 (editor, list, sharing, files: `map.file*`, `map.tofile*`, `map.saved`, `map.save.err`; the way between the bases:
 `map.cut`, `map.cut.dig`, `map.cut.play`), `home.maps`, `lc.map`, `os.map`, `os.map.cut`, `pg.cant.map`,
-`pg.cant.path`, `lc.err.bases`, `lc.err.path`; an Information section about maps.
+`pg.cant.path`, `lc.err.bases`, `lc.err.path`; an Information section about maps. The gallery and the picker:
+`src/lang/<code>/gallery.js` (`pk.*`, `gal.*`).
 
 ## 9. Tests
 
@@ -263,14 +296,21 @@ lang.js (merges into a registered language; the chosen language's letters are lo
   whose bases aren't connected (`st.map.linked` false, `cant` "path", start refused), the match cfg's map,
   identical clients (no desync).
 - `test/layout-check.js`: the maps list, a map's screen, new map, open a link, the editor's menu - desktop,
-  phone upright and sideways, every language; and the skirmish with a map chosen.
+  phone upright and sideways, every language; and the skirmish with a map chosen; the gallery, a published map's
+  screen, the map picker (one map gray) and its gallery.
+- `test/map-share-check.js`, the gallery: publish (a map that can't be played refused, the same map twice, another
+  author's 409, no name), the list in both orders, plays counted, remove (author / admin key / others refused), accounts
+  on (a session, the display name, a rename, a deleted account), kept across a restart.
+- `test/map-check.js`, the gallery's pages: the list with a picture, both orders, a published map's screen, Add to my
+  maps, Publish (refused for a map that can't be played - nothing sent) / Remove, your own map's Remove asking twice;
+  the skirmish's Left / Right and picker skipping a map that can't be played.
 - `test/lang-check.js`: the new Information section in every language.
 
 ## 10. Out of scope
 
 - Team sides on a map (which bases a team gets); objects for game modes (gold spots, flags).
 - Changing a map's size after it was made (make a new one from a random world).
-- A browser of public maps; ratings.
+- Ratings, comments, searching the gallery; a picture in the phone's map picker.
 - Which subset of bases a game with fewer tanks than bases gets is not checked separately: the check draws all K
   bases (a base's interior cleared - a way through a base's spot painted as rock exists only when that base is
   dealt).

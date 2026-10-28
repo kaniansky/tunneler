@@ -1,0 +1,28 @@
+// Galéria máp a výber mapy (docs/v6/MAPS.md): galéria na obrazovke Mapy, Zverejniť, výber mapy v potýčke a v online hre.
+import { Lang } from "../../js/lang.js";
+
+Lang.extend("sk", {
+  "pk.title": "VYBER MAPU", "pk.loading": "Načítavam...", "pk.none.mine": "Zatiaľ žiadne mapy (Mapy v hlavnom menu).",
+  "pk.none.gal": "Zatiaľ nič nezverejnené.", "pk.err.none": "Tento server nemá galériu máp.",
+  "pk.err.net": "Server neodpovedá - skús znova.",
+  "pk.random.i": "Svet vytvorený tak, ako ho robí pôvodná hra.", "pk.mine.i": "Vyber ju a hraj na nej.",
+  "pk.gal.by": "Zverejnil(a) {name} - hrané {n}-krát.",
+  "pk.show": "Ukázať: ", "pk.tab.mine": "tvoje mapy", "pk.tab.gallery": "galériu", "pk.show.i": "Tvoje vlastné mapy, alebo tie zverejnené na tomto serveri.",
+  "pk.order": "Poradie: ", "pk.sort.new": "najnovšie", "pk.sort.plays": "najhranejšie", "pk.order.i": "Najnovšie prvé, alebo najviac hrané prvé.",
+  "pk.back.i": "Späť bez zmeny mapy.", "pk.h.by": "AUTOR", "pk.h.plays": "HRANÉ",
+  "gal.open": "Galéria máp", "gal.open.i1": "Mapy, ktoré hráči zverejnili na tomto serveri:", "gal.open.i2": "pozri si ich, zahraj si, nechaj si kópiu.",
+  "gal.title": "GALÉRIA MÁP", "gal.one.title": "ZVEREJNENÁ MAPA",
+  "gal.add": "Pridať k mojim mapám", "gal.add.i": "Kópia medzi tvojimi mapami: uprav ju, hraj, zdieľaj.", "gal.added": "Je medzi tvojimi mapami: {name}",
+  "gal.play.i": "Nastavenie potýčky s touto mapou (kópia ide k tvojim mapám).",
+  "gal.link": "Kopírovať odkaz", "gal.link.i": "Odkaz na túto mapu: kto ho otvorí, dostane kópiu.",
+  "gal.back": "Späť do galérie", "gal.back.i": "Späť na zoznam zverejnených máp.",
+  "gal.publish": "Zverejniť v galérii", "gal.publish.i1": "Dá mapu do galérie tohto servera: každý hráč ju uvidí,",
+  "gal.publish.i2": "môže si ju zahrať a nechať kópiu. Môžeš ju zas odstrániť.",
+  "gal.publishing": "Zverejňujem...", "gal.published": "Zverejnená: mapa je v galérii.",
+  "gal.remove": "Odstrániť z galérie", "gal.remove.i": "Vyberie ju z galérie (kópie, ktoré si hráči nechali, ostávajú ich).",
+  "gal.remove.sure": "Stlač znova a odstráni sa z galérie.", "gal.removing": "Odstraňujem...", "gal.removed": "Odstránená z galérie.",
+  "gal.err.none": "Tento server nemá galériu máp (staršia verzia).", "gal.err.session": "Prihlás sa znova a zverejni.",
+  "gal.err.taken": "Túto mapu už zverejnil niekto iný.", "gal.err.full": "Galéria od teba ďalšie mapy neberie.",
+  "gal.err.busy": "Priveľa naraz - skús o minútu.", "gal.err.author": "Odstrániť ju môže len ten, kto ju zverejnil.",
+  "gal.err.other": "Nepodarilo sa - skús neskôr.",
+});

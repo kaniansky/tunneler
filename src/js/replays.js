@@ -59,8 +59,12 @@ export function mount() {
 
   // watched from a day's challenge leaderboard (/replay/<id>?challenge=<day>, daily.js): Back / Esc go to that day's board
   const fromDay = (d => /^\d{4}-\d{2}-\d{2}$/.test(d || "") ? d : null)(new URLSearchParams(location.search).get("challenge"));
-  const back = () => Nav.go(fromDay ? Links.challenge(fromDay) : Links.replays());
+  // ?from=cpu / split: watched right after that game (its menu's "Watch the replay", play.js) - Back / Esc go to the
+  // screen it was set up on
+  const from = (f => f === "cpu" || f === "split" ? f : null)(new URLSearchParams(location.search).get("from"));
+  const back = () => Nav.go(fromDay ? Links.challenge(fromDay) : from ? "/#" + from : Links.replays());
   const backItem = () => fromDay ? { key: "back", label: T("ch.back.board"), info: [T("ch.back.board.i")], go: back }
+    : from ? { key: "back", label: T("rp.back." + from), info: [T("rp.back." + from + ".i")], go: back }
     : { key: "back", label: T("back.replays"), info: [T("back.replays.i")], go: back };
   const home = () => Nav.go("/");
   const z = n => String(n).padStart(2, "0");
@@ -68,7 +72,15 @@ export function mount() {
   const dateText = d => { d = new Date(d); return z(d.getDate()) + "." + z(d.getMonth() + 1) + ". " + z(d.getHours()) + ":" + z(d.getMinutes()); };
   // a player's name: the lobby's, else the tank's colour (raw Unicode)
   const nameOf = q => q.name || Lang.raw(Lang.colorKeys[q.color] || "blue");
-  const kindText = r => r.kind === "online" ? UniText.fromRaw(r.room || "") || T("rp.kind.online") : T(r.kind === "split" ? "rp.kind.split" : "rp.kind.skirmish");
+  // the list's GAME: an online game's room, split screen, the daily challenge, else the skirmish's mode ("Capture the
+  // flag" - owner, 2026-10-28: "Skirmish" said nothing); a replay's screen: the kind, then its mode
+  const modeOf = r => { const m = r.opts && r.opts.mode; return typeof m === "string" && Lang.raw("gm." + m) ? m : "standard"; };
+  const cap = t => t.charAt(0).toUpperCase() + t.slice(1);
+  const modeText = r => UniText.fromRaw(cap(Lang.raw("gm." + modeOf(r))));
+  const kindText = r => r.kind === "online" ? UniText.fromRaw(r.room || "") || T("rp.kind.online") : r.kind === "split" ? T("rp.kind.split")
+    : r.challenge ? T("home.challenge") : modeText(r);
+  const kindLine = r => (r.kind === "online" ? kindText(r) : T(r.kind === "split" ? "rp.kind.split" : r.challenge ? "home.challenge" : "rp.kind.skirmish"))
+    + (r.kind === "split" ? "" : UniText.fromRaw(", " + Lang.raw("gm." + modeOf(r))));
   const playersText = r => {
     const P = r.meta ? r.meta.players : [];
     return P.length === 2 ? UniText.fromRaw(Lang.raw("rp.vs").replace("{a}", nameOf(P[0])).replace("{b}", nameOf(P[1]))) : T("rp.tanks", { n: P.length });
@@ -135,14 +147,14 @@ export function mount() {
   function detail(r, keep) {
     const P = r.meta ? r.meta.players : [];
     const lines = [{ row: 2, text: T("rp.one.title"), color: 12 },
-      { row: 4, text: dateText(r.date) + "  " + kindText(r) + "  " + clock(r.steps), color: 15 },
+      { row: 4, text: dateText(r.date) + "  " + kindLine(r) + "  " + clock(r.steps), color: 15 },
       { row: 5, text: winnerText(r), color: 14 }];
     const who = P.map((q, i) => ({ key: "p" + i, static: true, align: "left", attr: TEXT_COLORS[q.color] || 7,
       label: (r.you === i + 1 ? "\x10 " : "  ") + UniText.padEnd(UniText.slice(UniText.fromRaw(nameOf(q)), 18), 19) + (r.meta.teams ? T("rp.team", { n: q.team }) : "") }));   // (\x10 \u25BA: the recorder's own tank)
     const sure = armed && performance.now() < armed;
-    ui.show({
-      lines, box: { y: 7 }, infoRow: 9 + who.length + 7, back: () => { armed = 0; showList(); },
-      items: [...who, { key: "gap0", label: "", disabled: true },
+    // the players on the left, what to do with the replay on the right (owner, 2026-10-28: 8 tanks above the items
+    // pushed the info off the screen)
+    const acts = [
         { key: "watch", label: T("rp.watch"), info: [T("rp.watch.i")], go: () => Nav.go(Links.replay(r.id)) },
         { key: "share", label: T("rp.share"), go: () => shareReplay(r),
           info: shareNote && shareNote.id === r.id ? [{ text: shareNote.text, color: shareNote.color }].concat(shareNote.more ? [shareNote.more] : [])
@@ -155,8 +167,11 @@ export function mount() {
             armed = 0; await Replay.remove(r.id); showList();
           } },
         { key: "gap", label: "", disabled: true },
-        { key: "back", label: T("back.replays"), info: [T("back.replays.i")], go: () => { armed = 0; showList(); } }],
-      sel: keep ? undefined : who.length + 1,
+        { key: "back", label: T("back.replays"), info: [T("back.replays.i")], go: () => { armed = 0; showList(); } }];
+    ui.show({
+      lines, boxes: [{ y: 7, title: T("rp.h.players"), items: who }, { y: 7, items: acts }],
+      infoRow: 7 + Math.max(who.length, acts.length) + 3, back: () => { armed = 0; showList(); },
+      sel: keep ? undefined : who.length,
     }, keep);
   }
   // the Android app: its own way into the Downloads folder (MainActivity.kt - a download does nothing in

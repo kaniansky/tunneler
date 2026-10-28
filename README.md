@@ -41,7 +41,9 @@ screens drawn anew - see below).
 - **Your own maps** (main menu, Maps): paint rock, dirt and tunnels and place up to 8 bases on a small, medium or
   large map, with the keyboard, the mouse, a gamepad or a finger. Maps are kept in the browser, shared as links
   (`/map/<id>`) and saved as / opened from `.tmap` files, and played in a skirmish or an online game. A map is
-  played only when a tank can drive between all of its bases - the editor says which can't be reached.
+  played only when a tank can drive between all of its bases - the editor says which can't be reached. The **map
+  gallery** (Maps, Map gallery) lists the maps players published on the server - newest or most played, each with a
+  picture -, and the Map setting opens a picker of your maps and the gallery's.
 - **Player accounts**: online games and the daily challenge's leaderboard need an account on the game's server -
   a username (the name everybody sees, unique on that server) and a password, no e-mail. A recovery code, shown
   once, is the way to set a new password. A player is their account: a seat or tank comes back from any device,
@@ -116,7 +118,8 @@ Settings (split screen: map size, rounds to win and round time only):
   human or a computer tank (online: open, closed or AI), each with a team number 1-8: all different =
   free-for-all, shared numbers = teams of any size (4 v 4, 2 v 2 v 2 v 2, 3 v 5, ...).
 - **Map size** - small (512x256), medium (1024x512, the original) or large (2048x1024).
-- **Map** - random (the original's world generator) or one of your own maps (skirmish and online).
+- **Map** - random (the original's world generator), one of your own maps or one from the server's map gallery
+  (skirmish and online).
 - **Rounds to win** - 1 to 9 (the original: 3).
 - **Round time limit** - off, 2, 3, 5 or 10 minutes. When the time is up, the side that hit enemy tanks
   the most wins the round (a tie: nobody); the last 30 seconds count down next to the instrument panel.
@@ -280,29 +283,39 @@ Render's free plan stops a service after 15 minutes without requests; the server
 public address (`RENDER_EXTERNAL_URL`, which Render sets, or `KEEP_AWAKE_URL`) for `/api/health` every 10 minutes
 (`KEEP_AWAKE=0` turns that off).
 Games live in the server's memory. When the server is stopped with SIGTERM (a deploy, a restart), it first
-writes every game (lobbies and running matches) to the same store as the shared replays: the bucket, or else a
-folder (`STATE_DIR`, by default the replays' folder). The next server reads them back, and the players' pages
-reconnect and carry on. Without a bucket or a writable folder, a restart ends running games. The log says
-which store it uses at start (`rooms on a restart: ...`). `GET /api/health` answers `{ok, version, uptime,
-rooms, matches, errors}`, and pages report the errors they catch to the server's log (`client error ...`).
+writes every game (lobbies and running matches) to its state store (below). The next server reads them back, and the
+players' pages reconnect and carry on. Without a bucket or a writable folder for it, a restart ends running games.
+`GET /api/health` answers `{ok, version, uptime, rooms, matches, errors}`, and pages report the errors they catch to
+the server's log (`client error ...`).
 
-**Shared replays** (the links from "Share a link") need a place that survives restarts. In order:
+**Where the server keeps things.** Five kinds of data, each on its own:
 
-- an **S3-compatible bucket** - Cloudflare R2 (10 GB free), MinIO, AWS S3 - set by environment variables:
-  `REPLAY_S3_ENDPOINT` (R2: `https://<account id>.r2.cloudflarestorage.com`), `REPLAY_S3_BUCKET`,
-  `REPLAY_S3_ACCESS_KEY`, `REPLAY_S3_SECRET_KEY`, `REPLAY_S3_REGION` (R2: `auto`, the default). For R2:
-  create a bucket, then an R2 API token with "Object Read & Write" for that bucket - its Access Key ID and
-  Secret Access Key are the two keys. Replays stay until the bucket's own rules delete them: for R2, the
-  bucket's Settings -> Object lifecycle rules -> Add rule, "Delete objects" after N days (and set
-  `REPLAY_KEEP_DAYS` to the same N);
-- else a folder: `REPLAY_DIR` (default `shared-replays/` next to server.js; the Docker image uses
-  `/app/shared-replays`, docker-compose.yml mounts a volume there), the newest 5000 kept (and none older than
-  `REPLAY_KEEP_DAYS` days, when set);
-- else the server's memory (lost on a restart).
+| kind | what | bucket variable | folder |
+|---|---|---|---|
+| replays | shared replays (Share a link; the daily leaderboards' matches) | `S3_BUCKET_REPLAYS` | `DATA_DIR/replays` |
+| maps | shared maps (Share a link, maps chosen for online games) and the map gallery's index | `S3_BUCKET_MAPS` | `DATA_DIR/maps` |
+| accounts | player accounts | `S3_BUCKET_ACCOUNTS` | `DATA_DIR/accounts` |
+| challenges | the daily challenge's leaderboards (`<day>.json.gz`) | `S3_BUCKET_CHALLENGES` | `DATA_DIR/challenges` |
+| state | the games handed over on a restart | `S3_BUCKET_STATE` | `DATA_DIR/state` |
 
-`REPLAY_KEEP_DAYS` (optional): how long shared replays are kept - whoever shares one is told how long the link
-works. The server's log says which store it uses at start (`shared replays: ...`). The live server uses R2:
-Render's free disk is wiped on every deploy.
+- An **S3-compatible bucket** per kind - Cloudflare R2 (10 GB free), MinIO, AWS S3 - with one set of keys:
+  `S3_ENDPOINT` (R2: `https://<account id>.r2.cloudflarestorage.com`), `S3_ACCESS_KEY`, `S3_SECRET_KEY`,
+  `S3_REGION` (R2: `auto`, the default), and the kind's bucket variable. For R2: create the buckets, then one R2 API
+  token with "Object Read & Write" for them - its Access Key ID and Secret Access Key are the two keys.
+- A kind without a bucket goes to its folder in `DATA_DIR` (default `data/` next to server.js; the Docker image uses
+  `/app/data`, docker-compose.yml mounts a volume there). Without a writable folder: the server's memory (lost on a
+  restart).
+- Each bucket gets the rules its kind wants. **Replays**: R2's Settings -> Object lifecycle rules -> "Delete objects"
+  after N days, and `REPLAY_KEEP_DAYS` set to the same N (whoever shares one is told how long the link works; the folder
+  deletes older files itself, and keeps the newest 5000). **Challenges**: optional - only the last 30 days are ever
+  read. **Maps, accounts, state: no rule** - maps are kept for good, and an account deleted by a rule is lost.
+
+The map gallery: a published map can be removed by its author, or by anyone sending the header `X-Admin-Key: <key>`
+when the server has `GALLERY_ADMIN_KEY=<key>` (`curl -X POST -H "X-Admin-Key: <key>" <server>/api/gallery/<id>/remove`).
+
+The server's log says where each kind is kept at start (`shared replays: ...`, `shared maps: ...`, `daily challenge
+leaderboards: ...`, `rooms on a restart: ...`, `accounts: ...`). The live server uses R2 buckets: Render's free disk is
+wiped on every deploy (and its new instance starts before the old one stops - the state needs a bucket).
 
 **Player accounts** (docs/v6/ACCOUNTS.md): online games and daily-challenge results need an account on the server
 (a username and a password - no e-mail; a recovery code is the way back in). Set by environment variables:
@@ -312,11 +325,8 @@ Render's free disk is wiped on every deploy.
   makes one at its first start and keeps it with the accounts; set it to be independent of the store.
 - `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` (optional) - the Play Games project's web OAuth client: the Android
   app's "Sign in with Google Play" (docs/v6/ACCOUNTS.md section 6). Without them that option isn't offered.
-- Where accounts are kept: the replays' bucket - or `ACCOUNT_S3_BUCKET`, a bucket of their own with the same
-  endpoint and keys -, else a folder (`ACCOUNT_DIR`, default `accounts/` in `REPLAY_DIR`), else memory (lost on a
-  restart: development only). **A bucket lifecycle rule that deletes old replays deletes accounts in the same
-  bucket too** (an account is refreshed once a day when it is used, so only accounts unused for that long would
-  go): with `REPLAY_KEEP_DAYS` / such a rule, give accounts their own bucket (`ACCOUNT_S3_BUCKET`) - the log warns.
+- Where accounts are kept: `S3_BUCKET_ACCOUNTS`, else `DATA_DIR/accounts`, else memory (lost on a restart:
+  development only) - see above; never a bucket with a lifecycle rule.
 
 Behind a reverse proxy (Render, a CDN, nginx) set `TRUST_PROXY`, or the per-address limits of logins and sign-ups
 count every player as one address: `1` = the last `X-Forwarded-For` entry, a number n = the n-th entry from the right

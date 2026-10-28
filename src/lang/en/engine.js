@@ -5,6 +5,7 @@ const STRINGS_EN = {
   title: "TUNNELER", by: "by Norko Kaniansky",
   menu: ["Start game", "Instructions", "Back to main menu"],
   rematch: "Rematch",                   // replaces "Start game" after a match (same settings again)
+  replay: "Watch the replay",           // after a match in a skirmish / split screen (play.js): its replay
   waiting: ["Waiting for the", "players to start"],
   creating: "(creating world)", ready: "(world ready)",
   round: "ROUND", blue: "BLUE", green: "GREEN",
@@ -159,7 +160,7 @@ const STRINGS_EN = {
       ["Two looks:  ", "the original DOS screen, or modern graphics in high resolution with light, particles and a modern font (Settings, Graphics) - the same game either way."],
       ["Replays:  ", "every match you play or watch is kept (the newest 20, main menu, Replays): watch it again like a spectator - every view, the live map or one tank, paused, faster or slower - or send it to someone as a link or a file."],
       ["Daily challenge:  ", "every day (midnight to midnight, UTC) everyone gets the same skirmish - the same world, mode and computer tanks (main menu, Daily challenge).  Send your result: the server plays your match's replay again, and only what really happened goes on the day's leaderboard, where anyone can watch the best matches.  The leaderboard also shows the 30 days before (left / right), and any past day can be played again as practice - its results don't count.  Tomorrow brings a new one."],
-      ["Your own maps:  ", "paint a world - rock, dirt and tunnels - and place up to 8 bases (main menu, Maps) - a tank has to be able to drive between all of them (rock stops it); play it in a skirmish or an online game, or send it to someone as a link or a file.  The editor doesn't save by itself: back on the map's screen, using or leaving the map asks whether to save the changes or revert them."],
+      ["Your own maps:  ", "paint a world - rock, dirt and tunnels - and place up to 8 bases (main menu, Maps) - a tank has to be able to drive between all of them (rock stops it); play it in a skirmish or an online game, or send it to someone as a link or a file.  The editor doesn't save by itself: back on the map's screen, using or leaving the map asks whether to save the changes or revert them.  The map gallery (Maps, Map gallery) has the maps players published on the server - newest or most played, with a picture -: play one, keep a copy, or publish your own (a map that can be played) from its screen; the Map setting picks from your maps and the gallery."],
       ["The desktop app:  ", "Tunneler also comes as a small program for Windows, Linux and " +
         "macOS - download it from the releases page on GitHub " +
         "(github.com/kaniansky/tunneler/releases).  It plays split screen and skirmish " +

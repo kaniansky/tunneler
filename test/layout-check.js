@@ -329,6 +329,24 @@ const tick = () => new Promise(r => setTimeout(r, 0));
         win.TunnelerAndroid = { saveFile: name => "Download/" + name };
         await ui.spec.items.find(x => x.key === "save").go(); check(win, ui, W + ", a map saved as a file (Android)");
         delete win.TunnelerAndroid;
+        // the map gallery (a server's list, long names), a published map's screen (yours: Remove), the map picker
+        const later = async () => { for (let k = 0; k < 12; k++) await new Promise(r => setTimeout(r, 0)); };
+        const mBytes = M.encode(m), pub = [];
+        for (let k = 0; k < 12; k++) pub.push({ id: "abcdefgh" + "23456789"[k % 8] + "abcdefghjkmn"[k], name: "Championship of tunnels " + k, size: M.SIZES[k % 3],
+          bases: 2 + (k % 7), by: "Wolfgang Amad", date: 1, plays: k * 1234, mine: k === 0 });
+        const galFetch = async url => {
+          url = String(url);
+          if (/\/api\/gallery/.test(url)) return { ok: true, status: 200, json: async () => ({ sort: "new", total: pub.length, from: 0, maps: pub }) };
+          if (/\/api\/maps\/[a-z2-9]{10}$/.test(url)) return { ok: true, status: 200, arrayBuffer: async () => mBytes.buffer.slice(mBytes.byteOffset, mBytes.byteOffset + mBytes.length) };
+          return { ok: false, status: 404, json: async () => ({}) };
+        };
+        win.fetch = galFetch;
+        await win.tunnelerMapsList();
+        ui.spec.items.find(x => x.key === "gallery").go(); await later();
+        check(win, ui, W + ", the map gallery");
+        ui.spec.items.find(x => x.key === "g:" + pub[0].id).go(); await later();
+        check(win, ui, W + ", a published map (yours)");
+        api.detail(rec); ui.sel = ui.spec.items.findIndex(x => x.key === "pub"); check(win, ui, W + ", a map (Publish)");
         // the skirmish with that map chosen (its Map row, the size grayed)
         const h = makeEnv("/", size, touch);
         h.storage.set("tunneler.lang", code);
@@ -345,21 +363,32 @@ const tick = () => new Promise(r => setTimeout(r, 0));
         cut2.bases.push({ x: 30, y: 32 }, { x: 98, y: 32 });
         for (let y = 0; y < cut2.h; y++) { cut2.cells[y * cut2.w + 63] = M.ROCK; cut2.cells[y * cut2.w + 64] = M.ROCK; }
         cut2.name = "Cut";
-        await hw.MapStore.save(cut2);
+        // (Left / Right skip a map that can't be played: chosen while it could, then changed)
+        const cutRec = await hw.MapStore.save(cut2);
+        await hw.MapStore.put(Object.assign(cutRec, { linked: true }));
         await hw.tunnelerHomeMaps();
         const pickCut = () => { const r = hui.spec.items.find(x => x.key === "map"); for (let k = 0; k < 4 && !hw.Lang.decode(r ? hui.spec.items.find(x => x.key === "map").label : "").includes("Cut"); k++) hui.spec.items.find(x => x.key === "map").change(1); };
+        const cutNow = async () => { pickCut(); await hw.MapStore.put(Object.assign(cutRec, { linked: false })); await hw.tunnelerHomeMaps(); };
         if (go("settings")) {
-          pickCut();
+          await cutNow();
           check(hw, hui, W + ", skirmish game settings with a map not connected");
           hui.spec.back();
           hui.sel = hui.spec.items.findIndex(x => x.key === "play");
           check(hw, hui, W + ", skirmish with a map not connected (Start)");
         } else {
-          pickCut();
+          await cutNow();
           check(hw, hui, W + ", skirmish with a map not connected");
           hui.sel = hui.spec.items.findIndex(x => x.key === "play");
           check(hw, hui, W + ", skirmish with a map not connected (Start)");
         }
+        // the map picker: your maps (one grayed: it can't be played), the gallery
+        hw.fetch = galFetch;
+        go("settings");
+        go("map"); await later();
+        hui.sel = hui.spec.items.findIndex(x => x.key === "m:" + cutRec.id);
+        check(hw, hui, W + ", the map picker (one can't be played)");
+        go("tab"); await later();
+        check(hw, hui, W + ", the map picker's gallery");
       }
       // ---------------------------------------------------------------- the replays
       {

@@ -351,16 +351,16 @@ async function main() {
       });
     });
     const fport = await new Promise(r => fake.listen(0, () => r(fake.address().port)));
-    const replayS3 = Object.assign({ endpoint: "http://127.0.0.1:" + fport, bucket: "tunneler-replays" }, cfg);
-    const A = await start({ handoff: true, replayS3, replayDir: null, version: "dev" });
+    const s3 = Object.assign({ endpoint: "http://127.0.0.1:" + fport, buckets: { state: "tunneler-state" } }, cfg);
+    const A = await start({ handoff: true, s3, version: "dev" });
     const room = A.s.createRoom("Bucket night", true, true, {});
     const r = await A.s.shutdown();
-    const key = "/tunneler-replays/handoff-state.json.gz";
+    const key = "/tunneler-state/handoff-state.json.gz";
     check("with a bucket: the snapshot goes into it (a signed PUT)", () => {
-      assert(A.s.stateStore && /tunneler-replays/.test(A.s.stateStore), A.s.stateStore);
+      assert(A.s.stateStore && /tunneler-state/.test(A.s.stateStore), A.s.stateStore);
       assert(r.saved && objects.has(key), seen.join(", "));
     });
-    const B = await start({ handoff: true, replayS3, replayDir: null, version: "dev" });
+    const B = await start({ handoff: true, s3, version: "dev" });
     await until(() => B.s.rooms.has(room.id) && !objects.has(key), "restored from the bucket", 5000);
     check("the next server reads it from the bucket (GET) and deletes it there (DELETE); every request signed", () => {
       assert(seen.includes("GET " + key) && seen.includes("DELETE " + key), seen.join(", "));
@@ -391,8 +391,8 @@ async function main() {
   {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tunneler-state-"));
     // (accounts off: an anonymous client - the program has them on by default, docs/v6/ACCOUNTS.md)
-    const env = Object.assign({}, process.env, { PORT: "0", STATE_DIR: dir, REPLAY_DIR: path.join(dir, "replays"), UPDATE_CHECK: "0", STATIC_DIR: "src", ACCOUNTS: "off" });
-    for (const k of Object.keys(env)) if (k.startsWith("REPLAY_S3_")) delete env[k];
+    const env = Object.assign({}, process.env, { PORT: "0", DATA_DIR: dir, UPDATE_CHECK: "0", STATIC_DIR: "src", ACCOUNTS: "off" });
+    for (const k of Object.keys(env)) if (k.startsWith("S3_")) delete env[k];
     const p = spawn(process.execPath, [path.join(__dirname, "..", "server.js")], { env, stdio: ["ignore", "pipe", "pipe"] });
     let out = "";
     p.stdout.on("data", d => { out += d; }); p.stderr.on("data", d => { out += d; });
@@ -403,10 +403,10 @@ async function main() {
     const code = new Promise(r => p.on("exit", r));
     p.kill("SIGTERM");
     const exit = await code;
-    check("SIGTERM: the client told, the snapshot in STATE_DIR, exit code 0", () => {
+    check("SIGTERM: the client told, the snapshot in DATA_DIR/state, exit code 0", () => {
       assert.strictEqual(exit, 0, out);
       assert.strictEqual(c.restarts, 1);
-      assert(fs.existsSync(path.join(dir, "handoff-state.json.gz")));
+      assert(fs.existsSync(path.join(dir, "state", "handoff-state.json.gz")));
       assert(/handed over/.test(out), out);
     });
     fs.rmSync(dir, { recursive: true, force: true });

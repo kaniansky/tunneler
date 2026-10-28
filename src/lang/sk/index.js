@@ -5,6 +5,7 @@ import "./reliability.js";
 import "./quickplay.js";
 import "./challenge.js";
 import "./maps.js";
+import "./gallery.js";
 import "./modes/ctf.js";
 import "./modes/deathmatch.js";
 import "./modes/gold.js";

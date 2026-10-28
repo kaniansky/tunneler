@@ -52,7 +52,7 @@ const googleFile = sub => "google-" + crypto.createHash("sha256").update(String(
 // ------------------------------------------------------------ the stores: get(key) -> object | null, put(key, object), del(key)
 // keys: an account id, "name-<hash>", "secret"
 function s3AccountStore(cfg, s3Request) {
-  const obj = k => "account-" + k + ".json";
+  const obj = k => k + ".json";                       // (the accounts' own bucket: the same names as the folder's files)
   return {
     name: "the bucket " + cfg.bucket, persistent: true,
     async get(k) {
@@ -126,7 +126,8 @@ function rateLimiter(max, windowMs, now) {
 }
 
 // opts: store, secret (ACCOUNT_SECRET or null), scryptN (tests), now, say, lockFails, lockMs, json / readBody /
-// addressOf (server.js's), onDelete(account) (server.js: board entries, connections)
+// addressOf (server.js's), onDelete(account) (server.js: board entries, connections, published maps), onRename(account)
+// (server.js: the name its published maps show)
 function createAccounts(opts) {
   const store = opts.store || memoryAccountStore();
   const now = opts.now || Date.now;
@@ -314,6 +315,7 @@ function createAccounts(opts) {
       acct = cur;
     });
     say("account display name", JSON.stringify(acct.name), "->", JSON.stringify(shown(acct)));
+    if (opts.onRename) try { await opts.onRename(acct); } catch (e) { say("account renamed, its data not all:", e && e.message); }
     return acct;
   }
   async function changePassword(a, old, password) {

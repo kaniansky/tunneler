@@ -1072,4 +1072,25 @@ function play(search) {
   ok("the phone layout: a narrow tall screen, taps on its rows, Settings one column + Back, the Instructions re-wrapped, engine screens zoomed (crop / halves stacked)");
 }
 
-console.log("all " + n + " passed");
+// ---------------------------------------------------------------- play.js: "Watch the replay" after a match
+(async () => {
+  const st = new Map(), env = makeEnv("?mode=cpu&slots=" + encodeURIComponent("0:you:1,1:normal:2") + "&size=small&lv=2", st);
+  env.page("play.html");
+  const e = env.win.tunnelerEngine();
+  Object.assign(e, { screen: "text", menuPage: "menu", kbdInstalled: false, menuShift: -20, menuSel: 0 });
+  assert.strictEqual(e.menuScans.length, 2, "no replay yet: Rematch, Back");
+  e.screen = "map";
+  env.win.tunnelerRunner().recorder.stepped();             // (the match reached its world map: its replay is kept)
+  Object.assign(e, { screen: "text", menuSel: 1 });
+  assert.strictEqual(e.menuScans.length, 3, "Rematch, Watch the replay, Back");
+  for (let i = 0; i < 16000; i += 2) { e.vram[i] = 0x20; e.vram[i + 1] = 7; }
+  e.showMainMenu();
+  const box = Array.from({ length: 25 }, (_, r) => Array.from({ length: 80 }, (_, c) => String.fromCharCode(e.vram[r * 160 + c * 2])).join("")).join("\n");
+  assert(box.includes(e.strings.replay) && box.includes(e.strings.rematch), "the menu shows it:\n" + box);
+  env.key("Enter");
+  await new Promise(r => setTimeout(r, 20));
+  assert(/^\/replays\/[a-z0-9]+\?from=cpu$/.test(env.win.location.href), "its replay, from the skirmish: " + env.win.location.href);
+  assert.strictEqual(st.get("tunneler.cpu.size"), "small", "the game's settings kept (Back comes back to them)");
+  ok("play.js: after a match \"Watch the replay\" opens its replay (Back: the skirmish)");
+  console.log("all " + n + " passed");
+})().catch(err => { console.error(err); process.exit(1); });

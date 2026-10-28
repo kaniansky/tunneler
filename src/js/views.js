@@ -450,7 +450,10 @@ class ViewModes {
     const a = kind === "half" ? 2 / 3 : kind === "full" ? 4 / 3 : c.width / (c.height * ASPECT);
     c.style.aspectRatio = String(a);
     c.style.width = room ? "min(" + Math.max(80, room.w) + "px, " + Math.max(80, Math.floor(room.h * a)) + "px)"
-      : "min(calc(100vw - 16px), calc((100vh - 90px) * " + a.toFixed(4) + "))";
+      // (and the status line under it - a spectator's, a replay's: its height grows with the width, --status-k, as
+      // style.css's canvas.game; a wide window's grid ran past the bottom)
+      : "min(calc(100vw - 16px), calc((100vh - 90px) * " + a.toFixed(4) + "), calc((100vh - 16px - var(--status-gap, 0px)) / ("
+        + (1 / a).toFixed(4) + " + var(--status-k, 0))))";
   }
 
   surface(W, H) {

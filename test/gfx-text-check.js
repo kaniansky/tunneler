@@ -144,6 +144,8 @@ function screen(rows = 25) {
   const short = extra => T.analyse(Object.assign({}, sh.t, { rows: 12 }, extra)).titles.length;
   assert.strictEqual(short({ view: { rows: 12, units: 30, top: 0 } }), 1, "a short phone screen's title");
   assert.strictEqual(short({}), 0, "no title on a short screen without a view (a status line)");
+  assert.strictEqual(short({ view: { rows: 12, units: 30, top: 0 }, infoRows: [0] }), 1, "other info rows: still the title");
+  assert.strictEqual(short({ view: { rows: 12, units: 30, top: 0 }, infoRows: [1] }), 0, "a menu's red message (an info row): no title");
   ok("analysis: panels (title gaps, separators), the highlight, rules, titles (short phone screens too), loose pieces, double frames, crop");
 }
 

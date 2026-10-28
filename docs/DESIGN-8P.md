@@ -705,7 +705,7 @@ and replaying a match is fairly cheap").
   Back to the replays.
 - Sharing (owner, 2026-10-25: "shareable replay links"): a replay's screen has "Share a link" - the replay
   goes to the game's server (POST /api/replays: checked, gzip'd, under a random 8-character id; at most 10 a
-  minute per address, 512 KB each, the newest 5000 kept, in REPLAY_DIR or memory) and the link
+  minute per address, 512 KB each, the newest 5000 kept, in the replays' bucket, DATA_DIR/replays or memory) and the link
   /replay/<id> is copied (and shown). Opening it fetches the replay (GET /api/replays/<id>), keeps it with
   the others and plays it; "Open a replay link" on the Replays screen takes a pasted link (another server's
   too) or an id.

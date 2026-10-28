@@ -268,9 +268,11 @@ class TunnelerEngine {
     this.escHeld = false;
     this.escPlayer = Number.isInteger(o.escPlayer) && o.escPlayer >= 0 ? o.escPlayer : 0;
     this.autoStartPending = !!o.autoStart;
-    // noInstructions: the menu without "Instructions" (the site's main menu has them)
-    this.menuScans = o.noInstructions ? [MENU_SCANS[0], MENU_SCANS[2]] : MENU_SCANS;
-    this.menuRows = o.noInstructions ? [MENU_ROWS[0], MENU_ROWS[1]] : MENU_ROWS;
+    // noInstructions: the menu without "Instructions" (the site's main menu has them); replayItem (display only, set by
+    // play.js once the match's replay is kept): after a match "Watch the replay" (strings.replay) takes the Instructions
+    // item's place - the page catches it before the engine sees it
+    this.noInstructions = !!o.noInstructions;
+    this.replayItem = false;
     const n1 = this.nPlayers + 1, arr = v => new Array(n1).fill(v);
     this.randSeed = seed >>> 0;
     this.vram = new Uint8Array(0x8000);          // B800:0000
@@ -2643,6 +2645,8 @@ class TunnelerEngine {
     const notice = this.menuNotice || (this.menuWaiting ? S.waiting : null);
     let items = this.menuShift !== 0 && S.rematch ? [S.rematch, ...S.menu.slice(1)] : S.menu;   // after a match
     if (this.menuScans.length < MENU_SCANS.length) items = [items[0], items[2]];
+    else if (this.noInstructions) items = [items[0], S.replay, items[2]];   // (after a match: Rematch, Watch the replay, Back)
+    if (this.menuSel >= items.length) this.menuSel = 0;
     const W = this.menuW = Math.max(16, ...(notice || items).map(t => visLen(t) + 4)) + 1 >> 1 << 1;
     const X = this.menuX = this.menuShift + 41 - ((W + 2) >> 1);
     const nLines = notice ? notice.length + 2 : this.menuRows[this.menuRows.length - 1] + 1;
@@ -2668,6 +2672,11 @@ class TunnelerEngine {
       if (extras) this.centreStats(42, 80, 1, 24);
     }
   }
+
+  // the menu's items: their F-key scan codes and box rows (menuSel indexes them)
+  get menuScans() { return this.noInstructions && !this.replayShown() ? [MENU_SCANS[0], MENU_SCANS[2]] : MENU_SCANS; }
+  get menuRows() { return this.noInstructions && !this.replayShown() ? [MENU_ROWS[0], MENU_ROWS[1]] : MENU_ROWS; }
+  replayShown() { return this.replayItem && this.menuShift !== 0 && !!this.strings.replay; }
 
   // highlight bar over the selected item (text rows 12..15, inside the box)
   // (only while the menu is on the screen - e.g. not on an auto start's "(creating world)" screen, where

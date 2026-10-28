@@ -1,7 +1,7 @@
 // The screenshots of 6.0's new screens (README and homepage), in both looks: quickplay.png, challenge.png,
 // map-editor.png (graphics "original") and modern-quickplay.png, modern-challenge.png, modern-map-editor.png
 // (graphics "modern"), 1000x820 like readme-screenshots.js. Against a fresh local server without accounts:
-//   REPLAY_DIR=$(mktemp -d) ACCOUNTS=off PORT=8117 node server.js &
+//   DATA_DIR=$(mktemp -d) ACCOUNTS=off PORT=8117 node server.js &
 //   node tools/v6-screenshots.js 8117 screenshots
 // It first fills today's daily-challenge leaderboard with bot-played results (real replays, checked by the server;
 // the server takes 6 a minute from one address, so this takes about two minutes). Needs playwright-core and a

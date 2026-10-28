@@ -28,7 +28,7 @@
 //
 // Running reliably (docs/v6/RELIABILITY.md): a socket error never ends the process; on SIGTERM (a deploy, a
 // restart) the rooms - seats, settings, chat, host keys, matches with their frame logs - are written to the
-// handoff store (the replays' bucket, else STATE_DIR / the replays' folder) before every client is told
+// handoff store (the state's bucket, else DATA_DIR/state) before every client is told
 // {t:"restart"} and closed with 1012; the next server reads them back (at its start, and for an unknown room
 // during its first minutes - it may have started before the old one stopped) and the pages resume.
 //
@@ -39,9 +39,9 @@
 //        GET /api/rooms/<id>      one room (also private ones: their ids carry a random suffix)
 //        POST /api/quickplay      {version, name} -> {id, created, hostKey?}: a public quick-play room (docs/v6/QUICKPLAY.md)
 //                                 with a place for one more human (the most humans first), else a new one
-//        POST /api/replays        a replay (src/js/replay.js: gzip'd or plain JSON) -> {id}: shared - kept in an
-//                                 S3-compatible bucket (REPLAY_S3_*: Cloudflare R2...), else REPLAY_DIR (the
-//                                 newest MAX_SHARED), else memory; {id, days} when REPLAY_KEEP_DAYS says how long
+//        POST /api/replays        a replay (src/js/replay.js: gzip'd or plain JSON) -> {id}: shared - kept in the
+//                                 replays' bucket (S3_BUCKET_REPLAYS), else DATA_DIR/replays (the newest
+//                                 MAX_SHARED), else memory; {id, days} when REPLAY_KEEP_DAYS says how long
 //        GET  /api/replays/<id>   that replay (gzip'd JSON); the page address /replay/<id> plays it
 //        GET  /api/challenge[/<day>][?cid=]   the daily challenge's leaderboard (docs/v6/CHALLENGE.md): {day, current,
 //                                 ends, now, total, top: [{rank, name, rounds, won, kills, secs, replay}], you}
@@ -50,8 +50,8 @@
 //                                 improved} or {error, code}: bad / name / config / differs / unfinished / long (400),
 //                                 day / taken / version (409), busy / storage (503); <day> = "YYYY-MM-DD" (UTC)
 //        POST /api/maps           a custom map (src/js/mapdata.js bytes, docs/v6/MAPS.md) -> {id}: checked,
-//                                 kept in its canonical form under the hash of its content (the same store
-//                                 as the replays: the bucket (<id>.map), MAP_DIR - default REPLAY_DIR/maps -, memory)
+//                                 kept in its canonical form under the hash of its content (the maps' bucket
+//                                 S3_BUCKET_MAPS (<id>.map), else DATA_DIR/maps, else memory) - for good
 //        GET  /api/maps/<id>      that map's bytes; the page address /map/<id> opens it
 //        POST /api/rooms          {name, public, spectators, seats?: [{kind: open|closed|easy|normal|hard,
 //                                  team: 1..8} x 8 (index = colour)], size, winScore, friendlyFire, roundTime,
@@ -152,6 +152,11 @@ const CHALLENGE_QUEUE = 6;             // challenge replays waiting for a worker
 const MAX_MAP_SHARES_PER_MIN = 20;     // POST /api/maps per address
 const MAX_SHARED_MAPS = 5000;          // shared maps kept in the folder (the oldest go)
 const MAX_MAP_BYTES = 40 * 1024;       // one map, as sent (mapdata.js: at most ~33 KB, usually a few hundred bytes)
+const GALLERY_KEY = "gallery.json.gz"; // the map gallery's index, beside the maps (their ids are 10 letters / digits)
+const MAX_GALLERY = 10000;             // maps in the gallery
+const MAX_GALLERY_PER_AUTHOR = 100;    // ... published by one author
+const MAX_PUBLISH_PER_MIN = 10;        // POST /api/gallery per address
+const GALLERY_PLAYS_SAVE_MS = 60 * 1000;   // plays counted: the index written at most this often
 const MAP_LOADS_PER_MIN = 30;          // maps a room's host may choose a minute (each one a lookup in the store)
 const MAX_ROOMS_PER_ADDR = 20;         // rooms created by one address that still exist
 const MAX_CONNECTS_PER_MIN = 120;      // websocket connections per address
@@ -188,8 +193,8 @@ function cleanName(s) {
 }
 
 // ------------------------------------------------------------ an S3-compatible bucket (Cloudflare R2, MinIO, AWS S3)
-// The shared replays' store when configured: REPLAY_S3_ENDPOINT (R2: https://<account id>.r2.cloudflarestorage.com),
-// REPLAY_S3_BUCKET, REPLAY_S3_ACCESS_KEY, REPLAY_S3_SECRET_KEY, REPLAY_S3_REGION (R2: "auto", the default).
+// One bucket per kind of data (createServer: where the server keeps things): S3_ENDPOINT (R2: https://<account
+// id>.r2.cloudflarestorage.com), S3_ACCESS_KEY, S3_SECRET_KEY, S3_REGION (R2: "auto", the default), S3_BUCKET_<KIND>.
 // Requests are signed with AWS Signature Version 4 (path-style URLs) - no SDK.
 function s3Config(c) {
   if (!c || !c.endpoint || !c.bucket || !c.accessKey || !c.secretKey) return null;
@@ -420,6 +425,7 @@ function createServer(opts = {}) {
   // bits, the clock. Classic (BLUE + GREEN players): the original frame format, runs only while both are
   // connected. Extended: runs from the start until it ends (a missing player's tank stands still).
   function startMatch(room) {
+    if (room.map) galleryPlayed(room.map);             // (a published map: one more play)
     const slots = slotsNow(room);
     const ext = !isClassic(slots, room);
     for (const s of slots) if (!s.bot) { const ws = room.seats[s.color].occ; s.cid = ws.cid; s.name = ws.name; }
@@ -678,30 +684,42 @@ function createServer(opts = {}) {
   const allowChallenge = rateLimiter(opts.maxChallengePerMin || MAX_CHALLENGE_PER_MIN);
   const allowMapShare = rateLimiter(MAX_MAP_SHARES_PER_MIN);
 
+  // ------------------------------------------------------------ where the server keeps things (README.md, Hosting)
+  // Five kinds: replays (shared ones, a leaderboard's too), maps (shared ones), accounts, challenges (the daily
+  // leaderboards), state (the handoff of a deploy). Each in a bucket of its own when opts.s3 names one for it ({endpoint,
+  // accessKey, secretKey, region, buckets: {kind: name}} - the program: S3_ENDPOINT, S3_ACCESS_KEY, S3_SECRET_KEY,
+  // S3_REGION and S3_BUCKET_<KIND>), else in its own folder in opts.dataDir (dataDir/<kind>/ - the program: DATA_DIR,
+  // default data/ next to this file; a Docker volume), else in memory (tests; lost on a restart). Each bucket gets the
+  // lifecycle rules its kind wants - the replays' "delete after 90 days" must never reach a map or an account (owner,
+  // 2026-10-28: one bucket for everything did).
+  const bucketOf = kind => {
+    const c = opts.s3, name = c && c.buckets && c.buckets[kind];
+    return name ? s3Config(Object.assign({}, c, { bucket: name })) : null;
+  };
+  const folderOf = kind => {
+    if (!opts.dataDir || bucketOf(kind)) return null;
+    const d = path.join(opts.dataDir, kind);
+    try { fs.mkdirSync(d, { recursive: true }); fs.accessSync(d, fs.constants.W_OK); return d; } catch (e) { return null; }
+  };
+  const placeOf = (s3, dir) => s3 ? "the bucket " + s3.bucket + " at " + s3.endpoint : dir ? "the folder " + dir : "memory (lost on a restart)";
+
   // ------------------------------------------------------------ shared replays (docs/DESIGN-8P.md 33)
-  // A replay someone shares: checked (a replay's fields), stored gzip'd under a random id, given back to
-  // whoever has the link. In the S3-compatible bucket when there is one (opts.replayS3 / REPLAY_S3_*: kept until
-  // the bucket's own rules delete them - an R2 lifecycle rule, if wanted), else on disk in replayDir (opts.replayDir
-  // / REPLAY_DIR, default shared-replays/ next to this file - null: memory only; the newest MAX_SHARED kept), else
-  // memory. Nothing else is kept with it. REPLAY_KEEP_DAYS (opts.replayKeepDays): how long a shared replay is
-  // kept - the sharer is told; the folder's older files go here, the bucket needs its own rule for it (R2: an
-  // object lifecycle rule "delete after N days" - docs in README.md, Hosting).
-  const s3 = s3Config(opts.replayS3 !== undefined ? opts.replayS3 : { endpoint: process.env.REPLAY_S3_ENDPOINT, bucket: process.env.REPLAY_S3_BUCKET,
-    accessKey: process.env.REPLAY_S3_ACCESS_KEY, secretKey: process.env.REPLAY_S3_SECRET_KEY, region: process.env.REPLAY_S3_REGION });
-  const replayDir = opts.replayDir !== undefined ? opts.replayDir : process.env.REPLAY_DIR || path.join(__dirname, "shared-replays");
+  // A replay someone shares: checked (a replay's fields), stored gzip'd under a random id, given back to whoever has the
+  // link (the replays' bucket / folder). REPLAY_KEEP_DAYS (opts.replayKeepDays): how long a shared replay is kept - the
+  // sharer is told; the folder's older files go here, the bucket needs its own rule for it (R2: an object lifecycle rule
+  // "delete after N days" - README.md, Hosting).
   const keepDays = Math.max(0, Math.floor(+(opts.replayKeepDays !== undefined ? opts.replayKeepDays : process.env.REPLAY_KEEP_DAYS) || 0));
-  // A store of shared things (replays, maps) by id: the bucket (objects <prefix><id><ext>, a memory cache of
-  // the last 500 in front of it), else a folder (dir; the newest max kept, and none older than keepDays), else
-  // memory (the newest max).
-  function sharedStore({ prefix, ext, dir, max, keepDays: days, type }) {
+  // A store of shared things (replays, maps) by id: the bucket (objects <id><ext>, a memory cache of the last 500 in
+  // front of it), else a folder (the newest max kept, and none older than keepDays), else memory (the newest max).
+  function sharedStore({ s3, dir, ext, max, keepDays: days, type, pinned }) {
     const mem = new Map();                               // id -> bytes (memory, or a cache of the disk / bucket)
-    let disk = false, writes = 0;
-    if (dir && !s3) { try { fs.mkdirSync(dir, { recursive: true }); fs.accessSync(dir, fs.constants.W_OK); disk = true; } catch (e) { disk = false; } }
+    const disk = !!dir;
+    let writes = 0;
     const file = id => path.join(dir, id + ext);
     const cache = (id, b) => { mem.set(id, b); while (mem.size > 500) mem.delete(mem.keys().next().value); };
     async function keep(id, bytes) {
       if (s3) {                                          // (the bucket: a failed upload is the sharer's error)
-        const r = await s3Request(s3, "PUT", prefix + id + ext, bytes, type);
+        const r = await s3Request(s3, "PUT", id + ext, bytes, type);
         if (r.status < 200 || r.status >= 300) throw new Error("storage " + r.status);
         cache(id, bytes);
         return;
@@ -716,7 +734,8 @@ function createServer(opts = {}) {
             const files = fs.readdirSync(dir).filter(f => f.endsWith(ext))
               .map(f => ({ f, t: fs.statSync(path.join(dir, f)).mtimeMs })).sort((x, y) => y.t - x.t);
             const old = days ? Date.now() - days * 86400000 : -Infinity;
-            for (const { f } of files.filter((x, i) => i >= max || x.t < old)) { fs.unlinkSync(path.join(dir, f)); mem.delete(f.slice(0, -ext.length)); }
+            const id = f => f.slice(0, -ext.length);
+            for (const { f } of files.filter((x, i) => (i >= max || x.t < old) && !(pinned && pinned(id(x.f))))) { fs.unlinkSync(path.join(dir, f)); mem.delete(id(f)); }
           } catch (e) { /* later */ }
         }
       } else mem.set(id, bytes);
@@ -725,7 +744,7 @@ function createServer(opts = {}) {
     async function get(id) {
       if (mem.has(id)) return mem.get(id);
       if (s3) {
-        const r = await s3Request(s3, "GET", prefix + id + ext);
+        const r = await s3Request(s3, "GET", id + ext);
         if (r.status === 404) return null;
         if (r.status < 200 || r.status >= 300) throw new Error("storage " + r.status);
         cache(id, r.body);
@@ -742,43 +761,36 @@ function createServer(opts = {}) {
     async function del(id) {
       mem.delete(id);
       if (s3) {
-        const r = await s3Request(s3, "DELETE", prefix + id + ext);
+        const r = await s3Request(s3, "DELETE", id + ext);
         if (r.status >= 300 && r.status !== 404) throw new Error("storage " + r.status);
       } else if (disk) try { fs.unlinkSync(file(id)); } catch (e) { /* gone */ }
     }
-    return { keep, get, del, has: id => mem.has(id), get disk() { return disk; },
-      describe: () => s3 ? "the bucket " + s3.bucket + " at " + s3.endpoint + (prefix ? " (" + prefix + ")" : "") : disk ? "the folder " + dir : "memory (lost on a restart)" };
+    return { keep, get, del, has: id => mem.has(id), get disk() { return disk; }, get bucket() { return !!s3; }, describe: () => placeOf(s3, dir) };
   }
-  const replays = sharedStore({ prefix: "", ext: ".replay", dir: replayDir, max: MAX_SHARED, keepDays, type: "application/gzip" });
-  // shared maps (docs/v6/MAPS.md): MAP_DIR (opts.mapDir; null: memory only), by default a folder in the replays' one
-  const mapDir = opts.mapDir !== undefined ? opts.mapDir : process.env.MAP_DIR || (replayDir ? path.join(replayDir, "maps") : null);
-  const maps = sharedStore({ prefix: "", ext: ".map", dir: mapDir, max: MAX_SHARED_MAPS, keepDays: 0, type: "application/octet-stream" });
-  const diskOk = replays.disk;                       // (the replays' folder works: the challenge boards and the handoff use it too)
+  const replays = sharedStore({ s3: bucketOf("replays"), dir: folderOf("replays"), ext: ".replay", max: MAX_SHARED, keepDays, type: "application/gzip" });
+  // shared maps (docs/v6/MAPS.md): kept for good
+  const maps = sharedStore({ s3: bucketOf("maps"), dir: folderOf("maps"), ext: ".map", max: MAX_SHARED_MAPS, keepDays: 0, type: "application/octet-stream",
+    pinned: id => galleryIds.has(id) });                // (a published map: never swept from the folder)
   // the handoff store (docs/v6/RELIABILITY.md 2.3): opts.stateStore (tests; null = none), else - for the server
-  // started as the program (opts.handoff) - the bucket, else STATE_DIR / opts.stateDir, else the shared replays' folder
+  // started as the program (opts.handoff) - the state's bucket / folder
   const stateStore = (() => {
     if (opts.stateStore !== undefined) return opts.stateStore;
     if (!opts.handoff) return null;
-    if (s3) return s3StateStore(s3);
-    const dir = opts.stateDir !== undefined ? opts.stateDir : process.env.STATE_DIR || (diskOk ? replayDir : null);
-    if (!dir) return null;
-    try { fs.mkdirSync(dir, { recursive: true }); fs.accessSync(dir, fs.constants.W_OK); return dirStateStore(dir); } catch (e) { return null; }
+    const b = bucketOf("state"), d = folderOf("state");
+    return b ? s3StateStore(b) : d ? dirStateStore(d) : null;
   })();
 
   // ------------------------------------------------------------ player accounts (docs/v6/ACCOUNTS.md)
   // opts.accounts (default off: the tests' anonymous clients; the program: on unless ACCOUNTS=off). With them on, online
   // play (joining, creating, quick play) and sending daily-challenge results need a session; a connection's identity
-  // key (ws.cid) is "acc-" + the account id and its name the username. The store: opts.accountStore (tests), else
-  // the bucket (ACCOUNT_S3_BUCKET: a bucket of its own with the replays' endpoint and keys - else the replays'
-  // bucket), else ACCOUNT_DIR / opts.accountDir (default REPLAY_DIR/accounts), else memory (development only).
+  // key (ws.cid) is "acc-" + the account id and its name the username. The store: opts.accountStore (tests), else the
+  // accounts' bucket / folder, else memory (development only).
   const accountsOn = !!opts.accounts;
   const accountStore = !accountsOn ? null : (() => {
     if (opts.accountStore) return opts.accountStore;
-    const own = opts.accountS3 !== undefined ? s3Config(opts.accountS3)
-      : process.env.ACCOUNT_S3_BUCKET && s3 ? Object.assign({}, s3, { bucket: process.env.ACCOUNT_S3_BUCKET }) : null;
-    if (own || s3) return Accounts.s3AccountStore(own || s3, s3Request);
-    const dir = opts.accountDir !== undefined ? opts.accountDir : process.env.ACCOUNT_DIR || (diskOk ? path.join(replayDir, "accounts") : null);
-    if (dir) try { return Accounts.dirAccountStore(dir); } catch (e) { /* not writable: memory */ }
+    const b = bucketOf("accounts"), d = folderOf("accounts");
+    if (b) return Accounts.s3AccountStore(b, s3Request);
+    if (d) try { return Accounts.dirAccountStore(d); } catch (e) { /* not writable: memory */ }
     return Accounts.memoryAccountStore();
   })();
   const accountKey = a => "acc-" + a.id;           // (a room's / board's key for an account: never a browser's client id)
@@ -788,7 +800,7 @@ function createServer(opts = {}) {
   const accounts = !accountsOn ? null : Accounts.createAccounts({ store: accountStore,
     secret: opts.accountSecret !== undefined ? opts.accountSecret : process.env.ACCOUNT_SECRET || null,
     scryptN: opts.scryptN, now: opts.now, say, lockFails: opts.lockFails, lockMs: opts.lockMs, limits: opts.accountLimits, json, readBody, addressOf,
-    onDelete: a => accountDeleted(a),
+    onDelete: a => accountDeleted(a), onRename: a => galleryRenamed(a),
     // Google Play Games sign-in (the Android app): the game server's OAuth client - off without (docs/v6/ACCOUNTS.md 6)
     google: { clientId: opts.googleClientId !== undefined ? opts.googleClientId : process.env.GOOGLE_CLIENT_ID || null,
       clientSecret: opts.googleClientSecret !== undefined ? opts.googleClientSecret : process.env.GOOGLE_CLIENT_SECRET || null, fetch: opts.googleFetch } });
@@ -803,6 +815,7 @@ function createServer(opts = {}) {
   // kept replays gone
   async function accountDeleted(a) {
     const key = accountKey(a);
+    await galleryForget(key).catch(() => {});        // (its published maps leave the gallery)
     for (const r of rooms.values()) for (const ws of r.sockets) if (ws.cid === key) try { fail(ws, "This account was deleted.", "login"); } catch (e) { /* gone */ }
     const today = Challenge.dayOf(now());
     for (let k = 0; k <= BOARD_DAYS; k++) {
@@ -850,23 +863,25 @@ function createServer(opts = {}) {
 
   // ------------------------------------------------------------ the daily challenge (docs/v6/CHALLENGE.md)
   // A board per UTC day {day, entries: [{cid, name, rounds, won, kills, secs, date, replay}]} (one entry per client id,
-  // its best), kept where the shared replays are: the bucket (challenge-<day>.json.gz), else the folder (the last
-  // BOARD_DAYS days), else memory; cached here once read, written after every change (one write at a time per day).
+  // its best - its replay a shared replay, by id), kept in the challenges' bucket / folder (<day>.json.gz; the folder
+  // the last BOARD_DAYS days), else memory; cached here once read, written after every change (one write at a time per
+  // day).
   // A result comes as its replay: a worker thread plays it again (challenge-worker.js) - the board only ever holds
   // what the server's engine says.
   const now = opts.now || Date.now;
   const challengeTimeMs = opts.challengeTimeMs || CHALLENGE_TIME_MS;
   const challengeWorkers = opts.challengeWorkers || 1;
   const boards = new Map();                              // day -> Promise of the board
-  const boardFile = day => path.join(replayDir, "challenge-" + day + ".json.gz");
+  const boardS3 = bucketOf("challenges"), boardDir = folderOf("challenges");
+  const boardFile = day => path.join(boardDir, day + ".json.gz");
   const readBoardBytes = async day => {
-    if (s3) {
-      const r = await s3Request(s3, "GET", "challenge-" + day + ".json.gz");
+    if (boardS3) {
+      const r = await s3Request(boardS3, "GET", day + ".json.gz");
       if (r.status === 404) return null;
       if (r.status < 200 || r.status >= 300) throw new Error("storage " + r.status);
       return r.body;
     }
-    if (!diskOk) return null;
+    if (!boardDir) return null;
     try { return fs.readFileSync(boardFile(day)); } catch (e) { return null; }
   };
   function loadBoard(day) {
@@ -883,27 +898,27 @@ function createServer(opts = {}) {
     }
     return boards.get(day);
   }
-  // the folder: boards older than BOARD_DAYS go (and the weekly challenge's old ones, challenge-2026-W43.json.gz),
-  // looked at once a day (a bucket's own lifecycle rule deletes its old objects)
+  // the folder: boards older than BOARD_DAYS go, looked at once a day (a bucket's own lifecycle rule deletes its old
+  // objects - or keeps them: only the last BOARD_DAYS days are ever read)
   let swept = null;
   function sweepBoards() {
     const today = Challenge.dayOf(now());
-    if (s3 || !diskOk || swept === today) return;
+    if (!boardDir || swept === today) return;
     swept = today;
     try {
-      for (const f of fs.readdirSync(replayDir)) {
-        const m = /^challenge-(.+)\.json\.gz$/.exec(f);
-        if (m && (!Challenge.validDay(m[1]) || Challenge.dayEnd(m[1]) + BOARD_DAYS * Challenge.DAY <= now())) fs.unlinkSync(path.join(replayDir, f));
+      for (const f of fs.readdirSync(boardDir)) {
+        const m = /^(.+)\.json\.gz$/.exec(f);
+        if (m && (!Challenge.validDay(m[1]) || Challenge.dayEnd(m[1]) + BOARD_DAYS * Challenge.DAY <= now())) fs.unlinkSync(path.join(boardDir, f));
       }
     } catch (e) { /* later */ }
   }
   function saveBoard(board) {
     const gz = zlib.gzipSync(Buffer.from(JSON.stringify({ day: board.day, entries: board.entries })));
     board.saving = board.saving.catch(() => {}).then(async () => {
-      if (s3) {
-        const r = await s3Request(s3, "PUT", "challenge-" + board.day + ".json.gz", gz);
+      if (boardS3) {
+        const r = await s3Request(boardS3, "PUT", board.day + ".json.gz", gz);
         if (r.status < 200 || r.status >= 300) throw new Error("storage " + r.status);
-      } else if (diskOk) { fs.writeFileSync(boardFile(board.day), gz); sweepBoards(); }
+      } else if (boardDir) { fs.writeFileSync(boardFile(board.day), gz); sweepBoards(); }
     });
     return board.saving;
   }
@@ -951,6 +966,139 @@ function createServer(opts = {}) {
   }
   const STATUS = { bad: 400, name: 400, config: 400, differs: 400, unfinished: 400, long: 400, day: 409, taken: 409, version: 409, busy: 503, storage: 503 };
   const challengeError = (res, code, error) => json(res, STATUS[code] || 400, { error: error || code, code });
+  // ------------------------------------------------------------ the map gallery (docs/v6/MAPS.md, owner 2026-10-28)
+  // Maps their authors published (POST /api/gallery: a playable map - MapData.MIN_BASES bases a tank can drive between -
+  // with an account's session, or a client id + name without accounts), listed newest or most played first (a play: an
+  // online match started on it). One index {maps: [{id, name, size, bases, author, by, date, plays}]} (author: the
+  // account's key / the client id, by: the name shown) in the maps' bucket / folder (GALLERY_KEY), cached once read,
+  // written after every change (plays: at most every GALLERY_PLAYS_SAVE_MS). The maps themselves are shared maps, kept
+  // for good. Its author removes a map (POST /api/gallery/<id>/remove), and so does the operator (X-Admin-Key:
+  // GALLERY_ADMIN_KEY); a deleted account's maps leave it, a renamed one's show the new name.
+  const galleryS3 = bucketOf("maps"), galleryDir = folderOf("maps");
+  const galleryAdmin = opts.galleryAdminKey !== undefined ? opts.galleryAdminKey : process.env.GALLERY_ADMIN_KEY || null;
+  const galleryIds = new Set();
+  let gallery = null, galleryWrite = Promise.resolve(), playsTimer = null, galleryMem = null;
+  const allowPublish = rateLimiter(MAX_PUBLISH_PER_MIN);
+  function loadGallery() {
+    if (!gallery) {
+      gallery = (async () => {
+        let gz = null;
+        if (galleryS3) {
+          const r = await s3Request(galleryS3, "GET", GALLERY_KEY);
+          if (r.status !== 404 && (r.status < 200 || r.status >= 300)) throw new Error("storage " + r.status);
+          if (r.status !== 404) gz = r.body;
+        } else if (galleryDir) try { gz = fs.readFileSync(path.join(galleryDir, GALLERY_KEY)); } catch (e) { gz = null; }
+        else gz = galleryMem;
+        let g = null;
+        try { g = gz ? JSON.parse(zlib.gunzipSync(gz).toString("utf8")) : null; } catch (e) { g = null; }
+        const list = g && Array.isArray(g.maps) ? g.maps.filter(x => x && NetProto.mapId(x.id) && typeof x.author === "string" && typeof x.name === "string") : [];
+        for (const x of list) galleryIds.add(x.id);
+        return { maps: list };
+      })();
+      gallery.catch(() => { gallery = null; });          // (the storage failed: asked again next time)
+    }
+    return gallery;
+  }
+  function saveGallery(g) {
+    clearTimeout(playsTimer); playsTimer = null;
+    const gz = zlib.gzipSync(Buffer.from(JSON.stringify({ maps: g.maps })));
+    galleryWrite = galleryWrite.catch(() => {}).then(async () => {
+      if (galleryS3) {
+        const r = await s3Request(galleryS3, "PUT", GALLERY_KEY, gz);
+        if (r.status < 200 || r.status >= 300) throw new Error("storage " + r.status);
+      } else if (galleryDir) { const f = path.join(galleryDir, GALLERY_KEY); fs.writeFileSync(f + ".tmp", gz); fs.renameSync(f + ".tmp", f); }
+      else galleryMem = gz;
+    });
+    return galleryWrite;
+  }
+  function galleryPlayed(id) {
+    if (!galleryIds.has(id)) return;
+    loadGallery().then(g => {
+      const x = g.maps.find(e => e.id === id);
+      if (!x) return;
+      x.plays = (x.plays || 0) + 1;
+      if (!playsTimer) playsTimer = setTimeout(() => { saveGallery(g).catch(e => say("gallery not stored:", e.message)); }, GALLERY_PLAYS_SAVE_MS);
+    }).catch(() => {});
+  }
+  async function galleryForget(author) {
+    const g = await loadGallery();
+    const keep = g.maps.filter(x => x.author !== author);
+    if (keep.length === g.maps.length) return;
+    for (const x of g.maps) if (x.author === author) galleryIds.delete(x.id);
+    g.maps = keep;
+    await saveGallery(g);
+  }
+  async function galleryRenamed(a) {
+    const g = await loadGallery(), key = accountKey(a), by = accounts.shown(a);
+    let changed = false;
+    for (const x of g.maps) if (x.author === key && x.by !== by) { x.by = by; changed = true; }
+    if (changed) await saveGallery(g);
+  }
+  const galleryEntry = (x, me) => ({ id: x.id, name: x.name, size: x.size, bases: x.bases, by: x.by, date: x.date, plays: x.plays || 0, mine: !!me && x.author === me });
+  async function galleryApi(req, res, p) {
+    const u = new URL(req.url, "http://x");
+    // who asks: an account's session (accounts on; optional to read), else the client id + name
+    const who = async need => {
+      if (accounts) {
+        if (need) { const a = await needSession(req, res); return a ? { key: accountKey(a), by: accounts.shown(a) } : null; }
+        let a = null;
+        try { a = await accounts.sessionOf(req); } catch (e) { a = null; }
+        return { key: a ? accountKey(a) : null, by: a ? accounts.shown(a) : null };
+      }
+      return { key: clientId(u.searchParams.get("cid")), by: cleanPlayerName(u.searchParams.get("name")) };
+    };
+    let g;
+    const load = async () => { try { g = await loadGallery(); return true; } catch (e) { json(res, 503, { error: "storage unavailable, try later", code: "storage" }); return false; } };
+    if (p === "/api/gallery" && req.method === "GET") {
+      if (!(await load())) return;
+      const me = (await who(false)).key;
+      const sort = u.searchParams.get("sort") === "plays" ? "plays" : "new";
+      const from = Math.max(0, Math.floor(+u.searchParams.get("from") || 0)), n = Math.max(1, Math.min(50, Math.floor(+u.searchParams.get("n") || 20)));
+      let list = u.searchParams.get("mine") === "1" ? g.maps.filter(x => me && x.author === me) : g.maps.slice();
+      list.sort(sort === "plays" ? (a, b) => (b.plays || 0) - (a.plays || 0) || b.date - a.date : (a, b) => b.date - a.date);
+      return json(res, 200, { sort, total: list.length, from, maps: list.slice(from, from + n).map(x => galleryEntry(x, me)) });
+    }
+    if (p === "/api/gallery" && req.method === "POST") {
+      const w = await who(true);
+      if (!w) return;
+      if (!w.key) return json(res, 400, { error: "bad client id", code: "bad" });
+      if (!w.by) return json(res, 400, { error: "a name is needed", code: "name" });
+      let bytes;
+      try { bytes = await readRaw(req, MAX_MAP_BYTES); } catch (e) { return json(res, 413, { error: "too large" }); }
+      if (!allowPublish(addressOf(req))) return json(res, 429, { error: "too many maps published, try again in a minute", code: "busy" });
+      const canon = MapData.canonical(bytes), m = canon ? MapData.decode(canon) : null;
+      if (!m) return json(res, 400, { error: "not a map", code: "map" });
+      const buf = Buffer.from(canon), id = mapIdOf(buf);
+      if (m.bases.length < MapData.MIN_BASES) return json(res, 400, { error: "too few bases", code: "bases" });
+      if (!mapLinked(id, m)) return json(res, 400, { error: "a tank can't reach every base", code: "path" });
+      if (!(await load())) return;
+      const old = g.maps.find(x => x.id === id);
+      if (old) return old.author === w.key ? json(res, 200, { id, map: galleryEntry(old, w.key) }) : json(res, 409, { error: "already in the gallery", code: "published" });
+      if (g.maps.filter(x => x.author === w.key).length >= MAX_GALLERY_PER_AUTHOR || g.maps.length >= MAX_GALLERY) return json(res, 429, { error: "the gallery is full", code: "full" });
+      try { if (!maps.has(id)) await maps.keep(id, buf); } catch (e) { return json(res, 503, { error: "could not store it, try later", code: "storage" }); }
+      const x = { id, name: m.name, size: m.size, bases: m.bases.length, author: w.key, by: w.by, date: now(), plays: 0 };
+      g.maps.push(x); galleryIds.add(id);
+      try { await saveGallery(g); } catch (e) { g.maps = g.maps.filter(e2 => e2 !== x); galleryIds.delete(id); return json(res, 503, { error: "could not store it, try later", code: "storage" }); }
+      say("gallery: published", id, JSON.stringify(m.name), "by", JSON.stringify(w.by));
+      return json(res, 200, { id, map: galleryEntry(x, w.key) });
+    }
+    const rm = /^\/api\/gallery\/([a-z2-9]{10})\/remove$/.exec(p);
+    if (rm && req.method === "POST") {
+      const admin = !!galleryAdmin && sameKey(req.headers["x-admin-key"] || "", galleryAdmin);
+      const w = admin ? null : await who(true);
+      if (!admin && !w) return;
+      if (!admin && !w.key) return json(res, 400, { error: "bad client id", code: "bad" });
+      if (!(await load())) return;
+      const x = g.maps.find(e => e.id === rm[1]);
+      if (!x) return json(res, 404, { error: "not in the gallery", code: "none" });
+      if (!admin && x.author !== w.key) return json(res, 403, { error: "only its author removes it", code: "author" });
+      g.maps = g.maps.filter(e => e !== x); galleryIds.delete(x.id);
+      try { await saveGallery(g); } catch (e) { return json(res, 503, { error: "could not store it, try later", code: "storage" }); }
+      say("gallery: removed", x.id, admin ? "by the operator" : "by its author");
+      return json(res, 200, { ok: true });
+    }
+    json(res, 404, { error: "not found" });
+  }
   async function challengeApi(req, res, p) {
     const u = new URL(req.url, "http://x"), m = /^\/api\/challenge(?:\/([^/]*))?$/.exec(p);
     // (a day "YYYY-MM-DD", a real date - an old week id "2026-W43" or junk is refused here)
@@ -1102,11 +1250,12 @@ function createServer(opts = {}) {
       const gz = validReplay(bytes);
       if (!gz) return json(res, 400, { error: "not a replay" });
       let id = replayId();
-      while (replays.has(id) || (!s3 && await replays.get(id))) id = replayId();   // (a bucket: 32^8 ids - no lookup)
+      while (replays.has(id) || (!replays.bucket && await replays.get(id))) id = replayId();   // (a bucket: 32^8 ids - no lookup)
       try { await replays.keep(id, gz); } catch (e) { return json(res, 503, { error: "could not store it, try later" }); }
       return json(res, 200, keepDays ? { id, days: keepDays } : { id });
     }
     if (/^\/api\/challenge(\/[^/]*)?$/.test(p)) return challengeApi(req, res, p);
+    if (/^\/api\/gallery(\/|$)/.test(p)) return galleryApi(req, res, p);
     const rm = /^\/api\/replays\/([a-z2-9]{8})$/.exec(p);
     if (rm && req.method === "GET") {
       let gz;
@@ -1782,13 +1931,12 @@ function createServer(opts = {}) {
     server, rooms, createRoom, shutdown, snapshot, refreshHandoff,
     get closing() { return closing; },
     stateStore: stateStore ? stateStore.name : null,
-    replayStore: replays.describe(), mapStore: maps.describe(),
-    // (accounts: null = off; else where they are kept, and whether a bucket lifecycle rule may delete them)
+    replayStore: replays.describe(), mapStore: maps.describe(), boardStore: placeOf(boardS3, boardDir),
+    galleryPlayed,                                     // (tests: a play counted as a match on the map would)
+    // (accounts: null = off; else where they are kept)
     accounts, accountStore: accounts ? accounts.storeName : null,
-    accountWarning: accounts && keepDays && s3 && !process.env.ACCOUNT_S3_BUCKET && opts.accountS3 === undefined && !opts.accountStore
-      ? "REPLAY_KEEP_DAYS is set and accounts share the replays' bucket: its lifecycle rule would delete accounts unused for " + keepDays + " days - set ACCOUNT_S3_BUCKET" : null,
     // (a handoff snapshot the previous server left is read right away)
-    listen(port, cb) { server.listen(port, () => { refreshHandoff(true); if (cb) cb(server.address().port); }); return this; },
+    listen(port, cb) { server.listen(port, () => { refreshHandoff(true); loadGallery().catch(() => {}); if (cb) cb(server.address().port); }); return this; },
     close(cb) {
       clearInterval(heartbeat); clearInterval(idleSweep);
       for (const w of checkWorkers) w.terminate();
@@ -1881,7 +2029,12 @@ if (require.main === module) {
     process.exit(1);
   }
   // accounts (docs/v6/ACCOUNTS.md): on, unless ACCOUNTS=off (a LAN / self-hosted server: free names as before)
-  const srv = createServer({ handoff: true, accounts: !/^(0|false|no|off)$/i.test(process.env.ACCOUNTS || "") });
+  // where things are kept (README.md, Hosting): S3_* buckets, one per kind - else DATA_DIR's folders
+  const env = process.env, buckets = { replays: env.S3_BUCKET_REPLAYS, maps: env.S3_BUCKET_MAPS, accounts: env.S3_BUCKET_ACCOUNTS,
+    challenges: env.S3_BUCKET_CHALLENGES, state: env.S3_BUCKET_STATE };
+  const s3 = env.S3_ENDPOINT ? { endpoint: env.S3_ENDPOINT, accessKey: env.S3_ACCESS_KEY, secretKey: env.S3_SECRET_KEY, region: env.S3_REGION, buckets } : null;
+  const srv = createServer({ handoff: true, accounts: !/^(0|false|no|off)$/i.test(env.ACCOUNTS || ""),
+    dataDir: env.DATA_DIR || path.join(__dirname, "data"), s3 });
   srv.server.on("error", err => { if (!srv.closing) startupError(port, err); });
   // an error no handler caught: logged, and the server goes on - ending the process would end every game
   // on it (docs/v6/RELIABILITY.md 2.1)
@@ -1896,10 +2049,11 @@ if (require.main === module) {
   srv.listen(port, p => {
     log("TUNNELER server " + (VERSION || "") + " on http://localhost:" + p);
     log("shared replays: " + srv.replayStore);
-    log("rooms on a restart: " + (srv.stateStore ? "handed over through " + srv.stateStore : "lost (no bucket or writable folder)"));
     log("shared maps: " + srv.mapStore);
+    log("daily challenge leaderboards: " + srv.boardStore);
+    log("rooms on a restart: " + (srv.stateStore ? "handed over through " + srv.stateStore : "lost (no bucket or writable folder)"));
     log("accounts: " + (srv.accountStore ? "on, kept in " + srv.accountStore + (process.env.ACCOUNT_SECRET ? " (ACCOUNT_SECRET set)" : "") : "off (ACCOUNTS=off: free names)"));
-    if (srv.accountWarning) log("WARNING: " + srv.accountWarning);
+    if (s3 && !s3.accessKey) log("WARNING: S3_ENDPOINT is set but not S3_ACCESS_KEY / S3_SECRET_KEY: no bucket is used");
     if (VERSION && !/^(0|false|no|off)$/i.test(process.env.UPDATE_CHECK || "")) watchReleases(VERSION);
     keepAwake();
   });

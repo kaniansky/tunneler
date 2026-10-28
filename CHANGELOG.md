@@ -4,6 +4,33 @@ All notable changes to Tunneler. Versions follow [semantic versioning](https://s
 by pushing a version tag (see CONTRIBUTING.md). Up to its version 6.0.1 the game was called Tunneler Online:
 those releases are tagged `online-vX.Y.Z`, their changes are in [docs/CHANGELOG-online.md](docs/CHANGELOG-online.md).
 
+## Unreleased
+
+- Hosting: each kind of data the server keeps - shared replays, shared maps, accounts, the daily leaderboards, the
+  games handed over on a restart - in a bucket of its own (`S3_ENDPOINT`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`,
+  `S3_REGION`, `S3_BUCKET_REPLAYS` / `_MAPS` / `_ACCOUNTS` / `_CHALLENGES` / `_STATE`), else in its folder in
+  `DATA_DIR` (default `data/`; Docker `/app/data`). One bucket for everything let the replays' "delete after 90 days"
+  rule delete shared maps and unused accounts too. The old `REPLAY_S3_*`, `REPLAY_DIR`, `MAP_DIR`, `ACCOUNT_DIR`,
+  `ACCOUNT_S3_BUCKET` and `STATE_DIR` are gone (README.md, Hosting).
+- Map gallery (Maps, Map gallery): the maps players published on the server, the newest or the most played first, each
+  with a picture of the map. A published map can be added to your maps, played in a skirmish or linked; a map's screen
+  has "Publish to the gallery" (and "Remove from the gallery" for your own). Only a map that can be played is published.
+- The Map setting (skirmish, the online game's host) opens a map picker: random, your maps or the gallery's, with a
+  picture of the selected one; Left / Right still step through your maps. A map that can't be played (too few bases, a
+  base a tank can't reach) is shown gray with the reason and can't be chosen.
+- An older server has no gallery: the picker and the gallery say so, everything else works.
+- After a skirmish or a split-screen match the menu has "Watch the replay" between Rematch and Back: the match's
+  replay, whose Back (or Esc) returns to the skirmish's / split screen's settings.
+- Replays: the list's GAME column shows the skirmish's mode ("Capture the flag", "Daily challenge"...) instead of just
+  "Skirmish"; a replay's screen says both ("Skirmish, capture the flag").
+- Watching a replay or an online game as a spectator: the views and the status line under them no longer run past the
+  bottom of a wide window.
+- Modern graphics: a one-line red message under a menu ("Press again to delete it.") is no longer drawn as large as
+  a screen's title.
+- A replay's screen: the players in a box of their own beside Watch / Share / Save / Delete - with 8 tanks the list
+  pushed the descriptions off the bottom of the screen.
+- Plays together with 1.1.0 - 1.1.5: nothing in the game changed.
+
 ## 1.1.5
 
 - The map editor on a phone held upright uses the whole screen above its tools (it was a small strip at the top), and

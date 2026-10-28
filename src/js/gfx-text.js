@@ -313,7 +313,10 @@ function analyse(t) {
     }
     return true;
   };
+  // (never a menu's info rows: a one-line red message under a menu - "Press again to delete it." - isn't a title)
+  const infoRow = new Set(Array.isArray(t.infoRows) ? t.infoRows : []);
   for (let r = 0; r < rows && (rows >= 20 || t.view); r++) {
+    if (infoRow.has(r)) continue;
     let a = -1, b = -1, ok = true;
     for (let c = c0; c < c1; c++) {
       const i = r * 80 + c, ch = cp[i];
@@ -698,6 +701,7 @@ function draw(ctx, W, H, t, opts) {
   }
   // (nothing changed: the output still shows it)
   const cv = ctx.canvas, bar = state.hl ? [state.hl.x, state.hl.y - sc, state.hl.w, state.hl.h].join(",") : "";
+  if (t.pic !== state.pic) { state.pic = t.pic; changed = true; }
   if (!changed && !animating && state.shownBar === bar && cv && cv.width === W && cv.height === H) return false;
   state.shown = baseKey; state.shownBar = bar;
   prep(ctx);
@@ -710,7 +714,29 @@ function draw(ctx, W, H, t, opts) {
     else drawBar(ctx, state, hb, st, g);
   }
   ctx.drawImage(textC, 0, 0);
+  if (t.pic) drawPic(ctx, t.pic, g);
   return animating;
+}
+
+// a DOS screen's picture (t.pic: a map's preview, DosUI spec.pic) in its block of cells: square, centred, crisp pixels
+// (the phone layout's scrolling window clips it)
+const picCanvases = new WeakMap();
+function drawPic(ctx, pic, g) {
+  let c = picCanvases.get(pic.rgba);
+  if (!c) {
+    c = canvasOf(pic.w, pic.h);
+    const x = c.getContext("2d");
+    if (!x || !x.putImageData || typeof ImageData === "undefined") return;
+    x.putImageData(new ImageData(pic.rgba, pic.w, pic.h), 0, 0);
+    picCanvases.set(pic.rgba, c);
+  }
+  const x0 = g.X(pic.col), x1 = g.X(pic.col + pic.cols), y0 = g.Y(pic.row), y1 = g.Y(pic.row + pic.rows);
+  const k = Math.min((x1 - x0) / pic.w, (y1 - y0) / pic.h), w = pic.w * k, h = pic.h * k;
+  ctx.save();
+  if (g.clip && pic.row < g.nScroll) { ctx.beginPath(); ctx.rect(0, 0, g.W, g.clip); ctx.clip(); }
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(c, Math.round(x0 + (x1 - x0 - w) / 2), Math.round(y0 + (y1 - y0 - h) / 2), Math.round(w), Math.round(h));
+  ctx.restore();
 }
 
 // draw(ctx) once - or, with a scrolling window (g.clip), twice: clipped to the window, then to the rest

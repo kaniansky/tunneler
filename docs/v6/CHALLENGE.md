@@ -180,9 +180,9 @@ POST /api/challenge/<day>?cid=<client id>&name=<player name>    body: the replay
   anybody. The name is cleaned (`NetProto.cleanPlayerName`); a name already on this day's board under another
   client id is refused (`taken`), so nobody can pose as another player.
 - `<day>` that isn't a valid day (an old week id "2026-W43", 2026-02-30, junk) is refused at once: 400 `bad`.
-- A board per day: `{day, entries: [{cid, name, rounds, won, kills, secs, date, replay}]}`, kept where the shared
-  replays are - the S3-compatible bucket (`challenge-<day>.json.gz`), else `REPLAY_DIR/challenge-<day>.json.gz`,
-  else memory - and cached in memory once read. Written after every change (one write at a time). At most
+- A board per day: `{day, entries: [{cid, name, rounds, won, kills, secs, date, replay}]}`, kept in the challenges'
+  own bucket (`S3_BUCKET_CHALLENGES`, `<day>.json.gz`), else `DATA_DIR/challenges/<day>.json.gz`, else memory - and
+  cached in memory once read. Written after every change (one write at a time). At most
   `MAX_BOARD` (5000) entries; the worst go.
 - An accepted result that beats the player's entry (or is the first) is stored as a shared replay
   (`keepShared`, the same ids as `/api/replays`) and its id goes on the entry: the board can show it. What is kept is
@@ -190,10 +190,9 @@ POST /api/challenge/<day>?cid=<client id>&name=<player name>    body: the replay
   state checks and summary, and the board's name on BLUE - nothing else the request carried.
 - `GET` answers for today and the `BOARD_DAYS` (30) days before it: they all fit the board cache (`BOARD_DAYS` + 2),
   so asking for many old days can't make the server read its storage again and again. The folder keeps the same: once
-  a day (at the first board written that day) boards older than that go - and the weekly challenge's old
-  `challenge-2026-W43.json.gz` files.
-- A bucket lifecycle rule that deletes shared replays after N days (the live server: 90) also deletes old boards and
-  their entries' replays - only today matters, so that is fine.
+  a day (at the first board written that day) boards older than that go (and anything not named after a day).
+- The entries' replays are shared replays (the replays' bucket - its lifecycle rule, 90 days on the live server, is
+  longer than the 30 days of boards the server reads). A rule on the challenges' bucket is optional.
 - Only today (UTC) is accepted, and yesterday for `DAY_GRACE_MS` (= `Challenge.GRACE_MS`, 2 hours) after midnight
   (a match started just before it). The server's clock decides (`opts.now` for tests).
 

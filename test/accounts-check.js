@@ -26,7 +26,7 @@ async function until(cond, what, timeout = 20000) {
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), "tunneler-accounts-"));
 // a server with accounts on (scrypt made cheap for the test)
 const start = opts => new Promise(r => {
-  const s = createServer(Object.assign({ quiet: true, tickMs: 4, accounts: true, scryptN: 1024, replayDir: null, replayS3: null }, opts));
+  const s = createServer(Object.assign({ quiet: true, tickMs: 4, accounts: true, scryptN: 1024 }, opts));
   s.listen(0, port => r({ s, port }));
 });
 async function api(port, method, p, body, token) {
@@ -299,29 +299,27 @@ function record(day) {
   console.log("storage");
   {
     const dir = tmp();
-    let A = await start({ accountDir: dir });
+    let A = await start({ dataDir: dir });
     const a = (await signup(A.port, "Folder", "kept on disk")).j;
     A.s.close();
-    const B = await start({ accountDir: dir });
-    const files = fs.readdirSync(dir).sort();
+    const B = await start({ dataDir: dir });
+    const files = fs.readdirSync(path.join(dir, "accounts")).sort();
     ok((await api(B.port, "GET", "/api/account", null, a.token)).status === 200 && (await login(B.port, "folder", "kept on disk")).status === 200,
       "a folder: after a restart the token still works (the secret is kept) and the login too");
     ok(files.includes(a.account.id + ".json") && files.includes("secret.json") && files.some(f => /^name-[0-9a-f]{32}\.json$/.test(f)) && !files.some(f => /\.tmp$/.test(f)),
-      "the folder holds the account, its name's index and the secret: " + files.join(", "));
+      "the folder (DATA_DIR/accounts) holds the account, its name's index and the secret: " + files.join(", "));
     B.s.close();
     const dir2 = tmp();
-    A = await start({ accountDir: dir2, accountSecret: "operator secret" });
+    A = await start({ dataDir: dir2, accountSecret: "operator secret" });
     const b = (await signup(A.port, "Secret", "kept on disk")).j;
     A.s.close();
-    const C = await start({ accountDir: dir2, accountSecret: "operator secret" });
-    ok(!fs.readdirSync(dir2).includes("secret.json") && (await api(C.port, "GET", "/api/account", null, b.token)).status === 200,
+    const C = await start({ dataDir: dir2, accountSecret: "operator secret" });
+    ok(!fs.readdirSync(path.join(dir2, "accounts")).includes("secret.json") && (await api(C.port, "GET", "/api/account", null, b.token)).status === 200,
       "ACCOUNT_SECRET: no secret stored, tokens survive a restart");
     C.s.close();
-    // the accounts' replays folder default: REPLAY_DIR/accounts
-    const rd = tmp();
-    const D = await start({ replayDir: rd });
-    await signup(D.port, "Default", "kept on disk");
-    ok(fs.existsSync(path.join(rd, "accounts")) && /accounts/.test(D.s.accountStore), "by default in the replays' folder's accounts/: " + D.s.accountStore);
+    // no data folder: memory (development only)
+    const D = await start({});
+    ok(/memory/.test(D.s.accountStore), "without a data folder or a bucket: memory - " + D.s.accountStore);
     D.s.close();
   }
   {
@@ -343,18 +341,18 @@ function record(day) {
       });
     });
     const fport = await new Promise(r => fake.listen(0, () => r(fake.address().port)));
-    const accountS3 = Object.assign({ endpoint: "http://127.0.0.1:" + fport, bucket: "tunneler-accounts" }, cfg);
-    let A = await start({ accountS3 });
+    const s3 = Object.assign({ endpoint: "http://127.0.0.1:" + fport, buckets: { accounts: "tunneler-accounts" } }, cfg);
+    let A = await start({ s3 });
     const a = (await signup(A.port, "Bucket", "in the cloud")).j;
     A.s.close();
-    const B = await start({ accountS3 });
+    const B = await start({ s3 });
     ok((await api(B.port, "GET", "/api/account", null, a.token)).status === 200 && (await login(B.port, "Bucket", "in the cloud")).status === 200,
       "a bucket: after a restart the token and the login work");
     const keys = [...objects.keys()].sort();
-    ok(keys.includes("/tunneler-accounts/account-" + a.account.id + ".json") && keys.includes("/tunneler-accounts/account-secret.json") &&
-      keys.some(k => /account-name-[0-9a-f]{32}\.json$/.test(k)) && seen.every(x => !/BAD/.test(x)), "its objects (account, name, secret), every request signed: " + keys.join(", "));
+    ok(keys.includes("/tunneler-accounts/" + a.account.id + ".json") && keys.includes("/tunneler-accounts/secret.json") &&
+      keys.some(k => /\/name-[0-9a-f]{32}\.json$/.test(k)) && seen.every(x => !/BAD/.test(x)), "its objects (account, name, secret), every request signed: " + keys.join(", "));
     const del = await api(B.port, "POST", "/api/account/delete", { password: "in the cloud" }, a.token);
-    ok(del.status === 200 && !objects.has("/tunneler-accounts/account-" + a.account.id + ".json") && ![...objects.keys()].some(k => /account-name-/.test(k)),
+    ok(del.status === 200 && !objects.has("/tunneler-accounts/" + a.account.id + ".json") && ![...objects.keys()].some(k => /\/name-/.test(k)),
       "deleting removes the account and its name from the bucket (DELETE)");
     B.s.close();
     fake.close();
@@ -464,7 +462,7 @@ function record(day) {
   console.log("online");
   {
     let clock = Date.now();
-    const { s, port } = await start({ now: () => clock, qpStartMs: 60, qpAfterMs: 60, qpHoldMs: 400, replayDir: null });
+    const { s, port } = await start({ now: () => clock, qpStartMs: 60, qpAfterMs: 60, qpHoldMs: 400 });
     const ann = (await signup(port, "Ann", "ann password")).j, bob = (await signup(port, "Bob", "bob password")).j, cy = (await signup(port, "Cy", "cy password")).j;
     let r = await api(port, "POST", "/api/rooms", { name: "Account night", version: "dev", seats: [{ kind: "open", team: 1 }, { kind: "open", team: 2 }] });
     ok(r.status === 401 && r.j.code === "session", "creating a game needs a session (401)");
@@ -557,7 +555,7 @@ function record(day) {
     const rep = record(quick);
     const dir = tmp();
     const clock = Challenge.dayStart(quick) + 9 * 3600000;
-    const { s, port } = await start({ replayDir: dir, now: () => clock, maxChallengePerMin: 1000 });
+    const { s, port } = await start({ dataDir: dir, now: () => clock, maxChallengePerMin: 1000 });
     const zed = (await signup(port, "Zed", "zed password")).j;
     const body = zlib.gzipSync(Buffer.from(JSON.stringify(rep)));
     let r = await fetch("http://127.0.0.1:" + port + "/api/challenge/" + quick + "?cid=client-aaaa&name=Impostor", { method: "POST", body, headers: { "Content-Type": "application/octet-stream" } });

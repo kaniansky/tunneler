@@ -58,10 +58,10 @@ hash, and a match is its seed, cfg and run-length frame log. So the whole state 
 read back in, and the game continues *exactly*: clients resume with `&match=<no>&have=<frames>` as they
 already do after a reconnect.
 
-- **Store** (`stateStore`): the S3-compatible bucket of the shared replays when configured (object
+- **Store** (`stateStore`): the state's own S3-compatible bucket when configured (`S3_BUCKET_STATE`, object
   `handoff-state.json.gz`, the only option that survives a Render deploy, whose disk is wiped). Otherwise a
-  folder: `STATE_DIR`, by default the shared-replays folder, which is a volume in docker-compose. Otherwise
-  none, and then the server just says so in its start-up log. Tests pass their own store.
+  folder: `DATA_DIR/state`, which is in a volume in docker-compose. Otherwise none, and then the server just says so
+  in its start-up log. Tests pass their own store.
 - **Snapshot** (gzip'd JSON): `{format: 1, version, at, rooms: [...]}`. Each room has its fields plus its
   match: `{no, seed, ext, slots (with client ids and names), cfg, log: {entries, length}, report}`. Password
   salt and hash are stored as hex, and the bans and admitted ids as lists. Sockets are not stored: clients

@@ -9,12 +9,16 @@
 // Space / Enter paint (held: while moving), 1-4 the tool, Tab the next one, [ ] or , . the brush, + - the zoom, U or
 // Ctrl+Z undo, Esc the editor's menu. Mouse: the cursor follows it, the left button paints, the right one drags the
 // view, the wheel zooms. Touch: one finger paints, two drag and pinch. Leaving the editor saves the map.
+import { Account } from "./account.js";
 import { Display } from "./display.js";
 import { DosUI } from "./dosui.js";
 import { Endpoint, Links } from "./endpoint.js";
 import { TunnelerEngine } from "./engine.js";
 import { Lang } from "./lang.js";
+import { Login } from "./login.js";
 import { MapData } from "./mapdata.js";
+import { MapPic } from "./mappic.js";
+import { MapPick } from "./mappick.js";
 import { MapStore } from "./mapstore.js";
 import { Nav } from "./nav.js";
 import { Pads } from "./pads.js";
@@ -68,7 +72,7 @@ export function mount() {
     return [MapData.MAX_NAME + 2, Math.max(w("map.h.size"), ...MapData.SIZES.map(s => UniText.cols(sizeText(s)))) + 2, Math.max(w("map.h.bases"), 1)];
   };
   const cols = () => ui.isNarrow() ? NARROW : wide();
-  const ROWS = 11;
+  const ROWS = 10;
   let list = [];
   const rowText = r => {
     const C = cols();
@@ -85,16 +89,17 @@ export function mount() {
       go: () => detail(r) }));
     if (!list.length) items.push({ key: "none", label: T("map.none"), disabled: true });
     items.push({ key: "sep", separator: true });
+    items.push({ key: "gallery", label: T("gal.open"), info: [T("gal.open.i1"), T("gal.open.i2")], go: () => galleryList() });
     items.push({ key: "new", label: T("map.new"), info: [T("map.new.i")], go: () => newMap() });
     items.push({ key: "link", label: T("map.link"), info: [T("map.link.i")], go: () => openLink() });
     items.push({ key: "file", label: T("map.file"), info: fileError ? [{ text: T("map.file.err"), color: 12 }] : [T("map.file.i")], go: () => openFile() });
     items.push({ key: "gap", label: "", disabled: true });
     items.push({ key: "back", label: T("back.main"), info: [T("back.main.i")], go: home });
-    const shown = Math.max(1, Math.min(items.length - 6, ROWS)), bottom = 3 + 3 + shown + 6;
-    const C = cols(), w = Math.max(1 + C[0] + C[1] + C[2] + 1, DosUI.boxWidth(items.slice(-6)));
+    const FIXED = 7, shown = Math.max(1, Math.min(items.length - FIXED, ROWS)), bottom = 3 + 3 + shown + FIXED;
+    const C = cols(), w = Math.max(1 + C[0] + C[1] + C[2] + 1, DosUI.boxWidth(items.slice(-FIXED)));
     ui.show({
       lines: [{ row: 2, text: T("map.title"), color: 12 }],
-      box: { x: 41 - ((w + 2) >> 1), y: 3, w, rows: shown }, fixed: 6,
+      box: { x: 41 - ((w + 2) >> 1), y: 3, w, rows: shown }, fixed: FIXED,
       header: UniText.padEnd(" " + T("map.h.name"), C[0] + 1) + UniText.padEnd(T("map.h.size"), C[1]) + T("map.h.bases"),
       items, infoRow: bottom + 2, back: home,
     }, keep);
@@ -237,10 +242,14 @@ export function mount() {
         { key: "name", label: T("map.name"), input: nameForm, align: "left", info: [T("map.name.i")], go: () => { noteName(r); detail(r, true); } },
         { key: "gap0", label: "", disabled: true },
         { key: "edit", label: T("map.edit"), info: editInfo, go: () => { noteName(r); edit(r, shownMap(r)); } },
-        { key: "play", label: T("map.play"), info: why ? [{ text: T(why === "bases" ? "map.need" : "map.cut.play"), color: 12 }] : [T("map.play.i")],
+        { key: "play", label: T("map.play"), attr: why ? 0x08 : 0, info: why ? [{ text: T(why === "bases" ? "map.need" : "map.cut.play"), color: 12 }] : [T("map.play.i")],
           go: () => { if (why) return; settle(r, r2 => { if (MapStore.playable(r2)) return detail(r2); store("tunneler.cpu.map", r2.id); Nav.go("/#cpu"); }); } },
         { key: "share", label: T("map.share"), go: () => settle(r, r2 => shareMap(r2)),
           info: shareNote && shareNote.id === r.id ? [{ text: shareNote.text, color: shareNote.color }] : [T("map.share.i1"), T("map.share.i2")] },
+        published(r) ? { key: "unpub", label: T("gal.remove"), info: [galNote && galNote.id === r.id ? galNote : T("gal.remove.i")], go: () => settle(r, r2 => unpublish(r2)) }
+          : { key: "pub", label: T("gal.publish"), attr: why ? 0x08 : 0,
+            info: galNote && galNote.id === r.id ? [galNote] : why ? [{ text: T(why === "bases" ? "map.need" : "map.cut.play"), color: 12 }] : [T("gal.publish.i1"), T("gal.publish.i2")],
+            go: () => { if (why) return; settle(r, r2 => publish(r2)); } },
         { key: "save", label: T("map.tofile"), info: fileNote && fileNote.id === r.id ? [{ text: fileNote.text, color: fileNote.color }] : [T("map.tofile.i")],
           go: () => settle(r, r2 => { const n = saveFile(MapData.decode(r2.code)); fileNote = n && Object.assign({ id: r2.id }, n); detail(r2, true); }) },
         { key: "delete", label: T("map.delete"), info: [sure ? { text: T("map.delete.sure"), color: 12 } : T("map.delete.i")],
@@ -253,6 +262,98 @@ export function mount() {
       ],
     }, keep);
   }
+  // ------------------------------------------------------------ the map gallery (docs/v6/MAPS.md; owner, 2026-10-28)
+  // Publishing needs who you are: a server with accounts - logged in (LOG IN first), else the player's name (asked once)
+  let galNote = null;                                      // {id, text, color}: what Publish / Remove did
+  const published = r => MapStore.published(r);
+  const galName = () => DosUI.playerName();
+  function whoFirst(then, back) {
+    Account.config().then(on => {
+      if (ed) return;
+      if (on === true && !Account.session()) return Login.ask(ui, { done: then, back, backKey: "back.maps" });
+      if (on !== true && !galName()) return ui.askName(then, back);
+      then();
+    });
+  }
+  const galErr = c => T({ none: "gal.err.none", net: "pk.err.net", session: "gal.err.session", bases: "map.need", path: "map.cut.play",
+    published: "gal.err.taken", full: "gal.err.full", busy: "gal.err.busy", author: "gal.err.author" }[c] || "gal.err.other");
+  function publish(r) {
+    whoFirst(async () => {
+      galNote = { id: r.id, text: T("gal.publishing"), color: 7 };
+      detail(r, true);
+      const res = await MapStore.publish(r, galName());
+      galNote = { id: r.id, text: res.ok ? T("gal.published") : galErr(res.code), color: res.ok ? 10 : 12 };
+      if (!ed && ui.spec && ui.spec.items.some(it => it.key === "pub" || it.key === "unpub")) detail(r, true);
+    }, () => detail(r, true));
+  }
+  async function unpublish(r) {
+    galNote = { id: r.id, text: T("gal.removing"), color: 7 };
+    detail(r, true);
+    const res = await MapStore.unpublish(r.shared, galName(), r);
+    galNote = { id: r.id, text: res.ok || res.code === "none" ? T("gal.removed") : galErr(res.code), color: res.ok || res.code === "none" ? 10 : 12 };
+    if (!ed && ui.spec && ui.spec.items.some(it => it.key === "pub" || it.key === "unpub")) detail(r, true);
+  }
+  // the gallery: MapPick's list (newest / most played) - a map opens its own screen
+  const galState = {};                                     // (the order and the map last opened: kept for the way back)
+  function galleryList() {
+    MapPick.show(ui, { tabs: ["gallery"], title: "gal.title", backLabel: "back.maps", backInfo: "back.maps.i", name: galName, state: galState,
+      choose: ({ entry }) => galleryMap(entry), back: () => showList() });
+  }
+  // a published map's screen: its picture, who made it, how often it was played; Add to my maps, Play it, copy a link,
+  // Remove (your own)
+  let galMap = null, galArmed = 0;
+  async function galleryMap(e, keep) {
+    let map = galMap && galMap.id === e.id ? galMap.map : null;
+    const back = () => { galArmed = 0; galleryList(); };
+    const take = async then => {
+      let r = null;
+      try { r = await MapStore.fetchShared(e.id); } catch (err) { r = null; }
+      if (ed) return;
+      if (!r) { galNote = { id: e.id, add: true, text: T("pk.err.net"), color: 12 }; return galleryMap(e, true); }
+      then(r);
+    };
+    const sure = galArmed && performance.now() < galArmed;
+    const note = galNote && galNote.id === e.id ? galNote : null;
+    const pic = map ? MapPic.of(map) : null;
+    ui.show({
+      lines: [{ row: 2, text: T("gal.one.title"), color: 12 }, { row: 3, text: UniText.fromRaw(e.name || "?"), color: 15 },
+        { row: 4, text: infoText(e.size, e.bases), color: 11 }, { row: 5, text: T("pk.gal.by", { name: e.by || "?", n: e.plays || 0 }), color: 3 }],
+      pic: pic ? Object.assign({ row: 7, col: 27, cols: 28, rows: 6 }, pic) : null,
+      box: { y: 14 }, infoRow: 22, back,
+      items: [
+        { key: "add", label: T("gal.add"), info: [note && note.add ? note : T("gal.add.i")],
+          go: () => take(r => { galNote = { id: e.id, add: true, text: T("gal.added", { name: r.name }), color: 10 }; galleryMap(e, true); }) },
+        { key: "play", label: T("map.play"), info: [T("gal.play.i")],
+          go: () => take(r => { store("tunneler.cpu.map", r.id); Nav.go("/#cpu"); }) },
+        { key: "share", label: T("gal.link"), info: [note && note.link ? note : T("gal.link.i")], go: async () => {
+          const link = Endpoint.web(Links.mapLink(e.id));
+          let copied = false;
+          try { if (navigator.clipboard) { await navigator.clipboard.writeText(link); copied = true; } } catch (err) { copied = false; }
+          galNote = { id: e.id, link: true, text: T(copied ? "map.shared" : "map.shared.nocopy", { link }), color: 10 };
+          galleryMap(e, true);
+        } },
+      ].concat(e.mine ? [{ key: "unpub", label: T("gal.remove"), info: [sure ? { text: T("gal.remove.sure"), color: 12 } : note && note.rm ? note : T("gal.remove.i")],
+        go: async () => {
+          if (!sure) { galArmed = performance.now() + 4000; galleryMap(e, true); setTimeout(() => { if (!ed && galArmed) { galArmed = 0; if (ui.spec && ui.spec.items.some(it => it.key === "add")) galleryMap(e, true); } }, 4100); return; }
+          galArmed = 0;
+          const rec = await MapStore.byShared(e.id);
+          const res = await MapStore.unpublish(e.id, galName(), rec);
+          if (ed) return;
+          if (res.ok || res.code === "none") return galleryList();
+          galNote = { id: e.id, rm: true, text: galErr(res.code), color: 12 };
+          galleryMap(e, true);
+        } }] : [])
+        .concat([{ key: "gap", label: "", disabled: true }, { key: "back", label: T("gal.back"), info: [T("gal.back.i")], go: back }]),
+    }, keep);
+    if (!map) {
+      try {
+        const res = await fetch(Endpoint.api("/api/maps/" + e.id));
+        map = res.ok ? MapData.decode(new Uint8Array(await res.arrayBuffer())) : null;
+      } catch (err) { map = null; }
+      if (map && !ed && ui.spec && ui.spec.items.some(it => it.key === "add")) { galMap = { id: e.id, map }; galleryMap(e, true); }
+    }
+  }
+
   async function shareMap(r) {
     shareNote = { id: r.id, text: T("map.sharing"), color: 7 };
     detail(r, true);

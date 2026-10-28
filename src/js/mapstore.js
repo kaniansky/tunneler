@@ -11,6 +11,15 @@
 //   MapStore.share(rec) -> the shared id (POST /api/maps on the game's server; kept with the record)
 //   MapStore.sharedHere(rec) -> its shared id on the game's server, or "" (not sent there yet)
 //   MapStore.fetchShared(id, origin?) -> the record (GET /api/maps/<id>; one this browser has is reused)
+// The map gallery on the game's server (server.js galleryApi; owner, 2026-10-28) - each answers {ok: true, ...} or
+// {ok: false, code} (code "none": this server has no gallery - an older one; "net": no answer; "session": log in):
+//   MapStore.gallery({sort: "new" | "plays", from, n, mine}, name) -> {ok, total, maps: [{id, name, size, bases, by, date,
+//                              plays, mine}]}
+//   MapStore.publish(rec, name) -> {ok, map} (a playable map only - the server checks it too; rec.galleryAt = the server)
+//   MapStore.unpublish(id, name) -> {ok}             MapStore.published(rec) -> it is in this server's gallery (as far as
+//                              this browser knows)
+// name: the player's name on a server without accounts (with them the session's display name counts)
+import { Account } from "./account.js";
 import { Endpoint } from "./endpoint.js";
 import { TunnelerEngine } from "./engine.js";
 import { MapData } from "./mapdata.js";
@@ -73,7 +82,8 @@ async function save(map, rec) {
   const same = rec && rec.code === code;
   return put({ id: rec && rec.id || newId(), name: MapData.cleanName(map.name), size: map.size, bases: map.bases.length, code,
     linked: same && typeof rec.linked === "boolean" ? rec.linked : linkedOf(map),
-    date: same && rec.date ? rec.date : Date.now(), shared: same ? rec.shared || "" : "", sharedAt: same ? rec.sharedAt || "" : "" });
+    date: same && rec.date ? rec.date : Date.now(), shared: same ? rec.shared || "" : "", sharedAt: same ? rec.sharedAt || "" : "",
+    galleryAt: same ? rec.galleryAt || "" : "" });                 // (a changed map is another map: not the published one)
 }
 // records from before the check (no linked): worked out once and kept
 async function fill(recs) {
@@ -97,6 +107,49 @@ async function share(rec) {
   await put(rec);
   return j.id;
 }
+// the map gallery: who asks - the session (accounts), else this browser's client id + the player's name
+function clientId() {
+  let cid = null;
+  try { cid = root.localStorage.getItem("tunneler.client"); } catch (e) { cid = null; }
+  if (!cid || !/^[A-Za-z0-9_-]{8,64}$/.test(cid)) {
+    const a = new Uint8Array(12);
+    if (root.crypto && root.crypto.getRandomValues) root.crypto.getRandomValues(a); else for (let i = 0; i < a.length; i++) a[i] = Math.floor(Math.random() * 256);
+    cid = Array.from(a, b => b.toString(16).padStart(2, "0")).join("");
+    try { root.localStorage.setItem("tunneler.client", cid); } catch (e) { /* private mode */ }
+  }
+  return cid;
+}
+async function galleryCall(method, path, query, body, name) {
+  const q = Object.assign({}, query, { cid: clientId() }, name ? { name } : {});
+  const qs = Object.keys(q).filter(k => q[k] !== undefined && q[k] !== null && q[k] !== "").map(k => k + "=" + encodeURIComponent(q[k])).join("&");
+  let res;
+  try {
+    res = await fetch(Endpoint.api(path) + (qs ? "?" + qs : ""), { method, body: body || undefined,
+      headers: Object.assign(body ? { "Content-Type": "application/octet-stream" } : {}, Account.auth()) });
+  } catch (e) { return { ok: false, code: "net" }; }
+  const j = await res.json().catch(() => ({}));
+  if (res.status === 404 && path === "/api/gallery" && method === "GET") return { ok: false, code: "none" };   // (an older server)
+  if (res.status === 401 && j.code === "session") { Account.logout(); return { ok: false, code: "session" }; }
+  if (!res.ok) return { ok: false, code: j.code || (res.status === 429 ? "busy" : res.status === 404 ? "none" : "error"), msg: j.error || "HTTP " + res.status };
+  return Object.assign({ ok: true }, j);
+}
+function gallery({ sort, from, n, mine } = {}, name) {
+  return galleryCall("GET", "/api/gallery", { sort: sort === "plays" ? "plays" : "new", from: from || 0, n: n || 50, mine: mine ? 1 : null }, null, name);
+}
+async function publish(rec, name) {
+  if (playable(rec)) return { ok: false, code: playable(rec) };
+  const r = await galleryCall("POST", "/api/gallery", {}, MapData.fromCode(rec.code), name);
+  if (r.ok || r.code === "published") {
+    if (r.ok) { rec.galleryAt = here(); rec.shared = r.id; rec.sharedAt = here(); await put(rec); }
+  }
+  return r;
+}
+async function unpublish(id, name, rec) {
+  const r = await galleryCall("POST", "/api/gallery/" + id + "/remove", {}, null, name);
+  if (rec && (r.ok || r.code === "none")) { rec.galleryAt = ""; await put(rec); }
+  return r;
+}
+const published = rec => !!rec && !!rec.galleryAt && rec.galleryAt === here() && !!rec.shared;
 async function byShared(id) { return (await list()).find(r => r.shared === id) || null; }
 // a shared map (by its server id): the one this browser already has, else fetched and kept
 async function fetchShared(id, origin) {
@@ -112,7 +165,7 @@ async function fetchShared(id, origin) {
 }
 
 export const MapStore = {
-  list, get, save, remove, share, sharedHere, byShared, fetchShared, put, fill, playable,
+  list, get, save, remove, share, sharedHere, byShared, fetchShared, put, fill, playable, gallery, publish, unpublish, published,
   // (tests: forget the storage; mem = true: this page's memory only)
   reset(mem) { dbp = mem ? Promise.resolve(null) : null; memory = mem ? new Map() : null; },
 };
