@@ -49,6 +49,11 @@ screens drawn anew - see below).
   once, is the way to set a new password. A player is their account: a seat or tank comes back from any device,
   and nobody can play under another's name. Split screen, skirmish, replays, maps and looking at the daily
   challenge need none. (Servers can switch accounts off - see [Hosting](#hosting).)
+- **Everything on every device**: logged in, your maps, replays and settings are kept with your account and come
+  with you to every device you log in on - the browser, the desktop app or the Android app; a map or replay deleted
+  on one goes on the others too.
+- **The score mid-match**: hold **Tab** (SCORE on a touch screen, Back on a gamepad) for a box with the round,
+  every player's or team's score and the game's settings.
 - **Running reliably**: a server restart or deploy no longer ends online games (the server hands them to the
   next one, the pages reconnect and carry on); a dead connection is noticed within seconds and the page
   reconnects with its tank; a desync repairs itself.
@@ -59,6 +64,10 @@ The details are in [CHANGELOG.md](CHANGELOG.md) and [docs/v6/](docs/v6/).
 | Quick play: two players, two computer tanks | The daily challenge's leaderboard | The map editor |
 |---|---|---|
 | ![Quick play](screenshots/quickplay.png) | ![Daily challenge leaderboard](screenshots/challenge.png) | ![Map editor](screenshots/map-editor.png) |
+
+| Held Tab: the score mid-match (king of the hill, 4 tanks) |
+|---|
+| ![The score mid-match](screenshots/score.png) |
 
 ## Modern graphics
 
@@ -160,7 +169,8 @@ name leaves the seat to watch).
 The creator of the game is its **host** (when the host leaves, the next player takes over): a click (or
 Left / Right) steps every seat nobody else sits on through closed, open, the host's own seat (while they
 sit nowhere else) and AI (easy, medium, hard), a right click goes back; they also set its team, change
-the game's settings, **Kick a player** (who then can't come back) and **Start game** once everybody
+the game's settings, **Kick a player** (who then can't come back - their chat messages show as *deleted*),
+**Delete a message** from the chat and **Start game** once everybody
 seated is ready. Open seats nobody took get no tank. (A quick-play game has fixed settings, no "ready": its
 next match starts by itself after a countdown.) During a match only its players play - whoever
 joins then watches; afterwards everyone is back in the lobby, with the statistics of the last match.
@@ -198,17 +208,18 @@ The homepage, https://kaniansky.com/tunneler/, comes in the same languages.
 | Fire | Left Shift, Space | Enter, Right Shift |
 
 Online and against the computer you can use either set. Hold two direction keys to move diagonally;
-firing while moving digs faster. **Esc** ends the match on one computer; online, **Esc twice** leaves the
+firing while moving digs faster. Hold **Tab** for the score (players; a spectator's Tab switches the views).
+**Esc** ends the match on one computer; online, **Esc twice** leaves the
 game (one player can't end it for everybody). Menus: arrow keys and Enter, number keys 1-8 for teams, or
 the mouse (clicks, the wheel in long lists); Esc goes back.
 
 **Gamepads** work too: the left stick or the d-pad drives the tank in 8 directions, A / B / X / Y, the
-shoulder buttons and the triggers fire, Start is Esc. In split screen the first gamepad is BLUE and the
+shoulder buttons and the triggers fire, Start is Esc, Back / Select shows the score. In split screen the first gamepad is BLUE and the
 second GREEN (the keyboard still works); against the computer and online any gamepad drives your tank.
 In menus the d-pad moves, A selects, B goes back.
 
 **Phones and tablets**: touch the screen and an on-screen joystick (left) and a FIRE button (right)
-appear, plus an ESC button; they drive your tank (BLUE in split screen). Tap menu items to choose them.
+appear, plus ESC and SCORE (held: the score) buttons; they drive your tank (BLUE in split screen). Tap menu items to choose them.
 The game fits the screen in portrait and landscape.
 
 The rules are in the game's own *Instructions* page: win the set number of rounds (three in the

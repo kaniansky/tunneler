@@ -1,10 +1,40 @@
 name: CI
 
+# (not for changes that can't affect the game, the server or the apps - owner, 2026-10-28: the homepage, the docs, the
+# screenshots, Markdown files, the other workflows; flatpak/ stays - update-check reads its metainfo)
 on:
   push:
     branches: ["main", "release/**"]
+    paths-ignore:
+      - "site/**"
+      - "docs/**"
+      - "screenshots/**"
+      - "**/*.md"
+      - "LICENSE"
+      - ".github/workflows/app-build.yml"
+      - ".github/workflows/docker-publish.yml"
+      - ".github/workflows/keep-awake.yml"
+      - ".github/workflows/linux-repos.yml"
+      - ".github/workflows/release-notes.yml"
+      - ".github/workflows/release.yml"
+      - ".github/workflows/site.yml"
+      - ".github/workflows/updater-manifest.yml"
   pull_request:
     branches: ["main"]
+    paths-ignore:
+      - "site/**"
+      - "docs/**"
+      - "screenshots/**"
+      - "**/*.md"
+      - "LICENSE"
+      - ".github/workflows/app-build.yml"
+      - ".github/workflows/docker-publish.yml"
+      - ".github/workflows/keep-awake.yml"
+      - ".github/workflows/linux-repos.yml"
+      - ".github/workflows/release-notes.yml"
+      - ".github/workflows/release.yml"
+      - ".github/workflows/site.yml"
+      - ".github/workflows/updater-manifest.yml"
 
 # (the runner images pinned - ubuntu-24.04 here and in every workflow, not ubuntu-latest: a new image comes when we
 # move to it, not by itself - owner, 2026-10-27; a silent image change had broken the app builds' Rust cache)
