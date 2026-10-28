@@ -147,7 +147,13 @@ function fightNow(ai, e, mx, my, ctx, s) {
   const E = ctx.E, me = ai.me;
   if (ctx.dE <= 16) return true;
   if (cheb(E.x, E.y, e.baseX[me], e.baseY[me]) < e.sc(100)) return true;
-  if (s.q && s.si >= 0 && G0(e, s) && cheb(mx, my, e.GS.spots[s.q][s.si].x, e.GS.spots[s.q][s.si].y) < 20) return true;
+  // near its firing spot: the enemy there is fought - from 20 px, until 32 px away (it went back and forth across one
+  // line between the firing spot and a spot to fight from just beyond it, round after round - 1.2)
+  if (s.q && s.si >= 0 && G0(e, s)) {
+    const d = cheb(mx, my, e.GS.spots[s.q][s.si].x, e.GS.spots[s.q][s.si].y);
+    s.nearSpot = d < 20 || (s.nearSpot && d < 32);
+    if (s.nearSpot) return true;
+  }
   if (s.meetQ !== ai.focus || ai.t - s.meetT > 200) { s.meetQ = ai.focus; s.fight = ai.rng() < FIGHT; }
   s.meetT = ai.t;
   return s.fight;

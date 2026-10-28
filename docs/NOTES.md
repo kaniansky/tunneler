@@ -597,6 +597,15 @@ page from before 2.0 - is refused (POST 409 `{code:
   (hard, 4 tanks, 6 modes x full / circle): standing >= 2 s 23.7 % -> 12.1 % of their time alive, the rest mostly
   repairing at home and "hold" (hill). Classic AI untouched (screen-check's classic fingerprint unchanged; the
   extended ones re-recorded).
+- Hiding and refuelling (owner, 2026-10-28, 1.2): a retreating tank waits at `hideSpot` - `hideSpots` (offsets inside the
+  repair distance, each with the doorway shots that reach its 7 x 7 body: per doorway and direction) minus
+  `threatShots` (what the threat - the target, else the enemy last seen - can send in: through the doorway on its
+  side, away from its side or straight), the one nearest to the threat ("the top right threat moves the tank to top
+  right"); no threat: out of all of them, (+-7, 0); kept 36 frames. A retreat for energy alone goes to `refuelBase`
+  (own, a teammate's +40, any other whose owner isn't within 150 px +80, by distance; low shield: only those that
+  repair) - on a large map the last two tanks shuttled between their far-apart bases for 150 000+ frames (ai-ext-sim
+  "large 8 free-for-all" seed 101); now every one of 8 seeds ends in 5 - 22 k frames. Siege `fightNow`: hysteresis at
+  its firing spot (20 / 32 px) - it went back and forth across the line, a round against an idle tank 10 minutes.
 - Siege (owner, 2026-10-28, 1.2): a fallen base's walls vanish - open ground (they turned to dirt, "rubble", before).
 - King of the hill (owner, 2026-10-28): a computer tank stood beside the hill - the same stale-memory `engage` as
   above (fixed in 1.2).

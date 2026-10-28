@@ -119,6 +119,39 @@ const LEVELS = {
 // extended: a retreat ends at home with this much shield (not a full one: it waited at its base ~9 s for the last
 // third - owner, 2026-10-28, "parking"); a remembered enemy not seen for this many frames is looked for, not waited for
 const LEAVE_SHIELD = 8000, STALE = 18;
+// extended: where a retreating tank waits in its base - offsets from the base's middle where the engine refuels and
+// repairs (distance < 15), with which shots coming in through a doorway (the 7 px gaps in the top / bottom walls) can
+// touch its 7 x 7 body there: exposed[spot] = bits, bit (sy < 0 ? 0 : 3) + dx + 1 for the top doorway's shots going
+// down (sy 1) / the bottom one's going up, dx -1 left / 0 straight / 1 right - until they meet a wall; worked out once
+let HIDE_SPOTS = null;
+function hideSpots(e) {
+  if (HIDE_SPOTS) return HIDE_SPOTS;
+  const cells = new Map();                                 // interior cell -> the shots (bits) passing it
+  for (const sy of [1, -1]) for (const dx of [-1, 0, 1]) {
+    const bit = 1 << ((sy > 0 ? 0 : 3) + dx + 1);
+    for (let x0 = -3; x0 <= 3; x0++)
+      for (let x = x0, y = -sy * 17; Math.abs(x) <= 16 && Math.abs(y) <= 17; x += dx, y += sy) cells.set(x + "," + y, (cells.get(x + "," + y) || 0) | bit);
+  }
+  const out = [];
+  for (let y = -13; y <= 13; y++)
+    for (let x = -13; x <= 13; x++) {
+      if (e.distance(Math.abs(x), Math.abs(y)) >= 14) continue;   // (a pixel of margin inside the engine's 15)
+      let bits = 0;
+      for (let v = -3; v <= 3; v++) for (let u = -3; u <= 3; u++) bits |= cells.get((x + u) + "," + (y + v)) || 0;
+      out.push([x, y, bits]);
+    }
+  return (HIDE_SPOTS = out);
+}
+// the shots a threat at (tx, ty) can send into the base at (bx, by): through the doorway on its side (above: the top
+// one) going away from its side (right of the middle: down-left or down; left: down-right or down; in line: down)
+function threatShots(tx, ty, bx, by) {
+  const top = ty < by, base = top ? 0 : 3;
+  const side = tx > bx + 3 ? 1 : tx < bx - 3 ? -1 : 0;
+  let bits = 1 << (base + 1);                              // (straight)
+  if (side >= 0) bits |= 1 << (base + 0);                  // (towards the left)
+  if (side <= 0) bits |= 1 << (base + 2);                  // (towards the right)
+  return bits;
+}
 // each level's number in the PRNG seeds (from when a weaker "easy" level came first - kept, so every game
 // plays as before)
 const LEVEL_NUMBER = { easy: 1, normal: 2, hard: 3 };
@@ -461,7 +494,7 @@ class TunnelerAI {
     this.wpBest = Infinity; this.wpBestT = 0;   // closest it got to the waypoint, and when
     this.wpSeenT = 0;                // last frame it explored
     this.reach = null;               // interior cells (see interior), built on first use
-    this.retreating = false;
+    this.retreating = false; this.rbase = null; this.hide = null;
     this.spot = null; this.spotT = -9999;
     this.dodgeDir = -1; this.dodgeT = 0; this.dodgeLen = 5; this.threatSeen = new Set();
     this.unstickDir = -1; this.unstickT = 0;
@@ -524,6 +557,47 @@ class TunnelerAI {
     this.lastX = mx; this.lastY = my;
     this.prevKeys = moving;
     return out;
+  }
+
+  // extended, retreating: where in its base it waits (hideSpots) - out of the shots the threat (the target, else the
+  // enemy last seen) can send in (threatShots), behind the walls nearest to it (owner, 2026-10-28: "the top right threat
+  // moves the tank to top right"; the closest such spot); no threat known: out of every doorway's shots (beside the
+  // middle at mid height), the nearest; none a teammate stands on; chosen again every 36 frames or when the threat
+  // moved, so it doesn't wander
+  hideSpot(e, mx, my, bx, by, T) {
+    const th = T || this.enemy;
+    const key = th ? Math.round(th.x / 8) + "," + Math.round(th.y / 8) : "-";
+    const H = this.hide;
+    if (H && H.bx === bx && H.by === by && H.key === key && this.t - H.t < 36) return [H.x, H.y];
+    let best = null, bestS = -Infinity;
+    const avoid = th ? threatShots(th.x, th.y, bx, by) : 63;
+    for (const [dx, dy, bits] of hideSpots(e)) {
+      if (bits & avoid) continue;
+      const x = bx + dx, y = by + dy;
+      if (this.mates.some(q => e.alive[q] && cheb(e.tankX[q], e.tankY[q], x, y) <= 6)) continue;
+      const sc = -(th ? Math.hypot(x - th.x, y - th.y) : 0) - 0.4 * Math.hypot(x - mx, y - my);
+      if (sc > bestS) { bestS = sc; best = [x, y]; }
+    }
+    if (!best) best = [bx, by];
+    this.hide = { bx, by, key, t: this.t, x: best[0], y: best[1] };
+    return best;
+  }
+
+  // extended: the base to retreat to -> {x, y, repair}: its own (refuels fastest, repairs), a teammate's (slower, repairs at
+  // half speed) or - for energy alone (repair false) - any other one (refuels slowest) whose owner isn't near it, nor
+  // one a game mode switched off (GM.baseUsable); the cheapest by the way there and the slower refuelling (owner,
+  // 2026-10-28: on a large map two last tanks turned back for home before ever meeting, round after round)
+  refuelBase(e, mx, my, repair) {
+    const me = this.me, N = playersOf(e);
+    let best = null, bestS = Infinity;
+    for (let q = 1; q <= N; q++) {
+      if (e.GM && e.GM.baseUsable && !e.GM.baseUsable(e, q, me)) continue;
+      const mate = q !== me && !enemyOf(e, me, q);
+      if (q !== me && !mate && (repair || (e.alive[q] && cheb(e.tankX[q], e.tankY[q], e.baseX[q], e.baseY[q]) < 150))) continue;
+      const s = cheb(mx, my, e.baseX[q], e.baseY[q]) + (q === me ? 0 : mate ? 40 : 80);
+      if (s < bestS) { bestS = s; best = { x: e.baseX[q], y: e.baseY[q], repair: q === me || mate }; }
+    }
+    return best || { x: e.baseX[me], y: e.baseY[me], repair: true };
   }
 
   // the fight over (update): only out of the way of the shots still flying, no firing
@@ -690,6 +764,13 @@ class TunnelerAI {
     // destroyed tank comes back at once anyway), false (no retreat now; one under way ends). The mode keeps
     // its answer steady (a retreat started / ended every other frame would replan the path every frame).
     const rp = e.GM && e.GM.aiRetreat ? e.GM.aiRetreat(this, e) : null;
+    // extended (the usual retreats): the base it retreats to - for energy alone the nearest it can refuel at (refuelBase),
+    // low shield one that repairs; kept for the retreat (rbase). Classic: its own, as always
+    const ext = e.extended && rp == null;
+    let rb = ext ? (this.retreating && this.rbase ? this.rbase : this.refuelBase(e, mx, my, e.shield[me] < cfg.retreatS)) : { x: bx, y: by, repair: true };
+    if (ext && this.retreating && !rb.repair && e.shield[me] < cfg.retreatS) rb = this.rbase = this.refuelBase(e, mx, my, true);
+    const rDist = ext ? cheb(mx, my, rb.x, rb.y) : homeDist;
+    const atBase = ext ? e.distance(Math.abs(mx - rb.x), Math.abs(my - rb.y)) < 15 : atHome;
     if (rp === false) {
       if (this.retreating) { this.retreating = false; this.path = null; this.waypoint = null; }
     } else if (rp === "energy") {
@@ -699,13 +780,13 @@ class TunnelerAI {
         this.retreating = false; this.path = null; this.waypoint = null;
       }
     } else if (!this.retreating) {
-      let low = e.energy[me] < cfg.retreatE + homeDist * 4 || e.shield[me] < cfg.retreatS;
+      let low = e.energy[me] < cfg.retreatE + rDist * 4 || e.shield[me] < cfg.retreatS;
       // the best levels finish a fight they are winning
       if (low && this.levelName === "hard" && T && e.energy[me] > 1500 &&
           cheb(mx, my, T.x, T.y) < 40 && e.shield[me] > 3000) low = false;
-      if (low) { this.retreating = true; this.path = null; }
-    } else if (atHome && e.energy[me] >= cfg.leaveAt && e.shield[me] >= (e.extended ? LEAVE_SHIELD : cfg.leaveAt)) {
-      this.retreating = false; this.path = null; this.waypoint = null;
+      if (low) { this.retreating = true; this.path = null; if (ext) this.rbase = rb; }
+    } else if (atBase && e.energy[me] >= cfg.leaveAt && (ext ? !rb.repair || e.shield[me] >= LEAVE_SHIELD : e.shield[me] >= cfg.leaveAt)) {
+      this.retreating = false; this.path = null; this.waypoint = null; this.rbase = null;
     }
 
     let dir = -1, fire = false;
@@ -773,8 +854,14 @@ class TunnelerAI {
         // (extended: not right after a standoff on the line - energy runs out standing there)
         if (T && dE < 45 && !(e.extended && this.t < this.noDefendUntil) && this.spotFor(e, mx, my, T, true))
           dir = this.engage(e, mx, my, T, true);
-        else if (atHome && cheb(mx, my, bx, by) <= 1) dir = -1;
-        else dir = this.goTo(e, mx, my, bx, by, false);
+        else {
+          // extended: not in the middle, in line with the doorways - behind the walls (owner, 2026-10-28: "hide behind
+          // the wall at the best position"): the hiding spot farthest from the threat it knows of
+          const rx = ext ? rb.x : bx, ry = ext ? rb.y : by;
+          const [hx, hy] = e.extended ? this.hideSpot(e, mx, my, rx, ry, T) : [bx, by];
+          if ((ext ? atBase : atHome) && cheb(mx, my, hx, hy) <= 1) dir = -1;
+          else dir = this.goTo(e, mx, my, hx, hy, false);
+        }
       } else if (recent && dE <= cfg.engage) {
         this.mode = "engage";
         dir = this.engage(e, mx, my, E, false);

@@ -183,6 +183,24 @@ for (const c of configs) {
 }
 check(homeTotal > 0, "no bot ever went home to refuel");
 
+// ------------------------------------------------------------------ hiding in the base (owner, 2026-10-28)
+// a retreating tank waits out of the doorways' line of fire, as far from the threat as it gets
+{
+  const e = startEngine(1, { slots: slots([1, 2, 3]), extended: true, size: "small" });
+  const ai = new TunnelerAI("hard", 1); ai.mates = []; ai.t = 0;
+  const at = (th, m) => { ai.hide = null; return ai.hideSpot(e, m ? m[0] : 100, m ? m[1] : 100, 100, 100, th).map(v => v - 100); };
+  // every spot: no doorway shot (straight / diagonal, from the gap |x| <= 3 at y = -17 down, or 17 up) touches the 7 x 7 tank
+  // the shots of a direction (sy 1: from the top doorway down, -1: from the bottom one up; dx -1 / 0 / 1) that touch it
+  const shotHits = ([x, y], sy, dx) => { for (let x0 = -3; x0 <= 3; x0++)
+    for (let px = x0, py = -sy * 17; Math.abs(px) <= 16 && Math.abs(py) <= 17; px += dx, py += sy) if (Math.abs(px - x) <= 3 && Math.abs(py - y) <= 3) return true; return false; };
+  const none = at(null), upR = at({ x: 150, y: 40 }), downL = at({ x: 60, y: 170 });
+  check([1, -1].every(sy => [-1, 0, 1].every(dx => !shotHits(none, sy, dx))), "hiding, no threat known: out of every doorway shot (" + none + ")");
+  // (a threat up right fires in through the top doorway down or down-left: the top right corner is behind the walls)
+  check(!shotHits(upR, 1, 0) && !shotHits(upR, 1, -1) && upR[0] > 0 && upR[1] < 0, "hiding, a threat above right: behind the walls nearest to it, top right (" + upR + ")");
+  check(!shotHits(downL, -1, 0) && !shotHits(downL, -1, 1) && downL[0] < 0 && downL[1] > 0, "hiding, a threat below left: bottom left (" + downL + ")");
+  check([none, upR, downL].every(([x, y]) => e.distance(Math.abs(x), Math.abs(y)) < 15), "hiding: where the base refuels and repairs");
+}
+
 // ------------------------------------------------------------------ line of sight: what the bots see
 console.log("\nLine of sight");
 {

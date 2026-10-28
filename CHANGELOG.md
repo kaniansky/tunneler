@@ -14,6 +14,12 @@ those releases are tagged `online-vX.Y.Z`, their changes are in [docs/CHANGELOG-
   back to 8000 instead of full. Computer tanks stand about half as long: 24 % -> 12 % of their time in all-computer
   matches, with line of sight 39-45 % -> 13-19 % (king of the hill, capture the flag, deathmatch). The classic game's
   computer player is unchanged.
+- Computer tanks low on energy or shield hide in a base behind its walls (extended games): not in the middle, in line
+  with the doorways, but where the shots the threat can send in through a doorway don't reach - the corner nearest to
+  it, behind the walls between them. A retreat for energy alone goes to the nearest base it can refuel at (any base
+  refuels, more slowly than its own) instead of always home: on a large map the last two tanks no longer turn back
+  for home before ever meeting. Base siege: a computer tank no longer goes back and forth between the firing spot at
+  a base and a spot to fight its owner from.
 - Replays play only in the version (major.minor) that recorded them: another version's are gray in the list with
   the version that recorded them, can be saved as a file or deleted but not watched or shared, and their links say so.
 - Capture the flag: the flag pole is white again (pink since the new tank colours).
