@@ -95,6 +95,29 @@ function makeEnv(store, webgl, more) {
   ok("modern settings: clean / retro presets, custom, menus' style, quality, bad values");
 }
 
+// ---------------------------------------------------------------- Depth: 3D the default, 3D that didn't work
+{
+  const store = new Map(), { win } = makeEnv(store, false), G = win.Gfx;
+  assert.strictEqual(G.modern().depth, "3d", "3D by default");
+  store.set("tunneler.gfx.modern", JSON.stringify(Object.assign({}, G.modern(), { depth: "2d", glow: "off" })));
+  assert.strictEqual(G.modern().depth, "3d", "1.2.0's 2D saved with another setting: not a choice, the default");
+  assert.strictEqual(G.modern().glow, "off");
+  G.setModern("depth", "2d");
+  assert.strictEqual(G.modern().depth, "2d", "Depth chosen: kept");
+  G.setModern("glow", "on");
+  assert.strictEqual(G.modern().depth, "2d", "... also when another setting is changed after it");
+  G.setModern("depth", "3d");
+  const told = [];
+  G.onFail3d = why => told.push(why);
+  G.fail3d("shader");
+  G.fail3d("shader");
+  assert.strictEqual(G.no3d(), "shader", "3D failed: remembered (Settings says so)");
+  assert.deepStrictEqual(told, ["shader"], "reported once");
+  G.fail3d("");
+  assert.strictEqual(G.no3d(), "", "3D made fine later: forgotten");
+  ok("depth: 3D by default (a 2D saved by 1.2.0 with other settings is not a choice), a failed 3D remembered and reported once");
+}
+
 // ---------------------------------------------------------------- painting: original untouched, tagging
 {
   const { win } = makeEnv(new Map(), false), D = win.Display;
@@ -166,8 +189,9 @@ function makeEnv(store, webgl, more) {
   assert.strictEqual(out.width, 1920, "the surface stays in device pixels");
   ok("one canvas: layers drawn into their framebuffers (quality), redrawn only after painting, the original as blits");
 
-  // quality auto: the play screen's frame times decide the size
+  // quality auto: the play screen's frame times decide the size (2D: high, medium, low)
   G.setModern("quality", "auto");
+  G.setModern("depth", "2d");
   G.autoReset();
   runFrames();
   assert.strictEqual(L.pres.W, 1920, "auto: full size at first");
@@ -206,8 +230,24 @@ function makeEnv(store, webgl, more) {
   assert.strictEqual(G.autoQuality(), "high", "a bit slower than 60 fps (21 ms): stays");
   frames(4, 1100);
   assert.strictEqual(G.autoQuality(), "medium", "very slow (a frame a second): decided after 3 s, not 90 frames");
+  // 3D: one more step - low still slow: drawn in 2D
+  G.setModern("depth", "3d");
+  G.autoReset();
+  frames(91, 40); frames(91, 40);
+  assert.strictEqual(G.autoQuality(), "low", "3D: slow twice: low");
+  assert.strictEqual(G.depth(), "3d", "low: still 3D");
+  frames(91, 40);
+  assert.strictEqual(G.autoQuality(), "2d", "3D at low still slow: the 2d step");
+  assert.strictEqual(G.depth(), "2d", "drawn in 2D");
+  assert.strictEqual(G.qualityScale(), 0.5, "at low's size");
+  frames(91, 40);
+  assert.strictEqual(G.autoQuality(), "2d", "never below the 2d step");
+  G.setModern("depth", "2d");
+  assert.strictEqual(G.autoQuality(), "low", "Depth 2D: low is the lowest");
   G.setModern("quality", "high");
-  ok("quality auto: smaller while the play screen's frames are slow, bigger again after a fast stretch, waiting longer each time");
+  G.setModern("depth", "3d");
+  assert.strictEqual(G.depth(), "3d", "a fixed quality: 3D stays 3D");
+  ok("quality auto: smaller while the play screen's frames are slow, bigger again after a fast stretch, waiting longer each time; 3D's last step 2D");
 }
 
 // ---------------------------------------------------------------- the renderers register themselves

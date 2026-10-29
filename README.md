@@ -9,7 +9,7 @@ free account on the server (a username and a password); split screen and skirmis
 Render's free tier: if nobody has played for a while, the first visit can take up to a minute while the
 server wakes up.)
 
-![Main menu](screenshots/home.png)
+![Main menu](screenshots/modern-home.png)
 
 ## Same game, same look
 
@@ -49,7 +49,7 @@ New in 1.2:
 
 | 3D: a team game on generated caves (the triangle marks your teammate) | The map picker: generated maps |
 |---|---|
-| ![3D](screenshots/modern-3d.png) | ![Map picker](screenshots/map-picker.png) |
+| ![3D](screenshots/modern-3d.png) | ![Map picker](screenshots/modern-map-picker.png) |
 
 Earlier:
 
@@ -84,9 +84,9 @@ Earlier:
 
 The details are in [CHANGELOG.md](CHANGELOG.md) and [docs/v6/](docs/v6/).
 
-| Quick play: two players, two computer tanks | The daily challenge's leaderboard | The map editor |
+| Quick play: two players, computer tanks in the other seats | The daily challenge's leaderboard | The map editor |
 |---|---|---|
-| ![Quick play](screenshots/quickplay.png) | ![Daily challenge leaderboard](screenshots/challenge.png) | ![Map editor](screenshots/map-editor.png) |
+| ![Quick play](screenshots/modern-quickplay.png) | ![Daily challenge leaderboard](screenshots/modern-challenge.png) | ![Map editor](screenshots/modern-map-editor.png) |
 
 | Held Tab: the score mid-match (king of the hill, 4 tanks) |
 |---|
@@ -99,16 +99,16 @@ dirt and cracked rock, dark tunnels lit by the tanks' lamps and headlights, glow
 fire and debris, a smooth camera that glides with your tank, a new energy and shield panel, and every menu
 in a modern font, flat and warm (no gradients, no glow). Its own settings screen picks a style (clean, or retro with chunky
 pixels and the DOS colors) and quality, terrain, tunnel edges, lighting, particles, glow, screen shake,
-camera, UI, the line of sight's fog of war and **depth: 2D or 3D** (1.2). Only the look changes - the game, its rules and online
+camera, UI, the line of sight's fog of war and **depth: 3D or 2D** (1.2; 3D the default since 1.2.2). Only the look changes - the game, its rules and online
 play stay exactly the same, and every player chooses their own look. **Modern** is the default since 5.0; **Original** is one switch away.
 
-| Modern: the main menu | Modern: its settings |
+| Modern: its settings | Modern: a skirmish of four in 3D |
 |---|---|
-| ![Modern main menu](screenshots/modern-home.png) | ![Modern settings](screenshots/modern-settings.png) |
-| **Modern: a skirmish of four** | **Modern, retro style: split screen** |
-| ![Modern skirmish](screenshots/modern-game.png) | ![Modern retro split screen](screenshots/modern-retro.png) |
-| **Modern: the daily challenge** | **Modern: the map editor** |
-| ![Modern daily challenge](screenshots/modern-challenge.png) | ![Modern map editor](screenshots/modern-map-editor.png) |
+| ![Modern settings](screenshots/modern-settings.png) | ![Modern skirmish](screenshots/modern-game.png) |
+| **Modern, retro style: split screen** | **Original: the main menu** |
+| ![Modern retro split screen](screenshots/modern-retro.png) | ![Original main menu](screenshots/home.png) |
+| **Original: the daily challenge** | **Original: the map editor** |
+| ![Original daily challenge](screenshots/challenge.png) | ![Original map editor](screenshots/map-editor.png) |
 
 ## Modes
 
@@ -177,7 +177,7 @@ tank you watch and come from their side, in stereo (split screen: left near BLUE
 
 | Create a game | The game's lobby: seats, teams, settings, chat |
 |---|---|
-| ![Create a game](screenshots/create.png) | ![Pre-game lobby](screenshots/online-lobby.png) |
+| ![Create a game](screenshots/modern-create.png) | ![Pre-game lobby](screenshots/modern-online-lobby.png) |
 
 ### Online
 
@@ -211,13 +211,13 @@ reconnecting resumes where you left off. (A classic BLUE vs GREEN game pauses in
 
 | An 8-tank game: BLUE sees its team | Spectator: all views | Spectator: map and scores |
 |---|---|---|
-| ![Team view](screenshots/online-team.png) | ![All views](screenshots/spectator-grid.png) | ![Map and scores](screenshots/spectator-map.png) |
+| ![Team view](screenshots/modern-online-team.png) | ![All views](screenshots/modern-spectator-grid.png) | ![Map and scores](screenshots/modern-spectator-map.png) |
 
 **Spectators** switch between three views with Tab or 1 2 3: all view screens in a grid, the live map of
 the whole world with a score table (wins, energy, shield per tank and team), or one tank followed large
 (Left / Right choose the tank).
 
-![Game list](screenshots/lobby.png)
+![Game list](screenshots/modern-lobby.png)
 
 Languages: English, Slovenčina, Čeština, Українська and Русский (on the Settings screen, or
 `?lang=sk` / `cs` / `uk` / `ru` / `en` in the address). Each language is one folder in `src/lang/`.
@@ -327,9 +327,9 @@ Games live in the server's memory. When the server is stopped with SIGTERM (a de
 writes every game (lobbies and running matches) to its state store (below). The next server reads them back, and the
 players' pages reconnect and carry on. Without a bucket or a writable folder for it, a restart ends running games.
 `GET /api/health` answers `{ok, version, uptime, rooms, matches, errors}`, and pages report the errors they catch to
-the server's log (`client error ...`).
+the server's log (`client error ...`) and keep them grouped (`ERRORS_TOKEN`, below).
 
-**Where the server keeps things.** Five kinds of data, each on its own:
+**Where the server keeps things.** Six kinds of data, each on its own:
 
 | kind | what | bucket variable | folder |
 |---|---|---|---|
@@ -338,6 +338,7 @@ the server's log (`client error ...`).
 | accounts | player accounts (and the maps, replays and settings kept with them) | `S3_BUCKET_ACCOUNTS` | `DATA_DIR/accounts` |
 | challenges | the daily challenge's leaderboards (`<day>.json.gz`) | `S3_BUCKET_CHALLENGES` | `DATA_DIR/challenges` |
 | state | the games handed over on a restart | `S3_BUCKET_STATE` | `DATA_DIR/state` |
+| errors | the pages' (and the server's) error reports, grouped | `S3_BUCKET_ERRORS`, else the state's bucket | `DATA_DIR/errors` |
 
 - An **S3-compatible bucket** per kind - Cloudflare R2 (10 GB free), MinIO, AWS S3 - with one set of keys:
   `S3_ENDPOINT` (R2: `https://<account id>.r2.cloudflarestorage.com`), `S3_ACCESS_KEY`, `S3_SECRET_KEY`,
@@ -366,6 +367,9 @@ wiped on every deploy (and its new instance starts before the old one stops - th
 - `ACCOUNTS=off` - no accounts: free player names as before (a LAN game, a server for friends). Default: on.
 - `ACCOUNT_SECRET` - the key that signs the players' login tokens (any long random string). Without it the server
   makes one at its first start and keeps it with the accounts; set it to be independent of the store.
+- `ERRORS_TOKEN` (optional) - turns on reading the kept error reports: `curl -H "Authorization: Bearer $ERRORS_TOKEN"
+  "<server>/api/errors?since=2026-01-01T00:00:00Z&version=1.2.1"` (JSON, newest first; `DELETE /api/errors/<key>`
+  clears a group). Without it the endpoint answers 404 (reports are still kept).
 - `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` (optional) - the Play Games project's web OAuth client: the Android
   app's "Sign in with Google Play" (docs/v6/ACCOUNTS.md section 6). Without them that option isn't offered.
 - Where accounts are kept: `S3_BUCKET_ACCOUNTS`, else `DATA_DIR/accounts`, else memory (lost on a restart:

@@ -455,7 +455,8 @@ export function mount() {
       else {
         const m = Gfx.modern();
         for (const k of Object.keys(Gfx.MODERN)) {
-          rows.push(L(k, pad("mod." + k) + Lang.enc(modValue(k, m[k])), [T("mod." + k + ".i1"), ...(MOBILE && k !== "style" ? [] : [T(k === "style" ? "mod.style.i2" : "mod.i2")])],
+          rows.push(L(k, pad("mod." + k) + Lang.enc(modValue(k, m[k])), [T("mod." + k + ".i1"), ...(k === "depth" && G().no3d() ? [{ text: T("mod.depth.none"), color: 12 }] : []),
+            ...(MOBILE && k !== "style" ? [] : [T(k === "style" ? "mod.style.i2" : "mod.i2")])],
             d => setModern(k, d)));
           if (k === "style") rows.push({ key: "gap-m", label: "", disabled: true });
         }

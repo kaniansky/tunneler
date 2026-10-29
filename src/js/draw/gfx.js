@@ -21,7 +21,8 @@ const MODES = ["original", "modern"];
 const MODERN = {
   style: ["clean", "retro", "custom"],
   quality: ["auto", "high", "medium", "low"],
-  depth: ["2d", "3d"],                     // (not in the presets: 3D goes with either style - its terrain follows Edges)
+  depth: ["3d", "2d"],                     // (not in the presets: 3D goes with either style - its terrain follows Edges;
+                                           // 3D the default since 1.2.2 - owner, 2026-10-29)
   terrain: ["textured", "smooth", "flat"],
   edges: ["smooth", "pixel"],
   fog: ["blurred", "dark", "gray"],
@@ -43,9 +44,11 @@ const QUALITY = { high: 1, medium: 0.75, low: 0.5 };     // the modern output's 
 // windowMs, at least 3 - over slowMs), one step bigger again after upFrames fast ones; a size that turned out slow
 // waits before it's tried again (30 s, doubled every time it's slow again, at most 10 minutes - no flipping back and
 // forth). Measured only while a play screen moves (its view windows are drawn every frame); off it, or while the
-// page is hidden, the count starts again.
-const AUTO = { steps: ["high", "medium", "low"], slowMs: 25, fastMs: 18, frames: 90, windowMs: 3000, upFrames: 1200, retryMs: 30000, maxRetryMs: 600000 };
+// page is hidden, the count starts again. Depth 3D has one more step below low: "2d" (low, drawn in 2D - owner,
+// 2026-10-29: 3D the default, so a device too slow for it plays in 2D).
+const AUTO = { steps: ["high", "medium", "low", "2d"], slowMs: 25, fastMs: 18, frames: 90, windowMs: 3000, upFrames: 1200, retryMs: 30000, maxRetryMs: 600000 };
 const auto = { level: 0, last: 0, times: [], sum: 0, fast: 0, slowAt: [], wait: [] };
+const autoMax = () => Gfx.modern().depth === "3d" ? 3 : 2;          // (the lowest step: 2D only goes to low)
 function autoFrame(now, playing) {
   const hidden = !!(root.document && root.document.hidden);
   if (!playing || hidden || !auto.last) { auto.last = playing && !hidden ? now : 0; auto.times = []; auto.sum = 0; return; }
@@ -55,7 +58,7 @@ function autoFrame(now, playing) {
   if (auto.times.length < AUTO.frames && !(auto.sum >= AUTO.windowMs && auto.times.length >= 3)) return;
   const t = auto.times.sort((a, b) => a - b), median = t[t.length >> 1];
   auto.times = []; auto.sum = 0;
-  if (median > AUTO.slowMs && auto.level < AUTO.steps.length - 1) {
+  if (median > AUTO.slowMs && auto.level < autoMax()) {
     const l = auto.level;
     auto.wait[l] = Math.min(AUTO.maxRetryMs, auto.wait[l] ? auto.wait[l] * 2 : AUTO.retryMs);
     auto.slowAt[l] = now; auto.level++; auto.fast = 0;
@@ -65,7 +68,8 @@ function autoFrame(now, playing) {
     if (auto.fast >= AUTO.upFrames && !(now - auto.slowAt[up] < auto.wait[up])) { auto.level = up; auto.fast = 0; }
   } else auto.fast = 0;
 }
-const qualityScale = () => { const q = Gfx.modern().quality; return QUALITY[q === "auto" ? AUTO.steps[auto.level] : q]; };
+const autoStep = () => AUTO.steps[Math.min(auto.level, autoMax())];
+const qualityScale = () => { const q = Gfx.modern().quality, s = q === "auto" ? autoStep() : q; return QUALITY[s === "2d" ? "low" : s]; };
 
 const load = (k, d) => { try { const v = root.localStorage.getItem(k); return v == null ? d : v; } catch (e) { return d; } };
 const save = (k, v) => { try { root.localStorage.setItem(k, v); } catch (e) { /* no storage */ } };
@@ -244,7 +248,9 @@ class Presenter {
       if (!sc || this.modernFailed || !Gfx.Modern) return true;
       if (!this.modern) { this.modern = Gfx.Modern.create(gl); this.modernFailed = !this.modern; }
       if (!this.modern) return true;
-      this.modern.draw(sc, src.width, src.height, W, H, now || 0, Gfx.modern());
+      const set = Gfx.modern();
+      set.depth = Gfx.depth(set);
+      this.modern.draw(sc, src.width, src.height, W, H, now || 0, set);
       // (every view - also one black with DESTROYED, when no world window is left to draw)
       if ((sc.cells && sc.cells.length || sc.windows && sc.windows.length || sc.map && sc.map.kind === "end") && Gfx.Hud) {
         const c = this.canvasOf("hud", W, H), ctx = c.getContext("2d");
@@ -323,14 +329,29 @@ const Gfx = {
     const r = {};
     for (const k in MODERN) r[k] = pick(MODERN[k], o[k]);
     if (r.style !== "custom" && !o.terrain) Object.assign(r, PRESETS[r.style]);    // (nothing stored yet: the preset)
+    // (a Depth stored without depthSet is 1.2.0's default saved with another setting, not a choice: the default)
+    if (!o.depthSet) r.depth = MODERN.depth[0];
     return r;
   },
   modernKey: () => load("tunneler.gfx.modern", ""),
+  // 3D that didn't work on this device (a shader or a height target the GPU can't make): the modern look draws 2D,
+  // Settings says so - localStorage "tunneler.gfx.no3d" = why, "" once the modern look is made with 3D again
+  no3d: () => load("tunneler.gfx.no3d", ""),
+  fail3d(why) {
+    if (Gfx.no3d() === why) return;
+    save("tunneler.gfx.no3d", why);
+    if (why && Gfx.onFail3d) Gfx.onFail3d(why);
+  },
+  onFail3d: null,                          // (app.js: reported to the server)
   // Quality auto: the size it uses now ("high" / "medium" / "low"); AUTO + autoFrame for tests
-  autoQuality: () => AUTO.steps[auto.level], AUTO, autoFrame, autoReset() { Object.assign(auto, { level: 0, last: 0, times: [], sum: 0, fast: 0, slowAt: [], wait: [] }); },
+  autoQuality: autoStep, AUTO,
+  // the depth drawn: 3D unless Depth is 2D or Quality auto went down to its "2d" step
+  depth: (m = Gfx.modern()) => m.depth === "3d" && !(m.quality === "auto" && autoStep() === "2d") ? "3d" : "2d",
+  autoFrame, autoReset() { Object.assign(auto, { level: 0, last: 0, times: [], sum: 0, fast: 0, slowAt: [], wait: [] }); },
   setModern(key, v) {
     if (!MODERN[key] || !MODERN[key].includes(v)) return;
     const o = Gfx.modern();
+    if (key === "depth" || /"depthSet":true/.test(Gfx.modernKey())) o.depthSet = true;
     if (key === "style") { if (v !== "custom") Object.assign(o, PRESETS[v]); o.style = v; }
     else {
       o[key] = v;

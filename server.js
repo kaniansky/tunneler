@@ -34,7 +34,10 @@
 // during its first minutes - it may have started before the old one stopped) and the pages resume.
 //
 // HTTP:  GET /api/health          {ok, version, uptime, rooms, matches, errors}
-//        POST /api/errors         a page's error report {where, msg, stack, url, version, ua} (max 4 KB; logged)
+//        POST /api/errors         a page's error report {where, msg, stack, url, version, ua} (max 4 KB; logged, and kept
+//                                 grouped - the errors' bucket S3_BUCKET_ERRORS, else the state's, else DATA_DIR/errors)
+//        GET  /api/errors[?since=<ISO>&version=<v>]   the groups, newest first; DELETE /api/errors/<key> clears one -
+//                                 both need `Authorization: Bearer <ERRORS_TOKEN>`; without ERRORS_TOKEN: 404
 //        every /api answer: X-Tunneler-Version (a page of another version reloads itself)
 //        GET /api/rooms           public rooms
 //        GET /api/rooms/<id>      one room (also private ones: their ids carry a random suffix)
@@ -176,6 +179,9 @@ const MATCH_ALONE_MS = 60 * 1000;      // a match none of whose players is conne
 const MAX_ERROR_BYTES = 4096;          // one client error report (POST /api/errors)
 const MAX_ERRORS_PER_MIN = 10;         // client error reports per address
 const MAX_ERRORS_TOTAL_PER_MIN = 120;  // client error reports from everybody together
+const MAX_ERROR_GROUPS = 500;          // kept error report groups (the oldest `last` go)
+const ERROR_KEEP_DAYS = 60;            // a group not seen for this long goes
+const ERROR_FLUSH_MS = 60000;          // kept error reports are written this often (and at shutdown)
 const SHUTDOWN_SAVE_MS = 8000;         // the most a graceful shutdown waits for the handoff snapshot to be written
 const HANDOFF_WINDOW_MS = 10 * 60 * 1000;   // after a start: an unknown room makes the server look for a handoff snapshot
 const HANDOFF_POLL_MS = 2000;          // ... at most this often
@@ -669,7 +675,7 @@ function createServer(opts = {}) {
   // the API answers any origin (CORS): the desktop app's pages come from tauri://localhost /
   // tauri.localhost, not from this server; nothing here uses cookies or other credentials
   // (X-Tunneler-Version on every answer: a page of another version reloads itself - docs/v6/RELIABILITY.md 2.7)
-  const CORS = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  const CORS = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, Authorization", "Access-Control-Max-Age": "86400", "Access-Control-Expose-Headers": "X-Tunneler-Version",
     ...(version ? { "X-Tunneler-Version": version } : {}) };
   function json(res, code, obj) {
@@ -695,7 +701,7 @@ function createServer(opts = {}) {
 
   // ------------------------------------------------------------ client error reports (docs/v6/RELIABILITY.md 2.9)
   // {where, msg, stack, url, version, ua} from a page that caught an error: each field cut and without control
-  // characters, logged as one line (+ the stack); nothing is kept
+  // characters, logged as one line (+ the stack) and kept in groups (recordError, below)
   const errorText = (v, max) => String(v == null ? "" : v).replace(/[\u0000-\u0008\u000B-\u001F\u007F-\u009F\u2028\u2029]/g, " ").slice(0, max);
   function clientError(body) {
     if (!body || typeof body !== "object") return null;
@@ -806,6 +812,73 @@ function createServer(opts = {}) {
     const b = bucketOf("state"), d = folderOf("state");
     return b ? s3StateStore(b) : d ? dirStateStore(d) : null;
   })();
+
+  // ------------------------------------------------------------ kept error reports (docs/v6/RELIABILITY.md 2.9)
+  // Grouped, not one object per report: key = hash of where + message + the stack's first line (numbers and long ids
+  // left out); a group {where, msg, stack (the newest sample), count, first, last, versions: {v: n}, urls, uas}. Writes
+  // are behind: reports pile up in `pending` and go to the store (one object, errors.json: the errors' bucket, else the
+  // state's, else DATA_DIR/errors, else memory) every ~60 s and at shutdown - merged into what the store holds then (a
+  // new instance may have written meanwhile). At most MAX_ERROR_GROUPS, none older than ERROR_KEEP_DAYS. No addresses,
+  // queries, names or chat. Read: GET /api/errors with ERRORS_TOKEN (opts.errorsToken); no token set -> 404.
+  const errorsToken = opts.errorsToken !== undefined ? opts.errorsToken : process.env.ERRORS_TOKEN || "";
+  const errorStore = (() => {
+    const b = bucketOf("errors") || bucketOf("state"), d = b ? null : folderOf("errors"), KEY = "errors.json";
+    if (b) return { name: "the bucket " + b.bucket,
+      async get() { const r = await s3Request(b, "GET", KEY); if (r.status === 404) return null; if (r.status < 200 || r.status >= 300) throw new Error("storage " + r.status); return r.body; },
+      async put(buf) { const r = await s3Request(b, "PUT", KEY, buf, "application/json"); if (r.status < 200 || r.status >= 300) throw new Error("storage " + r.status); } };
+    if (d) { const f = path.join(d, KEY);
+      return { name: "the folder " + d, async get() { try { return fs.readFileSync(f); } catch (e) { return null; } },
+        async put(buf) { fs.writeFileSync(f + ".tmp", buf); fs.renameSync(f + ".tmp", f); } }; }
+    let mem = null;
+    return { name: "memory (lost on a restart)", async get() { return mem; }, async put(buf) { mem = buf; } };
+  })();
+  const errorKey = r => crypto.createHash("sha1").update([r.where, r.msg, r.stack[0] || ""].join("\n")
+    .replace(/-[A-Z0-9]{8}\b/g, "-#").replace(/[0-9a-f]{8,}/gi, "#").replace(/\d+/g, "#")).digest("hex").slice(0, 12);
+  const errorPending = new Map();                 // key -> {g: the newest report, n, versions, urls, uas, first, last}
+  const addCapped = (list, v, max) => { if (v && !list.includes(v)) { list.push(v); if (list.length > max) list.shift(); } };
+  function mergeErrors(groups, pending) {          // pending's reports into groups (an object: key -> group)
+    for (const [k, p] of pending) {
+      const g = groups[k] || (groups[k] = { where: p.g.where, msg: p.g.msg, stack: "", count: 0, first: p.first, last: p.last, versions: {}, urls: [], uas: [] });
+      g.count += p.n; g.where = p.g.where; g.msg = p.g.msg;
+      if (p.last >= g.last) g.stack = p.g.stack.join("\n");
+      if (p.last > g.last) g.last = p.last;
+      if (p.first < g.first) g.first = p.first;
+      for (const v of Object.keys(p.versions)) g.versions[v] = (g.versions[v] || 0) + p.versions[v];
+      for (const u of p.urls) addCapped(g.urls, u, 5);
+      for (const u of p.uas) addCapped(g.uas, u.slice(0, 120), 5);
+    }
+    const cut = new Date(Date.now() - ERROR_KEEP_DAYS * 86400000).toISOString();
+    for (const k of Object.keys(groups)) if (groups[k].last < cut) delete groups[k];
+    const all = Object.keys(groups);
+    if (all.length > MAX_ERROR_GROUPS) all.sort((a, b) => groups[a].last < groups[b].last ? 1 : -1).slice(MAX_ERROR_GROUPS).forEach(k => delete groups[k]);
+    return groups;
+  }
+  const readErrors = async () => { const b = await errorStore.get(); try { return b ? JSON.parse(b.toString()).groups || {} : {}; } catch (e) { return {}; } };
+  function recordError(r) {
+    const now = new Date().toISOString(), k = errorKey(r);
+    let p = errorPending.get(k);
+    if (!p) { if (errorPending.size >= 1000) return; errorPending.set(k, p = { g: r, n: 0, versions: {}, urls: [], uas: [], first: now, last: now }); }
+    p.g = r; p.n++; p.last = now; p.versions[r.version || "?"] = (p.versions[r.version || "?"] || 0) + 1;
+    addCapped(p.urls, r.url, 5); addCapped(p.uas, r.ua, 5);
+  }
+  let errorFlushing = null;
+  function flushErrors() {                         // -> a promise (never rejects); what failed stays pending
+    if (!errorPending.size) return Promise.resolve();
+    return errorFlushing = (errorFlushing || Promise.resolve()).then(async () => {
+      if (!errorPending.size) return;
+      const taken = new Map(errorPending); errorPending.clear();
+      try { await errorStore.put(Buffer.from(JSON.stringify({ groups: mergeErrors(await readErrors(), taken) }))); }
+      catch (e) { say("error reports not stored:", e && e.message); for (const [k, p] of taken) { const q = errorPending.get(k); if (q) joinPending(p, q); errorPending.set(k, p); } }
+    });
+  }
+  // (a failed write: the reports that came meanwhile join the old ones)
+  function joinPending(p, q) { p.n += q.n; if (q.last > p.last) p.last = q.last; p.g = q.g; for (const v of Object.keys(q.versions)) p.versions[v] = (p.versions[v] || 0) + q.versions[v]; q.urls.forEach(u => addCapped(p.urls, u, 5)); q.uas.forEach(u => addCapped(p.uas, u, 5)); }
+  const errorTimer = setInterval(() => { flushErrors(); }, opts.errorFlushMs || ERROR_FLUSH_MS);
+  errorTimer.unref();
+  const tokenOk = req => {                         // (constant time: the digests are compared)
+    const m = /^Bearer (.+)$/.exec(req.headers.authorization || "");
+    return !!(errorsToken && m && crypto.timingSafeEqual(crypto.createHash("sha256").update(m[1]).digest(), crypto.createHash("sha256").update(errorsToken).digest()));
+  };
 
   // ------------------------------------------------------------ player accounts (docs/v6/ACCOUNTS.md)
   // opts.accounts (default off: the tests' anonymous clients; the program: on unless ACCOUNTS=off). With them on, online
@@ -1259,9 +1332,32 @@ function createServer(opts = {}) {
       if (!r) return json(res, 400, { error: "bad request" });
       say("client error v" + (r.version || "?"), r.where + ":", r.msg, "|", r.url || "-", "|", r.ua || "-");
       if (!quiet) for (const l of r.stack) log("    " + l);
+      recordError(r);
       if (opts.onClientError) opts.onClientError(r);   // (tests)
       res.writeHead(204, CORS);
       return res.end();
+    }
+    if (p === "/api/errors" || p.startsWith("/api/errors/")) {      // (the owner's read: ERRORS_TOKEN)
+      if (!errorsToken) return json(res, 404, { error: "not found" });
+      if (!tokenOk(req)) return json(res, 401, { error: "unauthorized" });
+      const u = new URL(req.url, "http://x");
+      if (p === "/api/errors" && req.method === "GET") {
+        const since = u.searchParams.get("since") || "", ver = u.searchParams.get("version") || "";
+        await flushErrors();
+        const groups = await readErrors();
+        const list = Object.keys(groups).map(k => Object.assign({ key: k }, groups[k]))
+          .filter(g => (!since || g.last >= since) && (!ver || g.versions[ver])).sort((a, b) => a.last < b.last ? 1 : -1);
+        return json(res, 200, list);
+      }
+      const m = /^\/api\/errors\/([0-9a-f]{12})$/.exec(p);
+      if (m && req.method === "DELETE") {
+        await flushErrors();
+        const groups = await readErrors(), had = !!groups[m[1]];
+        delete groups[m[1]];
+        if (had) await errorStore.put(Buffer.from(JSON.stringify({ groups })));
+        return json(res, had ? 200 : 404, had ? { ok: true } : { error: "not found" });
+      }
+      return json(res, 404, { error: "not found" });
     }
     if (p === "/api/rooms" && req.method === "GET") {
       return json(res, 200, [...rooms.values()].filter(r => r.public).sort((a, b) => b.created - a.created).map(roomInfo));
@@ -1971,6 +2067,8 @@ function createServer(opts = {}) {
     closing = true;
     server.close();
     for (const r of rooms.values()) if (r.match) { stopClock(r.match); clearTimeout(r.match.aloneTimer); }
+    clearInterval(errorTimer);
+    await Promise.race([flushErrors(), new Promise(res => setTimeout(res, saveMs).unref())]);   // (the kept error reports)
     await flushGallery();                         // (the gallery's plays counted since its last write)
     let saved = false;
     if (stateStore && rooms.size) {
@@ -1996,7 +2094,13 @@ function createServer(opts = {}) {
   }
 
   return {
-    server, rooms, createRoom, shutdown, snapshot, refreshHandoff,
+    server, rooms, createRoom, shutdown, snapshot, refreshHandoff, flushErrors,
+    // the server's own uncaught error, kept like a page's (where: "server")
+    serverError(err) {
+      const r = clientError({ where: "server", msg: err && err.message || String(err), version: version || "", ua: "node " + process.version, stack: err && err.stack ? String(err.stack).split("\n").slice(1).join("\n") : "" });
+      if (r) recordError(r);
+    },
+    errorStore: errorStore.name,
     get closing() { return closing; },
     stateStore: stateStore ? stateStore.name : null,
     replayStore: replays.describe(), mapStore: maps.describe(), boardStore: placeOf(boardS3, boardDir),
@@ -2099,15 +2203,15 @@ if (require.main === module) {
   // accounts (docs/v6/ACCOUNTS.md): on, unless ACCOUNTS=off (a LAN / self-hosted server: free names as before)
   // where things are kept (README.md, Hosting): S3_* buckets, one per kind - else DATA_DIR's folders
   const env = process.env, buckets = { replays: env.S3_BUCKET_REPLAYS, maps: env.S3_BUCKET_MAPS, accounts: env.S3_BUCKET_ACCOUNTS,
-    challenges: env.S3_BUCKET_CHALLENGES, state: env.S3_BUCKET_STATE };
+    challenges: env.S3_BUCKET_CHALLENGES, state: env.S3_BUCKET_STATE, errors: env.S3_BUCKET_ERRORS };
   const s3 = env.S3_ENDPOINT ? { endpoint: env.S3_ENDPOINT, accessKey: env.S3_ACCESS_KEY, secretKey: env.S3_SECRET_KEY, region: env.S3_REGION, buckets } : null;
   const srv = createServer({ handoff: true, accounts: !/^(0|false|no|off)$/i.test(env.ACCOUNTS || ""),
     dataDir: env.DATA_DIR || path.join(__dirname, "data"), s3 });
   srv.server.on("error", err => { if (!srv.closing) startupError(port, err); });
   // an error no handler caught: logged, and the server goes on - ending the process would end every game
   // on it (docs/v6/RELIABILITY.md 2.1)
-  process.on("uncaughtException", err => { processErrors.count++; log("UNCAUGHT", err && err.stack || err); });
-  process.on("unhandledRejection", err => { processErrors.count++; log("UNHANDLED REJECTION", err && err.stack || err); });
+  process.on("uncaughtException", err => { processErrors.count++; log("UNCAUGHT", err && err.stack || err); try { srv.serverError(err); } catch (e) { /* only kept */ } });
+  process.on("unhandledRejection", err => { processErrors.count++; log("UNHANDLED REJECTION", err && err.stack || err); try { srv.serverError(err); } catch (e) { /* only kept */ } });
   // a deploy / restart: the rooms handed over to the next server, the clients told (docs/v6/RELIABILITY.md 2.2)
   for (const sig of ["SIGTERM", "SIGINT"]) process.on(sig, () => {
     if (srv.closing) { log(sig + " again: quitting now"); process.exit(1); }   // (a second Ctrl+C doesn't wait)
@@ -2119,6 +2223,7 @@ if (require.main === module) {
     log("shared replays: " + srv.replayStore);
     log("shared maps: " + srv.mapStore);
     log("daily challenge leaderboards: " + srv.boardStore);
+    log("client error reports: " + (process.env.ERRORS_TOKEN ? "kept in " + srv.errorStore + ", GET /api/errors with ERRORS_TOKEN" : "logged only (ERRORS_TOKEN not set; would be kept in " + srv.errorStore + ")"));
     log("rooms on a restart: " + (srv.stateStore ? "handed over through " + srv.stateStore : "lost (no bucket or writable folder)"));
     log("accounts: " + (srv.accountStore ? "on, kept in " + srv.accountStore + (process.env.ACCOUNT_SECRET ? " (ACCOUNT_SECRET set)" : "") : "off (ACCOUNTS=off: free names)"));
     if (s3 && !s3.accessKey) log("WARNING: S3_ENDPOINT is set but not S3_ACCESS_KEY / S3_SECRET_KEY: no bucket is used");

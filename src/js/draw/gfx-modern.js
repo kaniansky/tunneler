@@ -568,11 +568,14 @@ const rnd = (a, b) => a + Math.random() * (b - a);
 const angDiff = (a, b) => { let d = (b - a) % (2 * Math.PI); if (d > Math.PI) d -= 2 * Math.PI; if (d < -Math.PI) d += 2 * Math.PI; return d; };
 
 function create(gl) {
-  const prog = program(gl, VS, FS, ["aPos"]);
+  // (a GPU that can't build the 3D shader still gets the modern look: the same shader without 3D - Gfx.fail3d)
+  let prog = program(gl, VS, FS, ["aPos"]), why3d = "";
+  if (!prog && (prog = program(gl, VS, FS.replace("uniform int uDepth;", "const int uDepth = 0;"), ["aPos"]))) why3d = "shader";
   if (!prog) return null;
   const pprog = program(gl, PVS, PFS, ["aP", "aC", "aS"]);
   // 3D: the height passes into their own textures - A one texel per world pixel around a view, B (smooth edges) HRES
   const haprog = program(gl, VS, HAFS, ["aPos"]), hprog = program(gl, VS, HFS, ["aPos"]), hau = {}, hu = {};
+  if (!why3d && !(haprog && hprog)) why3d = "height shader";
   if (haprog) for (const n of ["uWorld", "uWorldPx", "uRowOff", "uRows", "uOutside", "uCls", "uOrg"]) hau[n] = gl.getUniformLocation(haprog, n);
   if (hprog) for (const n of ["uA", "uOrg", "uOrgA", "uSizeA", "uRes"]) hu[n] = gl.getUniformLocation(hprog, n);
   const HRES = 4, HW_ = 100, HH_ = 96;                 // (the view's 76 x 71 and a margin: rays reach a few px out)
@@ -584,10 +587,12 @@ function create(gl) {
     for (const q of [gl.TEXTURE_WRAP_S, gl.TEXTURE_WRAP_T]) gl.texParameteri(gl.TEXTURE_2D, q, gl.CLAMP_TO_EDGE);
     gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+    if (!why3d && gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) why3d = "height target";
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     return { tex, fbo };
   };
   const hA = target(HW_, HH_, gl.NEAREST), hB = target(HW_ * HRES, HH_ * HRES, gl.LINEAR);
+  Gfx.fail3d(why3d);
   // the height maps of a view whose camera (top left of the floor it shows) is cam: the world texture now bound to
   // unit 0 (the world or the player's memory band, rowOff / rows / outside as the main pass) -> [A's, B's (or null)]
   // world rectangles; A on unit 3, B on unit 2
@@ -953,7 +958,8 @@ function create(gl) {
       gl.uniform2f(u.uCam, cam[0], cam[1]); gl.uniform2f(u.uScale, 1 / 4.5, 1 / 4);
       gl.uniform1i(u.uStatic, cam0.noise ? 1 : 0); gl.uniform1i(u.uMap, 0); gl.uniform1f(u.uTS, 1);
       // 3D: the camera straight above the view's middle, EYE world pixels up (the floor fills the view exactly as in 2D)
-      gl.uniform1i(u.uDepth, set.depth === "3d" ? 1 : 0);
+      const d3 = set.depth === "3d" && !why3d;
+      gl.uniform1i(u.uDepth, d3 ? 1 : 0);
       gl.uniform3f(u.uEye, cam[0] + win[2] * 0.5 / 4.5, cam[1] + win[3] * 0.5 / 4, EYE);
       gl.uniform1i(u.uEdges, set.edges === "pixel" ? 1 : 0);
       const m = sight && !cam0.noise ? sightFor(e, w.p, cam0) : null;
@@ -973,7 +979,7 @@ function create(gl) {
       }
       // 3D: the height maps around this view (A per world pixel on unit 3; smooth edges: B on unit 2)
       gl.uniform1i(u.uH, 2); gl.uniform1i(u.uHA, 3);
-      const hr = set.depth === "3d" && !cam0.noise
+      const hr = d3 && !cam0.noise
         ? heights(e, cam, m ? m.y0 : 0, m ? m.rows : e.worldH, m ? 0 : 7, S.cls, set.edges !== "pixel") : null;
       gl.uniform4f(u.uARect, ...(hr ? hr[0] : [0, 0, 0, 0]));
       gl.uniform4f(u.uHRect, ...(hr && hr[1] ? hr[1] : [0, 0, 0, 0]));

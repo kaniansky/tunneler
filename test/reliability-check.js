@@ -185,6 +185,52 @@ async function main() {
     s.close();
   }
 
+  // ---------------------------------------------------------------- kept error reports (grouped; the owner's read)
+  console.log("kept error reports (GET /api/errors)");
+  {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tunneler-errors-"));
+    const auth = { Authorization: "Bearer secret-token" };
+    const rep = (port, o) => http(port, "POST", "/api/errors", Object.assign({ where: "online loop", msg: "boom 12", stack: "at a (app-ABCD1234.js:10:5)", url: "/game/x?pw=1", version: "1.2.1", ua: "UA one" }, o));
+    const off = await start({});
+    await rep(off.port, {});
+    const r0 = await http(off.port, "GET", "/api/errors");
+    check("no ERRORS_TOKEN: the read is disabled (404)", () => assert.strictEqual(r0.status, 404));
+    off.s.close();
+    const a = await start({ errorsToken: "secret-token", dataDir: dir, errorFlushMs: 20 });
+    await rep(a.port, {}); await rep(a.port, { msg: "boom 99", stack: "at a (app-ZZZZ9999.js:77:1)", version: "1.2.0", url: "/other", ua: "UA two" });
+    await rep(a.port, { msg: "another" });
+    const no = await http(a.port, "GET", "/api/errors"), bad = await http(a.port, "GET", "/api/errors", null, { Authorization: "Bearer nope" });
+    check("the read needs the token (401 without / with a wrong one)", () => assert.deepStrictEqual([no.status, bad.status], [401, 401]));
+    const got = await http(a.port, "GET", "/api/errors", null, auth);
+    check("grouped by where + message + first stack line (numbers / ids normalized), counted, newest first", () => {
+      assert.strictEqual(got.status, 200); assert.strictEqual(got.json.length, 2);
+      const g = got.json.find(x => x.msg.startsWith("boom"));
+      assert.strictEqual(g.count, 2); assert.deepStrictEqual(g.versions, { "1.2.1": 1, "1.2.0": 1 });
+      assert.deepStrictEqual(g.urls, ["/game/x", "/other"]); assert.deepStrictEqual(g.uas, ["UA one", "UA two"]);
+      assert.strictEqual(g.where, "online loop"); assert(/app-ZZZZ9999/.test(g.stack)); assert(g.first <= g.last); assert(got.json[0].last >= got.json[1].last);
+      assert(!JSON.stringify(got.json).includes("pw="));
+    });
+    const v = await http(a.port, "GET", "/api/errors?version=1.2.0", null, auth), sn = await http(a.port, "GET", "/api/errors?since=2999-01-01T00:00:00Z", null, auth);
+    check("?version= and ?since= filter", () => { assert.strictEqual(v.json.length, 1); assert.strictEqual(sn.json.length, 0); });
+    a.s.serverError(new Error("server broke 5"));
+    await a.s.shutdown(2000);                                  // (flushes to DATA_DIR/errors)
+    check("written to DATA_DIR/errors at shutdown", () => assert(fs.existsSync(path.join(dir, "errors", "errors.json"))));
+    const b = await start({ errorsToken: "secret-token", dataDir: dir });
+    await rep(b.port, {});
+    const again = await http(b.port, "GET", "/api/errors", null, auth);
+    check("survives a restart: counts go on; the server's own errors too (where: server)", () => {
+      assert.strictEqual(again.json.length, 3);
+      assert.strictEqual(again.json.find(x => x.msg.startsWith("boom")).count, 3);
+      assert.strictEqual(again.json.find(x => x.where === "server").msg, "server broke 5");
+    });
+    const key = again.json.find(x => x.msg === "another").key;
+    const noDel = await http(b.port, "DELETE", "/api/errors/" + key), del = await http(b.port, "DELETE", "/api/errors/" + key, null, auth);
+    const left = await http(b.port, "GET", "/api/errors", null, auth);
+    check("DELETE /api/errors/<key>: token needed; clears the group", () => { assert.strictEqual(noDel.status, 401); assert.strictEqual(del.status, 200); assert.strictEqual(left.json.length, 2); });
+    b.s.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+
   // ---------------------------------------------------------------- the same page's new connection replaces its dead one
   console.log("a page's new connection (&sid=)");
   {

@@ -942,13 +942,15 @@ page from before 2.0 - is refused (POST 409 `{code:
   quality review (1.2.1): summary <= 35 characters, no article, no technical terms; brand colors colorful, not
   light / dark gray, the dark one a darker muted light one (#f2c48d / #4a2c17: the icon's earth); the icon must not
   fill its canvas - the Linux icons (src-tauri/icons/32x32, 128x128, 128x128@2x.png, tools/make-icons.js) are the
-  rounded icon at 80 %, so the manifest takes them from the .deb as before; screenshots from the newest tag.
+  rounded icon at 80 %, so the manifest takes them from the .deb as before; screenshots from the release's own tag
+  (raw.githubusercontent.com/.../v<version>/screenshots/ - a release with new screenshots points the metainfo at itself).
 - **Graphics setting** (docs/GRAPHICS.md - read it before touching gfx*.js; DESIGN-8P 29; display only,
   local): localStorage `tunneler.gfx` original / modern (the default since 5.0; no WebGL2 = original; "upscaled" and
   its CRT were dropped, a stored "upscaled" = modern) + `tunneler.gfx.modern` (JSON: style clean / retro /
   custom, quality (auto - the default, owner 2026-10-25: `AUTO` / `autoFrame` in the frame loop, the median frame time
   of a window while a play screen moves -> one step smaller / bigger with a growing wait; no more "phones: medium") /
-  high / medium / low, terrain, edges, fog, tanks (realistic / simple - shader `uTankStyle`; both as big as the
+  high / medium / low (Depth 3D: then `2d` - low's size in 2D), depth (3D the default since 1.2.2, `depthSet` = chosen;
+  3D that doesn't work: 2D + localStorage `tunneler.gfx.no3d` + a report - GRAPHICS.md 3D), terrain, edges, fog, tanks (realistic / simple - shader `uTankStyle`; both as big as the
   game's 7 x 7 sprite, measured; rock / base walls drawn over a turned tank's corners), light, glow, particles,
   shake, camera, panel - in that order (owner, 2026-10-26) - `Gfx.modern()`,
   `setModern`, `PRESETS`, `menuStyle()`); homepage Settings, category Graphics: the Graphics row, then
@@ -1080,7 +1082,10 @@ page from before 2.0 - is refused (POST 409 `{code:
   (`refreshHandoff`; Render starts the new instance first); a restored match waits for its players (`waitAll`,
   `RESUME_GRACE_MS`); another version: lobbies only; a room's / match's unknown plain-data fields go along (`extra`). `&sid=` (a page's random id): a new connection with the cid +
   sid of one still in the room replaces it (`leaveRoom(room, ws, true)`; seat, tank, host role). `POST /api/errors`
-  (`clientError`, 4 KB, 10/min/address, 120/min in all; logged), `GET /api/health`, `X-Tunneler-Version` on /api.
+  (`clientError`, 4 KB, 10/min/address, 120/min in all; logged, and kept grouped by `recordError`: `errors.json` in
+  `S3_BUCKET_ERRORS`, else the state's bucket, else `DATA_DIR/errors`; flushed every 60 s + at shutdown; 500 groups /
+  60 days; the server's own uncaught errors as `where: "server"`; read with `GET /api/errors` + `Authorization: Bearer
+  $ERRORS_TOKEN`, `?since=` / `?version=`, `DELETE /api/errors/<key>`; no `ERRORS_TOKEN` = 404), `GET /api/health`, `X-Tunneler-Version` on /api.
   online.js: dead connection = a ping answered by nothing for `DEAD_MS` (after a first pong) -> `dropSocket()`;
   `closed(code)` backs off with jitter; `online` / visibilitychange reconnect now; restart / 1012 -> `rel.restart`
   screen; `noroom` after a hello -> retried `GONE_RETRY_MS` (`saved: false`: not at all), then `rel.gone`; desync / an engine error -> `rebuild()`
