@@ -293,9 +293,15 @@ sudo curl -fsSL -o /etc/yum.repos.d/tunneler.repo https://kaniansky.com/tunneler
 sudo dnf install tunneler
 ```
 
-There is also a **Flatpak** (`flatpak/`, app id `com.kaniansky.Tunneler`) - the release's
-`.deb` on the GNOME runtime - meant for [Flathub](https://flathub.org), where software managers such as
-Linux Mint's find it; it updates through them, not through the app. To build and install it yourself:
+On any distribution the game is on [Flathub](https://flathub.org/apps/com.kaniansky.Tunneler), where software
+managers such as GNOME Software, KDE Discover and Linux Mint's find it; it updates through them, not through the app:
+
+```bash
+flatpak install flathub com.kaniansky.Tunneler
+```
+
+The Flatpak (`flatpak/`, app id `com.kaniansky.Tunneler`) is the release's `.deb` on the GNOME runtime. To build and
+install it yourself:
 
 ```bash
 flatpak install --user flathub org.flatpak.Builder org.gnome.Sdk//51

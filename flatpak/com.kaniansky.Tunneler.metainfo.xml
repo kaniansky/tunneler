@@ -5,7 +5,7 @@
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>Unlicense AND OFL-1.1</project_license>
   <name>Tunneler</name>
-  <summary>The 1991 tunnel-digging tank duel, with online play</summary>
+  <summary>Dig tunnels, hunt the enemy tank</summary>
   <developer id="com.kaniansky">
     <name>Norko Kaniansky</name>
   </developer>
@@ -33,24 +33,32 @@
   <url type="vcs-browser">https://github.com/kaniansky/tunneler</url>
   <screenshots>
     <screenshot type="default">
-      <caption>Split screen: two tanks in the underground world</caption>
-      <image>https://raw.githubusercontent.com/kaniansky/tunneler/online-v4.0.0/screenshots/split-screen.png</image>
+      <caption>Split screen: two tanks dig through the underground world</caption>
+      <image>https://raw.githubusercontent.com/kaniansky/tunneler/v1.2.0/screenshots/modern-split-screen.png</image>
     </screenshot>
     <screenshot>
-      <caption>The main menu</caption>
-      <image>https://raw.githubusercontent.com/kaniansky/tunneler/online-v4.0.0/screenshots/home.png</image>
+      <caption>The original DOS look</caption>
+      <image>https://raw.githubusercontent.com/kaniansky/tunneler/v1.2.0/screenshots/split-screen.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Four tanks, each with its own view</caption>
+      <image>https://raw.githubusercontent.com/kaniansky/tunneler/v1.2.0/screenshots/modern-game.png</image>
     </screenshot>
     <screenshot>
       <caption>Skirmish: you against computer tanks, in teams</caption>
-      <image>https://raw.githubusercontent.com/kaniansky/tunneler/online-v4.0.0/screenshots/vs-computer.png</image>
+      <image>https://raw.githubusercontent.com/kaniansky/tunneler/v1.2.0/screenshots/modern-vs-computer.png</image>
     </screenshot>
     <screenshot>
       <caption>An online game's lobby: seats, teams, settings and chat</caption>
-      <image>https://raw.githubusercontent.com/kaniansky/tunneler/online-v4.0.0/screenshots/online-lobby.png</image>
+      <image>https://raw.githubusercontent.com/kaniansky/tunneler/v1.2.0/screenshots/modern-online-lobby.png</image>
     </screenshot>
     <screenshot>
-      <caption>Watching an online game: every tank's view</caption>
-      <image>https://raw.githubusercontent.com/kaniansky/tunneler/online-v4.0.0/screenshots/spectator-grid.png</image>
+      <caption>The daily challenge's leaderboard</caption>
+      <image>https://raw.githubusercontent.com/kaniansky/tunneler/v1.2.0/screenshots/modern-challenge.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>The map editor</caption>
+      <image>https://raw.githubusercontent.com/kaniansky/tunneler/v1.2.0/screenshots/modern-map-editor.png</image>
     </screenshot>
   </screenshots>
   <categories>
@@ -66,7 +74,7 @@
   </keywords>
   <content_rating type="oars-1.1">
     <content_attribute id="violence-cartoon">moderate</content_attribute>
-    <content_attribute id="social-chat">intense</content_attribute>
+    <content_attribute id="social-chat">moderate</content_attribute>
   </content_rating>
   <supports>
     <control>keyboard</control>
@@ -77,10 +85,13 @@
     <display_length compare="ge">768</display_length>
   </requires>
   <branding>
-    <color type="primary" scheme_preference="light">#aa00aa</color>
-    <color type="primary" scheme_preference="dark">#550055</color>
+    <color type="primary" scheme_preference="light">#f2c48d</color>
+    <color type="primary" scheme_preference="dark">#4a2c17</color>
   </branding>
   <releases>
+    <release version="1.2.1" date="2026-10-29">
+      <url type="details">https://github.com/kaniansky/tunneler/releases/tag/v1.2.1</url>
+    </release>
     <release version="1.2.0" date="2026-10-28">
       <url type="details">https://github.com/kaniansky/tunneler/releases/tag/v1.2.0</url>
     </release>

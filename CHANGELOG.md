@@ -4,6 +4,16 @@ All notable changes to Tunneler. Versions follow [semantic versioning](https://s
 by pushing a version tag (see CONTRIBUTING.md). Up to its version 6.0.1 the game was called Tunneler Online:
 those releases are tagged `online-vX.Y.Z`, their changes are in [docs/CHANGELOG-online.md](docs/CHANGELOG-online.md).
 
+## 1.2.1
+
+Plays with 1.2.0 (the game is unchanged).
+
+- **On Flathub**: `flatpak install flathub com.kaniansky.Tunneler`, and software managers such as GNOME Software,
+  KDE Discover and Linux Mint's find it. Its page: a shorter summary, the icon's earth colors, current screenshots.
+- Flatpak: its content rating says the chat is moderated (the host deletes messages, kicks players).
+- The Linux icon (.deb, .rpm, AppImage, Flatpak) leaves a margin around the rounded square, like other apps' icons.
+- README and homepage: installing from Flathub.
+
 ## 1.2.0
 
 Online play needs 1.2 on every side (the computer tanks, generated maps and the protocol changed): a 1.1 app or page

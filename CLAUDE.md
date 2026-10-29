@@ -95,4 +95,5 @@ docs/RENDERING.md (engine / renderers), docs/GRAPHICS.md (modern look - read bef
 
 - Extended AI sometimes parks near a base / another bot (next minor - an AI change is never a patch).
 - Classic AI rarely enters an enemy base (kept as it is).
-- Flathub submission (flathub/flathub#10724) on hold; AI tools must not drive that PR.
+- On Flathub (github.com/flathub/com.kaniansky.Tunneler): its AI policy - no AI-written manifest content, no
+  AI-opened or -automated PRs there; its bot opens the updates (NOTES.md "Flatpak").

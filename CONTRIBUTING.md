@@ -49,8 +49,8 @@ The tag runs `.github/workflows/release.yml`:
   `X.Y.Z`, `X.Y` and the short commit sha;
 - the homepage (`site/`) uploaded to https://kaniansky.com/tunneler/;
 - the Flatpak manifest (`flatpak/`) updated for it - both `.deb` sha256, the tag and its commit - and
-  committed to `main` (job `flatpak`). On Flathub, its bot then opens the update by itself (the manifest's
-  `x-checker-data`).
+  committed to `main` (job `flatpak`). On [Flathub](https://flathub.org/apps/com.kaniansky.Tunneler) its bot
+  then opens the update by itself (the manifest's `x-checker-data`) in github.com/flathub/com.kaniansky.Tunneler.
 
 `release-notes.yml` (Actions tab -> Run workflow) rewrites an existing release's notes from the
 changelog; `docker-publish.yml` builds an image by hand.
