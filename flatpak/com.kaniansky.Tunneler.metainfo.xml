@@ -33,32 +33,36 @@
   <url type="vcs-browser">https://github.com/kaniansky/tunneler</url>
   <screenshots>
     <screenshot type="default">
-      <caption>Split screen: two tanks dig through the underground world</caption>
-      <image>https://raw.githubusercontent.com/kaniansky/tunneler/v1.2.0/screenshots/modern-split-screen.png</image>
+      <caption>Split screen: two tanks dig through the underground world, in 3D</caption>
+      <image>https://raw.githubusercontent.com/kaniansky/tunneler/v1.2.2/screenshots/modern-split-screen.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>A team game in 3D on generated caves</caption>
+      <image>https://raw.githubusercontent.com/kaniansky/tunneler/v1.2.2/screenshots/modern-3d.png</image>
     </screenshot>
     <screenshot>
       <caption>The original DOS look</caption>
-      <image>https://raw.githubusercontent.com/kaniansky/tunneler/v1.2.0/screenshots/split-screen.png</image>
+      <image>https://raw.githubusercontent.com/kaniansky/tunneler/v1.2.2/screenshots/split-screen.png</image>
     </screenshot>
     <screenshot>
       <caption>Four tanks, each with its own view</caption>
-      <image>https://raw.githubusercontent.com/kaniansky/tunneler/v1.2.0/screenshots/modern-game.png</image>
+      <image>https://raw.githubusercontent.com/kaniansky/tunneler/v1.2.2/screenshots/modern-game.png</image>
     </screenshot>
     <screenshot>
       <caption>Skirmish: you against computer tanks, in teams</caption>
-      <image>https://raw.githubusercontent.com/kaniansky/tunneler/v1.2.0/screenshots/modern-vs-computer.png</image>
+      <image>https://raw.githubusercontent.com/kaniansky/tunneler/v1.2.2/screenshots/modern-vs-computer.png</image>
     </screenshot>
     <screenshot>
       <caption>An online game's lobby: seats, teams, settings and chat</caption>
-      <image>https://raw.githubusercontent.com/kaniansky/tunneler/v1.2.0/screenshots/modern-online-lobby.png</image>
+      <image>https://raw.githubusercontent.com/kaniansky/tunneler/v1.2.2/screenshots/modern-online-lobby.png</image>
     </screenshot>
     <screenshot>
       <caption>The daily challenge's leaderboard</caption>
-      <image>https://raw.githubusercontent.com/kaniansky/tunneler/v1.2.0/screenshots/modern-challenge.png</image>
+      <image>https://raw.githubusercontent.com/kaniansky/tunneler/v1.2.2/screenshots/modern-challenge.png</image>
     </screenshot>
     <screenshot>
       <caption>The map editor</caption>
-      <image>https://raw.githubusercontent.com/kaniansky/tunneler/v1.2.0/screenshots/modern-map-editor.png</image>
+      <image>https://raw.githubusercontent.com/kaniansky/tunneler/v1.2.2/screenshots/modern-map-editor.png</image>
     </screenshot>
   </screenshots>
   <categories>
@@ -89,6 +93,9 @@
     <color type="primary" scheme_preference="dark">#4a2c17</color>
   </branding>
   <releases>
+    <release version="1.2.2" date="2026-10-29">
+      <url type="details">https://github.com/kaniansky/tunneler/releases/tag/v1.2.2</url>
+    </release>
     <release version="1.2.1" date="2026-10-29">
       <url type="details">https://github.com/kaniansky/tunneler/releases/tag/v1.2.1</url>
     </release>

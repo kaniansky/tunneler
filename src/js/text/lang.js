@@ -170,11 +170,16 @@ function title() { return "TUNNELER"; }
 function version() { return VERSION ? "v" + String(VERSION).replace(/\.0$/, "") : ""; }
 
 try { wanted = localStorage.getItem("tunneler.lang") || "en"; } catch (e) { /* private mode */ }
-// ?lang=sk in the address (e.g. from the homepage's Play link) chooses the language and remembers it
+// ?lang=sk in the address (e.g. from the homepage's Play link) chooses the language and remembers it, then leaves the
+// address (owner, 2026-10-29: a language chosen in Settings stays after a reload)
 try {
-  const q = root.location && new URLSearchParams(root.location.search).get("lang");
+  const u = root.location && new URL(root.location.href), q = u && u.searchParams.get("lang");
   if (q && /^[a-z]{2,5}$/.test(q)) { wanted = q; remember(q); }
-} catch (e) { /* no location */ }
+  if (u && u.searchParams.has("lang") && root.history && root.history.replaceState) {
+    u.searchParams.delete("lang");
+    root.history.replaceState(root.history.state, "", u.pathname + u.search + u.hash);
+  }
+} catch (e) { /* no location / history */ }
 code = wanted;
 
 // font text -> Unicode text (graphics "modern", gfx-text.js / gfx-hud.js draw it in a real font): font bytes

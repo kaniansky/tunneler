@@ -4,6 +4,19 @@ All notable changes to Tunneler. Versions follow [semantic versioning](https://s
 by pushing a version tag (see CONTRIBUTING.md). Up to its version 6.0.1 the game was called Tunneler Online:
 those releases are tagged `online-vX.Y.Z`, their changes are in [docs/CHANGELOG-online.md](docs/CHANGELOG-online.md).
 
+## 1.2.2
+
+- **3D is the default** (Settings, Graphics, modern: Depth). A device that can't draw it plays in 2D - Settings says
+  so, and the page reports it - and with Quality auto, a device too slow for 3D even at low quality plays in 2D too.
+  A Depth saved by 1.2.0 together with another setting counts as not chosen: 3D.
+- Error reports kept: the pages' error reports and the server's own errors are kept grouped (by place and message,
+  with counts, versions and the last time) in the server's storage, so they survive a restart; `ERRORS_TOKEN` turns
+  on reading them (`GET /api/errors`, README "Hosting").
+- `?lang=` in the address (the homepage's Play links) is taken out of it once read: a language chosen in Settings
+  stays after a reload.
+- README, homepage and Flathub screenshots made again, mostly in the modern look in 3D (the original look where it
+  is the point); the quick play caption says computer tanks fill the other seats.
+
 ## 1.2.1
 
 Plays with 1.2.0 (the game is unchanged).

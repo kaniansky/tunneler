@@ -21,6 +21,7 @@ import { Scope } from "./scope.js";
 import { VERSION } from "./version.js";
 
 Report.install();                          // (errors nobody would see go to the server - docs/v6/RELIABILITY.md 2.9)
+Gfx.onFail3d = why => Report.error("gfx 3d", "3D failed: " + why);
 
 const ROUTES = [
   { name: "games", re: /^\/(games\/?|lobby\.html)$/, title: "Tunneler - online", load: () => import("./routes/lobby.js") },

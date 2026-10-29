@@ -30,7 +30,16 @@ const fill = a => { while (a.length < 8) a.push(S('closed', a.length + 1)); retu
   };
   const shot = (p, f) => p.screenshot({ path: OUT + '/' + (MODERN && !f.startsWith('modern-') ? 'modern-' : '') + f });
   const until = async (p, fn, ms = 30000) => { const t = Date.now(); while (Date.now() - t < ms) { if (await p.evaluate(fn).catch(() => false)) return true; await sleep(200); } return false; };
-  const hold = async (p, keys, ms) => { for (const k of keys) await p.keyboard.down(k); await sleep(ms); for (const k of keys) await p.keyboard.up(k); };
+  // keys held for ms of game time (the engine's steps of 54.9 ms; wall time off a play screen): software rendering
+  // (3D) is slow, and the engine steps fewer times than the clock says
+  const tick = p => p.evaluate(() => window.tunnelerEngine && tunnelerEngine() ? tunnelerEngine().tick : null).catch(() => null);
+  const hold = async (p, keys, ms) => {
+    const t0 = await tick(p);
+    for (const k of keys) await p.keyboard.down(k);
+    if (t0 == null) await sleep(ms);
+    else for (const end = t0 + Math.round(ms / 54.925), t = Date.now(); Date.now() - t < 60000 && (await tick(p)) < end;) await sleep(30);
+    for (const k of keys) await p.keyboard.up(k);
+  };
   try {
     // home
     let p = await page({}, '/'); await sleep(1000); await shot(p, 'home.png'); await p.close();
@@ -59,9 +68,10 @@ const fill = a => { while (a.length < 8) a.push(S('closed', a.length + 1)); retu
     const id = main.id, url = r => '/game/' + id + '/' + r;
     const blue = await page({ ['tunneler.host.' + id]: main.hostKey, 'tunneler.name': 'Norko', 'tunneler.view': 'team', 'tunneler.ping': '1' }, url('blue'));
     await sleep(500);
-    const green = await page({ 'tunneler.name': 'Zuzka' }, url('green'));
+    // (GREEN and CYAN aren't photographed: the original look - 4 pages in software 3D can't keep up with the match)
+    const green = await page({ 'tunneler.name': 'Zuzka', 'tunneler.gfx': 'original' }, url('green'));
     await sleep(500);
-    const cyan = await page({ 'tunneler.name': 'Petr' }, url('cyan'));
+    const cyan = await page({ 'tunneler.name': 'Petr', 'tunneler.gfx': 'original' }, url('cyan'));
     const spec = await page({ 'tunneler.name': 'Kiko' }, url('watch'));
     await sleep(2500);
     for (const [pg, msg] of [[green, 'gl hf!'], [cyan, 'Привет! 👋 ready when you are']]) {
@@ -78,6 +88,7 @@ const fill = a => { while (a.length < 8) a.push(S('closed', a.length + 1)); retu
     await Promise.all([hold(blue, ['KeyS'], 2500), hold(cyan, ['ArrowDown'], 2000), hold(green, ['ArrowLeft', 'ArrowUp'], 3000)]);
     await Promise.all([hold(blue, ['KeyD', 'Space'], 2500), hold(cyan, ['ArrowRight', 'ArrowDown'], 2500), hold(green, ['KeyS'], 2000)]);
     await Promise.all([hold(blue, ['KeyS', 'KeyD'], 1500), hold(cyan, ['ArrowRight'], 1500)]);
+    await until(blue, () => window.tunnelerFrames && !tunnelerFrames().catching && tunnelerFrames().queued < 4);   // (caught up)
     await sleep(500); await shot(blue, 'online-team.png');
     // (the players' windows closed - the match runs on - so the spectator's catches up: software rendering is slow)
     for (const pg of [blue, green, cyan]) await pg.close();

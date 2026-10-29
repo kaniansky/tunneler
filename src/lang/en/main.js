@@ -93,6 +93,7 @@ Lang.register("en", {
   "mod.depth.2d": "2D",
   "mod.depth.3d": "3D",
   "mod.depth.i1": "3D: the world raised, seen from above. Edges pixel: blocks.",
+  "mod.depth.none": "3D didn't work on this device: drawn in 2D.",
   "mod.edges": "Tunnel edges: ",
   "mod.edges.smooth": "Smooth",
   "mod.edges.pixel": "Pixel",

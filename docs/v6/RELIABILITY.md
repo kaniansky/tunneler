@@ -155,7 +155,17 @@ import would not help.
   `{where, msg, stack, url, version, ua}`. Each field is cut to a length (msg 300, stack 1500 - at most 12
   lines, url 200, ua 200, where 40) and control characters are removed. The server logs one line
   `client error v<version> <where>: <msg> | <path> | <ua>` plus the stack, and answers 204. Limits: 10 a
-  minute per address, 120 a minute in all. Nothing is stored and there is no GET.
+  minute per address, 120 a minute in all.
+- Kept (since 1.2.2): grouped, not one object per report - key = sha1 (12 hex) of where + msg + the stack's first line
+  (digits, long hex ids and `-XXXXXXXX` chunk hashes replaced), group `{key, where, msg, stack (newest sample), count,
+  first, last, versions: {v: n}, urls (<= 5 paths), uas (<= 5)}`. Reports pile up in memory and are merged into one
+  object `errors.json` every 60 s and at shutdown (read-merge-write, so an overlapping instance loses nothing; a failed
+  write keeps them pending). At most 500 groups (the oldest `last` go), none unseen for 60 days. No addresses, queries,
+  names or chat. The server's own uncaught exceptions / unhandled rejections are kept too (`where: "server"`).
+  Store: `S3_BUCKET_ERRORS`, else the state's bucket, else `DATA_DIR/errors`, else memory.
+- Read: `GET /api/errors[?since=<ISO>&version=<v>]` -> JSON list, `last` descending; `DELETE /api/errors/<key>` clears
+  a fixed group. Both need `Authorization: Bearer <ERRORS_TOKEN>` (constant-time compare); 401 otherwise; without
+  `ERRORS_TOKEN` on the server: 404 (disabled).
 - `src/js/net/report.js` (`Report`): `Report.error(where, err)` sends at most 5 different errors per page load
   (deduplicated by where + message), and only from built pages (a version) - not from src/ pages or tests.
   `Report.install()` (app.js) catches `error` (only from this site's scripts - not extensions) and
