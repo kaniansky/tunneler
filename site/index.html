@@ -482,6 +482,8 @@ sudo apt update &amp;&amp; sudo apt install tunneler</pre>
     <p class="note" data-i18n="dl.repo.f">Fedora and other dnf systems:</p>
     <pre class="cmd">sudo curl -fsSL -o /etc/yum.repos.d/tunneler.repo https://kaniansky.com/tunneler/rpm/tunneler.repo
 sudo dnf install tunneler</pre>
+    <p class="note" data-i18n="dl.flathub">Any distribution: the game is on <a href="https://flathub.org/apps/com.kaniansky.Tunneler">Flathub</a>, so software managers that use it (GNOME Software, KDE Discover, Linux Mint's) find it - or:</p>
+    <pre class="cmd">flatpak install flathub com.kaniansky.Tunneler</pre>
     <h3 data-i18n="dl.server.h">Your own server</h3>
     <p class="note" data-i18n="dl.docker">Prefer to host it yourself? The server is one Node.js file or a Docker image:</p>
     <pre class="cmd">docker run -p 8050:8050 ghcr.io/kaniansky/tunneler</pre>

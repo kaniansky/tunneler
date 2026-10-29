@@ -1,7 +1,10 @@
 // The app's icon (owner, 2026-10-25: a blue tank seen from the side, flat colours with hard-edged light and
 // shade, on earth) drawn as SVG and rendered in a headless Chromium into every place an icon lives:
 //   src-tauri/app-icon.png                    1024, rounded (then: npx @tauri-apps/cli@2 icon src-tauri/app-icon.png
-//                                             -o <tmp> and copy the files src-tauri/icons/ has)
+//                                             -o <tmp> and copy the files src-tauri/icons/ has but the Linux ones)
+//   src-tauri/icons/32x32, 128x128, 128x128@2x.png   Linux (.deb, rpm, AppImage, the Flatpak): rounded at 80 % of
+//                                             the canvas (Flathub's quality review: a rounded square that fills
+//                                             it all is too big)
 //   src/icons/icon-192/512.png                rounded (the installable web app, apple-touch-icon)
 //   src/icons/maskable-192/512.png            full square, the tank inside the 80 % safe circle
 //   src/favicon.ico, site/favicon.ico         16 / 32 / 48, rounded
@@ -112,6 +115,9 @@ def put(name, size, rel, rgb=False):
 put("rounded", 1024, "src-tauri/app-icon.png")
 for s in (192, 512): put("rounded", s, "src/icons/icon-%d.png" % s); put("maskable", s, "src/icons/maskable-%d.png" % s, True)
 put("rounded", 256, "site/img/icon.png")
+linux = Image.new("RGBA", (1024, 1024), (0, 0, 0, 0)); small = im["rounded"].resize((820, 820), Image.LANCZOS); linux.paste(small, (102, 102), small)
+for s, f in ((32, "32x32"), (128, "128x128"), (256, "128x128@2x")):
+    linux.resize((s, s), Image.LANCZOS).save(os.path.join(R, "src-tauri/icons/%s.png" % f), optimize=True)
 put("square", 512, "docs/play-store/icon-512.png", True)
 for f in ("src/favicon.ico", "site/favicon.ico"):
     im["rounded"].resize((256, 256), Image.LANCZOS).save(os.path.join(R, f), sizes=[(16, 16), (32, 32), (48, 48)])
@@ -124,5 +130,5 @@ print("icons written")
   execFileSync("python3", ["-I", "-c", py, tmp, ROOT], { stdio: "inherit" });
   const bg = path.join(ROOT, res, "values/ic_launcher_background.xml");
   fs.writeFileSync(bg, fs.readFileSync(bg, "utf8").replace(/#[0-9A-Fa-f]{6}/, SKY.toUpperCase()));
-  console.log("the SVGs: " + tmp + "\nnext: npx @tauri-apps/cli@2 icon src-tauri/app-icon.png -o <dir>, copy what src-tauri/icons/ has");
+  console.log("the SVGs: " + tmp + "\nnext: npx @tauri-apps/cli@2 icon src-tauri/app-icon.png -o <dir>, copy what src-tauri/icons/ has but 32x32, 128x128, 128x128@2x.png");
 })().catch(e => { console.error(e); process.exit(1); });

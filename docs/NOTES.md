@@ -925,16 +925,24 @@ page from before 2.0 - is refused (POST 409 `{code:
   Flathub review asked) repackages the release's `.deb` per architecture (`_amd64.deb` x86_64,
   `_arm64.deb` aarch64 - app-build.yml's linux-arm64 job) on org.gnome.Platform (WebKitGTK 4.1) and
   installs the `.desktop` / metainfo from this repository at the release tag (a git source - they belong
-  upstream, not in the Flathub repo); gamepads: `--device-if=all:!has-input-device` + `--device=input`.
+  upstream, not in the Flathub repo); gamepads: `--device-if=all:!has-input-device` + `--device=input` (Flathub lists it as "can access webcams":
+  it reads the `all`; `--device=input` alone fails its linter, finish-args-no-required-flatpak, never excepted);
+  content rating: social-chat moderate (the host deletes messages, kicks, bans; anybody hides the chat).
   Release steps: `node tools/flatpak-update.js --metainfo <v>` before tagging (the metainfo's <release>; `npm version`
   runs it - package.json "version" script; update-check fails while it's missing), `node tools/flatpak-update.js <v>`
   after (both .deb sha256 + the tag's commit) - release.yml job `flatpak` does that and commits it to main (owner,
   2026-10-25) -, then the manifest into
   the Flathub repository. Inside a Flatpak the app offers no update (lib.rs `flatpak()`: FLATPAK_ID /
-  /.flatpak-info). Flathub submission flathub/flathub#10724: on hold until the project has 2-3 months of
-  history (reviewer, 2026-10-21); AI tools must not drive that PR or its review (Flathub's AI policy). The
-  manifest's sources carry `x-checker-data` (json: the latest GitHub release's .deb per architecture; git: the
-  `v*` tags): once the app is on Flathub, its external data checker opens the update PRs itself.
+  /.flatpak-info). On Flathub since 2026-10-29 (submission flathub/flathub#10724, released 1.1.6; the app's
+  repository github.com/flathub/com.kaniansky.Tunneler, the owner a collaborator; verified by the token in
+  kaniansky.com/.well-known/org.flathub.VerifiedApps.txt). Flathub's AI policy: manifests must not contain
+  AI-generated content, AI tools must not open or automate its pull requests (the owner merges the bot's updates or
+  opens them). The manifest's sources carry `x-checker-data` (json: the latest GitHub release's .deb per
+  architecture; git: the `v*` tags): Flathub's external data checker opens the update PRs itself. Its listing
+  quality review (1.2.1): summary <= 35 characters, no article, no technical terms; brand colors colorful, not
+  light / dark gray, the dark one a darker muted light one (#f2c48d / #4a2c17: the icon's earth); the icon must not
+  fill its canvas - the Linux icons (src-tauri/icons/32x32, 128x128, 128x128@2x.png, tools/make-icons.js) are the
+  rounded icon at 80 %, so the manifest takes them from the .deb as before; screenshots from the newest tag.
 - **Graphics setting** (docs/GRAPHICS.md - read it before touching gfx*.js; DESIGN-8P 29; display only,
   local): localStorage `tunneler.gfx` original / modern (the default since 5.0; no WebGL2 = original; "upscaled" and
   its CRT were dropped, a stored "upscaled" = modern) + `tunneler.gfx.modern` (JSON: style clean / retro /
