@@ -84,11 +84,12 @@ function drawMap() {
 
 (async () => {
   await fillBoard();
-  const b = await chromium.launch({ args: ["--disable-gpu", "--use-angle=swiftshader", "--use-gl=angle", "--disable-gpu-compositing"], executablePath: CHROME });
+  const b = await chromium.launch({ args: process.env.GPU === "0" ? ["--disable-gpu", "--use-angle=swiftshader", "--use-gl=angle", "--disable-gpu-compositing"]
+    : ["--use-angle=gl", "--enable-gpu", "--ignore-gpu-blocklist"], executablePath: CHROME });   // (the GPU; GPU=0: software, slow)
   const errs = [];
   const page = async (look, ls, url) => {
     const ctx = await b.newContext({ viewport: { width: 1000, height: 820 } });
-    await ctx.addInitScript(o => { for (const k in o) localStorage.setItem(k, o[k]); }, Object.assign({ "tunneler.gfx": look }, ls));
+    await ctx.addInitScript(o => { for (const k in o) localStorage.setItem(k, o[k]); }, Object.assign({ "tunneler.gfx": look, "tunneler.gfx.modern": JSON.stringify({ quality: "high" }) }, ls));
     const p = await ctx.newPage(); p.on("pageerror", e => errs.push(url + ": " + e.message));
     await p.goto(B + url); return p;
   };
