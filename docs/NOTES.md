@@ -770,7 +770,8 @@ page from before 2.0 - is refused (POST 409 `{code:
   server's address (after 300 ms; the wake-up hint after 3 s or a failed request), Esc / Back to the
   main menu; one request at a time (`poll()`), the 2 s polling keeps retrying.
 - README screenshots: `tools/readme-screenshots.js <port> screenshots` against a fresh local server
-  (scripted session: menus, split screen, a 4-tank online game with chat, spectator views; GPU off).
+  (scripted session: menus, split screen, a 4-tank online game with chat, spectator views; the GPU -
+  `GPU=0`: software rendering, slow - and Quality high: auto steps down to 2D when frames come slowly).
   6.0's screens (quickplay / challenge / map-editor.png, both looks): `tools/v6-screenshots.js <port> screenshots`
   against a fresh server with `ACCOUNTS=off` (it first fills today's challenge board with bot-played replays).
 - Short addresses (the routes, app.js): `/games`, `/game/<id>[/<color|watch>]` (the game's lobby; watch = as a

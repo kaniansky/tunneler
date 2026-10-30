@@ -5,7 +5,7 @@
 //                                                                 the modern look, modern-<name>.png - the homepage's modern theme)
 // Needs playwright-core (not a dependency: npm i --no-save playwright-core) and a Chromium - set CHROME
 // to its executable (default: playwright's download in ~/.cache/ms-playwright). The browser runs with
-// the GPU off (software rendering).
+// the GPU (ANGLE on OpenGL: the 3D look at full speed); GPU=0 - software rendering, slow (no GPU, a CI runner).
 const { chromium } = require('playwright-core');
 const CHROME = process.env.CHROME || (() => {
   const dir = require('path').join(require('os').homedir(), '.cache/ms-playwright');
@@ -14,13 +14,18 @@ const CHROME = process.env.CHROME || (() => {
 })();
 const PORT = process.argv[2], OUT = process.argv[3], B = 'http://localhost:' + PORT;
 const MODERN = process.argv[4] === 'modern';                   // (the whole session in the modern look)
-const GFX = { 'tunneler.gfx': MODERN ? 'modern' : 'original' };   // (modern is the game's default since 5.0: say which)
+// Quality high, not auto: auto steps down (to 2D at last) when frames come slowly - software rendering, a busy GPU
+const HIGH = { quality: 'high' };
+const GFX = { 'tunneler.gfx': MODERN ? 'modern' : 'original', 'tunneler.gfx.modern': JSON.stringify(HIGH) };   // (modern is the game's default since 5.0: say which)
+// the browser's graphics (also in v6-screenshots.js, play-screenshots.js): the GPU, or GPU=0 software
+const GL = process.env.GPU === '0' ? ['--disable-gpu', '--use-angle=swiftshader', '--use-gl=angle', '--disable-gpu-compositing']
+  : ['--use-angle=gl', '--enable-gpu', '--ignore-gpu-blocklist'];
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const api = async (body) => (await fetch(B + '/api/rooms', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.assign({ version: require('../package.json').version }, body)) })).json();
 const S = (kind, team) => ({ kind, team });
 const fill = a => { while (a.length < 8) a.push(S('closed', a.length + 1)); return a; };
 (async () => {
-  const b = await chromium.launch({ args: ['--disable-gpu', '--use-angle=swiftshader', '--use-gl=angle', '--disable-gpu-compositing'], executablePath: CHROME });
+  const b = await chromium.launch({ args: GL, executablePath: CHROME });
   const errs = [];
   const page = async (ls, url) => {
     const ctx = await b.newContext({ viewport: { width: 1000, height: 820 } });
@@ -122,7 +127,7 @@ const fill = a => { while (a.length < 8) a.push(S('closed', a.length + 1)); retu
     await until(p, () => window.tunnelerEngine && window.tunnelerEngine().screen === 'play');
     await hold(p, ['ShiftLeft'], 100); await hold(p, ['KeyW'], 2500); await hold(p, ['KeyW', 'Space'], 600);
     await sleep(2000); await shot(p, 'modern-game.png'); await p.close();
-    p = await page(Object.assign({ 'tunneler.gfx.modern': JSON.stringify({ style: 'retro' }) }, M), '/split?size=small');
+    p = await page(Object.assign({ 'tunneler.gfx.modern': JSON.stringify(Object.assign({ style: 'retro' }, HIGH)) }, M), '/split?size=small');
     await until(p, () => window.tunnelerEngine && window.tunnelerEngine().screen === 'play');
     await hold(p, ['KeyW', 'ArrowUp'], 3000); await hold(p, ['Space'], 300);
     await sleep(500); await shot(p, 'modern-retro.png'); await p.close();

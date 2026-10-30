@@ -4,6 +4,11 @@ All notable changes to Tunneler. Versions follow [semantic versioning](https://s
 by pushing a version tag (see CONTRIBUTING.md). Up to its version 6.0.1 the game was called Tunneler Online:
 those releases are tagged `online-vX.Y.Z`, their changes are in [docs/CHANGELOG-online.md](docs/CHANGELOG-online.md).
 
+## Unreleased
+
+- Screenshots (README, homepage, Google Play) really in 3D: the screenshot tools draw with the GPU (`GPU=0`:
+  software) and Quality high - Quality auto had stepped down to 2D in software rendering.
+
 ## 1.2.3
 
 - **Language** is a category of Settings: every language in a list in its own name, the one in use checked (room for

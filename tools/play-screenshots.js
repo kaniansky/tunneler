@@ -8,7 +8,7 @@
 // Runs its own server (accounts off). It first fills today's leaderboard with bot-played results (real replays,
 // checked by the server: 6 a minute from one address, so about two minutes). Needs playwright-core (not a
 // dependency: npm i --no-save playwright-core) and a Chromium - CHROME = its executable (default: playwright's
-// download in ~/.cache/ms-playwright). The GPU is off (software WebGL).
+// download in ~/.cache/ms-playwright). The browser uses the GPU (GPU=0: software WebGL, slow).
 "use strict";
 const fs = require("fs"), os = require("os"), path = require("path"), zlib = require("zlib");
 const { chromium } = require("playwright-core");
@@ -90,7 +90,8 @@ function drawMap() {
   await fillBoard();
   const board = await (await fetch(B + "/api/challenge/" + day)).json();
   const replayId = (board.top || []).map(e => e.replay).find(Boolean);
-  const b = await chromium.launch({ args: ["--disable-gpu", "--use-angle=swiftshader", "--use-gl=angle", "--disable-gpu-compositing"], executablePath: CHROME });
+  const b = await chromium.launch({ args: process.env.GPU === "0" ? ["--disable-gpu", "--use-angle=swiftshader", "--use-gl=angle", "--disable-gpu-compositing"]
+    : ["--use-angle=gl", "--enable-gpu", "--ignore-gpu-blocklist"], executablePath: CHROME });   // (the GPU; GPU=0: software, slow)
   const errs = [];
   const until = async (p, fn, ms = 30000) => { const t = Date.now(); while (Date.now() - t < ms) { if (await p.evaluate(fn).catch(() => false)) return true; await sleep(200); } return false; };
   // keys held for ms of game time (the engine's steps of 54.9 ms; wall time off a play screen): software rendering
@@ -104,7 +105,7 @@ function drawMap() {
     for (const k of keys) await p.keyboard.up(k);
   };
   let chatted = false;
-  const LS = { "tunneler.gfx": "modern", "tunneler.sound": "muted", "tunneler.name": ME[0], "tunneler.client": cidOf(ME[2]) };
+  const LS = { "tunneler.gfx": "modern", "tunneler.gfx.modern": JSON.stringify({ quality: "high" }), "tunneler.sound": "muted", "tunneler.name": ME[0], "tunneler.client": cidOf(ME[2]) };
   try {
     for (const dev of WANT) {
       const [w, h, dpr] = DEVICES[dev];
