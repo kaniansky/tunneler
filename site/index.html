@@ -108,6 +108,11 @@
   ul.changes { list-style: none; margin: 0; padding: 0; }
   ul.changes li { padding: 12px 0 12px 22px; border-top: 1px solid var(--rule); position: relative; }
   ul.changes li::before { content: "+"; position: absolute; left: 0; top: 12px; font: 600 16px/1.62 var(--mono); color: var(--green); }
+  /* "Also new": the list in two newspaper columns */
+  .also { margin-top: 56px; }
+  .also ul.changes { column-count: 2; column-gap: 48px; }
+  .also ul.changes li { break-inside: avoid; }
+  .also > p { margin-top: 24px; }
 
   /* the new features: the text beside its screenshot (the middle one the other way round) */
   .feat { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 48px; align-items: center; margin-top: 56px; }
@@ -234,6 +239,7 @@
     .cols > div { padding: 18px 0; border-left: 0; border-top: 1px solid var(--rule); }
     .cols > div:first-child { padding-top: 0; border-top: 0; }
     .dl > div { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+    .also ul.changes { column-count: 1; }
   }
   @media (max-width: 640px) {
     body { font-size: 16px; }
@@ -360,25 +366,21 @@
       <figcaption data-i18n="new.map.cap">The map editor: a small map with six bases.</figcaption>
     </figure>
   </div>
-  <div class="split">
-    <div>
-      <h3 data-i18n="new.also">Also new</h3>
-      <ul class="changes">
-        <li data-i18n="new.l7"><b>Smarter computer tanks</b>: they no longer park waiting for an enemy that left, hide behind a base's walls when low on energy or shield, refuel at the nearest base they may use and find their way out of other tanks' bases.</li>
-        <li data-i18n="new.l8"><b>Teammates marked</b>: a small triangle in their color over your teammates' tanks (Settings &rarr; Gameplay).</li>
-        <li data-i18n="new.l9"><b>Replays when you want them</b>: "Save the replay" after a match, or Settings &rarr; Gameplay &rarr; Save every match.</li>
-        <li data-i18n="new.l1"><b>Player accounts</b> for online games: a username (the name everybody sees, yours alone on that server) and a password, no e-mail. A recovery code, shown once when you sign up, is how you set a new password. Your account is you: your seat or tank comes back on any device, and nobody else can play under your name. Split screen, skirmish, replays, maps and looking at the daily challenge need no account.</li>
-        <li data-i18n="new.l2"><b>Running reliably</b>: a server restart or an update no longer ends online games. They move to the new server, and the players' pages reconnect and carry on. A dropped connection (a phone changing networks, a laptop waking up) reconnects within seconds with your tank, and a desync repairs itself.</li>
-        <li data-i18n="new.l3"><b>Realistic sound</b> is the default style now. The original PC speaker is one choice away in Settings &rarr; Sound.</li>
-        <li data-i18n="new.l4"><b>Everything on every device</b>: logged in, your maps, replays and settings are kept with your account and come with you to every device you log in on - the browser, the desktop app or the Android app.</li>
-        <li data-i18n="new.l5"><b>The score mid-match</b>: hold Tab (SCORE on a touch screen, Back on a gamepad) for the round, everyone's score and the game's settings.</li>
-        <li data-i18n="new.l6"><b>A cleaner chat</b>: the host of an online game can delete a message, and a kicked player's messages go with them.</li>
-      </ul>
-    </div>
-    <div>
-      <p data-i18n="new.since.p"><b>Modern graphics</b> are the default: the same game drawn at your screen's resolution, with lit tunnels, dust and sparks, while the original DOS look is one switch away in Settings &rarr; Graphics.</p>
-      <p><a href="https://github.com/kaniansky/tunneler/blob/main/CHANGELOG.md" data-i18n="new.log">All changes, version by version</a></p>
-    </div>
+  <div class="also">
+    <h3 data-i18n="new.also">Also new</h3>
+    <ul class="changes">
+      <li data-i18n="new.since.p"><b>Modern graphics</b> are the default: the same game drawn at your screen's resolution, with lit tunnels, dust and sparks, while the original DOS look is one switch away in Settings &rarr; Graphics.</li>
+      <li data-i18n="new.l7"><b>Smarter computer tanks</b>: they no longer park waiting for an enemy that left, hide behind a base's walls when low on energy or shield, refuel at the nearest base they may use and find their way out of other tanks' bases.</li>
+      <li data-i18n="new.l8"><b>Teammates marked</b>: a small triangle in their color over your teammates' tanks (Settings &rarr; Gameplay).</li>
+      <li data-i18n="new.l9"><b>Replays when you want them</b>: "Save the replay" after a match, or Settings &rarr; Gameplay &rarr; Save every match.</li>
+      <li data-i18n="new.l1"><b>Player accounts</b> for online games: a username (the name everybody sees, yours alone on that server) and a password, no e-mail. A recovery code, shown once when you sign up, is how you set a new password. Your account is you: your seat or tank comes back on any device, and nobody else can play under your name. Split screen, skirmish, replays, maps and looking at the daily challenge need no account.</li>
+      <li data-i18n="new.l2"><b>Running reliably</b>: a server restart or an update no longer ends online games. They move to the new server, and the players' pages reconnect and carry on. A dropped connection (a phone changing networks, a laptop waking up) reconnects within seconds with your tank, and a desync repairs itself.</li>
+      <li data-i18n="new.l3"><b>Realistic sound</b> is the default style now. The original PC speaker is one choice away in Settings &rarr; Sound.</li>
+      <li data-i18n="new.l4"><b>Everything on every device</b>: logged in, your maps, replays and settings are kept with your account and come with you to every device you log in on - the browser, the desktop app or the Android app.</li>
+      <li data-i18n="new.l5"><b>The score mid-match</b>: hold Tab (SCORE on a touch screen, Back on a gamepad) for the round, everyone's score and the game's settings.</li>
+      <li data-i18n="new.l6"><b>A cleaner chat</b>: the host of an online game can delete a message, and a kicked player's messages go with them.</li>
+    </ul>
+    <p><a href="https://github.com/kaniansky/tunneler/blob/main/CHANGELOG.md" data-i18n="new.log">All changes, version by version</a></p>
   </div>
 </div></section>
 
