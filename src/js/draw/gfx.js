@@ -47,7 +47,10 @@ const QUALITY = { high: 1, medium: 0.75, low: 0.5 };     // the modern output's 
 // page is hidden, the count starts again. Depth 3D has one more step below low: "2d" (low, drawn in 2D - owner,
 // 2026-10-29: 3D the default, so a device too slow for it plays in 2D).
 const AUTO = { steps: ["high", "medium", "low", "2d"], slowMs: 25, fastMs: 18, frames: 90, windowMs: 3000, upFrames: 1200, retryMs: 30000, maxRetryMs: 600000 };
+// (the step it settled on is remembered - localStorage "tunneler.gfx.auto": the next visit starts there instead of
+// stuttering through the first seconds of 3D on a weak device again; owner, 2026-10-29)
 const auto = { level: 0, last: 0, times: [], sum: 0, fast: 0, slowAt: [], wait: [] };
+const autoKeep = () => save("tunneler.gfx.auto", String(auto.level));
 const autoMax = () => Gfx.modern().depth === "3d" ? 3 : 2;          // (the lowest step: 2D only goes to low)
 function autoFrame(now, playing) {
   const hidden = !!(root.document && root.document.hidden);
@@ -61,11 +64,11 @@ function autoFrame(now, playing) {
   if (median > AUTO.slowMs && auto.level < autoMax()) {
     const l = auto.level;
     auto.wait[l] = Math.min(AUTO.maxRetryMs, auto.wait[l] ? auto.wait[l] * 2 : AUTO.retryMs);
-    auto.slowAt[l] = now; auto.level++; auto.fast = 0;
+    auto.slowAt[l] = now; auto.level++; auto.fast = 0; autoKeep();
   } else if (median < AUTO.fastMs && auto.level > 0) {
     auto.fast += t.length;
     const up = auto.level - 1;
-    if (auto.fast >= AUTO.upFrames && !(now - auto.slowAt[up] < auto.wait[up])) { auto.level = up; auto.fast = 0; }
+    if (auto.fast >= AUTO.upFrames && !(now - auto.slowAt[up] < auto.wait[up])) { auto.level = up; auto.fast = 0; autoKeep(); }
   } else auto.fast = 0;
 }
 const autoStep = () => AUTO.steps[Math.min(auto.level, autoMax())];
@@ -73,6 +76,7 @@ const qualityScale = () => { const q = Gfx.modern().quality, s = q === "auto" ? 
 
 const load = (k, d) => { try { const v = root.localStorage.getItem(k); return v == null ? d : v; } catch (e) { return d; } };
 const save = (k, v) => { try { root.localStorage.setItem(k, v); } catch (e) { /* no storage */ } };
+auto.level = Math.max(0, Math.min(AUTO.steps.length - 1, parseInt(load("tunneler.gfx.auto", "0"), 10) || 0));
 const pick = (list, v) => list.includes(v) ? v : list[0];
 // a touch screen without a mouse (phones, tablets)
 

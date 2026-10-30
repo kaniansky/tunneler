@@ -382,7 +382,10 @@ joystick drives the tank, the end map / menu without them, a tap beside the map 
   `mapSnap`); a player's key also moves the shared game on (auto-repeats never count).
   `window.tunnelerEngine()` (also `tunnelerRunner / tunnelerViews / tunnelerLobbyUI`) for tests.
   Connecting / paused (a classic match while one player is away) / catching up / errors (`kicked`,
-  `full`, `busy`, `noroom`, `idle`) are DOS screens too (`DosUI` with `present` override).
+  `full`, `busy`, `noroom`, `idle`) are DOS screens too (`DosUI` with `present` override). Over a player's running match
+  (connecting / paused / catching up) that screen takes only <ESC> (`spec.keys`; 1.2.3 - Enter / Space are fire, and a
+  slow page catching up under a held fire key chose "Back to the list of games"), redraws its count 4 times a second, and
+  reports a player still catching up after 30 s or leaving while catching up (RELIABILITY.md 2.9.1).
 - `dosui.js` - the menus' renderer model (docs/RENDERING.md): every screen's snapshot carries `snap.ui` = {titles, boxes
   (title gaps, separators), bar, rule} (0-based cells; `spec.panels` = frames around other content - the online chat);
   original draws the cells, modern draws the structure from the model (gfx-text.js `fromModel`; `analyse` only for the
@@ -849,9 +852,10 @@ page from before 2.0 - is refused (POST 409 `{code:
   left-handed (pads.js `Pads.TOUCH`) - only on a touch screen (`GameScreen.touch()`; owner, 2026-10-27; info
   `set.cat.controls.i` / `.ik` keys only / `.it` touch only); Online = Name,
   (Server: app), Preferred color ("tunneler.online.color"), Show chat ("tunneler.chat.hide" = "1": hidden),
-  Chat sound ("tunneler.chatsound"; grayed out and silent while the chat is hidden), Show ping; then a blank
-  row, a centred "Language: X" switch (`langRow`, owner 2026-10-25 - no category any more), a blank row, Back to
-  main menu; texts `set.cat.<c>(.i)`, `set.*`, `ctl.*`, `touch.*`, `tc.*`, `scale.*`),
+  Chat sound ("tunneler.chatsound"; grayed out and silent while the chat is hidden), Show ping; Language = a row per
+  language in its own name, the one in use "√ " (Enter / a click chooses it - `set.lang.i2`; a category again since
+  1.2.3, owner 2026-10-29: room for more languages - 1.0-1.2.2 had a "Language: X" switch below the categories);
+  then a blank row, Back to main menu; texts `set.cat.<c>(.i)`, `set.*`, `ctl.*`, `touch.*`, `tc.*`, `scale.*`),
   the chosen one's settings on the right (box title = the category; rows line up on their ": " within the
   category - `catItems` takes off the padding all of its rows share, click zones with it; on a desktop `centred`
   puts the ": " column in the box's middle, moved left only as far as the longest name and value need; on the phone a
@@ -948,7 +952,8 @@ page from before 2.0 - is refused (POST 409 `{code:
   local): localStorage `tunneler.gfx` original / modern (the default since 5.0; no WebGL2 = original; "upscaled" and
   its CRT were dropped, a stored "upscaled" = modern) + `tunneler.gfx.modern` (JSON: style clean / retro /
   custom, quality (auto - the default, owner 2026-10-25: `AUTO` / `autoFrame` in the frame loop, the median frame time
-  of a window while a play screen moves -> one step smaller / bigger with a growing wait; no more "phones: medium") /
+  of a window while a play screen moves -> one step smaller / bigger with a growing wait; no more "phones: medium";
+  the step it ended at kept in `tunneler.gfx.auto` - the next visit starts there, 1.2.3) /
   high / medium / low (Depth 3D: then `2d` - low's size in 2D), depth (3D the default since 1.2.2, `depthSet` = chosen;
   3D that doesn't work: 2D + localStorage `tunneler.gfx.no3d` + a report - GRAPHICS.md 3D), terrain, edges, fog, tanks (realistic / simple - shader `uTankStyle`; both as big as the
   game's 7 x 7 sprite, measured; rock / base walls drawn over a turned tank's corners), light, glow, particles,
@@ -1014,7 +1019,7 @@ page from before 2.0 - is refused (POST 409 `{code:
   `mine` / `seen`); and `zoom()` enlarges the engine's 80 x 25 text screens: crop to the used
   area (>= 40 columns) or stack the halves at a gutter (divider column first; word gaps aren't gutters): the
   left half's blocks, then the right half, then the left blocks holding a box (the menu below the statistics); `cellAt` maps taps back through `zoom().at`. Settings on a phone held upright: home.js
-  `settingsMobile` (category list + Language -> a category screen ending in "back-cat" `set.back`); sideways the
+  `settingsMobile` (category list -> a category screen ending in "back-cat" `set.back`); sideways the
   desktop's two boxes (owner, 2026-10-27; turning the phone switches - a resize listener). Text fields: a tap
   focuses a hidden `<input class="soft-input">` (`softFocus`) so the phone keyboard opens. Pads `hideTouch()`
   (play.js: while the engine's menu shows; online.js: lobby / spectator). Android Back on the main menu:

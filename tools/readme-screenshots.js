@@ -96,7 +96,24 @@ const fill = a => { while (a.length < 8) a.push(S('closed', a.length + 1)); retu
     await spec.keyboard.press('Digit1'); await sleep(800); await shot(spec, 'spectator-grid.png');
     await spec.keyboard.press('Digit2'); await sleep(1500); await shot(spec, 'spectator-map.png');
     // graphics "modern" (docs/GRAPHICS.md): the main menu, its settings, a skirmish of 4 (clean), the split screen (retro)
+    // the map picker (the skirmish's Map row): map-picker.png / modern-map-picker.png
+    p = await page({}, '/');
+    await sleep(800); await p.keyboard.press('ArrowDown'); await p.keyboard.press('Enter'); await sleep(500);
+    await p.evaluate(() => tunnelerHomeUI().spec.items.find(i => i.key === 'map').go()); await sleep(600);
+    await shot(p, 'map-picker.png'); await p.close();
+    if (MODERN) {
+      // 3D (the default): a team game on generated caves, your teammate's triangle
+      p = await page({}, '/skirmish?mode=cpu&slots=' + encodeURIComponent('0:you:1,1:hard:2,2:hard:1,3:hard:2') + '&size=small&view=team&gen=gen:caves:fair');
+      await until(p, () => window.tunnelerEngine && window.tunnelerEngine().screen === 'play');
+      await hold(p, ['KeyS'], 1500); await hold(p, ['KeyD'], 1500); await hold(p, ['KeyS', 'Space'], 800);
+      await sleep(800); await shot(p, 'modern-3d.png'); await p.close();
+    }
     if (MODERN) return;                                          // (the modern session has its own of all the above)
+    // held Tab: the score mid-match (king of the hill, 4 tanks)
+    p = await page({}, '/skirmish?mode=cpu&slots=' + encodeURIComponent('0:you:1,1:hard:2,2:normal:3,3:hard:4') + '&size=small&gm=hill');
+    await until(p, () => window.tunnelerEngine && window.tunnelerEngine().screen === 'play');
+    await hold(p, ['KeyW'], 4000);
+    await p.keyboard.down('Tab'); await sleep(600); await shot(p, 'score.png'); await p.keyboard.up('Tab'); await p.close();
     const M = { 'tunneler.gfx': 'modern' };
     p = await page(M, '/'); await sleep(1500); await shot(p, 'modern-home.png');
     for (const k of ['ArrowUp', 'Enter', 'ArrowDown', 'Enter', 'ArrowDown', 'ArrowDown', 'ArrowDown']) { await p.keyboard.press(k); await sleep(150); }   // (Settings, Graphics, Terrain)

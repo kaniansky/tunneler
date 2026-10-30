@@ -117,6 +117,17 @@ function makeEnv(store, webgl, more) {
   assert.strictEqual(G.no3d(), "", "3D made fine later: forgotten");
   ok("depth: 3D by default (a 2D saved by 1.2.0 with other settings is not a choice), a failed 3D remembered and reported once");
 }
+{
+  // Quality auto: the step it settled on is where the next visit starts
+  const store = new Map([["tunneler.gfx.auto", "3"]]), { win } = makeEnv(store, false), G = win.Gfx;
+  assert.strictEqual(G.autoQuality(), "2d", "a device that ended at 3D's 2d step starts there");
+  assert.strictEqual(G.depth(), "2d");
+  G.setModern("depth", "2d");
+  assert.strictEqual(G.autoQuality(), "low", "(Depth 2D: low at most)");
+  const s2 = new Map([["tunneler.gfx.auto", "nonsense"]]);
+  assert.strictEqual(makeEnv(s2, false).win.Gfx.autoQuality(), "high", "nothing usable stored: high");
+  ok("quality auto: the last step remembered for the next visit");
+}
 
 // ---------------------------------------------------------------- painting: original untouched, tagging
 {
@@ -204,6 +215,7 @@ function makeEnv(store, webgl, more) {
   assert.strictEqual(G.autoQuality(), "high", "fast frames: high");
   frames(91, 40);
   assert.strictEqual(G.autoQuality(), "medium", "slow frames (40 ms): one step smaller");
+  assert.strictEqual(store.get("tunneler.gfx.auto"), "1", "the step remembered");
   runFrames();
   assert.strictEqual(L.pres.W, 1440, "auto at medium: 0.75 of the device pixels");
   frames(91, 40);

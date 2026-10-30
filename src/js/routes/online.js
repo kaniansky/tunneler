@@ -194,7 +194,7 @@ export function mount() {
     views.setWatchOut(player >= 0 ? cfg.watchOut : "wreck");   // (spectators see everything anyway)
     if (showPing) views.setPing(rtt == null ? null : Math.round(rtt));
     markEngine(engine, player);
-    frames = 0; queue.clear(); lastReport = ""; desyncAt = -1; mapPending = false; mapSnap = null;
+    frames = 0; queue.clear(); lastReport = ""; desyncAt = -1; mapPending = false; mapSnap = null; catchSince = 0;
     if (lobby) closeLobby();
     presentOverlay();
     renderBar();
@@ -292,15 +292,27 @@ export function mount() {
       else { fatal = T("rel.crash"); if (runner) runner.stop(); runner = null; engine = null; if (ws) ws.close(); updateOverlay(); }
     }
   }
+  // Catching up ("Catching up with the game... n / m"): frames run quietly, as many as fit in 25 ms a pass. The
+  // count on the screen is redrawn a few times a second, not every pass - a slow device (software 3D) spent the time
+  // its catching up needed on drawing it. A player still behind after CATCH_REPORT_MS: reported (once a match).
+  let catchSince = 0, catchShown = 0, catchReported = 0;
+  const CATCH_REPORT_MS = (window.tunnelerNetTimes || {}).catchReport || 30000;   // (tests: shorter)
   function pumpFrames() {
     const now = performance.now();
     if (catching) {
+      if (!catchSince) catchSince = now;
       const end = now + 25;
       while (queue.length > 3 && performance.now() < end) stepFrame(0, true);
-      if (queue.length <= 3) { catching = false; rebuilding = false; nextAt = performance.now(); renderBar(); }
-      updateOverlay();
+      if (queue.length <= 3) { catching = false; catchSince = 0; rebuilding = false; nextAt = performance.now(); renderBar(); }
+      else if (isPlayer() && !rebuilding && now - catchSince > CATCH_REPORT_MS && catchReported !== matchNo) {
+        catchReported = matchNo;
+        Report.error("online catch-up", new Error("a player still catching up after " + Math.round((now - catchSince) / 1000) + " s: "
+          + queue.length + " frames behind"));
+      }
+      if (!catching || !msgSnap || now - catchShown >= 250) { catchShown = now; updateOverlay(); }
       return;
     }
+    catchSince = 0;
     if (rebuilding && queue.length <= 3) { rebuilding = false; renderBar(); }
     if (queue.length > 60) { catching = true; return; }       // far behind (tab was hidden): fast-forward
     if (queue.length && nextAt < now - 250) nextAt = now;      // stream stalled and resumed: resync
@@ -1408,13 +1420,22 @@ export function mount() {
       if (msgSnap) { msgSnap = null; presentOverlay(); }
       return;
     }
-    const items = [{ key: "lobby", label: T("back.lobby"), info: [T("back.lobby.i")], go: () => leave(gamesHref) }];
+    // a player's own match runs on under this screen (catching up, connecting, paused): the game's keys never
+    // choose here - a slow page flashing "Catching up" under a held fire key (Enter / Space) left its match for the
+    // list of games; <ESC> or a click / tap does (and a player who leaves while catching up is reported: too slow)
+    const playing = isPlayer() && !fatal;
+    const back = () => {
+      if (playing && catching && !rebuilding) Report.error("online catch-up", new Error("a player left the match while catching up: "
+        + queue.length + " frames behind"));
+      leave(gamesHref);
+    };
+    const items = [{ key: "lobby", label: T("back.lobby"), info: [T("back.lobby.i")], go: back }];
     const you = isPlayer() ? { text: T("on.youplay", { name: me.name || DosUI.playerName() }), color: TEXT_COLORS[cfg.slots[player].color] }
       : { text: Lang.enc(me.name || DosUI.playerName()), color: 7 };
     dos.show({
       lines: [{ row: 2, text: T("room.title"), color: 12 }, { row: 4, text: Lang.enc(roomName || roomId), color: 15 }, { row: 5, ...you },
         ...msg.map((m, k) => ({ row: 9 + k, ...(typeof m === "string" ? { text: m, color: 14 } : m) }))],
-      box: { y: 13 }, infoRow: 19, items, back: () => leave(gamesHref),
+      box: { y: 13 }, infoRow: 19, items, back, ...(playing ? { keys: e => e.code === "Escape", hint: T("ui.back") } : null),
     }, !!msgSnap);
   }
 

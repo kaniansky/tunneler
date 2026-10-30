@@ -173,6 +173,18 @@ import would not help.
   shows "Something went wrong - the error was reported." with a tap / key to go to the main menu instead
   of a blank page), the online game loop throwing, and a chunk failing to load.
 
+### 2.9.1 A slow page stays in its match
+
+A page that can't keep up (software 3D, a busy machine, a stalled tab) falls more than 60 frames behind and shows
+"Catching up with the game... n / m" (frames run quietly, 25 ms a pass) until it is back - on a slow device again and
+again. That status screen's one item is "Back to the list of games", and DosUI chose it with Enter / Space: the
+player's fire keys. A player holding or pressing fire as the screen came up left the running match for the games list
+(seen making the README screenshots: BLUE's page on /games, its match going on without it). Now a status screen over a
+match this page plays (catching up, connecting, paused - not an error screen) takes no game keys (`spec.keys`: only
+Esc; the hint "<ESC> back."); Esc or a click / tap leaves. The count on the screen is redrawn 4 times a second, not
+every pass. Reported (`Report.error("online catch-up", ...)`, once a match): a player still catching up after 30 s
+(`tunnelerNetTimes.catchReport` in tests), and a player who leaves while catching up.
+
 ### 2.10 Health (A11)
 
 `GET /api/health` -> `{ok: true, version, uptime, rooms, matches, errors}` with no-store. Every API
@@ -219,7 +231,8 @@ and Render's health check can use it. Changing them is left to the owner.
   handoff, and so does another feature's plain room data. The bucket store against a fake S3 that checks every
   request's Signature V4: the snapshot PUT on shutdown, then GET and DELETE by the next server. SIGTERM on the
   real program writes the snapshot and exits with 0.
-- Online page (vm, stub websocket): a dead connection (no answer to a ping) is dropped and reconnected.
+- Online page (vm, stub websocket): a player's page far behind its match: fire keys on "Catching up" keep it in the
+  match, the report after a while, Esc leaves (reported). A dead connection (no answer to a ping) is dropped and reconnected.
   `restart` shows the restart screen and reconnects (`saved: false`: the first `noroom` is the gone screen). `noroom` after hello retries, then shows the gone
   screen. A desync rebuilds without `&match` (at most twice). A version error reloads once per version.
   The `online` event reconnects at once.

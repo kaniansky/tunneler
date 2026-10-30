@@ -139,6 +139,7 @@ Lang.register("en", {
   "set.cat.controls.it": "The size and side of the touch controls.",
   "set.cat.language": "Language",
   "set.cat.language.i": "The language of the menus and the game.",
+  "set.lang.i2": "<ENTER> or a click chooses it.",
   "set.volume": "Volume: ",
   "set.volume.i": "How loud every sound is.",
   "set.stereo": "Stereo: ",

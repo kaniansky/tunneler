@@ -130,7 +130,7 @@ export function mount() {
   const screenTitle = key => [{ row: 4, text: T(key), color: 12 }];
   const levelsText = () => LEVELS.map(l => Lang.lower(Lang.raw("level." + l))).join(", ");
 
-  function setLang(d) { Lang.set(step(Lang.codes, Lang.code, d)); settings(true); }
+  function setLang(code) { Lang.set(code); settings(true); }
 
   // sound style: muted / original (the PC speaker) / realistic / cartoony - speaker.js keeps it
   // (localStorage "tunneler.sound"); a change plays a short sample
@@ -278,16 +278,14 @@ export function mount() {
   // right box is as wide as its widest row in any category - nothing moves when a value or the category changes.
   // categories (owner, 2026-10-24): Display, Graphics (the original's or the modern's settings), Sound,
   // Controls, Online, Language
-  // (Language is no category: a switch of its own below them - owner, 2026-10-25)
+  // (Language: a category since 1.2.3 - a list of the languages, room for more of them; owner, 2026-10-29)
   // (Controls: the keys - on a phone / tablet only once a keyboard was used on it - and the touch controls - only on a
   // touch screen; owner, 2026-10-27)
   // (owner, 2026-10-28: Gameplay instead of Display - the display's settings, the replays' and the preferred color)
-  const cats = () => ["gameplay", "graphics", "sound", "controls", "online"];
+  const cats = () => ["gameplay", "graphics", "sound", "controls", "online", "language"];
   const showKeys = () => !!CTL() && (!MOBILE || Controls.keyboardSeen());
   const showTouch = () => !!PADS() && GameScreen.touch();
   const catInfo = c => T("set.cat." + c + ".i" + (c !== "controls" || (showKeys() && showTouch()) ? "" : showKeys() ? "k" : "t"));
-  const langRow = () => ({ key: "lang", label: T("home.lang") + Lang.name(Lang.code), info: [T("home.lang.i1"), T("home.lang.i2")],
-    go: () => setLang(1), change: setLang });
   let setCat = "gameplay";
   const ONOFF = ["light", "glow", "shake"];
   const modValue = (k, v, c) => ONOFF.includes(k) ? Lang.raw(v === "on" ? "set.ping.on" : "set.ping.off", c) : Lang.raw("mod." + k + "." + v, c);
@@ -391,6 +389,9 @@ export function mount() {
   function catRows(c) {
     const L = (key, label, info, change, extra) => Object.assign({ key, label, info, align: "left",
       go: () => change(1), change }, extra || {});
+    // (each language in its own name, the one in use checked)
+    if (c === "language") return Lang.codes.map(l => ({ key: "lang-" + l, align: "left", label: Lang.enc(l === Lang.code ? "√ " : "  ") + Lang.name(l),
+      info: [T("home.lang.i1"), T("set.lang.i2")], go: () => setLang(l) }));
     if (c === "sound") {
       const rows = [L("sound", pad("set.sound") + T("sound." + soundStyle()), [T("sound.i1"), T("sound.i2")], setSound)];
       if (SP()) {
@@ -526,7 +527,7 @@ export function mount() {
     // (the category shown on the right in white - it stays marked while the selection is in the settings)
     const catRows = CATS.map(c => ({ key: "cat-" + c, label: T("set.cat." + c), info: [catInfo(c)], attr: c === setCat ? 0x0F : 0,
       go: () => ui.nextBox(1), change: d => { if (d > 0) ui.nextBox(1); } }));
-    const left = catRows.concat({ key: "gap", label: "", disabled: true }, langRow(), { key: "gap2", label: "", disabled: true },
+    const left = catRows.concat({ key: "gap", label: "", disabled: true },
       { key: "back", label: T("back.main"), info: [T("back.main.i")], go: leave });
     // (the desktop app's Server input: narrower when the two boxes would not fit 80 columns - a longer
     // address scrolls inside it)
@@ -557,7 +558,7 @@ export function mount() {
         lines: [{ row: 2, text: T("set.title"), color: 12 }], box: { y: 5 }, sel: Math.max(0, CATS.indexOf(setCat)), infoRow: 19,
         items: CATS.map(c => ({ key: "cat-" + c, label: T("set.cat." + c), info: [catInfo(c)],
           go: () => { setCat = c; setOpen = c; settings(); } }))
-          .concat({ key: "gap", label: "", disabled: true }, langRow(), { key: "gap2", label: "", disabled: true },
+          .concat({ key: "gap", label: "", disabled: true },
             { key: "back", label: T("back.main"), info: [T("back.main.i")], go: leave }),
         back: leave,
       }, keep);
