@@ -11,7 +11,7 @@ process.env.STATIC_DIR = process.env.STATIC_DIR || "src";   // serve the sources
 const assert = require("assert");
 const WebSocket = require("ws");
 const { TunnelerEngine, NetProto, TunnelerAI, MapData } = require("./src.js");
-const { createServer } = require("../server.js");
+const { createServer, PackedLog } = require("../server.js");
 const { MapGen } = require("../src/js/game/mapgen.js");
 const { FrameQueue, frameToInput, frameToInputExt, stateHash, HASH_EVERY, UP, RIGHT, FIRE, engineOptions } = NetProto;
 
@@ -129,7 +129,7 @@ class FakeClient {
       this.received.push(f);
       stepWith(this.engine, this.bots, f);
       this.frames++;
-      if (this.frames % HASH_EVERY === 0) this.send({ t: "h", m: this.match.no, n: this.frames, h: stateHash(this.engine) });
+      if (this.frames % HASH_EVERY === 0) this.send({ t: "h", m: this.match.no, n: this.frames, h: (stateHash(this.engine) ^ (this.lie || 0)) >>> 0 });
     }
   }
   send(m) { if (this.ws.readyState === 1) this.ws.send(JSON.stringify(m)); }
@@ -177,6 +177,34 @@ async function main() {
   const srv = createServer({ tickMs: TICK, quiet: true, cleanupMs: 5000, logChunk: 7, matchAloneMs: 1000 });
   const port = await new Promise(r => srv.listen(0, r));
   console.log("server on port", port);
+
+  // ---------------------------------------------------------------- the server's packed frame log
+  console.log("frame log");
+  {
+    let r = 99;
+    const rnd = n => ((r = (Math.imul(r, 1103515245) + 12345) >>> 0) >>> 16) % n;
+    for (const [ext, n] of [[false, 2], [true, 3], [true, 8]]) {
+      const ref = new NetProto.FrameLog(), log = new PackedLog(ext, n);
+      let same = true;
+      for (let f = 0; f < 3000; f++) {
+        const bits = Array.from({ length: n }, () => rnd(4) ? 0 : rnd(64) & (ext ? 31 : 63));
+        if (rnd(3)) bits.fill(0);
+        const keys = rnd(40) ? [] : [[f, 32, 0x39]], drives = ext && !rnd(200) ? [[1 + rnd(n), 7, "Zoë"]] : [];
+        const a = ext ? ref.pushN(bits, keys, drives) : ref.push(bits[0], bits[1], keys);
+        const b = ext ? log.pushN(bits, keys, drives) : log.push(bits[0], bits[1], keys);
+        if (JSON.stringify(a) !== JSON.stringify(b)) same = false;
+      }
+      check((ext ? n + " tanks" : "classic") + ": the frames pushed are the same entries as FrameLog's", () => assert(same));
+      check((ext ? n + " tanks" : "classic") + ": the log, its parts and a handoff's copy are FrameLog's", () => {
+        assert.strictEqual(log.length, ref.length); assert.strictEqual(log.count, ref.entries.length);
+        assert.deepStrictEqual(log.entries, ref.entries);
+        for (const from of [0, 1, 777, 2999, 3000]) assert.deepStrictEqual(log.slice(from), ref.slice(from));
+        const back = PackedLog.from(ext, n, JSON.parse(JSON.stringify(log.entries)), log.length);
+        assert(back); assert.deepStrictEqual(back.entries, ref.entries);
+        assert.strictEqual(PackedLog.from(ext, n, ref.entries, log.length + 1), null);
+      });
+    }
+  }
 
   // ---------------------------------------------------------------- http / list api
   console.log("api");
@@ -529,6 +557,36 @@ async function main() {
     check("gold: the mode's state the same everywhere", () => assert.strictEqual(JSON.stringify(g1.engine.GS), JSON.stringify(gs.engine.GS)));
     check("no desync (gold)", () => assert(![g1, g2, gs].some(c => c.desync) && gm.desyncs === 0));
     for (const c of [g1, g2, gs]) await c.close();
+  }
+
+  // ---------------------------------------------------------------- out of step: the players' hashes judged
+  // (a clear majority: only the others are told - they rebuild; no majority: everybody; spectators only themselves)
+  console.log("desync");
+  for (const [n, liars] of [[3, ["D3"]], [2, ["D2"]], [3, ["DS"]]]) {
+    const dr = (await http(port, "POST", "/api/rooms", { name: "Desync room", size: "small",
+      seats: Array.from({ length: n }, (_, i) => ({ kind: "open", team: i + 1 })) })).json;
+    const cs = [];
+    for (let i = 1; i <= n; i++) cs.push(await new FakeClient(port, dr.id, i === 1 ? { name: "D1", host: dr.hostKey } : { name: "D" + i }).connect());
+    const ds = await new FakeClient(port, dr.id, { name: "DS", role: "watch" }).connect();
+    await until(() => cs[0].status && cs[0].status.seats.filter(x => x.k).length === n, "seated (desync)");
+    for (const c of cs.slice(1)) c.send({ t: "ready", v: 1 });
+    await updated(cs[0], st => st.cant === null, "can start (desync)");
+    cs[0].send({ t: "start" });
+    const all = [...cs, ds];
+    await until(() => all.every(c => c.match), "desync match");
+    for (const c of all) if (liars.includes(c.name)) c.lie = 1;
+    await until(() => all.every(c => c.frames > HASH_EVERY * 4), "desync frames", 30000);
+    await Promise.all(all.map(c => c.sync()));
+    const dm = srv.rooms.get(dr.id).match, told = all.filter(c => c.desync).map(c => c.name);
+    if (liars[0] === "DS") check("a spectator out of step: only it is told, the match goes on", () =>
+{ assert.deepStrictEqual(told, ["DS"]); assert.strictEqual(dm.desyncs, 0); });
+    else if (n > 2) check("3 players, one out of step: only that one is told (it rebuilds), the others play on", () => {
+      assert.deepStrictEqual(told, liars); assert(dm.desyncs >= 1);
+    });
+    else check("2 players disagreeing (no majority): everybody is told", () => {
+      assert.deepStrictEqual(told.sort(), ["D1", "D2", "DS"]); assert(dm.desyncs >= 1);
+    });
+    for (const c of all) await c.close();
   }
 
   // ---------------------------------------------------------------- a custom map online (docs/v6/MAPS.md)

@@ -1,6 +1,8 @@
 // Glue between an engine and the browser: runs engine steps, presents the screen snapshots each step
 // produced at their proper times, plays the speaker events, and repaints every animation frame.
 import { TunnelerEngine } from "../game/engine.js";
+import { Debug } from "../ui/debug.js";
+import { Scope } from "../scope.js";
 
 const TICK_MS = TunnelerEngine.TICK_MS;
 
@@ -20,13 +22,21 @@ class Runner {
     // optional: a replay recorder (replay.js) - gets every step's input before it runs and a call after it
     this.recorder = null;
     this.raf = requestAnimationFrame(t => this.frame(t));
+    // (Debug info: the engine this runner steps)
+    this.undebug = Debug.provide("engine", () => {
+      const e = this.engine;
+      return { kind: e.extended ? "extended" : "classic", tanks: e.nPlayers, tick: e.tick, screen: e.screen, round: e.round, shown: this.queue.length };
+    });
+    Scope.onEnd(this.undebug);
   }
 
   // Runs one engine step whose virtual start is presented at real time `at`.
   // quiet: fast-forward (catching up / replaying), nothing is shown or played.
   runStep(input, at, quiet) {
     if (this.recorder) this.recorder.input(input);
+    const t0 = Debug.on() ? performance.now() : 0;
     this.engine.step(input);
+    if (t0) { Debug.count("steps"); Debug.time("step", performance.now() - t0); }
     if (this.recorder) this.recorder.stepped();
     if (!quiet) {
       for (const s of this.engine.snapshots) this.queue.push({ at: at + s.t, snap: s });
@@ -55,7 +65,7 @@ class Runner {
     this.raf = requestAnimationFrame(t => this.frame(t));
   }
 
-  stop() { cancelAnimationFrame(this.raf); if (this.speaker) this.speaker.silence(); }
+  stop() { cancelAnimationFrame(this.raf); if (this.speaker) this.speaker.silence(); this.undebug(); }
 }
 
 // Runs an engine on the local clock (split screen / vs CPU): one step per BIOS tick.

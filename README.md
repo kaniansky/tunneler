@@ -46,6 +46,13 @@ New in 1.2:
   replay plays in the version that recorded it.
 - After death with one view, your left / right keys switch the teammate you watch; split screen's info shows your
   keys; the skirmish and online lobbies show the map.
+- **Lamps that stop at walls** (1.2.4): a tank's lamp and headlight light its tunnel and the walls' faces, no longer
+  through rock, base walls or dirt; the static at low energy is bright snow like the original's.
+- **A quicker online game** (1.2.4): a frame from the server runs as soon as it arrives - your tank answers your keys
+  up to 55 ms sooner -, an out-of-step page repairs itself without making the others rebuild, and the modern graphics
+  send the GPU only what changed.
+- **Debug info** (1.2.4, Settings, Gameplay): frame rate, drawing, the engine and the connection (ping, input lag,
+  the frames waiting) in a small box at the top left.
 
 | 3D: a team game on generated caves (the triangle marks your teammate) | The map picker: generated maps |
 |---|---|
@@ -95,7 +102,7 @@ The details are in [CHANGELOG.md](CHANGELOG.md) and [docs/v6/](docs/v6/).
 ## Modern graphics
 
 Settings, **Graphics: modern** draws the same game at your screen's resolution: smooth tunnels, textured
-dirt and cracked rock, dark tunnels lit by the tanks' lamps and headlights, glowing shots, dust, sparks,
+dirt and cracked rock, dark tunnels lit by the tanks' lamps and headlights (stopped by what's in the way), glowing shots, dust, sparks,
 fire and debris, a smooth camera that glides with your tank, a new energy and shield panel, and every menu
 in a modern font, flat and warm (no gradients, no glow). Its own settings screen picks a style (clean, or retro with chunky
 pixels and the DOS colors) and quality, terrain, tunnel edges, lighting, particles, glow, screen shake,

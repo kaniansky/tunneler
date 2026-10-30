@@ -472,6 +472,27 @@ joystick drives the tank, the end map / menu without them, a tap beside the map 
   Name / chat inputs still need a real keyboard. `test/input-check.js` (mock `navigator.getGamepads`,
   synthesized pointer events, online.html's held bits and lobby).
 
+## Debug info (`src/js/ui/debug.js`)
+
+Settings > Gameplay "Debug info" (localStorage `tunneler.debug`, off by default; owner, 2026-10-30): a small HTML box
+at the top left of the page (`#debug-info`, monospace 10 px, over the canvas, no pointer events), redrawn twice a
+second. Display only - nothing enters the engine. `Debug.provide(group, fn)` (a line per group: `screen` and `gpu` -
+surface.js; `engine` - runner.js, per Runner; `net` - online.js: connection, ping, match, your tank, frames, queued,
+spare (the jitter buffer), catching up, rebuilds, desync), `Debug.count(name, n)` (per second: frames, steps, world
+KB, 3d heights, hud draws, msgs in, KB in / out), `Debug.time(name, ms)` (the last half second's average, kept
+until the next - the "ms" line: draw, step, buffer = a frame's arrival -> it run, input lag = a key pressed -> the
+frame with it run on this page; releases aren't timed - the server keeps a released key for the rest of that step).
+Steady text (owner: "not jumpy"): fixed decimals, every figure as wide as at its widest, a figure once shown keeps its
+place ("-" without a value). Labels are technical names, not translated; the Settings row and its info are (5
+languages). Tests: local-check.js (the row).
+
+Online input lag (1.2.4; owner, 2026-10-30): a key waits for the server's next step (0 - 55 ms, the game's tick - as in
+a local game), the way there and back, then the page's frame clock. That clock ran every frame the same part of a
+tick after the frame arrived (its phase: anything from 0 to 55 ms, measured 1.5 - 43). Now online.js `slack`: the
+least time a frame waited over half a second; above `SLACK_MS` (4) the clock moves that much earlier (never later -
+a late frame runs when it comes). Measured on localhost: buffer 2 - 7 ms. Test: net-page-smoke.js (frames 30 ms
+early: ~32 ms waits before, under 15 after a second).
+
 ## Languages (`lang.js`, `src/lang/<code>/`, `glyphs.js`)
 
 `src/js/text/lang.js` is the core (encoding, font slots, `t()`, `set()`, `apply()`); **every text lives in
@@ -525,10 +546,14 @@ Classic match (`isClassic`: BLUE + GREEN players in different teams) = frames `[
 count | keystrokes]` (bits: 1 up, 2 down, 4 left, 8 right, 16 fire, 32 esc), runs only while both are
 connected; extended = `[[b0..bN-1], count (, keys)]`, AI tanks always 0 (every client runs the same
 `TunnelerAI`s), never pauses (a missing player's bits are 0). The clock ticks at 1193182/65536 Hz
-(drift-free); held bits latched between ticks; run-length encoded; frames `{t:"f", m, n, f}`. During a
+(drift-free); held bits latched between ticks; run-length encoded (the server keeps it packed - `PackedLog`: a
+byte per tank's bits, a count per entry, keys / drive markers aside; ~15 x less memory than arrays, the same entries
+on the wire and in the handoff); frames `{t:"f", m, n, f}`; a connection with 1 MB unsent (`MAX_BUFFERED`) is dropped
+(it reconnects and catches up, paced). During a
 match only its players play (`player` by client id - a reconnect gets the tank back); everybody else
 watches; lobby changes wait. Players send `b`, `k` (relayed as "any key" only), `h {m, n, h}` (hash
-every 64 frames -> desync), `r` (cosmetic: the list's score; `playing` false = left the world map). The
+every 64 frames -> desync: a clear majority of the players -> only the others rebuild, else everybody - RELIABILITY.md
+2.6), `r` (cosmetic: the list's score; `playing` false = left the world map). The
 match ends (`endMatch`, `{t:"end", no}`) when most of its connected players report `playing: false`, or
 `matchAloneMs` (60 s) after its last player left. Limits: 1 KB messages, 120 msg/s, 500 rooms, empty
 rooms removed after 10 minutes, idle rooms closed after 10 minutes.

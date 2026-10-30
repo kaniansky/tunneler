@@ -44,6 +44,8 @@ import { NetProto } from "../game/netproto.js";
 import { Pads } from "../io/pads.js";
 import { Replay } from "../game/replay.js";
 import { Report, Reload } from "../net/report.js";
+import { Debug } from "../ui/debug.js";
+import { Scope } from "../scope.js";
 import { Runner } from "../io/runner.js";
 import { Speaker } from "../io/speaker.js";
 import { StatusLine } from "../draw/statusline.js";
@@ -117,6 +119,14 @@ export function mount() {
   // the fewest frames left waiting after a scheduled step, over half a second (spare); when that never got down to 0,
   // one frame runs early - the buffer shrinks to what the connection's jitter needs (0-1 frames on a steady one)
   let spare = Infinity, spareSince = 0;
+  // ... and within a frame (owner, 2026-10-30: "decrease the input lag"): the clock's phase. A frame that arrived waited
+  // for the clock's next 55 ms beat - up to a whole frame, the same every frame. slack = the least time any frame waited
+  // over half a second (when it was due - nextAt - minus when it came); more than SLACK_MS: the clock moves that much
+  // earlier, so even the latest of them runs just after it arrives (never later: a late frame runs when it comes)
+  let slack = Infinity;
+  const SLACK_MS = 4;
+  let lagWait = null;                // (Debug info: the bits a key press added and when)
+  let arrived = { end: 0, at: 0 };   // the newest frames received: the frame count after them, when
   let fatal = null, fatal2 = null, desyncAt = -1, lastReport = "";
   let lastRep = null, lastRepSaved = false;   // the last match's replay: saved here from the room's "Save the replay"
   let lastMatch = null;              // {engine, cfg, player} of the last match played to its end (statistics)
@@ -261,6 +271,9 @@ export function mount() {
     const input = ext ? frameToInputExt(f, NetProto.botInputs(bots, human, botBits)) : frameToInput(f[0], f[1], f[2]);
     runner.runStep(input, at, quiet);
     frames++;
+    if (frames === arrived.end && !quiet) Debug.time("buffer", performance.now() - arrived.at);   // (Debug info: arrival -> run)
+    // (Debug info: a key pressed -> the frame with it run here - the server's latch and the way back, the jitter buffer)
+    if (lagWait && player >= 0 && (((ext ? f[0][player] : f[player]) | 0) & lagWait.need) === lagWait.need) { Debug.time("input lag", performance.now() - lagWait.t); lagWait = null; }
     if (engine.screen === "map" && (!lastMatch || lastMatch.no !== matchNo))   // the match is over: its statistics are final
       lastMatch = { engine, cfg, player, no: matchNo };
     if (engine.screen === "map" && engine.snapshots.length) {
@@ -320,7 +333,8 @@ export function mount() {
     while (queue.length > 3) { stepFrame(now, false); nextAt = Math.max(nextAt, now + TICK_MS); }
     if (now - spareSince >= 500) {
       if (spare >= 1 && spare !== Infinity && queue.length) { stepFrame(now, false); nextAt = now + TICK_MS; }
-      spare = Infinity; spareSince = now;
+      else if (slack !== Infinity && slack > SLACK_MS) nextAt -= slack - SLACK_MS;
+      spare = Infinity; spareSince = now; slack = Infinity;
     }
     if (isPlayer()) sendKeys();
   }
@@ -355,7 +369,12 @@ export function mount() {
   function updateBits() {
     let b = 0;
     if (isPlayer() && !lobby) for (const bit in CODES) if (CODES[bit].some(c => keyboard.isDown(c))) b |= +bit;   // (not in the lobby)
-    if (b !== bits) { bits = b; send({ t: "b", v: b }); }
+    if (b !== bits) {
+      // (Debug info: a key pressed - the bits it adds - and when; releases aren't timed: the server keeps a key let go
+      // for the rest of that step, so a tap counts)
+      if (Debug.on() && b & ~bits) lagWait = { need: b & ~bits, t: performance.now() };
+      bits = b; send({ t: "b", v: b });
+    }
   }
   // registered after Keyboard's own listeners, so its state is already updated
   window.addEventListener("keydown", updateBits);
@@ -802,9 +821,11 @@ export function mount() {
     if (lobby.setOpen && lobbyUI.isNarrow()) return drawGameSettings(keep, selKey);
     let seats = seatItems();
     const sets = settingItems(), acts = actionItems();
-    // (the Game box ends above the info on row 22: at most 8 rows - View and, after a match, Statistics made
-    // 9 and it ran into the info; empty rows go first, from the top - the one above Back to the lobby last)
-    while (acts.length > 8 && acts.some(it => it.disabled && !it.label)) acts.splice(acts.findIndex(it => it.disabled && !it.label), 1);
+    // (the Game box ends where the chat beside it does, above the info: as many rows as the settings above it leave -
+    // 8 with 9 settings; View and, after a match, Statistics made 9 and it ran into the info; After death and Save the
+    // replay again - owner, 2026-10-30; empty rows go first, from the top - the one above Back to the lobby last)
+    const maxActs = 20 - (sets.length + 3);
+    while (acts.length > maxActs && acts.some(it => it.disabled && !it.label)) acts.splice(acts.findIndex(it => it.disabled && !it.label), 1);
     const lines = [], text = [], panels = [];
     // the seats (the game's name in the top border) and the chat below them on the left - its last row the "Say:"
     // input (a box joined to the panel above it) -, the settings and the Game box below them on the right (owner,
@@ -1116,7 +1137,15 @@ export function mount() {
   let hadHello = false, restarting = false, goneUntil = 0;
   let rebuilds = 0, rebuildsOf = 0, rebuilding = false;
 
-  function send(m) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(m)); }
+  function send(m) {
+    if (!ws || ws.readyState !== 1) return;
+    const s = JSON.stringify(m);
+    ws.send(s);
+    Debug.count("KB out", s.length / 1024);
+  }
+  Scope.onEnd(Debug.provide("net", () => ({ conn: Lang.decode(T(connKey, connParams)).replace(/\s+/g, " ").trim(), ping: rtt == null ? "" : Math.round(rtt) + " ms",
+    match: matchNo || "", you: matchNo ? (player >= 0 ? "tank " + (player + 1) : "watching") : "", frames, queued: queue.length,
+    spare: spare === Infinity ? "" : spare, catching: catching ? "yes" : "", rebuilds: rebuilds || "", desync: desyncAt >= 0 ? desyncAt : "" })));
 
   // the connection is closed (or found dead): reconnect after a while - at once after a restart, then backing
   // off (x1.6 up to 10 s) with up to 30% more at random (pages coming back after a restart don't all arrive at once)
@@ -1218,6 +1247,7 @@ export function mount() {
       awaitSince = null;                                   // (anything at all: the connection lives)
       let m;
       try { m = JSON.parse(ev.data); } catch (e) { return; }
+      if (Debug.on()) { Debug.count("msgs in"); Debug.count("KB in", (ev.data.length || 0) / 1024); }
       handle(m);
     };
     ws.onclose = ev => { if (ws === sock) closed(ev && ev.code); };
@@ -1286,6 +1316,8 @@ export function mount() {
         if (!engine || m.m !== matchNo) break;
         if (m.n !== frames + queue.length) { if (ws) ws.close(); return; }   // gap: reconnect resumes
         if (!queue.pushEntries(m.f) && ws) ws.close();     // (a malformed entry - e.g. a bad drive marker: reconnect resumes)
+        arrived = { end: frames + queue.length, at: performance.now() };
+        if (!catching && queue.length) slack = Math.min(slack, nextAt + (queue.length - 1) * TICK_MS - arrived.at);
         break;
       case "st": {
         // somebody new in the room (a seat taken or a spectator): the join sound

@@ -23,6 +23,7 @@ import { Speaker } from "../io/speaker.js";
 import { UniText } from "../text/unitext.js";
 import { Nav } from "../nav.js";
 import { Scope } from "../scope.js";
+import { Debug } from "../ui/debug.js";
 export function mount() {
   const ui = new DosUI(document.getElementById("screen"));
   Pads.start({ menu: () => true });                    // (a gamepad steers the menus)
@@ -306,7 +307,7 @@ export function mount() {
   // a key row's label: "BLUE up: "
   const keyLabel = (set, a) => Lang.raw(set) + " " + Lang.raw("ctl." + a) + ": ";
   const rowLabels = () => ["set.name", "set.account", "home.lang", "set.sound", "set.volume", "set.stereo", "set.fade", "set.gfx", "set.fullscreen",
-    "set.scale", "set.tankcolors", "set.teammarks", "rp.auto", "set.smooth", "set.ping", "set.prefer", "set.chatsound", "set.showchat", "touch.size", "touch.left", "touch.look"]
+    "set.scale", "set.tankcolors", "set.teammarks", "rp.auto", "set.debug", "set.smooth", "set.ping", "set.prefer", "set.chatsound", "set.showchat", "touch.size", "touch.left", "touch.look"]
     .concat(isApp() ? ["set.server"] : [], Object.keys(Gfx.MODERN).map(k => "mod." + k))
     .map(k => Lang.raw(k) || "").concat(CTL() ? Controls.SETS.flatMap(st => Controls.ACTIONS.map(a => keyLabel(st, a))) : []);
   const labelW = () => Math.max(...rowLabels().map(l => UniText.cols(l)));
@@ -440,6 +441,9 @@ export function mount() {
       // every match's replay saved by itself, or only when asked after it (replay.js; play.js / online.js "Save the replay")
       const auto = () => { Replay.setAutoSave(!Replay.autoSave()); settings(true); };
       rows.push(L("autosave", pad("rp.auto") + T(Replay.autoSave() ? "rp.auto.on" : "rp.auto.off"), [T("rp.auto.i1"), T("rp.auto.i2")], auto));
+      // figures for finding problems in a small box at the top left of the page (ui/debug.js; display only)
+      rows.push(L("debug", pad("set.debug") + onOffT(Debug.on()), [T("set.debug.i"), T("home.lang.i2")],
+        () => { Debug.set(!Debug.on()); settings(true); }));
       return rows;
     }
     if (c === "graphics") {

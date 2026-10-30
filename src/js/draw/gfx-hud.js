@@ -140,9 +140,10 @@ function draw(ctx, W, H, sc, sw, sh, set, now, style) {
     ctx.lineWidth = Math.max(1, px(0.8)); ctx.strokeStyle = clean ? LINE : "#777"; ctx.stroke();
     ctx.restore();
     // the round clock and a game mode's number: tags at the panel's right end (owner, 2026-10-28: beside the
-    // panel they covered its percentages since it is as wide as the window) - room kept for them whenever the game
-    // can show them, so the bars don't jump when the clock appears
-    const TW = 24, slots = (e.roundTicks ? 1 : 0) + (e.GM && e.GM.hud ? 1 : 0);
+    // panel they covered its percentages since it is as wide as the window) - room made for the ones shown now; with
+    // none the bars reach the panel's end (owner, 2026-10-30: "not stretched to 100% when there is nothing next to them")
+    const clockOn = !!(e.roundTicks && e.clockShown >= 0 && e.clockShown <= 30), hs = e.hudShown && e.hudShown[p];
+    const TW = 24, slots = (clockOn ? 1 : 0) + (hs ? 1 : 0);
     const right = bx + bw - (slots ? px(6 + slots * (TW + 4)) : 0);   // (the bars' and percentages' right end)
     const bars = [[e.energy[p], clean ? HUES[14] : "#ffff55", bolt], [e.shield[p], clean ? HUES[11] : "#55ffff", shield]];
     bars.forEach(([v, cs, icon], i) => {
@@ -177,9 +178,8 @@ function draw(ctx, W, H, sc, sw, sh, set, now, style) {
       ctx.fillText(text, x, ty + th / 2);
       ctx.restore();
     };
-    if (e.roundTicks && e.clockShown >= 0 && e.clockShown <= 30)
+    if (clockOn)
       tag(right + px(4 + TW / 2), String(e.clockShown), e.clockShown <= 10 ? (Math.floor(now / 250) % 2 ? hues[12] : hues[15]) : hues[14]);
-    const hs = e.hudShown && e.hudShown[p];
     if (hs) { const [v, k] = hs.split(":"); tag(bx + bw - px(6 + TW / 2), v, hues[(+k || 14) & 15]); }
     // the name on the top border
     if (sc.labels && c.name) {
@@ -218,5 +218,16 @@ function draw(ctx, W, H, sc, sw, sh, set, now, style) {
   }
 }
 
-Gfx.Hud = { draw };
+// everything draw shows apart from what a setting changes (gfx.js draws it again then anyway): the same key - the
+// same picture, the last one drawn still holds (the engine's state moves only with its steps - e.tick; the marks
+// with the smooth camera; the blinking low bars and round clock with their phases)
+function key(sc, W, H, set, now, style) {
+  const e = sc.engine, k = [W, H, set.panel, style, Display.tankColorMode(), e ? e.tick : -1, sc.map ? sc.map.kind : "", sc.anykey,
+    sc.labels, sc.ping, sc.notice, sc.cut, sc.destroyed, Math.floor(now / 300) % 2, Math.floor(now / 250) % 2];
+  for (const c of sc.cells || []) k.push(c.p, c.x, c.y, c.viewer, c.black, c.name, c.team, c.color);
+  for (const c of sc.windows || []) if (c.markAt && c.markAt.length) k.push(c.markAt.join(";"));
+  return k.join("|");
+}
+
+Gfx.Hud = { draw, key };
 export const Hud = Gfx.Hud;

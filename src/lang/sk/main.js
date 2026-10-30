@@ -163,6 +163,8 @@ Lang.register("sk", {
   "set.tankcolors.i": "Len hracia obrazovka; mená si nechávajú svoje farby.",
   "set.teammarks": "Označiť spoluhráčov: ",
   "set.teammarks.i": "Malý trojuholník nad tankami tvojich spoluhráčov v tímových hrách.",
+  "set.debug": "Ladiace údaje: ",
+  "set.debug.i": "Snímky za sekundu, kreslenie, engine a sieť v okienku vľavo hore.",
   "ctl.up": "hore",
   "ctl.down": "dole",
   "ctl.left": "vľavo",
@@ -460,7 +462,7 @@ Lang.register("sk", {
         ["Zvuk:  ", "V Nastaveniach zvolíš jeho štýl: pôvodný (pípanie PC " +
           "speakera z roku 1991), realistický (zvuky tankov), nahratý (skutočné nahrávky), rozprávkový (boing a puk) " +
           "alebo vypnutý; aj hlasitosť, stereo a slabnutie so vzdialenosťou.  Zvuky ostatných tankov slabnú so vzdialenosťou od tvojho a znejú z ich strany (stereo)."],
-        ["Nastavenia:  ", "Hra (celá obrazovka - aj <ALT>+<ENTER> -, veľkosť obrazu, farby tankov: bežné, pre farbosleposť alebo ty modrý / tím zelený / nepriatelia červení, značka nad tankami spoluhráčov, obľúbená farba, ukladať každý zápas), Grafika (pôvodná alebo moderná, potom nastavenia toho vzhľadu), Zvuk (štýl, hlasitosť, stereo, slabnutie so vzdialenosťou), Ovládanie (klávesy oboch tankov; dotykové ovládanie: veľkosť, strana a vzhľad - jednoduchý alebo tvoj tank), Online (tvoj účet - alebo meno -, chat, zvuk chatu, ping; v desktopovej aplikácii server) a Jazyk."],
+        ["Nastavenia:  ", "Hra (celá obrazovka - aj <ALT>+<ENTER> -, veľkosť obrazu, farby tankov: bežné, pre farbosleposť alebo ty modrý / tím zelený / nepriatelia červení, značka nad tankami spoluhráčov, obľúbená farba, ukladať každý zápas, ladiace údaje), Grafika (pôvodná alebo moderná, potom nastavenia toho vzhľadu), Zvuk (štýl, hlasitosť, stereo, slabnutie so vzdialenosťou), Ovládanie (klávesy oboch tankov; dotykové ovládanie: veľkosť, strana a vzhľad - jednoduchý alebo tvoj tank), Online (tvoj účet - alebo meno -, chat, zvuk chatu, ping; v desktopovej aplikácii server) a Jazyk."],
         ["Grafika:  ", "Nastavenia vyberajú pôvodnú (obrazovka DOS-u z roku 1991) alebo modernú (predvolená): tá istá hra nakreslená v rozlíšení tvojej obrazovky - hladké tunely, textúrovaná hlina a skala, tmavé tunely osvetlené svetlami tankov, žiariace strely, prach, iskry a oheň, nový panel a menu v modernom písme.  Nastavenia modernej grafiky: štýl (čistý alebo retro), kvalita, terén, okraje tunelov, osvetlenie, častice, žiara, otrasy obrazu, kamera (plynulá: tanky kĺžu medzi krokmi) a rozhranie, a hmla vojny pri výhľade.  Hĺbka 3D (predvolená) svet vyvýši: steny s výškou a tieňmi, zhora rovnako ako 2D (okraje tunelov pixely: kocky); zariadenie, ktoré ju nevie nakresliť, alebo je s kvalitou auto naň pomalé, hrá v 2D.  Mení sa len vzhľad, nikdy hra - ani online."],
       ],
     },

@@ -164,6 +164,8 @@ Lang.register("en", {
   "set.tankcolors.i": "Only the game screen; the names keep their colors.",
   "set.teammarks": "Mark teammates: ",
   "set.teammarks.i": "A small triangle over your teammates' tanks in team games.",
+  "set.debug": "Debug info: ",
+  "set.debug.i": "Frame rate, drawing, engine and network figures in a box at the top left.",
   "ctl.up": "up",
   "ctl.down": "down",
   "ctl.left": "left",

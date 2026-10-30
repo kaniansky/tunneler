@@ -128,7 +128,7 @@ const Accounts = require("./accounts.js");
 const CloudSave = require("./cloudsave.js");
 // this server's version (package.json): clients of another version can't create or join its games
 const VERSION = (() => { try { return require("./package.json").version || null; } catch (e) { return null; } })();
-const { FrameLog, ALL_BITS, EXT_BITS, F10, HASH_EVERY, ROLES, MAX_SLOTS, MAX_PLAYER_NAME, SEAT_KINDS, SETTINGS, cleanPlayerName, cleanChat,
+const { ALL_BITS, EXT_BITS, F10, HASH_EVERY, ROLES, MAX_SLOTS, MAX_PLAYER_NAME, SEAT_KINDS, SETTINGS, cleanPlayerName, cleanChat,
   roomSettings, matchSlots, startProblem, isClassic } = NetProto;
 
 const PUB = path.join(__dirname, process.env.STATIC_DIR || "public");
@@ -141,6 +141,7 @@ const MAX_FRAMES = Math.floor(8 * 3600 * 18.2);   // ~8 hours of play per room (
 const MAX_ENTRIES = 250000;            // frame log entries per room (busy play: up to one per frame; then the room stops)
 const MAX_TOTAL_ENTRIES = 4000000;     // all rooms' logs together: no new rooms above this (~ 400 MB)
 const LOG_CHUNK = 2000;                // log entries per message while a (re)joining client catches up
+const MAX_BUFFERED = 1 << 20;          // a connection with this much unsent: no longer taking it (dropped - it comes back and catches up)
 const MAX_CREATES_PER_MIN = 30;        // POST /api/rooms per address
 const MAX_QUICK_PER_MIN = 60;          // POST /api/quickplay per address (creating a room also counts as a create)
 const QP_START_MS = 10 * 1000;         // quick play: the first match starts this long after a player sat down
@@ -273,6 +274,71 @@ function dirStateStore(dir) {
 }
 // errors that escaped every handler (counted for /api/health; the program logs them and keeps serving)
 const processErrors = { count: 0 };
+
+// A match's frame log, packed: the entries of NetProto.FrameLog (run-length encoded - what the wire and a handoff
+// carry, entry(i) / entries) kept as bytes - a player's bits a byte each, a count per entry, the rare keys and drive
+// markers aside: a long busy match (a new entry nearly every frame) in a tenth of the memory of arrays of arrays.
+// ext: [[b0..bN-1], count, keys?, drives?] (n players); classic: [b, g, count, keys?]
+class PackedLog {
+  constructor(ext, n) {
+    this.ext = !!ext; this.n = ext ? Math.max(1, n | 0) : 2; this.length = 0; this.count = 0;
+    this.bits = new Uint8Array(256 * this.n); this.runs = new Uint32Array(256); this.more = new Map();   // entry -> [keys, drives]
+  }
+  // one frame: bits (n), its keys and drive markers (ext) -> that frame's entry (count 1) as the clients get it
+  add(bits, k, drives) {
+    const keys = k && k.length ? k : null, dr = this.ext && drives && drives.length ? drives : null, n = this.n, last = this.count - 1;
+    let same = !keys && !dr && last >= 0 && !this.more.has(last);
+    for (let j = 0; same && j < n; j++) same = this.bits[last * n + j] === (bits[j] & 255);
+    if (same) this.runs[last]++;
+    else {
+      if (this.count === this.runs.length) {
+        const b = new Uint8Array(this.bits.length * 2), r = new Uint32Array(this.runs.length * 2);
+        b.set(this.bits); r.set(this.runs); this.bits = b; this.runs = r;
+      }
+      const i = this.count++;
+      for (let j = 0; j < n; j++) this.bits[i * n + j] = bits[j];
+      this.runs[i] = 1;
+      if (keys || dr) this.more.set(i, [keys, dr]);
+    }
+    this.length++;
+    const b = Array.from(bits.slice(0, n), v => v & 255);
+    if (!this.ext) return keys ? [b[0], b[1], 1, keys] : [b[0], b[1], 1];
+    return dr ? [b, 1, keys, dr] : keys ? [b, 1, keys] : [b, 1];
+  }
+  pushN(bits, k, drives) { return this.add(bits, k, drives); }
+  push(b, g, k) { return this.add([b, g], k, null); }
+  // entry i (its count: run, default the whole run)
+  entry(i, run) {
+    const n = this.n, o = i * n, x = this.more.get(i), c = run == null ? this.runs[i] : run;
+    if (!this.ext) return x && x[0] ? [this.bits[o], this.bits[o + 1], c, x[0]] : [this.bits[o], this.bits[o + 1], c];
+    const b = Array.from(this.bits.subarray(o, o + n));
+    return x && x[1] ? [b, c, x[0], x[1]] : x && x[0] ? [b, c, x[0]] : [b, c];
+  }
+  get entries() { const out = []; for (let i = 0; i < this.count; i++) out.push(this.entry(i)); return out; }
+  // entries covering frames [from, length) (FrameLog.slice)
+  slice(from) {
+    from = Math.max(0, from | 0);
+    const out = [];
+    for (let i = 0, pos = 0; i < this.count; i++) {
+      const end = pos + this.runs[i];
+      if (end > from) out.push(this.entry(i, pos >= from ? this.runs[i] : end - from));
+      pos = end;
+    }
+    return out;
+  }
+  // from a handoff's {entries, length} (null: not a log of this kind)
+  static from(ext, n, entries, length) {
+    const log = new PackedLog(ext, n);
+    for (const e of entries) {
+      const bits = ext ? e && e[0] : e, c = ext ? e && e[1] : e && e[2];
+      if (!Array.isArray(e) || !Array.isArray(bits) && ext || ext && bits.length !== log.n || !Number.isInteger(c) || c < 1) return null;
+      const keys = ext ? e[2] : e[3], drives = ext ? e[3] : null;
+      log.add(ext ? bits : [e[0] | 0, e[1] | 0], keys, drives);
+      if (c > 1) { log.runs[log.count - 1] += c - 1; log.length += c - 1; }
+    }
+    return log.length === length ? log : null;
+  }
+}
 
 function createServer(opts = {}) {
   const tickMs = opts.tickMs || NetProto.TICK_MS;
@@ -460,7 +526,7 @@ function createServer(opts = {}) {
       room, no: ++room.matches, seed, ext, slots, qp: room.qp, drives: [],
       cfg: { ext, players: N, slots: slots.map(s => ({ color: s.color, bot: s.bot, level: s.level, team: s.team })),
         names: slots.map(s => s.bot ? null : s.name), ...settingsOf(room), ...(room.qp ? { qp: true } : {}), map: room.mapCode || genCode },
-      log: new FrameLog(), socks: slots.map(s => s.bot ? null : room.seats[s.color].occ),
+      log: new PackedLog(ext, N), socks: slots.map(s => s.bot ? null : room.seats[s.color].occ),
       held: new Array(N).fill(0), latch: new Array(N).fill(0), keys: [],
       running: false, timer: null, startAt: 0, startN: 0, hashes: new Map(), desyncs: 0, aloneTimer: null,
       report: { screen: "text", playing: true, round: 0, wins: new Array(N).fill(0), teamWins: [] },
@@ -533,28 +599,26 @@ function createServer(opts = {}) {
     }
     if (out.length) {
       const msg = JSON.stringify({ t: "f", m: m.no, n: first, f: out });
-      for (const s of room.sockets) if (s.readyState === 1 && !s.syncing) s.send(msg);   // (catching up: see sendLog)
+      for (const s of room.sockets) if (s.readyState === 1 && !s.syncing) sendLive(s, msg);   // (catching up: see sendLog)
     }
     if (logFull(m)) { say("room", room.id, "frame log full"); stopClock(m); return; }
     schedule(m);
   }
-  const logFull = m => m.log.length >= MAX_FRAMES || m.log.entries.length >= MAX_ENTRIES;
-  const totalEntries = () => { let n = 0; for (const r of rooms.values()) if (r.match) n += r.match.log.entries.length; return n; };
+  const logFull = m => m.log.length >= MAX_FRAMES || m.log.count >= MAX_ENTRIES;
+  const totalEntries = () => { let n = 0; for (const r of rooms.values()) if (r.match) n += r.match.log.count; return n; };
 
   // The log from frame `from` on, at most `max` entries, without a copy of everything before it.
   // cur = {i, pos}: an entry index and its first frame, kept per connection so every part doesn't scan
   // from the start. (The last entry may still grow - a run of identical frames - so the cursor never
   // moves past it.)
-  const entryCount = e => Array.isArray(e[0]) ? e[1] : e[2];
   function logPart(log, cur, from, max) {
-    const E = log.entries, out = [];
-    while (cur.i < E.length - 1 && cur.pos + entryCount(E[cur.i]) <= from) { cur.pos += entryCount(E[cur.i]); cur.i++; }
+    const R = log.runs, out = [];
+    while (cur.i < log.count - 1 && cur.pos + R[cur.i] <= from) { cur.pos += R[cur.i]; cur.i++; }
     let n = from, pos = cur.pos;
-    for (let i = cur.i; i < E.length && out.length < max; i++) {
-      const e = E[i], end = pos + entryCount(e);
+    for (let i = cur.i; i < log.count && out.length < max; i++) {
+      const end = pos + R[i];
       if (end > n) {
-        if (pos >= n) out.push(Array.isArray(e[0]) ? [e[0].slice(), ...e.slice(1)] : e.slice());
-        else out.push(Array.isArray(e[0]) ? [e[0].slice(), end - n] : [e[0], e[1], end - n]);   // (only runs have count > 1)
+        out.push(log.entry(i, pos >= n ? R[i] : end - n));   // (only runs - no keys - have count > 1)
         n = end;
       }
       pos = end;
@@ -566,7 +630,7 @@ function createServer(opts = {}) {
   function sendLog(m, ws) {
     const room = m.room;
     if (ws.readyState !== 1 || !room.sockets.has(ws) || room.match !== m) return;
-    if (ws.bufferedAmount > 1 << 20) { setTimeout(() => sendLog(m, ws), 50); return; }
+    if (ws.bufferedAmount > MAX_BUFFERED) { setTimeout(() => sendLog(m, ws), 50); return; }
     const part = logPart(m.log, ws.cur, ws.sent, logChunk);
     if (part.f.length) ws.send(JSON.stringify({ t: "f", m: m.no, n: ws.sent, f: part.f }));
     ws.sent = part.end;
@@ -611,8 +675,52 @@ function createServer(opts = {}) {
     endMatch(room, "over");
   }
 
+  // Out of step (desync): the players' hashes of a frame (every HASH_EVERY), once every connected player's is in
+  // (late: the ones that came) - all the same: fine; a clear majority: only the others are out of step - told, they
+  // rebuild the match from frame 0 (the log is the canonical run) and report again, the rest play on; no majority
+  // (two players, a tie): every page rebuilds and the hashes so far are forgotten. Spectators only check themselves.
+  function judge(m, n, rec, late) {
+    const connected = m.socks.map((s, i) => s && s.readyState === 1 && !m.slots[i].bot ? i : -1).filter(i => i >= 0);
+    if (!late && connected.some(i => !rec.votes.has(i))) return;
+    rec.done = true;
+    const tally = new Map();
+    for (const h of rec.votes.values()) tally.set(h, (tally.get(h) || 0) + 1);
+    const ranked = [...tally].sort((a, b) => b[1] - a[1]);
+    if (ranked.length > 1 && ranked[0][1] === ranked[1][1]) {
+      m.desyncs++;
+      say("DESYNC room", m.room.id, "frame", n, "no majority:", ranked.map(([h, c]) => h.toString(16) + " x" + c).join(" "));
+      broadcast(m.room, JSON.stringify({ t: "desync", n }));
+      m.hashes.clear();
+      return;
+    }
+    rec.h = ranked.length ? ranked[0][0] : null;
+    const off = [...rec.votes].filter(([, h]) => h !== rec.h).map(([q]) => q);
+    if (off.length) {
+      for (const q of off) forget(m, q);
+      outOfStep(m, n, off.map(q => m.socks[q]), "player(s) " + off.join(", "), null, rec.h);
+    }
+    if (rec.h !== null) outOfStep(m, n, [...rec.specs].filter(([, h]) => h !== rec.h).map(([s]) => s), "spectator", null, rec.h);
+    rec.specs.clear();
+  }
+  // a player out of step: its hashes so far go (it reports them again after its rebuild)
+  function forget(m, p) { for (const r of m.hashes.values()) r.votes.delete(p); }
+  function outOfStep(m, n, socks, who, h, want) {
+    socks = socks.filter(s => s && s.readyState === 1);
+    if (!socks.length) return;
+    if (!who.startsWith("spectator")) m.desyncs++;
+    say("DESYNC room", m.room.id, "frame", n, who, h != null ? h.toString(16) : "", "!=", want.toString(16));
+    const msg = JSON.stringify({ t: "desync", n });
+    for (const s of socks) s.send(msg);
+  }
   function broadcast(room, msg) {
-    for (const s of room.sockets) if (s.readyState === 1) s.send(msg);
+    for (const s of room.sockets) if (s.readyState === 1) sendLive(s, msg);
+  }
+  // a live message (frames, the lobby's news): a connection that piled up MAX_BUFFERED unsent (its network took
+  // nothing for minutes - the heartbeat sees only a dead one) is dropped instead of growing; the page reconnects and
+  // gets the rest of the log paced (sendLog)
+  function sendLive(s, msg) {
+    if (s.bufferedAmount > MAX_BUFFERED) { if (!s.dropped) { s.dropped = true; say("dropped a connection that takes nothing:", s.bufferedAmount, "bytes unsent"); s.terminate(); } return; }
+    s.send(msg);
   }
   // Chat messages: who wrote one is kept as a hash of the client id (its messages go when it is kicked - the id itself
   // never leaves the server); what the pages get is {id, from, text, del?}, a deleted one's text CHAT_DELETED
@@ -1829,27 +1937,25 @@ function createServer(opts = {}) {
           const oldest = m.log.length - HASH_EVERY * 64;
           if (msg.m !== m.no || n <= 0 || n % HASH_EVERY || n > m.log.length || n < oldest) break;
           let rec = m.hashes.get(n);
-          if (p < 0) {                                     // a spectator: checked, but only it is told
-            if (rec && rec.h !== h) {
-              say("DESYNC room", room.id, "frame", n, "spectator", rec.h.toString(16), "!=", h.toString(16));
-              ws.send(JSON.stringify({ t: "desync", n }));
-            }
+          if (!rec) {
+            m.hashes.set(n, rec = { votes: new Map(), specs: new Map(), h: null, done: false });
+            if (m.hashes.size > 80) for (const k of [...m.hashes.keys()]) if (k < oldest) m.hashes.delete(k);
+          }
+          if (p < 0) {                                     // a spectator: checked against the players' hash, only it is told
+            if (!rec.done) rec.specs.set(ws, h);
+            else if (rec.h !== null && rec.h !== h) outOfStep(m, n, [ws], "spectator", h, rec.h);
             break;
           }
-          if (!rec) {                                      // the players' hashes: the first one per player counts
-            m.hashes.set(n, { h, from: new Set([p]) });
-            if (m.hashes.size > 80) for (const k of [...m.hashes.keys()]) if (k < oldest) m.hashes.delete(k);
-          } else if (!rec.from.has(p)) {
-            rec.from.add(p);
-            if (rec.h !== h) {
-              m.desyncs++;
-              say("DESYNC room", room.id, "frame", n, "player", p, rec.h.toString(16), "!=", h.toString(16));
-              broadcast(room, JSON.stringify({ t: "desync", n }));
-              // (every page told rebuilds the match from frame 0 and reports its hashes again - on the
-              // canonical run now: the hashes so far, the faulty ones among them, are forgotten)
-              m.hashes.clear();
-            }
+          if (rec.votes.has(p)) break;                     // (the first one per player counts)
+          if (rec.done) {                                  // (decided: a player who rebuilt, or one far behind)
+            if (rec.h !== null && rec.h !== h) { forget(m, p); outOfStep(m, n, [m.socks[p]], "player " + p, h, rec.h); }
+            else rec.votes.set(p, h);
+            break;
           }
+          rec.votes.set(p, h);
+          judge(m, n, rec, false);
+          // (a frame a player never reported - gone, far behind: decided without it two hash periods later)
+          for (const [k, r] of m.hashes) if (!r.done && k <= n - 2 * HASH_EVERY) judge(m, k, r, true);
           break;
         }
         case "r": {
@@ -2036,9 +2142,10 @@ function createServer(opts = {}) {
     for (const c of room.chat) if (c && Number.isInteger(c.id) && c.id > room.chatId) room.chatId = c.id;
     for (const c of room.chat) if (c && !Number.isInteger(c.id)) c.id = ++room.chatId;
     const sm = s.match;
-    if (sm && sameVersion && sm.log && Array.isArray(sm.log.entries) && Number.isInteger(sm.log.length) && Array.isArray(sm.slots) && sm.cfg) {
-      const N = sm.slots.length, log = new FrameLog();
-      log.entries = sm.log.entries; log.length = sm.log.length;
+    const log = sm && sameVersion && sm.log && Array.isArray(sm.log.entries) && Number.isInteger(sm.log.length) && Array.isArray(sm.slots) && sm.cfg
+      ? PackedLog.from(!!sm.ext, sm.slots.length, sm.log.entries, sm.log.length) : null;
+    if (log) {
+      const N = sm.slots.length;
       room.match = { room, no: sm.no | 0, seed: sm.seed >>> 0, ext: !!sm.ext, slots: sm.slots, cfg: sm.cfg, log,
         socks: new Array(N).fill(null), held: new Array(N).fill(0), latch: new Array(N).fill(0), keys: [],
         running: false, timer: null, startAt: 0, startN: 0, hashes: new Map(), desyncs: sm.desyncs | 0, aloneTimer: null,
@@ -2176,7 +2283,7 @@ function watchReleases(current, say = log) {
   setInterval(check, DAY_MS).unref();
 }
 
-module.exports = { createServer, slugify, cleanName, newerVersion, latestRelease, sigV4, s3Request, keepAwake };
+module.exports = { createServer, PackedLog, slugify, cleanName, newerVersion, latestRelease, sigV4, s3Request, keepAwake };
 
 // Readable start-up errors instead of a Node stack trace (exit code 1).
 function startupError(port, err) {
