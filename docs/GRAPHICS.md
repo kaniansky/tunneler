@@ -76,6 +76,15 @@ how the game and every menu screen are drawn. This file describes what is built.
   labels); the instrument panel keeps the normal palette.
 - The page around the game takes the modern style's background (`Gfx.refresh` sets style.css's `--bg` on
   `<html>` from `Gfx.Text.STYLES[style].back`: clean's warm near-black, retro's black); original removes it.
+- What a frame reuses (1.2.4 - a play screen is drawn every frame, the engine steps 18 times a second): the 2D
+  source is uploaded only after a paint (`srcStale`); the HUD has a texture of its own, drawn again only when
+  `Hud.key` changes (the engine's step, the scene's cells / marks / notice / ping, a blink phase, a setting); the
+  world texture gets only the rows that changed since the last step (`uploadWorld`: two buffers in turn,
+  `texSubImage2D`); a view's line of sight memory band and what its tank sees go up once per step, each view with
+  its own textures; the 3D height maps (passes A / B) are per view and made again only when the step, the camera's
+  whole world pixel or a setting changed (`heights`); the 3D ray skips the tanks' heights above their top (2 x uTS
+  - `below` / `under`, the same answer as `sceneH`). Debug info (Settings > Gameplay, ui/debug.js) shows the
+  frame rate and these per second (world KB, 3d heights, hud draws).
 - Robustness: a lost and restored WebGL context rebuilds every layer; an error in a layer's frame shows that
   layer as the original (until the next graphics change); a failed modern shader is not retried every frame.
 
@@ -129,13 +138,21 @@ how the game and every menu screen are drawn. This file describes what is built.
   between engine steps (interpolated over a tick, turning eased) and the view follows the gliding tank
   exactly (`tank - 38`); "exact": the engine's positions and cameras.
 - Light: ambient darkness, each tank's lamp and headlight cone, shots, flashes of firing / impacts / hits
-  / explosions. Glow: halos around shots, embers and "other" pixels.
+  / explosions. Glow: halos around shots, embers and "other" pixels. A tank's lamp and headlight stop at what's in
+  the way (1.2.4; owner, 2026-10-30: "the light from the tank should not go through the wall and rock, maybe not even
+  through the dirt"): its light mask (`LMFS`, a 105 x 105 slot per player in one texture, made on the GPU when the
+  tank moved or the ground within its reach changed) - along the line from the tank rock and base walls stop it (their
+  first pixel, the face it shines on, lit), dirt lets it in 1.5 px (the tunnel's edge glows, no tunnel behind it is
+  lit). Shots and flashes still light by distance. A GPU without the mask program: light by distance as before.
 - Particles (gl.POINTS in their own VAO, Math.random - display only): dust when digging / bumping, sparks
   on firing, impacts and hits, fire, debris and smoke when a tank blows up; capped per setting. Screen
   shake when a view's tank is hit or a tank blows up near it.
 - Line of sight: the view's terrain from the player's memory (`engine.sightMem[p]`, a band of rows), what
   its tank sees now from `engine.sightView`; the rest in fog (blurred: soft edges, dim; dark; gray). Only
-  tanks and shots the player sees are drawn / lit. The static at low energy: animated noise.
+  tanks and shots the player sees are drawn / lit. The static at low energy: animated noise - bright snow, a block per world pixel,
+  black to white and the palette's colours as the original's, at 3/4 brightness, an integer hash per block and frame (1.2.4;
+  owner, 2026-10-30: dim gray noise read as the view
+  going dark).
 - World maps: the end-of-match map (36, 20, 648 x 292 dots: the engine's 144 x 73 samples) and the
   spectators' live map (views' `drawMap` rect, tanks drawn larger) through the same shader.
 - The notice band ("Press <ESC> again...") is cut out of the windows (`sc.cut`).
@@ -175,8 +192,8 @@ how the game and every menu screen are drawn. This file describes what is built.
   view a frame (the background with the window cut out, a 1 px border in the player's colour), the
   instrument panel (energy and shield as icon + solid bar + percent; low values blink rust), the
   round clock and a game mode's number as tags at the panel's right end (`engine.clockShown`, `engine.hudShown[p]`;
-  owner, 2026-10-28: beside the panel they covered its percentages - the bars are shorter whenever the game can show
-  a tag: a round time, a mode with a number), the name label
+  owner, 2026-10-28: beside the panel they covered its percentages - the bars are shorter while a tag is shown; with
+  none they reach the panel's end - owner, 2026-10-30), the name label
   on the top border (with the team), DESTROYED for blacked-out views; the ping and the notice band across
   the screen; the end-of-match map's frame around the map and the banner (the "PRESS ANY KEY" pixel art
   stays). Panel "classic": nothing - the upscaled original frame, panel and labels show.

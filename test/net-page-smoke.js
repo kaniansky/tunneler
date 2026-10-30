@@ -324,6 +324,22 @@ function loadPage(page, search, stored, version) {
     // its timers fire late - so the mean is what tells them apart, under 2)
     const last = queued.slice(-20), mean = last.reduce((a, b) => a + b, 0) / last.length;
     assert(Math.max(...last) <= 3 && mean < 2, "the buffer shrinks again (to about nothing waiting): " + queued.join(" "));
+    // the clock's phase (owner, 2026-10-30: the input lag): frames that come 30 ms before the page's clock would run
+    // them (a stall sets the clock to an arrival, then a frame every tick, 30 ms early) - after a second they run just
+    // after they arrive instead of 30 ms later every time
+    await waitFor(() => env.win.tunnelerFrames().queued === 0, "the frames so far run (phase)");
+    await wait(400);
+    ws.recv({ t: "f", m: 1, n: n++, f: [[0, 0, 1]] });
+    const R = performance.now(), waits = [];
+    for (let i = 1; i <= 40; i++) {
+      await wait(Math.max(0, R + i * TICK - 30 - performance.now()));
+      const before = env.win.tunnelerFrames().frames, at = performance.now();
+      ws.recv({ t: "f", m: 1, n: n++, f: [[0, 0, 1]] });
+      while (env.win.tunnelerFrames().frames === before && performance.now() - at < 100) await wait(1);
+      waits.push(performance.now() - at);
+    }
+    const lastW = waits.slice(-15), meanW = lastW.reduce((a, b) => a + b, 0) / lastW.length;
+    assert(waits[1] > 20 && meanW < 15, "frames run soon after they arrive (the clock moved to them): " + waits.map(Math.round).join(" "));
     ws.recv({ t: "f", m: 2, n, f: [[0, 0, 1]] });                     // another match's frames: ignored
     assert.strictEqual(env.sockets.length, 1);
     // the end: back to the lobby
@@ -440,6 +456,8 @@ function loadPage(page, search, stored, version) {
     // its replay: not saved by itself (Replays, "Save every match" off) - the room's "Save the replay" saves it
     const sv = () => lui.spec.items.find(it => it.key === "saverep");
     assert(sv() && sv().label === "Save the replay", "Save the replay in the lobby");
+    const keysNow = lui.spec.items.map(it => it.key);
+    assert(keysNow.indexOf("back") === keysNow.indexOf("saverep") + 1, "no blank row between Save the replay and Back (the box stays off the info text): " + keysNow.join(" "));
     assert.strictEqual((await env.win.Replay.list()).length, 0, "not saved yet");
     sv().go();
     await wait(20);

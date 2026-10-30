@@ -4,8 +4,23 @@ All notable changes to Tunneler. Versions follow [semantic versioning](https://s
 by pushing a version tag (see CONTRIBUTING.md). Up to its version 6.0.1 the game was called Tunneler Online:
 those releases are tagged `online-vX.Y.Z`, their changes are in [docs/CHANGELOG-online.md](docs/CHANGELOG-online.md).
 
-## Unreleased
+## 1.2.4
 
+- **Debug info** (Settings > Gameplay): frame rate, drawing, the engine's steps and the connection (ping, the frames
+  waiting, input lag, data per second) in a small box at the top left.
+- Modern graphics: a tank's lamp and headlight no longer shine through rock, base walls or dirt - they light the
+  tunnel and the walls' faces; the energy and shield bars reach the panel's end while no round clock or mode number
+  is shown beside them; the static at low energy is bright snow like the original's (it looked like the view going
+  dark).
+- Online: the room's Game box no longer runs into the help text below it after a match (Statistics, Save the
+  replay): it drops its blank rows to fit beside the chat.
+- Faster modern graphics: the world goes to the GPU only where it changed since the last step (not all of it 18 times
+  a second), the HUD and the 3D height maps are made again only when they change, the line of sight once per step.
+- Online: less input lag - a frame from the server runs as soon as it arrives (up to 55 ms earlier; before, the
+  page's own frame clock could hold every frame for part of a step).
+- Online: when the players' checks disagree and most of them agree, only the page out of step rebuilds the match
+  (before: every page); a connection that takes nothing for minutes is dropped instead of piling up data on the
+  server, which also keeps a match's log in a fifteenth of the memory.
 - Screenshots (README, homepage, Google Play) really in 3D: the screenshot tools draw with the GPU (`GPU=0`:
   software) and Quality high - Quality auto had stepped down to 2D in software rendering.
 

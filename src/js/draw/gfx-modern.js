@@ -14,6 +14,7 @@
 import { Display } from "./display.js";
 import { TunnelerEngine } from "../game/engine.js";
 import { Gfx } from "./gfx.js";
+import { Debug } from "../ui/debug.js";
 const root = globalThis;
 
 const VS = `#version 300 es
@@ -49,6 +50,11 @@ uniform vec4 uLt[32];         // lights: x, y, radius, intensity
 uniform int uNS;
 uniform vec4 uShot[48];       // shells in flight: x, y, direction x, y (the engine draws and erases them within a frame)
 uniform vec3 uLc[32];
+uniform int uNTL;             // the first uNTL lights are the tanks' lamps (uTank's order)
+uniform int uLMOn;            // the tanks' light masks (LMFS): their lamps and headlights stop at rock, walls, dirt
+uniform sampler2D uLM;        // ... one LM_N x LM_N square per player (slot), its tank in the middle
+uniform vec2 uLMC[8];         // ... per slot: the world point its middle texel is
+uniform int uTSlot[8];        // ... per tank (uTank's order): its slot, -1 none
 uniform int uDepth;           // 3D (setting Depth): the world as a heightfield, seen from straight above (uEye)
 uniform vec3 uEye;            // 3D: the camera - world pixels, z its height above the tunnels' floor
 uniform sampler2D uH;         // 3D, smooth edges: the terrain's heights around the view (HFS), height / HSCALE
@@ -59,6 +65,7 @@ out vec4 outColor;
 
 // 3D: the heights of the materials (world pixels): dirt, rock, base walls; tanks below (tankH)
 const float HD = 3.0, HR = 3.75, HW = 3.5, HMAX = 3.75, HSCALE = 4.0, SHOT_H = 1.6;   // (owner, 2026-10-28: half of the first ones)
+const float LM_R = 52.0, LM_N = 105.0;                    // the light masks: radius (a headlight's reach), size
 const vec3 SUN = vec3(-0.45, -0.55, 0.7);                 // (normalized below) the light the 3D shapes are shaded by
 
 int colAt(ivec2 g) {
@@ -71,6 +78,14 @@ int colAt(ivec2 g) {
   return int((g.x & 1) == 1 ? (b >> 4) & 15u : b & 15u);
 }
 int shapeOf(int cls) { return cls >= 4 ? 0 : cls; }
+// how much of tank i's own light reaches world position wp (its light mask; 1 without one)
+float lmask(int i, vec2 wp) {
+  int s = uLMOn == 1 ? uTSlot[i] : -1;
+  if (s < 0) return 1.0;
+  vec2 q = wp - uLMC[s] + LM_R + 0.5;
+  if (q.x < 0.5 || q.y < 0.5 || q.x > LM_N - 0.5 || q.y > LM_N - 0.5) return 0.0;
+  return texture(uLM, vec2((float(s) * LM_N + q.x) / (8.0 * LM_N), q.y / LM_N)).r;
+}
 // how much of world position wp the player sees now (0..1, soft at the edge; pixel edges: 0 or 1)
 float seenAmt(vec2 wp) {
   if (uVisOn == 0) return 1.0;
@@ -312,14 +327,27 @@ float terrH(vec2 wp) {
   return mix(lo, hi, smoothstep(0.3, 0.7, (bil - lo) / (hi - lo)));
 }
 float sceneH(vec2 wp) { return max(terrH(wp), tankH(wp)); }
+// (whether a point z high is below / in the scene's shade: above the tanks' top - 2 x uTS, tankH's highest - only the
+// terrain counts, the same answer as sceneH's for less)
+bool below(vec2 wp, float z) { return z <= (z > 2.0 * uTS ? terrH(wp) : sceneH(wp)); }
+bool under(vec2 wp, float z) { return (z >= 2.0 * uTS ? terrH(wp) : sceneH(wp)) > z; }
 
 void main() {
   vec2 s = vec2(gl_FragCoord.x / uOut.x * uSize.x, (uOut.y - gl_FragCoord.y) / uOut.y * uSize.y);
   if (s.y >= uWin.y + uWin.w || s.y < uWin.y) discard;
   if (uStatic == 1) {                                     // low energy: the view is static
-    float h = hash(floor(s * vec2(0.7, 0.5)) + floor(uTime * 24.0) * 17.31);
-    float band = 0.75 + 0.25 * sin(s.y * 0.35 + uTime * 9.0);
-    outColor = vec4(vec3(h * 0.65 * band + 0.05), 1.0);
+    // (bright snow, black to white with a hint of the palette's colours as the original's static - owner, 2026-10-30:
+    // "show static instead of going dark"; the dim gray noise before read as the view going dark)
+    // (a block per world pixel, as the original's; an integer hash of the block and the frame - the float one repeated
+    // in stripes; a little dimmer than full - owner, 2026-10-30)
+    ivec2 cell = ivec2(floor((s - uWin.xy) / vec2(4.5, 4.0)));
+    uvec3 v = uvec3(uvec2(cell + 4096), uint(uTime * 24.0)) * 1664525u + 1013904223u;
+    v.x += v.y * v.z; v.y += v.z * v.x; v.z += v.x * v.y; v ^= v >> 16u;
+    v.x += v.y * v.z; v.y += v.z * v.x; v.z += v.x * v.y;
+    float h = float(v.x & 65535u) / 65535.0, k = float(v.y & 65535u) / 65535.0;
+    float band = 0.88 + 0.12 * sin(s.y * 0.35 + uTime * 9.0);
+    vec3 c = k < 0.4 ? uPal[int(h * 15.99)] : vec3(smoothstep(0.2, 0.75, h));
+    outColor = vec4(c * band * 0.75, 1.0);
     return;
   }
   vec2 wp = uCam + (s - uWin.xy) * uScale;                // world pixels (3D: on the tunnels' floor)
@@ -337,13 +365,13 @@ void main() {
     for (int k = 1; k <= 16; k++) {
       float t = t0 + (1.0 - t0) * float(k) / 16.0;
       vec3 P = uEye + D * t;
-      if (P.z <= sceneH(P.xy)) { tb = t; hit = true; break; }
+      if (below(P.xy, P.z)) { tb = t; hit = true; break; }
       ta = t;
     }
     if (hit) for (int k = 0; k < 7; k++) {
       float t = (ta + tb) * 0.5;
       vec3 P = uEye + D * t;
-      if (P.z <= sceneH(P.xy)) tb = t; else ta = t;
+      if (below(P.xy, P.z)) tb = t; else ta = t;
     }
     vec3 P = uEye + D * tb;
     wp = P.xy; hz = P.z;
@@ -370,7 +398,7 @@ void main() {
     float sh = 0.0;
     for (int k = 1; k <= 8; k++) {
       vec3 Q = vec3(wp, hz + 0.05) + L * (float(k) * 0.5);
-      if (sceneH(Q.xy) > Q.z) { sh = 1.0 - float(k - 1) / 10.0; break; }
+      if (under(Q.xy, Q.z)) { sh = 1.0 - float(k - 1) / 10.0; break; }
     }
     col *= 1.0 - 0.45 * sh;
   }
@@ -384,6 +412,7 @@ void main() {
     for (int i = 0; i < 32; i++) {
       if (i >= uNL) break;
       float d = length(wp - uLt[i].xy), k = clamp(1.0 - d / uLt[i].z, 0.0, 1.0);
+      if (k > 0.0 && i < uNTL) k *= lmask(i, wp);
       L += uLc[i] * uLt[i].w * k * k;
     }
     for (int i = 0; i < 8; i++) {
@@ -394,6 +423,7 @@ void main() {
       if (d < 2.5 || d > 52.0) continue;
       vec2 f = vec2(sin(uTank[i].z), -cos(uTank[i].z));
       float cone = smoothstep(0.62, 0.9, dot(v / d, f)) * pow(1.0 - d / 52.0, 1.4);
+      if (cone > 0.0) cone *= lmask(i, wp);
       L += vec3(1.0, 0.93, 0.78) * cone * 0.95;
     }
     col *= min(L, vec3(1.7));
@@ -436,6 +466,46 @@ void main() {
     col = mix(f, col, fade);
   }
   outColor = vec4(clamp(col, 0.0, 1.0), 1.0);
+}`;
+
+// The tanks' light masks (owner, 2026-10-30: "the light from the tank should not go through the wall and rock, maybe not
+// even through the dirt"): for every world pixel up to LM_R from a tank, how much of its light gets there - along the
+// line from the tank: rock and base walls stop it (their first pixel, the face it shines on, still lit), dirt lets it
+// in DIRT px (the tunnel's edge glows, no other tunnel behind it). One slot per player, LM_N texels square, made when
+// its tank moved or the ground near it changed (a step)
+const LMFS = `#version 300 es
+precision highp float;
+precision highp int;
+precision highp usampler2D;
+uniform usampler2D uWorld;
+uniform ivec2 uWorldPx;
+uniform int uCls[16];
+uniform vec2 uC;                 // the tank's middle (world px)
+uniform float uX0;               // the slot's first column
+out vec4 outColor;
+const float R = 52.0, DIRT = 1.5;
+int colAt(ivec2 g) {
+  if (g.x < 0 || g.y < 0 || g.x >= uWorldPx.x || g.y >= uWorldPx.y) return 7;
+  uint b = texelFetch(uWorld, ivec2(g.x >> 1, g.y), 0).r;
+  return int((g.x & 1) == 1 ? (b >> 4) & 15u : b & 15u);
+}
+void main() {
+  ivec2 o = ivec2(floor(vec2(gl_FragCoord.x - uX0, gl_FragCoord.y))) - int(R);
+  float dist = length(vec2(o));
+  if (dist > R) { outColor = vec4(0.0, 0.0, 0.0, 1.0); return; }
+  vec2 a = uC, b = uC + vec2(o);
+  ivec2 to = ivec2(floor(b));
+  int n = int(ceil(dist * 2.0));
+  float tr = 1.0, dirt = 0.0, len = dist / float(max(n, 1));
+  for (int k = 1; k < 112; k++) {
+    if (k >= n) break;
+    ivec2 g = ivec2(floor(mix(a, b, float(k) / float(n))));
+    if (g == to) break;
+    int c = uCls[colAt(g)];
+    if (c == 2 || c == 3) { tr = 0.0; break; }
+    if (c == 1) { dirt += len; tr = 1.0 - smoothstep(0.0, DIRT, dirt); if (tr <= 0.0) break; }
+  }
+  outColor = vec4(tr, 0.0, 0.0, 1.0);
 }`;
 
 // 3D: the terrain's heights around a view, in two passes (both: height / 4 in red)
@@ -579,7 +649,9 @@ function create(gl) {
   if (haprog) for (const n of ["uWorld", "uWorldPx", "uRowOff", "uRows", "uOutside", "uCls", "uOrg"]) hau[n] = gl.getUniformLocation(haprog, n);
   if (hprog) for (const n of ["uA", "uOrg", "uOrgA", "uSizeA", "uRes"]) hu[n] = gl.getUniformLocation(hprog, n);
   const HRES = 4, HW_ = 100, HH_ = 96;                 // (the view's 76 x 71 and a margin: rays reach a few px out)
+  // (also made while drawing - a view's first height maps: the texture and framebuffer bound before stay bound)
   const target = (w, h, filter) => {
+    const wasTex = gl.getParameter(gl.TEXTURE_BINDING_2D), wasFb = gl.getParameter(gl.FRAMEBUFFER_BINDING);
     const tex = gl.createTexture(), fbo = gl.createFramebuffer();
     gl.bindTexture(gl.TEXTURE_2D, tex);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
@@ -588,17 +660,37 @@ function create(gl) {
     gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
     if (!why3d && gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) why3d = "height target";
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, wasFb);
+    gl.bindTexture(gl.TEXTURE_2D, wasTex);
     return { tex, fbo };
   };
-  const hA = target(HW_, HH_, gl.NEAREST), hB = target(HW_ * HRES, HH_ * HRES, gl.LINEAR);
+  // (a view's own pair, made on first use - kept while nothing they come from changed: the step, the camera's
+  // whole world pixel, the settings; a view that moves smoothly between steps reuses them)
+  const hTargets = new Map();                        // view key -> {hA, hB, key}
+  const hFirst = { hA: target(HW_, HH_, gl.NEAREST), hB: target(HW_ * HRES, HH_ * HRES, gl.LINEAR), key: "" };
   Gfx.fail3d(why3d);
+  // the tanks' light masks (LMFS): a slot per player in one texture (none - a GPU that can't: light through everything)
+  const LM_N = 105, lmprog = program(gl, VS, LMFS, ["aPos"]), lmu = {};
+  if (lmprog) for (const n of ["uWorld", "uWorldPx", "uCls", "uC", "uX0"]) lmu[n] = gl.getUniformLocation(lmprog, n);
+  const lmT = lmprog ? target(8 * LM_N, LM_N, gl.LINEAR) : null;
   // the height maps of a view whose camera (top left of the floor it shows) is cam: the world texture now bound to
   // unit 0 (the world or the player's memory band, rowOff / rows / outside as the main pass) -> [A's, B's (or null)]
   // world rectangles; A on unit 3, B on unit 2
-  function heights(e, cam, rowOff, rows, outside, cls, smooth) {
+  function heights(view, e, cam, rowOff, rows, outside, cls, smooth) {
     if (!haprog || (smooth && !hprog)) return null;
     const org = [Math.floor(cam[0]) - 12, Math.floor(cam[1]) - 12];
+    let t = hTargets.get(view);
+    if (!t) hTargets.set(view, t = hTargets.size ? { hA: target(HW_, HH_, gl.NEAREST), hB: target(HW_ * HRES, HH_ * HRES, gl.LINEAR), key: "" } : hFirst);
+    const { hA, hB } = t, r = [org[0], org[1], HW_, HH_];
+    const key = [e.tick, org[0], org[1], rowOff, rows, outside, smooth ? 1 : 0, cls.join()].join();
+    if (key === t.key) {
+      gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, hA.tex);
+      gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, smooth ? hB.tex : null);
+      gl.activeTexture(gl.TEXTURE0);
+      return [r, smooth ? r : null];
+    }
+    t.key = key;
+    Debug.count("3d heights");
     const fb = gl.getParameter(gl.FRAMEBUFFER_BINDING), vp = gl.getParameter(gl.VIEWPORT), sc = gl.isEnabled(gl.SCISSOR_TEST);
     gl.disable(gl.SCISSOR_TEST);
     gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, null);
@@ -626,13 +718,13 @@ function create(gl) {
     gl.viewport(vp[0], vp[1], vp[2], vp[3]);
     if (sc) gl.enable(gl.SCISSOR_TEST);
     gl.useProgram(prog);
-    const r = [org[0], org[1], HW_, HH_];
     return [r, smooth ? r : null];
   }
   const u = {}, pu = {};
   for (const n of ["uWorld", "uVis", "uWorldPx", "uRowOff", "uRows", "uOutside", "uSize", "uOut", "uWin", "uCam", "uScale", "uPal",
     "uCls", "uTerrain", "uEdges", "uGlow", "uLight", "uFog", "uVisOn", "uStatic", "uMap", "uVisOrg", "uTime", "uNT", "uTank",
-    "uTankCol", "uTread", "uTS", "uTankStyle", "uNL", "uLt", "uLc", "uNS", "uShot", "uDepth", "uEye", "uH", "uHRect", "uHA", "uARect"]) u[n] = gl.getUniformLocation(prog, n);
+    "uTankCol", "uTread", "uTS", "uTankStyle", "uNL", "uLt", "uLc", "uNS", "uShot", "uDepth", "uEye", "uH", "uHRect", "uHA", "uARect",
+    "uNTL", "uLMOn", "uLM", "uLMC", "uTSlot"]) u[n] = gl.getUniformLocation(prog, n);
   if (pprog) for (const n of ["uCam", "uScale", "uSize", "uOut", "uWin"]) pu[n] = gl.getUniformLocation(pprog, n);
   const worldTex = texture(gl), visTex = texture(gl);
   gl.bindTexture(gl.TEXTURE_2D, visTex);
@@ -674,8 +766,13 @@ function create(gl) {
         }
     }
   }
+  // the world as the views show it, into worldTex - only the rows that changed since the last step (two buffers in
+  // turn: the one uploaded last is what the texture holds)
   function uploadWorld(e) {
-    if (!S.buf || S.buf.length !== e.world.length) S.buf = new Uint8Array(e.world.length);
+    if (!S.buf || S.buf.length !== e.world.length) {
+      S.buf = new Uint8Array(e.world.length);
+      if (S.prev && S.prev.length !== e.world.length) S.prev = null;
+    }
     const buf = S.buf, ws = e.ws;
     buf.set(e.world);
     // the game mode's objects (taken out of the world again before the step ended): as the views showed them
@@ -685,10 +782,23 @@ function create(gl) {
       if (i < buf.length) buf[i] = x & 1 ? (buf[i] & 0x0F) | (o[k + 2] << 4) : (buf[i] & 0xF0) | o[k + 2];
     }
     untank(e, buf, 0);
+    const prev = S.prev;
+    let r0 = 0, r1 = e.worldH;
+    if (prev && S.prevW === ws) {
+      let a = 0, b = buf.length;
+      while (a < b && buf[a] === prev[a]) a++;
+      while (b > a && buf[b - 1] === prev[b - 1]) b--;
+      r0 = Math.floor(a / ws); r1 = Math.ceil(b / ws);
+    }
     gl.bindTexture(gl.TEXTURE_2D, worldTex);
     gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8UI, ws, e.worldH, 0, gl.RED_INTEGER, gl.UNSIGNED_BYTE, buf);
+    if (!prev || S.prevW !== ws) gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8UI, ws, e.worldH, 0, gl.RED_INTEGER, gl.UNSIGNED_BYTE, buf);
+    else if (r1 > r0) gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, r0, ws, r1 - r0, gl.RED_INTEGER, gl.UNSIGNED_BYTE, buf, r0 * ws);
+    Debug.count("world KB", (r1 - r0) * ws / 1024);
     gl.pixelStorei(gl.UNPACK_ALIGNMENT, 4);
+    S.buf = prev && prev.length === buf.length ? prev : null;
+    S.prev = buf; S.prevW = ws;
+    S.wband = !prev || S.prevW !== ws ? [0, e.worldH] : [r0, r1];        // (the light masks: the rows that changed)
   }
 
   function spawn(kind, x, y, set, e) {
@@ -727,8 +837,10 @@ function create(gl) {
   function update(e, now, set) {
     if (e !== S.e) {
       Object.assign(S, { e, tick: -1, tanks: [], parts: [], flashes: [], shake: [] });
-      for (const m of memTex.values()) gl.deleteTexture(m.tex);
+      for (const m of memTex.values()) { gl.deleteTexture(m.tex); gl.deleteTexture(m.visTex); }
       memTex.clear();
+      for (const t of hTargets.values()) t.key = "";
+      S.lm = [];
     }
     const dt = Math.min(0.1, Math.max(0, (now - (S.last || now)) / 1000));
     S.last = now;
@@ -770,7 +882,12 @@ function create(gl) {
   // the sight memory around a view (the rows it can show) and what its tank sees now - once per step
   function sightFor(e, p, cam) {
     let m = memTex.get(p);
-    if (!m) memTex.set(p, m = { tex: texture(gl), tick: -1 });
+    if (!m) {
+      memTex.set(p, m = { tex: texture(gl), visTex: texture(gl), tick: -1, vis: new Uint8Array(76 * 71) });
+      gl.bindTexture(gl.TEXTURE_2D, m.visTex);
+      for (const q of [gl.TEXTURE_MIN_FILTER, gl.TEXTURE_MAG_FILTER]) gl.texParameteri(gl.TEXTURE_2D, q, gl.LINEAR);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, 76, 71, 0, gl.RED, gl.UNSIGNED_BYTE, null);
+    }
     const mem = e.sightMem && e.sightMem[p];
     if (m.tick !== e.tick && mem) {
       m.tick = e.tick;
@@ -780,15 +897,26 @@ function create(gl) {
       const band = m.band && m.band.length === m.rows * e.ws ? m.band : (m.band = new Uint8Array(m.rows * e.ws));
       band.set(mem.subarray(m.y0 * e.ws, (m.y0 + m.rows) * e.ws));
       untank(e, band, m.y0, p);                          // (the tanks seen now: drawn as shapes; old ghosts stay)
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8UI, e.ws, m.rows, 0, gl.RED_INTEGER, gl.UNSIGNED_BYTE, band);
-      const v = e.sightView(p, cam.x, cam.y), vis = new Uint8Array(76 * 71);
+      if (m.texRows === m.rows && m.texWs === e.ws) gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, e.ws, m.rows, gl.RED_INTEGER, gl.UNSIGNED_BYTE, band);
+      else { gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8UI, e.ws, m.rows, 0, gl.RED_INTEGER, gl.UNSIGNED_BYTE, band); m.texRows = m.rows; m.texWs = e.ws; }
+      // what its tank sees now (once per step, into the view's own texture - every frame binds it)
+      const v = e.sightView(p, cam.x, cam.y), vis = m.vis;
       for (let i = 0; i < vis.length; i++) vis[i] = v[i] ? 255 : 0;
-      m.vis = vis; m.vx = cam.x; m.vy = cam.y;
+      m.vx = cam.x; m.vy = cam.y;
+      gl.bindTexture(gl.TEXTURE_2D, m.visTex);
+      gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 76, 71, gl.RED, gl.UNSIGNED_BYTE, vis);
       gl.pixelStorei(gl.UNPACK_ALIGNMENT, 4);
     }
     return mem ? m : null;
   }
 
+  // what each of the world's 16 colours is (CLASS): the tanks' colours their base walls
+  function classes(e) {
+    const cls = new Int32Array(16).fill(CLASS.other);
+    cls[0] = CLASS.tunnel; cls[6] = cls[8] = CLASS.dirt; cls[7] = CLASS.rock; cls[12] = CLASS.ember; cls[4] = CLASS.trail;
+    for (let p = 1; p <= e.nPlayers; p++) cls[e.playerColor ? e.playerColor(p) : [0, 9, 10][p]] = CLASS.wall;
+    return cls;
+  }
   function setCommon(e, sw, sh, W, H, now, set) {
     gl.useProgram(prog);
     gl.uniform1i(u.uWorld, 0);
@@ -798,9 +926,7 @@ function create(gl) {
     gl.uniform2f(u.uOut, W, H);
     const D = Display, pal = e.extended ? D.EXT_PALETTE : D.LORES_PALETTE;
     gl.uniform3fv(u.uPal, pal.flatMap(c => c.map(v => v / 255)));
-    const cls = new Int32Array(16).fill(CLASS.other);
-    cls[0] = CLASS.tunnel; cls[6] = cls[8] = CLASS.dirt; cls[7] = CLASS.rock; cls[12] = CLASS.ember; cls[4] = CLASS.trail;
-    for (let p = 1; p <= e.nPlayers; p++) cls[e.playerColor ? e.playerColor(p) : [0, 9, 10][p]] = CLASS.wall;
+    const cls = classes(e);
     gl.uniform1iv(u.uCls, cls);
     S.cls = cls;
     gl.uniform1i(u.uTerrain, ["textured", "smooth", "flat"].indexOf(set.terrain));
@@ -813,21 +939,54 @@ function create(gl) {
   }
   // tanks (and their lamps) for a view: own view (p), or everyone (p 0); with line of sight only those seen
   function tanksFor(e, p, pal, lamps, scale) {
-    const tanks = [], cols = [], lights = [], lcols = [], treads = [];
+    const tanks = [], cols = [], lights = [], lcols = [], treads = [], slots = [];
     for (let q = 1; q <= e.nPlayers && tanks.length < 32; q++) {
       const t = S.tanks[q], sp = e.alive[q] ? sprite(e, q, 0) : null;
       if (!sp || !t || t.x === undefined) continue;
       if (p && q !== p && e.sight && e.sight !== "full" && !e.sightSees(p, e.tankX[q], e.tankY[q])) continue;
       tanks.push(t.x, t.y, t.ang, lamps ? 1 : 0);
       treads.push(t.tr || 0);
+      slots.push(S.lm && S.lm[q - 1] ? q - 1 : -1);
       for (const v of [sp[4][2], sp[1][1], sp[0][3]]) cols.push(...pal[v & 15].map(c => c / 255));
       if (lamps) { lights.push(t.x + 0.5, t.y + 0.5, 30 * scale, 0.75); lcols.push(1, 0.9, 0.75); }
     }
-    return { tanks, cols, lights, lcols, treads };
+    return { tanks, cols, lights, lcols, treads, slots };
   }
   function setTanks(T) {
     gl.uniform1i(u.uNT, T.tanks.length / 4);
     if (T.tanks.length) { gl.uniform4fv(u.uTank, T.tanks); gl.uniform3fv(u.uTankCol, T.cols); gl.uniform1fv(u.uTread, T.treads); }
+    if (T.slots && T.slots.length) gl.uniform1iv(u.uTSlot, T.slots);
+  }
+  // the light masks of the tanks whose lamps shine (Lighting on) - a slot made again when its tank moved or the ground
+  // within its reach changed (the rows uploadWorld changed); the world texture bound to unit 0 after it
+  function lightMasks(e, set) {
+    if (!lmT || set.light !== "on" || !S.prev) return;
+    const L = S.lm || (S.lm = []), band = S.wband || [0, 0], R = 53;
+    const todo = [];
+    for (let q = 1; q <= e.nPlayers && q <= 8; q++) {
+      if (!e.alive[q]) continue;
+      const x = e.tankX[q], y = e.tankY[q], m = L[q - 1];
+      if (m && m.x === x && m.y === y && !(m.tick !== e.tick && band[1] > y - R && band[0] < y + R + 1)) continue;
+      todo.push(q);
+      L[q - 1] = { x, y, tick: e.tick, c: [x + 0.5, y + 0.5] };
+    }
+    if (!todo.length) return;
+    const fb = gl.getParameter(gl.FRAMEBUFFER_BINDING), vp = gl.getParameter(gl.VIEWPORT), sc = gl.isEnabled(gl.SCISSOR_TEST);
+    gl.disable(gl.SCISSOR_TEST);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, lmT.fbo);
+    gl.useProgram(lmprog);
+    gl.activeTexture(gl.TEXTURE4); gl.bindTexture(gl.TEXTURE_2D, null);   // (not sampled while drawn into)
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, worldTex);
+    gl.uniform1i(lmu.uWorld, 0); gl.uniform2i(lmu.uWorldPx, e.worldW, e.worldH); gl.uniform1iv(lmu.uCls, classes(e));
+    for (const q of todo) {
+      gl.viewport((q - 1) * LM_N, 0, LM_N, LM_N);
+      gl.uniform2f(lmu.uC, ...L[q - 1].c); gl.uniform1f(lmu.uX0, (q - 1) * LM_N);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+    }
+    Debug.count("light masks", todo.length);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+    gl.viewport(vp[0], vp[1], vp[2], vp[3]);
+    if (sc) gl.enable(gl.SCISSOR_TEST);
   }
   function setLights(e, p, T, on) {
     if (!on) { gl.uniform1i(u.uLight, 0); return; }
@@ -846,6 +1005,7 @@ function create(gl) {
       lt.push(l.x, l.y, l.r * (0.6 + 0.4 * k), l.i * k * k); lc.push(...l.col);
     }
     gl.uniform1i(u.uLight, 1);
+    gl.uniform1i(u.uNTL, T.lights.length / 4);
     gl.uniform1i(u.uNL, lt.length / 4);
     if (lt.length) { gl.uniform4fv(u.uLt, lt); gl.uniform3fv(u.uLc, lc); }
   }
@@ -918,7 +1078,13 @@ function create(gl) {
     const e = sc.engine;
     if (!e || !e.world) return;
     update(e, now, set);
+    lightMasks(e, set);
     const base = setCommon(e, sw, sh, W, H, now, set), D = Display;
+    // (the light masks on unit 4: every slot's middle; off - Lighting off, none made - the lamps light by distance)
+    const lmOn = !!(lmT && set.light === "on" && S.lm && S.lm.length);
+    gl.uniform1i(u.uLMOn, lmOn ? 1 : 0); gl.uniform1i(u.uLM, 4);
+    gl.activeTexture(gl.TEXTURE4); gl.bindTexture(gl.TEXTURE_2D, lmT ? lmT.tex : null);
+    if (lmOn) { const c = []; for (let k = 0; k < 8; k++) c.push(...(S.lm[k] ? S.lm[k].c : [0, 0])); gl.uniform2fv(u.uLMC, c); }
     // tank colours (Settings, Graphics; display only): each view's palette as its viewer sees the tanks
     const palFor = viewer => {
       const pal = D.tankPalette8 ? D.tankPalette8(base, e, viewer) : base;
@@ -966,10 +1132,7 @@ function create(gl) {
       if (m) {
         gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, m.tex);
         gl.uniform1i(u.uRowOff, m.y0); gl.uniform1i(u.uRows, m.rows); gl.uniform1i(u.uOutside, 0);
-        gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, visTex);
-        gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, 76, 71, 0, gl.RED, gl.UNSIGNED_BYTE, m.vis);
-        gl.pixelStorei(gl.UNPACK_ALIGNMENT, 4);
+        gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, m.visTex);
         gl.activeTexture(gl.TEXTURE0);
         gl.uniform1i(u.uVisOn, 1); gl.uniform2i(u.uVisOrg, m.vx, m.vy);
       } else {
@@ -980,7 +1143,7 @@ function create(gl) {
       // 3D: the height maps around this view (A per world pixel on unit 3; smooth edges: B on unit 2)
       gl.uniform1i(u.uH, 2); gl.uniform1i(u.uHA, 3);
       const hr = d3 && !cam0.noise
-        ? heights(e, cam, m ? m.y0 : 0, m ? m.rows : e.worldH, m ? 0 : 7, S.cls, set.edges !== "pixel") : null;
+        ? heights((m ? "m" : "w") + w.p, e, cam, m ? m.y0 : 0, m ? m.rows : e.worldH, m ? 0 : 7, S.cls, set.edges !== "pixel") : null;
       gl.uniform4f(u.uARect, ...(hr ? hr[0] : [0, 0, 0, 0]));
       gl.uniform4f(u.uHRect, ...(hr && hr[1] ? hr[1] : [0, 0, 0, 0]));
       const pal = palFor(w.viewer || w.p);

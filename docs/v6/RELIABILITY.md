@@ -124,9 +124,13 @@ does for a late spectator, and the page runs it on a fresh engine (the "Catching
 screen). It also takes over its tank again (2.4). A rebuild can fix the usual causes: a frame applied
 twice or lost locally, state left over from a reconnect, or a bug that only shows on an incremental
 path. Every client that was told about the desync rebuilds the same way, so they all end up on the
-canonical run. The server forgets the hashes it had when it broadcasts the desync (`m.hashes.clear()`):
-the rebuilt pages report them again from the canonical run, so a faulty first report can't keep them out of
-step. At most `MAX_REBUILDS` (2) per match. After that the desync must be genuinely different
+canonical run. Who is told (1.2.4, server only - the messages are the same): the server judges a frame's hashes
+once every connected player's is in (or two hash periods later without the missing ones). A clear majority:
+only the players with another hash are told, their hashes so far forgotten (they report again after the
+rebuild); the others play on. No majority (two players, a tie): every page is told and the server forgets the
+hashes it had (`m.hashes.clear()`), so a faulty first report can't keep them out of step. A spectator is
+checked against the players' hash and only it is told; spectators never vote (one couldn't make a player
+rebuild). At most `MAX_REBUILDS` (2) per match. After that the desync must be genuinely different
 code, and the status line shows "DESYNC at frame n" as before. Determinism argument: the rebuilt engine
 gets the same seed, cfg and frames as every other client and the same `TunnelerAI` instances (new, from
 the cfg), so it is exactly what a late spectator would compute. Nothing local enters the simulation.

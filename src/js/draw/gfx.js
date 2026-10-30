@@ -11,6 +11,7 @@
 // dots x 4 lines each - character 0xDD: dots 0-3 the low nibble, 4-8 the high one), everything else on
 // the dot grid. No WebGL2: always the original.
 import { Display } from "./display.js";
+import { Debug } from "../ui/debug.js";
 const root = globalThis;
 
 const MODES = ["original", "modern"];
@@ -206,6 +207,7 @@ class Presenter {
     this.fbo = null; this.tex = null; this.W = 0; this.H = 0;
     this.modern = null; this.modernFailed = false;
     this.animating = false;
+    this.srcStale = true; this.hudKey = null;
   }
   // draws the layer into its framebuffer when something changed (or moves); true = drawn
   render(now, W, H) {
@@ -226,6 +228,9 @@ class Presenter {
     // (modern play screens move every frame: particles, the smooth camera, light; text screens while
     // their highlight slides)
     if (!fresh && !L.gfxDirty && !(sc && sc.windows && sc.windows.length) && !this.animating) return false;
+    // (painted, the source changed, a setting: the source texture and the HUD made again - else a play screen's
+    // frame reuses them while they hold)
+    if (fresh || L.gfxDirty) { this.srcStale = true; this.hudKey = null; }
     L.gfxDirty = false;
     this.animating = false;
     const src = L.src;
@@ -243,7 +248,7 @@ class Presenter {
         gl.useProgram(k.up);
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, this.srcTex);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src);
+        if (this.srcStale) { gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src); this.srcStale = false; }
         gl.uniform1i(k.upU.uSrc, 0);
         gl.uniform2f(k.upU.uSize, src.width, src.height);
         gl.uniform2f(k.upU.uOut, W, H);
@@ -257,10 +262,16 @@ class Presenter {
       this.modern.draw(sc, src.width, src.height, W, H, now || 0, set);
       // (every view - also one black with DESTROYED, when no world window is left to draw)
       if ((sc.cells && sc.cells.length || sc.windows && sc.windows.length || sc.map && sc.map.kind === "end") && Gfx.Hud) {
-        const c = this.canvasOf("hud", W, H), ctx = c.getContext("2d");
-        ctx.clearRect(0, 0, W, H);
-        Gfx.Hud.draw(ctx, W, H, sc, src.width, src.height, Gfx.modern(), now || 0, Gfx.menuStyle());
-        this.blit(c, W, H, true);
+        // (drawn again only when what it shows changed - Hud.key: the engine's step, the scene, a blink)
+        const hset = Gfx.modern(), style = Gfx.menuStyle(), key = Gfx.Hud.key(sc, W, H, hset, now || 0, style);
+        if (key !== this.hudKey) {
+          const c = this.canvasOf("hud", W, H), ctx = c.getContext("2d");
+          ctx.clearRect(0, 0, W, H);
+          Gfx.Hud.draw(ctx, W, H, sc, src.width, src.height, hset, now || 0, style);
+          this.blit(c, W, H, true, this.hudTex || (this.hudTex = k.tex()));
+          this.hudKey = key;
+          Debug.count("hud draws");
+        } else this.blit(null, W, H, true, this.hudTex);
       }
       return true;
     } finally {
@@ -276,15 +287,18 @@ class Presenter {
     if (c.width !== W || c.height !== H) { c.width = W; c.height = H; }
     return c;
   }
-  // a 2D canvas of the output's size onto the output (blend: over what is there)
-  blit(c, W, H, blend) {
+  // a 2D canvas of the output's size onto the output (blend: over what is there) - through tex (default the layer's
+  // own); c null: what tex holds already
+  blit(c, W, H, blend, tex) {
     const gl = this.gl, k = this.kit;
     gl.useProgram(k.blit);
     gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, this.layerTex);
-    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, c);
-    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+    gl.bindTexture(gl.TEXTURE_2D, tex || this.layerTex);
+    if (c) {
+      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, c);
+      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+    }
     gl.uniform1i(k.blitU, 0);
     if (blend) { gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA); } else gl.disable(gl.BLEND);
     gl.disable(gl.SCISSOR_TEST);
@@ -293,7 +307,7 @@ class Presenter {
     gl.disable(gl.BLEND);
   }
   // (the WebGL context was lost: everything made again on the next render)
-  drop() { this.fbo = null; this.modern = null; this.modernFailed = false; this.canvases = null; }
+  drop() { this.fbo = null; this.modern = null; this.modernFailed = false; this.canvases = null; this.hudTex = null; this.hudKey = null; this.srcStale = true; }
 }
 
 // ------------------------------------------------------------ the setting

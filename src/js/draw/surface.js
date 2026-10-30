@@ -14,6 +14,7 @@
 //                                  graphics change                  {lores})
 import { Gfx, Presenter } from "./gfx.js";
 import { Scope } from "../scope.js";
+import { Debug } from "../ui/debug.js";
 const root = globalThis;
 
 const layers = [];          // {el, src, painted, dirty (the source changed), gfxDirty (modern), pres, srcTex, rect}
@@ -132,9 +133,30 @@ function schedule() {
 }
 function tick(now) {
   raf = 0;
+  const t0 = root.performance ? root.performance.now() : 0;
   compose(now, true);
+  if (Debug.on()) { Debug.count("frames"); if (t0) Debug.time("draw", root.performance.now() - t0); }
   if (layers.length) schedule();
 }
+
+// Debug info (ui/debug.js): how the page is drawn
+let gpuName = null;
+const gpu = () => {
+  if (gpuName === null && gl) {
+    try { const x = gl.getExtension("WEBGL_debug_renderer_info"); gpuName = String(gl.getParameter(x ? x.UNMASKED_RENDERER_WEBGL : gl.RENDERER) || ""); }
+    catch (e) { gpuName = ""; }
+  }
+  return gpuName || "";
+};
+Debug.provide("screen", () => {
+  const m = gl ? Gfx.modern() : null, modern = !!gl && Gfx.mode() === "modern";
+  return { look: Gfx.mode(), canvas: gl ? "webgl2" + (lost ? " (lost)" : "") : c2d ? "2d" : "none",
+    size: canvas ? canvas.width + "x" + canvas.height : "", dpr: root.devicePixelRatio || 1,
+    quality: modern ? (m.quality === "auto" ? "auto:" + Gfx.autoQuality() : m.quality) + " x" + Gfx.qualityScale() : "",
+    depth: modern ? Gfx.depth(m) + (Gfx.no3d() ? " (no 3d: " + Gfx.no3d() + ")" : "") : "",
+    heap: root.performance && root.performance.memory ? Math.round(root.performance.memory.usedJSHeapSize / 1048576) + " MB" : "" };
+});
+Debug.provide("gpu", () => ({ renderer: gpu() }));
 
 function compose(now, frame) {
   if (!ensure() || lost || (!gl && !c2d)) return;

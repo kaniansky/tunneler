@@ -518,7 +518,7 @@ function play(search) {
   }
   assert(!keys().includes("lang"), "Language: no switch below the categories any more - a category (owner, 2026-10-29)");
   assert.strictEqual(sel(), "cat-gameplay", "on the first category");
-  same(right(), ["fullscreen", "scale", "gap-d", "tankcolors", "teammarks", "prefer", "autosave"], "Gameplay: fullscreen, screen size, a gap, tank colors, mark teammates, preferred color, save every match");
+  same(right(), ["fullscreen", "scale", "gap-d", "tankcolors", "teammarks", "prefer", "autosave", "debug"], "Gameplay: fullscreen, screen size, a gap, tank colors, mark teammates, preferred color, save every match, debug info");
   {
     // Save every match (replay.js autoSave): off by default (owner, 2026-10-28 - "Save the replay" after a match), switched here
     const row = () => ui().spec.items.find(i => i.key === "autosave"), dec = () => env.win.Lang.decode(row().label);
@@ -527,6 +527,13 @@ function play(search) {
     assert(/: On$/.test(dec()) && env.win.Replay.autoSave() && store.get("tunneler.replays.auto") === "1", "Save every match: On (kept)");
     row().go();
     assert(/: Off$/.test(dec()) && !env.win.Replay.autoSave(), "and Off again");
+    // Debug info (ui/debug.js): off by default, a box at the top left when on
+    const dbg = () => env.win.Lang.decode(ui().spec.items.find(i => i.key === "debug").label);
+    assert(/: Off$/.test(dbg()), "Debug info: Off (the default): " + dbg());
+    ui().spec.items.find(i => i.key === "debug").go();
+    assert(/: On$/.test(dbg()) && store.get("tunneler.debug") === "1", "Debug info: On (kept)");
+    ui().spec.items.find(i => i.key === "debug").go();
+    assert(/: Off$/.test(dbg()) && store.get("tunneler.debug") === "0", "and Off again");
     ui().spec.items.find(i => i.key === "prefer").change(1);   // Preferred color: BLUE (online games' seat)
     assert.strictEqual(store.get("tunneler.online.color"), "blue");
   }
@@ -541,7 +548,8 @@ function play(search) {
   assert.strictEqual(store.get("tunneler.scale"), "integer");
   env.key("ArrowDown"); env.key("ArrowRight");             // Tank colors: color-blind
   assert.strictEqual(store.get("tunneler.tankcolors"), "colorblind");
-  env.key("ArrowDown"); env.key("ArrowDown"); env.key("ArrowDown"); env.key("ArrowDown"); assert.strictEqual(sel(), "fullscreen", "Up / Down stay in the box (past Mark teammates, Preferred color, Save every match)");
+  for (let i = 0; i < 5; i++) env.key("ArrowDown");
+  assert.strictEqual(sel(), "fullscreen", "Up / Down stay in the box (past Mark teammates, Preferred color, Save every match, Debug info)");
   env.key("Escape"); assert.strictEqual(sel(), "cat-gameplay", "Esc: back to the category");
   env.key("ArrowDown"); env.key("ArrowRight");             // Graphics; Right: into its settings
   same(right(), ["gfx", "gap-g", "smooth"], "Graphics (original): graphics, a blank row, smooth scrolling");
