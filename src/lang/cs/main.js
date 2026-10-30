@@ -138,6 +138,7 @@ Lang.register("cs", {
   "set.cat.controls.it": "Velikost a strana dotykového ovládání.",
   "set.cat.language": "Jazyk",
   "set.cat.language.i": "Jazyk menu a hry.",
+  "set.lang.i2": "<ENTER> nebo klik ho vybere.",
   "set.volume": "Hlasitost: ",
   "set.volume.i": "Jak nahlas zní každý zvuk.",
   "set.stereo": "Stereo: ",

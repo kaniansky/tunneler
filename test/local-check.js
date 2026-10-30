@@ -509,22 +509,14 @@ function play(search) {
   env.key("ArrowUp"); env.key("Enter");                    // (wraps to the last item) Settings
   const keys = () => ui().spec.items.map(i => i.key), sel = () => ui().spec.items[ui().sel].key;
   const right = () => keys().slice(keys().indexOf("back") + 1);
-  same(keys().filter(k => /^cat-/.test(k)), ["cat-gameplay", "cat-graphics", "cat-sound", "cat-controls", "cat-online"], "categories");
+  same(keys().filter(k => /^cat-/.test(k)), ["cat-gameplay", "cat-graphics", "cat-sound", "cat-controls", "cat-online", "cat-language"], "categories");
   {                                                       // (centred as the tallest category: no category moves the screen)
     const shifts = new Set();
-    for (const c of ["cat-gameplay", "cat-graphics", "cat-sound", "cat-controls", "cat-online"]) { ui().sel = keys().indexOf(c); ui().draw(); shifts.add(ui().vshift); }
+    for (const c of ["cat-gameplay", "cat-graphics", "cat-sound", "cat-controls", "cat-online", "cat-language"]) { ui().sel = keys().indexOf(c); ui().draw(); shifts.add(ui().vshift); }
     assert.strictEqual(shifts.size, 1, "the same centring for every category: " + [...shifts]);
     ui().sel = keys().indexOf("cat-gameplay"); ui().draw();
   }
-  // Language: no category - a centred switch below them (owner, 2026-10-25)
-  {
-    const it = () => ui().spec.items.find(i => i.key === "lang"), before = env.win.Lang.code;
-    assert(it() && it().align !== "left" && keys().indexOf("lang") > keys().indexOf("cat-online"), "Language: a switch below the categories");
-    it().change(1);
-    assert(env.win.Lang.code !== before && it(), "Left / Right on it: the next language");
-    it().change(-1);
-    assert.strictEqual(env.win.Lang.code, before, "and back");
-  }
+  assert(!keys().includes("lang"), "Language: no switch below the categories any more - a category (owner, 2026-10-29)");
   assert.strictEqual(sel(), "cat-gameplay", "on the first category");
   same(right(), ["fullscreen", "scale", "gap-d", "tankcolors", "teammarks", "prefer", "autosave"], "Gameplay: fullscreen, screen size, a gap, tank colors, mark teammates, preferred color, save every match");
   {
@@ -591,11 +583,16 @@ function play(search) {
   env.key("ArrowDown"); assert.strictEqual(sel(), "ping", "(skipped)");
   env.key("Enter");                                        // Show ping on
   assert.strictEqual(store.get("tunneler.ping"), "1");
-  env.key("Escape"); env.key("ArrowDown");                 // Language (a switch below the categories)
-  assert.strictEqual(sel(), "lang");
-  env.key("ArrowRight");
-  assert.notStrictEqual(store.get("tunneler.lang") || "en", "en", "language switched");
-  env.key("ArrowLeft");
+  env.key("Escape"); env.key("ArrowDown");                 // Language: a category - every language, the one in use checked
+  assert.strictEqual(sel(), "cat-language");
+  same(right(), env.win.Lang.codes.map(l => "lang-" + l), "Language: a row per language");
+  assert(env.win.Lang.decode(ui().spec.items.find(i => i.key === "lang-en").label).startsWith("√"), "the one in use checked");
+  env.key("Tab"); env.key("ArrowDown"); env.key("Enter");
+  assert.strictEqual(store.get("tunneler.lang"), env.win.Lang.codes[1], "Enter on a language: chosen");
+  assert(env.win.Lang.decode(ui().spec.items.find(i => i.key === "lang-" + env.win.Lang.codes[1]).label).startsWith("√"), "... and checked");
+  ui().spec.items.find(i => i.key === "lang-en").go();
+  assert.strictEqual(env.win.Lang.code, "en", "back to English");
+  env.key("Escape"); assert.strictEqual(sel(), "cat-language", "Esc: back to the categories");
   env.key("ArrowDown"); assert.strictEqual(sel(), "back", "Language, then Back");
   // Controls: a key row takes the next key press (Esc cancels), the page doesn't see it
   if (env.win.Controls && env.win.Controls.get) {
@@ -1072,7 +1069,7 @@ function play(search) {
   // (by taps - go(): a key press here would be a keyboard's)
   const go = key => ui.spec.items.find(i => i.key === key).go(), ctlRows = () => ui.spec.items.map(i => i.key).filter(k => /^touch|^key-/.test(k));
   go("settings");
-  same(ui.spec.items.map(i => i.key), ["cat-gameplay", "cat-graphics", "cat-sound", "cat-controls", "cat-online", "gap", "lang", "gap2", "back"], "the categories, Language, Back");
+  same(ui.spec.items.map(i => i.key), ["cat-gameplay", "cat-graphics", "cat-sound", "cat-controls", "cat-online", "cat-language", "gap", "back"], "the categories (Language one of them), Back");
   assert.strictEqual(ui.spec.items[3].info[0], env.win.Lang.t("set.cat.controls.it"), "Controls: the touch controls only");
   go("cat-gameplay");
   same(ctlRows(), [], "Display: no touch controls' rows");

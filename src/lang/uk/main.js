@@ -138,6 +138,7 @@ Lang.register("uk", {
   "set.cat.controls.it": "Розмір і бік сенсорного керування.",
   "set.cat.language": "Мова",
   "set.cat.language.i": "Мова меню та гри.",
+  "set.lang.i2": "<ENTER> або клік вибирає її.",
   "set.volume": "Гучність: ",
   "set.volume.i": "Наскільки гучно звучить кожен звук.",
   "set.stereo": "Стерео: ",

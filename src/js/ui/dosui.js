@@ -57,6 +57,8 @@
 //                (bleed: the block grown by that part of a cell on every side - into a frame's cells)
 //                (Display, gfx-text.js); the phone layout puts it under the lines, as wide as the screen (a map's preview)
 //   spec.hint:   bottom line text;  spec.back: Esc handler;  spec.sel: initially selected item
+//   spec.keys:   (keydown event) => false: that key does nothing here (a status screen over a match being played: the
+//                game's keys - fire is Enter / Space - never choose; online.js)
 //   spec.footer: a short text at the bottom left (the main menu: the version)
 //   spec.backdrop: {vram, uni} - an 80 x 25 text screen under it all (the game's statistics after a match: drawn
 //                by the engine - its text - the menu on top); spec.wide: the 80 x 25 screen on a phone too (no phone
@@ -1052,7 +1054,7 @@ class DosUI {
 
   key(e) {
     const s = this.spec;
-    if (!s) return;
+    if (!s || (s.keys && !s.keys(e))) return;
     // (from the hidden touch input: what it types arrives as its "input" event - only the other keys here)
     if (soft && e.target === soft && (e.code === "Backspace" || e.key === "Unidentified" || (e.key && Array.from(e.key).length === 1))) return;
     if (s.page) {

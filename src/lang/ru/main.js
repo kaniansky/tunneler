@@ -138,6 +138,7 @@ Lang.register("ru", {
   "set.cat.controls.it": "Размер и сторона сенсорного управления.",
   "set.cat.language": "Язык",
   "set.cat.language.i": "Язык меню и игры.",
+  "set.lang.i2": "<ENTER> или клик выбирает его.",
   "set.volume": "Громкость: ",
   "set.volume.i": "Насколько громко звучит каждый звук.",
   "set.stereo": "Стерео: ",

@@ -93,7 +93,16 @@ function drawMap() {
   const b = await chromium.launch({ args: ["--disable-gpu", "--use-angle=swiftshader", "--use-gl=angle", "--disable-gpu-compositing"], executablePath: CHROME });
   const errs = [];
   const until = async (p, fn, ms = 30000) => { const t = Date.now(); while (Date.now() - t < ms) { if (await p.evaluate(fn).catch(() => false)) return true; await sleep(200); } return false; };
-  const hold = async (p, keys, ms) => { for (const k of keys) await p.keyboard.down(k); await sleep(ms); for (const k of keys) await p.keyboard.up(k); };
+  // keys held for ms of game time (the engine's steps of 54.9 ms; wall time off a play screen): software rendering
+  // (3D) is slow, and the engine steps fewer times than the clock says
+  const tick = p => p.evaluate(() => window.tunnelerEngine && tunnelerEngine() ? tunnelerEngine().tick : null).catch(() => null);
+  const hold = async (p, keys, ms) => {
+    const t0 = await tick(p);
+    for (const k of keys) await p.keyboard.down(k);
+    if (t0 == null) await sleep(ms);
+    else for (const end = t0 + Math.round(ms / 54.925), t = Date.now(); Date.now() - t < 60000 && (await tick(p)) < end;) await sleep(30);
+    for (const k of keys) await p.keyboard.up(k);
+  };
   let chatted = false;
   const LS = { "tunneler.gfx": "modern", "tunneler.sound": "muted", "tunneler.name": ME[0], "tunneler.client": cidOf(ME[2]) };
   try {
@@ -121,7 +130,7 @@ function drawMap() {
       p = await page("/skirmish?mode=cpu&slots=" + encodeURIComponent("0:you:1,1:hard:2") + "&size=small&view=self");
       await tap(p);
       await until(p, () => window.tunnelerEngine && tunnelerEngine().screen === "play");
-      await hold(p, ["KeyS"], 9000); await hold(p, ["KeyD"], 3000); await hold(p, ["KeyS", "KeyD", "Space"], 1500);
+      await hold(p, ["KeyS"], 4000); await hold(p, ["KeyD"], 1500); await hold(p, ["KeyS", "KeyD", "Space"], 800);
       await sleep(1500); await shot(p, "3-battle"); await close(p);
       // 4 four tanks: everyone's views
       p = await page("/skirmish?mode=cpu&slots=" + encodeURIComponent("0:you:1,1:hard:2,2:hard:3,3:hard:4") + "&size=small&view=everyone");

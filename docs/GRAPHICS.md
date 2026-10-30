@@ -26,7 +26,7 @@ how the game and every menu screen are drawn. This file describes what is built.
   | Row | Choices |
   |---|---|
   | Style | clean / retro (custom when a row below differs from the style's preset) |
-  | Quality | auto / high / medium / low (the output's size: 1 / 0.75 / 0.5 x the device pixels; auto - the default since 5.0.3 - steps down while the play screen's frames are slow and back up after a fast stretch: gfx.js `AUTO`; Depth 3D has one step more below low, `2d`: low's size drawn in 2D - `Gfx.depth()`) |
+  | Quality | auto / high / medium / low (the output's size: 1 / 0.75 / 0.5 x the device pixels; auto - the default since 5.0.3 - steps down while the play screen's frames are slow and back up after a fast stretch: gfx.js `AUTO`; Depth 3D has one step more below low, `2d`: low's size drawn in 2D - `Gfx.depth()`; the step it ended at is kept, localStorage `tunneler.gfx.auto`, and the next visit starts there - 1.2.3) |
   | Depth | 3D / 2D (1.2; 3D the default since 1.2.2 - owner, 2026-10-29: a Depth saved without `depthSet` - 1.2.0 saved the whole set with any change - counts as not chosen; not part of the styles' presets - 3D goes with either: its terrain follows Tunnel edges, smooth = sculpted, pixel = voxel blocks; owner, 2026-10-28) |
   | Terrain | textured / smooth / flat |
   | Tunnel edges | smooth / pixel |

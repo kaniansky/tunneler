@@ -4,6 +4,19 @@ All notable changes to Tunneler. Versions follow [semantic versioning](https://s
 by pushing a version tag (see CONTRIBUTING.md). Up to its version 6.0.1 the game was called Tunneler Online:
 those releases are tagged `online-vX.Y.Z`, their changes are in [docs/CHANGELOG-online.md](docs/CHANGELOG-online.md).
 
+## 1.2.3
+
+- **Language** is a category of Settings: every language in a list in its own name, the one in use checked (room for
+  more languages).
+- Quality auto remembers the step it ended at: a device too slow for full 3D starts the next visit there instead of
+  stuttering through the first seconds again.
+- Screenshot tools: the map picker, the 3D team game and the score are made by readme-screenshots.js too; the Google
+  Play screenshots hold keys for game steps.
+- Online: a slow page catching up with its match ("Catching up with the game...") no longer leaves the match when its
+  player presses fire (Enter / Space chose "Back to the list of games") - on that screen over a running match only
+  <ESC> or a click leaves. A player still catching up after 30 s, or leaving while catching up, is reported (error
+  reports).
+
 ## 1.2.2
 
 - **3D is the default** (Settings, Graphics, modern: Depth). A device that can't draw it plays in 2D - Settings says

@@ -613,6 +613,40 @@ async function pageTests() {
     check("every connection carries the page's sid", () => assert(env.sockets.every(s => /[?&]sid=/.test(s.url))));
   }
   {
+    // a slow page far behind its match ("Catching up with the game...") while its player holds fire: the status screen's
+    // "Back to the list of games" took the fire key (Enter / Space) - the page left its running match for the games list.
+    // Now the game's keys do nothing there (Esc or a click leaves), and a player still catching up after a while, or
+    // leaving while catching up, is reported (Report.error)
+    const env = pageEnv("?room=room", { version: "6.0.0", times: { ping: 5000, catchReport: 150 } });
+    env.load();
+    await until(() => env.sockets[0] && env.sockets[0].readyState === 1, "socket 0");
+    const cfg = { ext: true, players: 2, slots: [{ color: 0, bot: false, team: 1 }, { color: 1, bot: true, level: "easy", team: 2 }], names: ["Ann", null],
+      size: "small", winScore: 3, friendlyFire: false, roundTime: 0, visible: "self", watchOut: "wreck", sight: "full", mode: "standard" };
+    const s0 = env.sockets[0], href = env.win.location.href;
+    s0.recv(hello(1, { no: 1, seed: 1234, cfg, you: 0, n: 40000, from: 0, f: [[[0, 0], 40000]] }));
+    s0.recv(status(1, { no: 1, running: true, conn: [true, true], names: ["Ann", null] }));
+    const key = (code, k) => { for (const type of ["keydown", "keyup"]) env.fire(type, { code, key: k, target: {}, ctrlKey: false, altKey: false, metaKey: false, repeat: false, preventDefault() {} }); };
+    check("a player's page far behind: the 'Catching up with the game...' screen; its hint: <ESC> back.", () => {
+      assert(env.win.tunnelerFrames().catching); assert(/Catching up with the game/.test(statusText(env)), statusText(env));
+      assert.strictEqual(env.win.Lang.decode(env.win.tunnelerStatusUI().spec.hint), "<ESC> back.");
+    });
+    for (const [code, k] of [["Space", " "], ["Enter", "Enter"], ["NumpadEnter", "Enter"], ["ShiftLeft", "Shift"], ["ArrowDown", "ArrowDown"], ["KeyW", "w"]]) key(code, k);
+    check("... the game's keys (fire: Space, Enter...) don't choose 'Back to the list of games' - the page stays in its match", () => {
+      assert.strictEqual(env.win.location.href, href); assert(!s0.closedByPage); assert(env.win.tunnelerEngine());
+    });
+    const reports = () => env.fetches.filter(f => /\/api\/errors$/.test(f.url)).map(f => JSON.parse(f.o.body));
+    await until(() => reports().length, "the catch-up report", 5000);
+    check("still catching up after a while: reported (where 'online catch-up')", () => {
+      assert(env.win.tunnelerFrames().catching, "caught up too soon for the test");
+      assert.strictEqual(reports()[0].where, "online catch-up"); assert(/still catching up after \d+ s: \d+ frames behind/.test(reports()[0].msg), reports()[0].msg);
+    });
+    key("Escape", "Escape");
+    check("<ESC> leaves for the list of games - reported as a player who left while catching up", () => {
+      assert.strictEqual(env.win.location.href, "/games"); assert(s0.closedByPage);
+      assert(reports().some(r => r.where === "online catch-up" && /left the match while catching up/.test(r.msg)), JSON.stringify(reports()));
+    });
+  }
+  {
     // another version on the server: a built browser page reloads itself once for it; the same refusal again: the message
     const session = new Map();
     const env = pageEnv("?room=room", { version: "6.0.0", session });
