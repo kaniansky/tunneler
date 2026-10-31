@@ -475,8 +475,9 @@ joystick drives the tank, the end map / menu without them, a tap beside the map 
 ## Debug info (`src/js/ui/debug.js`)
 
 Settings > Gameplay "Debug info" (localStorage `tunneler.debug`, off by default; owner, 2026-10-30): a small HTML box
-at the top left of the page (`#debug-info`, monospace 10 px, over the canvas, no pointer events), redrawn twice a
-second. Display only - nothing enters the engine. `Debug.provide(group, fn)` (a line per group: `screen` and `gpu` -
+at the top left of the page (`#debug-info`, monospace 10 px, over the canvas, no pointer events but its X at the top
+right - `#debug-info-close` switches it off as Settings does; `Debug.onChange`: Settings open redraws its row; Ctrl+Shift+D switches it on any page -
+a window capture listener, the D swallowed (BLUE's right); owner, 2026-10-31; the row's info says so), redrawn twice a second. Display only - nothing enters the engine. `Debug.provide(group, fn)` (a line per group: `screen` and `gpu` -
 surface.js; `engine` - runner.js, per Runner; `net` - online.js: connection, ping, match, your tank, frames, queued,
 spare (the jitter buffer), catching up, rebuilds, desync), `Debug.count(name, n)` (per second: frames, steps, world
 KB, 3d heights, hud draws, msgs in, KB in / out), `Debug.time(name, ms)` (the last half second's average, kept
@@ -841,6 +842,9 @@ page from before 2.0 - is refused (POST 409 `{code:
   test/modes-check.js (+ test/modes/<mode>.js, test/modes-harness.js `runMatch`); net-sim runs a gold room.
 - Statistics centred vertically (vs computer's right half, the online page): `centreStats(c0, c1, r0, r1)`
   finds the used rows and moves them (`shiftRows`, text + Unicode plane) to the middle.
+- **Quit** (desktop app only; owner, 2026-10-31): the main menu's last row before the update rows, "Quit" (`home.quit`,
+  5 languages; the Information page's desktop app section says so) -> lib.rs command `quit` (`app.exit(0)`; Android:
+  an error - Back on the main menu leaves it, so home.js shows no row there: `window.TunnelerAndroid`). Browsers: none.
 - **New versions**: server.js `watchReleases` (only when started as the program; `UPDATE_CHECK=0` = off)
   asks GitHub's latest release at start and daily and logs a newer one (`newerVersion`, `latestRelease`).
   Desktop app: tauri-plugin-updater + opener (src-tauri/src/lib.rs commands `update_check` ->
@@ -973,7 +977,8 @@ page from before 2.0 - is refused (POST 409 `{code:
   light / dark gray, the dark one a darker muted light one (#f2c48d / #4a2c17: the icon's earth); the icon must not
   fill its canvas - the Linux icons (src-tauri/icons/32x32, 128x128, 128x128@2x.png, tools/make-icons.js) are the
   rounded icon at 80 %, so the manifest takes them from the .deb as before; screenshots from the release's own tag
-  (raw.githubusercontent.com/.../v<version>/screenshots/ - a release with new screenshots points the metainfo at itself).
+  (raw.githubusercontent.com/.../v<version>/screenshots/: `--metainfo <v>` points every one at `v<v>` - 1.2.4 shipped
+  the 1.2.3 ones by hand-kept urls; update-check asserts it).
 - **Graphics setting** (docs/GRAPHICS.md - read it before touching gfx*.js; DESIGN-8P 29; display only,
   local): localStorage `tunneler.gfx` original / modern (the default since 5.0; no WebGL2 = original; "upscaled" and
   its CRT were dropped, a stored "upscaled" = modern) + `tunneler.gfx.modern` (JSON: style clean / retro /

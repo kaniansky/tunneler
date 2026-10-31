@@ -45,6 +45,8 @@ Lang.register("sk", {
   "home.lang.i2": "← →, <ENTER> alebo klik ho prepne.",
   "home.settings": "Nastavenia",
   "home.settings.i": "Obrazovka, grafika, zvuk, ovládanie, hry online a jazyk.",
+  "home.quit": "Ukončiť",
+  "home.quit.i": "Zavrie hru.",
   "home.update": "Aktualizovať na verziu {v}",
   "home.update.busy": "Aktualizujem na verziu {v}...",
   "ph.name": "tvoje meno",
@@ -165,6 +167,7 @@ Lang.register("sk", {
   "set.teammarks.i": "Malý trojuholník nad tankami tvojich spoluhráčov v tímových hrách.",
   "set.debug": "Ladiace údaje: ",
   "set.debug.i": "Snímky za sekundu, kreslenie, engine a sieť v okienku vľavo hore.",
+  "set.debug.i2": "<Ctrl+Shift+D> ich prepne kdekoľvek.",
   "ctl.up": "hore",
   "ctl.down": "dole",
   "ctl.left": "vľavo",
@@ -462,7 +465,7 @@ Lang.register("sk", {
         ["Zvuk:  ", "V Nastaveniach zvolíš jeho štýl: pôvodný (pípanie PC " +
           "speakera z roku 1991), realistický (zvuky tankov), nahratý (skutočné nahrávky), rozprávkový (boing a puk) " +
           "alebo vypnutý; aj hlasitosť, stereo a slabnutie so vzdialenosťou.  Zvuky ostatných tankov slabnú so vzdialenosťou od tvojho a znejú z ich strany (stereo)."],
-        ["Nastavenia:  ", "Hra (celá obrazovka - aj <ALT>+<ENTER> -, veľkosť obrazu, farby tankov: bežné, pre farbosleposť alebo ty modrý / tím zelený / nepriatelia červení, značka nad tankami spoluhráčov, obľúbená farba, ukladať každý zápas, ladiace údaje), Grafika (pôvodná alebo moderná, potom nastavenia toho vzhľadu), Zvuk (štýl, hlasitosť, stereo, slabnutie so vzdialenosťou), Ovládanie (klávesy oboch tankov; dotykové ovládanie: veľkosť, strana a vzhľad - jednoduchý alebo tvoj tank), Online (tvoj účet - alebo meno -, chat, zvuk chatu, ping; v desktopovej aplikácii server) a Jazyk."],
+        ["Nastavenia:  ", "Hra (celá obrazovka - aj <ALT>+<ENTER> -, veľkosť obrazu, farby tankov: bežné, pre farbosleposť alebo ty modrý / tím zelený / nepriatelia červení, značka nad tankami spoluhráčov, obľúbená farba, ukladať každý zápas, ladiace údaje - aj <CTRL>+<SHIFT>+<D> kdekoľvek), Grafika (pôvodná alebo moderná, potom nastavenia toho vzhľadu), Zvuk (štýl, hlasitosť, stereo, slabnutie so vzdialenosťou), Ovládanie (klávesy oboch tankov; dotykové ovládanie: veľkosť, strana a vzhľad - jednoduchý alebo tvoj tank), Online (tvoj účet - alebo meno -, chat, zvuk chatu, ping; v desktopovej aplikácii server) a Jazyk."],
         ["Grafika:  ", "Nastavenia vyberajú pôvodnú (obrazovka DOS-u z roku 1991) alebo modernú (predvolená): tá istá hra nakreslená v rozlíšení tvojej obrazovky - hladké tunely, textúrovaná hlina a skala, tmavé tunely osvetlené svetlami tankov, žiariace strely, prach, iskry a oheň, nový panel a menu v modernom písme.  Nastavenia modernej grafiky: štýl (čistý alebo retro), kvalita, terén, okraje tunelov, osvetlenie, častice, žiara, otrasy obrazu, kamera (plynulá: tanky kĺžu medzi krokmi) a rozhranie, a hmla vojny pri výhľade.  Hĺbka 3D (predvolená) svet vyvýši: steny s výškou a tieňmi, zhora rovnako ako 2D (okraje tunelov pixely: kocky); zariadenie, ktoré ju nevie nakresliť, alebo je s kvalitou auto naň pomalé, hrá v 2D.  Mení sa len vzhľad, nikdy hra - ani online."],
       ],
     },
@@ -490,7 +493,7 @@ Lang.register("sk", {
         ["Desktopová aplikácia:  ", "Tunneler je aj malý program pre Windows, Linux a macOS " +
           "- stiahneš ho zo stránky vydaní na GitHube (github.com/kaniansky/tunneler/releases).  " +
           "Delenú obrazovku a potýčku hrá bez siete, hry online na verejnom serveri alebo " +
-          "na akomkoľvek inom (Nastavenia, Online, Server).  V prehliadači sa hra dá nainštalovať aj ako aplikácia (potom sa spustí aj bez siete)."],
+          "na akomkoľvek inom (Nastavenia, Online, Server); Ukončiť v hlavnom menu ho zavrie.  V prehliadači sa hra dá nainštalovať aj ako aplikácia (potom sa spustí aj bez siete)."],
         ["Originál:  ", "TUNNELER 2.0 napísal Geoffrey Silverton v roku 1991 v Turbo Pascale: dva " +
           "tanky sa prekopávajú podzemným svetom na jednom PC, s jednou klávesnicou a delenou " +
           "obrazovkou.  Táto verzia z neho zachováva všetko a pridáva zvyšok."],

@@ -127,12 +127,15 @@ const ok = msg => { n++; console.log("  ok  " + msg); };
     const v = require("../package.json").version, dir = path.join(__dirname, "..", "flatpak");
     const meta = fs.readFileSync(path.join(dir, "com.kaniansky.Tunneler.metainfo.xml"), "utf8");
     assert(meta.includes('<release version="' + v + '"'), "the Flatpak metainfo has no <release> for " + v + ": node tools/flatpak-update.js --metainfo " + v);
+    // Flathub copies the screenshots from the metainfo's urls: this release's tag, not an older one's
+    const shots = meta.match(/<image>[^<]*<\/image>/g) || [];
+    assert(shots.length && shots.every(u => u.includes("/v" + v + "/screenshots/")), "the Flatpak metainfo's screenshots aren't from tag v" + v + ": node tools/flatpak-update.js --metainfo " + v);
     const man = fs.readFileSync(path.join(dir, "com.kaniansky.Tunneler.yml"), "utf8");
     assert.strictEqual((man.match(/x-checker-data:/g) || []).length, 3, "x-checker-data on both .deb sources and the git source");
     assert(/url: \S+_amd64\.deb\n\s+sha256: [0-9a-f]{64}/.test(man) && /url: \S+_arm64\.deb\n\s+sha256: [0-9a-f]{64}/.test(man) && /tag: v\S+\n\s+commit: [0-9a-f]{40}/.test(man),
       "the lines tools/flatpak-update.js rewrites are there");
   }
-  ok("the Flatpak: the metainfo lists this version, the manifest's sources (x-checker-data, the lines the release job rewrites)");
+  ok("the Flatpak: the metainfo lists this version and its screenshots, the manifest's sources (x-checker-data, the lines the release job rewrites)");
 
   // keep awake (Render's free plan sleeps after 15 idle minutes): the server asks its own public address for /api/health
   // now and then - only where RENDER_EXTERNAL_URL / KEEP_AWAKE_URL is set, never with KEEP_AWAKE=0

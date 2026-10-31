@@ -45,6 +45,8 @@ Lang.register("cs", {
   "home.lang.i2": "← →, <ENTER> nebo klik ho přepne.",
   "home.settings": "Nastavení",
   "home.settings.i": "Obrazovka, grafika, zvuk, ovládání, hry online a jazyk.",
+  "home.quit": "Ukončit",
+  "home.quit.i": "Zavře hru.",
   "home.update": "Aktualizovat na verzi {v}",
   "home.update.busy": "Aktualizuji na verzi {v}...",
   "ph.name": "tvoje jméno",
@@ -165,6 +167,7 @@ Lang.register("cs", {
   "set.teammarks.i": "Malý trojúhelník nad tanky tvých spoluhráčů v týmových hrách.",
   "set.debug": "Ladicí údaje: ",
   "set.debug.i": "Snímky za sekundu, kreslení, engine a síť v okénku vlevo nahoře.",
+  "set.debug.i2": "<Ctrl+Shift+D> je přepne kdekoli.",
   "ctl.up": "nahoru",
   "ctl.down": "dolů",
   "ctl.left": "vlevo",
@@ -463,7 +466,7 @@ Lang.register("cs", {
         ["Zvuk:  ", "V Nastavení zvolíš jeho styl: původní (pípání PC " +
           "speakeru z roku 1991), realistický (zvuky tanků), nahraný (skutečné nahrávky), pohádkový (boing a puk) nebo vypnutý; i hlasitost, stereo a slábnutí se vzdáleností.  " +
           "Zvuky ostatních tanků slábnou se vzdáleností od tvého a znějí z jejich strany (stereo)."],
-        ["Nastavení:  ", "Hra (celá obrazovka - i <ALT>+<ENTER> -, velikost obrazu, barvy tanků: běžné, pro barvoslepost nebo ty modrý / tým zelený / nepřátelé červení, značka nad tanky spoluhráčů, oblíbená barva, ukládat každý zápas, ladicí údaje), Grafika (původní nebo moderní, pak nastavení toho vzhledu), Zvuk (styl, hlasitost, stereo, slábnutí se vzdáleností), Ovládání (klávesy obou tanků; dotykové ovládání: velikost, strana a vzhled - jednoduchý nebo tvůj tank), Online (tvůj účet - nebo jméno -, chat, zvuk chatu, ping; v desktopové aplikaci server) a Jazyk."],
+        ["Nastavení:  ", "Hra (celá obrazovka - i <ALT>+<ENTER> -, velikost obrazu, barvy tanků: běžné, pro barvoslepost nebo ty modrý / tým zelený / nepřátelé červení, značka nad tanky spoluhráčů, oblíbená barva, ukládat každý zápas, ladicí údaje - i <CTRL>+<SHIFT>+<D> kdekoli), Grafika (původní nebo moderní, pak nastavení toho vzhledu), Zvuk (styl, hlasitost, stereo, slábnutí se vzdáleností), Ovládání (klávesy obou tanků; dotykové ovládání: velikost, strana a vzhled - jednoduchý nebo tvůj tank), Online (tvůj účet - nebo jméno -, chat, zvuk chatu, ping; v desktopové aplikaci server) a Jazyk."],
         ["Grafika:  ", "Nastavení vybírá původní (obrazovka DOSu z roku 1991) nebo moderní (výchozí): tatáž hra nakreslená v rozlišení tvé obrazovky - hladké tunely, texturovaná hlína a skála, tmavé tunely osvětlené světly tanků, zářící střely, prach, jiskry a oheň, nový panel a menu v moderním písmu.  Nastavení moderní grafiky: styl (čistý nebo retro), kvalita, terén, okraje tunelů, osvětlení, částice, záře, otřesy obrazu, kamera (plynulá: tanky kloužou mezi kroky) a rozhraní, a mlha války při výhledu.  Hloubka 3D (výchozí) svět vyvýší: zdi s výškou a stíny, shora stejně jako 2D (okraje tunelů pixely: kostky); zařízení, které ji neumí nakreslit, nebo je s kvalitou auto na ni pomalé, hraje ve 2D.  Mění se jen vzhled, nikdy hra - ani online."],
       ],
     },
@@ -491,7 +494,7 @@ Lang.register("cs", {
         ["Desktopová aplikace:  ", "Tunneler je i malý program pro Windows, Linux a macOS - " +
           "stáhneš ho ze stránky vydání na GitHubu (github.com/kaniansky/tunneler/releases).  " +
           "Dělenou obrazovku a potyčku hraje bez sítě, hry online na veřejném serveru nebo " +
-          "na jakémkoli jiném (Nastavení, Online, Server).  V prohlížeči se hra dá nainstalovat i jako aplikace (pak se spustí i bez sítě)."],
+          "na jakémkoli jiném (Nastavení, Online, Server); Ukončit v hlavním menu ho zavře.  V prohlížeči se hra dá nainstalovat i jako aplikace (pak se spustí i bez sítě)."],
         ["Originál:  ", "TUNNELER 2.0 napsal Geoffrey Silverton v roce 1991 v Turbo Pascalu: dva " +
           "tanky se prokopávají podzemním světem na jednom PC, s jednou klávesnicí a dělenou " +
           "obrazovkou.  Tato verze z něj zachovává všechno a přidává zbytek."],

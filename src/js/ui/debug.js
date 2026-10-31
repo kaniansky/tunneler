@@ -5,14 +5,17 @@
 //     its own with Scope.onEnd)
 //   Debug.count(name, n) - adds to a figure shown per second ("name/s"); nothing while the box is off
 //   Debug.time(name, ms) - a duration, shown as the average of the last half second with any (the "ms" line)
+//   Debug.onChange(fn) -> remove: fn(on) when it is switched on / off (the box's X, Settings)
+// The box lets clicks through to the game, all but its X (top right): that switches it off, as Settings does.
+// Ctrl+Shift+D switches it on any page (owner, 2026-10-31) - the D doesn't reach the page (BLUE's right).
 import { Scope } from "../scope.js";
 
 const root = globalThis;
 const KEY = "tunneler.debug", EVERY_MS = 500;
 const load = () => { try { return root.localStorage.getItem(KEY) === "1"; } catch (e) { return false; } };
-let on = null, box = null, timer = 0, last = 0;
+let on = null, box = null, text = null, timer = 0, last = 0;
 const providers = new Map();               // group -> [fn]
-const counts = new Map(), times = new Map();
+const counts = new Map(), times = new Map(), listeners = new Set();
 
 const enabled = () => on === null ? (on = load()) : on;
 // (steady text: numbers with fixed decimals, every figure as wide as it has been at its widest - right-aligned
@@ -48,7 +51,7 @@ function render() {
   lines.push(line("rates", rates, 1), line("ms", avgs, 1));
   for (const k of counts.keys()) counts.set(k, 0);
   for (const t of times.values()) { t.sum = 0; t.n = 0; }
-  box.textContent = lines.filter(Boolean).join("\n");
+  text.textContent = lines.filter(Boolean).join("\n");
 }
 
 function show() {
@@ -58,7 +61,19 @@ function show() {
   box.id = "debug-info";
   Object.assign(box.style, { position: "fixed", left: "4px", top: "4px", zIndex: "2147483000", pointerEvents: "none",
     font: "10px/1.3 ui-monospace, Menlo, Consolas, monospace", color: "#d8f0d8", background: "rgba(0, 0, 0, 0.72)",
-    padding: "3px 5px", whiteSpace: "pre-wrap", fontVariantNumeric: "tabular-nums", maxWidth: "min(46em, calc(100vw - 8px))", borderRadius: "2px" });
+    padding: "3px 5px", whiteSpace: "pre-wrap", fontVariantNumeric: "tabular-nums", maxWidth: "min(46em, calc(100vw - 8px))", borderRadius: "2px",
+    display: "flex", alignItems: "flex-start", gap: "6px" });
+  text = doc.createElement("div");
+  // (the X: a bigger target than its glyph, for a finger; its own pointer events - nothing reaches the game)
+  const x = doc.createElement("div");
+  x.id = "debug-info-close";
+  x.textContent = "\u00D7";
+  Object.assign(x.style, { pointerEvents: "auto", cursor: "pointer", font: "bold 14px/1 ui-monospace, Menlo, Consolas, monospace",
+    color: "#d8f0d8", padding: "1px 5px 5px", margin: "-3px -5px 0 0", userSelect: "none" });
+  const swallow = e => e.stopPropagation();
+  for (const ev of ["pointerdown", "pointerup", "mousedown", "mouseup", "touchstart", "touchend", "contextmenu"]) x.addEventListener(ev, swallow);
+  x.addEventListener("click", e => { e.stopPropagation(); e.preventDefault(); Debug.set(false); });
+  box.append(text, x);
   doc.body.appendChild(box);
   last = root.performance ? root.performance.now() : Date.now();
   Scope.free(() => { timer = setInterval(render, EVERY_MS); });   // (the first after a while: not while the modules load)
@@ -66,16 +81,26 @@ function show() {
 function hide() {
   clearInterval(timer); timer = 0;
   if (box && box.parentNode) box.parentNode.removeChild(box);
-  box = null;
+  box = text = null;
 }
+
+// (capture: before any page's key handler; the D's keyup still reaches them - a release of a key not held)
+const toggleKey = e => {
+  if (!(e.ctrlKey && e.shiftKey && !e.altKey && !e.metaKey && e.code === "KeyD")) return;
+  e.preventDefault(); e.stopImmediatePropagation();
+  if (!e.repeat) Debug.set(!enabled());
+};
+if (root.addEventListener) Scope.free(() => root.addEventListener("keydown", toggleKey, true));
 
 export const Debug = {
   on: enabled,
   set(v) {
     on = !!v;
     try { root.localStorage.setItem(KEY, on ? "1" : "0"); } catch (e) { /* no storage */ }
-    if (on) show(); else hide();
+    if (on) { show(); render(); } else hide();              // (switched on: its figures at once, not an empty box)
+    for (const fn of [...listeners]) try { fn(on); } catch (e) { /* a page's */ }
   },
+  onChange(fn) { listeners.add(fn); return () => listeners.delete(fn); },
   provide(group, fn) {
     if (!providers.has(group)) providers.set(group, []);
     providers.get(group).push(fn);

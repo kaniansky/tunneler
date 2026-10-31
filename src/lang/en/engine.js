@@ -165,7 +165,7 @@ const STRINGS_EN = {
       ["Sound:  ", "Settings chooses its style: original (the PC " +
         "speaker beeps of 1991), realistic (tank noises), recorded (real recordings), cartoony (boings and pops), or muted; volume, stereo and distance fade too.  " +
         "The sounds of the other tanks fade with their distance from yours and come from their side (stereo)."],
-      ["Settings:  ", "Gameplay (fullscreen - also <ALT>+<ENTER> -, screen size, tank colors: normal, color-blind or you blue / team green / enemies red, a mark over your teammates' tanks, preferred color, save every match, debug info), Graphics (original or modern, then that look's settings), Sound (style, volume, stereo, distance fade), Controls (both tanks' keys; the touch controls' size, side and look - plain or your own tank), Online (your account - or your name -, show chat, chat sound, show ping; in the desktop app the server) and Language."],
+      ["Settings:  ", "Gameplay (fullscreen - also <ALT>+<ENTER> -, screen size, tank colors: normal, color-blind or you blue / team green / enemies red, a mark over your teammates' tanks, preferred color, save every match, debug info - also <CTRL>+<SHIFT>+<D> anywhere), Graphics (original or modern, then that look's settings), Sound (style, volume, stereo, distance fade), Controls (both tanks' keys; the touch controls' size, side and look - plain or your own tank), Online (your account - or your name -, show chat, chat sound, show ping; in the desktop app the server) and Language."],
       ["Graphics:  ", "Settings chooses original (the DOS screen of 1991) or modern (the default): the same game drawn at your screen's resolution - smooth tunnels, textured dirt and rock, dark tunnels lit by the tanks' lamps, glowing shots, dust, sparks and fire, a new panel and menus in a modern font.  Modern graphics settings: style (clean or retro), quality, terrain, tunnel edges, lighting, particles, glow, screen shake, camera (smooth: tanks glide between steps) and UI, and the fog of war of the line of sight.  Depth 3D (the default) raises the world: walls with height and shadows, seen from straight above as in 2D (tunnel edges pixel: blocks); a device that can't draw it, or with Quality auto too slow for it, plays in 2D.  Only the look changes, never the game - also online."],
     ],
   },
@@ -195,7 +195,7 @@ const STRINGS_EN = {
         "macOS - download it from the releases page on GitHub " +
         "(github.com/kaniansky/tunneler/releases).  It plays split screen and skirmish " +
         "without a network, and online games on the public server or any other one (Settings, " +
-        "Online, Server).  In a browser the game can be installed as an app too (it then also starts offline)."],
+        "Online, Server); Quit on the main menu closes it.  In a browser the game can be installed as an app too (it then also starts offline)."],
       ["The original:  ", "TUNNELER 2.0 was written by Geoffrey Silverton in 1991 in Turbo Pascal: " +
         "two tanks dig through an underground world on one PC, one keyboard and one split screen.  " +
         "This version keeps all of it and adds the rest."],

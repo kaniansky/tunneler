@@ -2,8 +2,10 @@
 "use strict";
 // The Flatpak (flatpak/, Flathub: com.kaniansky.Tunneler) for a release <version>:
 //   node tools/flatpak-update.js --metainfo <version>   before tagging: a <release> entry (version, today)
-//                                                        at the top of the metainfo's <releases> - the
-//                                                        Flatpak installs the metainfo from the tag
+//                                                        at the top of the metainfo's <releases> and the
+//                                                        screenshots from tag v<version> - the Flatpak installs
+//                                                        the metainfo from the tag, Flathub copies the
+//                                                        screenshots from its urls
 //   node tools/flatpak-update.js <version>              after the release: the manifest's two .deb urls +
 //                                                        sha256 (x86_64, aarch64) and the git source's tag +
 //                                                        commit; then copy the manifest into the Flathub
@@ -22,9 +24,11 @@ if (meta) {
     const day = new Date().toISOString().slice(0, 10);
     s = s.replace("  <releases>\n", "  <releases>\n    <release version=\"" + ver + "\" date=\"" + day + "\">\n" +
       "      <url type=\"details\">https://github.com/" + REPO + "/releases/tag/v" + ver + "</url>\n    </release>\n");
-    fs.writeFileSync(f, s);
   }
-  console.log("metainfo: release " + ver);
+  // every tag has its own screenshots/: point at this release's
+  s = s.replace(new RegExp("(raw\\.githubusercontent\\.com/" + REPO + "/)v[^/]+/screenshots/", "g"), "$1v" + ver + "/screenshots/");
+  fs.writeFileSync(f, s);
+  console.log("metainfo: release " + ver + ", screenshots v" + ver);
   process.exit(0);
 }
 

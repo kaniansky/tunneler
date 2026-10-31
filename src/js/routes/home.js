@@ -124,9 +124,10 @@ export function mount() {
 
   // the main menu: "TUNNELER" and the author (the version at the bottom left); the other screens: their
   // own title (like VS COMPUTER)
-  const title = () => {
-    const by = Lang.data[Lang.code].engine ? Lang.data[Lang.code].engine.by : "by Norko Kaniansky";
-    return [{ row: 4, text: Lang.title(), color: 12 }, { row: 6, text: Lang.enc(by), color: 4 }];
+  // (top: the main menu's box's top row - a tall menu lifts the title with it)
+  const title = (top = 8) => {
+    const by = Lang.data[Lang.code].engine ? Lang.data[Lang.code].engine.by : "by Norko Kaniansky", r = Math.min(4, top - 3);
+    return [{ row: r, text: Lang.title(), color: 12 }, { row: r + 2, text: Lang.enc(by), color: 4 }];
   };
   const screenTitle = key => [{ row: 4, text: T(key), color: 12 }];
   const levelsText = () => LEVELS.map(l => Lang.lower(Lang.raw("level." + l))).join(", ");
@@ -205,10 +206,17 @@ export function mount() {
       { key: "instr", label: T("menu.instr"), info: [T("menu.instr.i")], go: () => ui.showPage("instructions", "hotseat", () => main("instr")) },
       { key: "info", label: T("menu.info"), info: [T("menu.info.i")], go: () => ui.showPage("information", "hotseat", () => main("info")) },
       { key: "settings", label: T("home.settings"), info: [T("home.settings.i")], go: () => settings() },
+      // (the desktop app: its window has a close button, but a game shown fullscreen has none - owner, 2026-10-31;
+      // not the Android app: Back on the main menu leaves it, as apps there do)
+      ...(Endpoint.isApp && tauri() && !window.TunnelerAndroid ? [{ key: "gapq", label: "", disabled: true }, { key: "quit", label: T("home.quit"), info: [T("home.quit.i")],
+        go: () => { tauri().invoke("quit").catch(() => {}); } }] : []),
       ...updateItems(),
     ];
     if (typeof sel === "string") sel = Math.max(0, items.findIndex(it => it.key === sel));
-    ui.show({ lines: title(), box: { y: update ? 7 : 8 }, sel, infoRow: update ? 22 : 21,   // (Quick play + Daily challenge; the update rows: a row higher)
+    // (the box as low as row 8, the info at row 21 or an empty row under the box, its 2 lines above the bottom rule (23);
+    // a taller menu - the desktop app's Quit, an update - goes higher, at most to row 6, the info then right under it)
+    const y = Math.max(6, Math.min(8, 19 - items.length));
+    ui.show({ lines: title(y), box: { y }, sel, infoRow: Math.min(Math.max(y + items.length + 3, 21), 22),
       footer: Lang.version(), home: true, items }, keep);
   }
 
@@ -442,7 +450,7 @@ export function mount() {
       const auto = () => { Replay.setAutoSave(!Replay.autoSave()); settings(true); };
       rows.push(L("autosave", pad("rp.auto") + T(Replay.autoSave() ? "rp.auto.on" : "rp.auto.off"), [T("rp.auto.i1"), T("rp.auto.i2")], auto));
       // figures for finding problems in a small box at the top left of the page (ui/debug.js; display only)
-      rows.push(L("debug", pad("set.debug") + onOffT(Debug.on()), [T("set.debug.i"), T("home.lang.i2")],
+      rows.push(L("debug", pad("set.debug") + onOffT(Debug.on()), [T("set.debug.i"), T("set.debug.i2"), T("home.lang.i2")],
         () => { Debug.set(!Debug.on()); settings(true); }));
       return rows;
     }
@@ -517,6 +525,8 @@ export function mount() {
     const inputs = [nameForm.width + 1, ...(isApp() ? [serverForm.width + 1] : [])];
     return Math.max(labelW() + Math.max(...values.map(v => cols(v)), ...inputs) + 2, ...["ctl.reset", "acc.logout", "acc.change", "acc.delete", "acc.login.go"].map(k => cols(R(k)) + 2));
   };
+  // (the debug box's X switches it off: Settings open shows that at once)
+  Scope.onEnd(Debug.onChange(() => { if (ui.spec && ui.spec.items.some(it => it.key === "debug")) settings(true); }));
   function settings(keep) {
     nameForm.placeholder = T("ph.online");
     // (the input as wide as the placeholder in the longest language - names stay at most NAME_MAX)
