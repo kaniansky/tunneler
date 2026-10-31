@@ -80,6 +80,21 @@ changes the engine, the AI, the protocol or replays (a patch).
   own views side by side, the names, the screen after a match with the rounds. The classic engine (the 1991 game)
   runs online BLUE vs GREEN and old replays.
 
+- **Floor plane** (water and ground, 1.3, owner 2026-10-31; docs/v6/MAPS.md 5c - the original look): the world's 16
+  palette entries are all in use, so water, sand and grass aren't pixels of the world (water is 0, open) but a plane of
+  their own beside the LORES pixels, like the line-of-sight dim plane. playscreen.js `floorView` (after each view's
+  blit; `blitSight` with line of sight) fills a byte per LORES cell - the `FLOOR_LOOK` of its two pixels (low nibble =
+  the low-nibble pixel): 1 water, 2 its ripple (short dashes by a hash of the WORLD pixel, `rippleAt`: they stay put
+  when the view scrolls), 3 sand, 4 grass, 0 = the pixel's own colour - only where the pixel is 0, from
+  `engine.floor` and `engine.groundType` (`floorLook`): water; the shore (floor 3) sand on every ground; open from the
+  start in the ground's look (classic: black); dug (floor 0, pixel 0) sand on sand / grass, black on classic. Snapshots
+  carry `floors` (per view) and the world map's `floor` (no ripple); display.js `paint(..., dim, floor)` draws a look
+  where the pixel is 0 in `FLOOR_RGB` (6-bit DAC values), gray where the dim plane says remembered. Line of sight:
+  `sightSeen` (a bit per world pixel and player) - never seen stays black. The live map (views.js `drawMap`), map
+  pictures (mappic.js) and the editor (maps.js `render`, its own plane) use the same looks. With `engine.floor` null
+  (every game without water and with classic ground) nothing is allocated and no snapshot has a plane: every picture
+  as before (test/screen-check.js). Test: test/floor-look-check.js.
+
 ## Next
 
 - The status line as a model too (a row of segments) - it is a layer of the one canvas already: then nothing is

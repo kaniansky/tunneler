@@ -30,36 +30,49 @@ screens drawn anew - see below).
 
 ## What's new
 
-New in 1.2:
+New in 1.3:
 
-- **3D** (Settings, Graphics, modern: **Depth 3D**): the world raised - dirt, rock and base walls with height,
-  tunnels carved into the ground, tanks as 3D shapes with shadows - seen from straight above, so every view shows
-  exactly what the 2D one does. Smooth tunnel edges give sculpted terrain; pixel edges (the retro style) voxels.
-- **Generated maps**: the Map setting can be a world made anew for every match - **Fortresses**, **Arena**,
-  **Highlands** or **Caves** - with a fair layout (symmetric) or a natural one, in skirmishes and online games.
-  Teammates get bases near each other on every map. The map picker shows generated maps, your maps and the
-  gallery, each with its picture; a new map in the editor can start from a generated world.
-- **Smarter computer tanks**: they no longer park waiting for an enemy that left, hide behind a base's walls when
-  low on energy or shield, refuel at the nearest base they may use, and find their way out of other tanks' bases.
-- **Teammates marked**: a small triangle in their color over your teammates' tanks (Settings, Gameplay).
-- **Replays when you want them**: "Save the replay" after a match (or Settings, Gameplay, Save every match); a
-  replay plays in the version that recorded it.
-- After death with one view, your left / right keys switch the teammate you watch; split screen's info shows your
-  keys; the skirmish and online lobbies show the map.
-- **Lamps that stop at walls** (1.2.4): a tank's lamp and headlight light its tunnel and the walls' faces, no longer
-  through rock, base walls or dirt; the static at low energy is bright snow like the original's.
-- **A quicker online game** (1.2.4): a frame from the server runs as soon as it arrives - your tank answers your keys
-  up to 55 ms sooner -, an out-of-step page repairs itself without making the others rebuild, and the modern graphics
-  send the GPU only what changed.
-- **Debug info** (1.2.4, Settings, Gameplay): frame rate, drawing, the engine and the connection (ping, input lag,
-  the frames waiting) in a small box at the top left.
+- **Water**: a tank drives through it at half speed, it can't be dug, shots fly over it and explosions don't change
+  it; a base never stands in it. Animated waves in the modern look, deep blue with a sandy shore in the original.
+- **Ground**: a map's open floor is the original's dark tunnels, sand or grass (only the look); on sand or grass,
+  floor dug during play is sand.
+- **Six new generated maps**: **Labyrinth** (a maze of tunnels already dug), **Rivers**, **Islands** (every base on
+  an island in a sea), **Strata** (rock layers with gaps), **Quarters** (four parts split by rock walls with gates)
+  and **Open field** (almost no rock) join Fortresses, Arena, Highlands and Caves. Every generated map has sand or
+  grass ground; Rivers and Islands always have water, the other kinds in about one match in three.
+- **Show map** (a new setting, skirmish and online): holding **Tab** (SCORE on a phone) shows the map under the
+  score - what you have seen, what your team has seen, or the whole world revealed as the match started (for you or
+  for your team). Only what you (your team) see updates it, parts not seen right now are gray, and enemy tanks show
+  only while seen.
+- **The map's size in the map picker**: generated maps are listed by name, with a Map size row; the lobby's Map row
+  says it all - "Rivers (Large)", a map of yours "Crossroads (Large, 6)" - and there is no Map size row any more.
+- **Map editor**: a Water tool (keys 1-5: tunnel, dirt, rock, water, base) and a Ground row (Classic / Sand / Grass).
+- **Computer tanks know water is slow**: they drive around a pond when that is quicker and cross a river when it
+  isn't.
+- Also: the mouse wheel over a menu's list scrolls only the list; debug info has an X to close it and Ctrl+Shift+D
+  switches it anywhere; the desktop app has Quit on the main menu.
 
-| 3D: a team game on generated caves (the triangle marks your teammate) | The map picker: generated maps |
+Online play needs 1.3 on every side. Games without water and with the original ground - the original BLUE vs GREEN
+game, Original, your maps from before - play exactly as before.
+
+| A team game on generated rivers (modern look) | Held Tab with Show map: Revealed (team), generated islands |
 |---|---|
-| ![3D](screenshots/modern-3d.png) | ![Map picker](screenshots/modern-map-picker.png) |
+| ![Water](screenshots/modern-water.png) | ![The score with the map](screenshots/modern-score-map.png) |
 
 Earlier:
 
+- **3D** (1.2; Settings, Graphics, modern: **Depth 3D**): the world raised - dirt, rock and base walls with height,
+  tunnels carved into the ground, tanks as 3D shapes with shadows - seen from straight above, so every view shows
+  exactly what the 2D one does. Smooth tunnel edges give sculpted terrain; pixel edges (the retro style) voxels.
+- **Generated maps** (1.2): the Map setting can be a world made anew for every match, in skirmishes and online games.
+  Teammates get bases near each other on every map. The map picker shows generated maps, your maps and the gallery,
+  each with its picture; a new map in the editor can start from a generated world.
+- **Smarter computer tanks** (1.2): they no longer park waiting for an enemy that left, hide behind a base's walls
+  when low on energy or shield, refuel at the nearest base they may use, and find their way out of other tanks' bases.
+- 1.2 also: a small triangle in their color marks your teammates' tanks (Settings, Gameplay); "Save the replay" after
+  a match (or Settings, Gameplay, Save every match), a replay plays in the version that recorded it; after death with
+  one view, your left / right keys switch the teammate you watch; lamps stop at walls; online, your tank answers your
+  keys sooner; **Debug info** (Settings, Gameplay) shows the frame rate, drawing, the engine and the connection.
 - **Quick play** (Online game, in the list of games): straight into an online game. The server finds a game with a
   place for you or makes one - eight tanks free-for-all, computer tanks in every seat nobody sits on, matches that
   start by themselves after a short countdown. Join a running match and you take over a computer tank at once;
@@ -68,12 +81,12 @@ Earlier:
   map size and computer opponents. Play it as often as you like and send your result: the server plays the
   match's replay again with its own computer players, so only real results get on the day's leaderboard. Every
   entry's match can be watched, and the leaderboard goes back 30 days (play those days again as practice).
-- **Your own maps** (main menu, Maps): paint rock, dirt and tunnels and place up to 8 bases on a small, medium or
-  large map, with the keyboard, the mouse, a gamepad or a finger. Maps are kept in the browser, shared as links
-  (`/map/<id>`) and saved as / opened from `.tmap` files, and played in a skirmish or an online game. A map is
-  played only when a tank can drive between all of its bases - the editor says which can't be reached. The **map
-  gallery** (Maps, Map gallery) lists the maps players published on the server - newest or most played, each with a
-  picture -, and the Map setting opens a picker of your maps and the gallery's.
+- **Your own maps** (main menu, Maps): paint rock, dirt, tunnels and water and place up to 8 bases on a small, medium
+  or large map, on classic, sand or grass ground, with the keyboard, the mouse, a gamepad or a finger. Maps are kept in
+  the browser, shared as links (`/map/<id>`) and saved as / opened from `.tmap` files, and played in a skirmish or an
+  online game. A map is played only when a tank can drive between all of its bases - the editor says which can't be
+  reached. The **map gallery** (Maps, Map gallery) lists the maps players published on the server - newest or most
+  played, each with a picture -, and the Map setting opens a picker of generated maps, your maps and the gallery's.
 - **Player accounts**: online games and the daily challenge's leaderboard need an account on the game's server -
   a username (the name everybody sees, unique on that server) and a password, no e-mail. A recovery code, shown
   once, is the way to set a new password. A player is their account: a seat or tank comes back from any device,
@@ -83,7 +96,7 @@ Earlier:
   with you to every device you log in on - the browser, the desktop app or the Android app; a map or replay deleted
   on one goes on the others too.
 - **The score mid-match**: hold **Tab** (SCORE on a touch screen, Back on a gamepad) for a box with the round,
-  every player's or team's score and the game's settings.
+  every player's or team's score and the game's settings - and, with Show map (1.3), the map.
 - **Running reliably**: a server restart or deploy no longer ends online games (the server hands them to the
   next one, the pages reconnect and carry on); a dead connection is noticed within seconds and the page
   reconnects with its tank; a desync repairs itself.
@@ -91,7 +104,11 @@ Earlier:
 
 The details are in [CHANGELOG.md](CHANGELOG.md) and [docs/v6/](docs/v6/).
 
-| Quick play: two players, computer tanks in the other seats | The daily challenge's leaderboard | The map editor |
+| 3D: a team game on generated caves (the triangle marks your teammate) | The map picker: generated maps and the map size |
+|---|---|
+| ![3D](screenshots/modern-3d.png) | ![Map picker](screenshots/modern-map-picker.png) |
+
+| Quick play: two players, computer tanks in the other seats | The daily challenge's leaderboard | The map editor: water on grass |
 |---|---|---|
 | ![Quick play](screenshots/modern-quickplay.png) | ![Daily challenge leaderboard](screenshots/modern-challenge.png) | ![Map editor](screenshots/modern-map-editor.png) |
 
@@ -102,7 +119,7 @@ The details are in [CHANGELOG.md](CHANGELOG.md) and [docs/v6/](docs/v6/).
 ## Modern graphics
 
 Settings, **Graphics: modern** draws the same game at your screen's resolution: smooth tunnels, textured
-dirt and cracked rock, dark tunnels lit by the tanks' lamps and headlights (stopped by what's in the way), glowing shots, dust, sparks,
+dirt and cracked rock, animated water, sand and grass, dark tunnels lit by the tanks' lamps and headlights (stopped by what's in the way), glowing shots, dust, sparks,
 fire and debris, a smooth camera that glides with your tank, a new energy and shield panel, and every menu
 in a modern font, flat and warm (no gradients, no glow). Its own settings screen picks a style (clean, or retro with chunky
 pixels and the DOS colors) and quality, terrain, tunnel edges, lighting, particles, glow, screen shake,
@@ -116,6 +133,8 @@ play stay exactly the same, and every player chooses their own look. **Modern** 
 | ![Modern retro split screen](screenshots/modern-retro.png) | ![Original main menu](screenshots/home.png) |
 | **Original: the daily challenge** | **Original: the map editor** |
 | ![Original daily challenge](screenshots/challenge.png) | ![Original map editor](screenshots/map-editor.png) |
+| **Original: a river on generated rivers** | **Original: held Tab with Show map** |
+| ![Original water](screenshots/water.png) | ![Original score with the map](screenshots/score-map.png) |
 
 ## Modes
 
@@ -156,13 +175,17 @@ Settings (split screen: map size, rounds to win and round time only):
 - **Slots and teams** - 8 slots (BLUE, GREEN, RED, GOLD, PINK, LIME, SKY, WHITE), each nobody,
   human or a computer tank (online: open, closed or AI), each with a team number 1-8: all different =
   free-for-all, shared numbers = teams of any size (4 v 4, 2 v 2 v 2 v 2, 3 v 5, ...).
-- **Map size** - small (512x256), medium (1024x512, the original) or large (2048x1024).
-- **Map** - random (the original's world generator), one of your own maps or one from the server's map gallery
-  (skirmish and online).
 - **Rounds to win** - 1 to 9 (the original: 3).
 - **Round time limit** - off, 2, 3, 5 or 10 minutes. When the time is up, the side that hit enemy tanks
   the most wins the round (a tie: nobody); the last 30 seconds count down next to the instrument panel.
-- **Friendly fire** - on or off in team games (off: a shot at a teammate explodes like on a wall).
+- **Map** - Original (the original's world generator), a generated map (Fortresses, Arena, Highlands, Caves,
+  Labyrinth, Rivers, Islands, Strata, Quarters, Open field - a new world every match), one of your own maps or one
+  from the server's map gallery, chosen in the map picker with their pictures. The picker sets the size of Original
+  and the generated maps - small (512x256), medium (1024x512, the original) or large (2048x1024); a map of yours has
+  its own. The Map row shows it: "Rivers (Large)", "Crossroads (Large, 6)" (6 bases).
+- **Show map** - what holding Tab adds under the score: no map (the original), what you have seen, what your team
+  has seen, or the whole world revealed as the match started (for you or your team; only seeing updates it). Parts
+  not seen right now are gray; enemy tanks show only while seen.
 - **Line of sight** - off (the original), circle (each tank sees the world live only in a circle around it;
   the rest of its view is the world as that player last saw it, in gray - an enemy stays where you saw it
   last) or true (dirt, rock and base walls also hide what is behind them: in a tunnel you see only the
@@ -172,6 +195,7 @@ Settings (split screen: map size, rounds to win and round time only):
   screen, your wreck (the original), all your teammates still alive, the tank that destroyed you (then
   its killer, ...) or every tank still alive (then only those - your own destroyed view goes); nobody left
   to watch - black. Except with "my wreck", a destroyed teammate's view goes black too.
+- **Friendly fire** - on or off in team games (off: a shot at a teammate explodes like on a wall).
 
 The homepage's **Settings** screen holds your account for online games (Online: log in or out, change the
 password, delete the account), the language, the **sound** - muted, original (the PC speaker),
@@ -238,7 +262,8 @@ The homepage, https://kaniansky.com/tunneler/, comes in the same languages.
 | Fire | Left Shift, Space | Enter, Right Shift |
 
 Online and against the computer you can use either set. Hold two direction keys to move diagonally;
-firing while moving digs faster. Hold **Tab** for the score (players; a spectator's Tab switches the views). The keys can be changed in
+firing while moving digs faster. Hold **Tab** for the score (and, with Show map, the map; players - a spectator's
+Tab switches the views). The keys can be changed in
 Settings, Controls; after death with one view, your left / right keys watch the next teammate.
 **Esc** ends the match on one computer; online, **Esc twice** leaves the
 game (one player can't end it for everybody). Menus: arrow keys and Enter, number keys 1-8 for teams, or

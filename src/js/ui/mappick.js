@@ -4,11 +4,13 @@
 // a base a tank can't reach) isn't listed.
 //   MapPick.show(ui, {tabs: ["gen", "mine", "gallery"] | ["gallery"], tab, random, gen, current, choose(choice), back(), name(),
 //                     title, backLabel, backInfo})
-//     gen: {size, bases} - the generated kinds too (mapgen.js), their pictures for that size and number of tanks, and a
-//     Layout row (fair / natural)
-//     choice: {random: true} | {gen: "gen:<kind>:<layout>"} | {rec} (a map of this browser's - a gallery map is fetched
-//     and kept first) | {entry} (tabs
-//     ["gallery"] only: a gallery entry, not fetched: the Maps screen opens its own screen)
+//     gen: {size, bases} - the generated kinds too (mapgen.js), their pictures for that size and number of tanks (1.3:
+//     always natural - no Layout row); a Map size row on that tab (1.3, owner 2026-10-31: the size is chosen here, the
+//     lobby shows it in the Map row), the choice carries it: {..., size}
+//     choice: {random: true} | {gen: "gen:<kind>:natural"} | {rec} (a map of this browser's - a gallery map is fetched
+//     and kept first) | {entry} (tabs ["gallery"] only: a gallery entry, not fetched: the Maps screen opens its own
+//     screen)
+//     random: Original - the original game's random world - first
 //     current: the chosen map's local id ("" = a random world); name(): the player's name (a server without accounts);
 //     open(): false once the page put something else on the screen (nothing drawn any more);
 //     state: an object kept by the caller - the gallery's order and the map chosen last (selected again)
@@ -23,34 +25,33 @@ import { UniText } from "../text/unitext.js";
 
 const U = UniText;
 const maps = new Map();                                  // gallery id -> the decoded map (null while it loads)
-const genPics = new Map();                               // "kind size bases fair" -> a generated example's picture
-// a random world's example (the engine's own generator, seed 1) with its bases, as a map's picture
-function randomPic(size, n) {
-  const g = new TunnelerEngine(1, { size, extended: true, slots: Array.from({ length: n }, (_, i) => ({ color: i, team: i + 1 })) });
+const genPics = new Map();                               // "kind size bases" -> a generated example's picture
+// a random world's example (the engine's own generator, seed 1), as a map's picture - without bases (owner, 2026-10-31:
+// an example's bases are only where they happened to be: the world before the match deals them)
+function randomPic(size) {
+  const g = new TunnelerEngine(1, { size, extended: true });
   for (let k = 0; k < 6000 && g.worldStage !== -1; k++) g.step({});
-  g.step({ keys: [[0, 59]] });                           // (F1: the bases are placed as the game starts)
-  for (let k = 0; k < 400 && !g.baseX[1]; k++) g.step({});
-  const m = MapData.fromWorld(size, g.world, g.ws);
-  for (let p = 1; p <= n; p++) m.bases.push({ x: Math.round((g.baseX[p] - 2) / MapData.CELL), y: Math.round((g.baseY[p] - 2) / MapData.CELL) });
-  return MapPic.of(m);
+  return MapPic.of(MapData.fromWorld(size, g.world, g.ws));
 }
 const ROWS = 8;                                          // (a desktop: the list's rows - the info fits below them)
 
-// an example of a random world (kind null) or a generated kind (always the same seed), kept
-function examplePic(kind, size, bases, fair) {
-  const key = [kind || "random", size, bases, kind ? fair : ""].join(" ");
+// an example of a random world (kind null) or a generated kind (always the same seed), kept - without bases (owner,
+// 2026-10-31: a new map every match, its bases elsewhere)
+function examplePic(kind, size, bases) {
+  const key = kind ? [kind, size, bases].join(" ") : "random " + size;
   if (!genPics.has(key)) {
-    if (!kind) genPics.set(key, randomPic(size, bases));
-    else { const m = MapGen.make({ kind, size, bases, seed: 1, fair }); genPics.set(key, m ? MapPic.of(m) : null); }
+    if (!kind) genPics.set(key, randomPic(size));
+    else { const m = MapGen.make({ kind, size, bases, seed: 1 }); genPics.set(key, m ? MapPic.of(Object.assign({}, m, { bases: [] })) : null); }
   }
   return genPics.get(key);
 }
-// the picture of a map choice - "" (a random world), a generated kind's id (mapgen.js) or a map record - for size and
-// number of tanks: the skirmish lobby's preview (owner, 2026-10-28: always, also for the generated ones)
+// the picture of a map choice - "" (a random world), a generated kind's id (mapgen.js) or a map
+// record - for size and number of tanks: the skirmish lobby's preview (owner, 2026-10-28: always, also for the generated
+// ones)
 function preview(choice, size, bases) {
   if (choice && typeof choice === "object") return MapPic.of(MapData.decode(choice.code));
   const g = MapGen.parse(choice || "");
-  return examplePic(g ? g.kind : null, size, bases, g ? g.fair : true);
+  return examplePic(g ? g.kind : null, size, bases);
 }
 
 function show(ui, opts) {
@@ -61,7 +62,8 @@ function show(ui, opts) {
   // (first: the tab of the map chosen now - a random world or a generated kind: generated; else your maps)
   const first = tabs.includes(opts.tab) ? opts.tab : tabs.includes("gen") && (cur || opts.current === "") ? "gen" : tabs.includes("mine") ? "mine" : tabs[0];
   let tab = first, sort = state.sort === "plays" ? "plays" : "new";
-  let fair = cur ? cur.fair : state.fair !== false;       // (the Layout row: fair by default)
+  const SIZES = MapData.SIZES;
+  let size = opts.gen && SIZES.includes(opts.gen.size) ? opts.gen.size : "medium";   // (the generated tab's Map size row)
   let mine = null, gal = null, galCode = "", busy = false, closed = false, lastPic = null;
   const S = { open: true };
   const sizeText = s => Lang.raw("lc.size." + s) || s;
@@ -88,7 +90,7 @@ function show(ui, opts) {
     if (!it || !it.map) return null;
     if (it.map.gen || it.map.random) {                   // (an example of the kind: always the same seed)
       const g = opts.gen || { size: "medium", bases: 2 };
-      return examplePic(it.map.gen || null, g.size, g.bases, fair);
+      return examplePic(it.map.gen || null, size, g.bases);
     }
     if (it.map.rec) return MapPic.of(MapData.decode(it.map.rec.code));
     const id = it.map.entry.id;
@@ -120,14 +122,15 @@ function show(ui, opts) {
     if (closed || (opts.open && !opts.open())) return;
     const items = [];
     if (tab === "gen") {
-      const g = opts.gen;
-      if (opts.random) items.push({ key: "random", label: row(Lang.raw("pk.random"), g ? sizeText(g.size) : "", g ? String(g.bases) : ""), align: "left",
-        map: { random: true }, spans: spans(), info: [T("pk.random.i"), T("gen.i2")], go: () => { close(); opts.choose({ random: true }); } });
-      // the generated kinds: a new map of the kind for every match (their example's picture), the layout below
+      // (1.3, owner 2026-10-31: only the names - the size is the Map size row's, every match a base per tank)
+      const only = name => U.slice(U.fromRaw(name), W().reduce((a, b) => a + b, 0) - 1), white = [[0, 200, 0x0F]];
+      if (opts.random) items.push({ key: "random", label: only(Lang.raw("pk.random")), align: "left",
+        map: { random: true }, spans: white, info: [T("pk.random.i"), T("gen.i2")], go: () => { close(); opts.choose({ random: true, size }); } });
+      // the generated kinds: a new map of the kind for every match (their example's picture)
       if (opts.gen) for (const k of MapGen.KINDS)
-        items.push({ key: "gen:" + k, label: row(Lang.raw("gen." + k), sizeText(opts.gen.size), String(opts.gen.bases)), align: "left", map: { gen: k },
-          spans: spans(), info: [T("gen." + k + ".i"), T("gen.i2")],
-          go: () => { close(); opts.choose({ gen: MapGen.id(k, fair) }); } });
+        items.push({ key: "gen:" + k, label: only(Lang.raw("gen." + k)), align: "left", map: { gen: k },
+          spans: white, info: [T("gen." + k + ".i"), T("gen.i2")],
+          go: () => { close(); opts.choose({ gen: MapGen.id(k), size }); } });
     } else if (tab === "mine") {
       // (only the maps that can be played - owner, 2026-10-28: not listed grayed any more)
       const ok = mine ? mine.filter(r => !MapStore.playable(r)) : null;
@@ -155,15 +158,16 @@ function show(ui, opts) {
       const setTab = d => { tab = tabs[(tabs.indexOf(tab) + d + tabs.length) % tabs.length]; lastPic = null; if (tab === "gallery" && !gal) loadGallery(); else draw(); };
       fixed.push({ key: "tab", label: T("pk.show") + T("pk.tab." + tab), info: [T("pk.show.i")], go: () => setTab(1), change: setTab });
     }
-    if (tab === "gen" && opts.gen) {
-      const setFair = () => { fair = state.fair = !fair; draw(true); };
-      fixed.push({ key: "layout", label: T("pk.layout") + Lang.raw("gen." + (fair ? "fair" : "natural")), info: [T("pk.layout.i1"), T("pk.layout.i2")], go: setFair, change: setFair });
+    if (tab === "gen" && opts.gen) {                   // (the size of Original / a kind - your maps have their own)
+      const setSize = d => { size = SIZES[(SIZES.indexOf(size) + d + SIZES.length) % SIZES.length]; draw(true); };
+      fixed.push({ key: "size", label: T("lc.size") + T("lc.size." + size), info: [T("lc.size.i1"), T("lc.size.i2")], go: () => setSize(1), change: setSize });
     }
     if (tab === "gallery") {
       const setSort = d => { sort = state.sort = sort === "new" ? "plays" : "new"; loadGallery(); };
       fixed.push({ key: "sort", label: T("pk.order") + T("pk.sort." + sort), info: [T("pk.order.i")], go: () => setSort(1), change: setSort });
     }
-    // (the side box as tall on every tab: your maps have no second switch)
+    // (the side box as tall on every tab: your maps have no second switch - generated maps their size, the gallery its
+    // order)
     if (tab === "mine" && !narrow()) fixed.push({ key: "pad", label: "", disabled: true });
     fixed.push({ key: "gap", label: "", disabled: true },
       { key: "back", label: T(opts.backLabel || "set.back"), info: [T(opts.backInfo || "pk.back.i")], go: () => { close(); opts.back(); } });
@@ -174,11 +178,13 @@ function show(ui, opts) {
       || (cur && all.find(x => x.map && x.map.gen === cur.kind))
       || (opts.current === "" && all.find(x => x.map && x.map.random))
       || all.find(x => x.map && x.map.entry && x.map.entry.id === state.at) || all.find(x => x.map);
-    if (it && it.map && it.map.gen) state.genKind = it.map.gen;
-    // (on the Layout row: the kind chosen last, in the layout now)
-    const pic = picOf(it && it.map ? it : it && it.key === "layout" && state.genKind ? { map: { gen: state.genKind } } : null) || (it && it.map ? null : lastPic);
+    if (it && it.map && (it.map.gen || it.map.random)) state.genMap = it.map;
+    // (on the Map size row: the generated choice selected last, in the size now)
+    const pic = picOf(it && it.map ? it : it && it.key === "size" && state.genMap ? { map: state.genMap } : null) || (it && it.map ? null : lastPic);
     lastPic = pic;
-    const head = tab !== "gallery" ? row(T("map.h.name"), T("map.h.size"), T("map.h.bases")) : row(T("map.h.name"), T("pk.h.by"), T("pk.h.plays"));
+    // (the name column takes raw text - fromRaw: the header's name raw too, else a Cyrillic one came out garbled)
+    const head = tab === "gen" ? row(Lang.raw("map.h.name"), "", "") : tab === "mine" ? row(Lang.raw("map.h.name"), T("map.h.size"), T("map.h.bases"))
+      : row(Lang.raw("map.h.name"), T("pk.h.by"), T("pk.h.plays"));
     // (the info's row and the screen's rows stay where the longest list puts them: a list that loads or another tab
     // moves nothing)
     // (a desktop / a phone held sideways: the switches and Back in a box of their own under the picture - owner,

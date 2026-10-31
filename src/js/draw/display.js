@@ -45,6 +45,15 @@ for (const [p, t] of TAGGED) GRAY_OF.set(t, tagged(GRAY_OF.get(p)));
 const UNTAGGED = new Map();
 for (const [p, t] of TAGGED) { UNTAGGED.set(t, p); UNTAGGED.set(GRAY_OF.get(t), GRAY_OF.get(p)); }
 let tagLores = false;
+// Water and ground (owner, 2026-10-31, 1.3): the floor looks of open pixels (playscreen.js FLOOR_LOOK: 1 water, 2 its
+// lighter ripple, 3 sand, 4 grass) - colours of their own beside the palette (a floor plane, docs/RENDERING.md), in
+// the DAC's 6-bit steps: water a deep blue (darker and duller than the BLUE / SKY tanks), sand a pale beige (lighter
+// and greyer than dirt 6 / 8 and the GOLD tank), grass a muted yellowish olive (apart from the GREEN / LIME tanks and
+// the colour-blind greens)
+const FLOOR_RGB = [[0, 0, 0], [5, 12, 30], [14, 26, 44], [50, 45, 30], [25, 30, 10]];
+const FLOOR_PALETTE = dac(FLOOR_RGB), FLOOR_U32 = toU32(FLOOR_PALETTE);
+const FLOOR_GRAY = toU32(FLOOR_PALETTE.map(([r, g, b]) => { const v = Math.round((r * 0.3 + g * 0.59 + b * 0.11) * 0.55); return [v, v, v]; }));
+const FLOOR_TAGGED = tagged(FLOOR_U32), FLOOR_GRAY_TAGGED = tagged(FLOOR_GRAY);
 
 // Tank colours (Settings, Graphics; display only, localStorage "tunneler.tankcolors"): "normal" (the slots'
 // colours), "colorblind" (8 colours that stay apart for red-green colour blindness, by slot; Okabe-Ito based)
@@ -157,8 +166,10 @@ class Display {
       };
       if (c1 - c0 > 60) for (const needBar of [true, false]) for (let k = 0; k < 24 && g < 0; k++) for (const c of [40 - k, 40 + k])
         if (c >= 28 && c <= 51 && g < 0 && gutter(c, needBar)) g = c;
+      // (a picture - the score's map, 1.3: moved with the rows; a stacked screen has none)
       if (g < 0) z = { c0, c1, rows: all.r1 - all.r0, vram: s.vram.subarray(all.r0 * 160), uni: s.uni ? s.uni.subarray(all.r0 * 80) : null,
-        at: (c, r) => [c, r + all.r0], of: (c, r) => r >= all.r0 && r < all.r1 ? [c, r - all.r0] : null };
+        at: (c, r) => [c, r + all.r0], of: (c, r) => r >= all.r0 && r < all.r1 ? [c, r - all.r0] : null,
+        pic: s.pic ? Object.assign({}, s.pic, { row: s.pic.row - all.r0 }) : null };
       else {
         const L = box(Math.max(0, g - 40), g), R = box(g + 1, Math.min(80, g + 41));
         const lc = Math.max(0, g - 40), rc = g + 1;
@@ -179,16 +190,19 @@ class Display {
         const parts = [...blocks.filter(q => !q.box), R && { c: rc, w: Math.min(40, 80 - rc), r0: R.r0, n: R.r1 - R.r0 }, ...blocks.filter(q => q.box)].filter(Boolean);
         const rows = parts.reduce((n, q) => n + q.n, 0), vram = new Uint8Array(Math.max(25, rows) * 160), uni = s.uni ? new Uint32Array(Math.max(25, rows) * 80) : null;
         const from = [];                                 // (each row of the view: [column, row] of the 80 x 25 screen it shows)
-        let y = 0;
+        let y = 0, pic = null;
         for (const q of parts) {
           const w = q.w;
+          // (a picture - the score's map, 1.3 - in this part: moved with it)
+          if (s.pic && !pic && s.pic.col >= q.c && s.pic.col < q.c + w && s.pic.row >= q.r0 && s.pic.row < q.r0 + q.n)
+            pic = Object.assign({}, s.pic, { col: s.pic.col - q.c, row: y + s.pic.row - q.r0 });
           for (let k = 0; k < q.n; k++, y++) {
             vram.set(s.vram.subarray((q.r0 + k) * 160 + q.c * 2, (q.r0 + k) * 160 + (q.c + w) * 2), y * 160);
             if (uni) uni.set(s.uni.subarray((q.r0 + k) * 80 + q.c, (q.r0 + k) * 80 + q.c + w), y * 80);
             from.push([q.c, q.r0 + k, w]);
           }
         }
-        z = { c0: 0, c1: 40, rows, vram, uni, at: (c, r) => from[r] ? [from[r][0] + c, from[r][1]] : null,
+        z = { c0: 0, c1: 40, rows, vram, uni, pic, at: (c, r) => from[r] ? [from[r][0] + c, from[r][1]] : null,
           of: (c, r) => { const y = from.findIndex(f => f[1] === r && c >= f[0] && c < f[0] + f[2]); return y < 0 ? null : [c - from[y][0], y]; } };
       }
     }
@@ -288,9 +302,10 @@ class Display {
     const px = new Uint32Array(this.img.data.buffer);
     // (paletteFor: views.js gives the tank colours of the play screen / the world map)
     const pal = !text && this.paletteFor ? this.paletteFor(s) : paletteOf(s);
+    const pic = (z ? z.pic : s.pic) || null;            // (a text screen's picture - moved with a phone's crop)
     if (!lay) {
-      paint(px, width, 0, 0, vram, c0, c1, rows, text, pal, blinkOn, this.font, text ? uni : null, text ? null : s.dim);
-      if (text && s.pic && !z) paintPic(px, width, s.pic, c0, r => r * 16, 0, height);
+      paint(px, width, 0, 0, vram, c0, c1, rows, text, pal, blinkOn, this.font, text ? uni : null, text ? null : s.dim, text ? null : s.floor);
+      if (text && pic) paintPic(px, width, pic, c0, r => r * 16, 0, height);
     }
     else {
       const n = width * rows * 16;
@@ -324,7 +339,7 @@ class Display {
         }
       }
     }
-    if (lay && text && s.pic && !z) paintPic(px, width, s.pic, c0, r => lay.y[r], r => r < lay.n ? 0 : lay.clip, r => r < lay.n ? lay.clip : lay.total);
+    if (lay && text && pic) paintPic(px, width, pic, c0, r => lay.y[r], r => r < lay.n ? 0 : lay.clip, r => r < lay.n ? lay.clip : lay.total);
     // a text cursor (DosUI: an empty input) - the VGA's underline: the cell's last two scan lines, bright
     // white, blinking with the text
     const cur = text && blinkOn && s.cursor && !z ? s.cursor : null;
@@ -337,7 +352,7 @@ class Display {
     this.ctx.putImageData(this.img, 0, 0);
     // graphics "modern" (gfx.js, surface.js): what was drawn - a text screen goes through gfx-text.js
     Surface.painted(this.canvas, text ? { text: { vram, uni: uni || null, rows, rowH: lay ? s.rowH : null, view: lay ? s.view || null : null, c0, c1, cursor: cur && s.cursor ? cur : null, blinkOn,
-      centres: z ? null : s.centres || null, pic: z ? null : s.pic || null, ui: z ? zoomModel(s.ui, z) : s.ui || null } }
+      centres: z ? null : s.centres || null, pic, ui: z ? zoomModel(s.ui, z) : s.ui || null } }
       : { lores: s });
   }
 }
@@ -371,7 +386,9 @@ function paletteOf(s, raw) {
 // pixels, width W) with its top-left corner at (x0, y0): 9 dots per cell, 16 scan lines per row in
 // text mode (blink bit honoured), 4 in LORES. uni: the Unicode plane (text mode; 80 cells per row) or
 // null. dim: the dim plane (LORES, 80 cells per row: 1 = the attribute's low nibble remembered, 2 = the
-// high one's - drawn gray) or null. Also used by views.js for the multi-view screens and the map's score table.
+// high one's - drawn gray) or null. floor: the floor plane (LORES, 80 cells per row: a FLOOR_LOOK per pixel, the
+// low nibble's pixel in the low nibble - drawn in its floor colour where the pixel is 0; playscreen.js) or null.
+// Also used by views.js for the multi-view screens and the map's score table.
 // a DOS screen's picture (snap.pic, DosUI spec.pic: a map's preview) in its block of cells, square on the screen (a
 // canvas pixel is 1.35 times as tall as wide), centred in it, nearest pixels; yOf(row) = the row's first scan line,
 // lo / hi (numbers, or functions of the row) = the scan lines it may draw on (the phone layout's window); pic.bleed: the
@@ -395,8 +412,9 @@ function paintPic(px, W, pic, c0, yOf, lo, hi) {
   }
 }
 
-function paint(px, W, x0, y0, vram, c0, c1, rows, text, pal, blinkOn, font, uni, dim) {
+function paint(px, W, x0, y0, vram, c0, c1, rows, text, pal, blinkOn, font, uni, dim, floor) {
   const lines = text ? 16 : 4;
+  const FC = floor ? (tagLores ? FLOOR_TAGGED : FLOOR_U32) : null, FG = floor ? (tagLores ? FLOOR_GRAY_TAGGED : FLOOR_GRAY) : null;
   const gray = dim ? GRAY_OF.get(pal) || pal : null;
   const plain = text ? null : UNTAGGED.get(pal), plainGray = plain && gray ? UNTAGGED.get(gray) : null;
   const CONT = UniText.CONT;
@@ -408,7 +426,12 @@ function paint(px, W, x0, y0, vram, c0, c1, rows, text, pal, blinkOn, font, uni,
       if (text) { bg &= 7; if ((attr & 0x80) && !blinkOn) fg = bg; }
       const dm = gray ? dim[row * 80 + col] : 0;
       const P = plain && ch !== 0xDD ? plain : pal, Gr = plain && ch !== 0xDD ? plainGray : gray;
-      const fgc = dm & 1 ? Gr[fg] : P[fg], bgc = dm & 2 ? Gr[bg] : P[bg];
+      let fgc = dm & 1 ? Gr[fg] : P[fg], bgc = dm & 2 ? Gr[bg] : P[bg];
+      const fl = floor && ch === 0xDD ? floor[row * 80 + col] : 0;
+      if (fl) {
+        if (fl & 15 && !fg) fgc = (dm & 1 ? FG : FC)[fl & 15];
+        if (fl >> 4 && !bg) bgc = (dm & 2 ? FG : FC)[fl >> 4];
+      }
       let p = (y0 + row * lines) * W + x0 + (col - c0) * 9;
       const u = uni && text ? uni[row * 80 + col] : 0;
       if (u === CONT) {
@@ -460,7 +483,9 @@ Display.LORES_U32 = LORES_U32;
 Display.EXT_U32 = EXT_U32;
 Display.LORES_PALETTE = LORES_PALETTE;   // 8-bit RGB of the original game palette (gfx-modern.js)
 Display.EXT_PALETTE = EXT_PALETTE;   // 8-bit RGB of the extended palette (map / scoreboard drawing)
-Display.paint = paint;              // (px, W, x0, y0, vram, c0, c1, rows, text, pal, blinkOn, font, uni, dim)
+Display.paint = paint;              // (px, W, x0, y0, vram, c0, c1, rows, text, pal, blinkOn, font, uni, dim, floor)
+Display.FLOOR_PALETTE = FLOOR_PALETTE;   // 8-bit RGB of the floor looks (FLOOR_LOOK; the world maps, map pictures)
+Display.FLOOR_U32 = FLOOR_U32;
 Display.paletteOf = paletteOf;        // (snap, raw)
 Display.setTagLores = on => { tagLores = !!on; };
 Display.TANK_COLOR_MODES = TANK_COLOR_MODES;

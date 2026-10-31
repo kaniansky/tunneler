@@ -27,8 +27,9 @@ const PIT_HZ = 1193182;
 const TICK = 65536;                       // PIT clocks per BIOS tick = one game frame
 const WAIT_TICK = -1;                     // yield value: wait for the next BIOS tick
 // queueSound kinds by number, as semantic sound effects (engine.fx): 0 shot hits dirt / rock, 1 digging,
-// 2 shot hits a tank that survives (shield), 3 tank destroyed, 4 firing, 5 bumping into rock / the border
-const FX_KINDS = ["impact", "dig", "hit", "destroy", "fire", "bump"];
+// 2 shot hits a tank that survives (shield), 3 tank destroyed, 4 firing, 5 bumping into rock / the border; and
+// effects without a sound of the original: "splash" (1.3: a tank moved a pixel in water - fxEvent)
+const FX_KINDS = ["impact", "dig", "hit", "destroy", "fire", "bump", "splash"];
 const ms = v => Math.round(v * PIT_HZ / 1000);   // yield value > 0: wait that many PIT clocks
 
 // Not real waits - CPU time spent by the original between events, used only to place speaker events
@@ -109,6 +110,10 @@ const AFTER_DEATH = ["black", "wreck", "team", "killer", "others"];         // t
 // as its player last saw it, in grey. The ellipse is SIGHT_RX x SIGHT_RY pixels (about round on screen:
 // a pixel is 4.5 dots wide and 5.4 tall).
 const SIGHTS = ["full", "circle", "walls"];
+// the map shown with the score while Tab is held (1.3, owner 2026-10-31; display only - draw/seenmap.js, never in
+// stateHash): none, what the player's tank has seen, what its team has seen, revealed (the world as the match started,
+// changed by what the tank sees), revealed for the team (changed by what the team sees) (NetProto.SHOW_MAPS)
+const SHOW_MAPS = ["off", "own", "team", "all", "allteam"];
 const SIGHT_RX = 32, SIGHT_RY = 27;
 // the ellipse's offsets [dx, dy] ordered by max(|dx|, |dy|), each with the index of the next one towards
 // the tank (-1 = the tank's own pixel): line of sight in one pass - a pixel is seen when the light passes
@@ -229,6 +234,16 @@ class TunnelerEngine {
     this.size = this.customMap ? this.customMap.size : WORLD_SIZES[o.size] ? o.size : "medium";
     [this.scN, this.scD] = WORLD_SIZES[this.size];
     this.worldW = this.sc(1024); this.worldH = this.sc(512); this.ws = this.worldW >> 1;
+    // water and ground (owner, 2026-10-31, 1.3; extended only - docs/v6/MAPS.md "Water and ground"): groundType = how
+    // open floor looks (display only), hasWater = the match has water. floor: a byte per pixel (MapData.FLOOR: 0 none,
+    // 1 water, 2 open from the start, 3 shore) - static for the match once the world is made, display code reads it,
+    // the simulation only for the water's slowdown; null for every world without water and with classic ground (all
+    // games before 1.3: nothing allocated, no code path changes). Water is open (0) in the world: shots fly over it,
+    // it can't be dug, explosions leave it water.
+    this.groundType = this.customMap && MapData.GROUNDS.includes(this.customMap.ground) ? this.customMap.ground : "classic";
+    this.hasWater = !!this.customMap && this.customMap.cells.includes(MapData.WATER);
+    // (o.noFloor: mapReach's throwaway engine - it reads only the world)
+    this.floor = !o.noFloor && (this.hasWater || this.groundType !== "classic") ? new Uint8Array(this.worldW * this.worldH) : null;
     // extended mode, local games only: player 1's Esc (bit 32) ends the match as in the original (online
     // the extended engine ignores Esc - one player must not end everybody's match)
     this.escEnds = this.extended && !!o.escEnds;
@@ -282,6 +297,7 @@ class TunnelerEngine {
                                                   // round title / statistics (null = not at all, as the original)
     this.smoothScroll = !!o.smoothScroll;         // views scroll sideways 1 pixel at a time (blitView; the original: 2)
     this.sight = SIGHTS.includes(o.sight) ? o.sight : "full";   // line of sight (SIGHTS; blitSight)
+    this.showMap = SHOW_MAPS.includes(o.showMap) ? o.showMap : "off";   // the score's map (SHOW_MAPS; display only)
 
     // PlayGame locals
     this.obstacle = 0; this.static = false; this.soundOn = true; this.roundOver = false; this.matchOver = false;
@@ -518,6 +534,11 @@ class TunnelerEngine {
   }
 
   // x, y: world position of the source (not in the original, output only - see sound())
+  // an effect with no sound of the original (FX_KINDS after "bump"): display only, like every fx
+  fxEvent(kind, x, y) {
+    if (this.emitFx && this.soundOn)
+      this.fx.push({ t: (this.now + this.cpu - this.stepStart) * 1000 / PIT_HZ, kind, x, y });
+  }
   queueSound(kind, x, y) {
     if (this.emitFx && this.soundOn)
       this.fx.push({ t: (this.now + this.cpu - this.stepStart) * 1000 / PIT_HZ, kind: FX_KINDS[kind], x, y });
@@ -1159,6 +1180,14 @@ class TunnelerEngine {
       }
       if (ok) break;
     }
+    // (a base's inside always looks dug - sand on sand / grass, as map pictures and the editor show it: the floor's
+    // "open at the start" goes inside the walls; display only, the floor stays static for the match)
+    if (this.floor) for (let i = 1; i <= N; i++)
+      for (let y = this.baseY[i] - 17; y <= this.baseY[i] + 17; y++)
+        for (let x = this.baseX[i] - 17; x <= this.baseX[i] + 17; x++) {
+          const k = y * this.worldW + x;
+          if (this.floor[k] === 2) this.floor[k] = 0;
+        }
     this.groupTeams();
     this.baseMinDist = minDist;
     this.baseCarved = 0;
@@ -1212,6 +1241,8 @@ class TunnelerEngine {
         this.baseX[p] = f + this.random(W); this.baseY[p] = f + this.random(H);
         let ok = true;
         for (let q = 1; q < p && ok; q++) if (Math.max(Math.abs(this.baseX[p] - this.baseX[q]), Math.abs(this.baseY[p] - this.baseY[q])) < MapData.BASE_GAP) ok = false;
+        // (1.3: never in water - only a map with water can fail this, so dry maps keep their Random() order)
+        if (ok && this.hasWater && this.waterNear(this.baseX[p], this.baseY[p], 18)) ok = false;
         if (ok) break;
       }
     }
@@ -1524,6 +1555,12 @@ class TunnelerEngine {
                       this.tankDir[P] = this.newDir;
                       this.energy[P] -= 2;
                       this.metersMoved[P] = i16(this.metersMoved[P] + 1);
+                      // water (1.3): a pixel moved with water under the tank - it waits a frame, as after
+                      // digging (half speed)
+                      if (this.hasWater && this.inWater(this.newX, this.newY)) {
+                        this.digDelay[P] = 1;
+                        this.fxEvent("splash", this.newX, this.newY);
+                      }
                     }
                   }
                 }
@@ -1631,6 +1668,32 @@ class TunnelerEngine {
     yield* this.showWorldMap();
   }
 
+  // ============================================================ water (1.3, extended only)
+  // is any pixel of a tank's 7 x 7 box at (x, y) water?
+  inWater(x, y) { return this.waterNear(x, y, 3); }
+  // is any pixel within r of (x, y) water? (a base's walls: r 18)
+  waterNear(x, y, r) {
+    const F = this.floor, W = this.worldW;
+    if (!F) return false;
+    for (let j = Math.max(0, y - r); j <= y + r && j < this.worldH; j++)
+      for (let i = Math.max(0, x - r); i <= x + r && i < W; i++) if (F[j * W + i] === 1) return true;
+    return false;
+  }
+  // the shore: every pixel that isn't water within 3 px (on both axes) of water - after the world is made
+  markShore() {
+    const F = this.floor, W = this.worldW, H = this.worldH, R = 3;
+    if (!F) return;
+    const near = new Uint8Array(W * H);             // (water within R on the row, then within R of that on the column)
+    for (let y = 0; y < H; y++) {
+      const r = y * W;
+      for (let x = 0, last = -9; x < W; x++) { if (F[r + x] === 1) last = x; if (x - last <= R) near[r + x] = 1; }
+      for (let x = W - 1, last = W + 9; x >= 0; x--) { if (F[r + x] === 1) last = x; if (last - x <= R) near[r + x] = 1; }
+    }
+    for (let x = 0; x < W; x++) {
+      for (let y = 0, last = -9; y < H; y++) { const i = y * W + x; if (near[i]) last = y; if (y - last <= R && F[i] !== 1) F[i] = 3; }
+      for (let y = H - 1, last = H + 9; y >= 0; y--) { const i = y * W + x; if (near[i]) last = y; if (last - y <= R && F[i] !== 1) F[i] = 3; }
+    }
+  }
   // ============================================================ world generator
   rockBlob(x, y, size) {
     let r = 1, grow = 1, moveX = 0, moveY = 0;
@@ -1793,11 +1856,12 @@ class TunnelerEngine {
     if (this.worldStage !== -1) {
       for (let y = this.genY + 1; y < M.h; y++) {
         this.genY = y;
-        MapData.paintRow(M, this.world, this.ws, y);
+        MapData.paintRow(M, this.world, this.ws, y, this.floor);
         yield CPU_WORLD_ROW;
         this.keyStr = this.inKey();
         if (this.keyStr !== NO_KEY && y !== M.h - 1) return;
       }
+      if (this.hasWater) this.markShore();
     }
     this.worldStage = -1;
   }
@@ -1973,7 +2037,7 @@ class TunnelerEngine {
 // The game's picture (playscreen.js) through the engine, as before it was its own: pages and tests read engine.vram,
 // views, snapshots, screen, cams... - all of it the screen's (engine.out)
 const SCREEN_STATE = ["vram", "uni", "uniUsed", "mode", "screen", "loresActive", "dirty", "snapshots", "dim", "views", "viewDims",
-  "sightMem", "cams", "objsShown", "shownEnergy", "shownShield", "hudShown", "clockShown", "tickMarker"];
+  "sightMem", "seenCells", "seenAt", "cams", "objsShown", "shownEnergy", "shownShield", "hudShown", "clockShown", "tickMarker"];
 for (const k of SCREEN_STATE)
   Object.defineProperty(TunnelerEngine.prototype, k, { get() { return this.out[k]; }, set(v) { this.out[k] = v; }, configurable: true });
 for (const k of Object.getOwnPropertyNames(PlayScreen.prototype)) {
@@ -1994,6 +2058,7 @@ TunnelerEngine.PixelClassExt = PixelClassExt;
 TunnelerEngine.MAX_PLAYERS = EXT_MAX_PLAYERS;
 TunnelerEngine.AFTER_DEATH = AFTER_DEATH;
 TunnelerEngine.SIGHTS = SIGHTS;
+TunnelerEngine.SHOW_MAPS = SHOW_MAPS;
 TunnelerEngine.SIGHT_CELLS = SIGHT_CELLS;                 // (the line of sight's cells: the screen's sightView)
 TunnelerEngine.afterDeath = v => v === true || v === "1" ? "others" : AFTER_DEATH.includes(v) ? v : "wreck";   // (true / "1": older "ghost mode on")
 TunnelerEngine.PLAYER_KEYS = EXT_KEYS;              // role / lang key of player i (0-based)
@@ -2044,7 +2109,7 @@ function mapReachShapes() {
 TunnelerEngine.mapReach = (src, opts) => {
   const map = src && src.cells ? src : MapData.decode(src);
   if (!map) return null;
-  const e = new TunnelerEngine(1, { map: MapData.code(map) });
+  const e = new TunnelerEngine(1, { map: MapData.code(map), noFloor: true });
   MapData.paint(map, e.world, e.ws);
   const B = map.bases.map(MapData.basePx);
   const walled = B.map((b, i) => e.openBase(b.x, b.y) > 0 ? i : -1).filter(i => i >= 0);

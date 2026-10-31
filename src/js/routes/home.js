@@ -45,10 +45,12 @@ export function mount() {
   const TEXT_COLORS = TunnelerEngine.PLAYER_TEXT_COLORS;
   const clampInt = (v, lo, hi, d) => { v = parseInt(v, 10); return v >= lo && v <= hi ? v : d; };
   const MAP_COLS = 14;                                    // (a map's name in the Settings box: at most this wide)
-  // a map's name and its number of bases ("Crossroads (6)" - owner, 2026-10-26)
-  const mapLabel = rec => UniText.slice(UniText.fromRaw(rec.name), MAP_COLS) + (rec.bases ? " (" + rec.bases + ")" : "");
-  // a generated map's kind and layout ("Arena, fair")
-  const genLabel = g => T("gen.label", { kind: Lang.raw("gen." + g.kind), layout: Lang.lower(Lang.raw("gen." + (g.fair ? "fair" : "natural"))) });
+  // a map's name, its size and its number of bases ("Crossroads (Large, 6)" - owner, 2026-10-26: the bases; 1.3,
+  // 2026-10-31: the size too, the Map size row is gone - Original and the generated ones: "Rivers (Large)")
+  const mapLabel = rec => UniText.slice(UniText.fromRaw(rec.name), MAP_COLS) + " (" + T("lc.size." + rec.size) + (rec.bases ? ", " + rec.bases : "") + ")";
+  const sizedLabel = (name, size) => name + " (" + T("lc.size." + size) + ")";
+  // a generated map's kind ("Arena"; 1.3: always natural - no layout)
+  const genLabel = g => T("gen." + g.kind);
   const step = (list, v, d) => list[(list.indexOf(v) + d + list.length) % list.length];
   // round time limit in minutes (engine option roundTime; 0 = no limit, the original)
   const TIMES = [0, 2, 3, 5, 10];
@@ -78,9 +80,14 @@ export function mount() {
   // line of sight (full / circle / walls): how much of the world around your tank you see live
   const SIGHTS = TunnelerEngine.SIGHTS || ["full"];
   let sight = SIGHTS.includes(load("tunneler.cpu.sight")) ? load("tunneler.cpu.sight") : "full";
-  // a custom map (docs/v6/MAPS.md): one of the maps kept in this browser (its local id; "" = a random world), or a kind of
-  // generated map (mapgen.js: "gen:<kind>:<fair|natural>" - a new one every match)
+  // the score's map (1.3, owner 2026-10-31 - draw/seenmap.js): off / own / team / all / allteam (the team ones only with
+  // teams)
+  const SHOW_MAPS = TunnelerEngine.SHOW_MAPS || ["off"];
+  let showMap = SHOW_MAPS.includes(load("tunneler.cpu.showmap")) ? load("tunneler.cpu.showmap") : "off";
+  // a custom map (docs/v6/MAPS.md): one of the maps kept in this browser (its local id; "" = a random world), a kind of
+  // generated map (mapgen.js: "gen:<kind>:natural" - a new one every match)
   let cpuMap = load("tunneler.cpu.map", ""), cpuMaps = [], mapsLoaded = false;
+  if (MapGen.parse(cpuMap)) cpuMap = MapGen.id(MapGen.parse(cpuMap).kind);   // (a ":fair" kind kept before 1.3: natural)
   const mapRec = () => cpuMaps.find(r => r.id === cpuMap) || null;
   const loadMaps = () => MapStore.list().then(l => {
     cpuMaps = l; mapsLoaded = true;
@@ -111,7 +118,7 @@ export function mount() {
     save("tunneler.cpu.slots", JSON.stringify(slots)); save("tunneler.levels", "2");
     save("tunneler.cpu.size", cpuSize); save("tunneler.cpu.win", String(cpuWin)); save("tunneler.cpu.ff", ff ? "1" : "0");
     save("tunneler.cpu.view", view); save("tunneler.cpu.watch", watchOut); save("tunneler.cpu.time", String(cpuTime));
-    save("tunneler.cpu.sight", sight);
+    save("tunneler.cpu.sight", sight); save("tunneler.cpu.showmap", showMap);
     save("tunneler.cpu.mode", gmode); save("tunneler.cpu.goals", JSON.stringify(cpuGoals));
     if (mapsLoaded) save("tunneler.cpu.map", cpuMap);
   };
@@ -636,6 +643,8 @@ export function mount() {
   }
 
   const pickState = {};                                  // (the map picker's gallery order, kept)
+  // (the Show map value in effect: the team ones without a team of 2+ tanks are the player's own)
+  const smapOf = S => S.teamGame ? showMap : showMap === "team" ? "own" : showMap === "allteam" ? "all" : showMap;
   function cpu(keep, sel) {
     const S = cpuSetup();
     // (a map whose bases a tank can't all drive between, or with fewer bases than the skirmish has tanks, can't be played)
@@ -650,7 +659,8 @@ export function mount() {
       for (const u of S.used) all[u.color] = { kind: u.kind, team: u.team };
       Nav.go(Links.cpu("g=" + CpuCode.encode({ slots: all, size: cpuSize, win: cpuWin, time: cpuTime, ff: ff && S.teamGame,
         view, watch: watchOut, sight, mode: gmode, goal: GOALS[gmode] ? goalOf(gmode) : undefined }) +
-        (rec ? "&lmap=" + rec.id + (MapStore.sharedHere(rec) ? "&map=" + rec.shared : "") : MapGen.parse(cpuMap) ? "&gen=" + cpuMap : "")));   // (the map: this browser's copy, else the shared one)
+        (rec ? "&lmap=" + rec.id + (MapStore.sharedHere(rec) ? "&map=" + rec.shared : "") : MapGen.parse(cpuMap) ? "&gen=" + cpuMap
+          : "") + (smapOf(S) !== "off" ? "&smap=" + smapOf(S) : "")));   // (the map: this browser's copy, else the shared one)
     };
     // slot rows: "you                team 1", the who column padded to the longest text in this language,
     // each row in its tank's color (which is all that tells the colors apart - no color name)
@@ -696,25 +706,27 @@ export function mount() {
     const setMode = d => { gmode = step(MODE_LIST, gmode, d); redraw(); };
     // Left / Right: the next map that can be played; Enter: the map picker (your maps with their pictures, the
     // gallery - owner, 2026-10-28)
-    const GEN = MapGen.KINDS.flatMap(k => [MapGen.id(k, true), MapGen.id(k, false)]);
+    const GEN = MapGen.KINDS.map(k => MapGen.id(k));
     const setMap = d => { cpuMap = step([""].concat(GEN, cpuMaps.filter(r => !MapStore.playable(r) || r.id === cpuMap).map(r => r.id)), cpuMap, d); redraw(); };
     const pickMap = () => MapPick.show(ui, { random: true, current: cpuMap, state: pickState, name: () => DosUI.playerName(),
       gen: { size: cpuSize, bases: Math.max(2, S.used.length) },
       choose: async c => {
         cpuMap = c.random ? "" : c.gen ? c.gen : c.rec.id;
-        if (!c.random && !cpuMaps.some(r => r.id === cpuMap)) { try { cpuMaps = await MapStore.list(); } catch (e) { /* as it was */ } }
+        if (SIZES.includes(c.size) && !c.rec) cpuSize = c.size;   // (1.3: the size is chosen in the picker)
+        if (!c.random && !c.gen && !cpuMaps.some(r => r.id === cpuMap)) { try { cpuMaps = await MapStore.list(); } catch (e) { /* as it was */ } }
         saveCpu(); cpu(false, "map");
       },
       back: () => cpu(false, "map") });
+    // (the order - owner, 2026-10-31: mode, rounds to win, round time, map, show map, line of sight, view, after death,
+    // friendly fire)
+    const setSight = d => { sight = step(SIGHTS, sight, d); redraw(); };
+    // (1.3: the map with the score - the team ones only with a team of 2+ tanks)
+    const smapList = SHOW_MAPS.filter(v => (v !== "team" && v !== "allteam") || S.teamGame), smap = smapOf(S);
+    const setSmap = d => { showMap = step(smapList, smap, d); redraw(); };
+    const setWatch = d => { watchOut = step(TunnelerEngine.AFTER_DEATH, watchOut, d); redraw(); };
+    const toggleFF = () => { ff = !ff; redraw(); };
     const options = [
       { key: "mode", label: T("lc.mode") + T("gm." + gmode), info: [T("gm." + gmode + ".i"), T("lc.mode.i")], go: () => setMode(1), change: setMode },
-      { key: "map", label: T("lc.map") + (rec ? mapLabel(rec) : MapGen.parse(cpuMap) ? genLabel(MapGen.parse(cpuMap)) : T("lc.map.random")),
-        info: rec && rec.linked === false ? [{ text: T("lc.err.path"), color: 12 }, T("lc.map.i2")]
-          : MapGen.parse(cpuMap) ? [T("gen." + MapGen.parse(cpuMap).kind + ".i"), T("gen.i2")] : [T("lc.map.i1"), T("lc.map.i2")],
-        go: pickMap, change: setMap },
-      // (a map has its own size: shown, grayed)
-      // (owner, 2026-10-28: a setting that doesn't apply now - its value gray, the row selectable, its info says why)
-      rec ? { key: "size", label: T("lc.size") + T("lc.size." + rec.size), info: [T("lc.size.map")], valueAttr: 8, go: () => {} } : sizeItem(cpuSize, v => { cpuSize = v; redraw(); }),
       GOALS[gmode]                                   // (a mode's goal instead of rounds to win)
         ? { key: "goal", label: T("goal." + gmode) + (gmode === "infection" ? T("time.n", { n: goalOf(gmode) }) : goalOf(gmode)), info: [T("goal." + gmode + ".i")],
           go: () => { cpuGoals[gmode] = step(GOALS[gmode].choices, goalOf(gmode), 1); redraw(); },
@@ -723,19 +735,20 @@ export function mount() {
       gmode === "infection"                          // (infection: its goal is a time)
         ? Object.assign(timeItem(cpuTime, () => {}), { info: [T("lc.time.inf")], valueAttr: 8, change: undefined, go: () => {} })
         : timeItem(cpuTime, v => { cpuTime = v; redraw(); }),
+      { key: "map", label: T("lc.map") + (rec ? mapLabel(rec) : sizedLabel(MapGen.parse(cpuMap) ? genLabel(MapGen.parse(cpuMap))
+          : T("lc.map.random"), cpuSize)),
+        info: rec && rec.linked === false ? [{ text: T("lc.err.path"), color: 12 }, T("lc.map.i2")]
+          : MapGen.parse(cpuMap) ? [T("gen." + MapGen.parse(cpuMap).kind + ".i"), T("gen.i2")]
+          : [T("lc.map.i1"), T("lc.map.i2")],
+        go: pickMap, change: setMap },
+      { key: "smap", label: T("smap.label") + T("smap." + smap), info: [T("smap.i1"), T("smap." + smap + ".i")], go: () => setSmap(1), change: setSmap },
+      { key: "sight", label: T("lc.sight") + T("sight." + sight), info: [T("sight.i1"), T("sight.i2")], go: () => setSight(1), change: setSight },
+      { key: "view", label: T("cpu.view") + T("view." + view), info: [T("view.i1"), T("view.i2")], go: () => setView(1), change: setView },
+      { key: "watch", label: T("lc.watch") + T("watch." + watchOut), info: [T("watch.i1"), T("watch.i2")], go: () => setWatch(1), change: setWatch },
+      // friendly fire only matters with teammates: its value gray while no team has 2+ tanks
+      S.teamGame ? { key: "ff", label: T("lc.ff") + T(ff ? "lc.on" : "lc.off"), info: [T("lc.ff.i1"), T("lc.ff.i2")], go: toggleFF, change: toggleFF }
+        : { key: "ff", label: T("lc.ff") + T(ff ? "lc.on" : "lc.off"), info: [T("lc.ff.none")], valueAttr: 8, go: () => {} },
     ];
-    // friendly fire only matters with teammates: its value gray while no team has 2+ tanks
-    const toggleFF = () => { ff = !ff; redraw(); };
-    options.push(S.teamGame ? { key: "ff", label: T("lc.ff") + T(ff ? "lc.on" : "lc.off"), info: [T("lc.ff.i1"), T("lc.ff.i2")], go: toggleFF, change: toggleFF }
-      : { key: "ff", label: T("lc.ff") + T(ff ? "lc.on" : "lc.off"), info: [T("lc.ff.none")], valueAttr: 8, go: () => {} });
-    const setSight = d => { sight = step(SIGHTS, sight, d); redraw(); };
-    options.push({ key: "sight", label: T("lc.sight") + T("sight." + sight),
-      info: [T("sight.i1"), T("sight.i2")], go: () => setSight(1), change: setSight });
-    options.push({ key: "view", label: T("cpu.view") + T("view." + view),
-      info: [T("view.i1"), T("view.i2")], go: () => setView(1), change: setView });
-    const setWatch = d => { watchOut = step(TunnelerEngine.AFTER_DEATH, watchOut, d); redraw(); };
-    options.push({ key: "watch", label: T("lc.watch") + T("watch." + watchOut),
-      info: [T("watch.i1"), T("watch.i2")], go: () => setWatch(1), change: setWatch });
     // like the online game lobby (online.js), without the chat: the 8 slot rows (the screen's title in the
     // box's border) and the settings on top, Start / Back below them, the selected item's info under it
     const sets = options.map(o => Object.assign(o, { align: "left" }));
@@ -767,13 +780,14 @@ export function mount() {
     // (the settings box as wide as its widest possible value, so it doesn't jump when one changes)
     const noop = () => {}, labels = [
       ...MODE_LIST.map(m => T("lc.mode") + T("gm." + m)),
-      T("lc.map") + "W".repeat(MAP_COLS) + " (8)", T("lc.map") + T("lc.map.random"),
-      ...SIZES.map(v => sizeItem(v, noop).label),
+      ...SIZES.flatMap(z => [T("lc.map") + "W".repeat(MAP_COLS) + " (" + T("lc.size." + z) + ", 8)",
+        ...[T("lc.map.random"), ...MapGen.KINDS.map(k => genLabel({ kind: k }))].map(n => T("lc.map") + sizedLabel(n, z))]),
       ...Object.keys(GOALS).flatMap(m => GOALS[m].choices.map(n => T("goal." + m) + (m === "infection" ? T("time.n", { n }) : n))),
       ...[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => winItem(n, noop).label),
       ...TIMES.map(v => timeItem(v, noop).label),
       T("lc.ff") + T("lc.on"), T("lc.ff") + T("lc.off"),
       ...SIGHTS.map(v => T("lc.sight") + T("sight." + v)),
+      ...SHOW_MAPS.map(v => T("smap.label") + T("smap." + v)),
       ...VIEWS.map(v => T("cpu.view") + T("view." + v)),
       ...TunnelerEngine.AFTER_DEATH.map(w => T("lc.watch") + T("watch." + w))];
     const seatW = DosUI.boxWidth(slotItems), actW = DosUI.boxWidth(acts),

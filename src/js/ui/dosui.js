@@ -360,8 +360,9 @@ class DosUI {
     if (!quiet) this.draw();
   }
 
-  // mouse wheel over a box that scrolls (more items than rows): the selection moves through its list -
-  // and the list scrolls with it - one row per notch (trackpads: per ~50 pixels), not wrapping around
+  // mouse wheel over a box that scrolls (more items than rows): only the list scrolls, one row per notch (trackpads:
+  // per ~50 pixels), not past its ends - the selection stays where it was, out of view too, like a touch drag (owner,
+  // 2026-10-31: the wheel highlighted the items below / above before); a key brings the view back to it
   wheel(ev) {
     const s = this.spec;
     if (s && s.page) {                                   // a page: 3 rows per notch (trackpads: a row per ~33 pixels)
@@ -386,15 +387,14 @@ class DosUI {
       return true;
     }
     if (!s || s.page || s.boxes || !s.box || !(this.scrollRows < this.scrollN)) return false;
-    this.freeTop = false;
     this.wheelAcc = (this.wheelAcc || 0) + ev.deltaY * (ev.deltaMode === 1 ? 40 : ev.deltaMode === 2 ? 400 : 1);
+    let top = this.top;
     while (Math.abs(this.wheelAcc) >= 50) {
       const d = Math.sign(this.wheelAcc);
       this.wheelAcc -= d * 50;
-      const lead = this.scrollN < (s.items || []).length ? s.lead || 0 : 0;   // (spec.lead: the list starts after them)
-      for (let i = this.sel + d; i >= lead && i < lead + this.scrollN; i += d) if (this.enabled(i)) { this.sel = i; break; }
+      top = Math.max(0, Math.min(this.scrollN - this.scrollRows, top + d));
     }
-    this.draw();
+    if (top !== this.top) { this.top = top; this.freeTop = true; this.draw(); }
     return true;
   }
 

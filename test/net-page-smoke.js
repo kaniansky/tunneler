@@ -129,16 +129,17 @@ function loadPage(page, search, stored, version) {
     const shown = () => screenText(env.win, lui.display.snap);
     assert.strictEqual(cur(), "start", "the host's selection starts on Start game");
     assert(/Bob/.test(shown()) && /Zed/.test(shown()) && /Open/.test(shown()) && /AI \(Medium\)/.test(shown()) && /Closed/.test(shown()), "seats: " + shown());
-    assert(/Watching: Watcher/.test(shown()) && /Map size: Medium/.test(shown()), "spectators and settings: " + shown());
+    assert(/Watching: Watcher/.test(shown()) && /Map: Original \(Medium\)/.test(shown()) && /Show map: No/.test(shown()) && !/Map size/.test(shown()),
+      "spectators and settings (1.3: the size in the Map row, Show map): " + shown());
     // the Map row (the host): after Original the generated kinds (1.2 - the server makes one for every match), the size
-    // still the host's to set
+    // in the row (1.3: chosen in the map picker)
     {
       const n = ws.sent.length;
       lui.spec.items.find(it => it.key === "map").change(1);
-      assert(ws.sent.slice(n).some(m => m.t === "set" && m.map === "gen:fortress:fair"), "Right: Fortresses, fair");
-      ws.recv(mkSt({ settings: Object.assign({}, SETTINGS, { map: "gen:fortress:fair" }), map: { id: "gen:fortress:fair", gen: true } }));
+      assert(ws.sent.slice(n).some(m => m.t === "set" && m.map === "gen:fortress:natural" && !("water" in m)), "Right: Fortresses");
+      ws.recv(mkSt({ settings: Object.assign({}, SETTINGS, { map: "gen:fortress:natural" }), map: { id: "gen:fortress:natural", gen: true } }));
       await wait(150);
-      assert(/Map: Fortresses, fair/.test(shown()) && lui.spec.items.find(it => it.key === "size").change, "its name; Map size can change: " + shown());
+      assert(/Map: Fortresses \(Medium\)/.test(shown()) && !lui.spec.items.some(it => it.key === "size"), "its name and size: " + shown());
       ws.recv(mkSt());
       await wait(150);
     }
@@ -232,10 +233,10 @@ function loadPage(page, search, stored, version) {
     ws.recv(mkSt());
     await wait(150);
     // settings (host): Left / Right
-    sel(lui, "size");
+    sel(lui, "smap");
     press(env, "ArrowRight");
-    assert(ws.sent.some(m => m.t === "set" && m.size === "large"), "size sent");
-    assert.strictEqual(JSON.parse(env.ls.get("tunneler.online")).size, "large", "the host's settings remembered");
+    assert(ws.sent.some(m => m.t === "set" && m.showMap === "own"), "Show map sent");
+    assert.strictEqual(JSON.parse(env.ls.get("tunneler.online")).showMap, "own", "the host's settings remembered");
     assert(!lui.spec.items.some(it => it.key === "spectators" || it.key === "public"), "public / spectators: only when the game is created");
     // everybody ready: Start game
     ws.recv(mkSt({ cant: null, seats: mkSt().seats.map((x, i) => i === 0 ? Object.assign({}, x, { ready: true }) : x) }));
@@ -362,7 +363,7 @@ function loadPage(page, search, stored, version) {
     const ui = env.win.tunnelerLobbyUI();
     assert.strictEqual(ui.spec.items[ui.sel].key, "seat2", "a spectator's selection: the free seat");
     assert(!ui.spec.items.some(it => ["start", "ready", "kick", "spec"].includes(it.key)), "no host / ready items");
-    assert(ui.spec.items.find(it => it.key === "size").static, "settings read-only");
+    assert(ui.spec.items.find(it => it.key === "smap").static, "settings read-only");
     // the Map row (not the host): Enter shows the map - a random world: an example of one, framed; Back: the lobby
     {
       const m = ui.spec.items.find(it => it.key === "map");
@@ -596,7 +597,8 @@ function loadPage(page, search, stored, version) {
     assert.strictEqual(env2.win.location.href, "/", "Esc: back to the main menu");
     console.log("  ok  lobby.js: connecting to a server that doesn't answer yet, Esc cancels");
   }
-  // the games list scrolls with the mouse wheel (more rooms than its 8 rows), one row per notch, no wrap
+  // the games list scrolls with the mouse wheel (more rooms than its 8 rows), one row per notch, no wrap - only the list:
+  // the selection stays (owner, 2026-10-31); a key brings the view back to it
   {
     const env = loadPage("lobby.html", "", { "tunneler.name": "Zed" });
     for (let i = 0; i < 12; i++) env.rooms.push({ id: "r" + i, name: "Room " + i, public: true, spectators: true, ext: true, tanks: 3, players: 1, open: 1,
@@ -606,13 +608,17 @@ function loadPage(page, search, stored, version) {
     const key = () => ui.spec.items[ui.sel].key;
     assert(ui.scrollRows < ui.scrollN, "the list scrolls: " + ui.scrollRows + " / " + ui.scrollN);
     ui.sel = ui.spec.items.findIndex(it => it.key === "room:r0"); ui.draw();
-    for (let i = 0; i < 9; i++) ui.wheel({ deltaY: 100, deltaMode: 0 });     // 18 notches: down to the last room
-    assert.strictEqual(key(), "room:r11", "wheel down to the last room: " + key());
-    assert(ui.top > 0, "the list scrolled");
+    const max = ui.scrollN - ui.scrollRows;
+    for (let i = 0; i < 9; i++) ui.wheel({ deltaY: 100, deltaMode: 0 });     // 18 notches: down to the end of the list
+    assert.strictEqual(key(), "room:r0", "the wheel doesn't move the selection: " + key());
+    assert.strictEqual(ui.top, max, "the list scrolled to its end: " + ui.top + " / " + max);
     ui.wheel({ deltaY: 30, deltaMode: 0 }); ui.wheel({ deltaY: 30, deltaMode: 0 });   // (no wrap past the end)
-    assert.strictEqual(key(), "room:r11");
+    assert.strictEqual(ui.top, max);
     ui.wheel({ deltaY: -3, deltaMode: 1 });                                          // 3 lines up = 120 px: 2 rows
-    assert.strictEqual(key(), "room:r9");
+    assert.strictEqual(ui.top, max - 2, "3 lines up: 2 rows");
+    assert.strictEqual(key(), "room:r0");
+    press(env, "ArrowDown");                                                         // (a key: the view follows the selection again)
+    assert(key() === "room:r1" && ui.rowItems().includes(ui.sel), "a key: the selection in view again (" + key() + ", top " + ui.top + ")");
     console.log("  ok  lobby.js games list: mouse wheel scrolls it");
   }
   // create a game: name, a password, public, spectators (+ the host's last settings) -> straight into its lobby

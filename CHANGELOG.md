@@ -4,6 +4,32 @@ All notable changes to Tunneler. Versions follow [semantic versioning](https://s
 by pushing a version tag (see CONTRIBUTING.md). Up to its version 6.0.1 the game was called Tunneler Online:
 those releases are tagged `online-vX.Y.Z`, their changes are in [docs/CHANGELOG-online.md](docs/CHANGELOG-online.md).
 
+## 1.3.0
+
+Online play needs 1.3 on every side (water, the generated maps and the computer tanks changed). Games without water
+and with the original ground - the original BLUE vs GREEN game, Original, your maps from before - play as before.
+
+- **Water**: a tank drives through it at half speed, it can't be dug, shots fly over it and explosions don't change
+  it; a base never stands in it. It shows in both looks - animated waves in the modern one - with a sandy shore.
+- **Ground**: a map's open floor is the original's dark tunnels, sand or grass (only the look); on sand or grass,
+  floor dug during play is sand.
+- **Six new generated maps**: Labyrinth (a maze of tunnels already dug), Rivers, Islands (every base on an island in
+  a sea), Strata (rock layers with gaps), Quarters (four parts split by rock walls with gates) and Open field (almost
+  no rock). Rivers and Islands always have water, every other kind - the old four too - in about one match in three;
+  every generated map's ground is sand or grass. Generated maps are always natural now: the Layout setting (fair /
+  natural) is gone; the map picker lists them by name, with a Map size row, and their pictures show no bases.
+- **Show map**: a new setting (skirmish and online games) - holding Tab (SCORE on a phone) shows the map under the
+  score: what you have seen, what your team has seen (line of sight counts), or revealed - the world as the match
+  started, for you or for your team. Only what you (your team) see updates it; parts not seen right now are gray.
+  Enemy tanks show only while seen. The Map size row is gone: the size is chosen in the map picker and shown in the Map row ("Rivers (Large)").
+- Map editor: a Water tool (keys 1-5 pick the tools now: tunnel, dirt, rock, water, base) - water is never painted
+  inside a base's walls -, and a Ground row on the map's screen (Classic / Sand / Grass). A map with sand or grass
+  ground gets a new code; every map from before keeps its code.
+- Computer tanks know water is slow: they drive around a pond when that is quicker, cross a river when it isn't, and
+  don't pick firing spots or side-steps in water.
+- Instructions and Information explain water, ground and the new maps.
+- The mouse wheel over a menu's list scrolls only the list; the highlighted item stays where it was.
+
 ## 1.2.4
 
 - **Debug info** (Settings > Gameplay): frame rate, drawing, the engine's steps and the connection (ping, the frames

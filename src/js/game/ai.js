@@ -24,6 +24,8 @@
 // in place (clues of dead tanks dropped, reached clues used up, doorway hysteresis, ditherN -> unstick),
 // side-steps through fire and dirt (pickDodge), always out of a volley that would destroy it or a dead tank's
 // shots, and out of the way of the shots still flying once its fight is over (evade) - fewer drawn rounds.
+// Water (1.3, extended only - engine.hasWater): water is slow (half speed), so paths cost it more, firing spots and
+// side-steps avoid it (Grid.cost, chooseSpot, pickDodge); without water nothing changes (no PRNG draw either).
 // Line of sight (engine.sight circle / walls, both engines): it sees only what engine.sightSees allows,
 // and the best level gets rough positions instead of exact ones (SIGHT_LEVELS); off = unchanged.
 //
@@ -47,7 +49,7 @@
 //             Every node caches what lies under a 7x7 tank box centred on it: blocked (rock / base wall)
 //             or the number of dirt pixels. Rock never changes, dirt is re-read around places where the
 //             world changes (own tank, shots, and - for levels that "know the map" - the other tanks).
-//   Planner   weighted A* over the grid (tunnel = 4, dirt up to 12, blocked = impassable, no corner cutting).
+//   Planner   weighted A* over the grid (tunnel = 4, dirt up to 12, water 8, blocked = impassable, no corner cutting).
 //   Brain     perception (with a per-level reaction delay and fog of war, one memory per enemy), target
 //             choice (nearest known enemy), mode selection (retreat / engage / hunt / explore), firing-spot
 //             selection on the 8 shot lines through the target, shot prediction and dodging, stuck
@@ -227,6 +229,7 @@ function rockCells(e, key) {
 
 // ------------------------------------------------------------------ navigation grid
 const UNK = 255, BLOCK = 254;
+const WET_COST = 8;                          // a node with water: 4 px at 2 frames a pixel
 
 class Grid {
   constructor(engine, ox, oy) {
@@ -240,6 +243,9 @@ class Grid {
     this.val = new Uint8Array(n).fill(UNK);  // UNK, BLOCK or dirt pixel count under the 7x7 box
     this.seen = new Uint8Array(n);           // node has been inside the AI's view window
     this.penalty = new Uint8Array(n);        // extra cost after getting stuck there
+    // water (1.3, extended only): per node 0 not read yet / 1 dry / 2 water under its 7x7 box (engine.inWater: half
+    // speed); water never changes in a match, so it is read once. null without water: costs exactly as before
+    this.wet = engine.hasWater && engine.floor ? new Uint8Array(n) : null;
   }
   cx(n) { return this.ox + (n % this.w) * 4; }
   cy(n) { return this.oy + Math.floor(n / this.w) * 4; }
@@ -291,13 +297,22 @@ class Grid {
         if (this.val[n] !== BLOCK) this.val[n] = UNK;
       }
   }
+  // is there water under the 7x7 box of node n (the tank would drive at half speed there)
+  isWet(n) {
+    let w = this.wet[n];
+    if (!w) w = this.wet[n] = this.e.inWater(this.cx(n), this.cy(n)) ? 2 : 1;   // (the engine's own rule: its 7 x 7 box)
+    return w === 2;
+  }
   // cost of entering node n (Infinity = impassable). memory: unseen ground is assumed to be dirt.
+  // (about 1 per frame: 4 px of tunnel = 4, of dirt up to 12; water 8 - 2 frames a pixel -, so a small pond is driven
+  // around while a river is crossed when the way around is long; owner, 2026-10-31)
   cost(n, memory) {
     const v = this.value(n);
     if (v === BLOCK) return Infinity;
     const p = this.penalty[n] * 6;
     if (memory && !this.seen[n]) return 12 + p;
-    return (v === 0 ? 4 : 4 + 8 * Math.min(1, v / 10)) + p;
+    const c = v === 0 ? 4 : 4 + 8 * Math.min(1, v / 10);
+    return (this.wet && c < WET_COST && this.isWet(n) ? WET_COST : c) + p;
   }
   // closest passable node to (x, y) within r nodes
   nearestFree(x, y, r) {
@@ -1248,6 +1263,8 @@ class TunnelerAI {
         const move = reach * 0.75 + 3 * Math.min(2, Math.abs(sx - g.cx(g.nodeAt(sx, sy))) + Math.abs(sy - g.cy(g.nodeAt(sx, sy))));
         let score = move + dirt * 4 + Math.abs(t - 18) * 0.6 + (d === e.tankDir[this.me] ? -4 : 0);
         if (defensive) score += m * 5;
+        // water (1.3): not a spot to stand and fight on - it would side-step out of a shot's way at half speed
+        if (e.hasWater && e.inWater(sx, sy)) score += 12;
         // a teammate near the line: with friendly fire anywhere up to a little behind the enemy (a miss
         // flies on); without, only one in front of the enemy matters (it would stop the shot)
         if (this.mates.length) {
@@ -1377,14 +1394,15 @@ class TunnelerAI {
     // extended: fire / explosions (class 2) and dirt (1) don't block a side-step either - a tank drives and digs
     // through them; a duel at close range in a tunnel one tank wide fills it with explosions, and with only empty
     // pixels counting neither tank could ever get out of the line: both stood and fired until both were destroyed
-    const ext = e.extended;
+    // (water, 1.3: a step into it is slow too - half speed - so a dry side is preferred and a wet one held longer)
+    const ext = e.extended, wet = ext && e.hasWater;
     let best = -1, bestScore = -1, bestSlow = false;
     for (let i = 0; i < opts.length; i++) {
       const d = opts[i];
       let free = 0, slow = false;
       for (let k = 1; k <= 4; k++) {
-        const b = e.tankBlocked(mx + DX[d] * k, my + DY[d] * k, d);
-        if (b === 0 || (ext && b <= 2)) { free++; if (b) slow = true; } else break;
+        const x = mx + DX[d] * k, y = my + DY[d] * k, b = e.tankBlocked(x, y, d);
+        if (b === 0 || (ext && b <= 2)) { free++; if (b || (wet && e.inWater(x, y))) slow = true; } else break;
       }
       const score = free * 10 - (i >> 1) * 5 - (slow ? 8 : 0) + this.rng();
       if (free > 0 && score > bestScore) { bestScore = score; best = d; bestSlow = slow; }

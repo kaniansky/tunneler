@@ -69,20 +69,30 @@ ok("the frame is always rock (decoding forces it)", () => {
   assert.strictEqual(d.cells[f * d.w + f], MapData.TUNNEL);
   assert.strictEqual(d.cells[(d.h - 1) * d.w + d.w - 1], MapData.ROCK);
 });
-ok("junk refused: magic, version, size, truncated, trailing bytes, cell value 3, bases out of the map / touching / 9, a bad name", () => {
+ok("junk refused: magic, format (not 1 / 2), size, a bad ground, truncated, trailing bytes, bases out of the map / touching / 9 / on water, a bad name", () => {
   const m = testMap("small", 2), b = MapData.encode(m);
   const bad = f => { const c = Uint8Array.from(b); f(c); return c; };
   assert.strictEqual(MapData.decode(bad(c => { c[0] = 0x55; })), null, "magic");
-  assert.strictEqual(MapData.decode(bad(c => { c[2] = 2; })), null, "version");
+  assert.strictEqual(MapData.decode(bad(c => { c[2] = 3; })), null, "format 3");
+  assert.strictEqual(MapData.decode(bad(c => { c[2] = 0; })), null, "format 0");
+  // (format 2: the ground byte after the size - 1 sand, 2 grass; 0 classic is format 1's, 3 nothing)
+  const sand = testMap("small", 2); sand.ground = "sand";
+  const sb = MapData.encode(sand);
+  assert.strictEqual(sb[2], 2, "sand: format 2");
+  assert.strictEqual(MapData.decode(Uint8Array.from(sb, (v, i) => i === 4 ? 0 : v)), null, "format 2, ground 0");
+  assert.strictEqual(MapData.decode(Uint8Array.from(sb, (v, i) => i === 4 ? 3 : v)), null, "format 2, ground 3");
   assert.strictEqual(MapData.decode(bad(c => { c[3] = 3; })), null, "size");
   assert.strictEqual(MapData.decode(b.subarray(0, b.length - 1)), null, "truncated");
   assert.strictEqual(MapData.decode(Uint8Array.from([...b, 1])), null, "trailing byte");
   assert.strictEqual(MapData.decode(new Uint8Array(0)), null, "empty");
   assert.strictEqual(MapData.decode("not a code!"), null, "not base64url");
   assert.strictEqual(MapData.decode(null), null, "null");
+  // (1.3: cell value 3 is water - every 2-bit value is a cell now; a base on it is refused)
   const packed = MapData.blank("small"); for (let i = 0; i < packed.cells.length; i++) packed.cells[i] = i % 3;
   const pb = MapData.encode(packed); pb[pb.length - 10] = 0xFF;
-  assert.strictEqual(MapData.decode(pb), null, "cell value 3");
+  assert(MapData.decode(pb), "cell value 3: water");
+  const wet = testMap("small", 2); wet.cells[wet.bases[0].y * wet.w + wet.bases[0].x + 4] = MapData.WATER;
+  assert.strictEqual(MapData.decode(MapData.encode(wet)), null, "a base on water");
   const edge = testMap("small", 0); edge.bases.push({ x: 2, y: 30 }, { x: 60, y: 30 });
   assert.strictEqual(MapData.decode(MapData.encode(edge)), null, "a base in the frame");
   const near = testMap("small", 0); near.bases.push({ x: 40, y: 30 }, { x: 45, y: 30 });
@@ -428,7 +438,7 @@ const ticks = async (n = 8) => { for (let i = 0; i < n; i++) await tick(); };
     api.setTool("tunnel"); api.stamp(2, 2);
     assert.strictEqual(ed.map.cells[2 * ed.map.w + 2], MapData.ROCK, "the frame stays rock");
     // bases: one too close to the edge refused, one more placed, one removed
-    env.key("Digit4"); assert.strictEqual(ed.tool, "base");
+    env.key("Digit5"); assert.strictEqual(ed.tool, "base");
     api.stamp(3, 3);
     assert(ed.map.bases.length === 0 && ed.msg, "too close to the edge: refused, said so");
     api.stamp(64, 15);
@@ -509,21 +519,19 @@ const ticks = async (n = 8) => { for (let i = 0; i < n; i++) await tick(); };
       const m3 = env3.win.tunnelerMapEditor().map, mid = m3.cells[(m3.h >> 1) * m3.w + (m3.w >> 1)];
       assert(mid === want && m3.cells.every(v => v === want || v === MapData.ROCK), "start from " + (want === MapData.ROCK ? "rock" : "empty"));
     }
-    // a generated world (owner, 2026-10-28): a kind (mapgen.js), Bases and Layout rows; fair: an even number, symmetric
+    // a generated world (owner, 2026-10-28): a kind (mapgen.js) and a Bases row - always natural (1.3, owner 2026-10-31:
+    // no Layout row), any number of bases
     const env4 = makeEnv("/maps"); env4.page("maps.html"); await ticks();
     const ui4 = env4.win.tunnelerMapsUI(), row = k => ui4.spec.items.find(it => it.key === k);
     row("new").go();
     for (let k = 0; k < 5; k++) row("from").change(1);              // (dirt -> rock, empty, random, Fortresses, Arena)
-    assert(/Arena/.test(env4.win.Lang.decode(row("from").label)) && row("bases") && row("layout"), "Start from: Arena, Bases, Layout");
+    assert(/Arena/.test(env4.win.Lang.decode(row("from").label)) && row("bases") && !row("layout"), "Start from: Arena, Bases, no Layout");
     row("bases").change(1);
-    assert(/: 4$/.test(env4.win.Lang.decode(row("bases").label)), "fair: bases in pairs (2 -> 4): " + JSON.stringify(env4.win.Lang.decode(row("bases").label)));
-    row("layout").change(1); row("bases").change(1);
-    assert(/: 5$/.test(env4.win.Lang.decode(row("bases").label)), "natural: one more");
-    row("layout").change(1);
-    assert(/: 6$/.test(env4.win.Lang.decode(row("bases").label)), "fair again: an even number");
+    assert(/: 3$/.test(env4.win.Lang.decode(row("bases").label)), "bases one by one (2 -> 3): " + JSON.stringify(env4.win.Lang.decode(row("bases").label)));
+    row("bases").change(1); row("bases").change(1);
     row("create").go(); await ticks();
     const m4 = env4.win.tunnelerMapEditor().map;
-    assert(m4.bases.length === 6 && m4.cells.every((v, i) => v === m4.cells[m4.cells.length - 1 - i]), "a fair arena with 6 bases, point-symmetric");
+    assert(m4.bases.length === 5 && m4.name, "an arena with 5 bases");
   });
 
   await okAsync("the editor by pointer: a base dragged to another spot (and back where it can't go), two fingers move the view and paint nothing", async () => {
@@ -594,7 +602,7 @@ const ticks = async (n = 8) => { for (let i = 0; i < n; i++) await tick(); };
     const width = segs => segs.reduce((n, s) => n + U.cols(s.text), 0) + 2 * Math.max(0, segs.length - 1);
     for (const code of w.Lang.codes) {
       w.Lang.set(code);
-      for (const msg of [null, "map.err.max", "map.err.edge", "map.err.near"]) {
+      for (const msg of [null, "map.err.max", "map.err.edge", "map.err.near", "map.err.water"]) {
         api.say(msg ? w.Lang.t(msg) : null);
         for (const [phone, cols] of [[true, 40], [false, 80]]) {
           const rows = api.barRows(phone);
@@ -609,6 +617,93 @@ const ticks = async (n = 8) => { for (let i = 0; i < n; i++) await tick(); };
       }
     }
     w.Lang.set("en");
+  });
+
+  await okAsync("water and ground in the editor (1.3): the Water tool (key 4, Tab), never inside a base's walls, no base on water; the map's Ground row (a draft, saved in format 2, a .tmap file, the editor's picture)", async () => {
+    const env = makeEnv("/maps");
+    env.page("maps.html");
+    await ticks();
+    const w = env.win, ui = w.tunnelerMapsUI(), api = w.tunnelerMapsApi, T = w.Lang.t;
+    const m = MapData.blank("small"); m.name = "Lakes"; m.bases.push({ x: 30, y: 32 }, { x: 98, y: 32 });
+    let rec = await w.MapStore.save(m);
+    api.edit(rec, MapData.decode(rec.code));
+    const ed = w.tunnelerMapEditor(), at = (x, y) => ed.map.cells[y * ed.map.w + x];
+    // the tools: 1-5 (tunnel, dirt, rock, water, base), Tab / Shift+Tab through all five
+    env.key("Digit4"); assert.strictEqual(ed.tool, "water", "4: water");
+    env.key("Digit5"); assert.strictEqual(ed.tool, "base", "5: base");
+    env.key("Tab"); assert.strictEqual(ed.tool, "tunnel", "Tab after base: tunnel");
+    env.key("Tab", "Tab", { shiftKey: true }); env.key("Tab", "Tab", { shiftKey: true }); assert.strictEqual(ed.tool, "water", "Shift+Tab twice: water");
+    assert(api.barRows(false)[0].some(g => g.attr === 0x5F && w.Lang.decode(g.text).trim() === "4 " + w.Lang.decode(T("map.t.water"))), "the status line: 4 Water chosen");
+    api.barRows(true)[0].find(g => w.Lang.decode(g.text).trim() === w.Lang.decode(T("map.t.rock"))).onClick();
+    assert.strictEqual(ed.tool, "rock", "a tap on Rock (a phone's row)");
+    // painting water: water cells; next to a base its walls' cells (x - 4 .. x + 4) stay dry and the line says why
+    api.setTool("water"); api.setBrush(-9);
+    api.stamp(64, 32);
+    assert.strictEqual(at(64, 32), MapData.WATER, "water painted");
+    assert(!ed.msg, "no message away from the bases");
+    api.setBrush(3);                                                   // (radius 3: x 34 .. 40)
+    api.stamp(37, 32);
+    assert(at(35, 32) === MapData.WATER && at(34, 32) !== MapData.WATER && at(36, 32) === MapData.WATER, "the walls' cells dry, the rest water");
+    assert.strictEqual(ed.msg, T("map.err.water"), "said why");
+    assert.strictEqual(MapData.baseProblem(ed.map, 30, 32, 0), null, "the base still fine");
+    // the base tool: not on water (refused, said), a base dragged onto water neither
+    api.setTool("base");
+    api.stamp(64, 50);                                                 // (dirt there - but water at 64, 32 isn't near)
+    assert.strictEqual(ed.map.bases.length, 3, "a base on dirt");
+    api.undo();
+    ed.msg = null;
+    api.stamp(64, 34);
+    assert(ed.map.bases.length === 2 && ed.msg === T("map.err.water"), "a base on water: refused - " + ed.msg);
+    // Esc: the map's screen, the Ground row (Left / Right, Enter cycles); a change is a draft until saved
+    env.key("Escape", "Escape");
+    await ticks();
+    const item = k => ui.spec.items.find(it => it.key === k), changed = () => ui.spec.lines.some(l => l.text === T("map.changed"));
+    assert(item("ground") && ui.spec.items[1] === item("ground"), "the Ground row under the name");
+    assert(w.Lang.decode(item("ground").label).endsWith(w.Lang.decode(T("map.ground.classic"))), "classic at first");
+    item("back").go();
+    await item("keep").go();                                           // (the water saved)
+    await ticks();
+    rec = (await w.MapStore.list())[0];
+    api.detail(rec);
+    assert(!changed(), "saved");
+    item("ground").change(1);
+    assert(w.Lang.decode(item("ground").label).endsWith(w.Lang.decode(T("map.ground.sand"))) && changed(), "Right: sand - changed");
+    item("ground").change(-1);
+    assert(!changed(), "back to classic: nothing changed");
+    item("ground").change(-1);
+    assert(w.Lang.decode(item("ground").label).endsWith(w.Lang.decode(T("map.ground.grass"))) && changed(), "Left from classic: grass");
+    // Edit: the draft's ground in the editor (its picture has the floor plane)
+    item("edit").go();
+    assert.strictEqual(w.tunnelerMapEditor().map.ground, "grass", "the editor on the grass map");
+    env.key("Escape", "Escape");
+    await ticks();
+    assert(changed(), "still changed");
+    item("back").go();
+    await item("keep").go();
+    await ticks();
+    rec = (await w.MapStore.list())[0];
+    const saved = MapData.decode(rec.code);
+    assert(saved.ground === "grass" && MapData.fromCode(rec.code)[2] === 2 && saved.cells[32 * saved.w + 64] === MapData.WATER, "saved: grass (format 2), the water");
+    // a .tmap file, read back: the ground and the water kept
+    let blob = null;
+    w.Blob = function (parts) { blob = parts[0]; };
+    w.URL = Object.assign(Object.create(URL), { createObjectURL: () => "blob:x", revokeObjectURL() {} });
+    api.saveFile(saved);
+    assert(blob && MapData.decode(blob).ground === "grass", "the file has the ground");
+    await api.readFile({ size: blob.length, arrayBuffer: async () => blob.buffer.slice(blob.byteOffset, blob.byteOffset + blob.length) });
+    await ticks();
+    const all = await w.MapStore.list();
+    assert(all.length === 2 && all.every(r => r.code === rec.code), "the file read back: the same map");
+    // MapData.copy keeps it (the editor / the draft)
+    assert.strictEqual(MapData.copy(saved).ground, "grass");
+    // back to classic: format 1 again, the very bytes of a map without a ground
+    api.detail(rec);
+    item("ground").change(1);
+    item("back").go();
+    await item("keep").go();
+    await ticks();
+    rec = (await w.MapStore.list()).find(r => r.id === rec.id);
+    assert(MapData.decode(rec.code).ground === "classic" && MapData.fromCode(rec.code)[2] === 1, "classic: format 1");
   });
 
   await okAsync("a shared map's address (/map/<id>): fetched, kept, its screen; an unknown one: an error", async () => {
@@ -634,16 +729,16 @@ const ticks = async (n = 8) => { for (let i = 0; i < n; i++) await tick(); };
     ui.spec.items.find(it => it.key === "cpu").go();
     const row = () => ui.spec.items.find(it => it.key === "map");
     while (!w.Lang.decode(row().label).includes(w.Lang.raw("gen.arena"))) row().change(1);
-    assert.strictEqual(env.storage.get("tunneler.cpu.map"), "gen:arena:fair", "remembered: " + env.storage.get("tunneler.cpu.map"));
+    assert.strictEqual(env.storage.get("tunneler.cpu.map"), "gen:arena:natural", "remembered: " + env.storage.get("tunneler.cpu.map"));
     ui.spec.items.find(it => it.key === "play").go();
-    assert(/[?&]gen=gen(:|%3A)arena(:|%3A)fair/.test(w.location.href), "the link: " + w.location.href);
+    assert(/[?&]gen=gen(:|%3A)arena(:|%3A)natural/.test(w.location.href), "the link: " + w.location.href);
     const codes = new Set();
     for (let k = 0; k < 2; k++) {
       const p = makeEnv("/skirmish", "?mode=cpu&slots=0:you:1,1:normal:2,2:easy:3&size=small&gen=gen:arena:fair");
       p.page("play.html");
       await ticks(6);
       const e = p.win.tunnelerEngine && p.win.tunnelerEngine();
-      assert(e && e.customMap && e.customMap.name === "arena" && e.customMap.bases.length === 4 && e.size === "small", "a generated arena, 3 tanks: 4 bases (fair)");
+      assert(e && e.customMap && e.customMap.name === "arena" && e.customMap.bases.length === 3 && e.size === "small", "a generated arena, 3 tanks: 3 bases (an old :fair link: natural)");
       codes.add(MapData.code(e.customMap));
     }
     assert.strictEqual(codes.size, 2, "another map for another match");
@@ -672,13 +767,13 @@ const ticks = async (n = 8) => { for (let i = 0; i < n; i++) await tick(); };
     ui.spec.items.find(it => it.key === "cpu").go();
     const row = () => ui.spec.items.find(it => it.key === "map");
     assert(w.Lang.decode(row().label).includes(w.Lang.raw("lc.map.random")), "random first");
-    // (then the generated kinds - mapgen.js, 1.2: each fair, then natural)
+    // (then the generated kinds - mapgen.js; 1.3: each once, natural)
     row().change(1);
-    assert(w.Lang.decode(row().label).includes(w.Lang.raw("gen.fortress")) && w.Lang.decode(row().label).includes(w.Lang.lower(w.Lang.raw("gen.fair"))), "then the generated kinds: " + w.Lang.decode(row().label));
-    for (let k = 1; k < 8; k++) row().change(1);
+    assert(w.Lang.decode(row().label).includes(w.Lang.raw("gen.fortress")) && !w.Lang.decode(row().label).includes(","), "then the generated kinds (no layout): " + w.Lang.decode(row().label));
+    for (let k = 1; k < require("../src/js/game/mapgen.js").MapGen.KINDS.length; k++) row().change(1);
     row().change(1);
     assert(w.Lang.decode(row().label).includes("Big one"), "then the map");
-    assert(ui.spec.items.find(it => it.key === "size").valueAttr === 8 && !ui.spec.items.find(it => it.key === "size").change && w.Lang.decode(ui.spec.items.find(it => it.key === "size").label).includes(w.Lang.raw("lc.size.large")), "its size, its value grayed");
+    assert(!ui.spec.items.some(it => it.key === "size") && w.Lang.decode(row().label).includes("(" + w.Lang.raw("lc.size.large") + ", "), "its size and bases in the Map row (1.3): " + w.Lang.decode(row().label));
     assert.strictEqual(env.storage.get("tunneler.cpu.map"), rec.id, "remembered");
     // 3 tanks on a 2-base map: Start says why not
     const slot2 = ui.spec.items.find(it => it.key === "slot2");
@@ -824,7 +919,7 @@ const ticks = async (n = 8) => { for (let i = 0; i < n; i++) await tick(); };
     assert(!w.Lang.decode(ui.spec.items.find(it => it.key === "map").label).includes("Split"), "Left / Right skip it");
     ui.spec.items.find(it => it.key === "map").go();
     await ticks(4);
-    assert(ui.spec.items.some(it => it.key === "random") && ui.spec.items.some(it => it.key === "layout"), "the picker opens on generated (a generated kind chosen)");
+    assert(ui.spec.items.some(it => it.key === "random") && ui.spec.items.some(it => it.key === "gen:field"), "the picker opens on generated (a generated kind chosen)");
     ui.spec.items.find(it => it.key === "tab").change(1);   // (generated -> your maps)
     await ticks(4);
     assert(!ui.spec.items.some(it => it.key === "m:" + split.id) && ui.spec.items.some(it => it.key === "none"), "the picker: not listed");

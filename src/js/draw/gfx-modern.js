@@ -9,9 +9,11 @@
 // - particles (dust, sparks, fire, debris, smoke - from engine.fx), screen shake
 // - line of sight: what the player remembers (engine.sightMem) in fog - blurred, dark or gray
 // - the static at low energy as noise
-// Display only: reads the engine (world, tanks, shots, sprites, cams, fx, sight memory; sightView only
+// - water and ground (1.3, engine.floor): animated water, sand / grass floors, splashes
+// Display only: reads the engine (world, floor, tanks, shots, sprites, cams, fx, sight memory; sightView only
 // fills its own scratch buffers) and never writes it; the particles' randomness is Math.random.
 import { Display } from "./display.js";
+import { MapData } from "../game/mapdata.js";
 import { TunnelerEngine } from "../game/engine.js";
 import { Gfx } from "./gfx.js";
 import { Debug } from "../ui/debug.js";
@@ -61,6 +63,10 @@ uniform sampler2D uH;         // 3D, smooth edges: the terrain's heights around 
 uniform vec4 uHRect;          // ... its world rectangle: x, y, w, h
 uniform sampler2D uHA;        // 3D: the heights per world pixel (HAFS) - voxel blocks
 uniform vec4 uARect;          // ... its world rectangle
+uniform usampler2D uFloor;    // water and ground (1.3): engine.floor, 2 pixels a byte as uWorld (the whole world)
+uniform int uFloorOn;         // ... 0: no floor (no water, classic ground - every world before 1.3: drawn as before)
+uniform int uGround;          // ... the map's ground: 0 classic, 1 sand, 2 grass
+uniform int uMemSeen;         // ... a memory band: its green channel says which pixels the player has ever seen
 out vec4 outColor;
 
 // 3D: the heights of the materials (world pixels): dirt, rock, base walls; tanks below (tankH)
@@ -78,6 +84,23 @@ int colAt(ivec2 g) {
   return int((g.x & 1) == 1 ? (b >> 4) & 15u : b & 15u);
 }
 int shapeOf(int cls) { return cls >= 4 ? 0 : cls; }
+// water and ground (1.3; owner, 2026-10-31): how an open pixel at g looks - 0 dark (the classic tunnel), 1 sand, 2
+// grass, 3 water: water; the shore (within 3 px of water) sand on every ground; open from the start the map's ground;
+// dug since - dark on classic ground, sand on sand / grass. A memory: what the player never saw stays dark (the fog
+// doesn't give the lakes or the ground away)
+int lookAt(ivec2 g) {
+  if (uFloorOn == 0 || g.x < 0 || g.y < 0 || g.x >= uWorldPx.x || g.y >= uWorldPx.y) return 0;
+  if (uMemSeen == 1) {
+    int r = g.y - uRowOff;
+    if (r < 0 || r >= uRows || ((texelFetch(uWorld, ivec2(g.x >> 1, r), 0).g >> uint(g.x & 1)) & 1u) == 0u) return 0;
+  }
+  uint b = texelFetch(uFloor, ivec2(g.x >> 1, g.y), 0).r;
+  int f = int((g.x & 1) == 1 ? (b >> 4) & 15u : b & 15u);
+  return f == 1 ? 3 : f == 3 ? 1 : f == 2 ? uGround : uGround == 0 ? 0 : 1;
+}
+// (set by terrainAt for shade: the open floor's looks around - dark, sand, grass weights -, how much water is around)
+vec3 gLook = vec3(1.0, 0.0, 0.0);
+float gWet = 0.0;
 // how much of tank i's own light reaches world position wp (its light mask; 1 without one)
 float lmask(int i, vec2 wp) {
   int s = uLMOn == 1 ? uTSlot[i] : -1;
@@ -111,6 +134,39 @@ float mn(float x) {
 float fbm3(vec2 p) { return vnoise(p) * 0.55 + vnoise(p * 2.07 + 5.3) * 0.28 + vnoise(p * 4.13 + 11.7) * 0.17; }
 vec4 kern(float t) { return vec4(mn(1.0 + t), mn(t), mn(1.0 - t), mn(2.0 - t)); }
 
+// water (1.3): still, deep blue - two slow wave trains drifting across it (uTime), lighter where they rise, their slopes
+// the normal (glints of the light from the top left), lighter and foamy along the bank (gWet: how much water is around).
+// A deep, grayish blue: darker than the blue / sky tanks and every base wall
+float wave(vec2 p, float t) { return vnoise(p + vec2(t * 0.23, t * 0.08)) * 0.65 + vnoise(p * 1.73 - vec2(t * 0.12, t * 0.3) + 7.7) * 0.35; }
+vec3 water(vec2 wp) {
+  vec3 deep = vec3(0.035, 0.10, 0.26), lite = vec3(0.10, 0.25, 0.46);
+  float t = uTime, amp = uTerrain == 0 ? 5.0 : uTerrain == 1 ? 3.0 : 0.0;
+  vec2 p = wp * (uTerrain == 2 ? 0.08 : 0.12);
+  float h = wave(p, t), hx = wave(p + vec2(0.05, 0.0), t), hy = wave(p + vec2(0.0, 0.05), t);
+  vec3 n = normalize(vec3((h - hx) * amp / 0.05 * 0.04, (h - hy) * amp / 0.05 * 0.04, 1.0));
+  vec3 col = uTerrain == 2 ? mix(deep, lite, 0.3 + 0.25 * step(0.6, h)) : mix(deep, lite, smoothstep(0.25, 0.85, h));
+  // (faint lighter crests where the waves rise through one height - the ripples; a glint where a slope faces the light)
+  if (uTerrain != 2) {
+    col += vec3(0.05, 0.10, 0.12) * (1.0 - smoothstep(0.0, 0.06, abs(h - 0.62)));
+    col *= 0.96 + 0.08 * vnoise(wp * 0.8 + vec2(t * 0.4, -t * 0.2));
+  }
+  col += vec3(0.5, 0.65, 0.75) * pow(clamp(dot(n, normalize(vec3(-0.12, -0.16, 0.98))), 0.0, 1.0), 40.0) * 0.35;
+  float bank = 1.0 - smoothstep(0.45, 0.85, gWet);
+  float foam = bank * (uTerrain == 2 ? 0.7 : 0.5 + 0.5 * vnoise(wp * 1.4 + vec2(t * 0.6, -t * 0.4)));
+  return mix(col, vec3(0.50, 0.62, 0.66), foam * 0.5);
+}
+// sand (pale, fine-grained beige: wind ripples, grains) and grass (a muted, yellowish olive: tufts, patches) - looks only
+vec3 sand(vec2 wp, float n, float grain) {
+  vec3 c = vec3(0.80, 0.70, 0.47) * (0.92 + 0.16 * n);
+  if (uTerrain == 0) c *= (1.0 + grain * 0.16) * (0.97 + 0.05 * sin(wp.x * 0.8 + wp.y * 0.45 + n * 4.0));
+  return c;
+}
+vec3 grass(vec2 wp, float n, float grain) {
+  vec3 c = mix(vec3(0.32, 0.37, 0.14), vec3(0.44, 0.47, 0.20), uTerrain == 2 ? 0.5 : n);
+  if (uTerrain == 0) c *= (1.0 + grain * 0.3) * (0.9 + 0.2 * vnoise(wp * 0.11 + 23.0));
+  return c;
+}
+
 // a material's colour at world position wp; c: the colour index it comes from, open: how much tunnel is
 // around (0..1), tone: how much of the dirt around is the light kind
 vec3 shade(int cls, int c, vec2 wp, float open, float tone) {
@@ -119,8 +175,14 @@ vec3 shade(int cls, int c, vec2 wp, float open, float tone) {
   else if (uTerrain == 1) n = vnoise(wp * 0.25);
   if (cls == 0) {
     vec3 t = vec3(0.085, 0.07, 0.06) * (0.85 + 0.3 * n);
-    return t * mix(0.35, 1.0, smoothstep(0.35, 0.95, open));          // darker close to the walls
+    float dk = mix(0.35, 1.0, smoothstep(0.35, 0.95, open));          // darker close to the walls
+    if (uFloorOn == 1 && gLook.x < 1.0) {                              // (sand / grass: in shade near the walls too)
+      t = t * gLook.x + sand(wp, n, grain) * gLook.y + grass(wp, n, grain) * gLook.z;
+      dk = mix(dk, mix(0.55, 1.0, smoothstep(0.3, 0.95, open)), 1.0 - gLook.x);
+    }
+    return t * dk;
   }
+  if (cls == 4) return water(wp);
   if (cls == 1) {
     vec3 d = uTerrain == 2 ? (tone > 0.5 ? uPal[6] : uPal[8]) * 0.95
       : mix(vec3(0.50, 0.25, 0.05), vec3(0.72, 0.45, 0.20), clamp(tone * 0.55 + n * 0.6 - 0.1, 0.0, 1.0));
@@ -156,7 +218,7 @@ float sdBox(vec2 p, vec2 c, vec2 h, float r) {
 }
 
 // the terrain's colour at world position wp (pw: output pixels per world pixel; vis: seen now) -> col, and the
-// shape it shows (bs: 0 tunnel, 1 dirt, 2 rock, 3 base wall)
+// shape it shows (bs: 0 tunnel, 1 dirt, 2 rock, 3 base wall, 4 water - open floor too, at the same height)
 vec3 terrainAt(vec2 wp, float pw, bool vis, out int bs) {
   // terrain: the contour upscaler over material shapes (tunnel / dirt / rock / walls), or plain pixels
   int bc, ss, sc2;
@@ -164,30 +226,44 @@ vec3 terrainAt(vec2 wp, float pw, bool vis, out int bs) {
   vec2 tp = wp;                                          // (where the surfaces are textured)
   if (uEdges == 1) {
     ivec2 g = ivec2(floor(wp));
-    bc = colAt(g); bs = shapeOf(uCls[bc]); ss = bs; sc2 = bc;
+    bc = colAt(g); bs = shapeOf(uCls[bc]);
+    if (bs == 0 && uFloorOn == 1) {                       // (water and ground: this pixel's look)
+      int lk = lookAt(g);
+      if (lk == 3) bs = 4;
+      gLook = lk == 1 ? vec3(0.0, 1.0, 0.0) : lk == 2 ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0);
+    }
+    ss = bs; sc2 = bc;
     tp = floor(wp) + 0.5;
-    float o = 0.0, l = 0.0, d = 0.0;
+    float o = 0.0, l = 0.0, d = 0.0, wt = 0.0;
     for (int y = -1; y <= 1; y++)
       for (int x = -1; x <= 1; x++) {
         int c = colAt(g + ivec2(x, y)), m = shapeOf(uCls[c]);
-        if (m == 0) o += 1.0 / 9.0;
+        if (m == 0) { o += 1.0 / 9.0; if (uFloorOn == 1 && lookAt(g + ivec2(x, y)) == 3) wt += 1.0 / 9.0; }
         if (m == 1) { d += 1.0; if (c == 6) l += 1.0; }
       }
-    open = o; tone = d > 0.0 ? l / d : 0.5;
+    open = o; tone = d > 0.0 ? l / d : 0.5; gWet = wt;
   } else {
     vec2 q = wp - 0.5, b = floor(q), t = q - b;
     vec4 wx = kern(t.x), wy = kern(t.y);
     ivec2 base = ivec2(b);
     int cs[16], sh[16];
     float w[16], light = 0.0, dirt = 0.0;
+    vec3 lw = vec3(0.0);                                  // (water and ground: the open floor's looks around, water)
+    float wt = 0.0;
     for (int y = 0; y < 4; y++)
       for (int x = 0; x < 4; x++) {
         int k = y * 4 + x, c = colAt(base + ivec2(x - 1, y - 1));
         cs[k] = c; sh[k] = shapeOf(uCls[c]); w[k] = wx[x] * wy[y];
-        if (sh[k] == 0) open += w[k];
+        if (sh[k] == 0 && uFloorOn == 1) {
+          int lk = lookAt(base + ivec2(x - 1, y - 1));
+          if (lk == 3) { sh[k] = 4; wt += w[k]; }
+          else lw += (lk == 1 ? vec3(0.0, 1.0, 0.0) : lk == 2 ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0)) * max(w[k], 0.0);
+        }
+        if (sh[k] == 0 || sh[k] == 4) open += w[k];
         if (sh[k] == 1) { dirt += w[k]; if (c == 6) light += w[k]; }
       }
     tone = dirt > 0.0 ? light / dirt : 0.5;
+    if (uFloorOn == 1) { gWet = wt; float s = lw.x + lw.y + lw.z; gLook = s > 0.0 ? lw / s : vec3(1.0, 0.0, 0.0); }
     const int cand[4] = int[4](5, 6, 9, 10);
     best = -9.0;
     bs = sh[5]; bc = cs[5]; ss = sh[5]; sc2 = cs[5];
@@ -408,7 +484,8 @@ void main() {
 
   // light: dark tunnels, lit by lamps, headlights, shots and flashes
   if (uLight == 1) {
-    vec3 L = vec3(bs == 0 ? 0.36 : 0.48);
+    // (sand and grass lie open to the sky: lighter than the classic tunnels' dark; water as dark as a tunnel)
+    vec3 L = vec3(bs == 0 ? 0.36 + (uFloorOn == 1 ? 0.24 * (1.0 - gLook.x) : 0.0) : bs == 4 ? 0.42 : 0.48);
     for (int i = 0; i < 32; i++) {
       if (i >= uNL) break;
       float d = length(wp - uLt[i].xy), k = clamp(1.0 - d / uLt[i].z, 0.0, 1.0);
@@ -724,12 +801,17 @@ function create(gl) {
   for (const n of ["uWorld", "uVis", "uWorldPx", "uRowOff", "uRows", "uOutside", "uSize", "uOut", "uWin", "uCam", "uScale", "uPal",
     "uCls", "uTerrain", "uEdges", "uGlow", "uLight", "uFog", "uVisOn", "uStatic", "uMap", "uVisOrg", "uTime", "uNT", "uTank",
     "uTankCol", "uTread", "uTS", "uTankStyle", "uNL", "uLt", "uLc", "uNS", "uShot", "uDepth", "uEye", "uH", "uHRect", "uHA", "uARect",
-    "uNTL", "uLMOn", "uLM", "uLMC", "uTSlot"]) u[n] = gl.getUniformLocation(prog, n);
+    "uNTL", "uLMOn", "uLM", "uLMC", "uTSlot", "uFloor", "uFloorOn", "uGround", "uMemSeen"]) u[n] = gl.getUniformLocation(prog, n);
   if (pprog) for (const n of ["uCam", "uScale", "uSize", "uOut", "uWin"]) pu[n] = gl.getUniformLocation(pprog, n);
   const worldTex = texture(gl), visTex = texture(gl);
   gl.bindTexture(gl.TEXTURE_2D, visTex);
   for (const q of [gl.TEXTURE_MIN_FILTER, gl.TEXTURE_MAG_FILTER]) gl.texParameteri(gl.TEXTURE_2D, q, gl.LINEAR);
   const memTex = new Map();                          // player -> {tex, y0, rows, tick, vis, vx, vy}
+  // water and ground (1.3): engine.floor on unit 5, 2 pixels a byte (uploadFloor); no floor - a 1 x 1 zero, never read
+  const floorTex = texture(gl);
+  gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8UI, 1, 1, 0, gl.RED_INTEGER, gl.UNSIGNED_BYTE, new Uint8Array(1));
+  gl.pixelStorei(gl.UNPACK_ALIGNMENT, 4);
   let vao = null, vbo = null;
   if (pprog) {
     vao = gl.createVertexArray(); vbo = gl.createBuffer();
@@ -801,6 +883,28 @@ function create(gl) {
     S.wband = !prev || S.prevW !== ws ? [0, e.worldH] : [r0, r1];        // (the light masks: the rows that changed)
   }
 
+  // water and ground (1.3): engine.floor into floorTex - static for a match once its world is made, so only when it
+  // could have changed: another array or a new match (newMatchExt gives it a new roundLog); not while a map is being
+  // painted (nothing shows the floor before the world is ready)
+  function uploadFloor(e) {
+    const F = e.floor;
+    S.floorOn = !!F;
+    if (!F) return;
+    if (e.worldStage !== -1) return;
+    const key = e.roundLog || 1;
+    if (S.floorArr === F && S.floorKey === key) return;
+    S.floorArr = F; S.floorKey = key;
+    const W = e.worldW, H = e.worldH, ws = e.ws;
+    const buf = S.fbuf && S.fbuf.length === ws * H ? S.fbuf : (S.fbuf = new Uint8Array(ws * H));
+    for (let y = 0; y < H; y++)
+      for (let i = 0, r = y * W, o = y * ws; i < ws; i++) buf[o + i] = F[r + 2 * i] | F[r + 2 * i + 1] << 4;
+    gl.bindTexture(gl.TEXTURE_2D, floorTex);
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8UI, ws, H, 0, gl.RED_INTEGER, gl.UNSIGNED_BYTE, buf);
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 4);
+    Debug.count("floor KB", ws * H / 1024);
+  }
+
   function spawn(kind, x, y, set, e) {
     const n = set.particles === "off" ? 0 : set.particles === "low" ? 0.4 : 1;
     const add = (count, f) => { for (let i = 0; i < Math.round(count * n); i++) S.parts.push(f()); };
@@ -829,6 +933,12 @@ function create(gl) {
         const d = Math.hypot(e.tankX[p] - x, e.tankY[p] - y);
         if (d < 90) S.shake[p] = Math.max(S.shake[p] || 0, 3.2 * (1 - d / 90) + 0.6);
       }
+    } else if (kind === "splash") {
+      // (1.3: a tank moved a pixel in water - drops thrown up around its tracks, a faint ring spreading behind it)
+      add(1.6, () => { const a = rnd(0, 6.283), v = rnd(3, 12);
+        return { x: x + rnd(-3, 3), y: y + rnd(-3, 3), vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: rnd(0.25, 0.5), age: 0,
+          size: rnd(0.6, 1.3), col: [0.62, 0.8, 0.95], add: false, drag: 5, alpha: 0.75 }; });
+      add(0.6, () => ({ x, y, vx: 0, vy: 0, life: 0.6, age: 0, size: 3, col: [0.6, 0.76, 0.86], add: false, drag: 0, alpha: 0.16, grow: 7 }));
     }
     const max = MAX_PARTS[set.particles] || 0;
     if (S.parts.length > max) S.parts.splice(0, S.parts.length - max);
@@ -836,7 +946,7 @@ function create(gl) {
 
   function update(e, now, set) {
     if (e !== S.e) {
-      Object.assign(S, { e, tick: -1, tanks: [], parts: [], flashes: [], shake: [] });
+      Object.assign(S, { e, tick: -1, tanks: [], parts: [], flashes: [], shake: [], floorArr: null, floorKey: null });
       for (const m of memTex.values()) { gl.deleteTexture(m.tex); gl.deleteTexture(m.visTex); }
       memTex.clear();
       for (const t of hTargets.values()) t.key = "";
@@ -847,6 +957,7 @@ function create(gl) {
     if (e.tick !== S.tick) {
       S.tick = e.tick; S.t0 = now;
       uploadWorld(e);
+      uploadFloor(e);
       for (let p = 1; p <= e.nPlayers; p++) {
         const t = S.tanks[p] || (S.tanks[p] = { px: e.tankX[p], py: e.tankY[p], cx: e.tankX[p], cy: e.tankY[p], ang: (e.tankDir[p] & 7) * Math.PI / 4 });
         t.px = t.cx; t.py = t.cy; t.cx = e.tankX[p]; t.cy = e.tankY[p];
@@ -897,10 +1008,27 @@ function create(gl) {
       const band = m.band && m.band.length === m.rows * e.ws ? m.band : (m.band = new Uint8Array(m.rows * e.ws));
       band.set(mem.subarray(m.y0 * e.ws, (m.y0 + m.rows) * e.ws));
       untank(e, band, m.y0, p);                          // (the tanks seen now: drawn as shapes; old ghosts stay)
-      if (m.texRows === m.rows && m.texWs === e.ws) gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, e.ws, m.rows, gl.RED_INTEGER, gl.UNSIGNED_BYTE, band);
-      else { gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8UI, e.ws, m.rows, 0, gl.RED_INTEGER, gl.UNSIGNED_BYTE, band); m.texRows = m.rows; m.texWs = e.ws; }
       // what its tank sees now (once per step, into the view's own texture - every frame binds it)
       const v = e.sightView(p, cam.x, cam.y), vis = m.vis;
+      if (S.floorOn) {
+        // water and ground (1.3): which pixels the player has ever seen (a bit each, 2 pixels a byte as the world; a new
+        // match - a new roundLog - forgets, as the memory does), as the band's green channel: never seen stays dark
+        const n = e.ws * e.worldH;
+        if (!m.seen || m.seen.length !== n || m.seenKey !== e.roundLog) { m.seen = new Uint8Array(n); m.seenKey = e.roundLog; }
+        for (let r = 0; r < 71; r++) {
+          const y = cam.y + r;
+          if (y < 0 || y >= e.worldH) continue;
+          for (let c = 0; c < 76; c++) {
+            const x = cam.x + c;
+            if (v[r * 76 + c] && x >= 0 && x < e.worldW) m.seen[y * e.ws + (x >> 1)] |= 1 << (x & 1);
+          }
+        }
+        const rg = m.rg && m.rg.length === band.length * 2 ? m.rg : (m.rg = new Uint8Array(band.length * 2));
+        for (let i = 0, o = m.y0 * e.ws; i < band.length; i++) { rg[2 * i] = band[i]; rg[2 * i + 1] = m.seen[o + i]; }
+        if (m.texRows === m.rows && m.texWs === e.ws && m.texRG) gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, e.ws, m.rows, gl.RG_INTEGER, gl.UNSIGNED_BYTE, rg);
+        else { gl.texImage2D(gl.TEXTURE_2D, 0, gl.RG8UI, e.ws, m.rows, 0, gl.RG_INTEGER, gl.UNSIGNED_BYTE, rg); m.texRows = m.rows; m.texWs = e.ws; m.texRG = true; }
+      } else if (m.texRows === m.rows && m.texWs === e.ws && !m.texRG) gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, e.ws, m.rows, gl.RED_INTEGER, gl.UNSIGNED_BYTE, band);
+      else { gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8UI, e.ws, m.rows, 0, gl.RED_INTEGER, gl.UNSIGNED_BYTE, band); m.texRows = m.rows; m.texWs = e.ws; m.texRG = false; }
       for (let i = 0; i < vis.length; i++) vis[i] = v[i] ? 255 : 0;
       m.vx = cam.x; m.vy = cam.y;
       gl.bindTexture(gl.TEXTURE_2D, m.visTex);
@@ -935,6 +1063,10 @@ function create(gl) {
     gl.uniform1i(u.uFog, ["blurred", "dark", "gray"].indexOf(set.fog));
     gl.uniform1i(u.uTankStyle, set.tanks === "simple" ? 0 : 1);
     gl.uniform1f(u.uTime, now / 1000);
+    // water and ground (1.3): no floor - none of it is read
+    gl.uniform1i(u.uFloor, 5); gl.uniform1i(u.uFloorOn, S.floorOn ? 1 : 0); gl.uniform1i(u.uMemSeen, 0);
+    gl.uniform1i(u.uGround, Math.max(0, MapData.GROUNDS.indexOf(e.groundType)));   // (0 classic, 1 sand, 2 grass)
+    gl.activeTexture(gl.TEXTURE5); gl.bindTexture(gl.TEXTURE_2D, floorTex); gl.activeTexture(gl.TEXTURE0);
     return pal;
   }
   // tanks (and their lamps) for a view: own view (p), or everyone (p 0); with line of sight only those seen
@@ -1135,7 +1267,9 @@ function create(gl) {
         gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, m.visTex);
         gl.activeTexture(gl.TEXTURE0);
         gl.uniform1i(u.uVisOn, 1); gl.uniform2i(u.uVisOrg, m.vx, m.vy);
+        gl.uniform1i(u.uMemSeen, m.texRG ? 1 : 0);
       } else {
+        gl.uniform1i(u.uMemSeen, 0);
         gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, worldTex);
         gl.uniform1i(u.uRowOff, 0); gl.uniform1i(u.uRows, e.worldH); gl.uniform1i(u.uOutside, 7);
         gl.uniform1i(u.uVisOn, 0);

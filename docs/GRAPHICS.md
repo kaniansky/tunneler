@@ -186,6 +186,32 @@ how the game and every menu screen are drawn. This file describes what is built.
   the modern look is made with 3D) and app.js reports it once (`Report.error("gfx 3d", ...)`). Too slow: Quality
   auto's last step (above).
 
+### Water and ground (1.3; owner, 2026-10-31 - docs/v6/MAPS.md "Water and ground")
+
+- Display only, the extended engine's `engine.floor` (a byte per pixel: 0 none, 1 water, 2 open from the start, 3
+  shore; null for every world without water and with classic ground) and `engine.groundType`. Water is open (0) in
+  the world, so the classes, heights, light masks, line of sight and fog treat it as tunnel floor already.
+- The floor as an R8UI texture on unit 5 (`uFloor`, 2 pixels a byte as the world; `uploadFloor`): static for a match
+  once its world is made, so it goes up only when it could have changed - another array, a world being made (a map is
+  painted row by row), a new match (`newMatchExt` gives the match a new `roundLog`). No
+  floor: a 1 x 1 zero texture and `uFloorOn` 0 - every shader path as before 1.3 (uniform branches only).
+- How an open pixel looks (`lookAt`): water; the shore sand on every ground; open from the start the map's ground
+  (classic: the dark tunnel, sand, grass); dug since - dark on classic ground, sand on sand / grass. The contour
+  upscaler takes water as a shape of its own (shape 4: smooth banks; open floor for the dirt's and rock's edges); the
+  floor's looks around a point are blended by the kernel's weights (`gLook`: soft borders between sand, grass and the
+  dark tunnel).
+- Water: a deep grayish blue (darker than the blue and sky tanks and every base wall), two slow wave trains drifting
+  across it (`uTime`) - lighter where they rise, faint crests, their slopes the normal, a glint where one faces the
+  light -, lighter along the bank (`gWet`); textured / smooth / flat as the terrain (flat: two tones). Sand: pale beige,
+  fine grains and wind ripples; grass: a muted, yellowish olive with tufts and patches (both looks only). Lighting:
+  sand and grass lie open to the sky - lighter than the classic tunnels' dark (ambient 0.6 against 0.36); water about
+  as dark as a tunnel. 3D: water a flat surface at the floor's height (its waves only in the shading).
+- Line of sight: a memory band can't tell a remembered tunnel from a never seen pixel (both 0), so with a floor the
+  band goes up as RG8UI - its green channel which pixels the player has ever seen (`sightFor`: a bit per pixel, the
+  views' `sightView` ORed in once per step, forgotten with a new match); never seen stays dark (the fog doesn't give
+  the water or the ground away). Without a floor the band is R8UI as before.
+- Particles: fx "splash" (a tank moved a pixel in water) - a few drops around its tracks and a faint ring spreading.
+
 ## 6. The HUD (gfx-hud.js)
 
 - Flat like the menus (solid fills, 1 px lines, small corners, no gradient, no glow). Panel "modern": per

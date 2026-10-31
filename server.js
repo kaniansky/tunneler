@@ -101,7 +101,7 @@
 //                     {t:"me", name?, team?}  own name (any time) / own seat's team 1..8 (not while ready)
 //                     {t:"ready", v}  seated players: ready (1) / not (0)
 //                     host: {t:"seatSet", i, kind?, team?} (a seat nobody sits on), {t:"set", size?, winScore?,
-//                     roundTime?, friendlyFire?, visible?, watchOut?, sight?, mode?, goals?, map?} (map: a shared
+//                     roundTime?, friendlyFire?, visible?, watchOut?, sight?, showMap?, mode?, goals?, map?} (map: a shared
 //                     map's id, "" = a random world - loaded from the store, then st.map = {id, name, size,
 //                     bases} and the match cfg's map = its code; the room's size follows it) (public /
 //                     spectators only when the game is created; every player
@@ -414,7 +414,7 @@ function createServer(opts = {}) {
     const room = {
       id, name, public: !!isPublic, allowSpec: !!allowSpec,
       size: st.size, winScore: st.winScore, friendlyFire: st.friendlyFire, roundTime: st.roundTime,
-      visible: st.visible, watchOut: st.watchOut, sight: st.sight, mode: st.mode, goals: st.goals,
+      visible: st.visible, watchOut: st.watchOut, sight: st.sight, showMap: st.showMap, mode: st.mode, goals: st.goals,
       map: "", mapCode: "", mapInfo: null, mapWant: "",   // a custom map (setMap): its id, code, {id, name, size, bases}
       seats: st.seats.map(s => ({ kind: s.kind, team: s.team, occ: null, last: null, ai: qp && NetProto.LEVELS.includes(s.kind) ? s.kind : null })),
       qp: !!qp, qpTimer: null, qpAt: 0,            // quick play: the next match's timer and when it fires
@@ -434,7 +434,7 @@ function createServer(opts = {}) {
     return room;
   }
   const settingsOf = room => ({ size: room.size, winScore: room.winScore, friendlyFire: room.friendlyFire, roundTime: room.roundTime,
-    visible: room.visible, watchOut: room.watchOut, sight: room.sight, mode: room.mode, goals: room.goals, map: room.map });
+    visible: room.visible, watchOut: room.watchOut, sight: room.sight, showMap: room.showMap || "off", mode: room.mode, goals: room.goals, map: room.map });
   // The room's custom map (docs/v6/MAPS.md): "" = a random world; an id is loaded from the shared maps (async -
   // the last one asked for wins; unknown ids are ignored), then the room's size follows it and every player has
   // to agree again. Only in the lobby.
@@ -1069,7 +1069,7 @@ function createServer(opts = {}) {
   let mapGen = null;
   function generatedMap(id, size, n, seed) {
     mapGen = mapGen || require("./src/js/game/mapgen.js").MapGen;
-    const g = mapGen.parse(id), map = g && mapGen.make({ kind: g.kind, size, bases: n, seed, fair: g.fair });
+    const g = mapGen.parse(id), map = g && mapGen.make({ kind: g.kind, size, bases: n, seed });
     return map ? MapData.code(map) : "";
   }
   async function loadMap(id) {

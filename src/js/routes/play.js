@@ -98,6 +98,10 @@ function run(mapRec) {
   const watchOut = TunnelerEngine.afterDeath(mode === "cpu" ? params.get("watch") : null);
   // vs computer, line of sight (sight=circle|walls; none = full, the original): display only
   const sight = mode === "cpu" && (TunnelerEngine.SIGHTS || []).includes(params.get("sight")) ? params.get("sight") : "full";
+  // vs computer, the score's map (&smap=own|team|all|allteam - 1.3, owner 2026-10-31; draw/seenmap.js; none = off; not in the
+  // short code: the link's own parameter like &gen=; display only; not the daily challenge)
+  const smapArg = ch ? null : query.get("smap") || params.get("smap");
+  const showMap = mode === "cpu" && (TunnelerEngine.SHOW_MAPS || []).includes(smapArg) ? smapArg : "off";
 
   // vs computer: [{color, team, level}] in slot (color) order - you have level null, the computer tanks
   // their difficulty
@@ -142,14 +146,16 @@ function run(mapRec) {
   const speaker = new Speaker();
   const keyboard = new Keyboard(window);
   const seed = ch ? ch.seed : (Math.random() * 0x100000000) >>> 0;   // (the challenge: the day's world)
-  // a generated map (?gen=gen:<kind>:<fair|natural>, mapgen.js): a new one every match, from its seed, for its tanks
+  // a generated map (?gen=gen:<kind>:natural, mapgen.js - an old :fair link plays natural): a new one every match, from its
+  // seed, for its tanks
   const genId = !ch && !mapRec ? query.get("gen") : null, gen = MapGen.parse(genId);
-  const genMap = gen ? MapGen.make({ kind: gen.kind, size, bases: slots.length, seed, fair: gen.fair }) : null;
+  const genMap = gen ? MapGen.make({ kind: gen.kind, size, bases: slots.length, seed }) : null;
   const mapCode = mapRec ? mapRec.code : genMap ? MapData.code(genMap) : null;
   // (escEnds: player 1's Esc ends the match as in the original - the extended engine ignores Esc online)
   // (a skirmish always runs the extended engine - owner, 2026-10-24; match: the engine plays the match only - no menu)
   const opts = { slots: slots.map(s => ({ color: s.color, team: s.team })), size, winScore, roundTime, friendlyFire: ff, escEnds: true, escPlayer: me,
-    autoStart: true, noInstructions: true, match: true, sight, extended: true, mode: gmode, goal, ...(mapCode ? { map: mapCode } : {}) };
+    autoStart: true, noInstructions: true, match: true, sight, ...(showMap !== "off" ? { showMap } : {}), extended: true, mode: gmode, goal,
+    ...(mapCode ? { map: mapCode } : {}) };
   const engine = new TunnelerEngine(seed, JSON.parse(JSON.stringify(opts)));
   const kills = ch ? Challenge.track(engine) : null;      // (the challenge's result: the enemies you destroyed)
   // display only: views scroll sideways 1 pixel at a time (the homepage's Settings, "tunneler.smooth"; on unless "0";
@@ -192,7 +198,7 @@ function run(mapRec) {
       save("tunneler.cpu.slots", JSON.stringify(all)); save("tunneler.levels", "2");
       save("tunneler.cpu.size", size); save("tunneler.cpu.win", String(winScore)); save("tunneler.cpu.time", String(roundTime));
       save("tunneler.cpu.ff", ff ? "1" : "0"); save("tunneler.cpu.view", view); save("tunneler.cpu.watch", watchOut);
-      save("tunneler.cpu.sight", sight); save("tunneler.cpu.mode", gmode); save("tunneler.cpu.map", mapRec ? mapRec.id : genMap ? genId : "");
+      save("tunneler.cpu.sight", sight); save("tunneler.cpu.showmap", showMap); save("tunneler.cpu.mode", gmode); save("tunneler.cpu.map", mapRec ? mapRec.id : genMap ? genId : "");
       if (gmode !== "standard" && goal) {
         let goals = {};
         try { goals = JSON.parse(localStorage.getItem("tunneler.cpu.goals") || "{}") || {}; } catch (e) { goals = {}; }
