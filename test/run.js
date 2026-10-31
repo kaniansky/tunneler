@@ -43,6 +43,7 @@ const TESTS = [
   "water-check.js",
   "floor-look-check.js",
   "seenmap-check.js",
+  "static-check.js",
   "map-share-check.js",
   "lang-check.js",
   "unicode-check.js",
