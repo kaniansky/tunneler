@@ -522,7 +522,15 @@ style; sk / cs have a 6th row on top for the diacritics of Č / Á over full-siz
 ## Online protocol (server.js / netproto.js)
 
 Server-clocked deterministic lockstep, no prediction/rollback; the full message list is in server.js's
-header. A **room** (`POST /api/rooms {name, public, spectators, seats?: [{kind, team}] x 8, size,
+header. One clock for all matches (1.3.2): a single timer on a 55 ms grid makes every running match's frames
+(`clocked`, `armClock` / `clockTick`; a match starts on the next point) - one wake-up a tick instead of one per match.
+Static files (1.3.2, `staticFile`): in memory, an ETag (304 on a match - the unhashed files no longer download in full
+on every visit), a gzip copy of text files made once in the background (Render's edge compresses with brotli itself).
+Capacity: `tools/load-test.js` (light fake clients; `--cpu 10` holds the server to a tenth of a core, like Render's free
+plan): 2026-10-31 about 150 - 180 two-player or 40 - 50 eight-player matches before frames run late (was ~120 / ~35
+with a timer per match); a large generated map's start still brings a spike (p99 ~50 ms) - its map moves to the
+clients in 1.4. Lower thread priority for the worker threads was tried: no help under a CPU quota (the quota is the
+process's, whatever the thread). Test: test/static-check.js. A **room** (`POST /api/rooms {name, public, spectators, seats?: [{kind, team}] x 8, size,
 winScore, roundTime, friendlyFire, visible, watchOut}`, `NetProto.roomSettings`: defaults for anything
 missing - BLUE + GREEN open, the rest closed; the old `slots` form still works; 30 creates / minute /
 address) is a lobby: `seats[i]` (index = color) `{kind: open|closed|easy|normal|hard, team, occ:

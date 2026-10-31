@@ -580,31 +580,47 @@ function createServer(opts = {}) {
   }
 
   // ------------------------------------------------------------ clock
+  // One clock for every match (1.3.2): a single timer on a grid of tickMs - each running match makes its frames on the
+  // grid's points (its own pace as before; it starts on the next point, its first frame no later than a tick after
+  // start), so the server wakes once a tick for all its games instead of once per match (tools/load-test.js)
   const nextTime = m => m.startAt + (m.log.length - m.startN + 1) * tickMs;
+  const clocked = new Set();
+  let gridT0 = -1, gridTimer = null;
+  const gridFloor = t => { if (gridT0 < 0) gridT0 = t; return gridT0 + Math.floor((t - gridT0) / tickMs) * tickMs; };
 
   function startClock(m) {
     if (m.running) return;
     m.running = true;
-    m.startAt = performance.now();
+    m.startAt = gridFloor(performance.now());
     m.startN = m.log.length;
     m.latch = m.held.slice();
     m.keys = [];
-    schedule(m);
+    clocked.add(m);
+    armClock();
   }
   function stopClock(m) {
     if (!m.running) return;
     m.running = false;
-    clearTimeout(m.timer);
-    m.timer = null;
+    clocked.delete(m);
+    if (!clocked.size && gridTimer) { clearTimeout(gridTimer); gridTimer = null; }
   }
-  function schedule(m) {
-    m.timer = setTimeout(() => tick(m), Math.max(0, nextTime(m) - performance.now()));
+  // (the timer for the earliest frame due - every match's are on the same points)
+  function armClock() {
+    if (gridTimer || !clocked.size) return;
+    let next = Infinity;
+    for (const m of clocked) next = Math.min(next, nextTime(m));
+    gridTimer = setTimeout(clockTick, Math.max(0, next - performance.now()));
+  }
+  function clockTick() {
+    gridTimer = null;
+    for (const m of [...clocked]) tick(m);
+    armClock();
   }
   function tick(m) {
     if (!m.running) return;
     const room = m.room;
     const now = performance.now();
-    if (now - nextTime(m) > 1000) { m.startAt = now - tickMs; m.startN = m.log.length; }  // event loop stalled
+    if (now - nextTime(m) > 1000) { m.startAt = gridFloor(now) - tickMs; m.startN = m.log.length; }  // event loop stalled
     const first = m.log.length, out = [];
     while (nextTime(m) <= now && !logFull(m)) {
       out.push(m.ext ? m.log.pushN(m.latch, m.keys, m.drives) : m.log.push(m.latch[0], m.latch[1], m.keys));
@@ -617,7 +633,6 @@ function createServer(opts = {}) {
       for (const s of room.sockets) if (s.readyState === 1 && !s.syncing) sendLive(s, msg);   // (catching up: see sendLog)
     }
     if (logFull(m)) { say("room", room.id, "frame log full"); stopClock(m); return; }
-    schedule(m);
   }
   const logFull = m => m.log.length >= MAX_FRAMES || m.log.count >= MAX_ENTRIES;
   const totalEntries = () => { let n = 0; for (const r of rooms.values()) if (r.match) n += r.match.log.count; return n; };
@@ -1615,15 +1630,44 @@ function createServer(opts = {}) {
     if (p.endsWith("/")) p += "index.html";
     const f = path.join(PUB, path.normalize(p));
     if (!f.startsWith(PUB + path.sep) || p.includes("\0")) { res.writeHead(403); return res.end(); }
-    fs.readFile(f, (err, data) => {
+    staticFile(f, (err, c) => {
       if (err) { res.writeHead(404, { "Content-Type": "text/plain" }); return res.end("not found"); }
-      // (the bundles' names carry a hash: a new build has new names - kept for a year; everything else asks again)
+      // (the bundles' names carry a hash: a new build has new names - kept for a year; everything else asks again -
+      // 1.3.2: with an ETag, so a browser that has it gets 304 and nothing more: the fonts, sounds, pictures)
       const immutable = /^\/js\/(app|chunk)-[A-Z0-9]{8}\.js$/.test(p);
-      res.writeHead(200, { "Content-Type": TYPES[path.extname(f)] || "application/octet-stream",
-        "Cache-Control": immutable ? "public, max-age=31536000, immutable" : "no-cache" });
-      res.end(req.method === "HEAD" ? undefined : data);
+      const head = { "Content-Type": TYPES[path.extname(f)] || "application/octet-stream",
+        "Cache-Control": immutable ? "public, max-age=31536000, immutable" : "no-cache", ETag: c.etag, "Last-Modified": c.modified };
+      if (c.zipped !== undefined) head.Vary = "Accept-Encoding";
+      const gz = c.zipped && /\bgzip\b/.test(String(req.headers["accept-encoding"] || ""));
+      if (gz) { head["Content-Encoding"] = "gzip"; head.ETag = c.etag.slice(0, -1) + '-gz"'; }   // (each encoding its own tag)
+      const tags = String(req.headers["if-none-match"] || "");
+      if (tags && tags.split(",").some(t => t.trim().replace(/^W\//, "") === head.ETag)) { delete head["Content-Encoding"]; res.writeHead(304, head); return res.end(); }
+      res.writeHead(200, head);
+      res.end(req.method === "HEAD" ? undefined : gz ? c.zipped : c.data);
     });
   });
+  // static files (1.3.2): kept in memory once read, checked against the file (its mtime and size: a rebuild,
+  // STATIC_DIR=src) on every request; an ETag (the content's hash); a gzip copy of a text file made once, in the
+  // background (zlib's thread pool) - served when the browser takes gzip (a host in front may compress itself: Render's
+  // edge does - this is for a server of one's own). cb(err, {data, etag, modified, zipped}) - zipped: undefined = not
+  // a text file, null = not made yet
+  const staticCache = new Map(), ZIP = /\.(js|html|css|json|webmanifest|svg|txt|md|bin|wasm)$/;
+  function staticFile(f, cb) {
+    fs.stat(f, (err, st) => {
+      if (err || !st.isFile()) return cb(err || new Error("not a file"));
+      const c = staticCache.get(f);
+      if (c && c.mtime === st.mtimeMs && c.size === st.size) return cb(null, c);
+      fs.readFile(f, (e, data) => {
+        if (e) return cb(e);
+        const entry = { mtime: st.mtimeMs, size: st.size, data, modified: st.mtime.toUTCString(),
+          etag: '"' + crypto.createHash("sha1").update(data).digest("base64url").slice(0, 20) + '"', zipped: ZIP.test(f) && data.length > 512 ? null : undefined };
+        if (entry.zipped === null) zlib.gzip(data, { level: 9 }, (ze, z) => { entry.zipped = ze || z.length >= data.length ? undefined : z; });
+        if (staticCache.size >= 1000) staticCache.clear();   // (more files than any build has: someone asks for many)
+        staticCache.set(f, entry);
+        cb(null, entry);
+      });
+    });
+  }
 
   // ------------------------------------------------------------ websockets
   const wss = new WebSocketServer({ noServer: true, maxPayload: 1024 });

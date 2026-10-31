@@ -4,6 +4,16 @@ All notable changes to Tunneler. Versions follow [semantic versioning](https://s
 by pushing a version tag (see CONTRIBUTING.md). Up to its version 6.0.1 the game was called Tunneler Online:
 those releases are tagged `online-vX.Y.Z`, their changes are in [docs/CHANGELOG-online.md](docs/CHANGELOG-online.md).
 
+## 1.3.2
+
+Plays with 1.3.0 and 1.3.1 (nothing in the game changed).
+
+- The server runs every match on one shared clock: about a third more games fit on a small server (measured on a
+  tenth of a CPU core: about 150 two-player or 40 eight-player matches at once).
+- The page's fonts, sounds and pictures are no longer downloaded again on every visit (the server tells the browser
+  they haven't changed); a server of your own also sends text files compressed.
+- `tools/load-test.js`: measures how many matches a server carries.
+
 ## 1.3.1
 
 Plays with 1.3.0 (nothing in the game changed).
