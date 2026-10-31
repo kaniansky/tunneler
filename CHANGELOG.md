@@ -4,6 +4,18 @@ All notable changes to Tunneler. Versions follow [semantic versioning](https://s
 by pushing a version tag (see CONTRIBUTING.md). Up to its version 6.0.1 the game was called Tunneler Online:
 those releases are tagged `online-vX.Y.Z`, their changes are in [docs/CHANGELOG-online.md](docs/CHANGELOG-online.md).
 
+## 1.3.1
+
+Plays with 1.3.0 (nothing in the game changed).
+
+- Show map: the map without the world's rock frame round it; parts never seen are a faint dither, so the edge of what
+  you know shows against the background. On a phone held upright the map no longer goes missing when the score is
+  beside it (many tanks).
+- Online: the server makes generated maps in a background thread, so starting a match on one no longer makes the other
+  games stutter.
+- Less work per frame with water or sand / grass in the modern look, and with Show map (only your team's view is
+  tracked).
+
 ## 1.3.0
 
 Online play needs 1.3 on every side (water, the generated maps and the computer tanks changed). Games without water

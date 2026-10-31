@@ -255,7 +255,7 @@ class Presenter {
         gl.drawArrays(gl.TRIANGLES, 0, 3);
       }
       if (!sc || this.modernFailed || !Gfx.Modern) return true;
-      if (!this.modern) { this.modern = Gfx.Modern.create(gl); this.modernFailed = !this.modern; }
+      if (!this.modern) { this.modern = Gfx.Modern.create(gl); this.modernFailed = !this.modern; if (this.modernFailed) Gfx.modernFailed = true; }
       if (!this.modern) return true;
       const set = Gfx.modern();
       set.depth = Gfx.depth(set);

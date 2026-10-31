@@ -88,7 +88,8 @@ changes the engine, the AI, the protocol or replays (a patch).
   when the view scrolls), 3 sand, 4 grass, 0 = the pixel's own colour - only where the pixel is 0, from
   `engine.floor` and `engine.groundType` (`floorLook`): water; the shore (floor 3) sand on every ground; open from the
   start in the ground's look (classic: black); dug (floor 0, pixel 0) sand on sand / grass, black on classic. Snapshots
-  carry `floors` (per view) and the world map's `floor` (no ripple); display.js `paint(..., dim, floor)` draws a look
+  carry `floors` (per view - only while `PlayScreen.wantFloors()`: views.js says the original look, or a modern one
+  that failed; 1.3.1) and the world map's `floor` (no ripple); display.js `paint(..., dim, floor)` draws a look
   where the pixel is 0 in `FLOOR_RGB` (6-bit DAC values), gray where the dim plane says remembered. Line of sight:
   `sightSeen` (a bit per world pixel and player) - never seen stays black. The live map (views.js `drawMap`), map
   pictures (mappic.js) and the editor (maps.js `render`, its own plane) use the same looks. With `engine.floor` null

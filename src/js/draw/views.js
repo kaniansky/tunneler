@@ -45,6 +45,9 @@ import { Scope } from "../scope.js";
 import { Surface } from "./surface.js";
 import { GameScreen } from "../io/screen.js";
 
+// (the views' floor planes only when they are painted: the original look, or a modern one that failed - 1.3.1)
+PlayScreen.wantFloors = () => Gfx.mode() !== "modern" || !!Gfx.modernFailed;
+
 const MODES = ["grid", "map", "follow"];
 const ASPECT = 1.35;               // vertical / horizontal pixel scale of the 720x400 screen at 4:3
 const MAX_POWER = 11400;           // engine MaxPower (full energy / shield)

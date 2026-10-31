@@ -305,7 +305,9 @@ their water): water-check pins that, and pins 1.3's own maps (a patch never chan
 + - * / and `Math.floor` / `round` (no sin / cos / hypot / sqrt): every browser and the server make the same map.
 
 Speed (node 24, a large map with 8 bases, mostly `mapReach`): 100 - 175 ms per kind (the
-first, before the JIT, up to ~400 ms). NetProto's `GEN_ID` takes the ten kinds (pages and servers of 1.2 don't know
+first, before the JIT, up to ~400 ms) - so the server makes them in a worker thread (1.3.1: `mapgen-worker.js`, one,
+kept and unref'd; `startMatch` waits for the map, then starts if the room still can - a change meanwhile makes it
+again; no worker: made in the server's own thread as before; net-sim checks the event loop doesn't stall). NetProto's `GEN_ID` takes the ten kinds (pages and servers of 1.2 don't know
 the new ones: 1.3 is a minor). Texts: `gen.<kind>` / `gen.<kind>.i` in `src/lang/<code>/water.js` ("generated
 kinds"). Tests: mapgen-check (every kind x size x a sample of base counts, natural: made, reachable, valid, sand /
 grass, no water by a base, rivers / islands wet; 1 in 3 wet; the overrides; NetProto's
