@@ -42,6 +42,27 @@ const LOW_MEMORY = (() => {
 const CLOCK_DIGITS = [[7, 5, 5, 5, 7], [2, 6, 2, 2, 7], [7, 1, 7, 4, 7], [7, 1, 7, 1, 7], [5, 5, 7, 1, 1],
   [7, 4, 7, 1, 7], [7, 4, 7, 5, 7], [7, 1, 1, 2, 2], [7, 5, 7, 5, 7], [7, 5, 7, 1, 7]];
 
+// Water and ground (owner, 2026-10-31, 1.3; docs/RENDERING.md "Floor plane"): how an open (0) world pixel looks -
+// FLOOR_LOOK, drawn by display.js in colours of their own (the world's 16 palette entries are all in use). From
+// engine.floor (MapData.FLOOR) and the map's ground: water (with a fixed ripple), the shore sand on every ground,
+// open-from-the-start floor in the ground's look (classic: black as always), dug floor sand on sand / grass maps.
+const FLOOR_LOOK = { NONE: 0, WATER: 1, RIPPLE: 2, SAND: 3, GRASS: 4 };
+// the ripple: short dashes on every third row, by a hash of the WORLD pixel (it stays put when the view scrolls)
+function rippleAt(x, y) {
+  if (y % 3) return false;
+  const r = (y / 3) | 0, s = x + r * 5;
+  let h = Math.imul((s >> 3) + 0x3C1, 0x45D9F3B) ^ Math.imul(r + 0x9E37, 0x119DE1F3);
+  h = Math.imul(h ^ (h >>> 15), 0x2C1B3C6D);
+  return ((h >>> 27) & 1) === 1 && (s & 7) < 3;
+}
+// the look of open world pixel (x, y) whose floor (engine.floor) is f, on ground g; still: no ripple (the world maps)
+function floorLook(f, x, y, g, still) {
+  if (f === 1) return !still && rippleAt(x, y) ? FLOOR_LOOK.RIPPLE : FLOOR_LOOK.WATER;
+  if (f === 3) return FLOOR_LOOK.SAND;
+  if (g !== "sand" && g !== "grass") return FLOOR_LOOK.NONE;
+  return f === 2 && g === "grass" ? FLOOR_LOOK.GRASS : FLOOR_LOOK.SAND;
+}
+
 class PlayScreen {
   constructor(e) {
     this.e = e;
@@ -62,6 +83,17 @@ class PlayScreen {
     this.dim = new Uint8Array(8000);
     this.views = e.extended ? Array.from({ length: e.nPlayers }, () => new Uint8Array(16000)) : null;
     this.viewDims = e.extended ? this.views.map(() => new Uint8Array(8000)) : null;
+    // floor plane (1.3, only when the engine has a floor - engine.floor; display only): per cell of the LORES screen
+    // the FLOOR_LOOK of its low-nibble pixel (low nibble) and of its high one (high nibble), 0 = the pixel's colour;
+    // extended: one per view buffer, and one for the world map. sightSeen: per player a bit per world pixel ever seen
+    // (line of sight: never seen stays black)
+    this.flo = e.floor ? new Uint8Array(8000) : null;
+    this.viewFloors = e.extended && e.floor ? this.views.map(() => new Uint8Array(8000)) : null;
+    this.sightSeen = [];
+    // what each player has seen, per map cell of 4 x 4 world pixels (1.3 - the score's map, engine.showMap,
+    // draw/seenmap.js; display only): seenCells[p] the cell as p saw it last (0 never, open 1, dirt 2, rock 3, water 4;
+    // "all" / "allteam": every cell as the match started until seen), seenAt[p] when (the engine's step + 1; 0: not seen yet)
+    this.seenCells = []; this.seenAt = [];
     this.shownEnergy = arr(0); this.shownShield = arr(0);   // what the gauges show
     this.hudShown = arr(null);                    // a game mode's tag beside each panel (hudTag)
     this.clockShown = -1;                         // the round clock's seconds shown (-1 = none)
@@ -169,9 +201,13 @@ class PlayScreen {
       s.cams = this.cams.map(c => c && [c.x, c.y]);
       s.tanks = Array.from({ length: this.e.nPlayers + 1 }, (_, p) => p ? [this.e.tankX[p], this.e.tankY[p], this.e.alive[p] ? 1 : 0] : null);
       if (this.e.sight !== "full") s.dims = this.viewDims.map(d => d.slice());
+      if (this.viewFloors) s.floors = this.viewFloors.map(f => f.slice());
     }
     else if (this.mode === "text") s.text = this.textOps.map(o => o.slice());
-    else { s.vram = this.vram.slice(0, 16000); this.snapUni(s); }
+    else {
+      s.vram = this.vram.slice(0, 16000); this.snapUni(s);
+      if (this.flo && this.screen === "map") s.floor = this.flo.slice();
+    }
     this.snapshots.push(s);
   }
 
@@ -266,6 +302,7 @@ class PlayScreen {
       cam.x = col * 2 + (!noise && this.e.smoothScroll && (x & 1) === 1 ? 1 : 0); cam.y = row; cam.noise = !!noise;
     }
     if (p && this.e.sight !== "full") return this.blitSight(col, row, scrOfs, noise, x, p, noiseAt);
+    if (p && !noise) this.seenTrack(p, this.cams[p].x, row, null);
     let src, mem, skip;
     if (noise) { src = noiseAt; mem = LOW_MEMORY; skip = 474; }
     else { src = row * this.e.ws + col; mem = this.e.world; skip = this.e.ws - 38; }
@@ -280,7 +317,29 @@ class PlayScreen {
       }
       src += skip; dst += 84;
     }
+    if (this.flo) this.floorView(scrOfs, col * 2 + (half ? 1 : 0), row, noise);
     this.dirty = true;
+  }
+
+  // the floor plane of a view window just blitted at ScrOfs (world pixel (x0, y0) at its top left): the look of each
+  // open pixel; the static: none
+  floorView(scrOfs, x0, y0, noise) {
+    const flo = this.flo, F = this.e.floor, W = this.e.worldW, H = this.e.worldH, g = this.e.groundType;
+    let dst = scrOfs;
+    for (let r = 0; r < 71; r++, dst += 84) {
+      if (noise) { flo.fill(0, dst >> 1, (dst >> 1) + 38); dst += 76; continue; }
+      const wy = y0 + r;
+      for (let c = 0; c < 38; c++, dst += 2) {
+        const byte = this.vram[dst];
+        let f = 0;
+        for (let k = 0; k < 2; k++) {
+          const wx = x0 + 2 * c + k;
+          if ((byte >> (k << 2)) & 15 || wx < 0 || wx >= W || wy < 0 || wy >= H) continue;
+          f |= floorLook(F[wy * W + wx], wx, wy, g) << (k << 2);
+        }
+        flo[dst >> 1] = f;
+      }
+    }
   }
 
   // blitView with line of sight (display only: no random numbers but the static's, the world unchanged):
@@ -295,14 +354,22 @@ class PlayScreen {
     }
     const x0 = col * 2 + (this.e.smoothScroll && (x & 1) === 1 ? 1 : 0), y0 = row;
     const vis = this.sightView(p, x0, y0);
+    this.seenTrack(p, x0, y0, vis);
     let mem = this.sightMem[p];
     if (!mem || mem.length !== this.e.world.length) mem = this.sightMem[p] = new Uint8Array(this.e.world.length);
     const W = this.e.worldW, H = this.e.worldH, ws = this.e.ws, world = this.e.world;
+    // (with a floor: the look of the open pixels seen now or before - never seen stays black)
+    const flo = this.flo, F = this.e.floor, g = this.e.groundType;
+    let seen = null;
+    if (flo) {
+      seen = this.sightSeen[p];
+      if (!seen || seen.length !== (W * H + 7) >> 3) seen = this.sightSeen[p] = new Uint8Array((W * H + 7) >> 3);
+    }
     let dst = scrOfs;
     for (let r = 0; r < 71; r++) {
       const wy = y0 + r;
       for (let c = 0; c < 38; c++) {
-        let byte = 0, d = 0;
+        let byte = 0, d = 0, f = 0;
         for (let k = 0; k < 2; k++) {
           const wx = x0 + 2 * c + k;
           if (wx < 0 || wx >= W || wy < 0 || wy >= H) continue;
@@ -311,8 +378,14 @@ class PlayScreen {
           if (vis[r * 76 + 2 * c + k]) { v = (world[i] >> sh) & 15; mem[i] = (mem[i] & ~(15 << sh)) | (v << sh); }
           else { v = (mem[i] >> sh) & 15; d |= 1 << k; }
           byte |= v << (k << 2);
+          if (flo) {
+            const pi = wy * W + wx;
+            if (!(d & (1 << k))) seen[pi >> 3] |= 1 << (pi & 7);
+            if (!v && seen[pi >> 3] & (1 << (pi & 7))) f |= floorLook(F[pi], wx, wy, g) << (k << 2);
+          }
         }
         this.vram[dst] = byte; dim[dst >> 1] = d;
+        if (flo) flo[dst >> 1] = f;
         dst += 2;
       }
       dst += 84;
@@ -342,6 +415,46 @@ class PlayScreen {
   // a new match, a new world: nothing seen yet
   sightReset() {
     for (const m of this.sightMem) if (m) m.fill(0);
+    for (const m of this.sightSeen) if (m) m.fill(0);
+    for (const m of this.seenCells) if (m) m.fill(0);
+  }
+
+  // the score's map (1.3, engine.showMap - draw/seenmap.js): the map cells of player p's view at world
+  // pixel (x0, y0) its tank sees now (vis: line of sight's sightMask; null: the whole view window), each remembered as
+  // it is now - open, dirt, rock or water (SeenMap.SEEN); tanks, shots and base walls count as open (the map draws the
+  // bases itself, the tanks only where the mode shows them)
+  seenTrack(p, x0, y0, vis) {
+    const e = this.e;
+    if (!e.extended || !e.showMap || e.showMap === "off" || !e.youPlayer) return;
+    // (only what the map can show: the viewer's own - its team's with the team modes)
+    if (p !== e.youPlayer && !((e.showMap === "team" || e.showMap === "allteam") && e.team(p) === e.team(e.youPlayer))) return;
+    const cw = e.worldW >> 2, ch = e.worldH >> 2;
+    let S = this.seenCells[p], A = this.seenAt[p];
+    if (!S || S.length !== cw * ch) { S = this.seenCells[p] = new Uint8Array(cw * ch); A = this.seenAt[p] = new Uint32Array(cw * ch); }
+    // ("all" / "allteam": the whole world revealed as the match starts - then only what is seen changes it; owner,
+    // 2026-10-31)
+    if ((e.showMap === "all" || e.showMap === "allteam") && !S[0]) for (let cy = 0; cy < ch; cy++) for (let cx = 0; cx < cw; cx++) S[cy * cw + cx] = this.seenCell(cx, cy);
+    const now = (e.tick >>> 0) + 1;                   // (when: the engine's step - the newest of a team's memories wins)
+    const cx0 = Math.max(0, (x0 + 2) >> 2), cx1 = Math.min(cw - 1, (x0 + 73) >> 2), cy0 = Math.max(0, (y0 + 2) >> 2), cy1 = Math.min(ch - 1, (y0 + 68) >> 2);
+    for (let cy = cy0; cy <= cy1; cy++)
+      for (let cx = cx0; cx <= cx1; cx++) {
+        const px = cx * 4 + 2, py = cy * 4 + 2;           // (the cell's middle: seen when it is)
+        if (px < x0 || py < y0 || px >= x0 + 76 || py >= y0 + 71) continue;
+        if (vis && !vis[(py - y0) * 76 + px - x0]) continue;
+        const i = cy * cw + cx;
+        S[i] = this.seenCell(cx, cy); A[i] = now;
+      }
+  }
+  // a map cell as the world has it now: open 1, dirt 2, rock 3, water 4 (tanks, shots, base walls: open)
+  seenCell(cx, cy) {
+    const e = this.e, ws = e.ws, world = e.world, F = e.floor;
+    let dirt = 0, rock = 0;
+    for (let y = cy * 4; y < cy * 4 + 4; y++)
+      for (let x = cx * 4; x < cx * 4 + 4; x++) {
+        const v = (world[y * ws + (x >> 1)] >> ((x & 1) << 2)) & 15;
+        if (v === 6 || v === 8) dirt++; else if (v === 7 || v === 4) rock++;
+      }
+    return F && F[(cy * 4 + 2) * e.worldW + cx * 4 + 2] === 1 ? 4 : rock > 8 ? 3 : dirt > 8 ? 2 : 16 - dirt - rock >= 8 ? 1 : dirt >= rock ? 2 : 3;
   }
 
   // a new round in the same world: what was seen stays, but the tanks are back at their bases - the
@@ -463,11 +576,15 @@ class PlayScreen {
     const B = this.bannerRows(), bw = B[0].length, bx = 80 - (bw >> 1) - 1;
     this.fillBox(Math.max(1, (bx - 7) >> 1), 85, Math.min(78, (bx + bw + 8) >> 1), 93, 221, 1, 1);   // 8 pixels around
     // every 7th pixel of the original world (other sizes: the same 144 x 73 samples spread over it)
+    const flo = this.flo, F = this.e.floor, W = this.e.worldW;   // (1.3: open pixels in their floor's look, no ripple)
+    if (flo) flo.fill(0);
     for (let y = 0; y <= 72; y++)
       for (let x = 1; x <= 144; x++) {
-        let c = this.e.getPixel(this.e.sc(x * 7), this.e.sc(y * 7));
+        const wx = this.e.sc(x * 7), wy = this.e.sc(y * 7);
+        let c = this.e.getPixel(wx, wy);
         if (this.e.extended ? this.e.constructor.PixelClassExt[c] === 3 : (c === 10 || c === 9)) c = 0;   // tanks and bases hidden
         this.plotLores(x + 7, y + 5, c);
+        if (flo && !c) flo[(y + 5) * 80 + ((x + 7) >> 1)] |= floorLook(F[wy * W + wx], wx, wy, this.e.groundType, true) << (((x + 7) & 1) << 2);
       }
     // base markers: the original's 5x5 outline with a 1-pixel doorway gap top and bottom; on other map
     // sizes scaled to cover the whole base (a base is 35 pixels wide whatever the world size)
@@ -510,9 +627,10 @@ class PlayScreen {
 
   // run fn with this.vram pointing at player p's view buffer (all drawing helpers write this.vram)
   inView(p, fn) {
-    const v = this.vram, d = this.dim;
+    const v = this.vram, d = this.dim, f = this.flo;
     this.vram = this.views[p - 1]; this.dim = this.viewDims[p - 1];
-    try { fn(); } finally { this.vram = v; this.dim = d; }
+    if (f) this.flo = this.viewFloors[p - 1];
+    try { fn(); } finally { this.vram = v; this.dim = d; this.flo = f; }
   }
 
   // the original's left half (border, view screen, instrument panel) in a player's view buffer; the
@@ -598,5 +716,9 @@ class PlayScreen {
 
 
 }
+
+PlayScreen.FLOOR_LOOK = FLOOR_LOOK;
+PlayScreen.floorLook = floorLook;     // (floor, x, y, ground, still) -> FLOOR_LOOK of an open world pixel
+PlayScreen.rippleAt = rippleAt;
 
 export { PlayScreen };

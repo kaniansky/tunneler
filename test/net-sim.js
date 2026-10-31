@@ -677,22 +677,22 @@ async function main() {
     const g1 = await new FakeClient(port, gr.id, { name: "G1", host: gr.hostKey }).connect();
     const g2 = await new FakeClient(port, gr.id, { name: "G2" }).connect();
     await until(() => g1.status && g1.status.seats.filter(x => x.k).length === 2, "seated (gen room)");
-    g1.send({ t: "set", map: "gen:arena:fair" });
-    await updated(g1, st => st.settings.map === "gen:arena:fair", "the generated kind set");
+    g1.send({ t: "set", map: "gen:arena:fair" });                  // (an old :fair id: taken as natural - 1.3)
+    await updated(g1, st => st.settings.map === "gen:arena:natural", "the generated kind set");
     g1.send({ t: "set", size: "large" });
     await updated(g1, st => st.settings.size === "large", "its size set");
     check("a generated kind: the room's map, its size still the host's", () =>
-      assert(g1.status.settings.map === "gen:arena:fair" && g1.status.map && g1.status.map.gen && g1.status.settings.size === "large"));
+      assert(g1.status.settings.map === "gen:arena:natural" && g1.status.map && g1.status.map.gen && g1.status.settings.size === "large"));
     g2.send({ t: "ready", v: 1 });
     await updated(g1, st => st.cant === null, "can start (gen room)");
     g1.send({ t: "start" });
     await until(() => g1.match && g2.match, "gen match");
     const gm = srv.rooms.get(gr.id).match;
-    const want = MapData.code(MapGen.make({ kind: "arena", size: "large", bases: 3, seed: gm.seed, fair: true }));
-    check("the match's own map: made from its seed (a new one every match), 3 tanks on a fair map - 4 bases, large", () => {
+    const want = MapData.code(MapGen.make({ kind: "arena", size: "large", bases: 3, seed: gm.seed }));
+    check("the match's own map: made from its seed (a new one every match), 3 tanks - 3 bases (natural), large", () => {
       for (const c of [g1, g2]) {
         assert.strictEqual(c.cfg.map, want, c.name + " cfg");
-        assert(c.engine.extended && c.engine.customMap && c.engine.size === "large" && MapData.decode(c.cfg.map).bases.length === 4, c.name + " engine");
+        assert(c.engine.extended && c.engine.customMap && c.engine.size === "large" && MapData.decode(c.cfg.map).bases.length === 3, c.name + " engine");
       }
     });
     g1.bits(UP | FIRE); g2.bits(RIGHT);
@@ -704,6 +704,44 @@ async function main() {
       assert.deepStrictEqual(fingerprint(reference(gm, c.frames)), fingerprint(c.engine)));
     check("no desync (gen)", () => assert(![g1, g2].some(c => c.desync) && gm.desyncs === 0));
     for (const c of [g1, g2]) await c.close();
+  }
+
+  // ---------------------------------------------------------------- Show map, a map with its size (1.3, owner 2026-10-31)
+  console.log("show map, the map's size online");
+  {
+    const wr = (await http(port, "POST", "/api/rooms", { name: "Map room", size: "small", showMap: "team", water: true,
+      seats: [{ kind: "open", team: 1 }, { kind: "open", team: 2 }] })).json;
+    const w1 = await new FakeClient(port, wr.id, { name: "W1", host: wr.hostKey }).connect();
+    const w2 = await new FakeClient(port, wr.id, { name: "W2" }).connect();
+    await until(() => w1.status && w1.status.seats.filter(x => x.k).length === 2, "seated (map room)");
+    check("a room created with Show map: every player sees it; water is no setting any more", () => {
+      for (const c of [w1, w2]) assert(c.status.settings.showMap === "team" && !("water" in c.status.settings), c.name);
+    });
+    // (the picker's choice: the map and its size in one message)
+    w1.send({ t: "set", map: "gen:field:natural", size: "large" });
+    await updated(w2, st => st.settings.map === "gen:field:natural" && st.settings.size === "large", "a kind with its size");
+    w1.send({ t: "set", showMap: "everything" });
+    await settle();
+    check("Show map: only its choices", () => assert.strictEqual(w2.status.settings.showMap, "team"));
+    w1.send({ t: "set", map: "", size: "small", showMap: "own" });
+    await updated(w2, st => st.settings.map === "" && st.settings.size === "small" && st.settings.showMap === "own", "Original, small, Show map own");
+    w2.send({ t: "ready", v: 1 });
+    await updated(w1, st => st.cant === null, "can start (map room)");
+    w1.send({ t: "start" });
+    await until(() => w1.match && w2.match, "map room match");
+    const wm = srv.rooms.get(wr.id).match;
+    check("the match: cfg.showMap, every engine has it; BLUE vs GREEN stays the classic game", () => {
+      assert(wm.cfg.showMap === "own" && !wm.ext && !("water" in wm.cfg));
+      for (const c of [w1, w2]) assert(c.cfg.showMap === "own" && c.engine.showMap === "own" && !c.engine.extended, c.name);
+    });
+    w1.bits(UP | FIRE); w2.bits(RIGHT);
+    await until(() => w1.frames > 300, "map room frames", 60000);
+    w1.bits(0); w2.bits(0);
+    const wn = wm.log.length;
+    await until(() => [w1, w2].every(c => c.frames >= wn), "caught up (map room)");
+    check("both clients' engines identical (Show map: display only)", () => assert.strictEqual(stateHash(w1.engine), stateHash(w2.engine)));
+    check("no desync (map room)", () => assert(![w1, w2].some(c => c.desync) && wm.desyncs === 0));
+    for (const c of [w1, w2]) await c.close();
   }
 
   // ---------------------------------------------------------------- kick, host handover, no spectators

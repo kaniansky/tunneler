@@ -74,11 +74,14 @@ function drawMap() {
   line(64, 12, 64, 19, 1, 0); line(64, 52, 64, 45, 1, 0);
   line(46, 24, 46, 40, 0, 0); line(82, 24, 82, 40, 0, 0); line(46, 32, 49, 32, 0, 0); line(79, 32, 82, 32, 0, 0);
   disc(64, 32, 4, 0, 3);
+  // water (1.3): two ponds and a stream, never inside a base's walls; grass ground
+  disc(30, 44, 4, 3, 3); disc(98, 20, 4, 3, 3); line(30, 44, 40, 54, 1, 3);
+  m.ground = "grass";
   ed.changed = true;
   // the bases: the base tool, as a player places them
   api.setTool("base");
   for (const [x, y] of [[16, 14], [112, 14], [16, 50], [112, 50], [64, 12], [64, 52]]) api.stamp(x, y);
-  api.setTool("tunnel"); api.setBrush(1);
+  api.setTool("water"); api.setBrush(1);
   ed.cx = 58; ed.cy = 32; api.render();
 }
 

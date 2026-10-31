@@ -7,6 +7,7 @@
 //   MatchText.snapshot(snap, engine) -> a text snapshot (vram, uni, ui) of an engine snapshot's text steps
 //   new MatchText(engine).summary(boxRows) -> {top}   .statsPage(prompt)   .textSnap()
 import { STRINGS_EN } from "../../lang/en/engine.js";
+import { SeenMap } from "./seenmap.js";
 import { TextBuf } from "./textbuf.js";
 import { UniText } from "../text/unitext.js";
 
@@ -73,6 +74,7 @@ export class MatchText extends TextBuf {
       ui: { titles: this.ui.titles.slice(), boxes: this.ui.boxes.slice(), bar: null, rule: this.ui.rule } };
     this.snapUni(s);
     if (s.uni) s.uni = s.uni.slice(0, 8000);           // (the DOS screen's 25 rows)
+    if (this.pic) s.pic = this.pic;                    // (liveStats: the map - a picture in its block of cells)
     return s;
   }
   // the statistics alone, full screen (online, a replay)
@@ -410,15 +412,45 @@ export class MatchText extends TextBuf {
   liveStats() {
     this.window(1, 1, 80, 25);
     this.clearScreen();
-    const w = 40, score = this.scoreLines(w), set = this.e.showSettings ? this.settingsLines(w, 3) : [];
-    const rows = [{ text: this.strings.round + " " + this.e.round, color: 14 }, null, ...score, ...(set.length ? [null, ...set.map(text => ({ text, color: 3 }))] : [])];
-    const x = 41 - ((w + 4) >> 1), top = Math.max(1, 13 - ((rows.length + 4) >> 1));
-    this.textColor(5);
-    this.gotoXY(x, top); this.write("\xDA", "\xC4".repeat(w + 2), "\xBF");
-    for (let i = 0; i <= rows.length + 1; i++) { this.gotoXY(x, top + 1 + i); this.write("\xB3", " ".repeat(w + 2), "\xB3"); }
-    this.gotoXY(x, top + rows.length + 3); this.write("\xC0", "\xC4".repeat(w + 2), "\xD9");
-    this.ui.boxes.push({ r: top - 1, c: x - 1, r2: top + rows.length + 2, c2: x + w + 2 });
-    rows.forEach((l, i) => { if (l) { this.textColor(l.color); this.gotoXY(x + 2, top + 2 + i); this.write(UniText.slice(l.text, w)); } });
+    // (1.3, owner 2026-10-31: with the room's / skirmish's Show map - engine.showMap - the map too, draw/seenmap.js: the
+    // settings left out then; the map under the score while that leaves it 8+ rows, else beside it)
+    const map = SeenMap.picture(this.e, this.e.youPlayer);
+    const frame = (x, top, w, h) => {                   // (a box: x, top its top left corner, w x h inside)
+      this.textColor(5);
+      this.gotoXY(x, top); this.write("\xDA", "\xC4".repeat(w), "\xBF");
+      for (let i = 1; i <= h; i++) { this.gotoXY(x, top + i); this.write("\xB3", " ".repeat(w), "\xB3"); }
+      this.gotoXY(x, top + h + 1); this.write("\xC0", "\xC4".repeat(w), "\xD9");
+      this.ui.boxes.push({ r: top - 1, c: x - 1, r2: top + h, c2: x + w });
+    };
+    const lines = (w, set) => [{ text: this.strings.round + " " + this.e.round, color: 14 }, null, ...this.scoreLines(w),
+      ...(set.length ? [null, ...set.map(text => ({ text, color: 3 }))] : [])];
+    const text = (rows, x, top, w) => rows.forEach((l, i) => { if (l) { this.textColor(l.color); this.gotoXY(x + 2, top + 2 + i); this.write(UniText.slice(l.text, w)); } });
+    if (!map) {
+      const w = 40, rows = lines(w, this.e.showSettings ? this.settingsLines(w, 3) : []);
+      const x = 41 - ((w + 4) >> 1), top = Math.max(1, 13 - ((rows.length + 4) >> 1));
+      frame(x, top, w + 2, rows.length + 2);
+      text(rows, x, top, w);
+      return this;
+    }
+    const ASPECT = 2.4 * map.w / map.h;                 // (columns per row of the picture: a cell 9 x 16, shown 1.35 tall)
+    let w = 40, rows = lines(w, []);
+    const under = 24 - (rows.length + 4) - 2;           // (rows left for the map under the score)
+    let R, C, x, top, mx, my;
+    if (under >= 8) {
+      R = Math.min(14, under); C = Math.min(76, Math.round(R * ASPECT));
+      const total = rows.length + 4 + R + 2;
+      top = Math.max(1, 13 - (total >> 1)); x = 41 - ((w + 4) >> 1);
+      mx = 41 - ((C + 2) >> 1); my = top + rows.length + 4;
+    } else {
+      w = 30; rows = lines(w, []);
+      C = 80 - (w + 4) - 1 - 2 - 2; R = Math.max(4, Math.min(22, Math.round(C / ASPECT)));
+      x = 2; top = Math.max(1, 13 - ((rows.length + 4) >> 1));
+      mx = x + w + 4 + 1; my = Math.max(1, 13 - ((R + 2) >> 1));
+    }
+    frame(x, top, w + 2, rows.length + 2);
+    text(rows, x, top, w);
+    frame(mx, my, C, R);
+    this.pic = { col: mx, row: my, cols: C, rows: R, w: map.w, h: map.h, rgba: map.rgba, bleed: 0 };
     return this;
   }
   // the score as lines of at most w columns: [{text, color}] - per team (shared teams: its name, rounds won and the

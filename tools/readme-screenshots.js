@@ -1,5 +1,5 @@
 // The README's screenshots (1000x820, screenshots/*.png; modern-*.png: graphics "modern") from a running server:
-//   PORT=8102 node server.js &      (a fresh one: it gets a few public test games)
+//   DATA_DIR=$(mktemp -d) ACCOUNTS=off PORT=8102 node server.js &      (a fresh one: it gets a few public test games)
 //   node tools/readme-screenshots.js 8102 screenshots           (graphics "original" + a few modern ones)
 //   node tools/readme-screenshots.js 8103 screenshots modern    (on another fresh server: the same session in
 //                                                                 the modern look, modern-<name>.png - the homepage's modern theme)
@@ -48,9 +48,10 @@ const fill = a => { while (a.length < 8) a.push(S('closed', a.length + 1)); retu
   try {
     // home
     let p = await page({}, '/'); await sleep(1000); await shot(p, 'home.png'); await p.close();
-    // vs computer: 2 v 2 against computer tanks
+    // vs computer: 2 v 2 against computer tanks on generated rivers, the score's map seen by the team (1.3)
     p = await page({ 'tunneler.cpu.slots': JSON.stringify(fill([S('you', 1), S('hard', 2), S('normal', 1), S('hard', 2)])),
-      'tunneler.cpu.view': 'team', 'tunneler.cpu.time': '3', 'tunneler.cpu.watch': 'others' }, '/');
+      'tunneler.cpu.view': 'team', 'tunneler.cpu.time': '3', 'tunneler.cpu.watch': 'others',
+      'tunneler.cpu.map': 'gen:rivers:natural', 'tunneler.cpu.size': 'large', 'tunneler.cpu.showmap': 'team' }, '/');
     await sleep(800); await p.keyboard.press('ArrowDown'); await p.keyboard.press('Enter'); await sleep(500); await shot(p, 'vs-computer.png'); await p.close();
     // split screen, both tanks digging
     p = await page({}, '/play.html?mode=hotseat&size=medium&win=3');
@@ -59,7 +60,7 @@ const fill = a => { while (a.length < 8) a.push(S('closed', a.length + 1)); retu
     await sleep(300); await shot(p, 'split-screen.png'); await p.close();
     // public games for the list
     const main = await api({ name: 'Friday night', public: true, spectators: true, size: 'medium', winScore: 3, roundTime: 3, friendlyFire: false,
-      visible: 'team', watchOut: 'others', seats: fill([S('open', 1), S('open', 2), S('open', 1), S('hard', 2)]) });
+      visible: 'team', watchOut: 'others', map: 'gen:rivers:natural', showMap: 'team', seats: fill([S('open', 1), S('open', 2), S('open', 1), S('hard', 2)]) });
     await api({ name: 'Duel at dawn', public: true, spectators: true, seats: fill([S('open', 1), S('open', 2)]) });
     await api({ name: 'Team rumble', public: true, spectators: true, size: 'large', winScore: 5, seats: fill([S('open', 1), S('expert', 2), S('open', 1), S('expert', 2), S('open', 1), S('expert', 2), S('open', 1), S('expert', 2)]) });
     await api({ name: 'Żółw vs 王小明', public: true, spectators: false, size: 'small', seats: fill([S('open', 1), S('open', 2), S('normal', 3)]) });
@@ -80,6 +81,7 @@ const fill = a => { while (a.length < 8) a.push(S('closed', a.length + 1)); retu
     const spec = await page({ 'tunneler.name': 'Kiko' }, url('watch'));
     await sleep(2500);
     for (const [pg, msg] of [[green, 'gl hf!'], [cyan, 'Привет! 👋 ready when you are']]) {
+      await until(pg, () => window.tunnelerLobbyUI && tunnelerLobbyUI() && tunnelerLobbyUI().spec);   // (4 pages loading: slow)
       await pg.evaluate(() => { const u = tunnelerLobbyUI(); u.sel = u.spec.items.findIndex(i => i.key === 'say'); u.draw(); });
       await pg.evaluate(m => { for (const ch of m) window.dispatchEvent(new KeyboardEvent('keydown', { key: ch, code: 'KeyQ', bubbles: true })); }, msg);
       await pg.keyboard.press('Enter'); await sleep(300);
@@ -101,14 +103,14 @@ const fill = a => { while (a.length < 8) a.push(S('closed', a.length + 1)); retu
     await spec.keyboard.press('Digit1'); await sleep(800); await shot(spec, 'spectator-grid.png');
     await spec.keyboard.press('Digit2'); await sleep(1500); await shot(spec, 'spectator-map.png');
     // graphics "modern" (docs/GRAPHICS.md): the main menu, its settings, a skirmish of 4 (clean), the split screen (retro)
-    // the map picker (the skirmish's Map row): map-picker.png / modern-map-picker.png
-    p = await page({}, '/');
+    // the map picker (the skirmish's Map row; generated islands, large): map-picker.png / modern-map-picker.png
+    p = await page({ 'tunneler.cpu.map': 'gen:islands:natural', 'tunneler.cpu.size': 'large' }, '/');
     await sleep(800); await p.keyboard.press('ArrowDown'); await p.keyboard.press('Enter'); await sleep(500);
     await p.evaluate(() => tunnelerHomeUI().spec.items.find(i => i.key === 'map').go()); await sleep(600);
     await shot(p, 'map-picker.png'); await p.close();
     if (MODERN) {
       // 3D (the default): a team game on generated caves, your teammate's triangle
-      p = await page({}, '/skirmish?mode=cpu&slots=' + encodeURIComponent('0:you:1,1:hard:2,2:hard:1,3:hard:2') + '&size=small&view=team&gen=gen:caves:fair');
+      p = await page({}, '/skirmish?mode=cpu&slots=' + encodeURIComponent('0:you:1,1:hard:2,2:hard:1,3:hard:2') + '&size=small&view=team&gen=gen:caves:natural');
       await until(p, () => window.tunnelerEngine && window.tunnelerEngine().screen === 'play');
       await hold(p, ['KeyS'], 1500); await hold(p, ['KeyD'], 1500); await hold(p, ['KeyS', 'Space'], 800);
       await sleep(800); await shot(p, 'modern-3d.png'); await p.close();
@@ -120,6 +122,43 @@ const fill = a => { while (a.length < 8) a.push(S('closed', a.length + 1)); retu
     await hold(p, ['KeyW'], 4000);
     await p.keyboard.down('Tab'); await sleep(600); await shot(p, 'score.png'); await p.keyboard.up('Tab'); await p.close();
     const M = { 'tunneler.gfx': 'modern' };
+    // 1.3, both looks: a team game on generated rivers (water, sand or grass - the seed picks), BLUE driven to the
+    // nearest water; held Tab with Show map "Revealed (team)" on generated islands
+    for (const look of [{ 'tunneler.gfx': 'original' }, M]) {
+      const pre = look === M ? 'modern-' : '';
+      const near = () => p.evaluate(() => {           // (the nearest water pixel from BLUE - player 1: engine.floor 1)
+        const e = tunnelerEngine(), F = e.floor, W = e.worldW, x0 = e.tankX[1], y0 = e.tankY[1];
+        let best = null, bd = 1e9;
+        if (F) for (let k = 0; k < F.length; k++) if (F[k] === 1) { const dx = k % W - x0, dy = (k / W | 0) - y0, dd = dx * dx + dy * dy; if (dd < bd) { bd = dd; best = [dx, dy]; } }
+        return best && { dx: best[0], dy: best[1], d: Math.sqrt(bd) };
+      });
+      // (a world with a river near BLUE's base: a new one - a new seed - until it is)
+      let d0 = null;
+      for (let n = 0; n < 30; n++) {
+        p = await page(look, '/skirmish?mode=cpu&slots=' + encodeURIComponent('0:you:1,1:hard:2,2:hard:1,3:hard:2') + '&size=small&view=team&gen=gen:rivers:natural');
+        await until(p, () => window.tunnelerEngine && window.tunnelerEngine().screen === 'play');
+        d0 = await near();
+        if ((d0 && d0.d < 50) || n === 29) break;
+        await p.close();
+      }
+      // out of the base through its gate (up or down, towards the water), then at it (moving only: firing costs energy)
+      await hold(p, [d0 && d0.dy < 0 ? 'KeyW' : 'KeyS', 'Space'], 1200);
+      for (let i = 0, last = 1e9, axis = 0; i < 20; i++) {
+        const d = await near();
+        if (!d || d.d < 10) break;
+        if (d.d > last - 2) axis++;                    // (no nearer: rock in the way - one axis at a time)
+        last = d.d;
+        const h = d.dx > 4 ? 'KeyD' : d.dx < -4 ? 'KeyA' : null, v = d.dy > 4 ? 'KeyS' : d.dy < -4 ? 'KeyW' : null;
+        const keys = axis % 3 === 0 ? [h, v] : axis % 3 === 1 ? [h || v] : [v || h];
+        await hold(p, keys.filter(Boolean), 400);
+      }
+      await hold(p, ['Space'], 300);
+      await sleep(800); await shot(p, pre + 'water.png'); await p.close();
+      p = await page(look, '/skirmish?mode=cpu&slots=' + encodeURIComponent('0:you:1,1:hard:2,2:hard:1,3:hard:2') + '&size=small&view=team&gen=gen:islands:natural&smap=allteam');
+      await until(p, () => window.tunnelerEngine && window.tunnelerEngine().screen === 'play');
+      await hold(p, ['KeyS', 'Space'], 2500); await hold(p, ['KeyD', 'Space'], 3000); await hold(p, ['KeyW', 'KeyD'], 1500);
+      await p.keyboard.down('Tab'); await sleep(800); await shot(p, pre + 'score-map.png'); await p.keyboard.up('Tab'); await p.close();
+    }
     p = await page(M, '/'); await sleep(1500); await shot(p, 'modern-home.png');
     for (const k of ['ArrowUp', 'Enter', 'ArrowDown', 'Enter', 'ArrowDown', 'ArrowDown', 'ArrowDown']) { await p.keyboard.press(k); await sleep(150); }   // (Settings, Graphics, Terrain)
     await sleep(600); await shot(p, 'modern-settings.png'); await p.close();

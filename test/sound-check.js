@@ -26,6 +26,8 @@
 const path = require("path");
 const JS = path.join(__dirname, "..", "src", "js");
 const { TunnelerEngine: E, TunnelerAI, NetProto: { stateHash }, Speaker } = require("./src.js");
+// the fx kinds with a sound (1.3: "splash" - a tank in water - is display only, no sound yet)
+const SOUND_KINDS = E.FX_KINDS.filter(k => k !== "splash");
 // a fresh copy of speaker.js (its own sample cache) in this context: its bundle run again
 const freshSpeaker = () => { require("vm").runInThisContext(require("./page-env.js").bundle(["js/io/speaker.js"])); return globalThis.Speaker; };
 const K = E.KEYS;
@@ -234,7 +236,7 @@ class MockCtx {
   check(sp.ctx instanceof MockCtx, "unlock creates the AudioContext");
   const at = performance.now();
   const events = [{ t: 0, hz: 4970, x: 10, y: 10 }, { t: 18, hz: 0, x: -1, y: -1 }, { t: 36, hz: 1000, x: 500, y: 10 }];
-  const fx = E.FX_KINDS.map((k, i) => ({ t: i * 5, kind: k, x: 10, y: 10 }));
+  const fx = SOUND_KINDS.map((k, i) => ({ t: i * 5, kind: k, x: 10, y: 10 }));
   const reset = () => { made.osc = made.noise = made.gain = 0; sp.gain.gain.calls = []; sp.osc.frequency.calls = []; };
 
   reset(); sp.play(events, at, { x: 10, y: 10 }, fx);
@@ -522,7 +524,7 @@ const tick = () => new Promise(r => setTimeout(r, 0));
   {
     check(S.STYLES.indexOf("recorded") === S.STYLES.indexOf("realistic") + 1, "recorded right after realistic");
     let files = 0;
-    for (const k of E.FX_KINDS) {
+    for (const k of SOUND_KINDS) {
       const list = S.RECORDED[k] || [];
       check(list.length > 0, "recorded: no sample for " + k);
       for (const f of list) {
@@ -536,7 +538,7 @@ const tick = () => new Promise(r => setTimeout(r, 0));
       }
     }
     check(fs.readFileSync(path.join(SOUNDS, "CREDITS.md"), "utf8").includes("CC0"), "CREDITS.md");
-    ok("recorded: " + files + " samples for " + E.FX_KINDS.length + " kinds, on disk, credited");
+    ok("recorded: " + files + " samples for " + SOUND_KINDS.length + " kinds, on disk, credited");
 
     // a fresh copy of speaker.js: nothing fetched yet
     const R = freshSpeaker();
@@ -546,9 +548,9 @@ const tick = () => new Promise(r => setTimeout(r, 0));
     st.setItem("tunneler.sound", "original");
     const so = new R();
     so.unlock();
-    so.play([{ t: 0, hz: 100, x: 1, y: 1 }], performance.now(), null, E.FX_KINDS.map(k => ({ t: 0, kind: k, x: 1, y: 1 })));
+    so.play([{ t: 0, hz: 100, x: 1, y: 1 }], performance.now(), null, SOUND_KINDS.map(k => ({ t: 0, kind: k, x: 1, y: 1 })));
     so.setStyle("realistic", true);
-    so.play([], performance.now(), null, E.FX_KINDS.map(k => ({ t: 0, kind: k, x: 1, y: 1 })));
+    so.play([], performance.now(), null, SOUND_KINDS.map(k => ({ t: 0, kind: k, x: 1, y: 1 })));
     await tick();
     check(loads.length === 0, "original / realistic fetch no samples");
 
@@ -564,7 +566,7 @@ const tick = () => new Promise(r => setTimeout(r, 0));
     check(made.osc + made.noise > 0 && made.samples.length === 0, "while loading: the realistic synth");
     release(); hold = null;
     for (let i = 0; i < 5; i++) await tick();
-    for (const k of E.FX_KINDS) {
+    for (const k of SOUND_KINDS) {
       made.osc = made.noise = 0; made.samples = []; so.lastFx = {}; so.nextFx = {}; so.voices = {};
       so.play([], performance.now(), null, [{ t: 0, kind: k, x: 1, y: 1 }]);
       check(made.samples.length === 1 && made.osc + made.noise === 0 && R.RECORDED[k].includes(made.samples[0].name), "decoded: a " + k + " sample (" + JSON.stringify(made.samples.map(x => x.name)) + ")");

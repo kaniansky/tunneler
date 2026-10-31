@@ -347,7 +347,9 @@ function play(search) {
   pick(env, "slot2"); env.key("ArrowRight");               // CYAN: nobody -> normal (shown as easy)
   for (let i = 0; i < 6; i++) env.key("Enter");             // team 3 -> 8, then wraps to 1
   env.key("Enter");                                        // team 2
-  pick(env, "size"); env.key("ArrowRight");                // large
+  pick(env, "map"); env.key("Enter");                      // (1.3: the size in the map picker) Original, large
+  pick(env, "size"); env.key("ArrowRight"); pick(env, "random"); env.key("Enter");
+  pick(env, "smap"); env.key("ArrowRight");                // show map: seen by me
   pick(env, "win"); env.key("ArrowRight"); env.key("ArrowRight");   // win 5
   pick(env, "time"); env.key("ArrowRight"); env.key("Enter");       // round time: no limit -> 2 -> 3 min
   pick(env, "ff"); env.key("Enter");                       // friendly fire (a team has 2+): on
@@ -355,7 +357,7 @@ function play(search) {
   pick(env, "watch"); env.key("Enter");                    // after death: wreck -> team
   pick(env, "play"); env.key("Enter");                     // start
   assert.strictEqual(longLink(env.win.location.href),
-    "/skirmish?slots=0:you:1,1:easy:2,2:easy:2,7:hard:8&size=large&win=5&ff=1&view=everyone&watch=team&time=3&lv=2");
+    "/skirmish?slots=0:you:1,1:easy:2,2:easy:2,7:hard:8&size=large&win=5&ff=1&view=everyone&watch=team&time=3&lv=2&smap=own");
   assert.strictEqual(store.get("tunneler.cpu.watch"), "team", "after death remembered");
   assert.strictEqual(store.get("tunneler.cpu.time"), "3", "round time remembered");
   // number keys (top row and the numeric keypad with NumLock on) set the team of the selected slot row
@@ -430,11 +432,11 @@ function play(search) {
     assert.strictEqual(ui.spec.items[ui.sel].key, "slot3", "a click past the team selects the row");
     assert.strictEqual(st.get("tunneler.cpu.slots"), before, "... and changes nothing");
     ok("vs computer slot rows: clicks on the who / team columns cycle them (right click back), elsewhere select");
-    // a switch row (Map size): a click forward, a right click back
-    ui.click(at("size", 2));
-    assert.strictEqual(st.get("tunneler.cpu.size"), "large", "click on Map size: medium -> large");
-    assert(ui.backClick(at("size", 2)) && ui.backClick(at("size", 2)), "right click taken by the switch");
-    assert.strictEqual(st.get("tunneler.cpu.size"), "small", "right click twice: large -> medium -> small");
+    // a switch row (Show map): a click forward, a right click back
+    ui.click(at("smap", 2));
+    assert.strictEqual(st.get("tunneler.cpu.showmap"), "own", "click on Show map: no -> seen by me");
+    assert(ui.backClick(at("smap", 2)) && ui.backClick(at("smap", 2)), "right click taken by the switch");
+    assert(["all", "allteam"].includes(st.get("tunneler.cpu.showmap")), "right click twice: seen by me -> no -> the last one (revealed): " + st.get("tunneler.cpu.showmap"));
     ok("switch rows: a click steps forward, a right click back");
   }
   // remembered
@@ -442,7 +444,7 @@ function play(search) {
   env.page("index.html");
   env.key("ArrowDown"); env.key("Enter"); env.key("Enter");
   assert.strictEqual(longLink(env.win.location.href),
-    "/skirmish?slots=0:you:1,1:easy:2,2:easy:2,7:hard:8&size=large&win=5&ff=1&view=everyone&watch=team&time=3&lv=2");
+    "/skirmish?slots=0:you:1,1:easy:2,2:easy:2,7:hard:8&size=large&win=5&ff=1&view=everyone&watch=team&time=3&lv=2&smap=own");
   ok("vs computer slot editor: default classic, slots / teams / options, remembered in localStorage");
 
   // nobody but you: "Start a new game" does nothing
@@ -1009,9 +1011,9 @@ function play(search) {
   assert(keys().includes("mode") && keys().includes("watch") && keys().includes("slot0") && keys().includes("play") && !keys().includes("settings"),
     "the skirmish's settings on its screen: " + keys());
   assert(ui.spec.tight && ui.spec.fit && ui.narrow && ui.narrow.maxTop <= ui.narrow.minTop + 0.01, "it fits the phone (no scrolling)");
-  const sizeBefore = ui.spec.items.find(i => i.key === "size").label;
-  ui.sel = keys().indexOf("size"); env.key("ArrowRight");
-  assert(ui.spec.items.find(i => i.key === "size").label !== sizeBefore && keys().includes("slot0"), "a setting changes, the screen stays");
+  const sizeBefore = ui.spec.items.find(i => i.key === "smap").label;
+  ui.sel = keys().indexOf("smap"); env.key("ArrowRight");
+  assert(ui.spec.items.find(i => i.key === "smap").label !== sizeBefore && keys().includes("slot0"), "a setting changes, the screen stays");
   const pe = makeEnv("?mode=cpu&slots=0:you:1,1:p2:2,2:easy:2");
   pe.win.matchMedia = touch;
   pe.page("play.html");
@@ -1207,5 +1209,32 @@ function play(search) {
   assert(await env.win.Replay.get(env.win.location.href.split("/")[2].split("?")[0]), "watched unsaved: from the page's memory");
   assert.strictEqual(st.get("tunneler.cpu.size"), "small", "the game's settings kept (Back comes back to them)");
   ok("play.js: after a match \"Watch the replay\" opens its replay (Back: the skirmish)");
+  // ---------------------------------------------------------------- the Map row and the picker (1.3, owner 2026-10-31)
+  {
+    const st = new Map(), en = makeEnv("", st);
+    en.page("index.html");
+    await en.win.tunnelerHomeMaps().catch(() => {});
+    en.key("ArrowDown"); en.key("Enter");
+    const ui = en.win.tunnelerHomeUI(), row = () => ui.spec.items.find(it => it.key === "map"), label = () => en.win.Lang.decode(row().label);
+    assert(/: Original \(Medium\)$/.test(label()) && !ui.spec.items.some(it => it.key === "size"), "the size in the Map row, no Map size row: " + label());
+    row().change(1);
+    assert(label().includes(en.win.Lang.raw("gen." + require("../src/js/game/mapgen.js").MapGen.KINDS[0]) + " (Medium)"), "Right: the generated kinds (no Original with water) - " + label());
+    row().change(-1);
+    ok("skirmish: the Map row - Original, then the generated kinds; the size in it (\"Original (Medium)\")");
+    // the picker: the generated tab's rows only names, its Map size row sets the size
+    row().go();
+    const pk = en.win.tunnelerHomeUI(), keys = pk.spec.items.map(it => it.key);
+    assert(keys[0] === "random" && keys[1] === "gen:" + require("../src/js/game/mapgen.js").MapGen.KINDS[0] && !keys.includes("water") && keys.includes("size"), "the picker's rows: " + keys.join(" "));
+    assert.strictEqual(en.win.Lang.decode(pk.spec.items[0].label).trim(), en.win.Lang.raw("pk.random"), "only the name");
+    pk.spec.items.find(it => it.key === "size").change(1);
+    pk.spec.items.find(it => it.key === "gen:arena").go();
+    assert(/Arena \(Large\)$/.test(label()) && st.get("tunneler.cpu.size") === "large" && st.get("tunneler.cpu.map") === "gen:arena:natural", "chosen with its size: " + label());
+    ok("the map picker: generated maps by name only, the size on its own row - the choice carries it");
+  }
+  {
+    const w = play("?mode=cpu&slots=0:you:1,1:normal:2&size=small&water=1"), e = w.tunnelerEngine();
+    assert(!e.hasWater && e.floor === null && !e.customMap, "water=1: ignored (Original with water is gone)");
+    ok("play.js: an old ?water=1 is ignored");
+  }
   console.log("all " + n + " passed");
 })().catch(err => { console.error(err); process.exit(1); });

@@ -45,6 +45,8 @@ Lang.register("sk", {
   "home.lang.i2": "← →, <ENTER> alebo klik ho prepne.",
   "home.settings": "Nastavenia",
   "home.settings.i": "Obrazovka, grafika, zvuk, ovládanie, hry online a jazyk.",
+  "home.quit": "Ukončiť",
+  "home.quit.i": "Zavrie hru.",
   "home.update": "Aktualizovať na verziu {v}",
   "home.update.busy": "Aktualizujem na verziu {v}...",
   "ph.name": "tvoje meno",
@@ -165,6 +167,7 @@ Lang.register("sk", {
   "set.teammarks.i": "Malý trojuholník nad tankami tvojich spoluhráčov v tímových hrách.",
   "set.debug": "Ladiace údaje: ",
   "set.debug.i": "Snímky za sekundu, kreslenie, engine a sieť v okienku vľavo hore.",
+  "set.debug.i2": "<Ctrl+Shift+D> ich prepne kdekoľvek.",
   "ctl.up": "hore",
   "ctl.down": "dole",
   "ctl.left": "vľavo",
@@ -426,7 +429,8 @@ Lang.register("sk", {
         ["Počítačové tanky:  ", "počítač riadi tank na jednej z troch úrovní: ľahká, stredná alebo ťažká."],
         ["Veľkosť mapy:  ", "malá (512 x 256 bodov, štvrtina originálu), stredná (1024 x 512, " +
           "pôvodný svet) alebo veľká (2048 x 1024, štyrikrát väčšia).  Každý tank začína vo svojej " +
-          "vlastnej základni."],
+          "vlastnej základni.  Vyberáš ju vo výbere máp (<ENTER> na riadku Mapa); riadok Mapa ju ukazuje - Rieky (Veľká), tvoja mapa aj so základňami: Križovatka (Veľká, 6)."],
+        ["Voda a povrch:  ", "niektoré svety majú vodu - jazerá, rieky, more: tank ňou prejde polovičnou rýchlosťou, nedá sa vykopať, strely nad ňou preletia a výbuchy ju nezmenia; základňa nikdy nestojí vo vode.  Počítačové tanky vedia, že voda je pomalá.  Vodu majú generované mapy (Rieky a Ostrovy vždy, ostatné druhy asi v jednom zápase z troch) a mapy, do ktorých ju niekto nakreslil.  Povrch - klasický (tmavé tunely originálu), piesok alebo tráva - je len vzhľad: ukazuje sa na zemi voľnej od začiatku; na piesku a tráve je zem vykopaná počas hry piesočná a breh vody je piesočný na každom povrchu.  Každá generovaná mapa má piesok alebo trávu."],
         ["Pohľad:  ", "čo vidíš počas hry: len ja - iba svoju obrazovku; tím - aj obrazovky " +
           "spoluhráčov; všetci - obrazovky všetkých tankov, tvoju ako prvú.  V hre online nastaví jej " +
           "tvorca limit pohľadu: najviac, čo si v nej hráč môže zvoliť."],
@@ -436,12 +440,13 @@ Lang.register("sk", {
         ["Dohľad:  ", "vypnutý - ako v origináli: vidíš celú svoju obrazovku.  Kruh - naživo vidíš len kruh " +
           "okolo svojho tanku; zvyšok obrazovky ukazuje svet tak, ako si ho naposledy videl, v sivej " +
           "(nepriateľský tank ostane tam, kde si ho videl naposledy).  Skutočný - to isté, ale hlina, " +
-          "skala a steny základní zakryjú, čo je za nimi: v tuneli vidíš len tunel.  Počítačové tanky " +
+          "skala a steny základní zakryjú, čo je za nimi (voda nie): v tuneli vidíš len tunel.  Počítačové tanky " +
           "vidia rovnako; stredné a ťažké navyše zhruba počujú, kde je najbližší nepriateľ."],
+        ["Ukázať mapu:  ", "kým počas zápasu držíš <TAB> (na telefóne SKÓRE), pod skóre je mapa sveta: nie (ako originál), čo som videl (čo videl tvoj tank - s dohľadom čo ukázal), čo videl tím (čo videl tvoj tím), odhalená (celý svet, aký bol na začiatku zápasu, mení ho to, čo vidíš) alebo odhalená (tím) (mení ju to, čo vidí tvoj tím).  Mapu mení len to, čo vidíš ty alebo tvoj tím; časti, ktoré práve nikto nevidí, sú sivé a nepriateľské tanky sa ukážu, len keď sú vidieť."],
         ["Delená obrazovka:  ", "dvaja hráči na jednej klávesnici, {9}MODRÝ{3} proti {10}ZELENÉMU{3}, " +
           "každý so svojím pohľadom vedľa seba - potýčka vás dvoch.  Najprv si zvoľ veľkosť mapy, počet kôl " +
           "na výhru a čas kola."],
-        ["Potýčka:  ", "vlastná hra proti tankom počítača, sám alebo s druhým hráčom na tej istej klávesnici.  Každá z 8 farieb je hráč 1, hráč 2, nikto alebo tank počítača (ľahký, stredný, ťažký) so svojím tímom (1-8) - hráči môžu mať ľubovoľnú farbu; potom režim, veľkosť mapy, víťazné kolá, čas kola, paľba do vlastných, pohľad, čo po smrti a dohľad.  Hráč 1 riadi W A S D + SHIFT, hráč 2 šípkami + ENTER (iné klávesy: Nastavenia, Ovládanie).  Podržaním <TAB> počas zápasu (aj online) uvidíš skóre a nastavenia hry.  <ESC> počas hry ukončí zápas; Odveta alebo <ESC> v menu hry sa vráti k nastaveniam."],
+        ["Potýčka:  ", "vlastná hra proti tankom počítača, sám alebo s druhým hráčom na tej istej klávesnici.  Každá z 8 farieb je hráč 1, hráč 2, nikto alebo tank počítača (ľahký, stredný, ťažký) so svojím tímom (1-8) - hráči môžu mať ľubovoľnú farbu; potom režim, víťazné kolá, čas kola, mapa (aj jej veľkosť), ukázať mapu, dohľad, pohľad, čo po smrti a paľba do vlastných.  Hráč 1 riadi W A S D + SHIFT, hráč 2 šípkami + ENTER (iné klávesy: Nastavenia, Ovládanie).  Podržaním <TAB> počas zápasu (aj online) uvidíš skóre a nastavenia hry - alebo mapu (Ukázať mapu).  <ESC> počas hry ukončí zápas; Odveta alebo <ESC> v menu hry sa vráti k nastaveniam."],
         ["Hra online:  ", "2 až 8 tankov na rôznych počítačoch, niektoré z nich môžu byť počítačové.  Hra online " +
           "potrebuje účet na serveri hry (vytvoríš si ho alebo sa prihlásiš prvý raz; server bez účtov chce len meno).  Vytvor hru - jej " +
           "meno, nepovinné heslo (kto sa pripojí alebo pozerá, ho musí zadať; v zozname má hra zámok), " +
@@ -462,7 +467,7 @@ Lang.register("sk", {
         ["Zvuk:  ", "V Nastaveniach zvolíš jeho štýl: pôvodný (pípanie PC " +
           "speakera z roku 1991), realistický (zvuky tankov), nahratý (skutočné nahrávky), rozprávkový (boing a puk) " +
           "alebo vypnutý; aj hlasitosť, stereo a slabnutie so vzdialenosťou.  Zvuky ostatných tankov slabnú so vzdialenosťou od tvojho a znejú z ich strany (stereo)."],
-        ["Nastavenia:  ", "Hra (celá obrazovka - aj <ALT>+<ENTER> -, veľkosť obrazu, farby tankov: bežné, pre farbosleposť alebo ty modrý / tím zelený / nepriatelia červení, značka nad tankami spoluhráčov, obľúbená farba, ukladať každý zápas, ladiace údaje), Grafika (pôvodná alebo moderná, potom nastavenia toho vzhľadu), Zvuk (štýl, hlasitosť, stereo, slabnutie so vzdialenosťou), Ovládanie (klávesy oboch tankov; dotykové ovládanie: veľkosť, strana a vzhľad - jednoduchý alebo tvoj tank), Online (tvoj účet - alebo meno -, chat, zvuk chatu, ping; v desktopovej aplikácii server) a Jazyk."],
+        ["Nastavenia:  ", "Hra (celá obrazovka - aj <ALT>+<ENTER> -, veľkosť obrazu, farby tankov: bežné, pre farbosleposť alebo ty modrý / tím zelený / nepriatelia červení, značka nad tankami spoluhráčov, obľúbená farba, ukladať každý zápas, ladiace údaje - aj <CTRL>+<SHIFT>+<D> kdekoľvek), Grafika (pôvodná alebo moderná, potom nastavenia toho vzhľadu), Zvuk (štýl, hlasitosť, stereo, slabnutie so vzdialenosťou), Ovládanie (klávesy oboch tankov; dotykové ovládanie: veľkosť, strana a vzhľad - jednoduchý alebo tvoj tank), Online (tvoj účet - alebo meno -, chat, zvuk chatu, ping; v desktopovej aplikácii server) a Jazyk."],
         ["Grafika:  ", "Nastavenia vyberajú pôvodnú (obrazovka DOS-u z roku 1991) alebo modernú (predvolená): tá istá hra nakreslená v rozlíšení tvojej obrazovky - hladké tunely, textúrovaná hlina a skala, tmavé tunely osvetlené svetlami tankov, žiariace strely, prach, iskry a oheň, nový panel a menu v modernom písme.  Nastavenia modernej grafiky: štýl (čistý alebo retro), kvalita, terén, okraje tunelov, osvetlenie, častice, žiara, otrasy obrazu, kamera (plynulá: tanky kĺžu medzi krokmi) a rozhranie, a hmla vojny pri výhľade.  Hĺbka 3D (predvolená) svet vyvýši: steny s výškou a tieňmi, zhora rovnako ako 2D (okraje tunelov pixely: kocky); zariadenie, ktoré ju nevie nakresliť, alebo je s kvalitou auto naň pomalé, hrá v 2D.  Mení sa len vzhľad, nikdy hra - ani online."],
       ],
     },
@@ -485,12 +490,12 @@ Lang.register("sk", {
         ["Dva vzhľady:  ", "pôvodná obrazovka DOS-u alebo moderná grafika vo vysokom rozlíšení so svetlom, časticami a moderným písmom (Nastavenia, Grafika) - hra je vždy tá istá."],
         ["Záznamy:  ", "zápas, ktorý uložíš (po ňom \"Uložiť záznam\" alebo každý so zapnutým \"Ukladať každý zápas\" v hlavnom menu, Záznamy; 20 najnovších): pozri si ho znova ako divák - všetky pohľady, živú mapu alebo jeden tank, s pauzou, rýchlejšie či pomalšie - alebo ho niekomu pošli ako odkaz či súbor."],
         ["Denná výzva:  ", "každý deň (od polnoci do polnoci, UTC) dostanú všetci tú istú šarvátku - ten istý svet, režim aj počítačové tanky (hlavné menu, Denná výzva).  Pošli svoj výsledok: server znova prehrá záznam tvojho zápasu a do rebríčka dňa sa dostane len to, čo sa naozaj stalo - najlepšie zápasy si tam môže pozrieť každý.  Rebríček ukáže aj 30 dní predtým (doľava / doprava) a ktorýkoľvek minulý deň si môžeš zahrať znova ako tréning - jeho výsledky sa nepočítajú.  Zajtra príde nová."],
-        ["Vlastné mapy:  ", "nakresli si svet - skaly, hlinu a tunely - a rozmiestni až 8 základní (hlavné menu, Mapy) - tank musí prejsť medzi všetkými (skala ho zastaví); hraj na ňom v potýčke alebo online, alebo ho pošli niekomu ako odkaz alebo súbor.  Editor sám neukladá: na obrazovke mapy sa pri jej použití alebo odchode spýta, či zmeny uložiť, alebo zahodiť.  Galéria máp (Mapy, Galéria máp) má mapy, ktoré hráči zverejnili na serveri - najnovšie alebo najhranejšie, s obrázkom -: zahraj si, nechaj si kópiu, alebo zverejni svoju (takú, čo sa dá hrať) z jej obrazovky; nastavenie Mapa vyberá z generovaných máp, z tvojich máp aj z galérie."],
-        ["Generované mapy:  ", "nastavenie Mapa (potýčka, hra online) môže byť aj druh sveta, ktorý vznikne pre každý zápas nanovo: Pôvodná (náhodný svet pôvodnej hry), Pevnosti (každá základňa v skalnom prstenci s bránami), Aréna (veľký skalný prstenec s voľným námestím), Vysočina (skalné hrebene, základne v údoliach) alebo Jaskyne (jaskyne už vykopané v hline).  Rozloženie férová: rovnaké pre každú základňu (súmerné - pri nepárnom počte tankov ostane jedna základňa prázdna); prirodzená: hocijaké.  Spoluhráči dostanú základne blízko seba.  Aj nová mapa (Mapy) môže začať z generovaného sveta."],
+        ["Vlastné mapy:  ", "nakresli si svet - skaly, hlinu, tunely a vodu -, vyber jeho povrch (klasický, piesok alebo tráva) a rozmiestni až 8 základní (hlavné menu, Mapy) - tank musí prejsť medzi všetkými (skala ho zastaví, voda len spomalí; základňa nemôže stáť vo vode); hraj na ňom v potýčke alebo online, alebo ho pošli niekomu ako odkaz alebo súbor.  Editor sám neukladá: na obrazovke mapy sa pri jej použití alebo odchode spýta, či zmeny uložiť, alebo zahodiť.  Galéria máp (Mapy, Galéria máp) má mapy, ktoré hráči zverejnili na serveri - najnovšie alebo najhranejšie, s obrázkom -: zahraj si, nechaj si kópiu, alebo zverejni svoju (takú, čo sa dá hrať) z jej obrazovky; nastavenie Mapa vyberá z generovaných máp, z tvojich máp aj z galérie."],
+        ["Generované mapy:  ", "nastavenie Mapa (potýčka, hra online) môže byť aj druh sveta, ktorý vznikne pre každý zápas nanovo: Pôvodná (náhodný svet pôvodnej hry), Pevnosti (každá základňa v skalnom prstenci s bránami), Aréna (veľký skalný prstenec s voľným námestím), Vysočina (skalné hrebene, základne v údoliach), Jaskyne (jaskyne už vykopané v hline), Labyrint (bludisko už vykopaných tunelov), Rieky (kľukaté rieky cez hlinu), Ostrovy (ostrovy z hliny a trochy skál v mori, každá základňa na jednom), Vrstvy (vrstvy skál naprieč mapou s medzerami), Štvrte (štyri časti oddelené skalnými stenami s bránami) alebo Otvorené pole (takmer bez skál, roztrúsené balvany).  Rieky a Ostrovy majú vodu vždy, ostatné generované druhy asi v jednom zápase z troch; povrch každej generovanej mapy je piesok alebo tráva.  Spoluhráči dostanú základne blízko seba.  Aj nová mapa (Mapy) môže začať z generovaného sveta."],
         ["Desktopová aplikácia:  ", "Tunneler je aj malý program pre Windows, Linux a macOS " +
           "- stiahneš ho zo stránky vydaní na GitHube (github.com/kaniansky/tunneler/releases).  " +
           "Delenú obrazovku a potýčku hrá bez siete, hry online na verejnom serveri alebo " +
-          "na akomkoľvek inom (Nastavenia, Online, Server).  V prehliadači sa hra dá nainštalovať aj ako aplikácia (potom sa spustí aj bez siete)."],
+          "na akomkoľvek inom (Nastavenia, Online, Server); Ukončiť v hlavnom menu ho zavrie.  V prehliadači sa hra dá nainštalovať aj ako aplikácia (potom sa spustí aj bez siete)."],
         ["Originál:  ", "TUNNELER 2.0 napísal Geoffrey Silverton v roku 1991 v Turbo Pascale: dva " +
           "tanky sa prekopávajú podzemným svetom na jednom PC, s jednou klávesnicou a delenou " +
           "obrazovkou.  Táto verzia z neho zachováva všetko a pridáva zvyšok."],

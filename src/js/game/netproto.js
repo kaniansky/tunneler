@@ -57,6 +57,9 @@ const MAX_PLAYER_NAME = 16;                              // player names (pre-ga
 const MAX_CHAT = 60;                                     // characters per lobby chat message
 const VISIBLE = ["self", "team", "everyone"];            // what a player may see during play (room setting)
 const SIGHTS = ["full", "circle", "walls"];              // line of sight (room setting, display only; engine.js SIGHTS)
+// the map with the score while Tab is held (1.3, owner 2026-10-31; room setting, display only - draw/seenmap.js): none,
+// seen by me, seen by team, revealed, revealed (team) - engine.js SHOW_MAPS
+const SHOW_MAPS = ["off", "own", "team", "all", "allteam"];
 const ROUND_TIMES = [0, 2, 3, 5, 10];                    // round time limit, minutes (0 = none; room setting)
 // game modes (docs/DESIGN-8P.md 27; src/js/game/modes/<mode>.js - the server never loads them): standard = last
 // team standing. Infection and survival make their own teams (the seats' teams don't matter); survival
@@ -145,9 +148,11 @@ const AFTER_DEATH = ["black", "wreck", "team", "killer", "others"];
 const afterDeath = v => v === true || v === "1" ? "others" : AFTER_DEATH.includes(v) ? v : "wreck";
 
 // a shared map's id (POST /api/maps: the content's hash, docs/v6/MAPS.md), or a generated kind's (1.2, mapgen.js
-// MapGen.id: the server makes a new map of it for every match, from the match's seed); "" = no map (a random world)
-const MAP_ID = /^[a-z2-9]{10}$/, GEN_ID = /^gen:(fortress|arena|highlands|caves):(fair|natural)$/;
-const mapId = v => typeof v === "string" && (MAP_ID.test(v) || GEN_ID.test(v)) ? v : "";
+// MapGen.id: the server makes a new map of it for every match, from the match's seed; 1.3: six kinds more - every one
+// of MapGen.KINDS; always natural - owner, 2026-10-31: no Layout setting, a ":fair" id is taken as ":natural"); "" = no
+// map (a random world)
+const MAP_ID = /^[a-z2-9]{10}$/, GEN_ID = /^gen:(fortress|arena|highlands|caves|labyrinth|rivers|islands|strata|quarters|field):(fair|natural)$/;
+const mapId = v => typeof v !== "string" ? "" : MAP_ID.test(v) ? v : GEN_ID.test(v) ? v.replace(/:fair$/, ":natural") : "";
 const genMap = v => typeof v === "string" && GEN_ID.test(v);
 
 // a round time limit setting: one of ROUND_TIMES, else 0 (no limit)
@@ -169,7 +174,8 @@ function seatOf(s, i) {
 // when it isn't one. visible: the most a player may see during play - "self" (default), "team" or
 // "everyone" (docs/DESIGN-8P.md 23; display only). watchOut: after death (display only). sight: line of
 // sight - full (the original), circle or walls (display only, the engine draws the views). roundTime:
-// the round time limit in minutes (changes the simulation).
+// the round time limit in minutes (changes the simulation). showMap: the map on the score screen (SHOW_MAPS; display
+// only).
 const SETTINGS = {
   size: v => SIZES.includes(v) ? v : undefined,
   winScore: v => Number.isInteger(v) && v >= 1 && v <= 9 ? v : undefined,
@@ -178,6 +184,7 @@ const SETTINGS = {
   visible: v => VISIBLE.includes(v) ? v : undefined,
   watchOut: v => AFTER_DEATH.includes(v) ? v : undefined,
   sight: v => SIGHTS.includes(v) ? v : undefined,
+  showMap: v => SHOW_MAPS.includes(v) ? v : undefined,
   mode: v => MODES.includes(v) ? v : undefined,
   goals: v => goalsOf(v) || undefined,
 };
@@ -191,7 +198,8 @@ function roomSettings(o) {
   return { seats, size: SIZES.includes(o.size) ? o.size : "medium", winScore: clampInt(o.winScore, 1, 9, 3),
     friendlyFire: o.friendlyFire === true, roundTime: roundTime(o.roundTime),
     visible: VISIBLE.includes(o.visible) ? o.visible : "self", watchOut: afterDeath(o.watchOut), sight: SIGHTS.includes(o.sight) ? o.sight : "full",
-    mode: MODES.includes(o.mode) ? o.mode : "standard", goals: goalsOf(o.goals) || {}, map: mapId(o.map) };
+    mode: MODES.includes(o.mode) ? o.mode : "standard", goals: goalsOf(o.goals) || {}, map: mapId(o.map),
+    showMap: SHOW_MAPS.includes(o.showMap) ? o.showMap : "off" };
 }
 
 // The tanks of a match: the seats with a player (human) or a computer tank, in colour order ->
@@ -233,6 +241,7 @@ function engineOptions(cfg) {
     winScore: cfg.winScore || 3, friendlyFire: !!cfg.friendlyFire, autoStart: true, match: true };
   if (roundTime(cfg.roundTime)) o.roundTime = roundTime(cfg.roundTime);
   if (SIGHTS.includes(cfg.sight) && cfg.sight !== "full") o.sight = cfg.sight;
+  if (SHOW_MAPS.includes(cfg.showMap) && cfg.showMap !== "off") o.showMap = cfg.showMap;   // (display only: the score's map)
   if (cfg.ext) o.extended = true;
   if (MODES.includes(cfg.mode) && cfg.mode !== "standard") o.mode = cfg.mode;
   if (GOALS[cfg.mode]) o.goal = goalOf(cfg.mode, cfg.goals);
@@ -251,7 +260,8 @@ function readCfg(c) {
     winScore: clampInt(c.winScore, 1, 9, 3), friendlyFire: !!c.friendlyFire, roundTime: roundTime(c.roundTime),
     visible: VISIBLE.includes(c.visible) ? c.visible : "self", watchOut: afterDeath(c.watchOut), sight: SIGHTS.includes(c.sight) ? c.sight : "full",
     mode: MODES.includes(c.mode) ? c.mode : "standard", goals: goalsOf(c.goals) || {}, qp: !!c.qp,
-    map: typeof c.map === "string" && c.map && MapData.decode(c.map) ? c.map : "" };
+    map: typeof c.map === "string" && c.map && MapData.decode(c.map) ? c.map : "",
+    showMap: SHOW_MAPS.includes(c.showMap) ? c.showMap : "off" };
 }
 
 // ------------------------------------------------------------ quick play (docs/v6/QUICKPLAY.md)
@@ -430,7 +440,7 @@ function stateHash(e) {
 }
 
 const NetProto = { TICK_MS, UP, DOWN, LEFT, RIGHT, FIRE, ESC, ALL_BITS, EXT_BITS, BLUE_SCAN, GREEN_SCAN, F10,
-  AFTER_DEATH, afterDeath, ROLES, roleIndex, sameGame, MAX_SLOTS, LEVELS, oldLevel, SEAT_KINDS, SIZES, MAX_PLAYER_NAME, MAX_CHAT, VISIBLE, SIGHTS, ROUND_TIMES, roundTime,
+  AFTER_DEATH, afterDeath, ROLES, roleIndex, sameGame, MAX_SLOTS, LEVELS, oldLevel, SEAT_KINDS, SIZES, MAX_PLAYER_NAME, MAX_CHAT, VISIBLE, SIGHTS, SHOW_MAPS, ROUND_TIMES, roundTime,
   cleanPlayerName, cleanChat, cleanRoomName, MAX_PASSWORD, cleanPassword,
   RESERVED_NAMES, usernameKey, cleanUsername, MAX_USERNAME, MIN_ACCOUNT_PASSWORD, MAX_ACCOUNT_PASSWORD, passwordProblem, RECOVERY_ALPHABET, cleanRecovery, SETTINGS, defaultSeats, roomSettings, matchSlots, startProblem, isClassic, engineOptions, readCfg,
   MODES, OWN_TEAMS, GOALS, goalOf, QUICK_TANKS, QUICK_LEVEL, quickSettings, aiSlot, readDrives, botInputs, MAP_ID, mapId, genMap,

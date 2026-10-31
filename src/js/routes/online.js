@@ -56,7 +56,7 @@ import { VERSION } from "../version.js";
 import { ViewModes } from "../draw/views.js";
 import { Nav } from "../nav.js";
 export function mount() {
-  const { TICK_MS, UP, DOWN, LEFT, RIGHT, FIRE, ESC, ROLES, MAX_CHAT, VISIBLE, SIGHTS, SIZES, ROUND_TIMES, AFTER_DEATH, SEAT_KINDS,
+  const { TICK_MS, UP, DOWN, LEFT, RIGHT, FIRE, ESC, ROLES, MAX_CHAT, VISIBLE, SIGHTS, SHOW_MAPS, SIZES, ROUND_TIMES, AFTER_DEATH, SEAT_KINDS,
     frameToInput, frameToInputExt, FrameQueue, HASH_EVERY, stateHash, engineOptions, readCfg } = NetProto;
   const here = Links.here();                           // /game/<id>[/<colour|watch>] or ?room=&role=
   const roomId = (here.room || "").toLowerCase();
@@ -492,9 +492,9 @@ export function mount() {
   let myMaps = [], mapNote = null;
   MapStore.list().then(l => { myMaps = l; if (lobby && st) drawLobby(true); }, () => {});
   const MAP_COLS = 14;
-  // (then the generated kinds - 1.2: the server makes a new map of the kind every match - each fair, then natural)
-  const GEN_IDS = MapGen.KINDS.flatMap(k => [MapGen.id(k, true), MapGen.id(k, false)]);
-  const genLabel = g => T("gen.label", { kind: Lang.raw("gen." + g.kind), layout: Lang.lower(Lang.raw("gen." + (g.fair ? "fair" : "natural"))) });
+  // (then the generated kinds - 1.2: the server makes a new map of the kind every match; 1.3: always natural)
+  const GEN_IDS = MapGen.KINDS.map(k => MapGen.id(k));
+  const genLabel = g => T("gen." + g.kind);
   const tanksNow = () => Math.max(2, st.seats.filter(x => x.kind !== "closed").length);
   function mapChoices() {
     const id = st.settings.map || "", out = [{ id: "" }].concat(GEN_IDS.map(g => ({ id: g })), myMaps.map(r =>
@@ -503,14 +503,17 @@ export function mount() {
     if (id && !out.some(o => o.id === id)) out.push({ id, room: true });
     return out;
   }
-  // a map's name and its number of bases ("Crossroads (6)" - owner, 2026-10-26)
-  const mapLabel = (name, bases) => UniText.slice(UniText.fromRaw(name), MAP_COLS) + (bases ? " (" + bases + ")" : "");
+  // a map's name, its size and its number of bases ("Crossroads (Large, 6)" - owner, 2026-10-26: the bases; 1.3,
+  // 2026-10-31: the size too, the Map size row is gone - Original and the generated ones: "Rivers (Large)")
+  const sizeName = z => T("os.size." + (SIZES.includes(z) ? z : "medium"));
+  const mapLabel = (name, bases, size) => UniText.slice(UniText.fromRaw(name), MAP_COLS) + " (" + sizeName(size) + (bases ? ", " + bases : "") + ")";
+  const sizedLabel = (name, size) => name + " (" + sizeName(size) + ")";
   function mapName() {
     const id = st.settings.map || "";
-    if (!id) return T("os.map.random");
-    if (MapGen.parse(id)) return genLabel(MapGen.parse(id));
+    if (!id) return sizedLabel(T("os.map.random"), st.settings.size);
+    if (MapGen.parse(id)) return sizedLabel(genLabel(MapGen.parse(id)), st.settings.size);
     const m = st.map && st.map.id === id ? st.map : myMaps.find(r => r.shared === id) || {};
-    return m.name ? mapLabel(m.name, m.bases) : "...";
+    return m.name ? mapLabel(m.name, m.bases, m.size) : "...";
   }
   function stepMap(d) {
     if (!st || !isHost() || st.match) return;
@@ -523,18 +526,29 @@ export function mount() {
   }
   function useMap(next) {
     mapNote = null;
-    if (next.id !== null) return setSetting("map", next.id);
+    if (next.id !== null) return setMapChoice(next.id, next.size);
     mapNote = { rec: next.rec, text: T("os.map.sending"), color: 7 };
     drawLobby(true);
     MapStore.share(next.rec).then(sid => {
       if (!mapNote || mapNote.rec !== next.rec) return;
       mapNote = null;
-      setSetting("map", sid);
+      setMapChoice(sid);
     }, e => {
       if (!mapNote || mapNote.rec !== next.rec) return;
       mapNote = { rec: next.rec, text: T("os.map.err", { msg: String(e.message || e).slice(0, 40) }), color: 12 };
       if (lobby && st && lobby.page === "lobby") drawLobby(true);
     });
+  }
+  // a map's id or "" -> the room's setting map, with the size (Original's / a generated kind's, chosen in the map picker
+  // - 1.3) in one message
+  function setMapChoice(map, size) {
+    if (!st || !isHost() || st.match) return;
+    const sized = SIZES.includes(size) && (!map || MapGen.parse(map));
+    st.settings.map = map;                                 // (shown at once; the server's status confirms it)
+    if (sized) st.settings.size = size;
+    send(Object.assign({ t: "set", map }, sized ? { size } : {}));
+    rememberSettings();
+    if (lobby && lobby.page === "lobby") drawLobby(true);
   }
   // Enter on the Map row: the map picker (the host's maps with their pictures, the gallery - owner, 2026-10-28); the
   // lobby isn't redrawn over it (lobby.page "map"), a match starting closes it
@@ -550,14 +564,14 @@ export function mount() {
       open: () => !!lobby && lobby.page === "map",
       choose: async c => {
         if (!lobby || lobby.page !== "map") return;
-        if (c.gen) { lobby.page = "lobby"; if (isHost() && !st.match) useMap({ id: c.gen }); drawLobby(false, "map"); return; }
+        if (c.gen) { lobby.page = "lobby"; if (isHost() && !st.match) useMap({ id: c.gen, size: c.size }); drawLobby(false, "map"); return; }
         if (!c.random && !myMaps.some(r => r.id === c.rec.id)) {
           try { myMaps = await MapStore.list(); } catch (e) { /* as it was */ }
           if (!lobby || lobby.page !== "map") return;           // (closed / reconnected meanwhile)
         }
         const rec = c.random ? null : myMaps.find(r => r.id === c.rec.id) || c.rec;
         lobby.page = "lobby";
-        if (isHost() && !st.match) useMap(c.random ? { id: "" } : { id: MapStore.sharedHere(rec) || null, rec });
+        if (isHost() && !st.match) useMap(c.random ? { id: "", size: c.size } : { id: MapStore.sharedHere(rec) || null, rec });
         drawLobby(false, "map");
       },
       back });
@@ -576,7 +590,7 @@ export function mount() {
       let pic = null, name = Lang.raw("os.map.random"), size = st.settings.size, n = tanks;
       if (!id || g) {                                    // (a random world / a generated kind: an example)
         pic = MapPick.preview(id, size, tanks);
-        if (g) { name = Lang.decode(genLabel(g)); n = g.fair && tanks % 2 ? tanks + 1 : tanks; }
+        if (g) name = Lang.decode(genLabel(g));
       }
       else {
         const m = roomMaps.get(id);
@@ -729,18 +743,14 @@ export function mount() {
     const ML = TunnelerEngine.MODE_LIST, mode = ML.includes(s.mode) ? s.mode : "standard";
     const goalText = (m, n) => m === "infection" ? T("time.n", { n }) : String(n);
     const onOff = v => T(v ? "os.on" : "os.off");
+    // (1.3: the map with the score - the team ones only with a team of 2+ seats; without one the player's own)
+    const sm = SHOW_MAPS.includes(s.showMap) ? s.showMap : "off";
+    const smap = teams ? sm : sm === "team" ? "own" : sm === "allteam" ? "all" : sm;
+    const smapList = SHOW_MAPS.filter(v => (v !== "team" && v !== "allteam") || teams);
     return [
-      // the game mode first (docs/DESIGN-8P.md 27); the modifiers at the end
+      // (the order - owner, 2026-10-31: mode, rounds to win, round time, map, show map, line of sight, view (the room's
+      // limit, then this player's), after death, friendly fire)
       row("mode", T("lc.mode") + T("gm." + mode), [T("gm." + mode + ".i"), T("lc.mode.i")], d => setSetting("mode", cycle(ML, mode, d))),
-      // the map (docs/v6/MAPS.md): random or a shared one - its own size then (grayed)
-      Object.assign(row("map", T("os.map") + (mapNote ? mapLabel(mapNote.rec.name, mapNote.rec.bases) : mapName()),
-        mapNote ? [{ text: mapNote.text, color: mapNote.color }]
-          : st.map && st.map.id === s.map && st.map.linked === false ? [{ text: T("os.map.cut"), color: 12 }, T("os.map.i1")]   // (the server's check)
-          : [T("os.map.i1"), T("os.map.i2")], d => stepMap(d)),
-        // (not the host: a row to pick - Enter shows the map, owner 2026-10-28)
-        host ? { go: pickMap } : { static: false, attr: 5, info: [T("os.map.view.i")], go: viewMap }),
-      s.map && !MapGen.parse(s.map) ? row("size", T("os.size") + T("os.size." + (st.map && st.map.id === s.map ? st.map.size : s.size)), null, null, "lc.size.map")
-        : row("size", T("os.size") + T("os.size." + s.size), [T("os.size.i1"), T("os.size.i2")], d => setSetting("size", cycle(SIZES, s.size, d))),
       // (a mode with a goal - gold, waves, kills...: the goal instead of rounds to win, one round decides it)
       NetProto.GOALS[mode]
         ? row("goal", T("goal." + mode) + goalText(mode, NetProto.goalOf(mode, s.goals)), [T("goal." + mode + ".i")],
@@ -749,7 +759,16 @@ export function mount() {
       // (infection: its goal is a time to survive - no round time; grayed)
       row("time", T("os.time") + (s.roundTime ? T("time.n", { n: s.roundTime }) : T("time.off")), [T("time.i1"), T("time.i2")],
         d => setSetting("roundTime", cycle(ROUND_TIMES, s.roundTime, d)), mode === "infection" && "lc.time.inf"),
-      row("ff", T("os.ff") + T(s.friendlyFire ? "os.on" : "os.off"), [T("os.ff.i1"), T("os.ff.i2")], () => setSetting("friendlyFire", !s.friendlyFire), !teams && "lc.ff.none"),
+      // the map (docs/v6/MAPS.md): random or a shared one - its own size then (grayed)
+      Object.assign(row("map", T("os.map") + (mapNote ? mapLabel(mapNote.rec.name, mapNote.rec.bases, mapNote.rec.size) : mapName()),
+        mapNote ? [{ text: mapNote.text, color: mapNote.color }]
+          : st.map && st.map.id === s.map && st.map.linked === false ? [{ text: T("os.map.cut"), color: 12 }, T("os.map.i1")]   // (the server's check)
+          : MapGen.parse(s.map) ? [T("gen." + MapGen.parse(s.map).kind + ".i"), T("gen.i2")]   // (as the skirmish's Map row)
+          : [T("os.map.i1"), T("os.map.i2")], d => stepMap(d)),
+        // (not the host: a row to pick - Enter shows the map, owner 2026-10-28)
+        host ? { go: pickMap } : { static: false, attr: 5, info: [T("os.map.view.i")], go: viewMap }),
+      // (1.3: the map with the score - "Seen by team" only with a team of 2+ seats; without one it is "Seen by me")
+      row("smap", T("smap.label") + T("smap." + smap), [T("smap.i1"), T("smap." + smap + ".i")], d => setSetting("showMap", cycle(smapList, smap, d))),
       row("sight", T("os.sight") + T("sight." + (SIGHTS.includes(s.sight) ? s.sight : "full")), [T("sight.i1"), T("sight.i2")],
         d => setSetting("sight", cycle(SIGHTS, SIGHTS.includes(s.sight) ? s.sight : "full", d))),
       row("visible", T("os.visible") + T("view." + s.visible), [T("os.visible.i1"), T("os.visible.i2")], d => setSetting("visible", cycle(VISIBLE, s.visible, d))),
@@ -759,6 +778,7 @@ export function mount() {
         : { key: "view", label: T("pg.view") + T("view." + viewChoice()), align: "left", info: [T("pg.view.i1"), T("pg.view.i2", { max: Lang.raw("view." + visibleNow()) })],
           go: () => setView(1), change: setView },
       row("watch", T("os.watch") + T("watch." + s.watchOut), [T("watch.i1"), T("watch.i2")], d => setSetting("watchOut", cycle(AFTER_DEATH, s.watchOut, d))),
+      row("ff", T("os.ff") + T(s.friendlyFire ? "os.on" : "os.off"), [T("os.ff.i1"), T("os.ff.i2")], () => setSetting("friendlyFire", !s.friendlyFire), !teams && "lc.ff.none"),
     ];
   }
 
@@ -766,12 +786,12 @@ export function mount() {
   function settingsWidth() {
     const G = NetProto.GOALS, labels = [
       ...TunnelerEngine.MODE_LIST.map(m => T("lc.mode") + T("gm." + m)),
-      T("os.map") + "W".repeat(MAP_COLS) + " (8)", T("os.map") + T("os.map.random"),
-      ...SIZES.map(v => T("os.size") + T("os.size." + v)),
+      ...SIZES.flatMap(z => [T("os.map") + mapLabel("W".repeat(MAP_COLS), 8, z),
+        ...[T("os.map.random"), ...MapGen.KINDS.map(k => genLabel({ kind: k }))].map(n => T("os.map") + sizedLabel(n, z))]),
       ...Object.keys(G).flatMap(m => G[m].choices.map(n => T("goal." + m) + (m === "infection" ? T("time.n", { n }) : n))),
       T("os.win") + "9", ...ROUND_TIMES.map(v => T("os.time") + (v ? T("time.n", { n: v }) : T("time.off"))),
       T("os.ff") + T("os.on"), T("os.ff") + T("os.off"),
-      ...SIGHTS.map(v => T("os.sight") + T("sight." + v)),
+      ...SIGHTS.map(v => T("os.sight") + T("sight." + v)), ...SHOW_MAPS.map(v => T("smap.label") + T("smap." + v)),
       ...VISIBLE.map(v => T("os.visible") + T("view." + v)), ...VISIBLE.map(v => T("pg.view") + T("view." + v)),
       ...AFTER_DEATH.map(w => T("os.watch") + T("watch." + w))];
     return DosUI.boxWidth(labels.map(label => ({ label, align: "left" })));

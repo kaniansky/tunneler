@@ -35,6 +35,7 @@
 // the split screen are shown as two such views.
 import { MatchText } from "./matchtext.js";
 import { Display } from "./display.js";
+import { PlayScreen } from "./playscreen.js";
 import { TunnelerEngine } from "../game/engine.js";
 import { Gfx } from "./gfx.js";
 import { Lang } from "../text/lang.js";
@@ -537,8 +538,8 @@ class ViewModes {
     px.fill(pal0[0]);
     L.cells.forEach((v, k) => {
       const x = (k % L.cols) * 360, y = Math.floor(k / L.cols) * CH, pal = D.tankPalette(s, e, this.viewerOf(v));
-      if (s.views) { if (s.views[v]) this.paintView(px, W, x, y + top, s.views[v], 0, pal, pal0, s.dims ? s.dims[v] : null); }
-      else this.paintView(px, W, x, y + top, s.vram, v * 40, pal, pal0, s.dim);
+      if (s.views) { if (s.views[v]) this.paintView(px, W, x, y + top, s.views[v], 0, pal, pal0, s.dims ? s.dims[v] : null, s.floors ? s.floors[v] : null); }
+      else this.paintView(px, W, x, y + top, s.vram, v * 40, pal, pal0, s.dim, null);
       // after death "black": the view window (cells 1-38 x 2-72, 9 x 4 pixels each) black with DESTROYED;
       // the frame and the instrument panel stay
       if (this.blackedOut(v, e)) {
@@ -553,12 +554,12 @@ class ViewModes {
 
   // one 40-column view (columns c0..c0+39 of a LORES buffer) at (x, y): with the tank colours' palette, but
   // the instrument panel (cells 3-36 x rows 74-98) with the normal one - its gauges share palette entries
-  // with some tanks' colours (the shield's 3 = SKY)
-  paintView(px, W, x, y, vram, c0, pal, normal, dim) {
+  // with some tanks' colours (the shield's 3 = SKY); dim / floor: its dim / floor plane (playscreen.js) or null
+  paintView(px, W, x, y, vram, c0, pal, normal, dim, floor) {
     const D = Display, F = VGA_FONT;
-    if (pal === normal) { D.paint(px, W, x, y, vram, c0, c0 + 40, 100, false, pal, true, F, null, dim); return; }
+    if (pal === normal) { D.paint(px, W, x, y, vram, c0, c0 + 40, 100, false, pal, true, F, null, dim, floor); return; }
     const part = (r0, r1, a, b, p) => D.paint(px, W, x + a * 9, y + r0 * 4, vram.subarray(r0 * 160), c0 + a, c0 + b, r1 - r0, false, p, true, F, null,
-      dim ? dim.subarray(r0 * 80) : null);
+      dim ? dim.subarray(r0 * 80) : null, floor ? floor.subarray(r0 * 80) : null);
     part(0, 74, 0, 40, pal);
     part(74, 99, 0, 3, pal); part(74, 99, 3, 37, normal); part(74, 99, 37, 40, pal);
     part(99, 100, 0, 40, pal);
@@ -645,14 +646,17 @@ class ViewModes {
     // the world
     const MX = 9, MY = 16, MW = 702, MH = (MAP_TOP - 1) * 16;
     const pal = this.tankPaletteRaw(s, e);
-    // world: 2 pixels per byte, odd x in the high nibble (1024x512 unless the engine says otherwise)
+    // world: 2 pixels per byte, odd x in the high nibble (1024x512 unless the engine says otherwise); with a floor
+    // (1.3, water and ground) the open pixels in their floor's look (no ripple: scaled down)
     const world = e.world, ww = e.worldW || 1024, stride = ww >> 1, wh = e.worldH || world.length / stride;
+    const F = e.floor || null, look = PlayScreen.floorLook, FC = Display.FLOOR_U32, g = e.groundType;
     for (let y = 0; y < MH; y++) {
       const wy = Math.floor(y * wh / MH), rowOfs = wy * stride;
       let p = (MY + y) * W + MX;
       for (let x = 0; x < MW; x++) {
-        const wx = Math.floor(x * ww / MW), b = world[rowOfs + (wx >> 1)];
-        px[p++] = pal[(wx & 1) ? b >> 4 : b & 15];
+        const wx = Math.floor(x * ww / MW), b = world[rowOfs + (wx >> 1)], c = (wx & 1) ? b >> 4 : b & 15;
+        const f = F && !c ? look(F[wy * ww + wx], wx, wy, g, true) : 0;
+        px[p++] = f ? FC[f] : pal[c];
       }
     }
     const sx = wx => MX + Math.floor(wx * MW / ww), sy = wy => MY + Math.floor(wy * MH / wh);

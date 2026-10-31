@@ -475,8 +475,9 @@ joystick drives the tank, the end map / menu without them, a tap beside the map 
 ## Debug info (`src/js/ui/debug.js`)
 
 Settings > Gameplay "Debug info" (localStorage `tunneler.debug`, off by default; owner, 2026-10-30): a small HTML box
-at the top left of the page (`#debug-info`, monospace 10 px, over the canvas, no pointer events), redrawn twice a
-second. Display only - nothing enters the engine. `Debug.provide(group, fn)` (a line per group: `screen` and `gpu` -
+at the top left of the page (`#debug-info`, monospace 10 px, over the canvas, no pointer events but its X at the top
+right - `#debug-info-close` switches it off as Settings does; `Debug.onChange`: Settings open redraws its row; Ctrl+Shift+D switches it on any page -
+a window capture listener, the D swallowed (BLUE's right); owner, 2026-10-31; the row's info says so), redrawn twice a second. Display only - nothing enters the engine. `Debug.provide(group, fn)` (a line per group: `screen` and `gpu` -
 surface.js; `engine` - runner.js, per Runner; `net` - online.js: connection, ping, match, your tank, frames, queued,
 spare (the jitter buffer), catching up, rebuilds, desync), `Debug.count(name, n)` (per second: frames, steps, world
 KB, 3d heights, hud draws, msgs in, KB in / out), `Debug.time(name, ms)` (the last half second's average, kept
@@ -783,8 +784,9 @@ page from before 2.0 - is refused (POST 409 `{code:
 - Statistics page: no settings any more (owner, 2026-10-24; `statsSettings` is gone); the round title
   keeps them at the bottom.
 - DosUI `wheel(ev)`: over a switch row (an item with `change`) the wheel steps its value - up forward, down
-  back, one step per notch / ~50 px (every screen); elsewhere it moves the selection through a scrolling
-  single box (more items than `box.rows`), one row per notch / ~50 px, no wrap-around. Settings' Volume is a
+  back, one step per notch / ~50 px (every screen); elsewhere it scrolls a scrolling single box (more items than
+  `box.rows`), one row per notch / ~50 px, not past its ends - only the list: the selection stays, out of view too
+  (`freeTop`, as a touch drag; owner, 2026-10-31 - it moved the selection before); a key brings the view back. Settings' Volume is a
   meter of 10 cells (█ / ░) whose cells are click zones (a click sets that level, a right click one less) and
   `slide: true` (DosUI pointerdown / pointermove: every zone passed is clicked, past the ends 0 / 100; `slideTo`).
 - Kick: the host's single "Kick a player" item opens `drawKick()` (lobby.page "kick"): the kick
@@ -841,6 +843,9 @@ page from before 2.0 - is refused (POST 409 `{code:
   test/modes-check.js (+ test/modes/<mode>.js, test/modes-harness.js `runMatch`); net-sim runs a gold room.
 - Statistics centred vertically (vs computer's right half, the online page): `centreStats(c0, c1, r0, r1)`
   finds the used rows and moves them (`shiftRows`, text + Unicode plane) to the middle.
+- **Quit** (desktop app only; owner, 2026-10-31): the main menu's last row before the update rows, "Quit" (`home.quit`,
+  5 languages; the Information page's desktop app section says so) -> lib.rs command `quit` (`app.exit(0)`; Android:
+  an error - Back on the main menu leaves it, so home.js shows no row there: `window.TunnelerAndroid`). Browsers: none.
 - **New versions**: server.js `watchReleases` (only when started as the program; `UPDATE_CHECK=0` = off)
   asks GitHub's latest release at start and daily and logs a newer one (`newerVersion`, `latestRelease`).
   Desktop app: tauri-plugin-updater + opener (src-tauri/src/lib.rs commands `update_check` ->
@@ -973,7 +978,8 @@ page from before 2.0 - is refused (POST 409 `{code:
   light / dark gray, the dark one a darker muted light one (#f2c48d / #4a2c17: the icon's earth); the icon must not
   fill its canvas - the Linux icons (src-tauri/icons/32x32, 128x128, 128x128@2x.png, tools/make-icons.js) are the
   rounded icon at 80 %, so the manifest takes them from the .deb as before; screenshots from the release's own tag
-  (raw.githubusercontent.com/.../v<version>/screenshots/ - a release with new screenshots points the metainfo at itself).
+  (raw.githubusercontent.com/.../v<version>/screenshots/: `--metainfo <v>` points every one at `v<v>` - 1.2.4 shipped
+  the 1.2.3 ones by hand-kept urls; update-check asserts it).
 - **Graphics setting** (docs/GRAPHICS.md - read it before touching gfx*.js; DESIGN-8P 29; display only,
   local): localStorage `tunneler.gfx` original / modern (the default since 5.0; no WebGL2 = original; "upscaled" and
   its CRT were dropped, a stored "upscaled" = modern) + `tunneler.gfx.modern` (JSON: style clean / retro /
@@ -1051,7 +1057,7 @@ page from before 2.0 - is refused (POST 409 `{code:
   (play.js: while the engine's menu shows; online.js: lobby / spectator). Android Back on the main menu:
   `window.tunnelerBackExits`. Touch (every layout, DosUI `tpick`; play.js the engine's menu too): a finger put down
   on an item highlights it; a drag scrolls (the phone layout's `ndrag`; a single scrolling box by rows: `freeTop` - the
-  selection may leave the view until a key / the wheel) and that item stays highlighted (owner, 2026-10-27); let go
+  selection may leave the view until a key) and that item stays highlighted (owner, 2026-10-27); let go
   without moving = a tap, however long held (touchend clicks - `click({picked})`; a browser sends no click after a long
   press, and its click after a short one is ignored: `noClickUntil`), after a drag = nothing; put down anywhere else, a
   drag scrolls too. No highlight bar on a phone
@@ -1188,14 +1194,67 @@ page from before 2.0 - is refused (POST 409 `{code:
   day - `sweepBoards`), today + yesterday for `DAY_GRACE_MS` (2 h) after midnight; `opts.now` for tests. Dockerfile
   copies src/js + src/lang and the worker. Texts `src/lang/<code>/challenge.js` via `Lang.extend`, keys `ch.*`,
   `home.challenge(.i)`. Tests: test/challenge-check.js, layout-check / app-check screens.
+- **Show map** (1.3, owner 2026-10-31; display only, never in stateHash): the setting Show map - `off` (No, the
+  default) / `own` (Seen by me) / `team` (Seen by team) / `all` (Revealed) / `allteam` (Revealed (team)); the team ones
+  offered only with a team of 2+, else they are the player's own - engine option `showMap` (`TunnelerEngine.SHOW_MAPS` = `NetProto.SHOW_MAPS`; room setting / cfg `showMap`,
+  skirmish `&smap=`, `tunneler.cpu.showmap`; texts `smap.*` in src/lang/<code>/seenmap.js). Holding Tab (SCORE) shows
+  `MatchText.liveStats()` with the map (`draw/seenmap.js` `SeenMap.picture(e, viewer)` -> snap.pic): under the score
+  box while that leaves it 8+ rows, else beside it (the settings lines left out then); a phone held upright: Display's
+  crop moves the picture with its rows. Tracking (playscreen.js `seenTrack`, from every player's `blitView` /
+  `blitSight` each frame - the extended engine blits every view): per map cell (4 x 4 px) `seenCells[p]` (0 never,
+  open 1, dirt 2, rock 3, water 4 - tanks / shots / walls count as open) and `seenAt[p]` (the step); line of sight off:
+  the view window, on: what `sightView` lit. "all" / "allteam": every cell filled from the world when the match starts,
+  then only seeing changes it ("show map everything should only reveal the map but not update from the enemy view").
+  The picture: the newest memory of the viewers (own / all: the viewer; team / allteam: its team), what they see now in
+  colour, the
+  rest gray, never seen black; bases once known; tanks: the viewer's team and the ones they see now (the viewer's own
+  with a white edge). Not split screen, the daily challenge, replays. The lobbies: no Map size row - the map picker
+  sets it (see docs/v6/MAPS.md 6). Test: test/seenmap-check.js (display only, each mode, the layout, NetProto).
 - **Teammates marked** (owner, 2026-10-28; display only): `views.js teamMarks(e, viewer)` - the viewer's team but itself,
   alive (`tunneler.teammarks` "0" = off; Settings, Gameplay; CloudSave). Original look: `paintMarks` draws a 7 x 5
   world-pixel triangle (tank colour, black edge) from the snapshot's `cams` / `tanks` (playscreen snapshotExt);
   modern: gfx-modern.js places them (`markAt`, smoothed tank, the window's camera), gfx-hud.js `drawMarks` (also with
   the classic panel). Unseen tanks (line of sight): no mark. Test: local-check "teammates marked".
-- **Generated maps** (1.2, docs/v6/MAPS.md 5b): `game/mapgen.js` kinds fortress / arena / highlands / caves, fair /
-  natural, a new map every match from its seed (skirmish `?gen=`, online: the server in `startMatch`); Original = the
-  original game's random world (`lc.map.random`, "" as before). Pictures `MapPick.preview`.
+- **Generated maps** (1.2, docs/v6/MAPS.md 5b): `game/mapgen.js` kinds fortress / arena / highlands / caves (1.3:
+  natural only - the fair layout and its code removed), a new map every match from its seed (skirmish `?gen=`, online: the server in `startMatch`); Original = the
+  original game's random world (`lc.map.random`, "" as before). Pictures `MapPick.preview`. 1.3: six more kinds, sand / grass
+  ground and water - see "Water and ground".
+- **Water and ground** (1.3, owner 2026-10-31; docs/v6/MAPS.md 5c - and 5b for the kinds, 4 for the editor, 6 for
+  the map choice; extended engine only - the classic engine, Original and every dry classic-ground map play exactly as
+  before):
+  - Rules: map cell 3 = water - a tank at half speed (`digDelay` after a pixel moved in it), not dug, shots fly over,
+    explosions leave it, open in the world (line of sight, `mapReach`, modes see floor); `baseProblem` "water" (never
+    inside a base's walls). `map.ground` classic / sand / grass: looks only (format byte 2 + a ground byte; classic
+    stays format 1 - old codes and ids unchanged). `engine.floor` (null without water and classic ground: every older
+    game), `groundType`, `hasWater`, fx "splash" (display only). Test: test/water-check.js.
+  - "Original with water" (an engine option with lakes) was dropped before 1.3's release (owner: "open field does
+    that better"): the option / room setting `water` is ignored; water comes with maps only. Test: water-check.
+  - Generated kinds (mapgen.js): + labyrinth, rivers, islands, strata, quarters, field (10 in `MapGen.KINDS`, the new
+    ones last; always natural - no Layout setting, an old `:fair` id read as natural; example pictures without bases).
+    Every generated map's ground is sand or grass and rivers / islands always have water, every other kind
+    in about 1 match in 3 - both picked from the seed by a separate PRNG; water never within 8 cells of a base centre;
+    + - * / and floor / round only (every browser the same map). The old four made dry with classic ground are 1.2's
+    maps byte for byte (water-check pins both). `make({water, ground})` overrides for tests. Fortress, highlands,
+    strata and quarters get glades on sand / grass (open ground at the start - else their ground never showed: dug
+    floor is sand on every ground). Test: mapgen-check.
+  - Editor (routes/maps.js): tools tunnel / dirt / rock / water / base (keys 1-5, Tab), water never painted inside a
+    base's walls (`map.err.water`); the map's screen has a Ground row (Left / Right, a draft like the name). Test:
+    map-check. Online the host's Map row explains a kind like the skirmish's.
+  - Original look: a floor plane beside the LORES pixels (docs/RENDERING.md "Floor plane"; playscreen.js
+    `FLOOR_LOOK` / `floorLook`, display.js `FLOOR_RGB`): water deep blue with a fixed ripple, the shore sand, open
+    floor in the ground's look, dug floor sand on sand / grass; the world map, live map, map pictures and the editor
+    too; remembered (line of sight) gray. Test: test/floor-look-check.js. Modern look (docs/GRAPHICS.md "Water and
+    ground", gfx-modern.js): `engine.floor` as a texture (unit 5, uploaded per world / match, not per frame; no floor -
+    a 1 x 1 zero, nothing changes), water animated (waves, glints, a lighter bank), sand / grass textured and lighter
+    than the classic tunnels, never-seen pixels of a memory stay dark (an RG memory band: ever-seen bits), splash
+    particles; 3D: water flat at the floor's height.
+  - Computer tanks know water is slow (ai.js): a grid node with water under its 7 x 7 box costs 8 (tunnel 4, dirt up
+    to 12 - about a frame per pixel: 2 in water), read once per round (`Grid.wet`, null without water), so a pond is
+    driven around when the way round is shorter in time and a river crossed when it isn't; firing spots in water score
+    worse (`chooseSpot` +12), a side-step into water counts as slow (`pickDodge`). Without water nothing changes (no
+    new PRNG draw). Test: test/ai-water-sim.js (a water-blind bot as the baseline).
+  - Texts: src/lang/<code>/water.js (sections editor / map choice / generated kinds); Instructions "Water and ground",
+    Information "Your own maps" / "Generated maps".
 - **Custom maps** (v6, docs/v6/MAPS.md; a map is played only when a tank can drive between ALL its bases - owner:
   `TunnelerEngine.mapReach(map)` -> {ok, groups, walled} on the world a match starts on (painted, openBase, bases
   drawn), the game's own per-direction sprites, an integral image + a flood (large ~60 ms); used by the editor

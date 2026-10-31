@@ -2,15 +2,17 @@
 // engine (opts.map), the editor (maps.js), the pages that pick a map and server.js (checks shared maps).
 //
 // A map: {size: "small" | "medium" | "large", w, h (cells), cells: Uint8Array(w * h) (0 tunnel, 1 dirt,
-// 2 rock), bases: [{x, y}] (cells, 0..8 of them), name (raw Unicode)}. A cell is 4 x 4 world pixels; the
+// 2 rock, 3 water), bases: [{x, y}] (cells, 0..8 of them), name (raw Unicode), ground: "classic" | "sand" | "grass"
+// (1.3: how open floor looks - GROUNDS)}. A cell is 4 x 4 world pixels; the
 // frame - FRAME[size] cells all around - is always rock; a base's centre pixel is (x * 4 + 2, y * 4 + 2).
-//   MapData.blank(size, fill)        a new map (fill: 0 / 1 / 2, default dirt)
+//   MapData.blank(size, fill)        a new map (fill: 0 / 1 / 2 / 3, default dirt; ground classic)
 //   MapData.encode(map) -> bytes     MapData.decode(bytes | code) -> map or null (anything odd: null)
 //   MapData.code(map) -> string      base64url of the bytes (what travels: options, links, the match cfg)
 //   MapData.canonical(bytes)         decode + encode (null: not a map)
-//   MapData.baseProblem(map, x, y, skip)  why a base can't go to cell (x, y): null, "edge" or "near" (skip:
-//                                    the index of a base being moved)
-//   MapData.paint(map, world, ws)    the world bytes of the map (engine.world, ws bytes per row)
+//   MapData.baseProblem(map, x, y, skip)  why a base can't go to cell (x, y): null, "edge", "near" or "water"
+//                                    (skip: the index of a base being moved)
+//   MapData.paint(map, world, ws, floor)  the world bytes of the map (engine.world, ws bytes per row); floor
+//                                    (optional, a byte per pixel): FLOOR of every pixel (engine.floor)
 //   MapData.fromWorld(size, world, ws)  a map from a generated world (the editor's "random world")
 //   MapData.fileName(map)            "<name>.tmap" - a map file is its encoded bytes (the "TM" magic and format byte
 //                                    tell it; decode checks it like any other bytes)
@@ -25,7 +27,12 @@ const BASE_HALF = 18;            // a base's walls are 17 px from its centre: it
 const BASE_GAP = 40;             // base centres at least this far apart on one axis (35 px wide each)
 const MAX_NAME = 24;             // display columns
 const MAX_NAME_BYTES = 96;
-const TUNNEL = 0, DIRT = 1, ROCK = 2;
+const TUNNEL = 0, DIRT = 1, ROCK = 2, WATER = 3;
+// Water and ground (owner, 2026-10-31, 1.3; docs/v6/MAPS.md "Water and ground"): water is still - a tank drives
+// into it at half speed, it can't be dug, shots fly over it; a map's ground is only how its open floor looks
+const GROUNDS = ["classic", "sand", "grass"];
+// engine.floor per pixel: nothing (dirt / rock), water, open from the start, shore (within 3 px of water)
+const FLOOR = { NONE: 0, WATER: 1, OPEN: 2, SHORE: 3 };
 
 // a map's name: any letters (NFC), no control / bidi / zero-width / private-use characters or < >, spaces
 // collapsed, at most MAX_NAME display columns (as NetProto's room names)
@@ -51,11 +58,13 @@ function frame(map) {
 function blank(size, fill = DIRT) {
   if (!DIMS[size]) size = "medium";
   const [w, h] = DIMS[size];
-  return frame({ size, w, h, cells: new Uint8Array(w * h).fill(fill === TUNNEL || fill === ROCK ? fill : DIRT), bases: [], name: "" });
+  return frame({ size, w, h, cells: new Uint8Array(w * h).fill(fill === TUNNEL || fill === ROCK || fill === WATER ? fill : DIRT), bases: [], name: "",
+    ground: "classic" });
 }
 
 // why a base can't be centred on cell (x, y): "edge" (its walls would reach the frame or beyond), "near" (it
-// would touch another base - skip: a base's index not counted, the one being moved), null = fine
+// would touch another base - skip: a base's index not counted, the one being moved), "water" (water inside its
+// walls: a base never stands in water), null = fine
 function baseProblem(map, x, y, skip = -1) {
   const [w, h] = DIMS[map.size], f = FRAME[map.size] * CELL;
   const px = x * CELL + 2, py = y * CELL + 2;
@@ -66,6 +75,9 @@ function baseProblem(map, x, y, skip = -1) {
     const b = map.bases[i];
     if (Math.max(Math.abs(b.x - x), Math.abs(b.y - y)) * CELL < BASE_GAP) return "near";
   }
+  // (the walls, 17 px around the centre pixel x * 4 + 2, lie in the cells x - 4 .. x + 4)
+  const cells = map.cells, cw = map.w;
+  if (cells) for (let cy = y - 4; cy <= y + 4; cy++) for (let cx = x - 4; cx <= x + 4; cx++) if (cells[cy * cw + cx] === WATER) return "water";
   return null;
 }
 
@@ -93,10 +105,14 @@ function encode(map) {
   const useRuns = runs.length <= packed.length;
   const body = useRuns ? runs : packed;
   const bases = map.bases.slice(0, MAX_BASES);
-  const out = new Uint8Array(5 + bases.length * 4 + 1 + nb.length + 1 + body.length);
+  // format 1: classic ground (every map from before 1.3 keeps its bytes, code and id); format 2: one byte more after
+  // the size - the ground (1 sand, 2 grass)
+  const ground = GROUNDS.indexOf(map.ground) > 0 ? GROUNDS.indexOf(map.ground) : 0;
+  const out = new Uint8Array(5 + (ground ? 1 : 0) + bases.length * 4 + 1 + nb.length + 1 + body.length);
   let o = 0;
-  out[o++] = 0x54; out[o++] = 0x4D; out[o++] = 1;
+  out[o++] = 0x54; out[o++] = 0x4D; out[o++] = ground ? 2 : 1;
   out[o++] = SIZES.indexOf(map.size);
+  if (ground) out[o++] = ground;
   out[o++] = bases.length;
   for (const b of bases) { out[o++] = b.x & 255; out[o++] = b.x >> 8; out[o++] = b.y & 255; out[o++] = b.y >> 8; }
   out[o++] = nb.length; out.set(nb, o); o += nb.length;
@@ -132,20 +148,28 @@ function fromCode(s) {
 // bytes (Uint8Array / Buffer / array) or a code string -> a map, or null
 function decode(src) {
   const b = typeof src === "string" ? fromCode(src) : src && typeof src.length === "number" ? Uint8Array.from(src) : null;
-  if (!b || b.length < 8 || b[0] !== 0x54 || b[1] !== 0x4D || b[2] !== 1) return null;
+  if (!b || b.length < 8 || b[0] !== 0x54 || b[1] !== 0x4D || (b[2] !== 1 && b[2] !== 2)) return null;
   let o = 3;
   const size = SIZES[b[o++]];
   if (!size) return null;
+  let ground = "classic";
+  if (b[2] === 2) {                                     // (format 2: the ground - sand or grass, never classic)
+    ground = GROUNDS[b[o++]];
+    if (!ground || ground === "classic") return null;
+  }
   const [w, h] = DIMS[size], n = w * h;
   const nb = b[o++];
   if (nb > MAX_BASES || o + nb * 4 > b.length) return null;
-  const map = { size, w, h, cells: new Uint8Array(n), bases: [], name: "" };
+  const map = { size, w, h, cells: new Uint8Array(n), bases: [], name: "", ground };
+  const cellsLater = map.cells;
+  map.cells = null;                                     // (the bases' places first; water under them: below)
   for (let i = 0; i < nb; i++) {
     const x = b[o] | (b[o + 1] << 8), y = b[o + 2] | (b[o + 3] << 8);
     o += 4;
     if (baseProblem(map, x, y)) return null;
     map.bases.push({ x, y });
   }
+  map.cells = cellsLater;
   const ln = b[o++];
   if (ln === undefined || ln > MAX_NAME_BYTES || o + ln > b.length) return null;
   try { map.name = fromUtf8(b.subarray(o, o + ln)); } catch (e) { return null; }
@@ -156,9 +180,7 @@ function decode(src) {
   if (kind === 0) {
     if (b.length - o !== Math.ceil(n / 4)) return null;
     for (let i = 0; i < n; i++) {
-      const v = (b[o + (i >> 2)] >> ((i & 3) * 2)) & 3;
-      if (v > ROCK) return null;
-      cells[i] = v;
+      cells[i] = (b[o + (i >> 2)] >> ((i & 3) * 2)) & 3;
     }
     for (let i = n; i < Math.ceil(n / 4) * 4; i++) if ((b[o + (i >> 2)] >> ((i & 3) * 2)) & 3) return null;   // (padding: zero)
   } else if (kind === 1) {
@@ -167,13 +189,15 @@ function decode(src) {
       let v = 0, mul = 1, k = 0, byte;
       do { if (o >= b.length || k++ > 4) return null; byte = b[o++]; v += (byte & 0x7F) * mul; mul *= 128; } while (byte & 0x80);
       const val = v % 4, len = Math.floor(v / 4) + 1;
-      if (val > ROCK || i + len > n) return null;
+      if (i + len > n) return null;
       cells.fill(val, i, i + len);
       i += len;
     }
     if (i !== n) return null;
   } else return null;
-  return frame(map);
+  frame(map);
+  for (let i = 0; i < map.bases.length; i++) if (baseProblem(map, map.bases[i].x, map.bases[i].y, i)) return null;   // ("water")
+  return map;
 }
 
 const code = map => toCode(encode(map));
@@ -197,22 +221,25 @@ const dirtAt = (x, y) => {
   h = Math.imul(h ^ (h >>> 15), 0x2C1B3C6D);
   return (h >>> 28) & 1 ? 8 : 6;
 };
-// the world's bytes (2 pixels a byte, odd x = high nibble) as the map says
-function paint(map, world, ws) {
-  for (let cy = 0; cy < map.h; cy++) paintRow(map, world, ws, cy);
+// the world's bytes (2 pixels a byte, odd x = high nibble) as the map says; floor (optional): a byte per pixel
+// (y * worldW + x), FLOOR - water 1, tunnel 2, else 0 (the shore is the engine's: markShore)
+function paint(map, world, ws, floor) {
+  for (let cy = 0; cy < map.h; cy++) paintRow(map, world, ws, cy, floor);
 }
-// one row of cells (cy) into the world (the engine paints a row per CPU slice)
-function paintRow(map, world, ws, cy) {
-  const w = map.w, cells = map.cells;
+// one row of cells (cy) into the world (the engine paints a row per CPU slice); water is open (0) in the world -
+// only the floor tells it
+function paintRow(map, world, ws, cy, floor) {
+  const w = map.w, cells = map.cells, fw = w * CELL;
   for (let cx = 0; cx < w; cx++) {
-    const v = cells[cy * w + cx];
+    const v = cells[cy * w + cx], open = v === TUNNEL || v === WATER;
     for (let dy = 0; dy < CELL; dy++) {
       const y = cy * CELL + dy, row = y * ws;
       for (let dx = 0; dx < CELL; dx += 2) {
         const x = cx * CELL + dx;
-        const lo = v === ROCK ? 7 : v === TUNNEL ? 0 : dirtAt(x, y), hi = v === ROCK ? 7 : v === TUNNEL ? 0 : dirtAt(x + 1, y);
+        const lo = v === ROCK ? 7 : open ? 0 : dirtAt(x, y), hi = v === ROCK ? 7 : open ? 0 : dirtAt(x + 1, y);
         world[row + (x >> 1)] = lo | (hi << 4);
       }
+      if (floor) floor.fill(v === WATER ? FLOOR.WATER : v === TUNNEL ? FLOOR.OPEN : FLOOR.NONE, y * fw + cx * CELL, y * fw + cx * CELL + CELL);
     }
   }
 }
@@ -235,10 +262,11 @@ function fromWorld(size, world, ws) {
 }
 
 export const MapData = {
-  CELL, SIZES, DIMS, FRAME, MAX_BASES, MIN_BASES, MAX_NAME, TUNNEL, DIRT, ROCK, BASE_GAP,
+  CELL, SIZES, DIMS, FRAME, MAX_BASES, MIN_BASES, MAX_NAME, TUNNEL, DIRT, ROCK, WATER, GROUNDS, FLOOR, BASE_GAP,
   cleanName, blank, frame, inFrame, baseProblem, encode, decode, code, canonical, checkCode, toCode, fromCode,
   paint, paintRow, fromWorld, dirtAt, fileName, FILE_EXT,
   // a base's centre pixel
   basePx: b => ({ x: b.x * CELL + 2, y: b.y * CELL + 2 }),
-  copy: m => ({ size: m.size, w: m.w, h: m.h, cells: m.cells.slice(), bases: m.bases.map(b => ({ x: b.x, y: b.y })), name: m.name }),
+  copy: m => ({ size: m.size, w: m.w, h: m.h, cells: m.cells.slice(), bases: m.bases.map(b => ({ x: b.x, y: b.y })), name: m.name,
+    ground: GROUNDS.includes(m.ground) ? m.ground : "classic" }),
 };

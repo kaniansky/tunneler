@@ -22,7 +22,7 @@ A map is a grid of **cells of 4 x 4 world pixels** (the computer players' grid i
 | medium | 1024 x 512  | 256 x 128 | 10                 |
 | large  | 2048 x 1024 | 512 x 256 | 20                 |
 
-- Every cell is **tunnel** (0, open black), **dirt** (1) or **rock** (2).
+- Every cell is **tunnel** (0, open black), **dirt** (1), **rock** (2) or **water** (3, 1.3 - section 5c).
 - The **frame** - `sc(40)` px all around, the same thickness as the generated worlds' rock at the top and the
   bottom - is always rock (decoding forces it; the editor shows it darker and never paints it): tanks, shots
   and explosions can never leave the world, and a view near the edge shows rock, not the other side.
@@ -38,8 +38,9 @@ A map is a grid of **cells of 4 x 4 world pixels** (the computer players' grid i
 travels: in engine options, links, the online match cfg, replays.
 
 ```
-0  "T" "M" 1          magic + format
+0  "T" "M" 1 | 2      magic + format (1: classic ground; 2: a ground byte follows the size - section 5c)
 3  size               0 small, 1 medium, 2 large
+(4 ground)            format 2 only: 1 sand, 2 grass
 4  n                  bases (0..8), then n x (u16 cx, u16 cy) little endian
 .. name               u8 byte length (<= 96) + UTF-8
 .. terrain kind       0: packed - 2 bits per cell, 4 cells a byte, row by row
@@ -139,9 +140,12 @@ rock in the frame darker - it can't be painted), the tools on the status line un
 also the phone's way to choose). A desktop (two rows under the 4:3 screen):
 
 ```
- 1 Tunnel   2 Dirt   3 Rock   4 Base   Undo  Menu  SPACE: paint  ESC: menu   (the chosen tool white on magenta)
+ 1 Tunnel  2 Dirt  [ 3 Rock ]  4 Water  5 Base  Undo  Done  SPACE: paint  ESC: done   (the chosen tool white on magenta)
  Brush - 3 +  Zoom - 1:1 +  X 120  Y 64  Bases: 2 of 8  (a message in red)
 ```
+
+Five tools since water (1.3, owner 2026-10-31): each tool is padded with a space on both sides while its row has room,
+else only the chosen one, else none (`barRows`) - so every language fits beside Undo, Done and the key hint.
 
 A phone (40 columns, three rows - there is room under the screen): the tools; Brush, Undo, Menu; Zoom, the
 bases, a message (else "1 finger paints, 2 move"); there `-` and `+` are three cells wide (a finger's target).
@@ -150,7 +154,7 @@ message always stay, and on a desktop the key hint fits beside the tools (map-ch
 language).
 
 - Keyboard: arrows / W A S D move the cursor (Shift: 8 cells), Space / Enter paint (held: draw while
-  moving), 1-4 the tools, Tab the next tool, [ ] (or , .) the brush, + - the zoom, U or Ctrl+Z undo, Esc
+  moving), 1-5 the tools (tunnel, dirt, rock, water, base), Tab / Shift+Tab the next / previous tool, [ ] (or , .) the brush, + - the zoom, U or Ctrl+Z undo, Esc
   the editor's menu.
 - Mouse: the cursor follows it, left button paints / places, right button drags the view, the wheel zooms.
 - Touch: one finger paints (or places a base); two fingers drag and pinch the view.
@@ -158,7 +162,15 @@ language).
   moves, paints, changes the tool / the brush / the zoom; Esc = Done (owner, 2026-10-27); once one is connected the status line
   names its buttons instead of the keys - `map.keys.pad`).
 - Base tool: on an empty spot a new base (if there is room and fewer than 8), on a base it removes it;
-  dragging a base moves it. Bases are drawn in the tank colours of their number.
+  dragging a base moves it. Bases are drawn in the tank colours of their number. Not on water (`baseProblem` "water":
+  "A base can't stand in water.", also for a base dragged there).
+- Water tool (1.3): paints water (cell 3) - never inside a base's walls (the cells x - 4 .. x + 4, y - 4 .. y + 4 of
+  every base stay as they were, and the status line says "A base can't stand in water."), so an edited map always
+  decodes.
+- **Ground** (1.3): the map's screen has a Ground row under the Name (Classic / Sand / Grass - Left / Right, Enter the
+  next; info: only the look, the shore always sand). A change is a draft like the name's (gone again when the map is
+  back as saved); saved, a sand / grass map is format 2, classic format 1. New maps are classic (a generated kind brings
+  its own). The editor's picture shows the ground and the water as the game does (`render`, the floor plane).
 - Zoom: 1/4, 1/2, 1:1, 2, 4 screen pixels per cell; the view follows the cursor.
 - Undo: the last 30 strokes.
 
@@ -228,14 +240,14 @@ an older server answers 404 - the pages say "This server has no map gallery" and
 
 ## 5b. Generated maps (1.2, owner 2026-10-28)
 
-`src/js/game/mapgen.js` (`MapGen`): `make({kind, size, bases, seed, fair})` -> a map (MapData), deterministic from the
+`src/js/game/mapgen.js` (`MapGen`): `make({kind, size, bases, seed})` -> a map (MapData), deterministic from the
 seed (mulberry32, value-noise fbm), every base reachable (`TunnelerEngine.mapReach`, passages dug until it is).
 Kinds (`KINDS`): **fortress** (every base in a ring of rock with gates, open dirt between), **arena** (a great rock
 ring in the middle, four gates, an open plaza), **highlands** (ridges of rock, the bases in the valleys), **caves**
-(caverns already dug out: a cellular automaton on blocks). Layout **fair** (point-symmetric map, bases in symmetric
-pairs on an ellipse - an odd number of tanks gets one base more, `symmetric(map, open)` after the passages) or
-**natural** (the best spread of 8 tries). Ids `gen:<kind>:<fair|natural>` (`MapGen.id` / `parse`; NetProto.mapId
-accepts them, `NetProto.genMap(id)`). The engine deals teammates bases near each other (`groupTeams`, any map).
+(caverns already dug out: a cellular automaton on blocks). The bases: the best spread of 8 tries (1.2 also had a
+layout **fair** - a point-symmetric map, the bases in pairs - removed in 1.3 with its code). Ids
+`gen:<kind>:natural` (`MapGen.id` / `parse`; NetProto.mapId accepts them - an old `:fair` one as `:natural` -,
+`NetProto.genMap(id)`). The engine deals teammates bases near each other (`groupTeams`, any map).
 A new map **every match**: skirmish `?gen=<id>` (play.js: from the match's seed, a base per tank); online the room's
 Map setting may be an id - the server makes the match's map in `startMatch` from the match's seed (`generatedMap`,
 mapgen.js loaded with the engine on the first) and sends its code in `cfg.map` like a shared map's; the room's size
@@ -244,6 +256,97 @@ of a kind (seed 1) or of the original game's random world (`randomPic`: the engi
 the start), kept. The picker's **Show** (generated maps: Original + the kinds + Layout / your maps / the gallery),
 the editor's New map **Start from** a kind (+ Bases, Layout). Tests: mapgen-check, map-check, net-sim ("generated
 map online"), net-page-smoke.
+
+**1.3 (owner, 2026-10-31): always natural, previews without bases.** "i don't like the layout natural/fair, it should
+always be natural and no setting for it": no Layout row anywhere (the picker, the editor's New map - its Bases row goes
+one by one), the Map rows list each kind once; `MapGen.id(kind)` = `gen:<kind>:natural`, and an old `:fair` id (a
+stored choice, a link, a message) is read as natural (`parse` gives the kind, `NetProto.mapId` rewrites it, the
+skirmish's stored choice too). The fair code is gone from mapgen.js (owner: "remove the fair code too"; natural maps
+unchanged - water-check's pins). "in the generated map preview don't show the bases": the examples' pictures
+(`MapPick.preview` / the picker's generated tab: Original, the kinds) have no bases - every match makes a new map, its
+bases elsewhere; a map of yours or the gallery's still shows its bases. "generated maps list should only show the
+name, size and bases are always the same": the generated tab's rows are names only; its Map size row (where Layout
+was) sets the size of Original / a kind - the choice carries it (`{gen | random, size}`), and the lobbies show it in
+the Map row: "Rivers (Large)", a map of yours "Crossroads (Large, 6)" (no Map size row any more - section 6).
+
+**1.3 (owner, 2026-10-31): six kinds more, water and ground on every generated map.** `KINDS` after the old four:
+
+- **labyrinth** - a maze of tunnels already dug: rooms on a grid (8 / 10 / 12 cells apart by size, corridors 4 cells
+  = 16 px wide), a spanning tree (Kruskal on the edges in a random order) plus about 1 in 10 of the rest as loops;
+  walls of dirt, rock where a fine noise is high; every base in a room of tunnel 13 x 13 cells.
+- **rivers** - 2 - 5 winding rivers (by size), mostly left to right, some top to bottom, wider and narrower, cutting through anything;
+  open banks here and there (the ground shows). Always wet.
+- **islands** - the sea; a big island at every base (radius 13+ cells), smaller ones between (about one per 1000 cells);
+  a ragged coast (noise), rock in the cores of some, open beaches. Always wet.
+- **strata** - 3 - 6 layers of rock across the map (a shared wave and tilt, each its own wobble and thickness), a gap
+  every 30 - 120 cells; the bases' clearings make more.
+- **quarters** - two walls of rock through the middle (crossing anywhere near the middle), bent around the bases, 1 - 2 gates on each arm, open where they cross; a few rocks.
+- **field** - meadows of open ground (the map's sand / grass) among dirt, almost no rock: boulders scattered all over.
+
+**Glades** (review of 1.3): sand / grass shows only on floor open at the start (dug floor is sand on every ground), and
+fortress, highlands, strata and quarters had none - a grass map of theirs looked like a sand one. On sand or grass
+ground they get glades: dirt turned to tunnel where a noise of their own (`noise2(seed ^ 0x1B873593)`) is low - about 6 % of the map, like rivers' banks. Never on classic ground (a dry classic old kind stays
+1.2's map). mapgen-check: every kind has open ground on grass.
+
+The winding lines (rivers, layers, walls - `course()`) bend around every base on the side they pass it.
+
+**Ground and water by the seed** (`make`): a PRNG of its own (`mulberry32(seed ^ 0x5F3759DF)`) picks the ground -
+sand or grass, about half each - and whether a kind without water of its own is wet: about **1 in 3** (rivers and
+islands always). A wet map of the other kinds gets water that suits it (`wet()`, its own PRNG and noise): fortress -
+a moat 2 cells outside every ring, dry before the gates; arena - a pool in the plaza, half the time a moat round the
+ring; highlands - lakes in the valleys; caves - pools in the caverns; labyrinth - flooded corridors; strata - streams
+along the upper side of the layers; quarters - a lake where the walls cross and a pond in every quarter; field -
+ponds. Water's fields are lowered within 15 cells of a base centre (round edges there), and no water stays within 8
+cells of one (it becomes what was there - dirt where the kind's own water was): the base's walls (cells x - 4 .. x +
+4) and its clearing stay dry, so `baseProblem` never says "water". Water is open for `mapReach`, so the passages are
+cut as before. Since the land of the old four uses the same `rnd` calls as in 1.2, a dry old-kind map with classic
+ground is byte for byte 1.2's (`make({..., water: false, ground: "classic"})` - the overrides; rivers / islands keep
+their water): water-check pins that, and pins 1.3's own maps (a patch never changes them). The new code uses only
++ - * / and `Math.floor` / `round` (no sin / cos / hypot / sqrt): every browser and the server make the same map.
+
+Speed (node 24, a large map with 8 bases, mostly `mapReach`): 100 - 175 ms per kind (the
+first, before the JIT, up to ~400 ms). NetProto's `GEN_ID` takes the ten kinds (pages and servers of 1.2 don't know
+the new ones: 1.3 is a minor). Texts: `gen.<kind>` / `gen.<kind>.i` in `src/lang/<code>/water.js` ("generated
+kinds"). Tests: mapgen-check (every kind x size x a sample of base counts, natural: made, reachable, valid, sand /
+grass, no water by a base, rivers / islands wet; 1 in 3 wet; the overrides; NetProto's
+ids), water-check (the pins).
+
+## 5c. Water and ground (1.3, owner 2026-10-31)
+
+Extended engine only: the classic engine (BLUE vs GREEN) never sees water, and every game without water and with
+classic ground - every map from before 1.3, Original - plays and looks exactly as before (compare-wasm, ext-sim,
+screen-check unchanged). Generated maps changed on purpose in 1.3 (a minor): every one gets sand or grass ground and
+sometimes water, and six kinds were added (5b, "1.3"); the old four made dry with classic ground are 1.2's maps.
+
+- **Water** (cell value 3, `MapData.WATER`): still, it never moves. A tank drives into it at **half speed**; it can't
+  be dug; shots fly over it; explosions leave it water. In the world it is an open pixel (0) - so line of sight,
+  `mapReach` and the game modes' objects treat it as open floor; only `engine.floor` tells it from a tunnel. Computer
+  tanks know it is slow (ai.js: a wet grid node costs 8 - `Grid.wet` -, firing spots in water score worse, a side-step
+  into water counts as slow; nothing changes without water - test/ai-water-sim.js, docs/NOTES.md).
+- **Ground** (`map.ground`, `MapData.GROUNDS` = classic / sand / grass): only how open floor looks, no gameplay. Dirt
+  stays dirt (6 / 8). On a sand or grass map, floor open from the start looks like the ground, floor dug during play
+  is sand; classic keeps today's dark tunnels (dug floor dark too). Floor next to water (the **shore**) is sand on
+  every ground, classic too.
+- **Format**: format byte 1 is exactly the old layout (cells now 0..3) and is what `encode` writes for classic ground
+  - every existing map keeps its bytes, code and id. Format 2 = the same with one byte more right after the size: the
+  ground (1 sand, 2 grass; 0 is refused there). `decode` accepts both, refuses any other format byte or ground.
+- **Bases never stand in water**: `baseProblem` gives `"water"` when a water cell lies inside a base's walls (the
+  cells x - 4 .. x + 4, y - 4 .. y + 4 - its 35 x 35 px); `decode` refuses such a map.
+- **`engine.floor`**: `null` for a world without water and with classic ground (nothing allocated, no code path
+  changes); else a byte per pixel (`y * worldW + x`, `MapData.FLOOR`): 0 none (dirt / rock), 1 water, 2 open from the
+  start, 3 shore = a pixel that isn't water within 3 px (Chebyshev) of water (over 2 too). `MapData.paintRow(map,
+  world, ws, cy, floor)` writes 0 / 1 / 2, the engine's `markShore` the shore once the world is painted. Static for the
+  match: display code reads it (`engine.groundType`, `engine.hasWater` too); the simulation only for the slowdown.
+- **Half speed** (`playGameExt`): after a tank moved a pixel, if any pixel of its 7 x 7 box there is water (`inWater`),
+  `digDelay = 1` - it waits a frame, as after digging. Energy goes per frame as always. A display-only fx
+  `"splash"` at the tank (the last of `FX_KINDS`; `fxEvent` - no sound of the original, never read by the simulation).
+- **Original with water** (an engine option `water` with lakes in the original random world) was in 1.3's work and
+  dropped before the release (owner, 2026-10-31: "original with water is not needed, drop it, open field does that
+  better"): the option and a room setting `water` are ignored; water comes only with maps.
+- `mapgen.js` `symmetric(map, open)` picks the more open cell of a pair by an explicit rank (tunnel, water, dirt,
+  rock) - the old kinds' land unchanged.
+- Tests: `test/water-check.js` (formats, bases on water, the floor and its shore, half speed, shots over water,
+  explosions, a bot match on a wet Open field, the option water ignored), map-check (format bytes, cell value 3).
 
 ## 6. Playing a map
 
@@ -273,6 +376,14 @@ Creating a game with a remembered map id (tunneler.online) applies it once loade
 
 **Replays** record the options, so a map game's replay carries its map and plays anywhere.
 
+**The map's size, Show map** (1.3, owner 2026-10-31: "the map size should be chosen in the choose a map page and
+shown as `map type (map size)` in the lobby... instead of the map size setting in the lobby there should be a new
+setting to show map"): the lobbies (skirmish, online) have no Map size row - the map picker's generated tab sets it
+(online `{t:"set", map, size}` in one message), the Map row shows "Original (Medium)", "Rivers (Large)", a map of yours
+"Crossroads (Large, 6)". Show map (No / Seen by me / Seen by team / Revealed / Revealed (team) - the team ones only
+with a team of 2+): the
+map under the score while Tab (SCORE) is held - docs/NOTES.md "Show map".
+
 ## 7. Limits and abuse
 
 - Every decoded field is range-checked; anything odd -> null (400 on the API, ignored in options / cfg).
@@ -291,7 +402,9 @@ lang.js (merges into a registered language; the chosen language's letters are lo
 (editor, list, sharing, files: `map.file*`, `map.tofile*`, `map.saved`, `map.save.err`; the way between the bases:
 `map.cut`, `map.cut.dig`, `map.cut.play`), `home.maps`, `lc.map`, `os.map`, `os.map.cut`, `pg.cant.map`,
 `pg.cant.path`, `lc.err.bases`, `lc.err.path`; an Information section about maps. The gallery and the picker:
-`src/lang/<code>/gallery.js` (`pk.*`, `gal.*`).
+`src/lang/<code>/gallery.js` (`pk.*`, `gal.*`). Water and ground (1.3): `src/lang/<code>/water.js` (sections editor -
+`map.t.water`, `map.ground*` -, map choice - `pk.water*` -, generated kinds - `gen.<kind>*`); `map.err.water` in
+maps.js; the Instructions section "Water and ground" and the Information's "Your own maps" / "Generated maps".
 
 ## 9. Tests
 
@@ -323,7 +436,7 @@ lang.js (merges into a registered language; the chosen language's letters are lo
 - `test/map-check.js`, the gallery's pages: the list with a picture, both orders, a published map's screen, Add to my
   maps, Publish (refused for a map that can't be played - nothing sent) / Remove, your own map's Remove asking twice;
   the skirmish's Left / Right and picker skipping a map that can't be played.
-- `test/lang-check.js`: the new Information section in every language.
+- `test/lang-check.js`: the new Information section in every language (1.3: the Instructions' "Water and ground").
 
 ## 10. Out of scope
 

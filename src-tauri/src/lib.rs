@@ -12,6 +12,8 @@
 // in the browser. On Android the store / the APK channel updates the app: there is no updater plugin, and
 // update_check answers "no update", the other commands an error (home.js treats both as "no update").
 //
+// Quit (desktop only): the main menu's Quit item closes the app (Android: Back on the main menu).
+//
 // Fullscreen (desktop only): set_fullscreen / is_fullscreen change the window. On Android the activity is
 // always fullscreen (gen/android MainActivity.kt: immersive, system bars hidden, the screen kept on), and
 // the two commands answer an error (src/js/screen.js then leaves the setting alone).
@@ -112,6 +114,12 @@ mod desktop {
     pub fn is_fullscreen(window: tauri::WebviewWindow) -> Result<bool, String> {
         window.is_fullscreen().map_err(|e| e.to_string())
     }
+
+    // the main menu's Quit (home.js)
+    #[tauri::command]
+    pub fn quit(app: tauri::AppHandle) {
+        app.exit(0);
+    }
 }
 
 #[cfg(mobile)]
@@ -141,6 +149,11 @@ mod mobile {
     pub fn is_fullscreen() -> Result<bool, String> {
         Err(NO.into())
     }
+    // (Back on the main menu leaves the app: MainActivity.kt)
+    #[tauri::command]
+    pub fn quit() -> Result<(), String> {
+        Err(NO.into())
+    }
 }
 
 #[cfg(desktop)]
@@ -154,7 +167,7 @@ pub fn run() {
     #[cfg(desktop)]
     let builder = builder.plugin(tauri_plugin_updater::Builder::new().build()).plugin(tauri_plugin_opener::init());
     builder
-        .invoke_handler(tauri::generate_handler![update_check, update_install, update_page, set_fullscreen, is_fullscreen])
+        .invoke_handler(tauri::generate_handler![update_check, update_install, update_page, set_fullscreen, is_fullscreen, quit])
         .run(tauri::generate_context!())
         .expect("error while running TUNNELER");
 }

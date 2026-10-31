@@ -6,7 +6,7 @@
 // /maps.html?share=).
 // The editor: the map in the game's LORES screen (the world map's dotted frame around it), the tools on the status
 // line under it (DOS text, clickable - the phone's palette). Keys: arrows / W A S D move the cursor (Shift: 8 cells),
-// Space / Enter paint (held: while moving), 1-4 the tool, Tab the next one, [ ] or , . the brush, + - the zoom, U or
+// Space / Enter paint (held: while moving), 1-5 the tool (tunnel, dirt, rock, water, base), Tab the next one, [ ] or , . the brush, + - the zoom, U or
 // Ctrl+Z undo, Esc the editor's menu. Mouse: the cursor follows it, the left button paints, the right one drags the
 // view, the wheel zooms. Touch: one finger paints, two drag and pinch. Leaving the editor saves the map.
 import { Account } from "../net/account.js";
@@ -22,14 +22,16 @@ import { MapPic } from "../draw/mappic.js";
 import { MapPick } from "../ui/mappick.js";
 import { MapStore } from "../net/mapstore.js";
 import { Nav } from "../nav.js";
+import { PlayScreen } from "../draw/playscreen.js";
 import { Pads } from "../io/pads.js";
 import { Scope } from "../scope.js";
 import { GameScreen } from "../io/screen.js";
 import { StatusLine } from "../draw/statusline.js";
 import { UniText } from "../text/unitext.js";
 
-const TOOLS = ["tunnel", "dirt", "rock", "base"];
-const VALUE = { tunnel: MapData.TUNNEL, dirt: MapData.DIRT, rock: MapData.ROCK };
+// (water: 1.3, owner 2026-10-31 - docs/v6/MAPS.md 5c; a map's ground is set on its own screen)
+const TOOLS = ["tunnel", "dirt", "rock", "water", "base"];
+const VALUE = { tunnel: MapData.TUNNEL, dirt: MapData.DIRT, rock: MapData.ROCK, water: MapData.WATER };
 const BRUSHES = [0, 1, 2, 3, 5, 8];                        // radius in cells (shown as the diameter)
 const ZOOMS = [0.25, 0.5, 1, 2, 4];                       // LORES pixels per cell
 const ZOOM_TEXT = ["1:4", "1:2", "1:1", "2:1", "4:1"];
@@ -144,8 +146,9 @@ export function mount() {
   let fileNote = null;                                     // {id, text, color}: what Save as a file did (Android)
 
   // ------------------------------------------------------------ a new map
-  const form = { name: { value: "", max: MapData.MAX_NAME, width: MapData.MAX_NAME }, size: "medium", from: "dirt", bases: 2, fair: true };
-  // (owner, 2026-10-28: also a generated world - mapgen.js's kinds, with its bases and layout - to change in the editor)
+  const form = { name: { value: "", max: MapData.MAX_NAME, width: MapData.MAX_NAME }, size: "medium", from: "dirt", bases: 2 };
+  // (owner, 2026-10-28: also a generated world - mapgen.js's kinds, with its bases - to change in the editor; 1.3: always
+  // natural, no Layout row)
   const FROM = ["dirt", "rock", "empty", "random"].concat(MapGen.KINDS);
   const step = (arr, v, d) => arr[(arr.indexOf(v) + d + arr.length) % arr.length];
   function newMap(keep) {
@@ -154,13 +157,9 @@ export function mount() {
     // (owner, 2026-10-26: also rock everywhere and empty - the editor's "Fill everything with" is gone)
     const setFrom = d => { form.from = step(FROM, form.from, d); newMap(true); };
     const gen = MapGen.KINDS.includes(form.from);
-    // (a fair layout: bases in pairs - an even number)
-    const even = () => { if (form.fair && form.bases % 2) form.bases = Math.min(MapData.MAX_BASES, form.bases + 1); };
-    const setBases = d => { const k = form.fair ? 2 : 1; form.bases = Math.max(2, Math.min(MapData.MAX_BASES, form.bases + d * k)); even(); newMap(true); };
-    const setFair = () => { form.fair = !form.fair; even(); newMap(true); };
+    const setBases = d => { form.bases = Math.max(2, Math.min(MapData.MAX_BASES, form.bases + d)); newMap(true); };
     const genRows = !gen ? [] : [
       { key: "bases", label: T("map.gen.bases") + form.bases, info: [T("map.gen.bases.i")], go: () => setBases(form.bases >= MapData.MAX_BASES ? -99 : 1), change: setBases },
-      { key: "layout", label: T("pk.layout") + T("gen." + (form.fair ? "fair" : "natural")), info: [T("pk.layout.i1")], go: setFair, change: setFair },
     ];
     ui.show({
       lines: [{ row: 2, text: T("map.new.title"), color: 12 }], box: { y: 6 }, infoRow: 18, back: () => showList(),
@@ -186,7 +185,7 @@ export function mount() {
   }
   async function create() {
     const map = form.from === "random" ? randomWorld(form.size)
-      : MapGen.KINDS.includes(form.from) ? MapGen.make({ kind: form.from, size: form.size, bases: form.bases, seed: (Math.random() * 0x100000000) >>> 0, fair: form.fair })
+      : MapGen.KINDS.includes(form.from) ? MapGen.make({ kind: form.from, size: form.size, bases: form.bases, seed: (Math.random() * 0x100000000) >>> 0 })
       : MapData.blank(form.size, { rock: MapData.ROCK, empty: MapData.TUNNEL }[form.from]);
     map.name = MapData.cleanName(form.name.value) || Lang.raw("map.ph.name");
     // (no bases: the player places them - owner, 2026-10-25; a map needs MapData.MIN_BASES to be played)
@@ -233,6 +232,15 @@ export function mount() {
       ],
     });
   }
+  // the map's ground (classic / sand / grass - only how its open floor looks; owner, 2026-10-31): a change like the
+  // name's - a draft, gone again when the map is back as it was saved
+  function setGround(r, d) {
+    noteName(r);
+    const m = MapData.copy(shownMap(r));
+    m.ground = step(MapData.GROUNDS, m.ground, d);
+    draft = MapData.code(m) === r.code ? null : { id: r.id, rec: r, map: m };
+    detail(r, true);
+  }
   // (that map's screen still showing - an answer that comes late redraws only its own map)
   let detShown = null;
   const detOn = id => !ed && detShown === id && !!ui.spec && ui.spec.items.some(it => it.key === "name");
@@ -257,9 +265,11 @@ export function mount() {
     ui.show({
       lines: [{ row: 2, text: T("map.one.title"), color: 12 }, { row: 4, text: infoText(map.size, map.bases.length), color: 11 }]
         .concat(d ? [{ row: 5, text: T("map.changed"), color: 14 }] : []),
-      box: { y: 7 }, infoRow: 19, back: () => settle(r, done),
+      box: { y: 7 }, infoRow: 20, back: () => settle(r, done),
       items: [
         { key: "name", label: T("map.name"), input: nameForm, align: "left", info: [T("map.name.i")], go: () => { noteName(r); detail(r, true); } },
+        { key: "ground", label: T("map.ground") + T("map.ground." + map.ground), info: [T("map.ground.i1"), T("map.ground.i2")],
+          go: () => setGround(r, 1), change: d => setGround(r, d) },
         { key: "gap0", label: "", disabled: true },
         { key: "edit", label: T("map.edit"), info: editInfo, go: () => { noteName(r); edit(r, shownMap(r)); } },
         { key: "play", label: T("map.play"), attr: why ? 0x08 : 0, info: why ? [{ text: T(why === "bases" ? "map.need" : "map.cut.play"), color: 12 }] : [T("map.play.i")],
@@ -480,6 +490,16 @@ export function mount() {
     const m = ed.map, z = zoomOf(), vram = new Uint8Array(LR * 160);
     for (let i = 0; i < vram.length; i += 2) { vram[i] = 176; vram[i + 1] = 0x01; }   // (the game's dotted frame)
     const px = new Uint8Array(160 * LR).fill(255);                              // 255 = the frame shows
+    // water and ground (1.3, owner 2026-10-31): open pixels in their floor's look as in the game (playscreen.js
+    // FLOOR_LOOK; display.js draws the floor plane) - water (its ripple from 2:1 on, by the world pixel), the shore
+    // (world pixels within 3 of water) sand, tunnels in the map's ground
+    const fl = new Uint8Array(160 * LR), L = PlayScreen.FLOOR_LOOK, look = PlayScreen.floorLook, g = m.ground, W4 = MapData.CELL;
+    const wet = (x, y) => inMap(x, y) && m.cells[y * m.w + x] === MapData.WATER;
+    const shore = (wx, wy) => {
+      for (let cy = Math.floor((wy - 3) / W4); cy <= Math.floor((wy + 3) / W4); cy++)
+        for (let cx = Math.floor((wx - 3) / W4); cx <= Math.floor((wx + 3) / W4); cx++) if (wet(cx, cy)) return true;
+      return false;
+    };
     const k = z < 1 ? Math.round(1 / z) : 1;
     for (let y = VY0; y < VY0 + VH; y++)
       for (let x = VX0; x < VX0 + VW; x++) {
@@ -488,20 +508,24 @@ export function mount() {
         let v;
         if (k === 1) v = m.cells[cy * m.w + cx];
         else {                                                                    // (zoomed out: the block's most common)
-          const n = [0, 0, 0];
+          const n = [0, 0, 0, 0];
           for (let dy = 0; dy < k; dy++) for (let dx = 0; dx < k; dx++) if (inMap(cx + dx, cy + dy)) n[m.cells[(cy + dy) * m.w + cx + dx]]++;
-          v = n[0] >= n[1] && n[0] >= n[2] ? 0 : n[2] >= n[1] ? 2 : 1;
+          v = n[3] > n[0] && n[3] > n[1] && n[3] > n[2] ? 3 : n[0] >= n[1] && n[0] >= n[2] ? 0 : n[2] >= n[1] ? 2 : 1;
         }
-        const frame = MapData.inFrame(m.size, cx, cy);
-        px[y * 160 + x] = v === MapData.ROCK ? (frame ? 13 : 7) : v === MapData.TUNNEL ? 0 : MapData.dirtAt(x, y);
+        const frame = MapData.inFrame(m.size, cx, cy), wx = Math.floor(fx * W4), wy = Math.floor(fy * W4);
+        px[y * 160 + x] = v === MapData.ROCK ? (frame ? 13 : 7) : v === MapData.TUNNEL || v === MapData.WATER ? 0 : MapData.dirtAt(x, y);
+        if (v === MapData.WATER) fl[y * 160 + x] = look(MapData.FLOOR.WATER, wx, wy, g, z < 2);
+        else if (v === MapData.TUNNEL) fl[y * 160 + x] = shore(wx, wy) ? L.SAND : look(MapData.FLOOR.OPEN, wx, wy, g, true);
       }
-    const plot = (x, y, c) => { x = Math.round(x); y = Math.round(y); if (x >= VX0 && y >= VY0 && x < VX0 + VW && y < VY0 + VH) px[y * 160 + x] = c; };
+    // (f: the floor look of a 0 pixel - a base's inside: dug out by the engine, sand on sand / grass)
+    const plot = (x, y, c, f = 0) => { x = Math.round(x); y = Math.round(y); if (x >= VX0 && y >= VY0 && x < VX0 + VW && y < VY0 + VH) { px[y * 160 + x] = c; fl[y * 160 + x] = f; } };
+    const inside = g === "sand" || g === "grass" ? L.SAND : L.NONE;
     // a base: its walls (35 x 35 world pixels, doorways 7 wide in the top and bottom walls), black inside, its number
     const baseAt = (b, color, outlineOnly) => {
       const c = MapData.basePx(b), s = z / MapData.CELL;                         // (LORES pixels per world pixel)
       const [x0, y0] = pxOfCell((c.x - 17) / 4, (c.y - 17) / 4), [x1, y1] = pxOfCell((c.x + 17) / 4, (c.y + 17) / 4);
       const [mx] = pxOfCell(c.x / 4, c.y / 4), door = 4 * s;
-      if (!outlineOnly) for (let y = Math.ceil(y0) + 1; y < y1; y++) for (let x = Math.ceil(x0) + 1; x < x1; x++) plot(x, y, 0);
+      if (!outlineOnly) for (let y = Math.ceil(y0) + 1; y < y1; y++) for (let x = Math.ceil(x0) + 1; x < x1; x++) plot(x, y, 0, inside);
       for (let x = Math.round(x0); x <= Math.round(x1); x++) if (Math.abs(x - mx) >= door) { plot(x, y0, color); plot(x, y1, color); }
       for (let y = Math.round(y0); y <= Math.round(y1); y++) { plot(x0, y, color); plot(x1, y, color); }
       return [mx, (y0 + y1) / 2];
@@ -525,14 +549,18 @@ export function mount() {
         for (let y = 0; y < Math.max(1, z); y++) for (let x = 0; x < Math.max(1, z); x++) plot(x0 + x, y0 + y, 14);
       }
     }
+    const floor = new Uint8Array(LR * 80);
+    let wetOrGround = false;
     for (let y = 0; y < LR; y++)
       for (let c = 0; c < 80; c++) {
         const a = px[y * 160 + c * 2], b = px[y * 160 + c * 2 + 1];
         if (a === 255 && b === 255) continue;
         vram[y * 160 + c * 2] = 0xDD;
         vram[y * 160 + c * 2 + 1] = ((b === 255 ? 0 : b) << 4) | (a === 255 ? 0 : a);
+        const f = (a === 255 ? 0 : fl[y * 160 + c * 2]) | (b === 255 ? 0 : fl[y * 160 + c * 2 + 1] << 4);
+        if (f) { floor[y * 80 + c] = f; wetOrGround = true; }
       }
-    display.setSnapshot({ t: 0, mode: "lores", screen: "editor", palette: "extended", vram, rows: LR });
+    display.setSnapshot({ t: 0, mode: "lores", screen: "editor", palette: "extended", vram, rows: LR, floor: wetOrGround ? floor : null });
     renderBar();
   }
   const inBrush = (dx, dy, r) => dx * dx + dy * dy <= r * r + r;
@@ -553,8 +581,16 @@ export function mount() {
   // 4:3 screen); the groups a row may drop have the higher prio numbers (StatusLine drops those first)
   function barRows(phone) {
     const m = ed.map, pm = t => phone ? " " + t + " " : t;   // (a phone: - and + three cells wide - a finger's target)
-    const tools = TOOLS.map((t, i) => ({ text: " " + (phone ? "" : (i + 1) + " ") + T("map.t." + t) + " ", attr: t === ed.tool ? 0x5F : 0x07, prio: 0,
-      onClick: () => setTool(t) }));
+    // (five tools since water - owner, 2026-10-31: each padded with a space while the row has room, else only the
+    // chosen one, else none; a desktop's row also holds Undo, Done and the keys)
+    const toolsOf = pad => TOOLS.map((t, i) => {
+      const sp = pad === 2 || (pad === 1 && t === ed.tool) ? " " : "";
+      return { text: sp + (phone ? "" : (i + 1) + " ") + T("map.t." + t) + sp, attr: t === ed.tool ? 0x5F : 0x07, prio: 0, onClick: () => setTool(t) };
+    });
+    const width = segs => segs.reduce((n, s) => n + UniText.cols(s.text), 0) + 2 * Math.max(0, segs.length - 1);
+    const rest = phone ? 0 : UniText.cols(T("map.undo")) + UniText.cols(T("map.done")) + UniText.cols(T("map.keys")) + 6;
+    let tools = toolsOf(2);
+    for (let pad = 1; pad >= 0 && width(tools) + rest > (phone ? 40 : 80); pad--) tools = toolsOf(pad);
     const brush = [{ text: T("map.brush"), attr: 0x07, prio: 2 }, { text: pm("-"), attr: 0x0F, prio: 2, onClick: () => setBrush(-1) },
       { text: String(BRUSHES[ed.brush] * 2 + 1), attr: 0x0E, prio: 2 }, { text: pm("+"), attr: 0x0F, prio: 2, onClick: () => setBrush(1) }];
     const zoom = [{ text: T("map.zoom"), attr: 0x07, prio: 3 }, { text: pm("-"), attr: 0x0F, prio: 3, onClick: () => setZoom(-1) },
@@ -597,12 +633,18 @@ export function mount() {
     render();
   }
   // painting: the brush stamped on every cell from the last one to (x, y)
+  // (water never inside a base's walls - the cells x - 4 .. x + 4 around it, MapData.baseProblem: those stay as they
+  // are and the status line says why)
   function stamp(x, y) {
-    const m = ed.map, v = VALUE[ed.tool];
+    const m = ed.map, v = VALUE[ed.tool], bases = v === MapData.WATER ? m.bases : [];
+    let dry = false;
     for (const [dx, dy] of brushCells(BRUSHES[ed.brush])) {
       const cx = x + dx, cy = y + dy;
-      if (inMap(cx, cy) && !MapData.inFrame(m.size, cx, cy)) m.cells[cy * m.w + cx] = v;
+      if (!inMap(cx, cy) || MapData.inFrame(m.size, cx, cy)) continue;
+      if (bases.some(b => Math.abs(cx - b.x) <= 4 && Math.abs(cy - b.y) <= 4)) { dry = true; continue; }
+      m.cells[cy * m.w + cx] = v;
     }
+    if (dry) say(T("map.err.water"));
     ed.reach = null;
   }
   function paintTo(x, y) {
@@ -646,7 +688,7 @@ export function mount() {
     const c = e.code, k = e.key;
     if (MOVES[c]) { const n = e.shiftKey ? 8 : 1; moveCursor(MOVES[c][0] * n, MOVES[c][1] * n); }
     else if (c === "Space" || c === "Enter" || c === "NumpadEnter") { if (!e.repeat && !ed.stroke) beginStroke(); }
-    else if (/^Digit[1-4]$/.test(c)) setTool(TOOLS[+c.slice(5) - 1]);
+    else if (/^Digit[1-5]$/.test(c)) setTool(TOOLS[+c.slice(5) - 1]);
     else if (c === "Tab") setTool(step(TOOLS, ed.tool, e.shiftKey ? -1 : 1));
     else if (c === "BracketLeft" || c === "Comma") setBrush(-1);
     else if (c === "BracketRight" || c === "Period") setBrush(1);
