@@ -512,16 +512,31 @@ function createServer(opts = {}) {
   // start, with the players' client ids and names), the connection of each player (socks), held / latched
   // bits, the clock. Classic (BLUE + GREEN players): the original frame format, runs only while both are
   // connected. Extended: runs from the start until it ends (a missing player's tank stands still).
-  function startMatch(room) {
+  // gen: a generated kind's map already made for this start ({seed, code} - startMatch makes it first, in the worker)
+  function startMatch(room, gen) {
+    // (a generated kind: its map made in a worker thread first - mapgen-worker.js, 1.3.1: the games' clocks never wait
+    // for it; then started if the room still can - anything that changed meanwhile: made again)
+    if (!gen && NetProto.genMap(room.map)) {
+      if (room.genPending) return;
+      const want = { map: room.map, size: room.size, n: slotsNow(room).length, seed: (Math.random() * 0x100000000) >>> 0 };
+      room.genPending = want;
+      generatedMap(want.map, want.size, want.n, want.seed).then(code => {
+        room.genPending = null;
+        if (closing || rooms.get(room.id) !== room || room.match || cantStart(room)) return;
+        if (room.map !== want.map || room.size !== want.size || slotsNow(room).length !== want.n) return startMatch(room);
+        startMatch(room, { seed: want.seed, code });
+      });
+      return;
+    }
     if (room.map && !NetProto.genMap(room.map)) galleryPlayed(room.map);   // (a published map: one more play)
     const slots = slotsNow(room);
     const ext = !isClassic(slots, room);
     for (const s of slots) if (!s.bot) { const ws = room.seats[s.color].occ; s.cid = ws.cid; s.name = ws.name; }
     // quick play: every tank has a computer player on every client (a human's takes over when the human leaves)
     if (room.qp) for (const s of slots) if (!s.level) s.level = room.seats[s.color].ai || NetProto.QUICK_LEVEL;
-    const N = slots.length, seed = (Math.random() * 0x100000000) >>> 0;
+    const N = slots.length, seed = gen ? gen.seed : (Math.random() * 0x100000000) >>> 0;
     // a generated kind: this match's own map, from its seed, with a base for every tank (MapGen; the clients get its code)
-    const genCode = NetProto.genMap(room.map) ? generatedMap(room.map, room.size, N, seed) : "";
+    const genCode = gen ? gen.code : "";
     const m = {
       room, no: ++room.matches, seed, ext, slots, qp: room.qp, drives: [],
       cfg: { ext, players: N, slots: slots.map(s => ({ color: s.color, bot: s.bot, level: s.level, team: s.team })),
@@ -1065,12 +1080,43 @@ function createServer(opts = {}) {
     }
     return linkedCache.get(id);
   }
-  // a generated kind's map for a match (mapgen.js - loaded with the engine on the first one): its code
-  let mapGen = null;
+  // a generated kind's map for a match -> a promise of its code ("" = none): made in a worker thread (mapgen-worker.js,
+  // one, kept, unref'd - it never keeps the process alive); no worker or it failed: here (mapgen.js, loaded then)
+  let mapGen = null, genWorker = null, genSeq = 0;
+  const genWaiting = new Map();
   function generatedMap(id, size, n, seed) {
-    mapGen = mapGen || require("./src/js/game/mapgen.js").MapGen;
-    const g = mapGen.parse(id), map = g && mapGen.make({ kind: g.kind, size, bases: n, seed });
-    return map ? MapData.code(map) : "";
+    const kind = NetProto.genMap(id) ? id.split(":")[1] : null;
+    return new Promise(resolve => {
+      if (!kind) return resolve("");
+      const here = () => {
+        mapGen = mapGen || require("./src/js/game/mapgen.js").MapGen;
+        const map = mapGen.make({ kind, size, bases: n, seed });
+        resolve(map ? MapData.code(map) : "");
+      };
+      if (!genWorker) {
+        try {
+          const w = genWorker = new Worker(path.join(__dirname, "mapgen-worker.js"));
+          w.unref();
+          // (only its answers {id, code}: node --watch makes a worker send its required files first)
+          w.on("message", m => {
+            if (!m || typeof m !== "object" || !("id" in m)) return;
+            const r = genWaiting.get(m.id);
+            if (r) { genWaiting.delete(m.id); r(m.code); }
+          });
+          const failed = e => {
+            if (genWorker !== w) return;
+            if (e) say("map worker failed:", e.message);
+            genWorker = null;
+            for (const r of genWaiting.values()) r(null);
+            genWaiting.clear();
+          };
+          w.on("error", failed); w.on("exit", () => failed());
+        } catch (e) { genWorker = null; return here(); }
+      }
+      const k = ++genSeq;
+      genWaiting.set(k, code => (code == null ? here() : resolve(code)));
+      genWorker.postMessage({ id: k, kind, size, bases: n, seed });
+    });
   }
   async function loadMap(id) {
     if (!NetProto.mapId(id)) return null;
@@ -2174,6 +2220,7 @@ function createServer(opts = {}) {
     closing = true;
     server.close();
     for (const r of rooms.values()) if (r.match) { stopClock(r.match); clearTimeout(r.match.aloneTimer); }
+    if (genWorker) { const w = genWorker; genWorker = null; w.terminate().catch(() => {}); }
     clearInterval(errorTimer);
     await Promise.race([flushErrors(), new Promise(res => setTimeout(res, saveMs).unref())]);   // (the kept error reports)
     await flushGallery();                         // (the gallery's plays counted since its last write)

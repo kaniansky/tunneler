@@ -12,9 +12,10 @@ FROM node:lts-alpine
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
-COPY server.js accounts.js cloudsave.js challenge-worker.js ./
+COPY server.js accounts.js cloudsave.js challenge-worker.js mapgen-worker.js ./
 # server.js shares the wire protocol helpers with the browser (ES modules: src/package.json says so); the daily
-# challenge's replay check (challenge-worker.js) runs the game's engine, computer players, modes and English texts
+# challenge's replay check (challenge-worker.js) runs the game's engine, computer players, modes and English texts;
+# mapgen-worker.js makes the generated maps of online matches
 COPY src/package.json ./src/
 COPY src/js ./src/js
 COPY src/lang ./src/lang

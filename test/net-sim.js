@@ -705,6 +705,25 @@ async function main() {
     check("no desync (gen)", () => assert(![g1, g2].some(c => c.desync) && gm.desyncs === 0));
     for (const c of [g1, g2]) await c.close();
   }
+  // (1.3.1: the map made in a worker thread - mapgen-worker.js: starting a large match with 8 tanks on a generated map
+  // doesn't stall the server's event loop, so other rooms' clocks keep ticking; made here it took 100 - 400 ms)
+  {
+    const { monitorEventLoopDelay } = require("perf_hooks");
+    const br = (await http(port, "POST", "/api/rooms", { name: "Big gen", size: "large", map: "gen:labyrinth:natural",
+      seats: [{ kind: "open", team: 1 }].concat([2, 3, 4, 5, 6, 7, 8].map(t => ({ kind: "easy", team: t }))) })).json;
+    const b1 = await new FakeClient(port, br.id, { name: "B1", host: br.hostKey }).connect();
+    await until(() => b1.status && b1.status.settings.map === "gen:labyrinth:natural" && b1.status.cant === null, "big gen room ready");
+    await settle();
+    const h = monitorEventLoopDelay({ resolution: 5 });
+    h.enable();
+    b1.send({ t: "start" });
+    await until(() => b1.match, "big gen match", 20000);
+    h.disable();
+    const map = MapData.decode(b1.cfg.map), worst = Math.round(h.max / 1e6);
+    check("a large generated map for 8 tanks, made in the worker: the event loop never stalled (worst " + worst + " ms)", () =>
+      assert(map && map.size === "large" && map.bases.length === 8 && worst < 90, worst + " ms"));
+    await b1.close();
+  }
 
   // ---------------------------------------------------------------- Show map, a map with its size (1.3, owner 2026-10-31)
   console.log("show map, the map's size online");

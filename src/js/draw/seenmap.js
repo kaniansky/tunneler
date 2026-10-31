@@ -10,7 +10,9 @@
 //   "allteam"  Revealed (team): the same, changed by what the viewer's team sees
 // (owner, 2026-10-31: "Seen by me, Seen by team (if team exist), Revealed instead of Everything and Revealed (team)";
 // the team ones without teammates: as the viewer's own)
-// What one of them sees now in its colours, the rest gray (remembered); never seen black. Tanks: the viewer's team and
+// What one of them sees now in its colours, the rest gray (remembered); never seen a faint dark dither (1.3.1: not the
+// background's black - the edge of what is known shows). Without the world's rock frame (as map pictures:
+// MapData.FRAME cells on every side). Tanks: the viewer's team and
 // the tanks one of them sees now. A cell of the map is 4 x 4 world pixels (the map editor's cell): rock gray, dirt in the
 // game's browns, open floor in the ground's look (classic black, sand, grass), water blue. Bases: their walls in their
 // tank's colour (once their middle cell is known); tanks: a 3 x 3 square in their colour, the viewer's own with a white
@@ -22,6 +24,7 @@ import { PlayScreen } from "./playscreen.js";
 
 const OPEN = 1, DIRT = 2, ROCK = 3, WATER = 4;            // (seenCells: 0 = never seen)
 const NOW = 2;                                           // (seen in the last NOW steps: "now" - in colour)
+const UNSEEN = 30;                                       // (never seen: every other cell this dark gray, a hint of blue)
 
 // does the team of `viewers` see world pixel (x, y) now? Line of sight off: inside a viewer's view window (its cam)
 function seesNow(e, viewers, x, y) {
@@ -69,7 +72,8 @@ function picture(e, viewer) {
   for (let cy = 0; cy < ch; cy++)
     for (let cx = 0; cx < cw; cx++) {
       const i = cy * cw + cx, k = known[i];
-      if (k) put(cx, cy, look(k, cx, cy), !seen(i)); else put(cx, cy, 0);
+      if (k) put(cx, cy, look(k, cx, cy), !seen(i));
+      else { const o = i * 4, v = (cx ^ cy) & 1 ? UNSEEN : 0; rgba[o] = rgba[o + 1] = v; rgba[o + 2] = v + (v >> 2); rgba[o + 3] = 255; }
     }
   // the bases: walls 17 px from the middle (4 cells), the doorways at the top and the bottom
   for (let p = 1; p <= e.nPlayers; p++) {
@@ -91,7 +95,12 @@ function picture(e, viewer) {
     if (p === viewer) for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) put(tx + dx, ty + dy, 15);
     for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) put(tx + dx, ty + dy, c);
   }
-  return { w: cw, h: ch, rgba };
+  // (without the rock frame round the world: MapData.FRAME cells on every side)
+  const K = Math.min(MapData.FRAME[e.size] || 0, (Math.min(cw, ch) >> 1) - 1), w = cw - 2 * K, h = ch - 2 * K;
+  if (K <= 0) return { w: cw, h: ch, rgba };
+  const out = new Uint8ClampedArray(w * h * 4);
+  for (let y = 0; y < h; y++) out.set(rgba.subarray(((y + K) * cw + K) * 4, ((y + K) * cw + K + w) * 4), y * w * 4);
+  return { w, h, rgba: out };
 }
 
 export const SeenMap = { picture };

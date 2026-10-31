@@ -13,12 +13,19 @@
 //   - NetProto: the setting checked, carried by roomSettings / readCfg / engineOptions (never with "off")
 //   node test/seenmap-check.js
 const H = require("./modes-harness.js");
-const { NetProto, MatchText, TunnelerEngine } = require("./src.js");
+const { NetProto, MatchText, TunnelerEngine, MapData } = require("./src.js");
 const { SeenMap } = require("../src/js/draw/seenmap.js");
 const check = H.check;
 
-// (a picture's cells that aren't black)
-const lit = pic => { let n = 0; for (let i = 0; i < pic.w * pic.h; i++) if (pic.rgba[i * 4] | pic.rgba[i * 4 + 1] | pic.rgba[i * 4 + 2]) n++; return n; };
+// (never seen: black or the faint dither - 1.3.1)
+const blank = (rgba, o) => rgba[o] === rgba[o + 1] && (rgba[o] === 0 || rgba[o] === 30) && rgba[o + 2] === rgba[o] + (rgba[o] >> 2);
+// (a picture's cells that aren't never-seen)
+const lit = pic => { let n = 0; for (let i = 0; i < pic.w * pic.h; i++) if (!blank(pic.rgba, i * 4)) n++; return n; };
+// (a world cell i - 4 x 4 px - in the picture, which has no rock frame: its rgba offset, null in the frame)
+const at = (pic, e, i) => {
+  const cw = e.worldW >> 2, K = (cw - pic.w) >> 1, x = i % cw - K, y = Math.floor(i / cw) - K;
+  return x < 0 || y < 0 || x >= pic.w || y >= pic.h ? null : (y * pic.w + x) * 4;
+};
 const run = (showMap, extra = {}, frames = 1500, onFrame) => H.runMatch({ slots: H.slots([1, 2, 1, 2]), levels: ["normal", "normal", "normal", "normal"],
   seed: 5, size: "small", winScore: 3, maxFrames: frames, mods: Object.assign({ showMap }, extra.mods || {}),
   onFrame: (e, f) => { if (!f) e.youPlayer = 1; if (onFrame) onFrame(e, f); } });   // (the page's player: what the map tracks)
@@ -41,7 +48,12 @@ console.log("what each shows");
   check(!snap.pic, "off: the score screen without a picture");
 
   const all = run("all", {}, 300), pa = SeenMap.picture(all.engine, 1);
-  check(pa && pa.w === all.engine.worldW >> 2 && pa.h === all.engine.worldH >> 2, "all: a cell per 4 x 4 world pixels (" + (pa && pa.w) + " x " + (pa && pa.h) + ")");
+  const K = MapData.FRAME[all.engine.size];
+  check(pa && pa.w === (all.engine.worldW >> 2) - 2 * K && pa.h === (all.engine.worldH >> 2) - 2 * K,
+    "all: a cell per 4 x 4 world pixels, without the rock frame (" + (pa && pa.w) + " x " + (pa && pa.h) + ")");
+  let dither = 0;
+  { const o = SeenMap.picture(run("own", {}, 100).engine, 1); for (let i = 0; i < o.w * o.h; i++) if (o.rgba[i * 4] === 30) dither++; }
+  check(dither > 0, "never seen: a faint dither, not the background's black (" + dither + " cells)");
   check(lit(pa) > pa.w * pa.h * 0.5, "all: the world shown (" + lit(pa) + " of " + pa.w * pa.h + " cells not black)");
 
   let early = 0;
@@ -64,16 +76,19 @@ console.log("what each shows");
   let gray = 0, colour = 0;
   for (let i = 0; i < p2.w * p2.h; i++) {
     const r = p2.rgba[i * 4], g = p2.rgba[i * 4 + 1], b = p2.rgba[i * 4 + 2];
+    if (blank(p2.rgba, i * 4)) continue;
     if (r === g && g === b && r) gray++; else if (r !== g || g !== b) colour++;
   }
   check(gray > colour && colour > 0, "all: what isn't seen now gray (" + gray + "), what is in colour (" + colour + ")");
   // (allteam: the teammates' sight changes it too - where only a mate looked, the world as it is now)
-  const at = run("allteam", {}, 1500).engine, mate2 = at.teamMembers(at.team(1)).find(p => p !== 1);
-  const pAll = SeenMap.picture(e2, 1), pTeam = SeenMap.picture(at, 1);
+  const et = run("allteam", {}, 1500).engine, mate2 = et.teamMembers(et.team(1)).find(p => p !== 1);
+  const pAll = SeenMap.picture(e2, 1), pTeam = SeenMap.picture(et, 1);
   let mateOnly = 0, diff = 0;
-  for (let i = 0; i < at.seenCells[1].length; i++) if (at.seenAt[mate2][i] && !at.seenAt[1][i]) {
+  for (let i = 0; i < et.seenCells[1].length; i++) if (et.seenAt[mate2][i] && !et.seenAt[1][i]) {
+    const o = at(pTeam, et, i);
+    if (o === null) continue;
     mateOnly++;
-    if (pAll.rgba[i * 4] !== pTeam.rgba[i * 4] || pAll.rgba[i * 4 + 1] !== pTeam.rgba[i * 4 + 1]) diff++;
+    if (pAll.rgba[o] !== pTeam.rgba[o] || pAll.rgba[o + 1] !== pTeam.rgba[o + 1]) diff++;
   }
   check(mateOnly > 0 && diff > 0, "allteam: where only a teammate looked the map differs from all's (" + diff + " of " + mateOnly + " cells)");
 
@@ -84,8 +99,12 @@ console.log("what each shows");
   const pt = SeenMap.picture(e, 1), mate = e.teamMembers(e.team(1)).find(p => p !== 1);
   const mine = e.seenCells[1], theirs = e.seenCells[mate];
   let missing = 0;
-  for (let i = 0; i < mine.length; i++) if ((mine[i] || theirs[i]) && !(pt.rgba[i * 4 + 3])) missing++;
-  check(mate && missing === 0, "team: every cell a member has seen is on the map");
+  for (let i = 0; i < mine.length; i++) {
+    const o = at(pt, e, i);
+    // (an open cell on classic ground is black itself - the newer memory of the two may be one)
+    if ((mine[i] || theirs[i]) && o !== null && blank(pt.rgba, o) && !((mine[i] === 1 || theirs[i] === 1) && e.groundType === "classic")) missing++;
+  }
+  check(mate && missing === 0, "team: every cell a member has seen is on the map (" + missing + " missing)");
   check(e.teamMembers(e.team(1)).every(p => e.seenCells[p]) && [2, 4].every(p => !e.seenCells[p] || e.team(p) === e.team(1)),
     "only the viewer's team is tracked (what the map can show)");
   const ownOfTeam = SeenMap.picture(Object.assign(Object.create(Object.getPrototypeOf(e)), e, { showMap: "own" }), 1);

@@ -201,7 +201,8 @@ class PlayScreen {
       s.cams = this.cams.map(c => c && [c.x, c.y]);
       s.tanks = Array.from({ length: this.e.nPlayers + 1 }, (_, p) => p ? [this.e.tankX[p], this.e.tankY[p], this.e.alive[p] ? 1 : 0] : null);
       if (this.e.sight !== "full") s.dims = this.viewDims.map(d => d.slice());
-      if (this.viewFloors) s.floors = this.viewFloors.map(f => f.slice());
+      // (the views' floor planes: only when the original look draws them - views.js sets wantFloors)
+      if (this.viewFloors && PlayScreen.wantFloors()) s.floors = this.viewFloors.map(f => f.slice());
     }
     else if (this.mode === "text") s.text = this.textOps.map(o => o.slice());
     else {
@@ -696,29 +697,13 @@ class PlayScreen {
       if (((p - 1) & 1) + 1 === turn && hiB(this.e.energy[p]) !== hiB(this.shownEnergy[p])) this.drawGaugeExt(p, 1);
     }
   }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 }
 
 PlayScreen.FLOOR_LOOK = FLOOR_LOOK;
 PlayScreen.floorLook = floorLook;     // (floor, x, y, ground, still) -> FLOOR_LOOK of an open world pixel
 PlayScreen.rippleAt = rippleAt;
+// do play snapshots carry the views' floor planes? Only the original look's painting reads them (views.js: the original
+// look, or a modern one that failed); node, tests: always
+PlayScreen.wantFloors = () => true;
 
 export { PlayScreen };

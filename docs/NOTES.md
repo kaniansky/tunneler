@@ -1206,9 +1206,11 @@ page from before 2.0 - is refused (POST 409 `{code:
   the view window, on: what `sightView` lit. "all" / "allteam": every cell filled from the world when the match starts,
   then only seeing changes it ("show map everything should only reveal the map but not update from the enemy view").
   The picture: the newest memory of the viewers (own / all: the viewer; team / allteam: its team), what they see now in
-  colour, the
-  rest gray, never seen black; bases once known; tanks: the viewer's team and the ones they see now (the viewer's own
-  with a white edge). Not split screen, the daily challenge, replays. The lobbies: no Map size row - the map picker
+  colour, the rest gray, never seen a faint dark dither (1.3.1 - not the background's black); without the world's
+  rock frame (MapData.FRAME cells, as map pictures); bases once known; tanks: the viewer's team and the ones they see
+  now (the viewer's own with a white edge). Only `youPlayer`'s cells are tracked (with the team modes its team's -
+  1.3.1). Display's phone crop moves the picture with its rows, the stacked layout too (`zoom`: `z.pic`). Not split
+  screen, the daily challenge, replays. The lobbies: no Map size row - the map picker
   sets it (see docs/v6/MAPS.md 6). Test: test/seenmap-check.js (display only, each mode, the layout, NetProto).
 - **Teammates marked** (owner, 2026-10-28; display only): `views.js teamMarks(e, viewer)` - the viewer's team but itself,
   alive (`tunneler.teammarks` "0" = off; Settings, Gameplay; CloudSave). Original look: `paintMarks` draws a 7 x 5

@@ -49,6 +49,8 @@ New in 1.3:
 - **Map editor**: a Water tool (keys 1-5: tunnel, dirt, rock, water, base) and a Ground row (Classic / Sand / Grass).
 - **Computer tanks know water is slow**: they drive around a pond when that is quicker and cross a river when it
   isn't.
+- **1.3.1**: the Tab map without the world's rock frame, the parts never seen shown faintly; online, starting a match
+  on a generated map no longer makes the other games stutter.
 - Also: the mouse wheel over a menu's list scrolls only the list; debug info has an X to close it and Ctrl+Shift+D
   switches it anywhere; the desktop app has Quit on the main menu.
 
