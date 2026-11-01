@@ -4,6 +4,15 @@ All notable changes to Tunneler. Versions follow [semantic versioning](https://s
 by pushing a version tag (see CONTRIBUTING.md). Up to its version 6.0.1 the game was called Tunneler Online:
 those releases are tagged `online-vX.Y.Z`, their changes are in [docs/CHANGELOG-online.md](docs/CHANGELOG-online.md).
 
+## 1.3.3
+
+Plays with 1.3.0 - 1.3.2 (nothing in the game changed).
+
+- The server counts the online matches played each day, as totals only (mode, map, size, settings, players and
+  computer tanks, how they ended, minutes played) - nothing about any player; its operator reads them with
+  `GET /api/stats` (`ADMIN_TOKEN`). The privacy policy says so.
+- `ERRORS_TOKEN` is now `ADMIN_TOKEN` (it reads the error reports and the match counts); the old name still works.
+
 ## 1.3.2
 
 Plays with 1.3.0 and 1.3.1 (nothing in the game changed).

@@ -168,8 +168,8 @@ import would not help.
   names or chat. The server's own uncaught exceptions / unhandled rejections are kept too (`where: "server"`).
   Store: `S3_BUCKET_ERRORS`, else the state's bucket, else `DATA_DIR/errors`, else memory.
 - Read: `GET /api/errors[?since=<ISO>&version=<v>]` -> JSON list, `last` descending; `DELETE /api/errors/<key>` clears
-  a fixed group. Both need `Authorization: Bearer <ERRORS_TOKEN>` (constant-time compare); 401 otherwise; without
-  `ERRORS_TOKEN` on the server: 404 (disabled).
+  a fixed group. Both need `Authorization: Bearer <ADMIN_TOKEN>` (constant-time compare); 401 otherwise; without
+  `ADMIN_TOKEN` on the server: 404 (disabled).
 - `src/js/net/report.js` (`Report`): `Report.error(where, err)` sends at most 5 different errors per page load
   (deduplicated by where + message), and only from built pages (a version) - not from src/ pages or tests.
   `Report.install()` (app.js) catches `error` (only from this site's scripts - not extensions) and

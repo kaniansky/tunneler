@@ -37,7 +37,9 @@
 //        POST /api/errors         a page's error report {where, msg, stack, url, version, ua} (max 4 KB; logged, and kept
 //                                 grouped - the errors' bucket S3_BUCKET_ERRORS, else the state's, else DATA_DIR/errors)
 //        GET  /api/errors[?since=<ISO>&version=<v>]   the groups, newest first; DELETE /api/errors/<key> clears one -
-//                                 both need `Authorization: Bearer <ERRORS_TOKEN>`; without ERRORS_TOKEN: 404
+//                                 both need `Authorization: Bearer <ADMIN_TOKEN>`; without ADMIN_TOKEN: 404
+//        GET  /api/stats[?days=N]  the online matches played per day (totals only, nothing about a player; the last N
+//                                 days, default 30, newest first) - `Authorization: Bearer <ADMIN_TOKEN>`; without it: 404
 //        every /api answer: X-Tunneler-Version (a page of another version reloads itself)
 //        GET /api/rooms           public rooms
 //        GET /api/rooms/<id>      one room (also private ones: their ids carry a random suffix)
@@ -183,6 +185,7 @@ const MAX_ERRORS_TOTAL_PER_MIN = 120;  // client error reports from everybody to
 const MAX_ERROR_GROUPS = 500;          // kept error report groups (the oldest `last` go)
 const ERROR_KEEP_DAYS = 60;            // a group not seen for this long goes
 const ERROR_FLUSH_MS = 60000;          // kept error reports are written this often (and at shutdown)
+const STATS_KEEP_DAYS = 400;           // match counts: days kept
 const SHUTDOWN_SAVE_MS = 8000;         // the most a graceful shutdown waits for the handoff snapshot to be written
 const HANDOFF_WINDOW_MS = 10 * 60 * 1000;   // after a start: an unknown room makes the server look for a handoff snapshot
 const HANDOFF_POLL_MS = 2000;          // ... at most this often
@@ -551,6 +554,7 @@ function createServer(opts = {}) {
     for (const ws of room.sockets) if (ws.readyState === 1) ws.send(JSON.stringify({ t: "match", ...matchHello(m, ws, 0) }));
     say("room", room.id, "match", m.no, "seed", m.seed, ext ? slots.map(s => ROLES[s.color] + ":" + (s.bot ? s.level : "human") + ":" + s.team).join(" ") : "classic",
       room.size, room.winScore + " to win", room.friendlyFire ? "friendly fire" : "", room.roundTime ? room.roundTime + " min rounds" : "");
+    statsStarted(m, room);
     updateClock(room);
     sendStatus(room);
   }
@@ -574,6 +578,7 @@ function createServer(opts = {}) {
     room.report = { round: m.report.round, wins: m.report.wins, teamWins: m.report.teamWins, ext: m.ext, players: m.slots.length };
     for (const ws of room.sockets) { ws.player = -1; ws.ready = false; ws.syncing = false; }
     say("room", room.id, "match", m.no, "ended (" + why + ") at frame", m.log.length);
+    statsEnded(m, why);
     broadcast(room, JSON.stringify({ t: "end", no: m.no }));
     if (room.qp && why !== "empty") { qpFill(room); qpSchedule(room, qpAfterMs); }
     sendStatus(room);
@@ -957,10 +962,14 @@ function createServer(opts = {}) {
   // are behind: reports pile up in `pending` and go to the store (one object, errors.json: the errors' bucket, else the
   // state's, else DATA_DIR/errors, else memory) every ~60 s and at shutdown - merged into what the store holds then (a
   // new instance may have written meanwhile). At most MAX_ERROR_GROUPS, none older than ERROR_KEEP_DAYS. No addresses,
-  // queries, names or chat. Read: GET /api/errors with ERRORS_TOKEN (opts.errorsToken); no token set -> 404.
-  const errorsToken = opts.errorsToken !== undefined ? opts.errorsToken : process.env.ERRORS_TOKEN || "";
-  const errorStore = (() => {
-    const b = bucketOf("errors") || bucketOf("state"), d = b ? null : folderOf("errors"), KEY = "errors.json";
+  // queries, names or chat. Read: GET /api/errors with ADMIN_TOKEN (opts.adminToken); no token set -> 404.
+  // (1.3.3: ADMIN_TOKEN - it reads the match counts too; the old name ERRORS_TOKEN still works)
+  const adminToken = opts.adminToken !== undefined ? opts.adminToken : process.env.ADMIN_TOKEN || process.env.ERRORS_TOKEN || "";
+  const errorStore = oneObjectStore("errors", "errors.json");
+  // one JSON object kept for the operator (errors.json, stats.json): the errors' bucket, else the state's, else
+  // DATA_DIR/<folder>, else memory
+  function oneObjectStore(folder, KEY) {
+    const b = bucketOf("errors") || bucketOf("state"), d = b ? null : folderOf(folder);
     if (b) return { name: "the bucket " + b.bucket,
       async get() { const r = await s3Request(b, "GET", KEY); if (r.status === 404) return null; if (r.status < 200 || r.status >= 300) throw new Error("storage " + r.status); return r.body; },
       async put(buf) { const r = await s3Request(b, "PUT", KEY, buf, "application/json"); if (r.status < 200 || r.status >= 300) throw new Error("storage " + r.status); } };
@@ -969,7 +978,7 @@ function createServer(opts = {}) {
         async put(buf) { fs.writeFileSync(f + ".tmp", buf); fs.renameSync(f + ".tmp", f); } }; }
     let mem = null;
     return { name: "memory (lost on a restart)", async get() { return mem; }, async put(buf) { mem = buf; } };
-  })();
+  }
   const errorKey = r => crypto.createHash("sha1").update([r.where, r.msg, r.stack[0] || ""].join("\n")
     .replace(/-[A-Z0-9]{8}\b/g, "-#").replace(/[0-9a-f]{8,}/gi, "#").replace(/\d+/g, "#")).digest("hex").slice(0, 12);
   const errorPending = new Map();                 // key -> {g: the newest report, n, versions, urls, uas, first, last}
@@ -1015,8 +1024,65 @@ function createServer(opts = {}) {
   errorTimer.unref();
   const tokenOk = req => {                         // (constant time: the digests are compared)
     const m = /^Bearer (.+)$/.exec(req.headers.authorization || "");
-    return !!(errorsToken && m && crypto.timingSafeEqual(crypto.createHash("sha256").update(m[1]).digest(), crypto.createHash("sha256").update(errorsToken).digest()));
+    return !!(adminToken && m && crypto.timingSafeEqual(crypto.createHash("sha256").update(m[1]).digest(), crypto.createHash("sha256").update(adminToken).digest()));
   };
+
+  // ------------------------------------------------------------ match counts (1.3.3)
+  // What gets played online, as totals per UTC day - nothing about a player (no names, ids, addresses, rooms): per day
+  // {started, ended: {over, gone, empty}, minutes, qp, qpSolo, classic, mode: {}, map: {}, size: {}, sight: {}, showMap:
+  // {}, humans: {"1".."8"}, bots: {"0".."7"}}. A match is counted with its settings when it starts (map: random /
+  // gen:<kind> / gallery - a published map - / own - any other shared map), and when it ends: why (endMatch: over = the
+  // match was played out, gone = its players left, empty = the room closed) and its minutes of play. qpSolo: a quick-play
+  // match with one human only. Writes are behind, like the error reports: pending totals go to one object (stats.json,
+  // next to errors.json) every ~60 s and at shutdown, added to what the store holds then. Kept STATS_KEEP_DAYS.
+  // Read: GET /api/stats[?days=N] with ADMIN_TOKEN (newest day first); no token set -> 404.
+  const statsStore = oneObjectStore("stats", "stats.json");
+  let statsPending = {};                           // day -> totals not written yet
+  const statsDay = () => new Date().toISOString().slice(0, 10);
+  const statsOf = day => statsPending[day] || (statsPending[day] = {});
+  const bump = (o, k, n = 1) => { o[k] = Math.round(((o[k] || 0) + n) * 10) / 10; };
+  const bumpIn = (o, group, k, n = 1) => bump(o[group] || (o[group] = {}), String(k).slice(0, 40), n);
+  // (b's totals added into a: numbers added, objects merged the same way)
+  function addTotals(a, b) {
+    for (const k of Object.keys(b)) {
+      if (typeof b[k] === "number") bump(a, k, b[k]);
+      else if (b[k] && typeof b[k] === "object") addTotals(a[k] && typeof a[k] === "object" ? a[k] : (a[k] = {}), b[k]);
+    }
+    return a;
+  }
+  const mapKind = map => !map ? "random" : NetProto.genMap(map) ? "gen:" + map.split(":")[1] : galleryIds.has(map) ? "gallery" : "own";
+  function statsStarted(m, room) {
+    const s = statsOf(statsDay()), humans = m.slots.filter(x => !x.bot).length;
+    bump(s, "started");
+    if (!m.ext) bump(s, "classic");
+    if (m.qp) { bump(s, "qp"); if (humans === 1) bump(s, "qpSolo"); }
+    bumpIn(s, "mode", room.mode || "standard"); bumpIn(s, "map", mapKind(room.map)); bumpIn(s, "size", room.size);
+    bumpIn(s, "sight", room.sight || "full"); bumpIn(s, "showMap", room.showMap || "off");
+    bumpIn(s, "humans", humans); bumpIn(s, "bots", m.slots.length - humans);
+  }
+  function statsEnded(m, why) {
+    const s = statsOf(statsDay());
+    bumpIn(s, "ended", why);
+    bump(s, "minutes", Math.round(m.log.length * NetProto.TICK_MS / 6000) / 10);   // (game time: 55 ms a frame)
+  }
+  const readStats = async () => { const b = await statsStore.get(); try { return b ? JSON.parse(b.toString()).days || {} : {}; } catch (e) { return {}; } };
+  let statsFlushing = null;
+  function flushStats() {                          // -> a promise (never rejects); what failed stays pending
+    if (!Object.keys(statsPending).length) return Promise.resolve();
+    return statsFlushing = (statsFlushing || Promise.resolve()).then(async () => {
+      const taken = statsPending; statsPending = {};
+      if (!Object.keys(taken).length) return;
+      try {
+        const days = await readStats();
+        for (const d of Object.keys(taken)) addTotals(days[d] || (days[d] = {}), taken[d]);
+        const cut = new Date(Date.now() - STATS_KEEP_DAYS * 86400000).toISOString().slice(0, 10);
+        for (const d of Object.keys(days)) if (d < cut) delete days[d];
+        await statsStore.put(Buffer.from(JSON.stringify({ days })));
+      } catch (e) { say("match counts not stored:", e && e.message); for (const d of Object.keys(taken)) addTotals(statsOf(d), taken[d]); }
+    });
+  }
+  const statsTimer = setInterval(() => { flushStats(); }, opts.errorFlushMs || ERROR_FLUSH_MS);
+  statsTimer.unref();
 
   // ------------------------------------------------------------ player accounts (docs/v6/ACCOUNTS.md)
   // opts.accounts (default off: the tests' anonymous clients; the program: on unless ACCOUNTS=off). With them on, online
@@ -1506,8 +1572,17 @@ function createServer(opts = {}) {
       res.writeHead(204, CORS);
       return res.end();
     }
-    if (p === "/api/errors" || p.startsWith("/api/errors/")) {      // (the owner's read: ERRORS_TOKEN)
-      if (!errorsToken) return json(res, 404, { error: "not found" });
+    if (p === "/api/stats") {                                       // (the owner's read: ADMIN_TOKEN)
+      if (!adminToken) return json(res, 404, { error: "not found" });
+      if (!tokenOk(req)) return json(res, 401, { error: "unauthorized" });
+      if (req.method !== "GET") return json(res, 405, { error: "method not allowed" });
+      const n = Math.max(1, Math.min(STATS_KEEP_DAYS, parseInt(new URL(req.url, "http://x").searchParams.get("days"), 10) || 30));
+      await flushStats();
+      const days = await readStats();
+      return json(res, 200, Object.keys(days).sort().reverse().slice(0, n).map(d => Object.assign({ day: d }, days[d])));
+    }
+    if (p === "/api/errors" || p.startsWith("/api/errors/")) {      // (the owner's read: ADMIN_TOKEN)
+      if (!adminToken) return json(res, 404, { error: "not found" });
       if (!tokenOk(req)) return json(res, 401, { error: "unauthorized" });
       const u = new URL(req.url, "http://x");
       if (p === "/api/errors" && req.method === "GET") {
@@ -2265,8 +2340,8 @@ function createServer(opts = {}) {
     server.close();
     for (const r of rooms.values()) if (r.match) { stopClock(r.match); clearTimeout(r.match.aloneTimer); }
     if (genWorker) { const w = genWorker; genWorker = null; w.terminate().catch(() => {}); }
-    clearInterval(errorTimer);
-    await Promise.race([flushErrors(), new Promise(res => setTimeout(res, saveMs).unref())]);   // (the kept error reports)
+    clearInterval(errorTimer); clearInterval(statsTimer);
+    await Promise.race([Promise.all([flushErrors(), flushStats()]), new Promise(res => setTimeout(res, saveMs).unref())]);   // (the kept error reports, the match counts)
     await flushGallery();                         // (the gallery's plays counted since its last write)
     let saved = false;
     if (stateStore && rooms.size) {
@@ -2292,7 +2367,7 @@ function createServer(opts = {}) {
   }
 
   return {
-    server, rooms, createRoom, shutdown, snapshot, refreshHandoff, flushErrors,
+    server, rooms, createRoom, shutdown, snapshot, refreshHandoff, flushErrors, flushStats,
     // the server's own uncaught error, kept like a page's (where: "server")
     serverError(err) {
       const r = clientError({ where: "server", msg: err && err.message || String(err), version: version || "", ua: "node " + process.version, stack: err && err.stack ? String(err.stack).split("\n").slice(1).join("\n") : "" });
@@ -2421,7 +2496,7 @@ if (require.main === module) {
     log("shared replays: " + srv.replayStore);
     log("shared maps: " + srv.mapStore);
     log("daily challenge leaderboards: " + srv.boardStore);
-    log("client error reports: " + (process.env.ERRORS_TOKEN ? "kept in " + srv.errorStore + ", GET /api/errors with ERRORS_TOKEN" : "logged only (ERRORS_TOKEN not set; would be kept in " + srv.errorStore + ")"));
+    log("client error reports: " + ((process.env.ADMIN_TOKEN || process.env.ERRORS_TOKEN) ? "kept in " + srv.errorStore + ", GET /api/errors with ADMIN_TOKEN" : "logged only (ADMIN_TOKEN not set; would be kept in " + srv.errorStore + ")"));
     log("rooms on a restart: " + (srv.stateStore ? "handed over through " + srv.stateStore : "lost (no bucket or writable folder)"));
     log("accounts: " + (srv.accountStore ? "on, kept in " + srv.accountStore + (process.env.ACCOUNT_SECRET ? " (ACCOUNT_SECRET set)" : "") : "off (ACCOUNTS=off: free names)"));
     if (s3 && !s3.accessKey) log("WARNING: S3_ENDPOINT is set but not S3_ACCESS_KEY / S3_SECRET_KEY: no bucket is used");
