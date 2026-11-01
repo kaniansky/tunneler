@@ -194,9 +194,9 @@ async function main() {
     const off = await start({});
     await rep(off.port, {});
     const r0 = await http(off.port, "GET", "/api/errors");
-    check("no ERRORS_TOKEN: the read is disabled (404)", () => assert.strictEqual(r0.status, 404));
+    check("no ADMIN_TOKEN: the read is disabled (404)", () => assert.strictEqual(r0.status, 404));
     off.s.close();
-    const a = await start({ errorsToken: "secret-token", dataDir: dir, errorFlushMs: 20 });
+    const a = await start({ adminToken: "secret-token", dataDir: dir, errorFlushMs: 20 });
     await rep(a.port, {}); await rep(a.port, { msg: "boom 99", stack: "at a (app-ZZZZ9999.js:77:1)", version: "1.2.0", url: "/other", ua: "UA two" });
     await rep(a.port, { msg: "another" });
     const no = await http(a.port, "GET", "/api/errors"), bad = await http(a.port, "GET", "/api/errors", null, { Authorization: "Bearer nope" });
@@ -215,7 +215,7 @@ async function main() {
     a.s.serverError(new Error("server broke 5"));
     await a.s.shutdown(2000);                                  // (flushes to DATA_DIR/errors)
     check("written to DATA_DIR/errors at shutdown", () => assert(fs.existsSync(path.join(dir, "errors", "errors.json"))));
-    const b = await start({ errorsToken: "secret-token", dataDir: dir });
+    const b = await start({ adminToken: "secret-token", dataDir: dir });
     await rep(b.port, {});
     const again = await http(b.port, "GET", "/api/errors", null, auth);
     check("survives a restart: counts go on; the server's own errors too (where: server)", () => {

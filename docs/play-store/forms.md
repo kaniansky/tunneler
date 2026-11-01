@@ -42,14 +42,14 @@ Overview answers:
 
 Data types to declare (everything else: not collected). For each: **Collected: yes, Shared: no**,
 **Optional** (users can play without it - skirmish never connects anywhere), **Purpose: App functionality**
-only (no analytics, no ads, no personalization, no fraud prevention) - and **Account management**
-for Name and User IDs.
+(no ads, no personalization, no fraud prevention) - and **Account management** for Name and User IDs, and
+**Analytics** for App interactions (from 1.3.3: the match counts, below).
 
 | Category -> data type | What it is | Processed ephemerally? |
 |---|---|---|
 | Personal info -> **Name** | The player name (a nickname the user types) sent to the game server for online games; shown to the other players in that game. It also appears in the server's console log ("Norko connected", the room's name), which the hosting provider keeps for a while. | No (because of that log) |
 | Messages -> **Other in-app messages** | Lobby chat messages, relayed to everyone in the same game; the room keeps the last 50 in memory while it exists. | No (kept for joiners while the room lives) - declaring "No" is the safe answer |
-| App activity -> **App interactions** | The keys pressed during an online match (the lockstep game input), relayed to the other players and kept in the server's memory for the match. | Yes is defensible (memory only, for the running match), but **No** is the safer answer |
+| App activity -> **App interactions** | The keys pressed during an online match (the lockstep game input), relayed to the other players and kept in the server's memory for the match. From 1.3.3 the server also counts the online matches played each day (mode, map, size, settings, how many players and computer tanks, how they ended, minutes played) as totals with nothing about any player, to see what gets played - purposes **App functionality** and **Analytics**. Totals with nothing about a player may not need declaring at all; declaring Analytics here is the careful answer. | Yes is defensible (memory only, for the running match), but **No** is the safer answer |
 | Device or other IDs -> **Device or other IDs** | A random id the game makes once (`tunneler.client` in local storage) - not an Android / hardware id; the server uses it to give a player their seat back after a lost connection and for kicks. | No |
 | Personal info -> **User IDs** | The account: its username (also Personal info -> Name: stored, not ephemeral), a random account id and - when the player signs in with Google Play - the Play Games player id. The password and the recovery code are stored only as scrypt hashes (no Data safety type covers credentials; they serve Account management). Required for online play, optional for the app (everything else works without an account). | No |
 | App activity -> **Other user-generated content** | Shared replays ("Share a link": moves, settings, player names, kept on the server so anyone with the link can watch them) and daily-challenge results sent with the account: the place on the day's leaderboard and the match's replay, public on the leaderboard for 30 days; deleted with the account. From 1.1.7 also, while logged in: the player's maps, replays and settings kept with the account (private - only that account gets them back) so every device it logs in on has them; deleted with the account. | No |

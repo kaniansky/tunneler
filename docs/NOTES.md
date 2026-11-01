@@ -636,6 +636,16 @@ page from before 2.0 - is refused (POST 409 `{code:
   (hard, 4 tanks, 6 modes x full / circle): standing >= 2 s 23.7 % -> 12.1 % of their time alive, the rest mostly
   repairing at home and "hold" (hill). Classic AI untouched (screen-check's classic fingerprint unchanged; the
   extended ones re-recorded).
+  Rechecked 2026-11-01 (1.3.2): 120 all-AI matches (8 tanks, every mode x 3 sizes x full / circle x normal / hard, 6
+  generated map kinds; 30 000 frames each): standing >= 2 s 12.5 % of the time alive. Every stand of 10 s or more is
+  either gaining energy / shield (at its own, a teammate's or an unguarded enemy base) or a mode's own rule (hill
+  "hold" on the hill, infection survivors' "shelter" at home) - no parking left.
+- Infection's healthy computer tanks hold out in their own bases (2026-11-01, tried and dropped): all-AI matches (8
+  tanks, 3 sizes x full / circle x 3 levels, 108 each) - holding out at home: the healthy win 51 %; running from the
+  infected (roaming, fleeing to the spot farthest from the threat, refuge at home when nearer): 3 - 35 %; all of them
+  together in one base: 19 %; a pack round a leader hunting the infected: 12 %. The infected sense their prey and are
+  back 3 s after being destroyed - a base's walls and doorway are worth more than moving. What decides a match is the
+  map's size: the healthy win 8 % on small, 44 % medium, 100 % large (the default "Survive for", 3 minutes).
 - Hiding and refuelling (owner, 2026-10-28, 1.2): a retreating tank waits at `hideSpot` - `hideSpots` (offsets inside the
   repair distance, each with the doorway shots that reach its 7 x 7 body: per doorway and direction) minus
   `threatShots` (what the threat - the target, else the enemy last seen - can send in: through the doorway on its
@@ -1130,7 +1140,13 @@ page from before 2.0 - is refused (POST 409 `{code:
   (`clientError`, 4 KB, 10/min/address, 120/min in all; logged, and kept grouped by `recordError`: `errors.json` in
   `S3_BUCKET_ERRORS`, else the state's bucket, else `DATA_DIR/errors`; flushed every 60 s + at shutdown; 500 groups /
   60 days; the server's own uncaught errors as `where: "server"`; read with `GET /api/errors` + `Authorization: Bearer
-  $ERRORS_TOKEN`, `?since=` / `?version=`, `DELETE /api/errors/<key>`; no `ERRORS_TOKEN` = 404), `GET /api/health`, `X-Tunneler-Version` on /api.
+  $ADMIN_TOKEN`, `?since=` / `?version=`, `DELETE /api/errors/<key>`; no `ADMIN_TOKEN` = 404), `GET /api/health`, `X-Tunneler-Version` on /api.
+  Match counts (1.3.3, "count what gets played" - to choose the next features from what is played): `statsStarted`
+  (startMatch: started, classic, qp / qpSolo, mode, map - random / gen:<kind> / gallery / own -, size, sight, showMap,
+  humans, bots) and `statsEnded` (endMatch: ended.over / gone / empty, minutes of game time) - totals per UTC day,
+  nothing about a player; `stats.json` next to `errors.json` (`oneObjectStore`), flushed with the error reports' timer +
+  at shutdown, added to what the store holds; 400 days; `GET /api/stats?days=N` (default 30, newest first) with
+  `ADMIN_TOKEN`. test/stats-check.js.
   online.js: dead connection = a ping answered by nothing for `DEAD_MS` (after a first pong) -> `dropSocket()`;
   `closed(code)` backs off with jitter; `online` / visibilitychange reconnect now; restart / 1012 -> `rel.restart`
   screen; `noroom` after a hello -> retried `GONE_RETRY_MS` (`saved: false`: not at all), then `rel.gone`; desync / an engine error -> `rebuild()`

@@ -60,7 +60,7 @@ editor, 8 a replay.
      interact: yes)
    - Target audience: 13+
    - Data safety: Name, Other in-app messages, App interactions, Device or other IDs - collected, optional,
-     app functionality, not shared, encrypted in transit
+     app functionality (App interactions also analytics, from 1.3.3), not shared, encrypted in transit
    - News / government / financial / health / COVID: no
 6. **Countries / regions** for each track; then send the release for review.
 

@@ -53,6 +53,8 @@ New in 1.3:
   on a generated map no longer makes the other games stutter.
 - **1.3.2**: the server runs every match on one clock - about a third more games fit on a small server -, and the
   page's fonts, sounds and pictures aren't downloaded again on every visit.
+- **1.3.3**: the server counts the online matches played each day (totals only, nothing about any player), read by its
+  operator with `ADMIN_TOKEN` (the new name of `ERRORS_TOKEN`).
 - Also: the mouse wheel over a menu's list scrolls only the list; debug info has an X to close it and Ctrl+Shift+D
   switches it anywhere; the desktop app has Quit on the main menu.
 
@@ -365,7 +367,7 @@ Games live in the server's memory. When the server is stopped with SIGTERM (a de
 writes every game (lobbies and running matches) to its state store (below). The next server reads them back, and the
 players' pages reconnect and carry on. Without a bucket or a writable folder for it, a restart ends running games.
 `GET /api/health` answers `{ok, version, uptime, rooms, matches, errors}`, and pages report the errors they catch to
-the server's log (`client error ...`) and keep them grouped (`ERRORS_TOKEN`, below).
+the server's log (`client error ...`) and keep them grouped (`ADMIN_TOKEN`, below).
 
 **Where the server keeps things.** Six kinds of data, each on its own:
 
@@ -405,9 +407,11 @@ wiped on every deploy (and its new instance starts before the old one stops - th
 - `ACCOUNTS=off` - no accounts: free player names as before (a LAN game, a server for friends). Default: on.
 - `ACCOUNT_SECRET` - the key that signs the players' login tokens (any long random string). Without it the server
   makes one at its first start and keeps it with the accounts; set it to be independent of the store.
-- `ERRORS_TOKEN` (optional) - turns on reading the kept error reports: `curl -H "Authorization: Bearer $ERRORS_TOKEN"
+- `ADMIN_TOKEN` (optional) - turns on reading the kept error reports: `curl -H "Authorization: Bearer $ADMIN_TOKEN"
   "<server>/api/errors?since=2026-01-01T00:00:00Z&version=1.2.1"` (JSON, newest first; `DELETE /api/errors/<key>`
-  clears a group). Without it the endpoint answers 404 (reports are still kept).
+  clears a group). Without it the endpoint answers 404 (reports are still kept). The same token reads the match counts:
+  `curl -H "Authorization: Bearer $ADMIN_TOKEN" "<server>/api/stats?days=30"` - the online matches played per day
+  (totals by mode, map kind, size, settings, humans / computer tanks, how they ended, minutes; nothing about a player).
 - `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` (optional) - the Play Games project's web OAuth client: the Android
   app's "Sign in with Google Play" (docs/v6/ACCOUNTS.md section 6). Without them that option isn't offered.
 - Where accounts are kept: `S3_BUCKET_ACCOUNTS`, else `DATA_DIR/accounts`, else memory (lost on a restart:
