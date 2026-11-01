@@ -51,6 +51,8 @@ New in 1.3:
   isn't.
 - **1.3.1**: the Tab map without the world's rock frame, the parts never seen shown faintly; online, starting a match
   on a generated map no longer makes the other games stutter.
+- **1.3.2**: the server runs every match on one clock - about a third more games fit on a small server -, and the
+  page's fonts, sounds and pictures aren't downloaded again on every visit.
 - Also: the mouse wheel over a menu's list scrolls only the list; debug info has an X to close it and Ctrl+Shift+D
   switches it anywhere; the desktop app has Quit on the main menu.
 
@@ -356,7 +358,9 @@ The live version at <https://tunneler-online.onrender.com/> runs this repo's `Do
 host that runs a Docker image or `npm run build && npm start` and allows websockets works the same way.
 Render's free plan stops a service after 15 minutes without requests; the server keeps itself awake by asking its own
 public address (`RENDER_EXTERNAL_URL`, which Render sets, or `KEEP_AWAKE_URL`) for `/api/health` every 10 minutes
-(`KEEP_AWAKE=0` turns that off).
+(`KEEP_AWAKE=0` turns that off). How much one server carries: `node tools/load-test.js --cpu 10` (fake players on a
+server held to a tenth of a CPU core, like Render's free plan) - measured about 150 two-player or 40 eight-player
+matches at once before frames start to come late.
 Games live in the server's memory. When the server is stopped with SIGTERM (a deploy, a restart), it first
 writes every game (lobbies and running matches) to its state store (below). The next server reads them back, and the
 players' pages reconnect and carry on. Without a bucket or a writable folder for it, a restart ends running games.
