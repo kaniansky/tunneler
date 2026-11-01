@@ -16,7 +16,8 @@ const PORT = process.argv[2], OUT = process.argv[3], B = 'http://localhost:' + P
 const MODERN = process.argv[4] === 'modern';                   // (the whole session in the modern look)
 // Quality high, not auto: auto steps down (to 2D at last) when frames come slowly - software rendering, a busy GPU
 const HIGH = { quality: 'high' };
-const GFX = { 'tunneler.gfx': MODERN ? 'modern' : 'original', 'tunneler.gfx.modern': JSON.stringify(HIGH) };   // (modern is the game's default since 5.0: say which)
+// (a returning player: the main menu opens on its first item - a new one's on the training ground, 1.4)
+const GFX = { 'tunneler.gfx': MODERN ? 'modern' : 'original', 'tunneler.gfx.modern': JSON.stringify(HIGH), 'tunneler.trained': '1' };   // (modern is the game's default since 5.0: say which)
 // the browser's graphics (also in v6-screenshots.js, play-screenshots.js): the GPU, or GPU=0 software
 const GL = process.env.GPU === '0' ? ['--disable-gpu', '--use-angle=swiftshader', '--use-gl=angle', '--disable-gpu-compositing']
   : ['--use-angle=gl', '--enable-gpu', '--ignore-gpu-blocklist'];
@@ -158,6 +159,11 @@ const fill = a => { while (a.length < 8) a.push(S('closed', a.length + 1)); retu
       await until(p, () => window.tunnelerEngine && window.tunnelerEngine().screen === 'play');
       await hold(p, ['KeyS', 'Space'], 2500); await hold(p, ['KeyD', 'Space'], 3000); await hold(p, ['KeyW', 'KeyD'], 1500);
       await p.keyboard.down('Tab'); await sleep(800); await shot(p, pre + 'score-map.png'); await p.keyboard.up('Tab'); await p.close();
+      // 1.4: the training ground - out of the base into the dirt, the next step's hint over the game
+      p = await page(look, '/training');
+      await until(p, () => window.tunnelerEngine && window.tunnelerEngine().screen === 'play');
+      await hold(p, ['KeyS'], 3500); await hold(p, ['KeyD'], 1500);
+      await sleep(600); await shot(p, pre + 'training.png'); await p.close();
     }
     p = await page(M, '/'); await sleep(1500); await shot(p, 'modern-home.png');
     for (const k of ['ArrowUp', 'Enter', 'ArrowDown', 'Enter', 'ArrowDown', 'ArrowDown', 'ArrowDown']) { await p.keyboard.press(k); await sleep(150); }   // (Settings, Graphics, Terrain)

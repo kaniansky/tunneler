@@ -9,6 +9,7 @@
 // Space / Enter paint (held: while moving), 1-5 the tool (tunnel, dirt, rock, water, base), Tab the next one, [ ] or , . the brush, + - the zoom, U or
 // Ctrl+Z undo, Esc the editor's menu. Mouse: the cursor follows it, the left button paints, the right one drags the
 // view, the wheel zooms. Touch: one finger paints, two drag and pinch. Leaving the editor saves the map.
+import { Medals } from "../game/medals.js";
 import { Account } from "../net/account.js";
 import { Display } from "../draw/display.js";
 import { DosUI } from "../ui/dosui.js";
@@ -313,6 +314,7 @@ export function mount() {
       detail(r, true);
       const res = await MapStore.publish(r, galName());
       galNote = { id: r.id, text: res.ok ? T("gal.published") : galErr(res.code), color: res.ok ? 10 : 12 };
+      if (res.ok) Medals.earn("maker");                    // (1.4: a medal)
       if (detOn(r.id)) detail(r, true);
     }, () => detail(r, true));
   }

@@ -4,6 +4,19 @@ All notable changes to Tunneler. Versions follow [semantic versioning](https://s
 by pushing a version tag (see CONTRIBUTING.md). Up to its version 6.0.1 the game was called Tunneler Online:
 those releases are tagged `online-vX.Y.Z`, their changes are in [docs/CHANGELOG-online.md](docs/CHANGELOG-online.md).
 
+## 1.4.0
+
+1.4 - a new minor version: plays only with 1.4 pages and servers.
+
+- Training ground (main menu): a short first match that teaches the rules step by step - out of your base, shooting
+  the dirt away, refuelling at home, finding the enemy and destroying it - with a hint for each step under the game.
+  A new player finds it selected on the main menu.
+- Map of the week: on Sundays the daily challenge is played on a map from the gallery (a different one every week), its
+  author named on the challenge screen and the leaderboard.
+- Medals: 25 to earn (the training ground, a first victory, a flawless win, 5 kills in a match, the daily challenge 7 days
+  in a row, a win in every game mode...) - on the new Medals screen, shown after the match that earned them, and kept
+  with your account on every device.
+
 ## 1.3.3
 
 Plays with 1.3.0 - 1.3.2 (nothing in the game changed).

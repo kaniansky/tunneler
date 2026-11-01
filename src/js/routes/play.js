@@ -40,6 +40,54 @@ import { MapStore } from "../net/mapstore.js";
 import { MapData } from "../game/mapdata.js";
 import { MapGen } from "../game/mapgen.js";
 import { Scope } from "../scope.js";
+import { StatusLine } from "../draw/statusline.js";
+import { Medals } from "../game/medals.js";
+// the training ground's hints (1.4): the step's hint in a status line over the top of the game ("Training 2/5: ...";
+// overlay - owner, 2026-11-01: it moved the game up and down under it), wrapped to its width (40 columns, a phone held
+// sideways 32); the keys named as this browser has them (either set drives your tank; a phone: the joystick and FIRE);
+// the last step's 5 seconds, then none. Won: localStorage tunneler.trained = "1" (the main menu stops recommending it)
+function trainingHints(engine, canvas, views, afterShown) {
+  // (as wide as the game canvas: 40 columns under one view - online.js's rule -, a phone 40)
+  // (a phone held sideways: 32 - the game is short there, bigger letters)
+  const columns = () => { const L = views.layout(); return GameScreen.mobile() ? (innerWidth > innerHeight ? 32 : 40) : L.kind === "grid" && L.cols === 1 ? 40 : views.statusColumns(); };
+  const status = new StatusLine(document.getElementById("status"), canvas, columns, { overlay: true });
+  const R = (k, p) => (Lang.raw(k) || k).replace(/\{(\w+)\}/g, (m, n) => p && p[n] !== undefined ? p[n] : m);
+  const touch = () => GameScreen.mobile();
+  const keysText = () => touch() ? R("tr.keys.pad") : Controls.SETS.map(s => ["up", "left", "down", "right"].map(a => Controls.label(Controls.codesOf(s, a)[0])).join(" ")).join(" / ");
+  const fireText = () => touch() ? R("tr.fire.pad") : Controls.SETS.map(s => Controls.label(Controls.codesOf(s, "fire")[0])).join(" / ");
+  const M = TunnelerEngine.MODES.training;
+  let shown = "", lastAt = 0;
+  const tick = () => {
+    if (engine.over) {
+      if (engine.wins[1] > 0) try { localStorage.setItem("tunneler.trained", "1"); } catch (e) { /* no storage */ }
+      return show("", 0);
+    }
+    if (engine.screen !== "play" || !engine.GS) return show("", 0);
+    const n = M.step(engine), key = M.STEPS[n - 1] || "fight";
+    // (the last step's hint: 5 seconds, then the game alone - owner, 2026-11-01)
+    if (n >= M.STEPS.length) { lastAt = lastAt || Date.now(); if (Date.now() - lastAt > 5000) return show("", 0); }
+    const text = R("tr." + key, { keys: keysText(), fire: fireText(), dir: R("tr.d." + M.dir(engine)) });
+    show(R("tr.step", { n }) + ": " + text, 0x0B);
+  };
+  const el = document.getElementById("status");
+  function show(text, attr) {
+    el.style.display = text ? "" : "none";             // (style.css's display: block beats [hidden])
+    const cols = Math.max(20, columns() - 2);
+    const k = text + "|" + cols + "|" + afterShown();
+    if (k === shown) return;
+    shown = k;
+    const rows = [];
+    let line = "";
+    for (const w of text.split(" ").filter(Boolean)) {
+      if (line && (line + " " + w).length > cols) { rows.push(line); line = w; } else line = line ? line + " " + w : w;
+    }
+    if (line) rows.push(line);
+    status.set(rows.map(r => [{ text: r, attr, prio: 0, raw: true }]));
+  }
+  Scope.onEnd((iv => () => clearInterval(iv))(setInterval(tick, 150)));
+  window.tunnelerHint = () => shown.split("|")[0];       // (tests)
+  tick();
+}
 export function mount() {
   const q = new URLSearchParams(location.search), lmap = q.get("lmap"), smap = q.get("map");
   if (!lmap && !smap) return run(null);
@@ -72,24 +120,29 @@ function run(mapRec) {
   // a short link (?g=<code>, cpucode.js) stands for the long query it encodes
   const query = new URLSearchParams(location.search), code = query.get("g") ? CpuCode.decode(query.get("g")) : null;
   // the daily challenge (?challenge=2026-10-25, docs/v6/CHALLENGE.md): that day's skirmish, read from the query it stands for
-  const chDay = Challenge.validDay(query.get("challenge")) ? query.get("challenge") : null, ch = chDay ? Challenge.config(chDay) : null;
+  const chDay = Challenge.validDay(query.get("challenge")) ? query.get("challenge") : null;
+  // (a Sunday's map of the week - 1.4: &map=<the gallery map's id> on the challenge's link; the challenge fitted to it)
+  const chMapOf = rec => { const m = rec && query.get("map") ? MapData.decode(rec.code) : null; return m ? { id: query.get("map"), name: m.name, size: m.size, bases: m.bases.length } : null; };
+  const ch = chDay ? Challenge.config(chDay, Challenge.weekly(chDay) ? chMapOf(mapRec) : null) : null;
   const practice = !!ch && query.get("practice") === "1";   // (a past day played again: practice - docs/v6/CHALLENGE.md 2)
   const params = ch ? new URLSearchParams(Challenge.query(ch) + "&mode=cpu")
     : code ? new URLSearchParams(code + (query.get("mode") ? "&mode=" + query.get("mode") : "")) : query;
-  // /skirmish?... (old: /vs-computer?...) or /split?... (play.html?mode=cpu|hotseat&... in the desktop app)
-  const mode = params.get("mode") === "cpu" || /^\/(skirmish|vs-computer)\/?$/.test(location.pathname) ? "cpu" : "hotseat";
+  // /skirmish?... (old: /vs-computer?...) or /split?... (play.html?mode=cpu|hotseat&... in the desktop app); /training
+  // (play.html?mode=training): the training ground (1.4, game/modes/training.js) - BLUE you against GREEN, small, one round
+  const training = !ch && (params.get("mode") === "training" || /^\/training\/?$/.test(location.pathname));
+  const mode = training ? "training" : params.get("mode") === "cpu" || /^\/(skirmish|vs-computer)\/?$/.test(location.pathname) ? "cpu" : "hotseat";
   const LEVELS = ["easy", "normal", "hard"];              // (shown as easy / medium / hard)
   // a link without lv=2 is from version 3.2 or older: its levels were called normal / hard / expert
   const OLD_LEVELS = { easy: "easy", normal: "easy", hard: "normal", expert: "hard" };
   const lvl = v => params.get("lv") === "2" ? v : OLD_LEVELS[v] || v;
   const int = (v, lo, hi, d) => { v = parseInt(v, 10); return v >= lo && v <= hi ? v : d; };
-  const size = (TunnelerEngine.SIZES || []).includes(params.get("size")) ? params.get("size") : "medium";
-  const winScore = int(params.get("win"), 1, 9, 3);
+  const size = training ? "small" : (TunnelerEngine.SIZES || []).includes(params.get("size")) ? params.get("size") : "medium";
+  const winScore = training ? 1 : int(params.get("win"), 1, 9, 3);
   // round time limit in minutes (&time=2|3|5|10; none / anything else = no limit)
   const roundTime = [2, 3, 5, 10].includes(int(params.get("time"), 0, 99, 0)) ? int(params.get("time"), 0, 99, 0) : 0;
   // vs computer: the game mode (&gm=gold...) - docs/DESIGN-8P.md 27 (the old &norepair=1 is ignored:
   // the Base repairs setting is gone, 2026-10-23)
-  const gmode = mode === "cpu" && (TunnelerEngine.MODE_LIST || []).includes(params.get("gm")) ? params.get("gm") : "standard";
+  const gmode = training ? "training" : mode === "cpu" && (TunnelerEngine.MODE_LIST || []).includes(params.get("gm")) ? params.get("gm") : "standard";
   const goal = int(params.get("goal"), 0, 999, 0);      // a mode's goal (the engine checks it against the mode's choices)
   const VIEWS = ["self", "team", "everyone"];
   const view = VIEWS.includes(params.get("view")) ? params.get("view") : params.get("hide") === "0" ? "everyone" : "self";
@@ -134,8 +187,9 @@ function run(mapRec) {
   }
   // split screen: player 1 BLUE (team 1) against player 2 GREEN (team 2) - a skirmish without computer tanks (owner,
   // 2026-10-28: drawn and played as every other game, only its settings are split screen's; it ran the classic engine)
-  const split = mode !== "cpu";
-  const slots = split ? [{ color: 0, team: 1, level: null }, { color: 1, team: 2, level: null, p2: true }] : cpuSlots();
+  const split = mode === "hotseat";
+  const slots = training ? [{ color: 0, team: 1, level: null }, { color: 1, team: 2, level: "easy" }]
+    : split ? [{ color: 0, team: 1, level: null }, { color: 1, team: 2, level: null, p2: true }] : cpuSlots();
   const me = slots.findIndex(s => s.level === null && !s.p2);   // your (player 1's) index (0-based)
   const me2 = slots.findIndex(s => s.p2);                       // player 2's (-1: none) - GREEN's keys
   const teamGame = slots.some((s, i) => slots.some((o, j) => j !== i && o.team === s.team));
@@ -158,6 +212,7 @@ function run(mapRec) {
     ...(mapCode ? { map: mapCode } : {}) };
   const engine = new TunnelerEngine(seed, JSON.parse(JSON.stringify(opts)));
   const kills = ch ? Challenge.track(engine) : null;      // (the challenge's result: the enemies you destroyed)
+  const medalTrack = Medals.track(engine);               // (1.4: kills / losses for the medals - only reads)
   // display only: views scroll sideways 1 pixel at a time (the homepage's Settings, "tunneler.smooth"; on unless "0";
   // always with graphics modern - the setting is only offered for the original)
   try { engine.smoothScroll = localStorage.getItem("tunneler.smooth") !== "0"; } catch (e) { engine.smoothScroll = true; }
@@ -184,11 +239,12 @@ function run(mapRec) {
   // back as it was (owner, 2026-10-24)
   function toLobby() {
     if (ch) { leave(Links.challenge(practice ? chDay : null)); return; }   // (the challenge: back to its screen - practice: that day's board; the skirmish's settings stay)
+    if (training) { leave(Links.training()); return; }                     // (the training ground: again)
     keepSettings();
     leave(mode === "cpu" ? "/#cpu" : "/#split");
   }
   function keepSettings() {
-    if (ch) return;
+    if (ch || training) return;
     const save = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* no storage */ } };
     if (mode === "cpu") {
       const all = [0, 1, 2, 3, 4, 5, 6, 7].map(c => {
@@ -221,11 +277,15 @@ function run(mapRec) {
     if (after) return;
     clock.stop(); runner.stop();                       // (the engine is done: this screen from here)
     const S = engine.strings;
+    // (1.4: medals earned in this match - shown under its first choice; a past day's challenge counts as a skirmish)
+    const medals = Medals.afterMatch(engine, medalTrack, { kind: training ? "training" : ch && !practice ? "challenge" : split ? "split" : "skirmish",
+      me: me + 1, levels: slots.map(s => s.level), weekly: !!(ch && ch.map), day: chDay });
+    const medalInfo = medals.length ? [{ text: Lang.t(medals.length > 1 ? "medal.got.n" : "medal.got", { name: medals.map(id => Medals.name(id, Lang)).join(", ") }), color: 14 }] : [];
     // "Save the replay" while it isn't saved (Replays, "Save every match" off), then "Replay saved"
     let saved = !Replay.held(replayId);
     const save = () => { if (saved) return; saved = true; replaySaved = Replay.save(replayRep).catch(e => console.warn("replay:", e)); draw(true); };
     const items = () => [
-      { key: "rematch", label: ch ? Lang.t(practice ? "ch.back.board" : "ch.back") : S.rematch, go: toLobby },
+      { key: "rematch", label: ch ? Lang.t(practice ? "ch.back.board" : "ch.back") : S.rematch, go: toLobby, ...(medalInfo.length ? { info: medalInfo } : {}) },
       ...(replayId ? [{ key: "replay", label: S.replay, go: watchReplay }] : []),
       ...(replayId && (!saved || replayRep) ? [{ key: "save", label: Lang.t(saved ? "rp.kept" : "rp.keep"),
         info: [Lang.t(saved ? "rp.kept.i" : "rp.keep.i")], go: save }] : []),
@@ -244,7 +304,7 @@ function run(mapRec) {
     requestAnimationFrame(loop);
   }
 
-  engine.uiMode = mode;
+  engine.uiMode = training ? "cpu" : mode;
   Lang.apply(engine);
 
   // mouse / touch: a click or a tap on the round title / the world map goes on (as Enter); a tap beside the canvas too
@@ -309,6 +369,7 @@ function run(mapRec) {
   function leave(url) { clock.stop(); runner.stop(); Nav.go(url); }
   // the match is over: the screen after it
   runner.onStep = e => { if (e.over) afterMatch(); };
+  if (training) trainingHints(engine, canvas, views, () => !!after);
 
   // the match is recorded (replay.js): kept with the newest replays once it reaches its world map
   // (the challenge: its day on the replay, and the result remembered as this day's last - the challenge screen sends it)
@@ -316,7 +377,7 @@ function run(mapRec) {
   // challenge compares them)
   const recOpts = Object.assign({}, opts);
   delete recOpts.match;
-  runner.recorder = Replay.recorder(engine, { kind: mode === "cpu" ? "skirmish" : "split", seed, opts: recOpts, challenge: chDay }, rep => {
+  if (!training) runner.recorder = Replay.recorder(engine, { kind: mode === "cpu" ? "skirmish" : "split", seed, opts: recOpts, challenge: chDay }, rep => {
     replayId = rep.id;
     // (the daily challenge's always: its result is sent from it; else saved with Replays' "Save every match" on, or
     // after the match - "Save the replay")
@@ -328,7 +389,7 @@ function run(mapRec) {
       let kept = null;
       try { kept = JSON.parse(localStorage.getItem("tunneler.challenge.last") || "null"); } catch (e) { kept = null; }
       if (!(kept && kept.day === chDay && !kept.sent && kept.result && Challenge.compare(kept.result, result) < 0))
-        localStorage.setItem("tunneler.challenge.last", JSON.stringify({ day: chDay, id: rep.id, result, sent: false }));
+        localStorage.setItem("tunneler.challenge.last", JSON.stringify({ day: chDay, id: rep.id, result, sent: false, map: ch.map || null }));
     } catch (e) { /* no storage */ }
   });
   const clock = new LocalClock(runner, extInput);

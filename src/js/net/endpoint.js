@@ -58,6 +58,7 @@ const Links = {
   room: id => Links.game(id),
   split: query => (isApp ? "/play.html?mode=hotseat" + (query ? "&" + query : "") : "/split" + (query ? "?" + query : "")),
   cpu: query => (isApp ? "/play.html?mode=cpu" + (query ? "&" + query : "") : "/skirmish" + (query ? "?" + query : "")),
+  training: () => (isApp ? "/play.html?mode=training" : "/training"),   // (1.4: the training ground)
   invite: id => "/game/" + enc(id),              // (for Endpoint.web: always on a server)
   // the replays kept in this browser (replay.js), one of them played (its id)
   replays: () => isApp ? "/replays.html" : "/replays",

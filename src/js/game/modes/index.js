@@ -8,3 +8,4 @@ import "./infection.js";
 import "./shrink.js";
 import "./siege.js";
 import "./survival.js";
+import "./training.js";

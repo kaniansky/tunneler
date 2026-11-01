@@ -807,7 +807,7 @@ function createServer(opts = {}) {
   const PRETTY = [
     [/^\/games\/?$/, "/index.html"],                       // the games list
     [/^\/game\/[^/]+(\/[a-z]+)?\/?$/, "/index.html"],      // one game's lobby (/watch: as a spectator; /<colour>: that seat)
-    [/^\/(split|skirmish|vs-computer)\/?$/, "/index.html"], // split screen, a skirmish (/vs-computer: before 2.1)
+    [/^\/(split|skirmish|vs-computer|training)\/?$/, "/index.html"], // split screen, a skirmish (/vs-computer: before 2.1), the training ground (1.4)
     [/^\/replays(\/[^/]+)?\/?$/, "/index.html"],           // the replays kept in the browser, one of them played
     [/^\/replay\/[a-z2-9]{8}\/?$/, "/index.html"],          // a shared replay (POST /api/replays)
     [/^\/challenge\/?$/, "/index.html"],                    // the daily challenge
@@ -1232,11 +1232,20 @@ function createServer(opts = {}) {
   };
   function loadBoard(day) {
     if (!boards.has(day)) {
-      const p = readBoardBytes(day).then(gz => {
+      const p = readBoardBytes(day).then(async gz => {
         let b = null;
         try { b = gz ? JSON.parse(zlib.gunzipSync(gz).toString("utf8")) : null; } catch (e) { b = null; }
         const entries = b && Array.isArray(b.entries) ? b.entries.filter(x => x && typeof x.cid === "string" && typeof x.name === "string") : [];
-        return { day, entries: entries.sort(Challenge.compare), saving: Promise.resolve() };
+        const board = { day, entries: entries.sort(Challenge.compare), saving: Promise.resolve(), map: b && b.map && NetProto.mapId(b.map.id) ? b.map : null };
+        // a Sunday's map of the week (1.4): picked once, while the day is today and its board still empty (null = none:
+        // the gallery had none - the usual challenge), kept with the board
+        if (b && "map" in b) return board;
+        if (Challenge.weekly(day) && day === Challenge.dayOf(now()) && !entries.length) {
+          board.map = await pickWeeklyMap(day);              // (the gallery can't be read: the board isn't either - asked again next time)
+          board.picked = true;
+          saveBoard(board).catch(e => say("challenge board not stored:", e.message));
+        }
+        return board;
       });
       p.catch(() => boards.delete(day));                 // (the storage failed: asked again next time)
       boards.set(day, p);
@@ -1259,7 +1268,7 @@ function createServer(opts = {}) {
     } catch (e) { /* later */ }
   }
   function saveBoard(board) {
-    const gz = zlib.gzipSync(Buffer.from(JSON.stringify({ day: board.day, entries: board.entries })));
+    const gz = zlib.gzipSync(Buffer.from(JSON.stringify({ day: board.day, entries: board.entries, ...(board.picked || board.map ? { map: board.map } : {}) })));
     board.saving = board.saving.catch(() => {}).then(async () => {
       if (boardS3) {
         const r = await s3Request(boardS3, "PUT", board.day + ".json.gz", gz);
@@ -1274,12 +1283,26 @@ function createServer(opts = {}) {
   function boardInfo(board, cid) {
     const t = now(), i = cid ? board.entries.findIndex(x => x.cid === cid) : -1;
     return { day: board.day, current: board.day === Challenge.dayOf(t), ends: Challenge.dayEnd(board.day), now: t, total: board.entries.length,
-      top: board.entries.slice(0, BOARD_TOP).map(publicEntry), you: i >= 0 ? publicEntry(board.entries[i], i) : null };
+      top: board.entries.slice(0, BOARD_TOP).map(publicEntry), you: i >= 0 ? publicEntry(board.entries[i], i) : null, map: board.map || null };
+  }
+  // the map of the week (1.4, docs/v6/CHALLENGE.md 7): of the published maps, the one featured longest ago (never: first),
+  // then the most played, then the oldest - marked featured on that day in the gallery's index. -> {id, name, by, size,
+  // bases} or null (no map in the gallery)
+  async function pickWeeklyMap(day) {
+    const g = await loadGallery();
+    const list = g.maps.filter(x => NetProto.mapId(x.id) && (x.bases | 0) >= 2);
+    if (!list.length) return null;
+    list.sort((a, b) => (a.featured || "").localeCompare(b.featured || "") || (b.plays || 0) - (a.plays || 0) || (a.date || 0) - (b.date || 0) || a.id.localeCompare(b.id));
+    const x = list[0];
+    x.featured = day;
+    saveGallery(g).catch(e => say("gallery not stored:", e.message));
+    say("map of the week", day, x.id, JSON.stringify(x.name));
+    return { id: x.id, name: x.name, by: x.by || "", size: x.size, bases: x.bases | 0 };
   }
   // the replay checks: at most challengeWorkers at a time, CHALLENGE_QUEUE waiting
   let checksRunning = 0;
   const checksWaiting = [], checkWorkers = new Set(), checking = new Set();   // (checking: addresses with a check now)
-  function runCheck(bytes, day, name) {
+  function runCheck(bytes, day, name, map) {
     return new Promise(resolve => {
       const job = () => {
         checksRunning++;
@@ -1293,7 +1316,7 @@ function createServer(opts = {}) {
         };
         let w;
         try {
-          w = new Worker(path.join(__dirname, "challenge-worker.js"), { workerData: { bytes, day, version, name },
+          w = new Worker(path.join(__dirname, "challenge-worker.js"), { workerData: { bytes, day, version, name, map },
             resourceLimits: { maxOldGenerationSizeMb: 256 } });
         } catch (e) { return finish({ code: "busy" }); }
         checkWorkers.add(w);
@@ -1496,8 +1519,16 @@ function createServer(opts = {}) {
     const addr = addressOf(req);
     if (checking.has(addr)) return json(res, 429, { error: "your last result is still being checked", code: "busy" });
     checking.add(addr);
+    // (a Sunday's map of the week: the check plays on it - its code from the shared maps)
+    let map = null;
+    if (board.map) {
+      let m = null;
+      try { m = await loadMap(board.map.id); } catch (e) { m = null; }
+      if (!m) { checking.delete(addr); return challengeError(res, "storage", "the map of the week is unavailable, try later"); }
+      map = Object.assign({}, board.map, { code: m.code });
+    }
     let r;
-    try { r = await runCheck(new Uint8Array(bytes), day, name); } finally { checking.delete(addr); }
+    try { r = await runCheck(new Uint8Array(bytes), day, name, map); } finally { checking.delete(addr); }
     if (r && !r.code && !r.result) say("challenge check: an answer without a result:", JSON.stringify(r).slice(0, 300));
     if (!r || (!r.code && !r.result)) return challengeError(res, "bad", "the check failed");
     if (r.code) return challengeError(res, r.code, r.code === "version" ? "the replay is of another version than this server's " + version : null);

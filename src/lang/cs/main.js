@@ -481,6 +481,7 @@ Lang.register("cs", {
       waysHead: "Způsoby hry:",
       ways: [["Dělená obrazovka", "dva hráči na jedné klávesnici, jako v originálu"],
         ["Potyčka", "ty proti 1 až 7 tankům počítače, sám nebo v týmech"],
+        ["Cvičiště", "první zápas, který tě krok za krokem naučí pravidla"],
         ["Hra online", "2 až 8 tanků na jiných počítačích, i tanky počítače"],
         ["Sledovat", "hru online: všechny obrazovky, živá mapa či jeden tank"]],
       p2: ["Až 8 tanků bojuje každý za sebe nebo v týmech (přátelská palba podle volby) na",

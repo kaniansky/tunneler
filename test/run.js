@@ -45,6 +45,8 @@ const TESTS = [
   "seenmap-check.js",
   "static-check.js",
   "stats-check.js",
+  "weekly-check.js",
+  "medals-check.js",
   "map-share-check.js",
   "lang-check.js",
   "unicode-check.js",

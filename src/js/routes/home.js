@@ -1,6 +1,7 @@
 // Homepage, in the look of TUNNELER's own main menu (see dosui.js). Texts from lang.js.
 // Screens: the main menu, the split-screen settings (/#split) and the vs computer slot editor (/#cpu,
 // docs/DESIGN-8P.md 20). Their settings are remembered in localStorage and passed to play.html.
+import { Medals } from "../game/medals.js";
 import { Account } from "../net/account.js";
 import { Controls } from "../io/controls.js";
 import { CpuCode } from "../game/cpucode.js";
@@ -199,16 +200,32 @@ export function mount() {
         : [T(!update.install ? "home.update.new.i" : update.admin ? "home.update.admin.i" : "home.update.i", { v: update.version })] },
   ];
 
+  // ------------------------------------------------------------------ medals (1.4, game/medals.js): every medal - the earned
+  // ones in yellow with a check mark - and below the list how to earn the chosen one / when it was earned
+  function medals() {
+    const have = Medals.earned(), all = Medals.LIST.length, U = s => UniText.fromRaw(s);
+    const items = Medals.LIST.map(m => ({ key: "m:" + m.id, label: (have[m.id] ? "\xFB " : "  ") + U(Medals.name(m.id, Lang)), align: "left",
+      attr: have[m.id] ? 0x0E : 0x07, info: [U(Medals.how(m.id, Lang)), have[m.id] ? T("medal.when", { date: have[m.id] }) : T("medal.todo")], go: () => {} }));
+    items.push({ key: "gap", label: "", disabled: true }, { key: "back", label: T("back.main"), info: [T("back.main.i")], go: () => main("medals") });
+    window.tunnelerMedalsUI = () => items;               // (tests)
+    ui.show({ lines: [{ row: 2, text: T("medal.title"), color: 12 }, { row: 4, text: T("medal.count", { n: Object.keys(have).length, all }), color: 15 }],
+      box: { y: 6, rows: 11 }, fixed: 2, items, back: () => main("medals"), infoRow: 21 });
+  }
+  // a new player (1.4): the training ground not done and no skirmish played in this browser
+  const newPlayer = () => { try { return !localStorage.getItem("tunneler.trained") && !localStorage.getItem("tunneler.cpu.slots"); } catch (e) { return false; } };
   // sel: an item's index or key (the screen came back from it)
   function main(sel, keep) {
     const items = [
       ...(MOBILE ? [] : [{ key: "split", label: T("home.split"), info: [T("home.split.i1"), splitKeys()], go: () => split() }]),
       { key: "cpu", label: T("home.cpu"), info: [T(MOBILE ? "home.cpu.i1m" : "home.cpu.i1n"), T("home.cpu.i2")], go: () => cpu() },
+      // (1.4: the training ground - recommended, and the menu's first choice, until it is done or a skirmish was played)
+      { key: "training", label: T("home.training"), info: [T("home.training.i"), ...(newPlayer() ? [T("home.training.new")] : [])], go: () => { Nav.go(Links.training()); } },
       { key: "online", label: T("home.online"), info: [T("home.online.i1"), T("home.online.i2")],
         go: () => { Nav.go(Links.games()); } },
       { key: "challenge", label: T("home.challenge"), info: [T("home.challenge.i")], go: () => { Nav.go(Links.challenge()); } },   // (docs/v6/CHALLENGE.md)
       { key: "replays", label: T("home.replays"), info: [T("home.replays.i")], go: () => { Nav.go(Links.replays()); } },
       { key: "maps", label: T("home.maps"), info: [T("home.maps.i")], go: () => { Nav.go(Links.maps()); } },
+      { key: "medals", label: T("home.medals"), info: [T("home.medals.i", { n: Object.keys(Medals.earned()).length, all: Medals.LIST.length })], go: () => medals() },   // (1.4)
       { key: "gap", label: "", disabled: true },
       { key: "instr", label: T("menu.instr"), info: [T("menu.instr.i")], go: () => ui.showPage("instructions", "hotseat", () => main("instr")) },
       { key: "info", label: T("menu.info"), info: [T("menu.info.i")], go: () => ui.showPage("information", "hotseat", () => main("info")) },
@@ -219,6 +236,7 @@ export function mount() {
         go: () => { tauri().invoke("quit").catch(() => {}); } }] : []),
       ...updateItems(),
     ];
+    if (sel === 0 && !keep && newPlayer()) sel = "training";
     if (typeof sel === "string") sel = Math.max(0, items.findIndex(it => it.key === sel));
     // (the box as low as row 8, the info at row 21 or an empty row under the box, its 2 lines above the bottom rule (23);
     // a taller menu - the desktop app's Quit, an update - goes higher, at most to row 6, the info then right under it)

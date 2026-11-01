@@ -70,4 +70,6 @@ Lang.extend("uk", {
   "ch.board.none.past": "У таблиці того дня нікого немає.",
   "ch.back.board": "Назад до таблиці",
   "ch.back.board.i": "Назад до таблиці лідерів виклику того дня.",
+  // (1.4: a Sunday's map of the week - a published gallery map; its name and author raw Unicode)
+  "ch.weekly": "Мапа тижня: {name}, автор {by}",
 });

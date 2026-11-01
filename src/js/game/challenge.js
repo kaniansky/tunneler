@@ -5,9 +5,11 @@
 // happened on the day's leaderboard.
 //
 //   Challenge.dayOf(Date.now()) -> "2026-10-25"    dayStart(day) / dayEnd(day) -> ms   validDay(day)
-//   const cfg = Challenge.config(day)               {day, seed, mode, goal, size, winScore, roundTime, friendlyFire, sight, slots}
+//   const cfg = Challenge.config(day[, map])        {day, seed, mode, goal, size, winScore, roundTime, friendlyFire, sight, slots[, map]}
+//   Challenge.weekly(day)                           a Sunday: the map of the week's day (1.4) - map = {id, name, by, size, bases},
+//                                                   a published gallery map the server picked for it (its board says which)
 //   Challenge.query(cfg)                            the skirmish link's query (play.js builds the engine from it)
-//   Challenge.engineOptions(cfg)                    the engine options play.js builds from that query
+//   Challenge.engineOptions(cfg[, code])            the engine options play.js builds from that query (code: the map's)
 //   const kills = Challenge.track(engine)           kills per player, counted from outside the engine
 //   Challenge.result(engine, kills, steps)          {rounds, won, kills, secs} - BLUE's (you are always BLUE)
 //   Challenge.compare(a, b)                         the leaderboard's order (< 0: a is better)
@@ -58,15 +60,23 @@ function mulberry32(a) {
 const MODE_WEIGHTS = [["standard", 5], ["gold", 1], ["hill", 1], ["ctf", 1], ["deathmatch", 1], ["siege", 1], ["shrink", 1], ["survival", 1]];
 const MODE_TIME = { gold: 5, hill: 5, ctf: 5, deathmatch: 5, shrink: 5, siege: 10, survival: 10 };
 
-function config(day) {
+// a Sunday (UTC): the map of the week (1.4, owner 2026-11-01) - one published gallery map, its author named on the board
+const weekly = day => validDay(day) && new Date(dayStart(day)).getUTCDay() === 0;
+
+// map (the map of the week, 1.4 - {id, name, by, size, bases}; null / none: the usual generated world): the same draws in
+// the same order, then the map's size instead of the drawn one, no more computer tanks than its bases leave (survival
+// needs 4 bases), and the map on the challenge (display: its name and author)
+function config(day, map) {
   const r = mulberry32(hash("tunneler-challenge:" + day));
   const pick = list => {                                   // [[value, weight], ...]
     let n = r() % list.reduce((s, x) => s + x[1], 0);
     for (const [v, w] of list) { if (n < w) return v; n -= w; }
     return list[0][0];
   };
-  const mode = pick(MODE_WEIGHTS);
-  const size = pick([["small", 3], ["medium", 5], ["large", 2]]);
+  let mode = pick(MODE_WEIGHTS);
+  let size = pick([["small", 3], ["medium", 5], ["large", 2]]);
+  const M = map && typeof map === "object" && NetProto.mapId(map.id) && (map.bases | 0) >= 2 ? map : null;
+  if (M) { size = ["small", "medium", "large"].includes(M.size) ? M.size : size; if (mode === "survival" && M.bases < 4) mode = "standard"; }
   const goalMode = !!NetProto.GOALS[mode];
   const level = () => pick([["easy", 1], ["normal", 2], ["hard", 2]]);
   const slots = [{ color: 0, team: 1, level: null }];      // (you: BLUE)
@@ -76,6 +86,7 @@ function config(day) {
     for (let i = 1; i <= foes; i++) slots.push({ color: i, team: 2, level: level() });
   } else {
     foes = 1 + r() % (size === "large" ? 3 : 4);
+    if (M) foes = Math.min(foes, M.bases - 1);
     teamGame = foes >= 3 && r() % 3 === 0;                 // you and a medium teammate against the rest
     for (let i = 1; i <= foes; i++) slots.push(teamGame ? { color: i, team: i === 1 ? 1 : 2, level: i === 1 ? "normal" : level() }
       : { color: i, team: i + 1, level: level() });
@@ -85,7 +96,8 @@ function config(day) {
   const sight = pick([["full", 7], ["circle", 2], ["walls", 1]]);
   const friendlyFire = teamGame && r() % 3 === 0;
   const seed = r() >>> 0;
-  return { day, seed, mode, goal: goalMode ? NetProto.GOALS[mode].def : 0, size, winScore, roundTime, friendlyFire, sight, slots };
+  return { day, seed, mode, goal: NetProto.GOALS[mode] ? NetProto.GOALS[mode].def : 0, size, winScore, roundTime, friendlyFire, sight, slots,
+    ...(M ? { map: { id: M.id, name: String(M.name || "").slice(0, 40), by: String(M.by || "").slice(0, 40), size: M.size, bases: M.bases | 0 } } : {}) };
 }
 
 // the skirmish link's query for it (play.js reads it like any skirmish link): view = your own, after death = the wreck
@@ -93,13 +105,13 @@ function query(cfg) {
   const who = s => s.level === null ? "you" : s.level;
   return "slots=" + cfg.slots.map(s => s.color + ":" + who(s) + ":" + s.team).join(",") + "&lv=2&size=" + cfg.size + "&win=" + cfg.winScore +
     "&time=" + cfg.roundTime + "&ff=" + (cfg.friendlyFire ? 1 : 0) + "&view=self&watch=wreck" + (cfg.sight !== "full" ? "&sight=" + cfg.sight : "") +
-    (cfg.mode !== "standard" ? "&gm=" + cfg.mode : "") + (cfg.goal ? "&goal=" + cfg.goal : "") + "&challenge=" + cfg.day;
+    (cfg.mode !== "standard" ? "&gm=" + cfg.mode : "") + (cfg.goal ? "&goal=" + cfg.goal : "") + (cfg.map ? "&map=" + cfg.map.id : "") + "&challenge=" + cfg.day;
 }
 // the engine options play.js builds from that query (a skirmish: always the extended engine; you = player 1)
-function engineOptions(cfg) {
+function engineOptions(cfg, code) {
   return { slots: cfg.slots.map(s => ({ color: s.color, team: s.team })), size: cfg.size, winScore: cfg.winScore, roundTime: cfg.roundTime,
     friendlyFire: !!cfg.friendlyFire, escEnds: true, escPlayer: 0, autoStart: true, noInstructions: true,
-    sight: cfg.sight, extended: true, mode: cfg.mode, goal: cfg.goal };
+    sight: cfg.sight, extended: true, mode: cfg.mode, goal: cfg.goal, ...(cfg.map && code ? { map: code } : {}) };
 }
 // the same options (key order doesn't matter)
 const canon = v => Array.isArray(v) ? "[" + v.map(canon).join(",") + "]" : v && typeof v === "object"
@@ -138,12 +150,14 @@ const clock = secs => Math.floor(secs / 60) + ":" + z2(secs % 60);
 // ------------------------------------------------------------------ checking a replay (the server, in a worker thread)
 // Plays it on a new engine with its own computer players (as play.js creates them): every computer tank's bits must
 // be the recorded ones and the recorded state hashes must match; only BLUE's bits and the keystrokes come from the
-// replay. The result is the engine's own. deps: {Engine, AI, day, name? (BLUE's on the kept replay), maxSteps?}
+// replay. The result is the engine's own. deps: {Engine, AI, day, name? (BLUE's on the kept replay), maxSteps?, map? (the
+// day's map of the week with its code: {id, name, by, size, bases, code})}
 function verify(rep, deps) {
   const { Engine, AI, day } = deps, maxSteps = deps.maxSteps || MAX_STEPS;
   if (!Replay.valid(rep)) return { code: "bad" };
   if (rep.challenge !== day || !validDay(day)) return { code: "config" };
-  const cfg = config(day), opts = engineOptions(cfg);
+  const map = deps.map && deps.map.code ? deps.map : null;
+  const cfg = config(day, map), opts = engineOptions(cfg, map && map.code);
   if ((rep.seed >>> 0) !== cfg.seed || !sameOptions(rep.opts, opts)) return { code: "config" };
   if (rep.steps < 1 || rep.steps > maxSteps) return { code: "long" };
   const e = new Engine(cfg.seed, Object.assign(JSON.parse(JSON.stringify(opts)), { match: true }));
@@ -191,6 +205,6 @@ function clean(rep, e, player, checks, name) {
 }
 
 export const Challenge = {
-  MAX_STEPS, GRACE_MS, BOARD_DAYS, LEVELS, MODE_WEIGHTS, DAY, dayOf, dayStart, dayEnd, validDay, config, query, engineOptions, sameOptions,
+  MAX_STEPS, GRACE_MS, BOARD_DAYS, LEVELS, MODE_WEIGHTS, DAY, dayOf, dayStart, dayEnd, validDay, weekly, config, query, engineOptions, sameOptions,
   track, result, compare, clock, verify,
 };

@@ -45,7 +45,8 @@ older one trimmed is deleted on the server at the next sync).
 Settings: `CloudSave.SETTINGS` (name, sound, volume, stereo, fade, chat sound, ping, language, graphics + its modern
 settings, smooth scrolling, tank colours, keys, touch options, chat hidden, views, the online / skirmish / split screen
 setups...; not the session, the server, the client id, host keys, fullscreen / scale, the challenge's unsent result,
-old keys). Pulled (the server's changes written here) only at the start and after a login - the screens read them when
+old keys). The medals (`tunneler.medals`, 1.4) are merged instead - every medal of both sides, the earlier day
+(`Medals.merge`), at every sync, pull or not. Pulled (the server's changes written here) only at the start and after a login - the screens read them when
 they open; when a pull changed any, app.js reloads the main menu (at most once a minute). Other syncs only send this
 device's changes (the server's stay for the next pull). A device's first sync is always a pull: the account's settings
 win over a new device's (its own other keys go up); a send-only sync before any pull sends nothing.

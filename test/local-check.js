@@ -32,6 +32,8 @@ function makeEnv(search, store) {
     getContext: () => ({ createImageData: (w, h) => ({ data: new Uint8ClampedArray(w * h * 4) }), putImageData() {} }) });
   const elements = {};
   const storage = store || new Map();
+  // (a returning player: the main menu opens on its first item - a new one's opens on the training ground, 1.4)
+  if (!storage.has("tunneler.trained")) storage.set("tunneler.trained", "1");
   const win = {
     document: { title: "", getElementById: id => elements[id] || (elements[id] = mkEl(id)), createElement: mkEl,
       // (a browser's: the Fullscreen API there - screen.js offers the Settings row only where it exists)

@@ -2233,6 +2233,8 @@ TunnelerEngine.MODES = {};
 // every mode in the order the menus offer them (the same as NetProto.MODES); modifiers
 TunnelerEngine.MODE_LIST = ["standard", "gold", "infection", "survival", "hill", "shrink", "ctf", "siege", "deathmatch"];
 TunnelerEngine.OWN_TEAMS = ["infection", "survival"];      // modes that make their own teams
+// modes only this page's own games run (1.4): never in a lobby, online or in the daily challenge (not in MODE_LIST)
+TunnelerEngine.LOCAL_MODES = ["training"];
 // a mode's goal instead of rounds to win (the same as NetProto.GOALS)
 TunnelerEngine.GOALS = { gold: { choices: [5, 10, 15, 20, 30, 50], def: 10 }, infection: { choices: [1, 2, 3, 5, 10], def: 3 },
   survival: { choices: [3, 5, 7, 10, 15, 20], def: 5 }, hill: { choices: [30, 45, 60, 90, 120, 180], def: 60 },

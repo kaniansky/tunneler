@@ -294,6 +294,35 @@ joystick drives the tank, the end map / menu without them, a tap beside the map 
   `tunneler.cpu.slots` (JSON [{kind, team}] x 8), `tunneler.cpu.size`, `tunneler.cpu.win`,
   `tunneler.cpu.ff`, `tunneler.cpu.view` (old `tunneler.hide` 1 / 0 = self / everyone). Texts: `lc.*` keys
   (in each `src/lang/<code>/main.js`).
+- Training ground (1.4, owner 2026-11-01: a first match that teaches the original's rules): route `/training`
+  (`play.html?mode=training` in the apps; `Links.training()`) = `play.js` with game mode `training`
+  (`src/js/game/modes/training.js`; `TunnelerEngine.LOCAL_MODES` - not in `MODE_LIST` / `NetProto.MODES`: never in a
+  lobby, online, the daily challenge or a replay - none is recorded). BLUE you (team 1) against GREEN easy (team 2),
+  small, one round. Steps (`e.GS.step`, display only on the page): 1 out of the base (> 24 px: past its wall), 2 five shots, 3 the
+  energy dropped to 3500 - refuel at home to 10500, 4 GREEN in BLUE's view window (the hint: which way, `dir`), 5
+  destroy it; GREEN stands still and holds its fire until step 5 (`aiOverride` + the new `GM.aiHoldFire` hook in
+  ai.js, checked after every other decision so no random draw moves). The hint: `play.js trainingHints` - the status
+  line under the game (`StatusLine`, 40 columns under one view, a phone 40 / 32 sideways; wrapped), "Training n/5:
+  ..." in cyan, the keys as this browser has them (both sets; a phone: joystick / FIRE); at the end done (green) /
+  destroyed (red). Won: localStorage `tunneler.trained` = "1". Main menu: "Training ground" after Skirmish; a new
+  player (no `tunneler.trained`, no `tunneler.cpu.slots`) gets it selected and a second info line. Texts:
+  `src/lang/<code>/training.js` (`home.training*`, `tr.*`; lang-check lets the hints be 112 columns - they wrap).
+  views.js: on a phone the play screen's size counts the status line too (sideways it had no room). Tests:
+  test/modes/training.js.
+- Map of the week (1.4): Sundays' daily challenge on a published gallery map the server picks and keeps with the board -
+  docs/v6/CHALLENGE.md 9 (`Challenge.weekly`, `config(day, map)`, server.js `pickWeeklyMap`, daily.js `cfgOf`).
+- Medals (1.4): `src/js/game/medals.js` - 25 (`Medals.LIST`; texts `src/lang/<code>/medals.js`, the modes' medals one
+  text with the mode's name). Display only: `Medals.track(engine)` wraps killTankExt and only reads (kills / losses);
+  `Medals.afterMatch(engine, track, {kind, me, levels, weekly, day})` after every match - play.js `afterMatch` (kinds
+  skirmish / challenge - a past day's: skirmish - / training / split; the new ones under Rematch in yellow) and online.js
+  (the world map reached, a player); `Medals.earn("maker")` when a map is published (maps.js). Rules: first victory
+  (won; not split screen, not the training ground - owner), five kills, flawless (won, never destroyed), sharpshooter
+  (60 % of 20+ shots), mole (300 dug), veteran (all enemies hard computer tanks), against all odds (7 computer tanks),
+  the challenge played / won / 7 days in a row (`tunneler.medals.days`) / on a map of the week, online played / won,
+  split screen, the training ground, a win in each mode, all modes. Stored: localStorage `tunneler.medals` {id: day};
+  with an account a synced setting merged both ways (cloudsave.js `UNION`). Main menu "Medals" (after Maps): the list
+  (earned: yellow, a check mark), how to earn the chosen one and when it was earned. Tests: test/medals-check.js,
+  test/cloudsave-check.js (two devices' medals merged at login).
 - routes `/split`, `/skirmish` = `play.js` - local modes `?mode=hotseat&size=&win=` and
   `?mode=cpu&slots=<color>:<you|level>:<team>,...&size=&win=&ff=0|1&view=self|team|everyone` (old `opp` / `teams` / `hide` /
   `level` links still work); `LocalClock` drives one step per tick. The engine gets `{slots, size,

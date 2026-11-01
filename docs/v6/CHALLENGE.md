@@ -259,6 +259,25 @@ The Information page has a "Daily challenge" section (en/engine.js and every mai
   desktop / phone upright / sideways, every language; also a past day (the one of the 30 with the most description
   and the longest date), a day loading and a day that can't be loaded. `test/lang-check.js`: the new texts fit. `test/app-check.js`: the new route.
 
+## 9. The map of the week (1.4, owner 2026-11-01)
+
+On Sundays (UTC, `Challenge.weekly(day)`) the challenge is played on a published gallery map, its author named on the
+challenge screen and the board ("Map of the week: <name> by <author>", `ch.weekly`).
+
+- The server picks it (`pickWeeklyMap`): the first time the day's board is loaded while that day is today and the board
+  is still empty - of the gallery's maps the one featured longest ago (never: first), then the most played, then the
+  oldest; the gallery entry gets `featured: <day>`. Kept with the board (`map: {id, name, by, size, bases}`, or
+  `map: null` - an empty gallery: the usual challenge; a board without the key - before 1.4 - has none), and sent with
+  it (GET /api/challenge: `map`). The gallery can't be read: the board isn't either (503, asked again).
+- `Challenge.config(day, map)`: the same draws in the same order, then the map's size, at most its bases' tanks (you
+  and `bases - 1` computer tanks), no survival with fewer than 4 bases; `cfg.map`. `query` adds `&map=<id>` (play.js
+  fetches the shared map, as any map link); `engineOptions(cfg, code)` adds the map's code. Other days: unchanged.
+- The check (challenge-worker.js) plays the replay on the board's map (`verify(rep, {map: {..., code}})` - its code from
+  the shared maps); a replay without it (or with another map) is "config".
+- The challenge screen (daily.js `cfgOf` / `playLink`): a Sunday's challenge from its board's map (today's and past
+  days' boards); the remembered result keeps its map (`tunneler.challenge.last` `map`).
+- Tests: test/weekly-check.js.
+
 ## 8. Out of scope
 
 Prizes, accounts, streaks, boards older than 30 days, results of past days (practice only), a challenge for split

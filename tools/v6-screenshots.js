@@ -92,7 +92,7 @@ function drawMap() {
   const errs = [];
   const page = async (look, ls, url) => {
     const ctx = await b.newContext({ viewport: { width: 1000, height: 820 } });
-    await ctx.addInitScript(o => { for (const k in o) localStorage.setItem(k, o[k]); }, Object.assign({ "tunneler.gfx": look, "tunneler.gfx.modern": JSON.stringify({ quality: "high" }) }, ls));
+    await ctx.addInitScript(o => { for (const k in o) localStorage.setItem(k, o[k]); }, Object.assign({ "tunneler.gfx": look, "tunneler.gfx.modern": JSON.stringify({ quality: "high" }), "tunneler.trained": "1" }, ls));
     const p = await ctx.newPage(); p.on("pageerror", e => errs.push(url + ": " + e.message));
     await p.goto(B + url); return p;
   };
