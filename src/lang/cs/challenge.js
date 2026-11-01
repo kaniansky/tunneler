@@ -70,4 +70,6 @@ Lang.extend("cs", {
   "ch.board.none.past": "V žebříčku toho dne nikdo není.",
   "ch.back.board": "Zpět na žebříček",
   "ch.back.board.i": "Zpět na žebříček denní výzvy z toho dne.",
+  // (1.4: a Sunday's map of the week - a published gallery map; its name and author raw Unicode)
+  "ch.weekly": "Mapa týdne: {name} od {by}",
 });

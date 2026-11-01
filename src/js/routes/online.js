@@ -20,6 +20,7 @@
 // Accounts (docs/v6/ACCOUNTS.md): on a server that needs them every connection carries a one-time ticket (POST
 // /api/ticket with the session) instead of the name - LOG IN (login.js) first when there is no session, or when the
 // server refuses with "login"; the name prompt only on a server without accounts.
+import { Medals } from "../game/medals.js";
 import "../draw/gfx-modern.js";
 import "../draw/gfx-hud.js";
 import { Account } from "../net/account.js";
@@ -110,6 +111,7 @@ export function mount() {
   let human = null, names = null, tookTimer = null;
   let matchNo = 0;                   // the match this page runs (0 = none)
   let player = -1;                   // this page's tank in it (0-based), -1 = watching
+  let medalTrack = null;             // (1.4: Medals.track of the match's engine)
   let ended = false;                 // the server said the match is over (the frames left still run)
   let frames = 0;                    // frames run through the engine
   const queue = new FrameQueue();    // frames received, not yet run
@@ -180,6 +182,7 @@ export function mount() {
     cfg = c; matchNo = m.no; player = Number.isInteger(m.you) ? m.you : -1; ended = false;
     const opts = engineOptions(cfg);
     engine = new TunnelerEngine(m.seed >>> 0, JSON.parse(JSON.stringify(opts)));
+    medalTrack = Medals.track(engine);                     // (1.4: kills / losses for the medals - only reads)
     Lang.apply(engine);                                    // texts only: the simulation is the same
     engine.uiMode = "online";
     engine.setNames(cfg.names);                            // display only (raw Unicode)
@@ -274,8 +277,11 @@ export function mount() {
     if (frames === arrived.end && !quiet) Debug.time("buffer", performance.now() - arrived.at);   // (Debug info: arrival -> run)
     // (Debug info: a key pressed -> the frame with it run here - the server's latch and the way back, the jitter buffer)
     if (lagWait && player >= 0 && (((ext ? f[0][player] : f[player]) | 0) & lagWait.need) === lagWait.need) { Debug.time("input lag", performance.now() - lagWait.t); lagWait = null; }
-    if (engine.screen === "map" && (!lastMatch || lastMatch.no !== matchNo))   // the match is over: its statistics are final
+    if (engine.screen === "map" && (!lastMatch || lastMatch.no !== matchNo)) {   // the match is over: its statistics are final
       lastMatch = { engine, cfg, player, no: matchNo };
+      // (1.4: a player's medals - the computer tanks' levels from the match's seats)
+      if (player >= 0) Medals.afterMatch(engine, medalTrack, { kind: "online", me: player + 1, levels: cfg.slots.map(sl => sl.bot ? sl.level || "easy" : null) });
+    }
     if (engine.screen === "map" && engine.snapshots.length) {
       mapSnap = engine.snapshots[engine.snapshots.length - 1];
       if (!quiet && !mapPending) { mapPending = true; presentOverlay(); }

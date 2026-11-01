@@ -34,6 +34,8 @@ export function challengeLines(cfg) {
   const foes = cfg.slots.filter(s => s.level !== null && s.team !== 1), mate = cfg.slots.find(s => s.level !== null && s.team === 1);
   const list = foes.map(s => levelName(s.level)).join(", ");
   out.push(cfg.mode === "survival" ? T("ch.foes.survival", { list }) : mate ? T("ch.foes.team", { level: levelName(mate.level), list }) : T("ch.foes", { list }));
+  // (a Sunday: the map of the week and its author - 1.4; their names raw Unicode)
+  if (cfg.map) out.push(UniText.fromRaw(Lang.raw("ch.weekly").replace("{name}", cfg.map.name || "?").replace("{by}", cfg.map.by || "?")));
   const extra = [];
   if (cfg.sight !== "full") extra.push(T("lc.sight") + T("sight." + cfg.sight));
   if (cfg.friendlyFire) extra.push(T("lc.ff") + T("lc.on"));
@@ -92,7 +94,7 @@ export function mount() {
   function main(keep) {
     view = "main";
     if (/[?&]board=/.test(location.search)) try { history.replaceState(history.state, "", Links.challenge()); } catch (e) { /* no history */ }
-    const cfg = Challenge.config(day), L = last();
+    const cfg = cfgOf(day), L = last();
     // a result not sent yet: today's, or yesterday's while the server still takes it (a match begun just before midnight UTC)
     const pending = L && !L.sent &&
       (L.day === day || Challenge.dayEnd(L.day) <= Challenge.dayStart(day) && Date.now() + skew < Challenge.dayEnd(L.day) + Challenge.GRACE_MS);
@@ -102,9 +104,9 @@ export function mount() {
     lines.push({ row: 11, color: 14, text: offline ? T("ch.best.off") : !board ? T("ch.best.wait")
       : you ? UniText.fromRaw(Lang.raw("ch.best").replace("{rank}", you.rank).replace("{total}", board.total).replace("{score}", scoreText(you, cfg))) : T("ch.best.none") });
     if (note) lines.push({ row: 12, text: note.text, color: note.color });
-    const items = [{ key: "play", label: T("ch.play"), info: [T("ch.play.i"), T("ch.play.i2")], go: () => Nav.go(Links.cpu("challenge=" + day)) }];
+    const items = [{ key: "play", label: T("ch.play"), info: [T("ch.play.i"), T("ch.play.i2")], go: () => Nav.go(playLink(day)) }];
     if (pending) items.push({ key: "send", label: T("ch.send"), go: () => send(),   // (yesterday's: said so)
-      info: [UniText.fromRaw(Lang.raw(L.day === day ? "ch.send.i" : "ch.send.prev").replace("{score}", scoreText(L.result, Challenge.config(L.day)))), T("ch.send.i2")] });
+      info: [UniText.fromRaw(Lang.raw(L.day === day ? "ch.send.i" : "ch.send.prev").replace("{score}", scoreText(L.result, Challenge.config(L.day, L.map || null)))), T("ch.send.i2")] });
     items.push({ key: "board", label: T("ch.board"), info: [T("ch.board.i")], go: () => showBoard() },
       { key: "gap", label: "", disabled: true },
       { key: "back", label: T("back.main"), info: [T("back.main.i")], go: home });
@@ -133,6 +135,13 @@ export function mount() {
     return [0x07, mine ? 0x0E : 0x0F, 0x0A, 0x0C, 0x0B].map((a, i) => [at[i], i < C.length ? at[i + 1] : 200, a]);
   }
   // a day's board: {j} (the server's answer), "wait" or "off" (offline / refused: Enter on its row tries again)
+  // a day's challenge: a Sunday's with the map of the week its board names (1.4; none known yet / offline: without one)
+  function cfgOf(d) {
+    const st = Challenge.weekly(d) ? boardState(d) : null, m = st && typeof st === "object" ? st.j.map : null;
+    return Challenge.config(d, m || null);
+  }
+  // the link that plays a day's challenge (a Sunday's: &map=<the map of the week> - play.js fetches it)
+  const playLink = (d, practice) => { const c = cfgOf(d); return Links.cpu("challenge=" + d + (c.map ? "&map=" + c.map.id : "") + (practice ? "&practice=1" : "")); };
   function boardState(d) {
     if (d === day) return board && board.day === day ? { j: board } : offline ? "off" : "wait";
     if (past.has(d)) return { j: past.get(d) };
@@ -187,7 +196,7 @@ export function mount() {
     view = "board";
     const d = shownDay(), today = d === day, narrow = ui.isNarrow();
     try { history.replaceState(history.state, "", Links.challenge(today ? null : d)); } catch (e) { /* no history (tests) */ }
-    const cfg = Challenge.config(d), C = cols(), st = boardState(d), touch = GameScreen.mobile();
+    const cfg = cfgOf(d), C = cols(), st = boardState(d), touch = GameScreen.mobile();
     const j = typeof st === "object" ? st.j : null, top = j ? j.top || [] : [], you = j ? j.you : null;
     // the rows: the best (up to 50), your own entry below them when it isn't one of them; a row with a replay watches it
     // (its Back comes to this day's board again), one without isn't choosable
@@ -198,8 +207,8 @@ export function mount() {
         : { static: true }));
     if (!entries.length) entries.push(st === "off" ? { key: "off", label: T("ch.board.off"), attr: 0x0C, info: [T("ch.board.off.i"), T(touch ? "ch.retry.i.touch" : "ch.retry.i")], go: () => retry(d) }
       : { key: "none", label: T(st === "wait" ? "ch.board.wait" : today ? "ch.board.none" : "ch.board.none.past"), disabled: true });
-    const play = today ? { key: "play", label: T("ch.play"), info: [T("ch.play.i"), T("ch.play.i2")], go: () => Nav.go(Links.cpu("challenge=" + d)) }
-      : { key: "play", label: T("ch.again"), info: [T("ch.practice"), T("ch.again.i")], go: () => Nav.go(Links.cpu("challenge=" + d + "&practice=1")) };
+    const play = today ? { key: "play", label: T("ch.play"), info: [T("ch.play.i"), T("ch.play.i2")], go: () => Nav.go(playLink(d)) }
+      : { key: "play", label: T("ch.again"), info: [T("ch.practice"), T("ch.again.i")], go: () => Nav.go(playLink(d, true)) };
     const back = { key: "back", label: T("ch.back"), info: [T("ch.back.i")], go: () => main() };
     const lines = [{ row: 2, text: T("ch.board.title", { date: dateText(d, { month: "long", day: "numeric" }).toLocaleUpperCase() }), color: 12 }];
     const desc = challengeLines(cfg);
@@ -299,7 +308,7 @@ export function mount() {
         return;
       }
       store.set(LAST, JSON.stringify(Object.assign(L, { sent: true })));
-      const cfg = Challenge.config(L.day);
+      const cfg = Challenge.config(L.day, L.map || null);
       note = j.improved ? { text: T("ch.sent", { rank: j.rank, total: j.total }), color: 10 }
         : { text: UniText.fromRaw(Lang.raw("ch.sent.same").replace("{score}", scoreText(j.best, cfg))), color: 14 };
       await load();

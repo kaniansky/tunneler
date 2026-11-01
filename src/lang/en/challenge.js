@@ -70,4 +70,6 @@ Lang.extend("en", {
   "ch.board.none.past": "Nobody got on that day's leaderboard.",
   "ch.back.board": "Back to the leaderboard",
   "ch.back.board.i": "Back to the daily challenge's leaderboard of that day.",
+  // (1.4: a Sunday's map of the week - a published gallery map; its name and author raw Unicode)
+  "ch.weekly": "Map of the week: {name} by {by}",
 });

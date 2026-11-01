@@ -84,6 +84,7 @@ function device(port) {
   const a = device(port), b = device(port);
   // device A: its settings, a map, a replay; logs in and syncs - all of it goes up
   a.store.set("tunneler.gfx", "original"); a.store.set("tunneler.keys", "{\"blue\":{\"fire\":\"KeyK\"}}"); a.store.set("tunneler.fullscreen", "1");
+  a.store.set("tunneler.medals", '{"first":"2026-11-02","maker":"2026-11-02"}');   // (1.4: medals - merged, never one side over the other)
   await a.M.putRecord(mapOf("mapaaaaaaa", "Arena"));
   await a.R.save(replayOf("ra", 100));
   assert((await a.A.login("alice", "secret-pass-1")).ok);
@@ -91,19 +92,25 @@ function device(port) {
   assert(r.ok && !r.settings && r.maps === 0, "A: " + JSON.stringify(r));
   let idx = (await api(port, "GET", "/api/save", null, T)).j;
   same(Object.keys(idx.maps), ["mapaaaaaaa"]); same(Object.keys(idx.replays), ["ra"]);
-  same(idx.settings, { "tunneler.gfx": "original", "tunneler.keys": "{\"blue\":{\"fire\":\"KeyK\"}}" }, "only the game's settings (not fullscreen)");
+  same(idx.settings, { "tunneler.gfx": "original", "tunneler.keys": "{\"blue\":{\"fire\":\"KeyK\"}}", "tunneler.medals": '{"first":"2026-11-02","maker":"2026-11-02"}' },
+    "only the game's settings (not fullscreen)");
   // device B: its own map and look; logging in: the account's settings win, its map goes up, A's come down
   b.store.set("tunneler.gfx", "modern"); b.store.set("tunneler.sound", "0");
+  b.store.set("tunneler.medals", '{"first":"2026-11-01","five":"2026-11-03"}');
   await b.M.putRecord(mapOf("mapbbbbbbb", "Bunker"));
   assert((await b.A.login("alice", "secret-pass-1")).ok);
   r = await b.C.sync({ pull: true });
   assert(r.ok && r.settings && r.maps === 1 && r.replays === 1, "B: " + JSON.stringify(r));
   same(b.ls("tunneler.gfx"), "original", "B: the account's look"); same(b.ls("tunneler.sound"), "0", "B: its own other setting kept");
   same((await b.M.list()).map(x => x.name).sort(), ["Arena", "Bunker"]); same((await b.R.list()).map(x => x.id), ["ra"]);
-  ok("a new device: the account's settings, maps and replays come down, its own go up");
+  const both = '{"first":"2026-11-01","five":"2026-11-03","maker":"2026-11-02"}';
+  same(b.ls("tunneler.medals"), both, "B logging in: its medals and the account's together (the earlier day)");
+  same((await api(port, "GET", "/api/save", null, T)).j.settings["tunneler.medals"], both, "... and the account has them all");
+  ok("a new device: the account's settings, maps and replays come down, its own go up; medals merged");
   // A again (no pull): B's map comes down, B's sound setting doesn't
   r = await a.C.sync();
   same((await a.M.list()).map(x => x.name).sort(), ["Arena", "Bunker"]); same(a.ls("tunneler.sound"), null, "A: settings not pulled");
+  same(a.ls("tunneler.medals"), '{"first":"2026-11-01","five":"2026-11-03","maker":"2026-11-02"}', "A (no pull): B's medals come down all the same");
   // A deletes a map, changes a setting; B: the map goes, the setting only once pulled
   await a.M.remove("mapaaaaaaa"); a.store.set("tunneler.volume", "5");
   await a.C.sync();

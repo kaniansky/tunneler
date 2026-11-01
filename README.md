@@ -30,6 +30,23 @@ screens drawn anew - see below).
 
 ## What's new
 
+New in 1.4:
+
+- **Training ground** (main menu): a short first match that teaches the rules step by step - drive out of your base,
+  shoot the dirt away, refuel at home when your energy runs low, find the enemy tank and destroy it. Each step's hint
+  shows over the game, with your own keys; a new player finds it selected on the main menu.
+- **Map of the week**: on Sundays the daily challenge is played on a map from the gallery - a different one every
+  week, its author named on the challenge screen and the leaderboard.
+- **Medals**: 25 to earn - the training ground, a first victory, a flawless win, 5 kills in a match, a sharp eye, the
+  daily challenge seven days in a row, a win in every game mode and more. The new Medals screen shows them all and how
+  to earn them; the match that earns one says so, and with an account they follow you to every device.
+
+| The training ground (modern look) | The training ground (original look) |
+|---|---|
+| ![Training ground](screenshots/modern-training.png) | ![Original training ground](screenshots/training.png) |
+
+Online play needs 1.4 on every side.
+
 New in 1.3:
 
 - **Water**: a tank drives through it at half speed, it can't be dug, shots fly over it and explosions don't change
@@ -58,8 +75,8 @@ New in 1.3:
 - Also: the mouse wheel over a menu's list scrolls only the list; debug info has an X to close it and Ctrl+Shift+D
   switches it anywhere; the desktop app has Quit on the main menu.
 
-Online play needs 1.3 on every side. Games without water and with the original ground - the original BLUE vs GREEN
-game, Original, your maps from before - play exactly as before.
+Games without water and with the original ground - the original BLUE vs GREEN game, Original, your maps from before -
+play exactly as before.
 
 | A team game on generated rivers (modern look) | Held Tab with Show map: Revealed (team), generated islands |
 |---|---|
@@ -87,6 +104,9 @@ Earlier:
   map size and computer opponents. Play it as often as you like and send your result: the server plays the
   match's replay again with its own computer players, so only real results get on the day's leaderboard. Every
   entry's match can be watched, and the leaderboard goes back 30 days (play those days again as practice).
+  On Sundays it is played on the map of the week, a map from the gallery.
+- **Training ground** (main menu): a first match against one computer tank, five steps with a hint each.
+- **Medals** (main menu): 25 to earn, shown with how to earn them; kept with your account.
 - **Your own maps** (main menu, Maps): paint rock, dirt, tunnels and water and place up to 8 bases on a small, medium
   or large map, on classic, sand or grass ground, with the keyboard, the mouse, a gamepad or a finger. Maps are kept in
   the browser, shared as links (`/map/<id>`) and saved as / opened from `.tmap` files, and played in a skirmish or an
@@ -152,7 +172,7 @@ play stay exactly the same, and every player chooses their own look. **Modern** 
   password), send the invite
   link (`/game/<name>`), and play with 2 to 8 tanks from several computers; any seat can be an AI tank.
   Addresses: `/games` (the list), `/game/<name>` (the game's lobby), `/game/<name>/watch` (spectating),
-  `/split`, `/skirmish`, `/replays`, `/challenge`, `/maps`.
+  `/split`, `/skirmish`, `/training`, `/replays`, `/challenge`, `/maps`.
 - **Daily challenge** - the day's skirmish, the same for everyone, and its leaderboard (see above).
 - **Replays** - every match you play or watch is kept in the browser (the newest 20). Watch one again like a
   spectator (every view, the live map or one tank; pause, 1/2x to 8x, 30 s back / on), see its statistics,

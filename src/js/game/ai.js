@@ -897,6 +897,9 @@ class TunnelerAI {
     if (!fire && dir >= 0 && cfg.fastDig && e.energy[me] > cfg.fastDig && this.mode !== "retreat" &&
         dir === e.tankDir[me] && e.tankBlocked(mx + DX[dir], my + DY[dir], dir) === 1 && this.digWanted &&
         !(this.ff && this.mateInLine(e, mx, my, dir, 16))) fire = true;
+    // a game mode may hold its fire (GM.aiHoldFire -> true: no shot now - the training ground's GREEN before its step,
+    // 1.4); after every decision above, so the random draws stay as they were
+    if (fire && e.GM && e.GM.aiHoldFire && e.GM.aiHoldFire(this, e)) fire = false;
 
     return {
       up: dir >= 0 && DY[dir] < 0, down: dir >= 0 && DY[dir] > 0,

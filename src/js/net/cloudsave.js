@@ -12,6 +12,7 @@
 //                              when the page is hidden
 //   CloudSave.sync({pull})     -> {ok, code?, settings: changed here, maps, replays: items copied / deleted here}
 //   CloudSave.changed()        a sync soon (debounced)
+import { Medals } from "../game/medals.js";
 import { Account } from "./account.js";
 import { Endpoint } from "./endpoint.js";
 import { MapStore } from "./mapstore.js";
@@ -24,7 +25,9 @@ const root = globalThis;
 const SETTINGS = ["name", "sound", "volume", "stereo", "fade", "chatsound", "ping", "lang", "gfx", "gfx.modern", "smooth", "tankcolors", "teammarks",
   "keys", "touch.size", "touch.left", "touch.look", "chat.hide", "view", "spec", "replay", "replays.auto", "online", "online.color", "levels",
   "cpu.slots", "cpu.size", "cpu.win", "cpu.time", "cpu.ff", "cpu.view", "cpu.watch", "cpu.sight", "cpu.mode", "cpu.map", "cpu.goals",
-  "split.size", "split.win", "split.time"].map(k => "tunneler." + k);
+  "split.size", "split.win", "split.time", "medals"].map(k => "tunneler." + k);
+// (the medals - 1.4: never one side over the other - both devices' together, Medals.merge)
+const UNION = { "tunneler.medals": Medals.merge };
 const DEBOUNCE = 3000;
 
 const ls = {
@@ -127,12 +130,13 @@ async function syncSettings(index, base, out, pull) {
   for (const k of SETTINGS) {
     const h = ls.get(k), t = there[k] !== undefined ? there[k] : null, was = b ? (b[k] !== undefined ? b[k] : null) : undefined;
     let v;
-    if (was === undefined) v = pull && t !== null ? t : h;           // (the first sync here: the account's settings win)
+    if (UNION[k]) v = UNION[k](h, t);
+    else if (was === undefined) v = pull && t !== null ? t : h;      // (the first sync here: the account's settings win)
     else if (h !== was) v = h;                                         // (changed here)
     else v = pull ? t : h;
-    if (v !== h && pull) { ls.set(k, v); out.settings = true; }
-    result[k] = pull || h !== was ? v : t;                             // (what the server has after this sync)
-    keep[k] = pull || was === undefined || h !== was ? v : was;        // (not pulled: the server's change still to come)
+    if (v !== h && (pull || UNION[k])) { ls.set(k, v); out.settings = true; }
+    result[k] = pull || h !== was || UNION[k] ? v : t;                 // (what the server has after this sync)
+    keep[k] = UNION[k] || pull || was === undefined || h !== was ? v : was;   // (not pulled: the server's change still to come)
     if (result[k] !== t) send = true;
   }
   if (send) {

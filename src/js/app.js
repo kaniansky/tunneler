@@ -26,7 +26,7 @@ Gfx.onFail3d = why => Report.error("gfx 3d", "3D failed: " + why);
 const ROUTES = [
   { name: "games", re: /^\/(games\/?|lobby\.html)$/, title: "Tunneler - online", load: () => import("./routes/lobby.js") },
   { name: "online", re: /^\/(game\/.+|online\.html)$/, title: "Tunneler - online", load: () => import("./routes/online.js") },
-  { name: "play", re: /^\/(split|skirmish|vs-computer)\/?$|^\/play\.html$/, title: "Tunneler", load: () => import("./routes/play.js") },
+  { name: "play", re: /^\/(split|skirmish|vs-computer|training)\/?$|^\/play\.html$/, title: "Tunneler", load: () => import("./routes/play.js") },
   { name: "replays", re: /^\/(replays(\/[^/]+)?\/?|replay\/[a-z2-9]{8}\/?|replays\.html)$/, title: "Tunneler - replays", load: () => import("./routes/replays.js") },
   { name: "challenge", re: /^\/(challenge\/?|challenge\.html)$/, title: "Tunneler - daily challenge", load: () => import("./routes/daily.js") },
   { name: "maps", re: /^\/(maps(\/[^/]+)?\/?|map\/[a-z2-9]{10}\/?|maps\.html)$/, title: "Tunneler - maps", load: () => import("./routes/maps.js") },
@@ -85,7 +85,7 @@ function resetScreen() {
   c.classList.remove("half");
   c.style.cursor = "";
   s.style.display = "none";
-  for (const k of ["width", "cursor"]) s.style[k] = "";
+  for (const k of ["width", "cursor", "position", "left", "top"]) s.style[k] = "";   // (position / left / top: an overlay's - statusline.js)
   document.body.style.setProperty("--status-k", "0"); document.body.style.setProperty("--status-gap", "0px");   // (statusline.js room)
 }
 

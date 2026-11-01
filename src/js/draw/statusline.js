@@ -18,7 +18,10 @@ const root = globalThis;
 const ASPECT = 1.35;   // vertical / horizontal pixel scale of the game canvas (720x400 shown at 4:3)
 
 class StatusLine {
-  constructor(canvas, gameCanvas, columnsFn) {
+  // opts.overlay (1.4, owner 2026-11-01 - the training ground's hints: "position it absolutely on top"): over the top of
+  // the game canvas instead of under it - it takes no room, the game never moves when its rows change
+  constructor(canvas, gameCanvas, columnsFn, opts) {
+    this.overlay = !!(opts && opts.overlay);
     this.canvas = canvas;                                  // (#status: its place on the page, its clicks)
     this.src = Surface.source(canvas);                     // (the picture: the page's one canvas shows it there)
     this.ctx = this.src.getContext("2d");
@@ -43,6 +46,11 @@ class StatusLine {
     const cols = this.columnsFn(), lines = this.rows.length || 1, k = lines * 16 * ASPECT / (cols * 9);
     this.canvas.style.width = w + "px";
     this.canvas.style.height = (w * k) + "px";
+    if (this.overlay) {
+      const r = this.game.getBoundingClientRect();
+      Object.assign(this.canvas.style, { position: "fixed", left: r.left + "px", top: (r.top + 4) + "px" });
+      return StatusLine.room(0);
+    }
     // (shown: its height per width of the game canvas and the gap above it - style.css leaves the room for them where
     // the game canvas fills the screen's height, a phone held sideways; app.js resetScreen clears them)
     StatusLine.room(this.canvas.style.display === "none" ? 0 : k);

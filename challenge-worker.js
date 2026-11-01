@@ -4,7 +4,7 @@
 // code null = accepted (result: what the server's own engine says; gz: the replay, gzip'd, to keep as a shared
 // replay), else why not ("bad", "version", "config", "differs", "unfinished", "long"). server.js stops the worker
 // after its time limit.
-//   new Worker(__filename, {workerData: {bytes, day, version, name}})
+//   new Worker(__filename, {workerData: {bytes, day, version, name, map}})   (map: the day's map of the week with its code, 1.4)
 const { parentPort, workerData } = require("worker_threads");
 const zlib = require("zlib");
 const { TunnelerEngine } = require("./src/js/game/engine.js");
@@ -14,7 +14,7 @@ const { NetProto } = require("./src/js/game/netproto.js");
 require("./src/lang/en/index.js");                       // (the game modes' texts: the engine draws them)
 require("./src/js/game/modes/index.js");
 
-function check({ bytes, day, version, name }) {
+function check({ bytes, day, version, name, map }) {
   let raw = Buffer.from(bytes);
   try { if (raw[0] === 0x1F && raw[1] === 0x8B) raw = zlib.gunzipSync(raw, { maxOutputLength: 16 * 1024 * 1024 }); } catch (e) { return { code: "bad" }; }
   let rep;
@@ -23,7 +23,7 @@ function check({ bytes, day, version, name }) {
   // another version's engine may play differently (pages served from src/ say "dev": never refused, as for rooms)
   // (from 1.1 another patch of the same major.minor plays the same: NetProto.sameGame)
   if (version && !NetProto.sameGame(version, rep.version)) return { code: "version" };
-  const r = Challenge.verify(rep, { Engine: TunnelerEngine, AI: TunnelerAI, day, name });
+  const r = Challenge.verify(rep, { Engine: TunnelerEngine, AI: TunnelerAI, day, name, map: map || null });   // (map: a Sunday's map of the week)
   if (r.code) return { code: r.code, step: r.step };
   const gz = zlib.gzipSync(Buffer.from(JSON.stringify(r.replay)));   // (the cleaned replay: challenge.js clean())
   return { code: null, result: r.result, gz: new Uint8Array(gz.buffer, gz.byteOffset, gz.length) };

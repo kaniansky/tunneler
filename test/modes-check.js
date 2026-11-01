@@ -30,9 +30,9 @@ check(!missing.length || process.env.MODES_PARTIAL, "every game mode registered"
 }
 for (const m of Object.keys(E.MODES)) {
   const M = E.MODES[m];
-  check(E.MODE_LIST.includes(m), m + ": a known mode name");
+  check(E.MODE_LIST.includes(m) || E.LOCAL_MODES.includes(m), m + ": a known mode name");
   for (const l of ["en", "sk", "cs", "uk", "ru"])
-    check(!M.strings || !M.strings.en || (M.strings[l] && Object.keys(M.strings.en).every(k => typeof M.strings[l][k] === "string")),
+    check(!M.strings || !M.strings.en || !Object.keys(M.strings.en).length || (M.strings[l] && Object.keys(M.strings.en).every(k => typeof M.strings[l][k] === "string")),
       m + ": every in-game text translated (" + l + ")");
 }
 }
@@ -42,7 +42,7 @@ const setups = [
   { name: "free-for-all 4", teams: [1, 2, 3, 4], levels: ["normal", "easy", "hard", "normal"] },
   { name: "2 v 2", teams: [1, 2, 1, 2], levels: ["hard", "normal", "normal", "hard"] },
 ];
-for (const m of Object.keys(E.MODES).filter(modeOn)) {
+for (const m of Object.keys(E.MODES).filter(modeOn).filter(m => !E.LOCAL_MODES.includes(m))) {   // (a local mode: its own test)
   for (const s of quick ? setups.slice(0, 1) : setups) {
     const opts = { mode: m, slots: slots(s.teams), levels: s.levels, seed: 11, size: "small", winScore: 1, maxFrames: 80000 };
     const a = runMatch(opts), b = runMatch(opts);

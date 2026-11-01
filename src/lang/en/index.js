@@ -8,6 +8,8 @@ import "./maps.js";
 import "./water.js";
 import "./seenmap.js";
 import "./gallery.js";
+import "./training.js";
+import "./medals.js";
 import "./engine.js";
 import "./modes/ctf.js";
 import "./modes/deathmatch.js";

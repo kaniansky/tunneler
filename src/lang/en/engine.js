@@ -180,6 +180,7 @@ const STRINGS_EN = {
     waysHead: "Ways to play:",
     ways: [["split screen", "two players on one keyboard, just like the original"],
       ["skirmish", "you against 1 to 7 computer tanks, alone or in teams"],
+      ["training", "a first match that teaches the rules, step by step"],
       ["online game", "2 to 8 tanks on other computers, any of them computer tanks"],
       ["spectate", "watch an online game: all views, the live map, or one tank"]],
     p2: ["Up to 8 tanks fight free-for-all or in teams (friendly fire on or off) on",

@@ -109,7 +109,9 @@ for (const c of Lang.codes) {
   fits(c, "create.name", t("create.name") + "x".repeat(26), 38);
   for (const k of ["create.public", "create.spect"]) for (const y of ["yes", "no"]) fits(c, k, t(k) + t(y), 39);
   // single lines on the 80-column screen
-  for (const k in D) if (typeof D[k] === "string" && k !== "name") fits(c, k, t(k, { name: "GREEN", names: "BLUE and GREEN", level: "hard", levels: "easy, normal, hard, expert", msg: "x", n: 99, s: 9 }), 79);
+  // (the training ground's hints - tr.*, 1.4: wrapped in the status line under the game, at most 4 rows of a phone's 32
+  // columns with "Training n/5: " before them)
+  for (const k in D) if (typeof D[k] === "string" && k !== "name") fits(c, k, t(k, { name: "GREEN", names: "BLUE and GREEN", level: "hard", levels: "easy, normal, hard, expert", msg: "x", n: 99, s: 9 }), /^tr\.(?!d\.)/.test(k) ? 112 : 79);
   fits(c, "ui hint", t("ui.hint") + "  " + t("ui.back"), 78);
   fits(c, "create hint", t("create.hint"), 78);
   // the engine's own pages
