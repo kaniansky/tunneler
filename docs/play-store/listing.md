@@ -8,7 +8,7 @@ Limits: app name 30 characters, short description 80, full description 4000 (pla
 breaks). The counts below are Unicode characters, line breaks included, of the text inside each block -
 checked with Python's `len()` (see the end of this file).
 
-The text describes version 1.0.0 as it is on a phone: no split screen and no second player on one device
+The text describes version 1.4 as it is on a phone: no split screen and no second player on one device
 (phones and tablets hide them), so neither is mentioned. Up to its version 6.0.1 the game was called "Tunneler Online"
 (app id `com.kaniansky.TunnelerOnline`, never uploaded to Play). Game mode names, "Skirmish", "Replays", difficulty levels etc. use the game's own translations
 (`src/lang/<code>/main.js`).
@@ -29,12 +29,15 @@ Tunneler
 The 1991 DOS tank duel, rebuilt: dig tunnels and hunt tanks, online or vs AI.
 ```
 
-**Full description** (3187 / 4000)
+**Full description** (3965 / 4000)
 
 ```text
 Tunneler brings back TUNNELER, the 1991 DOS game by Geoffrey Silverton - rebuilt from its decompiled source code so that it plays exactly like the original, and extended with computer opponents, teams, game modes, online games, a daily challenge and your own maps.
 
 Two tanks under the ground. Dig through the dirt, find the enemy and shoot it before your energy runs out. Your base recharges your energy and repairs your shield. Every world is new, and every tunnel is one somebody dug.
+
+TRAINING GROUND
+New to the game? A short first match teaches the rules step by step: drive out of your base, shoot the dirt away, refuel at home, find the enemy tank and destroy it - with a hint for every step.
 
 FAITHFUL TO THE ORIGINAL
 Movement, digging, shots, explosions, energy, shield, sound and the world generator follow the original routine by routine. An automated test runs the original program next to this one and compares every frame.
@@ -45,6 +48,8 @@ SKIRMISH
 • Map size, rounds to win, round time limit, friendly fire, line of sight
 • See only your own view, your team's views or everyone's
 • A random world every round, or one of your own maps
+• Ten kinds of generated worlds - caves, rivers, islands, a labyrinth... - with water, sand or grass
+• Hold SCORE for the map: what you or your team have seen, or the whole world
 
 8 GAME MODES
 Besides the classic last tank standing: gold rush, infection, survival, king of the hill, shrinking world, capture the flag, base siege and deathmatch. The computer tanks play every mode too.
@@ -58,16 +63,19 @@ ONLINE GAMES
 • Play on the public server or run your own - the server is free too
 
 DAILY CHALLENGE
-Every day a new skirmish, the same for everyone: the same world, mode and computer tanks. Send your result - the server plays your match again to check it - and climb the day's leaderboard. Watch the best matches, and play any of the last 30 days again for practice.
+Every day a new skirmish, the same for everyone: the same world, mode and computer tanks. Send your result - the server plays your match again to check it - and climb the day's leaderboard. Watch the best matches, and play any of the last 30 days again for practice. On Sundays it is played on the map of the week from the gallery.
 
 YOUR OWN MAPS
-Paint a world of rock, dirt and tunnels and place up to 8 bases - one finger paints, two move and zoom. Play it in a skirmish or an online game, or send it to a friend as a link or a file.
+Paint a world of rock, dirt and tunnels and place up to 8 bases - one finger paints, two move and zoom. Play it in a skirmish or an online game, or send it to a friend as a link or a file. Add water and sand or grass ground, and publish your map in the gallery.
 
 REPLAYS
 Every match you play or watch is kept on your phone. Watch it again from any tank's view or on the live map, pause it, speed it up to 8x, see its statistics, or send it to a friend as a link or a file.
 
+MEDALS
+25 to earn: a first victory, a flawless win, 5 kills in one match, the daily challenge seven days in a row, a win in every game mode and more. With an account they follow you to every device.
+
 TWO LOOKS
-Modern graphics with lit tunnels, textured dirt, sparks and a smooth camera - or the original DOS look with its VGA font, one switch away. Sound: the original PC speaker, realistic, cartoony or real recordings.
+Modern graphics with lit tunnels, textured dirt, sparks and a smooth camera - or the original DOS look with its VGA font, one switch away. Sound: the original PC speaker, realistic, cartoony or real recordings. With modern graphics the world can even stand up in 3D.
 
 MADE FOR PHONES
 An on-screen joystick and fire button (three sizes, a left-handed layout), menus laid out for a phone held upright, game controller support. In English, Slovak, Czech, Ukrainian and Russian.
@@ -94,12 +102,15 @@ Tunneler
 Tanková klasika z DOSu (1991): kop tunely a lov tanky online aj proti počítaču.
 ```
 
-**Full description** (3147 / 4000)
+**Full description** (3904 / 4000)
 
 ```text
 Tunneler vracia hru TUNNELER pre DOS od Geoffreyho Silvertona z roku 1991 – prestavanú z dekompilovaného zdrojového kódu tak, aby sa hrala presne ako originál, a rozšírenú o počítačových súperov, tímy, herné režimy, hru online, dennú výzvu a vlastné mapy.
 
 Dva tanky pod zemou. Prekop sa hlinou, nájdi nepriateľa a zostreľ ho skôr, ako ti dôjde energia. Vlastná základňa ti dobije energiu a opraví štít. Každý svet je nový a každý tunel niekto vykopal.
+
+CVIČISKO
+V hre ste noví? Krátky prvý zápas vás krok za krokom naučí pravidlá: vyjdite zo základne, rozstreľte hlinu, doplňte energiu doma, nájdite nepriateľský tank a zničte ho – s radou ku každému kroku.
 
 VERNÁ ORIGINÁLU
 Pohyb, kopanie, strely, výbuchy, energia, štít, zvuk aj generátor sveta sledujú originál procedúru po procedúre. Automatický test spúšťa pôvodný program vedľa tohto a porovnáva každý snímok.
@@ -110,6 +121,8 @@ POTÝČKA
 • Veľkosť mapy, kolá na výhru, čas kola, priateľská paľba, dohľad
 • Vidíš len svoj pohľad, pohľady svojho tímu alebo všetkých
 • Každé kolo náhodný svet alebo tvoja vlastná mapa
+• Desať druhov generovaných svetov – jaskyne, rieky, ostrovy, labyrint... – s vodou, pieskom či trávou
+• Podržte SKÓRE a uvidíte mapu: čo ste videli vy alebo váš tím, či celý svet
 
 8 HERNÝCH REŽIMOV
 Okrem klasiky, kde vyhráva posledný tank: zlatá horúčka, nákaza, prežitie, kráľ kopca, zmenšujúci sa svet, ukradni vlajku, obliehanie základní a zápas na smrť. Počítačové tanky hrajú každý režim.
@@ -123,16 +136,19 @@ HRA ONLINE
 • Hraj na verejnom serveri alebo na vlastnom – server je tiež zadarmo
 
 DENNÁ VÝZVA
-Každý deň nová potýčka, pre všetkých rovnaká: rovnaký svet, režim aj počítačové tanky. Pošli svoj výsledok – server tvoj zápas prehrá znova a overí – a prebojuj sa v dennom rebríčku. Pozri si najlepšie zápasy a ktorýkoľvek z posledných 30 dní si zahraj znova ako tréning.
+Každý deň nová potýčka, pre všetkých rovnaká: rovnaký svet, režim aj počítačové tanky. Pošli svoj výsledok – server tvoj zápas prehrá znova a overí – a prebojuj sa v dennom rebríčku. Pozri si najlepšie zápasy a ktorýkoľvek z posledných 30 dní si zahraj znova ako tréning. V nedeľu sa hrá na mape týždňa z galérie.
 
 VLASTNÉ MAPY
-Nakresli svet zo skál, hliny a tunelov a rozmiestni až 8 základní – jedným prstom kreslíš, dvoma posúvaš a približuješ. Hraj ho v potýčke alebo v hre online, alebo ho pošli kamarátovi ako odkaz či súbor.
+Nakresli svet zo skál, hliny a tunelov a rozmiestni až 8 základní – jedným prstom kreslíš, dvoma posúvaš a približuješ. Hraj ho v potýčke alebo v hre online, alebo ho pošli kamarátovi ako odkaz či súbor. Pridajte vodu a piesočný či trávnatý povrch a zverejnite mapu v galérii.
 
 ZÁZNAMY
 Každý zápas, ktorý hráš alebo sleduješ, sa uloží v telefóne. Pozri si ho znova z pohľadu ktoréhokoľvek tanku alebo na živej mape, zastav ho, zrýchli až 8×, pozri si štatistiky alebo ho pošli kamarátovi ako odkaz či súbor.
 
+MEDAILY
+25 na získanie: prvé víťazstvo, výhra bez straty tanku, 5 zničených tankov v jednom zápase, denná výzva 7 dní po sebe, výhra v každom hernom režime a ďalšie. S účtom vás sprevádzajú na každom zariadení.
+
 DVA VZHĽADY
-Moderná grafika s osvetlenými tunelmi, hlinou s textúrou, iskrami a plynulou kamerou – alebo pôvodný vzhľad DOSu s písmom VGA – stačí jeden prepínač. Zvuk: pôvodný PC speaker, realistický, rozprávkový alebo nahratý.
+Moderná grafika s osvetlenými tunelmi, hlinou s textúrou, iskrami a plynulou kamerou – alebo pôvodný vzhľad DOSu s písmom VGA – stačí jeden prepínač. Zvuk: pôvodný PC speaker, realistický, rozprávkový alebo nahratý. V modernej grafike sa svet môže postaviť aj do 3D.
 
 PRE TELEFÓNY
 Joystick a tlačidlo streľby na obrazovke (tri veľkosti, rozloženie pre ľavákov), menu prispôsobené telefónu na výšku, podpora herných ovládačov. Po slovensky, česky, anglicky, ukrajinsky a rusky.
@@ -159,12 +175,15 @@ Tunneler
 Tanková klasika z DOSu (1991): kopej tunely a lov tanky online i proti počítači.
 ```
 
-**Full description** (3113 / 4000)
+**Full description** (3862 / 4000)
 
 ```text
 Tunneler vrací hru TUNNELER pro DOS od Geoffreyho Silvertona z roku 1991 – přestavěnou z dekompilovaného zdrojového kódu tak, aby se hrála přesně jako originál, a rozšířenou o počítačové soupeře, týmy, herní režimy, hru online, denní výzvu a vlastní mapy.
 
 Dva tanky pod zemí. Prokopej se hlínou, najdi nepřítele a sestřel ho dřív, než ti dojde energie. Vlastní základna ti dobije energii a opraví štít. Každý svět je nový a každý tunel někdo vykopal.
+
+CVIČIŠTĚ
+Jste ve hře noví? Krátký první zápas vás krok za krokem naučí pravidla: vyjeďte ze základny, rozstřílejte hlínu, doplňte energii doma, najděte nepřátelský tank a zničte ho – s radou ke každému kroku.
 
 VĚRNÁ ORIGINÁLU
 Pohyb, kopání, střely, výbuchy, energie, štít, zvuk i generátor světa sledují originál proceduru po proceduře. Automatický test spouští původní program vedle tohoto a porovnává každý snímek.
@@ -175,6 +194,8 @@ POTYČKA
 • Velikost mapy, kola k výhře, čas kola, přátelská palba, dohled
 • Vidíš jen svůj pohled, pohledy svého týmu, nebo všech
 • Každé kolo náhodný svět, nebo tvoje vlastní mapa
+• Deset druhů generovaných světů – jeskyně, řeky, ostrovy, labyrint... – s vodou, pískem či trávou
+• Podržte SKÓRE a uvidíte mapu: co jste viděli vy nebo váš tým, či celý svět
 
 8 HERNÍCH REŽIMŮ
 Kromě klasiky, kde vyhrává poslední tank: zlatá horečka, nákaza, přežití, král kopce, zmenšující se svět, ukradni vlajku, obléhání základen a zápas na smrt. Počítačové tanky hrají každý režim.
@@ -188,16 +209,19 @@ HRA ONLINE
 • Hraj na veřejném serveru, nebo na vlastním – server je také zdarma
 
 DENNÍ VÝZVA
-Každý den nová potyčka, pro všechny stejná: stejný svět, režim i počítačové tanky. Pošli svůj výsledek – server tvůj zápas přehraje znovu a ověří – a probojuj se v denním žebříčku. Podívej se na nejlepší zápasy a kterýkoli z posledních 30 dní si zahraj znovu jako trénink.
+Každý den nová potyčka, pro všechny stejná: stejný svět, režim i počítačové tanky. Pošli svůj výsledek – server tvůj zápas přehraje znovu a ověří – a probojuj se v denním žebříčku. Podívej se na nejlepší zápasy a kterýkoli z posledních 30 dní si zahraj znovu jako trénink. V neděli se hraje na mapě týdne z galerie.
 
 VLASTNÍ MAPY
-Nakresli svět ze skal, hlíny a tunelů a rozmísti až 8 základen – jedním prstem kreslíš, dvěma posouváš a přibližuješ. Hraj ho v potyčce nebo ve hře online, nebo ho pošli kamarádovi jako odkaz či soubor.
+Nakresli svět ze skal, hlíny a tunelů a rozmísti až 8 základen – jedním prstem kreslíš, dvěma posouváš a přibližuješ. Hraj ho v potyčce nebo ve hře online, nebo ho pošli kamarádovi jako odkaz či soubor. Přidejte vodu a písčitý či travnatý povrch a zveřejněte mapu v galerii.
 
 ZÁZNAMY
 Každý zápas, který hraješ nebo sleduješ, se uloží v telefonu. Podívej se na něj znovu z pohledu kteréhokoli tanku nebo na živé mapě, zastav ho, zrychli až 8×, prohlédni si statistiky, nebo ho pošli kamarádovi jako odkaz či soubor.
 
+MEDAILE
+25 k získání: první vítězství, výhra bez ztráty tanku, 5 zničených tanků v jednom zápase, denní výzva 7 dní po sobě, výhra v každém herním režimu a další. S účtem vás provázejí na každém zařízení.
+
 DVA VZHLEDY
-Moderní grafika s osvětlenými tunely, hlínou s texturou, jiskrami a plynulou kamerou – nebo původní vzhled DOSu s písmem VGA – stačí jeden přepínač. Zvuk: původní PC speaker, realistický, pohádkový nebo nahraný.
+Moderní grafika s osvětlenými tunely, hlínou s texturou, jiskrami a plynulou kamerou – nebo původní vzhled DOSu s písmem VGA – stačí jeden přepínač. Zvuk: původní PC speaker, realistický, pohádkový nebo nahraný. V moderní grafice se svět může postavit i do 3D.
 
 PRO TELEFONY
 Joystick a tlačítko střelby na obrazovce (tři velikosti, rozložení pro leváky), menu uzpůsobená telefonu na výšku, podpora herních ovladačů. Česky, slovensky, anglicky, ukrajinsky a rusky.
@@ -224,12 +248,15 @@ Tunneler
 Танкова класика з DOS (1991): копай тунелі й полюй на танки онлайн і проти ШІ.
 ```
 
-**Full description** (3251 / 4000)
+**Full description** (3916 / 4000)
 
 ```text
 Tunneler повертає гру TUNNELER для DOS, яку Geoffrey Silverton створив 1991 року, – відтворену з декомпільованого вихідного коду так, щоб грати точнісінько як оригінал, і доповнену комп'ютерними суперниками, командами, режимами гри, грою онлайн, викликом дня та власними мапами.
 
 Два танки під землею. Прокопуйся крізь ґрунт, знайди ворога й підстрель його, поки в тебе не скінчилася енергія. Власна база поповнює енергію і лагодить щит. Кожен світ новий, і кожен тунель хтось викопав.
+
+ПОЛІГОН
+Уперше в грі? Короткий перший матч крок за кроком навчить правил: виїдьте з бази, розстріляйте ґрунт, поповніть енергію вдома, знайдіть ворожий танк і знищте його – з підказкою до кожного кроку.
 
 ВІРНА ОРИГІНАЛУ
 Рух, копання, постріли, вибухи, енергія, щит, звук і генератор світу повторюють оригінал процедура за процедурою. Автоматичний тест запускає оригінальну програму поруч із цією і порівнює кожен кадр.
@@ -240,6 +267,7 @@ Tunneler повертає гру TUNNELER для DOS, яку Geoffrey Silverton 
 • Розмір мапи, раунди до перемоги, час раунду, вогонь по своїх, видимість
 • Бачиш лише свій екран, екрани своєї команди або всіх
 • Щораунду випадковий світ або твоя власна мапа
+• Десять видів згенерованих світів – печери, річки, острови, лабіринт... – з водою, піском чи травою
 
 8 РЕЖИМІВ ГРИ
 Окрім класики, де перемагає останній танк: золота лихоманка, інфекція, виживання, цар гори, світ стискається, захоплення прапора, облога баз і бій на смерть. Комп'ютерні танки грають у кожному режимі.
@@ -253,16 +281,19 @@ Tunneler повертає гру TUNNELER для DOS, яку Geoffrey Silverton 
 • Грай на публічному сервері або на власному – сервер теж безкоштовний
 
 ВИКЛИК ДНЯ
-Щодня нова сутичка, однакова для всіх: той самий світ, режим і комп'ютерні танки. Надішли свій результат – сервер ще раз програє твій матч і перевірить його – і пробийся в денній таблиці лідерів. Дивись найкращі матчі й зіграй будь-який із останніх 30 днів знову для тренування.
+Щодня нова сутичка, однакова для всіх: той самий світ, режим і комп'ютерні танки. Надішли свій результат – сервер ще раз програє твій матч і перевірить його – і пробийся в денній таблиці лідерів. Дивись найкращі матчі й зіграй будь-який із останніх 30 днів знову для тренування. У неділю він грається на мапі тижня з галереї.
 
 ВЛАСНІ МАПИ
-Намалюй світ зі скель, ґрунту й тунелів і розстав до 8 баз – одним пальцем малюєш, двома пересуваєш і масштабуєш. Грай на ньому в сутичці чи в грі онлайн або надішли другові посиланням чи файлом.
+Намалюй світ зі скель, ґрунту й тунелів і розстав до 8 баз – одним пальцем малюєш, двома пересуваєш і масштабуєш. Грай на ньому в сутичці чи в грі онлайн або надішли другові посиланням чи файлом. Додайте воду й піщану чи трав'янисту поверхню та опублікуйте мапу в галереї.
 
 ЗАПИСИ
 Кожен матч, який ти граєш або дивишся, зберігається в телефоні. Переглянь його знову очима будь-якого танка або на живій мапі, постав на паузу, пришвидш до 8×, подивись статистику або надішли другові посиланням чи файлом.
 
+МЕДАЛІ
+25 медалей: перша перемога, перемога без втрати танка, 5 знищених танків за один матч, виклик дня 7 днів поспіль, перемога в кожному режимі гри та інші. З обліковим записом вони з вами на кожному пристрої.
+
 ДВА ВИГЛЯДИ
-Сучасна графіка з освітленими тунелями, текстурованим ґрунтом, іскрами й плавною камерою – або оригінальний вигляд DOS зі шрифтом VGA – досить одного перемикача. Звук: оригінальний PC speaker, реалістичний, мультяшний або записаний.
+Сучасна графіка з освітленими тунелями, текстурованим ґрунтом, іскрами й плавною камерою – або оригінальний вигляд DOS зі шрифтом VGA – досить одного перемикача. Звук: оригінальний PC speaker, реалістичний, мультяшний або записаний. А сучасна графіка вміє й 3D.
 
 ДЛЯ ТЕЛЕФОНІВ
 Джойстик і кнопка вогню на екрані (три розміри, розкладка для шульг), меню для телефона у вертикальному положенні, підтримка геймпадів. Українською, англійською, словацькою, чеською і російською.
@@ -289,12 +320,15 @@ Tunneler
 Танковая классика DOS (1991): копай туннели и охоться на танки онлайн и с ИИ.
 ```
 
-**Full description** (3291 / 4000)
+**Full description** (3982 / 4000)
 
 ```text
 Tunneler возвращает игру TUNNELER для DOS, которую Geoffrey Silverton создал в 1991 году, – воссозданную по декомпилированному исходному коду так, чтобы играть в точности как оригинал, и дополненную компьютерными соперниками, командами, режимами игры, игрой онлайн, испытанием дня и своими картами.
 
 Два танка под землёй. Прокапывайся сквозь грунт, найди врага и подстрели его, пока у тебя не кончилась энергия. Своя база восполняет энергию и чинит щит. Каждый мир новый, и каждый туннель кто-то выкопал.
+
+ПОЛИГОН
+Впервые в игре? Короткий первый матч шаг за шагом научит правилам: выезжайте с базы, расстреляйте грунт, пополните энергию дома, найдите вражеский танк и уничтожьте его – с подсказкой к каждому шагу.
 
 ВЕРНАЯ ОРИГИНАЛУ
 Движение, копание, выстрелы, взрывы, энергия, щит, звук и генератор мира повторяют оригинал процедура за процедурой. Автоматический тест запускает оригинальную программу рядом с этой и сравнивает каждый кадр.
@@ -305,6 +339,7 @@ Tunneler возвращает игру TUNNELER для DOS, которую Geoff
 • Размер карты, раунды до победы, время раунда, огонь по своим, видимость
 • Видишь только свой экран, экраны своей команды или всех
 • Каждый раунд случайный мир или твоя собственная карта
+• Десять видов сгенерированных миров – пещеры, реки, острова, лабиринт... – с водой, песком или травой
 
 8 РЕЖИМОВ ИГРЫ
 Помимо классики, где побеждает последний танк: золотая лихорадка, заражение, выживание, царь горы, мир сжимается, захват флага, осада баз и бой насмерть. Компьютерные танки играют в каждом режиме.
@@ -318,16 +353,19 @@ Tunneler возвращает игру TUNNELER для DOS, которую Geoff
 • Играй на публичном сервере или на своём – сервер тоже бесплатный
 
 ИСПЫТАНИЕ ДНЯ
-Каждый день новая схватка, одна для всех: тот же мир, режим и компьютерные танки. Отправь свой результат – сервер ещё раз проиграет твой матч и проверит его – и пробейся в дневную таблицу лидеров. Смотри лучшие матчи и сыграй любой из последних 30 дней заново для тренировки.
+Каждый день новая схватка, одна для всех: тот же мир, режим и компьютерные танки. Отправь свой результат – сервер ещё раз проиграет твой матч и проверит его – и пробейся в дневную таблицу лидеров. Смотри лучшие матчи и сыграй любой из последних 30 дней заново для тренировки. По воскресеньям оно играется на карте недели из галереи.
 
 СВОИ КАРТЫ
-Нарисуй мир из скал, грунта и туннелей и расставь до 8 баз – одним пальцем рисуешь, двумя двигаешь и масштабируешь. Играй на нём в схватке или в игре онлайн или отправь другу ссылкой или файлом.
+Нарисуй мир из скал, грунта и туннелей и расставь до 8 баз – одним пальцем рисуешь, двумя двигаешь и масштабируешь. Играй на нём в схватке или в игре онлайн или отправь другу ссылкой или файлом. Добавьте воду и песчаную или травяную поверхность и опубликуйте карту в галерее.
 
 ЗАПИСИ
 Каждый матч, который ты играешь или смотришь, сохраняется в телефоне. Посмотри его снова глазами любого танка или на живой карте, поставь на паузу, ускорь до 8×, посмотри статистику или отправь другу ссылкой или файлом.
 
+МЕДАЛИ
+25 медалей: первая победа, победа без потери танка, 5 уничтоженных танков за один матч, испытание дня 7 дней подряд, победа в каждом режиме игры и другие. С учётной записью они с вами на каждом устройстве.
+
 ДВА ВИДА
-Современная графика с освещёнными туннелями, текстурным грунтом, искрами и плавной камерой – или оригинальный вид DOS со шрифтом VGA – достаточно одного переключателя. Звук: оригинальный PC speaker, реалистичный, мультяшный или записанный.
+Современная графика с освещёнными туннелями, текстурным грунтом, искрами и плавной камерой – или оригинальный вид DOS со шрифтом VGA – достаточно одного переключателя. Звук: оригинальный PC speaker, реалистичный, мультяшный или записанный. А современная графика умеет и 3D.
 
 ДЛЯ ТЕЛЕФОНОВ
 Джойстик и кнопка огня на экране (три размера, раскладка для левшей), меню для телефона в вертикальном положении, поддержка геймпадов. На русском, английском, словацком, чешском и украинском.

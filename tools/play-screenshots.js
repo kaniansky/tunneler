@@ -1,9 +1,10 @@
 // The Google Play screenshots (docs/play-store/screenshots/): the same 8 screens on a phone held upright
 // (360 x 720 at 3x = 1080 x 2160) and on 7" / 10" tablets held sideways (960 x 600 / 1280 x 800 at 2x =
 // 1920 x 1200 / 2560 x 1600), graphics modern, touch:
-//   1 the main menu, 2 the skirmish's settings, 3 a battle (your own view, the touch controls), 4 four tanks
-//   (everyone's views), 5 an online game's lobby (quick play, chat), 6 the daily challenge's leaderboard, 7 the
-//   map editor, 8 a replay (a leaderboard entry's, everyone's views).
+//   1 the main menu (a new player's: the training ground chosen), 2 the training ground (a step's hint over the game),
+//   3 a battle (your own view, the touch controls), 4 four tanks (everyone's views), 5 an online game's lobby (quick
+//   play, chat), 6 the daily challenge's leaderboard, 7 the map editor, 8 the medals (1.4: 2 and 8 were the skirmish's
+//   settings and a replay).
 //   npm run build && node tools/play-screenshots.js [out dir] [phone,tablet7,tablet10]
 // Runs its own server (accounts off). It first fills today's leaderboard with bot-played results (real replays,
 // checked by the server: 6 a minute from one address, so about two minutes). Needs playwright-core (not a
@@ -49,8 +50,11 @@ async function fillBoard() {
   for (const [name, level, seed] of PLAYERS) {
     const body = zlib.gzipSync(Buffer.from(JSON.stringify(record(level, seed))));
     for (;;) {
+      // (a connection kept alive across the match's recording - which blocks this process, the server's too - may be gone:
+      // again)
       const res = await fetch(B + "/api/challenge/" + day + "?cid=" + cidOf(seed) + "&name=" + encodeURIComponent(name),
-        { method: "POST", body, headers: { "Content-Type": "application/octet-stream" } });
+        { method: "POST", body, headers: { "Content-Type": "application/octet-stream" } }).catch(() => ({ status: 429, retry: true }));
+      if (res.retry) { await sleep(500); continue; }
       if (res.status !== 429) { console.log("board:", name, res.status); break; }
       await sleep(10000);                                       // (6 a minute: wait)
     }
@@ -122,11 +126,12 @@ function drawMap() {
       // 1 the main menu
       let p = await page("/");
       await sleep(2000); await shot(p, "1-menu"); await close(p);
-      // 2 the skirmish's settings: you and a teammate against two computer tanks, gold rush
-      const S = (kind, team) => ({ kind, team });
-      p = await page("/#cpu", { "tunneler.cpu.slots": JSON.stringify([S("you", 1), S("hard", 2), S("normal", 1), S("hard", 2),
-        S("none", 5), S("none", 6), S("none", 7), S("none", 8)]), "tunneler.cpu.view": "team", "tunneler.cpu.time": "3", "tunneler.levels": "2" });
-      await sleep(2000); await shot(p, "2-skirmish"); await close(p);
+      // 2 the training ground: out of the base, the next step's hint over the game
+      p = await page("/training");
+      await tap(p);
+      await until(p, () => window.tunnelerEngine && tunnelerEngine().screen === "play");
+      await hold(p, ["KeyS"], 3500); await hold(p, ["KeyD"], 1500);
+      await sleep(1200); await shot(p, "2-training"); await close(p);
       // 3 a battle: your own view, the touch controls
       p = await page("/skirmish?mode=cpu&slots=" + encodeURIComponent("0:you:1,1:hard:2") + "&size=small&view=self");
       await tap(p);
@@ -167,14 +172,12 @@ function drawMap() {
       await until(p, () => window.tunnelerMapEditor && tunnelerMapEditor());
       await p.evaluate(drawMap);
       await sleep(2000); await shot(p, "7-map-editor"); await close(p);
-      // 8 a replay: a leaderboard entry's match, everyone's views, a bit into it
-      p = await page("/replay/" + replayId + "?challenge=" + day);
-      await until(p, () => window.tunnelerReplay && tunnelerReplay().watching);
-      await p.keyboard.press("Equal"); await p.keyboard.press("Equal");
-      if (dev !== "phone") await p.keyboard.press("Digit1");    // (everyone's views; a phone follows one tank)
-      await until(p, () => tunnelerReplay().steps > 700, 60000);
-      await p.keyboard.press("Space");                            // (paused)
-      await sleep(1500); await shot(p, "8-replay"); await close(p);
+      // 8 the medals: a few earned, the second chosen (how it was earned, when)
+      p = await page("/", { "tunneler.trained": "1", "tunneler.medals": JSON.stringify({ training: day, first: day, five: day, "challenge": day, "mode.ctf": day, maker: day }) });
+      await until(p, () => window.tunnelerHomeUI && tunnelerHomeUI() && tunnelerHomeUI().spec);
+      await p.evaluate(() => { const u = tunnelerHomeUI(); u.sel = u.spec.items.findIndex(i => i.key === "medals"); u.draw(); });
+      await p.keyboard.press("Enter"); await sleep(600); await p.keyboard.press("ArrowDown");
+      await sleep(1500); await shot(p, "8-medals"); await close(p);
     }
   } finally { console.log("errors", JSON.stringify(errs)); await b.close(); srv.close(); process.exit(0); }
 })();

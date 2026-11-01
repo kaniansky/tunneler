@@ -14,9 +14,10 @@ Background: docs/ANDROID.md (build, signing, CI). Files in this folder:
 | `screenshots/tablet10-1..8-*.png` | 10" tablet screenshots, sideways, 2560 x 1600 |
 
 `node tools/play-screenshots.js` takes all of them from the current build (`npm run build` first; it runs its own
-server, modern graphics, a touch device): 1 the main menu, 2 the skirmish's settings, 3 a battle with the touch
-controls, 4 four tanks, 5 an online game's lobby (quick play), 6 the daily challenge's leaderboard, 7 the map
-editor, 8 a replay.
+server, modern graphics, a touch device): 1 the main menu, 2 the training ground (a step's hint over the game), 3 a
+battle with the touch controls, 4 four tanks, 5 an online game's lobby (quick play), 6 the daily challenge's
+leaderboard, 7 the map editor, 8 the medals. (1.4: 2 and 8 replaced the skirmish's settings and a replay - in Play
+Console delete those two and upload the new ones in their places.)
 
 ## Before you start
 
@@ -46,7 +47,7 @@ editor, 8 a replay.
    - App name, short description, full description: `listing.md` -> en.
    - App icon: `icon-512.png`.
    - Feature graphic: `feature-graphic.png`.
-   - Phone screenshots: `screenshots/phone-1-menu.png` ... `phone-8-replay.png` (2-8 allowed; order as numbered).
+   - Phone screenshots: `screenshots/phone-1-menu.png` ... `phone-8-medals.png` (2-8 allowed; order as numbered).
    - 7-inch / 10-inch tablet screenshots: `screenshots/tablet7-*.png` / `tablet10-*.png`.
    - Translations: "Manage translations" -> "Add your own translations" -> sk-SK, cs-CZ, uk-UA, ru-RU,
      paste from `listing.md` (the same graphics are used unless you upload localized ones).
