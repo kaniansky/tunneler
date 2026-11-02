@@ -224,12 +224,17 @@ function loadPage(page, search, stored, version) {
     assert(!ffRow.change && ffRow.valueAttr === 8 && /team/.test(ffRow.info[0]), "no team of 2: friendly fire's value grayed, its info says why");
     ws.recv(mkSt());
     await wait(150);
-    // survival / infection make their own teams: no team column, no team to change
-    ws.recv(mkSt({ settings: Object.assign({}, SETTINGS, { mode: "survival" }) }));
+    // a mod that makes its own sides (1.5: the official Survival - @hide teams): the team column gray, no team to change
+    {
+      const { loadMods } = require("./src.js"), Mods = loadMods();
+      const src = fs.readFileSync(path.join(__dirname, "..", "src", "mods", "survival.tmod.js"), "utf8"), h = Mods.parseHeader(src), id = Mods.idOf(src);
+      ws.recv(mkSt({ settings: Object.assign({}, SETTINGS, { mod: id }), mod: { id, name: h.name, by: h.by, about: h.about, game: h.game, version: h.version,
+        mode: h.mode, tanks: h.tanks, bases: h.bases, settings: h.settings, hide: h.hide } }));
+    }
     await wait(150);
     const own1 = lui.spec.items.find(it => it.key === "seat1");
-    assert(/Team \d/.test(shown()) && !own1.digit && own1.zones.length === 1 && own1.dim,
-      "survival: the team column stays (gray), no team to choose on your seat: " + shown());
+    assert(/Team \d/.test(shown()) && /Mode: Survival/.test(shown()) && !own1.digit && own1.zones.length === 1 && own1.dim,
+      "survival (a mod with @hide teams): the team column stays (gray), no team to choose on your seat: " + shown());
     ws.recv(mkSt());
     await wait(150);
     // settings (host): Left / Right

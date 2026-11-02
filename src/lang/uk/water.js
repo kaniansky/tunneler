@@ -11,6 +11,13 @@ Lang.extend("uk", {
   "map.ground.grass": "Трава",
   "map.ground.i1": "Як виглядає вільна земля: темні тунелі оригіналу, пісок або трава.",
   "map.ground.i2": "Лише вигляд - танки їздять так само. Берег води завжди піщаний.",
+  "map.ground.i3": "Інструмент Земля в редакторі малює на її частинах інший вигляд.",
+  // the Ground tool (1.5): the look it paints (Default: back to the map's ground)
+  "map.t.ground": "Земля",
+  "map.look.sand": "Пісок",
+  "map.look.grass": "Трава",
+  "map.look.classic": "Класичний",
+  "map.look.map": "Типовий",
   // ---- generated kinds (mapgen.js)
   "gen.labyrinth": "Лабіринт",
   "gen.rivers": "Річки",

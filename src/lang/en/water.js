@@ -11,6 +11,13 @@ Lang.extend("en", {
   "map.ground.grass": "Grass",
   "map.ground.i1": "How open floor looks: the original's dark tunnels, sand or grass.",
   "map.ground.i2": "Only the look - tanks drive the same. Water's shore is always sand.",
+  "map.ground.i3": "The Ground tool paints over it.",
+  // the Ground tool (1.5): the look it paints (Default: back to the map's ground)
+  "map.t.ground": "Ground",
+  "map.look.sand": "Sand",
+  "map.look.grass": "Grass",
+  "map.look.classic": "Classic",
+  "map.look.map": "Default",
   // ---- generated kinds (mapgen.js)
   "gen.labyrinth": "Labyrinth",
   "gen.rivers": "Rivers",

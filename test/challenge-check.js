@@ -13,11 +13,14 @@ const { TunnelerEngine: E, TunnelerAI, Lang } = require("./src.js");
 const { Challenge } = require(path.join(__dirname, "..", "src", "js", "game", "challenge.js"));
 const { Replay } = require(path.join(__dirname, "..", "src", "js", "game", "replay.js"));
 const { createServer } = require(path.join(__dirname, "..", "server.js"));
-const { runPage } = require("./page-env.js");
+const { runPage, shippedMod, textResponse } = require("./page-env.js");
+const { loadMods, modFile } = require("./src.js");
 
 let failures = 0;
 const ok = (cond, msg) => { if (cond) console.log("  ok  " + msg); else { failures++; console.log("  FAIL: " + msg); } };
 const DAY = 86400000;
+// (1.5: the official mods - src/mods/official.json; a mode day plays one of them)
+const OFFICIAL = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "src", "mods", "official.json"), "utf8")).mods;
 
 // ------------------------------------------------------------------ days
 {
@@ -50,12 +53,13 @@ for (let i = 0, t = Date.UTC(2026, 9, 25); i < 366; i++, t += DAY) days.push(Cha
     const c = Challenge.config(d);
     if (JSON.stringify(c) !== JSON.stringify(Challenge.config(d))) same = false;
     const teams = new Set(c.slots.map(s => s.team));
-    const good = c.day === d && Number.isInteger(c.seed) && c.seed >= 0 && c.seed < 2 ** 32 && E.MODE_LIST.includes(c.mode) && c.mode !== "infection" &&
+    // (1.5: a mode day plays the official mod of that key - src/mods/<key>.tmod.js; its goal is the mod's setting: goal 0)
+    const good = c.day === d && Number.isInteger(c.seed) && c.seed >= 0 && c.seed < 2 ** 32 && c.mode !== "infection" &&
+      (c.mode === "standard" || (OFFICIAL.includes(c.mode) && fs.existsSync(path.join(__dirname, "..", "src", "mods", c.mode + ".tmod.js")))) &&
       E.SIZES.includes(c.size) && c.winScore >= 1 && c.winScore <= 3 && [3, 5, 10].includes(c.roundTime) && E.SIGHTS.includes(c.sight) &&
       c.slots[0].color === 0 && c.slots[0].level === null && c.slots[0].team === 1 && c.slots.length >= 2 && c.slots.length <= 5 &&
       c.slots.slice(1).every((s, i) => s.color === i + 1 && Challenge.LEVELS.includes(s.level)) && teams.size >= 2 &&
-      (!c.friendlyFire || c.slots.filter(s => s.team === 1).length > 1) && (c.goal === 0) === !E.GOALS[c.mode] &&
-      (!E.GOALS[c.mode] || E.GOALS[c.mode].choices.includes(c.goal));
+      (!c.friendlyFire || c.slots.filter(s => s.team === 1).length > 1) && c.goal === 0;
     if (!good) { valid = false; console.log("    bad:", JSON.stringify(c)); }
     modes.set(c.mode, (modes.get(c.mode) || 0) + 1); sizes.add(c.size); foes.add(c.slots.length - 1); seeds.add(c.seed); times.add(c.roundTime); sights.add(c.sight);
     if (c.slots.some(s => s.level !== null && s.team === 1)) teamDays++;
@@ -118,18 +122,36 @@ function makeEnv(pathname, search, opts = {}) {
 const tick = (ms = 0) => new Promise(r => setTimeout(r, ms));
 
 // ------------------------------------------------------------------ play.js: ?challenge= is the day's game
-{
-  let all = true;
+// (1.5: a mode day plays that mode's official mod - the file the game ships, /mods/<mode>.tmod.js -, QuickJS loaded:
+// the engine comes a moment later; its options: the day's, with the mod's id and its settings' defaults)
+const Mods = loadMods();
+const WASM = fs.readFileSync(path.join(__dirname, "..", "src", "js", "vendor", "quickjs.wasm"));
+class PageURL extends URL { constructor(u, b) { super(u, b === undefined && !/^[a-z][a-z0-9+.-]*:/i.test(String(u)) ? "http://x.test/" : b); } }
+const shippedFetch = async url => shippedMod(url) !== null ? textResponse(shippedMod(url)) : { ok: false, status: 404, json: async () => ({}), arrayBuffer: async () => new ArrayBuffer(0) };
+const officialOf = key => { const t = modFile(key), c = Mods.check(t); return { id: c.id, source: t, settings: Mods.settingsOf(c.header, {}) }; };
+async function playJsChecks() {
+  let all = true, modeDays = 0;
   for (const w of days.slice(0, 12)) {
-    const env = makeEnv("/skirmish", "?challenge=" + w);
+    const env = makeEnv("/skirmish", "?challenge=" + w, { fetch: shippedFetch });
+    env.win.URL = PageURL;                                // (QuickJS's loader: a URL relative to the page's)
     env.page("play.html");
-    const rec = env.win.tunnelerRunner().recorder, cfg = Challenge.config(w), e = env.win.tunnelerEngine();
-    const good = rec.info.challenge === w && rec.info.seed === cfg.seed && Challenge.sameOptions(rec.info.opts, Challenge.engineOptions(cfg)) &&
+    if (env.win.Mods) env.win.Mods.wasmLoader = () => WASM;
+    for (let i = 0; i < 400 && !env.win.tunnelerRunner && !env.win.tunnelerNoMod; i++) await tick(i > 50 ? 5 : 0);
+    const cfg = Challenge.config(w), mod = cfg.mode !== "standard" ? officialOf(cfg.mode) : null;
+    if (mod) modeDays++;
+    if (!env.win.tunnelerRunner) { all = false; console.log("    no game:", w, cfg.mode, env.win.tunnelerNoMod && JSON.stringify(env.win.tunnelerNoMod().why)); continue; }
+    const rec = env.win.tunnelerRunner().recorder, e = env.win.tunnelerEngine();
+    const want = Challenge.engineOptions(cfg, null, mod);
+    // (as the replay keeps them - replay.js: the mod's id only, the settings its engine played with)
+    const got = JSON.parse(JSON.stringify(rec.info.opts));
+    if (got.mod) { got.mod = { id: got.mod.id }; got.modSettings = Object.assign({}, e.modInfo && e.modInfo.settings); }
+    const good = rec.info.challenge === w && rec.info.seed === cfg.seed && Challenge.sameOptions(got, want) &&
       e.nPlayers === cfg.slots.length && env.win.tunnelerAIs().length === cfg.slots.length - 1 &&
-      env.win.tunnelerAIs().every(ai => ai.levelName === cfg.slots[ai.me - 1].level);
-    if (!good) { all = false; console.log("    differs:", w, JSON.stringify(rec.info.opts), JSON.stringify(Challenge.engineOptions(cfg))); }
+      env.win.tunnelerAIs().every(ai => ai.levelName === cfg.slots[ai.me - 1].level) && (mod ? e.modInfo && e.modInfo.id === mod.id : !e.modInfo);
+    if (!good) { all = false; console.log("    differs:", w, JSON.stringify(got), JSON.stringify(want)); }
+    e.dispose();
   }
-  ok(all, "play.js with ?challenge=<day>: the day's seed, exactly its engine options, its computer players and levels (12 days)");
+  ok(all && modeDays > 0, "play.js with ?challenge=<day>: the day's seed, exactly its engine options, its computer players and levels; a mode day its official mod (12 days, " + modeDays + " mode days)");
   for (const bad of ["2026-W43", "2026-02-30"]) {
     const env = makeEnv("/skirmish", "?challenge=" + bad + "&slots=0:you:1,1:hard:2");
     env.page("play.html");
@@ -139,8 +161,10 @@ const tick = (ms = 0) => new Promise(r => setTimeout(r, ms));
 
 // ------------------------------------------------------------------ a challenge match played by computer players
 // (BLUE too: "you" is a hard computer player here) - recorded as play.js records it
+// (a mode day, 1.5: with its official mod - as play.js: the options carry the file, the replay keeps its id)
 function record(day) {
-  const cfg = Challenge.config(day), opts = Challenge.engineOptions(cfg);
+  const cfg = Challenge.config(day), mod = cfg.mode !== "standard" ? officialOf(cfg.mode) : null, opts = Challenge.engineOptions(cfg, null, mod);
+  if (mod) opts.mod = { id: mod.id, source: mod.source };
   const e = new E(cfg.seed, JSON.parse(JSON.stringify(opts)));
   const kills = Challenge.track(e);
   const ais = cfg.slots.map((s, i) => new TunnelerAI(s.level || "hard", i + 1));
@@ -150,7 +174,9 @@ function record(day) {
     const inp = { bits: ais.map(ai => TunnelerAI.bitsFor(ai, e)), keys: [] };
     rec.input(inp); e.step(inp); rec.stepped();
   }
-  return { rep, result: rep ? Challenge.result(e, kills, rep.steps) : null };
+  const res = { rep, result: rep ? Challenge.result(e, kills, rep.steps) : null };
+  e.dispose();
+  return res;
 }
 // a quick day: the standard game on a small map against one or two computer tanks
 const quick = days.find(w => { const c = Challenge.config(w); return c.mode === "standard" && c.size === "small" && c.slots.length <= 3; });
@@ -164,12 +190,32 @@ const gz = rep => zlib.gzipSync(Buffer.from(JSON.stringify(rep)));
 const copy = rep => JSON.parse(JSON.stringify(rep));
 
 (async () => {
+  await playJsChecks();
   const t0 = Date.now();
   const { rep, result } = record(quick);
   ok(rep && rep.challenge === quick && result && rep.steps > 100, "a bot-played challenge (" + quick + ", " + JSON.stringify(Challenge.config(quick).slots.map(s => s.level)) + "): " +
     (rep ? rep.steps : 0) + " steps, BLUE " + JSON.stringify(result) + " (" + (Date.now() - t0) + " ms)");
   const local = Challenge.verify(copy(rep), { Engine: E, AI: TunnelerAI, day: quick });
   ok(local.code === null && JSON.stringify(local.result) === JSON.stringify(result), "verify() plays it again with its own computer players: the same result");
+
+  // ---- a mode day (1.5): played with its official mod, checked with it - locally and in the server's worker (the file it
+  // ships, src/mods/<mode>.tmod.js); without the mod the day can't be checked
+  {
+    await Mods.load();
+    const md = days.find(w => { const c = Challenge.config(w); return c.mode !== "standard" && c.mode !== "survival" && c.size === "small" && c.slots.length === 2; });
+    const t1 = Date.now(), m = record(md), mcfg = Challenge.config(md);
+    ok(m.rep && m.rep.opts.mod && m.rep.opts.mod.id === officialOf(mcfg.mode).id && !("source" in m.rep.opts.mod) && m.result,
+      "a mode day (" + md + ", " + mcfg.mode + "): bot-played with the official mod, the replay keeps its id (" + (m.rep ? m.rep.steps : 0) + " steps, " + (Date.now() - t1) + " ms)");
+    const v = Challenge.verify(copy(m.rep), { Engine: E, AI: TunnelerAI, day: md, mod: officialOf });
+    ok(v.code === null && JSON.stringify(v.result) === JSON.stringify(m.result), "verify() with deps.mod: the same result " + JSON.stringify(v.result || v));
+    ok(Challenge.verify(copy(m.rep), { Engine: E, AI: TunnelerAI, day: md }).code === "config", "verify() without deps.mod: a mode day can't be checked (config)");
+    const mdir = fs.mkdtempSync(path.join(os.tmpdir(), "tunneler-challenge-mode-")), mclock = Challenge.dayStart(md) + 9 * 3600000;
+    const ms = createServer({ quiet: true, dataDir: mdir, now: () => mclock, maxChallengePerMin: 1000 });
+    const mport = await new Promise(r => ms.listen(0, r));
+    const r = await req(mport, "POST", "/api/challenge/" + md + "?cid=client-mode&name=Norko", gz(m.rep));
+    ok(r.status === 200 && r.j.ok && JSON.stringify(r.j.result) === JSON.stringify(m.result), "the server's worker checks it with the shipped mod: accepted " + JSON.stringify(r.j && (r.j.result || r.j)));
+    await new Promise(res => ms.close(res));
+  }
 
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tunneler-challenge-"));
   let clock = Challenge.dayStart(quick) + 9 * 3600000;

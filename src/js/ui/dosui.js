@@ -10,12 +10,15 @@
 //                                                  interior width, max visible item rows (scrolls);
 //                                                  without w the box fits its longest item (boxWidth),
 //                                                  centred unless x is given
-//   spec.boxes:  [{x, y, w, title, items, joinTop, wrap}]  instead of box / items: boxes side by side (each
+//   spec.boxes:  [{x, y, w, title, items, joinTop, wrap, rows}]  instead of box / items: boxes side by side (each
 //                                                  sized to its items, centred together, the title in
 //                                                  the top border), one selection over all of them:
 //                                                  Up / Down continue into the next / previous box
 //                                                  (wrap: stay in this box, round and round),
-//                                                  Tab jumps to the other box (in a text input: as Down)
+//                                                  Tab jumps to the other box (in a text input: as Down);
+//                                                  rows: at most that many item rows shown - more scroll (the
+//                                                  view follows the selection; the wheel, a finger, a click on
+//                                                  the border's arrows; not the phone layout: it shows them all)
 //   spec.onSel:  (i) => ...                        called when the selection moved to item i (keys,
 //                                                  mouse; e.g. a list of categories showing the chosen one)
 //   spec.fixed:  the last N items always stay visible below the scrolling ones (spec.lead: the first N above them -
@@ -159,6 +162,7 @@ class DosUI {
     this.active = opts.active || (() => true);
     this.t = new TextBuf();                  // the screen's text buffer (the engine's Crt calls, any number of rows)
     this.spec = null; this.sel = 0; this.top = 0;
+    this.btop = [];                          // spec.boxes' scrolling boxes: the first item row shown, per box
     window.addEventListener("keydown", e => { if (this.active()) this.key(e); });
     const si = softInput();
     if (si) si.addEventListener("input", () => { if (this.active()) this.softTyped(); });
@@ -191,9 +195,12 @@ class DosUI {
       if (!this.active() || !this.spec || this.spec.page || e.touches.length !== 1) return;
       const f = e.touches[0], i = this.itemAt(f);
       // (the phone layout's list: a row that can't be chosen - a leaderboard entry without a replay - drags it too)
-      const still = i < 0 && this.narrow && this.narrow.list && this.listRowAt(f);
+      // (a box of spec.boxes that scrolls: a drag on any of its rows - read-only ones too - scrolls it)
+      const sb = !this.narrow && this.spec.boxes ? this.boxAt(f) : null;
+      const still = (i < 0 && this.narrow && this.narrow.list && this.listRowAt(f)) || (i < 0 && !!sb && sb.scrolls);
       if ((i < 0 && !still) || (i >= 0 && this.spec.items[i].slide)) return;
-      this.tpick = { x: f.clientX, y: f.clientY, moved: false, top0: this.top, still };
+      this.tpick = { x: f.clientX, y: f.clientY, moved: false, top0: this.top, still,
+        box: sb && sb.scrolls ? sb.gi : -1, btop0: sb && sb.scrolls ? this.btop[sb.gi] || 0 : 0 };
       this.nanim = null; this.dragged = false;
       if (still) return;
       this.sel = i;
@@ -208,6 +215,9 @@ class DosUI {
         const H = canvas.getBoundingClientRect().height || 400, h = this.narrow ? H / this.narrow.units * LINE_H : H / 25;
         const top = Math.max(0, Math.min(this.scrollN - this.scrollRows, p.top0 + Math.round((p.y - f.clientY) / h)));
         if (top !== this.top) { this.top = top; this.freeTop = true; this.draw(); }
+      } else if (p.moved && !this.narrow && p.box >= 0 && this.spec.boxes) {   // (a scrolling box of spec.boxes)
+        const h = (canvas.getBoundingClientRect().height || 400) / 25;
+        this.scrollBox(p.box, p.btop0 + Math.round((p.y - f.clientY) / h), true);
       }
       e.preventDefault();
     }, { passive: false });
@@ -333,7 +343,7 @@ class DosUI {
     this.nkeep = !!keepSel;                    // (the same screen with fresh data: the phone layout keeps its scroll)
     if (spec.boxes) spec.items = [].concat(...spec.boxes.map(b => b.items));   // one selection over all boxes
     const n = spec.items.length;
-    if (!keepSel) { this.sel = spec.sel || 0; this.top = 0; this.freeTop = false; }
+    if (!keepSel) { this.sel = spec.sel || 0; this.top = 0; this.btop = []; this.freeTop = false; }
     else { const i = spec.items.findIndex(it => keyOf(it) === prev); if (i >= 0) this.sel = i; }
     this.sel = Math.min(Math.max(this.sel, 0), n - 1);
     if (!this.enabled(this.sel)) this.move(1, true);
@@ -375,6 +385,16 @@ class DosUI {
     // a switch under the mouse: the wheel steps its value - up forward, down back - one step a notch
     // (trackpads: per ~50 pixels), like Left / Right
     const wi = s ? this.itemAt(ev) : -1, wit = wi >= 0 ? s.items[wi] : null;
+    // (a box of spec.boxes that scrolls - the skirmish's / lobby's settings with a mod's: the wheel scrolls it, its
+    // switches too - one row a notch, like a list)
+    const wb = s && s.boxes && !s.page && !this.narrow ? this.boxAt(ev) : null;
+    if (wb && wb.scrolls) {
+      this.wheelAcc = (this.wheelAcc || 0) + ev.deltaY * (ev.deltaMode === 1 ? 40 : ev.deltaMode === 2 ? 400 : 1);
+      let top = this.btop[wb.gi] || 0;
+      while (Math.abs(this.wheelAcc) >= 50) { const d = Math.sign(this.wheelAcc); this.wheelAcc -= d * 50; top += d; }
+      this.scrollBox(wb.gi, top, true);
+      return true;
+    }
     if (wit && wit.change && !wit.disabled && !wit.input) {
       this.wheelAcc = (this.wheelAcc || 0) + ev.deltaY * (ev.deltaMode === 1 ? 40 : ev.deltaMode === 2 ? 400 : 1);
       if (Math.abs(this.wheelAcc) >= 50) {
@@ -534,6 +554,7 @@ class DosUI {
   drawBoxes() {
     const t = this.t;
     let bottom = 0;
+    this.arrows = [];
     for (const b of this.boxesGeom()) {
       const line = (row, a, fill, z) => { t.textColor(frameColor()); t.gotoXY(b.x, row); t.write(a + fill.repeat(b.w) + z); };
       // (joinTop: no top border - the box continues whatever is drawn above it, e.g. a panel's last rows)
@@ -545,13 +566,20 @@ class DosUI {
         m.gaps.push([b.x + 1, b.x + U.cols(txt)]);
       }
       let row = b.y + 1;
-      for (let i = b.start; i < b.end; i++, row++) {
-        if (this.spec.items[i].separator) { line(row, "\xC3", "\xC4", "\xB4"); m.seps.push(row - 1); continue; }
+      for (const i of this.boxShown(b)) {
+        if (this.spec.items[i].separator) { line(row, "\xC3", "\xC4", "\xB4"); m.seps.push(row - 1); row++; continue; }
         t.textColor(frameColor());
         this.drawItem(i, row, b);
+        row++;
       }
       line(row, "\xC0", "\xC4", "\xD9");
       m.r2 = row - 1;
+      if (b.scrolls) {                                   // (more of its items above / below: arrows on its frame - a click scrolls)
+        const top = this.btop[b.gi] || 0;
+        t.textColor(frameColor());
+        if (top > 0) { t.gotoXY(b.x + b.w - 1, b.y); t.write("\x18"); this.arrows.push({ x: b.x + b.w - 1, y: b.y, gi: b.gi, d: -1 }); }
+        if (top + b.rows < b.end - b.start) { t.gotoXY(b.x + b.w - 1, row); t.write("\x19"); this.arrows.push({ x: b.x + b.w - 1, y: row, gi: b.gi, d: 1 }); }
+      }
       // (a box joined to a panel above it - the chat's Say row: part of that panel)
       if (!b.joinTop && this.ui) this.ui.boxes.push(m);
       bottom = Math.max(bottom, row);
@@ -562,8 +590,10 @@ class DosUI {
   // column between them unless x is given; start..end = their items' indexes in spec.items
   boxesGeom() {
     let start = 0;
-    const g = this.spec.boxes.map(bx => {
-      const r = { x: bx.x, y: bx.y, w: bx.w || DosUI.boxWidth(bx.items), title: bx.title, joinTop: !!bx.joinTop, wrap: !!bx.wrap, start, end: start + bx.items.length };
+    const g = this.spec.boxes.map((bx, gi) => {
+      const r = { x: bx.x, y: bx.y, w: bx.w || DosUI.boxWidth(bx.items), title: bx.title, joinTop: !!bx.joinTop, wrap: !!bx.wrap, start, end: start + bx.items.length,
+        gi, rows: bx.rows > 0 && bx.items.length > bx.rows && !(this.isNarrow() && !this.spec.wide) ? bx.rows : 0 };
+      r.scrolls = r.rows > 0;
       start = r.end;
       return r;
     });
@@ -573,6 +603,37 @@ class DosUI {
     return g;
   }
   boxOf(i) { return this.boxesGeom().find(b => i >= b.start && i < b.end); }
+  // the items box b (of boxesGeom) shows, top to bottom: all of them, or b.rows from its view's top - which follows the
+  // selection (not after the wheel / a finger scrolled it: freeTop, until a key)
+  boxShown(b) {
+    const n = b.end - b.start;
+    if (!b.scrolls) return Array.from({ length: n }, (_, k) => b.start + k);
+    let top = this.btop[b.gi] || 0;
+    if (!this.freeTop && this.sel >= b.start && this.sel < b.end) {
+      const at = this.sel - b.start;
+      if (at < top) top = at;
+      if (at >= top + b.rows) top = at - b.rows + 1;
+    }
+    top = this.btop[b.gi] = Math.max(0, Math.min(top, n - b.rows));
+    return Array.from({ length: b.rows }, (_, k) => b.start + top + k);
+  }
+  // the box of spec.boxes under a mouse / touch event (its frame included), or null
+  boxAt(ev) {
+    const c = this.cellAt(ev);
+    if (!c || !this.spec || !this.spec.boxes) return null;
+    const x = c[0] + 1, y = c[1] + 1;
+    return this.boxesGeom().find(b => x >= b.x && x <= b.x + b.w + 1 && y >= b.y && y <= b.y + 1 + (b.scrolls ? b.rows : b.end - b.start)) || null;
+  }
+  // box gi of spec.boxes scrolled to show from item row `top` (free: the selection may go out of view - the wheel, a finger)
+  scrollBox(gi, top, free) {
+    const b = this.boxesGeom()[gi];
+    if (!b || !b.scrolls) return;
+    top = Math.max(0, Math.min(top, b.end - b.start - b.rows));
+    if (top === (this.btop[gi] || 0)) return;
+    this.btop[gi] = top;
+    if (free) this.freeTop = true;
+    this.draw();
+  }
 
   draw() {
     this.marq = null;
@@ -1166,8 +1227,8 @@ class DosUI {
     }
     if (this.spec.boxes) {
       for (const b of this.boxesGeom()) {
-        const k = c[1] + 1 - (b.y + 1), x = c[0] + 1 - b.x;
-        if (k >= 0 && k < b.end - b.start && x >= 0 && x <= b.w + 1) return this.enabled(b.start + k) ? b.start + k : -1;
+        const k = c[1] + 1 - (b.y + 1), x = c[0] + 1 - b.x, shown = this.boxShown(b);
+        if (k >= 0 && k < shown.length && x >= 0 && x <= b.w + 1) return this.enabled(shown[k]) ? shown[k] : -1;
       }
       return -1;
     }
@@ -1194,6 +1255,10 @@ class DosUI {
     }
     const link = this.linkAt(ev);
     if (link) { link.onClick(); return; }
+    // (a scrolling box's arrow on its frame: a row up / down)
+    const ac = !this.narrow && this.spec && this.spec.boxes && this.arrows && this.arrows.length ? this.cellAt(ev) : null;
+    const arrow = ac && this.arrows.find(a => a.x === ac[0] + 1 && a.y === ac[1] + 1);
+    if (arrow) { this.scrollBox(arrow.gi, (this.btop[arrow.gi] || 0) + arrow.d, true); return; }
     if (this.zoneClick(ev, 1)) return;
     if (this.narrow && this.dragged) { this.dragged = false; return; }   // (the end of a drag, not a tap)
     const i = this.itemAt(ev);

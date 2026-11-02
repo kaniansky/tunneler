@@ -29,7 +29,6 @@ const UNSEEN = 30;                                       // (never seen: every o
 // does the team of `viewers` see world pixel (x, y) now? Line of sight off: inside a viewer's view window (its cam)
 function seesNow(e, viewers, x, y) {
   for (const v of viewers) {
-    if (!e.alive[v]) continue;
     if (e.sight && e.sight !== "full") { if (e.sightSees(v, x, y)) return true; continue; }
     const c = e.cams && e.cams[v];
     if (c && !c.noise && x >= c.x && x < c.x + 76 && y >= c.y && y < c.y + 71) return true;
@@ -40,10 +39,12 @@ function seesNow(e, viewers, x, y) {
 function picture(e, viewer) {
   const mode = e && e.showMap;
   if (!e || !e.extended || !mode || mode === "off" || !viewer || !e.world) return null;
-  const cw = e.worldW >> 2, ch = e.worldH >> 2, W = e.worldW, F = e.floor, g = e.groundType;
-  // (the viewers: the viewer, its team too with "team" / "allteam")
+  const cw = e.worldW >> 2, ch = e.worldH >> 2, W = e.worldW, F = e.floor;
+  // (the memories: the viewer's, its team's too with "team" / "allteam" - and of the views it watches now; seen now:
+  // only those - PlayScreen.mapViewers: after death by its after death setting, black screen none)
   const team = (mode === "team" || mode === "allteam") && e.team ? e.teamMembers(e.team(viewer)) : [viewer];
-  const viewers = team.length ? team : [viewer];
+  const viewers = viewer === e.youPlayer ? PlayScreen.mapViewers(e) : team.filter(p => e.alive[p]);
+  const memory = team.concat(viewers.filter(p => !team.includes(p)));
   const rgba = new Uint8ClampedArray(cw * ch * 4), pal = Display.EXT_PALETTE, L = PlayScreen.FLOOR_LOOK;
   // (gray: the colour's brightness, darker - as line of sight's memory)
   const put = (x, y, c, gray) => {
@@ -58,12 +59,12 @@ function picture(e, viewer) {
     if (cls === WATER) return -L.WATER;
     if (cls === DIRT) return MapData.dirtAt(cx, cy);
     const f = F ? F[(cy * 4 + 2) * W + cx * 4 + 2] : 0;
-    const k = f === 3 ? L.SAND : PlayScreen.floorLook(f === 2 ? MapData.FLOOR.OPEN : f, cx, cy, g, true);
+    const k = f === 3 ? L.SAND : PlayScreen.floorLook(f === 2 ? MapData.FLOOR.OPEN : f, cx, cy, PlayScreen.groundAt(e, cx * 4 + 2, cy * 4 + 2), true);
     return k ? -k : 0;
   };
   // the cells: the newest memory of the viewers (all / allteam: the start's world where none saw it yet)
   const known = new Uint8Array(cw * ch), best = new Uint32Array(cw * ch), now = (e.tick >>> 0) + 1 - NOW;
-  for (const v of viewers) {
+  for (const v of memory) {
     const S = e.seenCells && e.seenCells[v], A = e.seenAt && e.seenAt[v];
     if (!S || S.length !== known.length) continue;
     for (let i = 0; i < S.length; i++) if (S[i] && (!known[i] || A[i] > best[i])) { best[i] = A[i]; known[i] = S[i]; }
@@ -76,10 +77,10 @@ function picture(e, viewer) {
       else { const o = i * 4, v = (cx ^ cy) & 1 ? UNSEEN : 0; rgba[o] = rgba[o + 1] = v; rgba[o + 2] = v + (v >> 2); rgba[o + 3] = 255; }
     }
   // the bases: walls 17 px from the middle (4 cells), the doorways at the top and the bottom
-  for (let p = 1; p <= e.nPlayers; p++) {
+  for (let p = 1; p <= (e.nBases || e.nPlayers); p++) {
     const bx = e.baseX[p] >> 2, by = e.baseY[p] >> 2, i = by * cw + bx;
     if (!known[i]) continue;
-    const c = e.playerColor(p), gray = !seen(i);
+    const c = e.baseColor ? e.baseColor(p) : e.playerColor(p), gray = !seen(i);
     for (let d = -4; d <= 4; d++) {
       if (d) { put(bx + d, by - 4, c, gray); put(bx + d, by + 4, c, gray); }
       put(bx - 4, by + d, c, gray); put(bx + 4, by + d, c, gray);

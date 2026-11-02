@@ -3,7 +3,9 @@
 //
 // A map: {size: "small" | "medium" | "large", w, h (cells), cells: Uint8Array(w * h) (0 tunnel, 1 dirt,
 // 2 rock, 3 water), bases: [{x, y}] (cells, 0..8 of them), name (raw Unicode), ground: "classic" | "sand" | "grass"
-// (1.3: how open floor looks - GROUNDS)}. A cell is 4 x 4 world pixels; the
+// (1.3: how open floor looks - GROUNDS), mods: [mod ids] (1.5, docs/MODS.md 6a: the script mods it is made for -
+// 0..MAX_MODS, game/mapmods.js says what that means for a match), groundCells: null or Uint8Array(w * h) (1.5, the
+// painted ground - PAINT: per cell 0 the map's ground, 1 classic, 2 sand, 3 grass; only the look, never the frame)}. A cell is 4 x 4 world pixels; the
 // frame - FRAME[size] cells all around - is always rock; a base's centre pixel is (x * 4 + 2, y * 4 + 2).
 //   MapData.blank(size, fill)        a new map (fill: 0 / 1 / 2 / 3, default dirt; ground classic)
 //   MapData.encode(map) -> bytes     MapData.decode(bytes | code) -> map or null (anything odd: null)
@@ -16,6 +18,15 @@
 //   MapData.fromWorld(size, world, ws)  a map from a generated world (the editor's "random world")
 //   MapData.fileName(map)            "<name>.tmap" - a map file is its encoded bytes (the "TM" magic and format byte
 //                                    tell it; decode checks it like any other bytes)
+//   MapData.groundOf(map, cx, cy)    the ground of cell (cx, cy): its painted one, else the map's
+//   MapData.painted(map)             does the map have painted ground (a cell not 0 inside the frame)?
+//   MapData.cleanMods(list)          the mod ids a map can keep: valid ids (MOD_ID: Mods.idOf's alphabet), each once,
+//                                    at most MAX_MODS, in their order
+// The formats (byte 2): 1 - classic ground, no mods (every map from before 1.3); 2 - a ground byte (sand / grass) after
+// the size; 3 (1.5) - a ground byte (any) and the mods (a count 1..4, then 10 ASCII bytes each) after the size; 4 (1.5) -
+// as 3 with a count 0..4, and after the terrain the painted ground (a kind byte and a body as the terrain's). Each is
+// written only when the one before can't say it, so a map keeps its bytes, code and id until it names a mod or is
+// painted.
 import { UniText } from "../text/unitext.js";
 
 const CELL = 4;
@@ -27,12 +38,33 @@ const BASE_HALF = 18;            // a base's walls are 17 px from its centre: it
 const BASE_GAP = 40;             // base centres at least this far apart on one axis (35 px wide each)
 const MAX_NAME = 24;             // display columns
 const MAX_NAME_BYTES = 96;
+// maps that need a mod (1.5, docs/MODS.md 6a): at most 4 mod ids (Mods.idOf - 10 of its 32 letters and digits)
+const MAX_MODS = 4, MOD_ID = /^[a-km-np-z2-9]{10}$/;
+function cleanMods(list) {
+  const out = [];
+  for (const id of Array.isArray(list) ? list : []) if (typeof id === "string" && MOD_ID.test(id) && !out.includes(id) && out.length < MAX_MODS) out.push(id);
+  return out;
+}
 const TUNNEL = 0, DIRT = 1, ROCK = 2, WATER = 3;
 // Water and ground (owner, 2026-10-31, 1.3; docs/v6/MAPS.md "Water and ground"): water is still - a tank drives
 // into it at half speed, it can't be dug, shots fly over it; a map's ground is only how its open floor looks
 const GROUNDS = ["classic", "sand", "grass"];
 // engine.floor per pixel: nothing (dirt / rock), water, open from the start, shore (within 3 px of water)
 const FLOOR = { NONE: 0, WATER: 1, OPEN: 2, SHORE: 3 };
+// the painted ground (owner, 2026-11-02, 1.5: "the ground should be paintable ... setting should stay and painting
+// overrides it"): per cell 0 = the map's ground (not painted), else that ground - PAINT[v]
+const PAINT = ["", "classic", "sand", "grass"];
+const groundOf = (map, cx, cy) => {
+  const v = map.groundCells ? map.groundCells[cy * map.w + cx] : 0;
+  return v ? PAINT[v] : GROUNDS.includes(map.ground) ? map.ground : "classic";
+};
+function painted(map) {
+  const P = map && map.groundCells;
+  if (!P || P.length !== map.w * map.h) return false;
+  const f = FRAME[map.size], w = map.w;
+  for (let y = f; y < map.h - f; y++) for (let x = f, r = y * w; x < w - f; x++) if (P[r + x]) return true;
+  return false;
+}
 
 // a map's name: any letters (NFC), no control / bidi / zero-width / private-use characters or < >, spaces
 // collapsed, at most MAX_NAME display columns (as NetProto's room names)
@@ -46,12 +78,15 @@ const inFrame = (size, x, y) => {
   const [w, h] = DIMS[size], f = FRAME[size];
   return x < f || y < f || x >= w - f || y >= h - f;
 };
-// the frame always rock
+// the frame always rock (and never painted)
 function frame(map) {
-  const { w, h, cells } = map, f = FRAME[map.size];
-  for (let y = 0; y < h; y++)
-    if (y < f || y >= h - f) cells.fill(ROCK, y * w, y * w + w);
-    else { cells.fill(ROCK, y * w, y * w + f); cells.fill(ROCK, y * w + w - f, y * w + w); }
+  const { w, h } = map, f = FRAME[map.size];
+  for (const [arr, v] of [[map.cells, ROCK], [map.groundCells, 0]]) {
+    if (!arr) continue;
+    for (let y = 0; y < h; y++)
+      if (y < f || y >= h - f) arr.fill(v, y * w, y * w + w);
+      else { arr.fill(v, y * w, y * w + f); arr.fill(v, y * w + w - f, y * w + w); }
+  }
   return map;
 }
 
@@ -59,7 +94,7 @@ function blank(size, fill = DIRT) {
   if (!DIMS[size]) size = "medium";
   const [w, h] = DIMS[size];
   return frame({ size, w, h, cells: new Uint8Array(w * h).fill(fill === TUNNEL || fill === ROCK || fill === WATER ? fill : DIRT), bases: [], name: "",
-    ground: "classic" });
+    ground: "classic", mods: [], groundCells: null });
 }
 
 // why a base can't be centred on cell (x, y): "edge" (its walls would reach the frame or beyond), "near" (it
@@ -85,13 +120,12 @@ function baseProblem(map, x, y, skip = -1) {
 function utf8(s) { return new TextEncoder().encode(s); }
 function fromUtf8(b) { return new TextDecoder("utf-8", { fatal: true }).decode(b); }
 
-function encode(map) {
-  const nb = utf8(cleanName(map.name));                 // (24 columns: at most 24 characters of 4 bytes)
-  const cells = map.cells, n = cells.length;
-  // packed: 2 bits a cell
+// a layer of 2-bit values a cell (the terrain, the painted ground): [kind, ...body] - whichever is shorter of packed
+// (kind 0: 4 cells a byte) and runs (kind 1: (length - 1) << 2 | value as varints)
+function layer(cells) {
+  const n = cells.length;
   const packed = new Uint8Array(Math.ceil(n / 4));
   for (let i = 0; i < n; i++) packed[i >> 2] |= (cells[i] & 3) << ((i & 3) * 2);
-  // runs: (length - 1) << 2 | value, as a varint
   const runs = [];
   for (let i = 0; i < n;) {
     let j = i + 1;
@@ -103,21 +137,61 @@ function encode(map) {
     if (runs.length > packed.length) break;           // (already longer: packed it is)
   }
   const useRuns = runs.length <= packed.length;
-  const body = useRuns ? runs : packed;
+  const out = new Uint8Array(1 + (useRuns ? runs.length : packed.length));
+  out[0] = useRuns ? 1 : 0;
+  out.set(useRuns ? runs : packed, 1);
+  return out;
+}
+// read a layer at b[o] into cells (n of them): the offset after it, or -1 (anything odd); toEnd: it must end the bytes
+function readLayer(b, o, cells, toEnd) {
+  const n = cells.length, kind = b[o++];
+  if (kind === 0) {
+    const len = Math.ceil(n / 4);
+    if (toEnd ? b.length - o !== len : b.length - o < len) return -1;
+    for (let i = 0; i < n; i++) cells[i] = (b[o + (i >> 2)] >> ((i & 3) * 2)) & 3;
+    for (let i = n; i < len * 4; i++) if ((b[o + (i >> 2)] >> ((i & 3) * 2)) & 3) return -1;   // (padding: zero)
+    o += len;
+  } else if (kind === 1) {
+    let i = 0;
+    while (i < n) {
+      let v = 0, mul = 1, k = 0, byte;
+      do { if (o >= b.length || k++ > 4) return -1; byte = b[o++]; v += (byte & 0x7F) * mul; mul *= 128; } while (byte & 0x80);
+      const val = v % 4, len = Math.floor(v / 4) + 1;
+      if (i + len > n) return -1;
+      cells.fill(val, i, i + len);
+      i += len;
+    }
+  } else return -1;
+  return toEnd && o !== b.length ? -1 : o;
+}
+
+function encode(map) {
+  const nb = utf8(cleanName(map.name));                 // (24 columns: at most 24 characters of 4 bytes)
+  const body = layer(map.cells);
+  // the painted ground (1.5): only when a cell inside the frame is painted - the frame's cells 0
+  const paint = painted(map) ? layer(frame({ size: map.size, w: map.w, h: map.h, groundCells: map.groundCells.slice() }).groundCells) : null;
   const bases = map.bases.slice(0, MAX_BASES);
   // format 1: classic ground (every map from before 1.3 keeps its bytes, code and id); format 2: one byte more after
-  // the size - the ground (1 sand, 2 grass)
-  const ground = GROUNDS.indexOf(map.ground) > 0 ? GROUNDS.indexOf(map.ground) : 0;
-  const out = new Uint8Array(5 + (ground ? 1 : 0) + bases.length * 4 + 1 + nb.length + 1 + body.length);
+  // the size - the ground (1 sand, 2 grass); format 3 (1.5): the ground byte (0 classic too), then the mods it needs
+  // (a count, 10 bytes each) - only for a map that names a mod: every other map keeps its bytes, code and id
+  const ground = GROUNDS.indexOf(map.ground) > 0 ? GROUNDS.indexOf(map.ground) : 0, mods = cleanMods(map.mods);
+  // format 4 (1.5): as 3 (the mods' count may be 0), the painted ground after the terrain - only for a painted map
+  const fmt = paint ? 4 : mods.length ? 3 : ground ? 2 : 1;
+  const out = new Uint8Array(5 + (fmt > 1 ? 1 : 0) + (fmt >= 3 ? 1 + mods.length * 10 : 0) + bases.length * 4 + 1 + nb.length + body.length +
+    (paint ? paint.length : 0));
   let o = 0;
-  out[o++] = 0x54; out[o++] = 0x4D; out[o++] = ground ? 2 : 1;
+  out[o++] = 0x54; out[o++] = 0x4D; out[o++] = fmt;
   out[o++] = SIZES.indexOf(map.size);
-  if (ground) out[o++] = ground;
+  if (fmt > 1) out[o++] = ground;
+  if (fmt >= 3) {
+    out[o++] = mods.length;
+    for (const id of mods) for (let i = 0; i < 10; i++) out[o++] = id.charCodeAt(i);
+  }
   out[o++] = bases.length;
   for (const b of bases) { out[o++] = b.x & 255; out[o++] = b.x >> 8; out[o++] = b.y & 255; out[o++] = b.y >> 8; }
   out[o++] = nb.length; out.set(nb, o); o += nb.length;
-  out[o++] = useRuns ? 1 : 0;
-  out.set(body, o);
+  out.set(body, o); o += body.length;
+  if (paint) out.set(paint, o);
   return out;
 }
 
@@ -130,7 +204,7 @@ function toCode(bytes) {
   }
   return s;
 }
-const MAX_CODE = 60000;
+const MAX_CODE = 90000;                                 // (format 4 at worst: ~65.6 KB - terrain and painted ground packed)
 function fromCode(s) {
   if (typeof s !== "string" || s.length > MAX_CODE || !/^[A-Za-z0-9_-]*$/.test(s) || s.length % 4 === 1) return null;
   const out = new Uint8Array(Math.floor(s.length * 3 / 4));
@@ -148,7 +222,7 @@ function fromCode(s) {
 // bytes (Uint8Array / Buffer / array) or a code string -> a map, or null
 function decode(src) {
   const b = typeof src === "string" ? fromCode(src) : src && typeof src.length === "number" ? Uint8Array.from(src) : null;
-  if (!b || b.length < 8 || b[0] !== 0x54 || b[1] !== 0x4D || (b[2] !== 1 && b[2] !== 2)) return null;
+  if (!b || b.length < 8 || b[0] !== 0x54 || b[1] !== 0x4D || b[2] < 1 || b[2] > 4) return null;
   let o = 3;
   const size = SIZES[b[o++]];
   if (!size) return null;
@@ -157,10 +231,21 @@ function decode(src) {
     ground = GROUNDS[b[o++]];
     if (!ground || ground === "classic") return null;
   }
+  const mods = [];
+  if (b[2] >= 3) {                                      // (format 3: the ground - any -, then 1..4 mod ids, each once;
+    ground = GROUNDS[b[o++]];                           // format 4: 0..4 of them)
+    const n = b[o++];
+    if (!ground || !(n >= (b[2] === 4 ? 0 : 1) && n <= MAX_MODS) || o + n * 10 > b.length) return null;
+    for (let i = 0; i < n; i++, o += 10) {
+      const id = String.fromCharCode(...b.subarray(o, o + 10));
+      if (!MOD_ID.test(id) || mods.includes(id)) return null;
+      mods.push(id);
+    }
+  }
   const [w, h] = DIMS[size], n = w * h;
   const nb = b[o++];
   if (nb > MAX_BASES || o + nb * 4 > b.length) return null;
-  const map = { size, w, h, cells: new Uint8Array(n), bases: [], name: "", ground };
+  const map = { size, w, h, cells: new Uint8Array(n), bases: [], name: "", ground, mods, groundCells: null };
   const cellsLater = map.cells;
   map.cells = null;                                     // (the bases' places first; water under them: below)
   for (let i = 0; i < nb; i++) {
@@ -175,27 +260,14 @@ function decode(src) {
   try { map.name = fromUtf8(b.subarray(o, o + ln)); } catch (e) { return null; }
   if (cleanName(map.name) !== map.name) return null;
   o += ln;
-  const kind = b[o++];
-  const cells = map.cells;
-  if (kind === 0) {
-    if (b.length - o !== Math.ceil(n / 4)) return null;
-    for (let i = 0; i < n; i++) {
-      cells[i] = (b[o + (i >> 2)] >> ((i & 3) * 2)) & 3;
-    }
-    for (let i = n; i < Math.ceil(n / 4) * 4; i++) if ((b[o + (i >> 2)] >> ((i & 3) * 2)) & 3) return null;   // (padding: zero)
-  } else if (kind === 1) {
-    let i = 0;
-    while (o < b.length) {
-      let v = 0, mul = 1, k = 0, byte;
-      do { if (o >= b.length || k++ > 4) return null; byte = b[o++]; v += (byte & 0x7F) * mul; mul *= 128; } while (byte & 0x80);
-      const val = v % 4, len = Math.floor(v / 4) + 1;
-      if (i + len > n) return null;
-      cells.fill(val, i, i + len);
-      i += len;
-    }
-    if (i !== n) return null;
-  } else return null;
+  o = readLayer(b, o, map.cells, b[2] !== 4);            // (formats 1 - 3: the terrain ends the bytes)
+  if (o < 0) return null;
+  if (b[2] === 4) {                                     // (format 4: the painted ground ends them - nothing painted: none)
+    map.groundCells = new Uint8Array(n);
+    if (readLayer(b, o, map.groundCells, true) < 0) return null;
+  }
   frame(map);
+  if (map.groundCells && !painted(map)) map.groundCells = null;
   for (let i = 0; i < map.bases.length; i++) if (baseProblem(map, map.bases[i].x, map.bases[i].y, i)) return null;   // ("water")
   return map;
 }
@@ -226,6 +298,12 @@ const dirtAt = (x, y) => {
 function paint(map, world, ws, floor) {
   for (let cy = 0; cy < map.h; cy++) paintRow(map, world, ws, cy, floor);
 }
+// is cell cx, cy within a base's 35 x 35 pixels (its inside and walls - the game clears them)
+function inBase(map, cx, cy) {
+  const x = cx * CELL + (CELL >> 1), y = cy * CELL + (CELL >> 1);
+  for (const b of map.bases) { const p = { x: b.x * CELL + 2, y: b.y * CELL + 2 }; if (Math.abs(x - p.x) <= 17 && Math.abs(y - p.y) <= 17) return true; }
+  return false;
+}
 // one row of cells (cy) into the world (the engine paints a row per CPU slice); water is open (0) in the world -
 // only the floor tells it
 function paintRow(map, world, ws, cy, floor) {
@@ -239,7 +317,13 @@ function paintRow(map, world, ws, cy, floor) {
         const lo = v === ROCK ? 7 : open ? 0 : dirtAt(x, y), hi = v === ROCK ? 7 : open ? 0 : dirtAt(x + 1, y);
         world[row + (x >> 1)] = lo | (hi << 4);
       }
-      if (floor) floor.fill(v === WATER ? FLOOR.WATER : v === TUNNEL ? FLOOR.OPEN : FLOOR.NONE, y * fw + cx * CELL, y * fw + cx * CELL + CELL);
+      if (floor) {
+        let f = v === WATER ? FLOOR.WATER : v === TUNNEL ? FLOOR.OPEN : FLOOR.NONE;
+        // (a painted cell inside a base - its inside the game digs out: open from the start, in its painted look; owner,
+        // 2026-11-02: "it should be possible to paint inside the base")
+        if (f === FLOOR.NONE && map.groundCells && map.groundCells[cy * w + cx] && inBase(map, cx, cy)) f = FLOOR.OPEN;
+        floor.fill(f, y * fw + cx * CELL, y * fw + cx * CELL + CELL);
+      }
     }
   }
 }
@@ -262,11 +346,12 @@ function fromWorld(size, world, ws) {
 }
 
 export const MapData = {
-  CELL, SIZES, DIMS, FRAME, MAX_BASES, MIN_BASES, MAX_NAME, TUNNEL, DIRT, ROCK, WATER, GROUNDS, FLOOR, BASE_GAP,
-  cleanName, blank, frame, inFrame, baseProblem, encode, decode, code, canonical, checkCode, toCode, fromCode,
+  CELL, SIZES, DIMS, FRAME, MAX_BASES, MIN_BASES, MAX_NAME, TUNNEL, DIRT, ROCK, WATER, GROUNDS, FLOOR, PAINT, BASE_GAP, MAX_MODS, MOD_ID,
+  cleanName, cleanMods, groundOf, painted, blank, frame, inFrame, baseProblem, encode, decode, code, canonical, checkCode, toCode, fromCode,
   paint, paintRow, fromWorld, dirtAt, fileName, FILE_EXT,
   // a base's centre pixel
   basePx: b => ({ x: b.x * CELL + 2, y: b.y * CELL + 2 }),
   copy: m => ({ size: m.size, w: m.w, h: m.h, cells: m.cells.slice(), bases: m.bases.map(b => ({ x: b.x, y: b.y })), name: m.name,
-    ground: GROUNDS.includes(m.ground) ? m.ground : "classic" }),
+    ground: GROUNDS.includes(m.ground) ? m.ground : "classic", mods: cleanMods(m.mods),
+    groundCells: m.groundCells && m.groundCells.length === m.w * m.h ? m.groundCells.slice() : null }),
 };

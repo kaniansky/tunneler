@@ -10,7 +10,10 @@ const assert = require("assert");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
-const { TunnelerEngine: E, TunnelerAI, SRC } = require("./src.js");
+const { TunnelerEngine: E, TunnelerAI, SRC, loadMods, modFile } = require("./src.js");
+// (1.5: the game's modes are official mods - src/mods/: a mode's picture is Gold rush's, the mod)
+const Mods = loadMods();
+const GOLD = { id: Mods.idOf(modFile("gold")), source: modFile("gold") };
 const { MatchText } = require(path.join(SRC, "js", "draw", "matchtext.js"));
 const GOLDEN = path.join(__dirname, "fixtures", "screen-golden.json");
 const record = process.argv.includes("--record");
@@ -59,7 +62,7 @@ function run(seed, opts, levels, cfg = {}) {
     }
     if (e.over) break;
   }
-  return { e, hash: h.digest("hex") };
+  return { e, hash: h.digest("hex") };   // (a mod's engine: e.dispose() by the caller)
 }
 const low = (k, e) => { if (k === 400) e.energy[1] = 1300; };
 const CASES = {
@@ -67,12 +70,16 @@ const CASES = {
     ["hard", "easy"], { names: ["Norko", "Žofia"], you: 1, settings: { view: "self", visible: "everyone", watchOut: "killer" }, poke: low }],
   "extended: 4 tanks, line of sight (walls), low energy": [9, { players: 4, extended: true, winScore: 1, size: "small", sight: "walls", autoStart: true, match: true },
     ["normal", "normal", "hard", "easy"], { poke: low, names: ["王小明", "Anna", "", "Петро"], you: 2 }],
-  "gold rush": [20, { players: 4, mode: "gold", size: "small", autoStart: true, match: true }, ["normal", "normal", "normal", "normal"]],
+  // (1.5: the official mod - its marks, the gold beside the gauges; before 1.5 the built-in mode "gold rush")
+  "gold rush (the official mod)": [20, { players: 4, extended: true, mod: GOLD, size: "small", autoStart: true, match: true }, ["normal", "normal", "normal", "normal"]],
 };
+(async () => {
+await Mods.load();
 {
   const golden = record ? {} : JSON.parse(fs.readFileSync(GOLDEN, "utf8"));
   for (const [name, args] of Object.entries(CASES)) {
-    const { hash } = run(...args);
+    const { e, hash } = run(...args);
+    e.dispose();
     if (record) golden[name] = hash;
     else assert.strictEqual(hash, golden[name], "the pictures changed: " + name);
   }
@@ -110,7 +117,7 @@ function checkModel(s, what) {
 
 // ---------------------------------------------------------------- a finished match's statistics by a screen of its own
 {
-  const { e } = run(20, { players: 4, mode: "gold", size: "small", winScore: 1, autoStart: true, match: true }, ["normal", "normal", "normal", "normal"], { steps: 20000 });
+  const { e } = run(20, { players: 4, extended: true, mod: GOLD, size: "small", winScore: 1, autoStart: true, match: true }, ["normal", "normal", "normal", "normal"], { steps: 20000 });
   assert.ok(e.over, "the match ended");
   const before = JSON.stringify([e.alive, e.wins, e.strings === undefined]);
   const scr = new MatchText(e).statsPage("Back");
@@ -125,3 +132,4 @@ function checkModel(s, what) {
 }
 
 console.log("screen-check: all " + n + " passed");
+})().catch(err => { console.error(err); process.exit(1); });

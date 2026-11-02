@@ -56,6 +56,7 @@ const CLASSIC_COLORS = [9, 10];    // classic tanks / bases: LORES colours 9 (BL
 const GAP = 5;                     // columns between the teams on the map's team lines
 
 const afterDeath = v => TunnelerEngine.afterDeath(v);
+const DEAD_SHOWN = 37;                                   // (after its tank is destroyed a view shows the wreck ~2 s - steps of 54.9 ms)
 const T = (k, p) => Lang.t(k, p);
 const raw = k => Lang.raw(k);
 const enc = s => Lang.enc(s);
@@ -181,7 +182,9 @@ class ViewModes {
     const mode = this.watchOut;
     if (!["team", "killer", "others"].includes(mode) || !this.scope || !e || !e.alive) { this.ghost = null; return null; }
     const n = this.nPlayers(), own = Math.min(this.scope.own, n - 1);
-    if (e.alive[own + 1]) { this.ghost = null; return null; }
+    // (just destroyed: its own view - the wreck - a while first, then the others; owner, 2026-11-02: "when i die, i should
+    // see my view for at least 2 seconds before switching to another player view")
+    if (e.alive[own + 1] || this.justDestroyed(own, e)) { this.ghost = null; return null; }
     const mate = i => e.extended && e.team ? e.team(i + 1) === e.team(own + 1) : false;
     const alive = [];
     for (let i = 0; i < n; i++) if (e.alive[i + 1] && (mode !== "team" || mate(i))) alive.push(i);
@@ -571,7 +574,15 @@ class ViewModes {
   // a player's own scope: a destroyed tank's view (own or a teammate's) is black with "DESTROYED" until
   // the next round - with every after death setting but "wreck" (which keeps showing the wrecks)
   blackedOut(i, e) {
-    return !!(this.scope && this.watchOut !== "wreck" && e && e.alive && !e.alive[i + 1]);
+    return !!(this.scope && this.watchOut !== "wreck" && e && e.alive && !e.alive[i + 1] && !this.justDestroyed(i, e));
+  }
+  // tank i (0-based) destroyed less than DEAD_SHOWN steps ago: its view still shows (the wreck), before it goes black
+  // or the views switch to the others (outCells). When: the step this page first saw it destroyed (display only)
+  justDestroyed(i, e) {
+    const D = this.deadAt || (this.deadAt = []), t = e.tick >>> 0;
+    if (!e.alive || e.alive[i + 1]) { D[i] = undefined; return false; }
+    if (D[i] === undefined || D[i] > t) D[i] = t;      // (first seen destroyed - or a replay went back)
+    return t - D[i] < DEAD_SHOWN;
   }
   // one line of font text centred in a 40-column view at pixel row y, in DOS attribute `attr`
   paintText(px, W, x, y, text, attr) {
@@ -652,13 +663,13 @@ class ViewModes {
     // world: 2 pixels per byte, odd x in the high nibble (1024x512 unless the engine says otherwise); with a floor
     // (1.3, water and ground) the open pixels in their floor's look (no ripple: scaled down)
     const world = e.world, ww = e.worldW || 1024, stride = ww >> 1, wh = e.worldH || world.length / stride;
-    const F = e.floor || null, look = PlayScreen.floorLook, FC = Display.FLOOR_U32, g = e.groundType;
+    const F = e.floor || null, look = PlayScreen.floorLook, FC = Display.FLOOR_U32, gAt = PlayScreen.groundAt;
     for (let y = 0; y < MH; y++) {
       const wy = Math.floor(y * wh / MH), rowOfs = wy * stride;
       let p = (MY + y) * W + MX;
       for (let x = 0; x < MW; x++) {
         const wx = Math.floor(x * ww / MW), b = world[rowOfs + (wx >> 1)], c = (wx & 1) ? b >> 4 : b & 15;
-        const f = F && !c ? look(F[wy * ww + wx], wx, wy, g, true) : 0;
+        const f = F && !c ? look(F[wy * ww + wx], wx, wy, gAt(e, wx, wy), true) : 0;
         px[p++] = f ? FC[f] : pal[c];
       }
     }
@@ -670,9 +681,10 @@ class ViewModes {
           if (fill || y === y0 || y === y1 || x === x0 || x === x1) px[y * W + x] = c;
         }
     };
-    // bases: outlined in their player's colour (the 1-pixel walls get lost when scaled down)
-    for (let p = 1; p <= n; p++) {
-      const c = pal[this.playerColor(p - 1)], bx = e.baseX[p], by = e.baseY[p];
+    // bases: outlined in their player's colour (the 1-pixel walls get lost when scaled down; a mod's @bases: as many as
+    // the world has, in their owner's colour - engine.baseColor)
+    for (let p = 1; p <= (e.nBases || n); p++) {
+      const c = pal[e.baseColor ? e.baseColor(p) & 15 : this.playerColor(p - 1)], bx = e.baseX[p], by = e.baseY[p];
       if (!bx && !by) continue;
       rect(sx(bx - 17), sy(by - 17), sx(bx + 17), sy(by + 17), c, false);
     }

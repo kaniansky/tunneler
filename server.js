@@ -59,6 +59,23 @@
 //                                 kept in its canonical form under the hash of its content (the maps' bucket
 //                                 S3_BUCKET_MAPS (<id>.map), else DATA_DIR/maps, else memory) - for good
 //        GET  /api/maps/<id>      that map's bytes; the page address /map/<id> opens it
+//        POST /api/mods           a script mod (1.5, docs/MODS.md 5: the .tmod.js file as it is, at most 64 KB) -> {id, name}:
+//                                 checked without running it - its header (game/mods.js Mods.check: a @name, an @game that
+//                                 includes this server's major.minor - else 400 code "version" with its game -, a known
+//                                 @mode, @tanks) and that it parses as a script (node's vm.Script compiles it, never runs
+//                                 it) - else 400 {error, code}; kept byte for byte under its id (Mods.idOf: the hash of its
+//                                 bytes) beside the shared maps (their bucket / folder: <id>.tmod.js; else memory) - for good
+//        GET  /api/mods/<id>      that mod's file (text/plain, immutable: an id is its content); every page of a room with
+//                                 the mod fetches it and checks the hash before it plays
+//        GET  /api/modgallery?sort=new|plays[&game=1.5][&q=text][&mine=1][&from=&n=]   the mod gallery (1.5, docs/MODS.md
+//                                 6b) -> {sort, total, from, mods: [{id, name, by (its @by, else its publisher), publisher,
+//                                 about, game, version, mode, tanks, bases, settings (how many), plays, at, mine}]} - the
+//                                 header only; game: those whose @game includes it; q: in the name / by / about; n <= 200
+//        POST /api/modgallery     {id, cid?, name?} (cid / name also in the query; accounts on: the session) -> {ok, id, mod}:
+//                                 a mod already shared (POST /api/mods) published - checked again (Mods.check: its @game
+//                                 includes this server's major.minor or a later one; else 400 code "version" with its game),
+//                                 limits as POST /api/gallery; 400 nomod / bad / name, 409 published, 429 busy / full
+//        POST /api/modgallery/<id>/remove   by its author (the session / cid) or X-Admin-Key = GALLERY_ADMIN_KEY -> {ok}
 //        POST /api/rooms          {name, public, spectators, seats?: [{kind: open|closed|easy|normal|hard,
 //                                  team: 1..8} x 8 (index = colour)], size, winScore, friendlyFire, roundTime,
 //                                  visible, watchOut, sight, password?} -> roomInfo + hostKey (defaults for anything
@@ -78,12 +95,12 @@
 //                     match = null or {no, seed, cfg, you: player index | -1, n, from, f: [entries]} (frames
 //                           from `from` on; a long log: the rest follows in "f" messages before any live frame)
 //                     cfg = {ext, players, slots: [{color, bot, level, team}], names, size, winScore,
-//                           friendlyFire, roundTime, visible, watchOut, sight}
+//                           friendlyFire, roundTime, visible, watchOut, sight, ..., mod, modSettings (with a mod only)}
 //                     {t:"match", no, seed, cfg, you, n, from, f}   a match starts (or: see hello)
 //                     {t:"f", m: match no, n, f: [entries]}       frames starting at frame index n
 //                     {t:"end", no}                               the match is over: back to the lobby
 //                     {t:"st", name, public, spectators, settings: {size, winScore, friendlyFire, roundTime,
-//                           visible, watchOut, sight}, seats: [{kind, team, k, name, ready, host, ping}] x 8 (k: the
+//                           visible, watchOut, sight, ..., mod}, map, mod (1.5: the mod's header or null), seats: [{kind, team, k, name, ready, host, ping}] x 8 (k: the
 //                           connection sitting there or null), specs: [{k, name, host, ping}], cant: why the
 //                           host can't start (null | "tanks" | "human" | "teams" | "ready" | "match"),
 //                           match: null | {no, running, conn: [per tank], names}}
@@ -103,9 +120,16 @@
 //                     {t:"me", name?, team?}  own name (any time) / own seat's team 1..8 (not while ready)
 //                     {t:"ready", v}  seated players: ready (1) / not (0)
 //                     host: {t:"seatSet", i, kind?, team?} (a seat nobody sits on), {t:"set", size?, winScore?,
-//                     roundTime?, friendlyFire?, visible?, watchOut?, sight?, showMap?, mode?, goals?, map?} (map: a shared
+//                     roundTime?, friendlyFire?, visible?, watchOut?, sight?, showMap?, mode?, goals?, map?, mod?} (map: a shared
 //                     map's id, "" = a random world - loaded from the store, then st.map = {id, name, size,
-//                     bases} and the match cfg's map = its code; the room's size follows it) (public /
+//                     bases, linked, mods} and the match cfg's map = its code; the room's size follows it; mod (1.5): a
+//                     mod's id (POST /api/mods first), "" = none - loaded from the store and checked (this server's
+//                     version, the map's mods: a map that needs mods takes only those - and switches the room to its
+//                     first one), then st.mod = {id, name, by, about, game, version, mode, tanks, bases, settings, hide} and
+//                     the match cfg's mod = its id, its mode the mod's @mode; never in quick play), modSettings (1.5, docs/MODS.md
+//                     3a: {key: value} - merged into the room's, checked against the mod's @setting lines: a choice, else the
+//                     default, unknown keys dropped; st.settings.modSettings and the match cfg's modSettings; a setting the
+//                     mod's @hide names: the match cfg gets the game's default, the room keeps its own) (public /
 //                     spectators only when the game is created; every player
 //                     unready after either), {t:"start"}, {t:"kick", k} (remove + ban by client id, their chat
 //                     messages *deleted*), {t:"chatdel", id} (a chat message *deleted*; not in quick play)
@@ -125,6 +149,11 @@ const { MapData } = require("./src/js/game/mapdata.js");
 // the engine only for TunnelerEngine.mapReach (rooms' maps): loaded when first needed
 let engineModule = null;
 const mapEngine = () => (engineModule = engineModule || require("./src/js/game/engine.js")).TunnelerEngine;
+// script mods (1.5, docs/MODS.md 5): only their files' checks (Mods.check, Mods.idOf - the header, the hash), loaded when
+// first needed; the server never runs a mod (it never runs the game)
+let modsModule = null;
+const modsLib = () => (modsModule = modsModule || require("./src/js/game/mods.js")).Mods;
+const vm = require("vm");
 // player accounts (docs/v6/ACCOUNTS.md): the store, tokens, tickets, /api/account*
 const Accounts = require("./accounts.js");
 const CloudSave = require("./cloudsave.js");
@@ -161,14 +190,22 @@ const CHALLENGE_TIME_MS = 60 * 1000;   // checking one challenge replay at most 
 const CHALLENGE_QUEUE = 6;             // challenge replays waiting for a worker at most (then "busy")
 const MAX_MAP_SHARES_PER_MIN = 20;     // POST /api/maps per address
 const MAX_SHARED_MAPS = 5000;          // shared maps kept in the folder (the oldest go)
-const MAX_MAP_BYTES = 40 * 1024;       // one map, as sent (mapdata.js: at most ~33 KB, usually a few hundred bytes)
+const MAX_MAP_BYTES = 72 * 1024;       // one map, as sent (mapdata.js: at most ~33 KB, ~66 KB painted - 1.5; usually a few hundred bytes)
 const GALLERY_KEY = "gallery.json.gz"; // the map gallery's index, beside the maps (their ids are 10 letters / digits)
 const MAX_GALLERY = 10000;             // maps in the gallery
 const MAX_GALLERY_PER_AUTHOR = 100;    // ... published by one author
 const MAX_PUBLISH_PER_MIN = 10;
 const MAX_PUBLISH_PER_DAY = 50;          // ... and a day, per address        // POST /api/gallery per address
 const GALLERY_PLAYS_SAVE_MS = 60 * 1000;   // plays counted: the index written at most this often
+const MOD_GALLERY_KEY = "modgallery.json.gz";   // the mod gallery's index, beside the mods (1.5, docs/MODS.md 6b)
+const OFFICIAL_KEY = "officialmods.json.gz";    // the official mods the admin set (1.5, docs/MODS.md 6c), beside the mods
+const MAX_MOD_GALLERY = 10000;         // mods in the gallery
+const MAX_MOD_GALLERY_PER_AUTHOR = 100;   // ... published by one author (and MAX_PUBLISH_PER_MIN / _PER_DAY per address)
 const MAP_LOADS_PER_MIN = 30;          // maps a room's host may choose a minute (each one a lookup in the store)
+const MAX_MOD_SHARES_PER_MIN = 20;     // POST /api/mods per address (1.5, script mods)
+const MAX_SHARED_MODS = 5000;          // shared mods kept in the folder (the oldest go)
+const MAX_MOD_BYTES = 65536;           // one mod file (game/mods.js Mods.MAX_BYTES)
+const MOD_LOADS_PER_MIN = 30;          // mods a room's host may choose a minute (each one a lookup in the store)
 const MAX_ROOMS_PER_ADDR = 20;         // rooms created by one address that still exist
 const MAX_CONNECTS_PER_MIN = 120;      // websocket connections per address
 const MAX_PW_FAILS = 10;               // wrong game passwords per address and minute (then refused unchecked)
@@ -419,6 +456,8 @@ function createServer(opts = {}) {
       size: st.size, winScore: st.winScore, friendlyFire: st.friendlyFire, roundTime: st.roundTime,
       visible: st.visible, watchOut: st.watchOut, sight: st.sight, showMap: st.showMap, mode: st.mode, goals: st.goals,
       map: "", mapCode: "", mapInfo: null, mapWant: "",   // a custom map (setMap): its id, code, {id, name, size, bases}
+      mod: "", modInfo: null, modWant: "",         // a script mod (setMod, 1.5): its id, what the lobby shows of it
+      modSettings: st.modSettings,                 // its own settings (docs/MODS.md 3a: {key: value}, checked by modSettingsNow)
       seats: st.seats.map(s => ({ kind: s.kind, team: s.team, occ: null, last: null, ai: qp && NetProto.LEVELS.includes(s.kind) ? s.kind : null })),
       qp: !!qp, qpTimer: null, qpAt: 0,            // quick play: the next match's timer and when it fires
       chat: [], chatId: 0,                         // the last CHAT_LOG chat messages [{id, from, text, who, del?}], the last id
@@ -432,12 +471,45 @@ function createServer(opts = {}) {
     };
     rooms.set(id, room);
     if (st.map) setMap(room, st.map).catch(() => {});   // (the host's last map: loaded from the store)
+    if (st.mod && !qp) setMod(room, st.mod).catch(() => {});   // (... and mod)
     armCleanup(room);
     say("room created", id, JSON.stringify(name), room.seats.map((s, i) => ROLES[i] + ":" + s.kind + ":" + s.team).join(" "));
     return room;
   }
   const settingsOf = room => ({ size: room.size, winScore: room.winScore, friendlyFire: room.friendlyFire, roundTime: room.roundTime,
-    visible: room.visible, watchOut: room.watchOut, sight: room.sight, showMap: room.showMap || "off", mode: room.mode, goals: room.goals, map: room.map });
+    visible: room.visible, watchOut: room.watchOut, sight: room.sight, showMap: room.showMap || "off", mode: room.mode, goals: room.goals, map: room.map,
+    mod: room.mod || "", modSettings: modSettingsNow(room) });
+  // The room's mod's own settings (1.5, docs/MODS.md 3a: its // @setting lines): with the mod loaded, every one of them -
+  // the host's value when it is one of its choices, else its default; keys the mod hasn't: dropped (Mods.settingsOf - what
+  // every page's engine does again with them); no mod (or not loaded yet): what the host sent, only its shape checked
+  // (setMod checks them when the mod comes)
+  const modSettingsNow = room => room.mod && room.modInfo && Array.isArray(room.modInfo.settings)
+    ? modsLib().settingsOf(room.modInfo, room.modSettings) : NetProto.modSettingsOf(room.modSettings);
+  // the built-in settings the room's mod hides (its // @hide: they mean nothing with it) -> [name]
+  const modHides = room => room.mod && room.modInfo && Array.isArray(room.modInfo.hide) ? room.modInfo.hide : [];
+  // the room's world size for a match: its own, or the game's default when the mod hides it (a custom map: the map's)
+  const sizeOfRoom = room => modHides(room).includes("size") && !(room.map && !NetProto.genMap(room.map)) ? modsLib().HIDE_DEFAULTS.size : room.size;
+  // The settings a match of the room plays with (its cfg, the list of games): settingsOf, but a setting the room's mod
+  // hides is the game's default (Mods.HIDE_DEFAULTS - the engine forces the same: every page shows and plays the same);
+  // the room keeps its own values for when the mod goes. (mode: the match's is the mod's @mode anyway - modeOfRoom; goal:
+  // the mode's default)
+  function playSettingsOf(room) {
+    const o = settingsOf(room), hide = modHides(room);
+    if (!hide.length) return o;
+    const D = modsLib().HIDE_DEFAULTS;
+    for (const k of hide) {
+      if (k === "goal") o.goals = {};
+      else if (k === "size") o.size = sizeOfRoom(room);
+      else if (k !== "mode" && k in D && k in o) o[k] = D[k];
+    }
+    // (@rounds n: the rounds to win the mod fixes - the engine forces the same, Mods.modHost.options)
+    if (room.mod && room.modInfo && room.modInfo.rounds) o.winScore = room.modInfo.rounds;
+    return o;
+  }
+  // the game mode a match of the room plays: a mod's @mode (the room's own mode setting stays for when the mod goes)
+  const modeOfRoom = room => room.modInfo && room.mod ? room.modInfo.mode : room.mode;
+  // the mods the room's map needs (1.5, docs/MODS.md 6a: mapdata.js map.mods; [] = any mod or none)
+  const mapMods = room => room.mapInfo && Array.isArray(room.mapInfo.mods) ? room.mapInfo.mods : [];
   // The room's custom map (docs/v6/MAPS.md): "" = a random world; an id is loaded from the shared maps (async -
   // the last one asked for wins; unknown ids are ignored), then the room's size follows it and every player has
   // to agree again. Only in the lobby.
@@ -465,6 +537,40 @@ function createServer(opts = {}) {
     if (got) room.size = got.info.size;
     unreadyAll(room);
     sendStatus(room);
+    // (a map that needs mods - none of them the room's: its first one, when this server has it; till then the room
+    // can't start - cantStart "mapmod")
+    const need = mapMods(room);
+    if (need.length && !need.includes(room.mod)) setMod(room, need[0]).catch(() => {});
+  }
+  // The room's script mod (1.5, docs/MODS.md 5): "" = none; an id is loaded from the shared mods and checked (made for
+  // this server's version - the host's page offers only such -, one of the map's mods when the map needs some), then
+  // every player has to agree again. As setMap: async, the last one asked for wins, at most MOD_LOADS_PER_MIN a minute;
+  // a refused one: the room's status again (the host's page showed its choice at once). Only in the lobby, never quick play.
+  async function setMod(room, id) {
+    if (room.qp) return;
+    id = NetProto.modId(id);
+    const now = Date.now();
+    room.modLoads = (room.modLoads || []).filter(t => now - t < 60000);
+    if (id && id !== room.mod) { if (room.modLoads.length >= MOD_LOADS_PER_MIN) return sendStatus(room); room.modLoads.push(now); }
+    room.modWant = id;
+    let got = null;
+    if (id) { try { got = await loadMod(id); } catch (e) { got = null; } }
+    if (room.modWant !== id || !rooms.has(room.id)) return;
+    const need = mapMods(room);
+    if ((id && !got) || (need.length && !need.includes(id)) || room.match) { room.modWant = room.mod; return sendStatus(room); }
+    if (room.mod === id) return sendStatus(room);
+    room.mod = id; room.modInfo = got ? got.info : null;
+    // (the host's values for the new mod's settings kept, the rest its defaults; no mod: none)
+    room.modSettings = got ? modsLib().settingsOf(got.info, room.modSettings) : {};
+    unreadyAll(room);
+    sendStatus(room);
+  }
+  // a shared mod by its id -> {id, info} (null: none, or not one this server's version runs)
+  async function loadMod(id) {
+    if (!NetProto.modId(id)) return null;
+    const bytes = await mods.get(id);
+    const c = bytes ? checkMod(bytes) : null;
+    return c && c.ok && c.id === id ? { id, info: modInfoOf(id, c.header) } : null;
   }
   const seated = room => room.seats.map((s, i) => s.occ ? i : -1).filter(i => i >= 0);
   // the tanks a match would have now
@@ -503,7 +609,7 @@ function createServer(opts = {}) {
     return { id: r.id, name: r.name, public: r.public, spectators: r.allowSpec, locked: !!r.password, version, qp: r.qp,
       state: m ? (m.running ? "playing" : "paused") : "lobby", round: m ? m.report.round : 0,
       wins: m ? m.report.wins : [], teamWins: m ? m.report.teamWins : [], ext: m ? m.ext : !isClassic(slots, r),
-      created: r.created, ...settingsOf(r), mapName: r.mapInfo ? r.mapInfo.name : "",
+      created: r.created, ...playSettingsOf(r), mapName: r.mapInfo ? r.mapInfo.name : "", modName: r.mod && r.modInfo ? r.modInfo.name : "",
       tanks: slots.length, players, places, bots: slots.filter(s => s.bot).length,
       open: r.qp ? qpPlaces(r) : r.seats.filter(s => s.kind === "open" && !s.occ).length,
       spec: r.sockets.size - players, teams: Object.values(teamSizes).some(n => n > 1), nTeams: Object.keys(teamSizes).length,
@@ -521,17 +627,21 @@ function createServer(opts = {}) {
     // for it; then started if the room still can - anything that changed meanwhile: made again)
     if (!gen && NetProto.genMap(room.map)) {
       if (room.genPending) return;
-      const want = { map: room.map, size: room.size, n: slotsNow(room).length, seed: (Math.random() * 0x100000000) >>> 0 };
+      // (its bases: one per tank - or a mod's @bases: as many as on a generated world of that size, docs/MODS.md 3a)
+      const genBases = () => { const n = slotsNow(room).length, B = room.mod && room.modInfo && room.modInfo.bases;
+        return B ? modsLib().basesFor(room.modInfo, { size: sizeOfRoom(room) }) : n; };
+      const want = { map: room.map, size: sizeOfRoom(room), n: slotsNow(room).length, bases: genBases(), seed: (Math.random() * 0x100000000) >>> 0 };
       room.genPending = want;
-      generatedMap(want.map, want.size, want.n, want.seed).then(code => {
+      generatedMap(want.map, want.size, want.bases, want.seed).then(code => {
         room.genPending = null;
         if (closing || rooms.get(room.id) !== room || room.match || cantStart(room)) return;
-        if (room.map !== want.map || room.size !== want.size || slotsNow(room).length !== want.n) return startMatch(room);
+        if (room.map !== want.map || sizeOfRoom(room) !== want.size || slotsNow(room).length !== want.n || genBases() !== want.bases) return startMatch(room);
         startMatch(room, { seed: want.seed, code });
       });
       return;
     }
     if (room.map && !NetProto.genMap(room.map)) galleryPlayed(room.map);   // (a published map: one more play)
+    if (room.mod && !room.qp) modGalleryPlayed(room.mod);                  // (a published mod: one more play - 1.5)
     const slots = slotsNow(room);
     const ext = !isClassic(slots, room);
     for (const s of slots) if (!s.bot) { const ws = room.seats[s.color].occ; s.cid = ws.cid; s.name = ws.name; }
@@ -543,17 +653,21 @@ function createServer(opts = {}) {
     const m = {
       room, no: ++room.matches, seed, ext, slots, qp: room.qp, drives: [],
       cfg: { ext, players: N, slots: slots.map(s => ({ color: s.color, bot: s.bot, level: s.level, team: s.team })),
-        names: slots.map(s => s.bot ? null : s.name), ...settingsOf(room), ...(room.qp ? { qp: true } : {}), map: room.mapCode || genCode },
+        names: slots.map(s => s.bot ? null : s.name), ...playSettingsOf(room), ...(room.qp ? { qp: true } : {}), map: room.mapCode || genCode,
+        // (a script mod - 1.5: its id, its @mode the match's mode, its settings checked against its header; never quick play)
+        mod: room.qp ? "" : room.mod || "", mode: room.qp ? room.mode : modeOfRoom(room) },
       log: new PackedLog(ext, N), socks: slots.map(s => s.bot ? null : room.seats[s.color].occ),
       held: new Array(N).fill(0), latch: new Array(N).fill(0), keys: [],
       running: false, timer: null, startAt: 0, startN: 0, hashes: new Map(), desyncs: 0, aloneTimer: null,
       report: { screen: "text", playing: true, round: 0, wins: new Array(N).fill(0), teamWins: [] },
     };
+    if (!m.cfg.mod) delete m.cfg.modSettings;      // (only a match with a mod has them)
     room.match = m;
     for (const ws of room.sockets) { ws.ready = false; ws.player = m.socks.indexOf(ws); ws.playing = null; ws.syncing = false; ws.sent = 0; ws.cur = { i: 0, pos: 0 }; }
     for (const ws of room.sockets) if (ws.readyState === 1) ws.send(JSON.stringify({ t: "match", ...matchHello(m, ws, 0) }));
     say("room", room.id, "match", m.no, "seed", m.seed, ext ? slots.map(s => ROLES[s.color] + ":" + (s.bot ? s.level : "human") + ":" + s.team).join(" ") : "classic",
-      room.size, room.winScore + " to win", room.friendlyFire ? "friendly fire" : "", room.roundTime ? room.roundTime + " min rounds" : "");
+      m.cfg.size, m.cfg.winScore + " to win", m.cfg.friendlyFire ? "friendly fire" : "", m.cfg.roundTime ? m.cfg.roundTime + " min rounds" : "",
+      m.cfg.mod ? "mod " + m.cfg.mod + (Object.keys(m.cfg.modSettings).length ? " " + JSON.stringify(m.cfg.modSettings) : "") : "");
     statsStarted(m, room);
     updateClock(room);
     sendStatus(room);
@@ -691,8 +805,16 @@ function createServer(opts = {}) {
   // seated player other than the host isn't ready), "match" (one is on)
   function cantStart(room) {
     if (room.match) return "match";
-    const p = startProblem(slotsNow(room), room.mode, room.mapInfo ? room.mapInfo.bases : null, room.mapInfo ? room.mapInfo.linked : null);
+    // (a mod's @hide teams: every tank its own team - the seats' teams mean nothing)
+    const slots = modHides(room).includes("teams") ? modsLib().ownTeams(slotsNow(room)) : slotsNow(room);
+    // (a mod whose bases have no walls - @walls none: the map reached without them)
+    const linked = room.mapInfo ? room.mapInfo.linked || (!!room.mod && !!room.modInfo && room.modInfo.walls === "none" && !!room.mapInfo.linkedOpen) : null;
+    const p = startProblem(slots, modeOfRoom(room), room.mapInfo ? room.mapInfo.bases : null, linked,
+      room.mod && room.modInfo ? room.modInfo.tanks : null, room.mod && room.modInfo ? room.modInfo.bases || null : null,
+      room.mod && room.modInfo ? room.modInfo.sides || "" : "");
     if (p) return p;
+    const need = mapMods(room);
+    if (need.length && !need.includes(room.mod)) return "mapmod";      // (1.5: the map's mod isn't the room's - not here yet)
     if (!room.qp && seated(room).some(i => { const ws = room.seats[i].occ; return !ws.host && !ws.ready; })) return "ready";   // (quick play: nobody gets ready)
     return null;
   }
@@ -774,6 +896,7 @@ function createServer(opts = {}) {
     const specs = [];
     for (const ws of room.sockets) if (ws.seat < 0) specs.push({ k: ws.serial, host: !!ws.host, ping: pingOf(ws), name: ws.name });
     broadcast(room, JSON.stringify({ t: "st", name: room.name, public: room.public, spectators: room.allowSpec, settings: settingsOf(room), map: room.mapInfo,
+      mod: room.mod ? room.modInfo : null,
       seats: room.seats.map(s => ({ kind: s.kind, team: s.team, k: s.occ ? s.occ.serial : null, name: s.occ ? s.occ.name : "",
         ready: !!(s.occ && s.occ.ready), host: !!(s.occ && s.occ.host), ping: pingOf(s.occ) })),
       specs, cant: cantStart(room), ...(room.qp ? { qp: { left: room.qpTimer ? Math.max(0, room.qpAt - Date.now()) : null } } : {}),
@@ -813,6 +936,7 @@ function createServer(opts = {}) {
     [/^\/challenge\/?$/, "/index.html"],                    // the daily challenge
     [/^\/maps(\/[^/]+)?\/?$/, "/index.html"],              // the maps kept in the browser, one of them edited
     [/^\/map\/[a-z2-9]{10}\/?$/, "/index.html"],            // a shared map (POST /api/maps)
+    [/^\/mod\/[a-z2-9]{10}\/?$/, "/index.html"],            // a shared script mod (1.5, POST /api/mods; ui/modsui.js)
     [/^\/(lobby|online|play|replays|challenge|maps)\.html$/, "/index.html"], // the pages before 5.0 (the desktop app's addresses)
   ];
   // the API answers any origin (CORS): the desktop app's pages come from tauri://localhost /
@@ -859,6 +983,7 @@ function createServer(opts = {}) {
   const allowQuick = rateLimiter(MAX_QUICK_PER_MIN);
   const allowChallenge = rateLimiter(opts.maxChallengePerMin || MAX_CHALLENGE_PER_MIN);
   const allowMapShare = rateLimiter(MAX_MAP_SHARES_PER_MIN);
+  const allowModShare = rateLimiter(MAX_MOD_SHARES_PER_MIN);
 
   // ------------------------------------------------------------ where the server keeps things (README.md, Hosting)
   // Five kinds: replays (shared ones, a leaderboard's too), maps (shared ones), accounts, challenges (the daily
@@ -947,6 +1072,29 @@ function createServer(opts = {}) {
   // shared maps (docs/v6/MAPS.md): kept for good
   const maps = sharedStore({ s3: bucketOf("maps"), dir: folderOf("maps"), ext: ".map", max: MAX_SHARED_MAPS, keepDays: 0, type: "application/octet-stream",
     pinned: id => galleryIds.has(id) });                // (a published map: never swept from the folder)
+  // shared script mods (1.5, docs/MODS.md 5): beside the maps - their bucket / folder, kept for good like them (<id>.tmod.js:
+  // the maps' sweep never sees them, nor theirs a map), the file byte for byte (its id is the hash of its bytes)
+  const officialIds = new Set();                        // (the official mods' files: never swept - officialList below)
+  const mods = sharedStore({ s3: bucketOf("maps"), dir: folderOf("maps"), ext: ".tmod.js", max: MAX_SHARED_MODS, keepDays: 0,
+    type: "text/plain; charset=utf-8", pinned: id => galleryModIds.has(id) || modGalleryIds.has(id) || officialIds.has(id) });   // (a published mod, a published map's mod: never swept)
+  // the game a mod has to be made for (its @game - Mods.fits): this server's major.minor - never older than this code's own
+  // (Mods.DEV_GAME: package.json still says the last release while the next one is made; no version - tests, "dev": the same)
+  const minorNo = v => { const m = /^(\d+)\.(\d+)/.exec(v || ""); return m ? +m[1] * 1000 + +m[2] : -1; };
+  const modGame = () => { const d = modsLib().DEV_GAME; return minorNo(version) > minorNo(d) ? version : d; };
+  // a mod's file, checked without running it -> {ok, id, header, text} or {ok: false, problem, header}: Mods.check's
+  // problems, "syntax" (it doesn't parse as a script: compiled by node's vm - never run)
+  function checkMod(bytes) {
+    const Mods = modsLib(), c = Mods.check(new Uint8Array(bytes), modGame());
+    if (!c.ok) return c;
+    try { new vm.Script(c.text, { filename: c.id + ".tmod.js" }); } catch (e) { return { ok: false, problem: "syntax", header: c.header, detail: String(e && e.message || e).slice(0, 120) }; }
+    return c;
+  }
+  // what a room shows of its mod (st.mod, roomInfo)
+  // (1.5, docs/MODS.md 3a: bases - its @bases {min, max} or null; settings - its @setting lines [{key, label: {en, ...},
+  // choices, def, onOff}]; hide - the built-in settings it hides: the lobby shows its rows from them, the server checks)
+  const modInfoOf = (id, h) => ({ id, name: h.name, by: h.by, about: h.about, game: h.game, version: h.version, mode: h.mode, tanks: h.tanks,
+    bases: h.bases || null, settings: h.settings || [], hide: h.hide || [], rounds: h.rounds || 0, sides: h.sides || "", walls: h.walls || "",
+    names: h.names || {}, abouts: h.abouts || {} });
   // the handoff store (docs/v6/RELIABILITY.md 2.3): opts.stateStore (tests; null = none), else - for the server
   // started as the program (opts.handoff) - the state's bucket / folder
   const stateStore = (() => {
@@ -1123,7 +1271,7 @@ function createServer(opts = {}) {
   async function accountDeleted(a) {
     const key = accountKey(a);
     await cloudSave.wipe(a).catch(e => say("an account's saved data not all deleted:", e && e.message));
-    await galleryForget(key).catch(() => {});        // (its published maps leave the gallery)
+    await galleryForget(key).catch(() => {});        // (its published maps and mods leave the galleries)
     for (const r of rooms.values()) for (const ws of r.sockets) if (ws.cid === key) try { fail(ws, "This account was deleted.", "login"); } catch (e) { /* gone */ }
     const today = Challenge.dayOf(now());
     for (let k = 0; k <= BOARD_DAYS; k++) {
@@ -1153,13 +1301,28 @@ function createServer(opts = {}) {
   // a shared map for a room: its code and {id, name, size, bases, linked} - linked: a tank can drive between all of its
   // bases (TunnelerEngine.mapReach, up to ~100 ms on a large map: kept per id - the id is the content's hash)
   const linkedCache = new Map();
-  function mapLinked(id, m) {
-    if (!linkedCache.has(id)) {
-      const r = mapEngine().mapReach(m);
+  // (open: the bases without walls - a mod's @walls none, Race)
+  function mapLinked(id, m, open) {
+    const k = open ? id + " open" : id;
+    if (!linkedCache.has(k)) {
+      const r = mapEngine().mapReach(m, open ? { walls: false } : null);
       if (linkedCache.size >= 2000) linkedCache.delete(linkedCache.keys().next().value);
-      linkedCache.set(id, !!(r && r.ok));
+      linkedCache.set(k, !!(r && r.ok));
     }
-    return linkedCache.get(id);
+    return linkedCache.get(k);
+  }
+  // a map's mods all have bases without walls (@walls none - their files in the mods' store): it may count as reached
+  // without them
+  async function mapModsOpen(m) {
+    const ids = Array.isArray(m.mods) ? m.mods.filter(x => NetProto.modId(x)) : [];
+    if (!ids.length) return false;
+    for (const id of ids) {
+      let b = null;
+      try { b = await mods.get(id); } catch (e) { b = null; }
+      const c = b ? checkMod(b) : null;
+      if (!c || !c.ok || c.header.walls !== "none") return false;
+    }
+    return true;
   }
   // a generated kind's map for a match -> a promise of its code ("" = none): made in a worker thread (mapgen-worker.js,
   // one, kept, unref'd - it never keeps the process alive); no worker or it failed: here (mapgen.js, loaded then)
@@ -1203,7 +1366,9 @@ function createServer(opts = {}) {
     if (!NetProto.mapId(id)) return null;
     const bytes = await maps.get(id);
     const m = bytes ? MapData.decode(bytes) : null;
-    return m ? { id, code: MapData.code(m), info: { id, name: m.name, size: m.size, bases: m.bases.length, linked: mapLinked(id, m) } } : null;
+    return m ? { id, code: MapData.code(m), info: { id, name: m.name, size: m.size, bases: m.bases.length, linked: mapLinked(id, m),
+      linkedOpen: mapLinked(id, m, true),
+      mods: Array.isArray(m.mods) ? m.mods.filter(x => NetProto.modId(x)) : [] } } : null;
   }
   const replayId = () => { const a = crypto.randomBytes(8); let s = ""; for (const b of a) s += "abcdefghijkmnpqrstuvwxyz23456789"[b & 31]; return s; };
 
@@ -1287,10 +1452,10 @@ function createServer(opts = {}) {
   }
   // the map of the week (1.4, docs/v6/CHALLENGE.md 7): of the published maps, the one featured longest ago (never: first),
   // then the most played, then the oldest - marked featured on that day in the gallery's index. -> {id, name, by, size,
-  // bases} or null (no map in the gallery)
+  // bases} or null (no map in the gallery). (1.5: never a map that needs a mod - the challenge plays without one)
   async function pickWeeklyMap(day) {
     const g = await loadGallery();
-    const list = g.maps.filter(x => NetProto.mapId(x.id) && (x.bases | 0) >= 2);
+    const list = g.maps.filter(x => NetProto.mapId(x.id) && (x.bases | 0) >= 2 && !(Array.isArray(x.mods) && x.mods.length));
     if (!list.length) return null;
     list.sort((a, b) => (a.featured || "").localeCompare(b.featured || "") || (b.plays || 0) - (a.plays || 0) || (a.date || 0) - (b.date || 0) || a.id.localeCompare(b.id));
     const x = list[0];
@@ -1345,74 +1510,102 @@ function createServer(opts = {}) {
   // GALLERY_ADMIN_KEY); a deleted account's maps leave it, a renamed one's show the new name.
   const galleryS3 = bucketOf("maps"), galleryDir = folderOf("maps");
   const galleryAdmin = opts.galleryAdminKey !== undefined ? opts.galleryAdminKey : process.env.GALLERY_ADMIN_KEY || null;
-  const galleryIds = new Set();
-  let gallery = null, galleryWrite = Promise.resolve(), playsTimer = null, galleryMem = null;
-  const allowPublish = rateLimiter(MAX_PUBLISH_PER_MIN);
-  // (and a day's worth per address: without accounts a client id is anybody's to make up)
-  const publishDay = new Map();
-  const allowPublishDay = addr => {
-    const t = now(), d = publishDay.get(addr);
-    if (!d || t - d.t0 > 24 * 3600 * 1000) { publishDay.set(addr, { t0: t, n: 1 }); if (publishDay.size > 10000) publishDay.clear(); return true; }
-    return ++d.n <= MAX_PUBLISH_PER_DAY;
+  const galleryIds = new Set(), galleryModIds = new Set();   // (the published maps; the mods they need - 1.5)
+  // (a limit a minute and a day's worth per address: without accounts a client id is anybody's to make up)
+  const publishLimits = () => {
+    const perMin = rateLimiter(MAX_PUBLISH_PER_MIN), day = new Map();
+    const perDay = addr => {
+      const t = now(), d = day.get(addr);
+      if (!d || t - d.t0 > 24 * 3600 * 1000) { day.set(addr, { t0: t, n: 1 }); if (day.size > 10000) day.clear(); return true; }
+      return ++d.n <= MAX_PUBLISH_PER_DAY;
+    };
+    return { perMin, perDay };
   };
-  // pending plays (galleryPlayed) written now - a server stopping
-  const flushGallery = () => playsTimer && gallery ? gallery.then(g => saveGallery(g)).catch(() => {}) : Promise.resolve();
-  function loadGallery() {
-    if (!gallery) {
-      gallery = (async () => {
-        let gz = null;
-        if (galleryS3) {
-          const r = await s3Request(galleryS3, "GET", GALLERY_KEY);
-          if (r.status !== 404 && (r.status < 200 || r.status >= 300)) throw new Error("storage " + r.status);
-          if (r.status !== 404) gz = r.body;
-        } else if (galleryDir) try { gz = fs.readFileSync(path.join(galleryDir, GALLERY_KEY)); } catch (e) { if (e.code !== "ENOENT") throw e; gz = null; }
-        else gz = galleryMem;
-        // (an index that can't be read is an error - 503 - never an empty gallery a write would then store over it)
-        const g = gz ? JSON.parse(zlib.gunzipSync(gz).toString("utf8")) : null;
-        const list = g && Array.isArray(g.maps) ? g.maps.filter(x => x && NetProto.mapId(x.id) && typeof x.author === "string" && typeof x.name === "string") : [];
-        for (const x of list) galleryIds.add(x.id);
-        return { maps: list };
-      })();
-      gallery.catch(() => { gallery = null; });          // (the storage failed: asked again next time)
+  const { perMin: allowPublish, perDay: allowPublishDay } = publishLimits();
+  // A gallery's index (the map gallery's, the mod gallery's - 1.5): {<field>: [entries]} gzip'd JSON under key in the maps'
+  // bucket / folder, else memory; read once and cached (valid: an entry kept; track: each one read), written after every
+  // change, its plays at most every GALLERY_PLAYS_SAVE_MS (flush: now - a server stopping; stop: the timer off)
+  function galleryIndex(key, field, valid, track) {
+    let cur = null, write = Promise.resolve(), timer = null, mem = null;
+    function load() {
+      if (!cur) {
+        cur = (async () => {
+          let gz = null;
+          if (galleryS3) {
+            const r = await s3Request(galleryS3, "GET", key);
+            if (r.status !== 404 && (r.status < 200 || r.status >= 300)) throw new Error("storage " + r.status);
+            if (r.status !== 404) gz = r.body;
+          } else if (galleryDir) try { gz = fs.readFileSync(path.join(galleryDir, key)); } catch (e) { if (e.code !== "ENOENT") throw e; gz = null; }
+          else gz = mem;
+          // (an index that can't be read is an error - 503 - never an empty gallery a write would then store over it)
+          const g = gz ? JSON.parse(zlib.gunzipSync(gz).toString("utf8")) : null;
+          const list = g && Array.isArray(g[field]) ? g[field].filter(x => x && typeof x.author === "string" && typeof x.name === "string" && valid(x)) : [];
+          for (const x of list) track(x);
+          return { [field]: list };
+        })();
+        cur.catch(() => { cur = null; });                // (the storage failed: asked again next time)
+      }
+      return cur;
     }
-    return gallery;
+    function save(g) {
+      clearTimeout(timer); timer = null;
+      const gz = zlib.gzipSync(Buffer.from(JSON.stringify({ [field]: g[field] })));
+      write = write.catch(() => {}).then(async () => {
+        if (galleryS3) {
+          const r = await s3Request(galleryS3, "PUT", key, gz);
+          if (r.status < 200 || r.status >= 300) throw new Error("storage " + r.status);
+        } else if (galleryDir) { const f = path.join(galleryDir, key); fs.writeFileSync(f + ".tmp", gz); fs.renameSync(f + ".tmp", f); }
+        else mem = gz;
+      });
+      return write;
+    }
+    // one more play (an online match started with it)
+    function played(id) {
+      load().then(g => {
+        const x = g[field].find(e => e.id === id);
+        if (!x) return;
+        x.plays = (x.plays || 0) + 1;
+        if (!timer) timer = setTimeout(() => { save(g).catch(e => say(key, "not stored:", e.message)); }, GALLERY_PLAYS_SAVE_MS);
+      }).catch(() => {});
+    }
+    // an author's entries gone (a deleted account) -> the entries removed
+    async function forget(author) {
+      const g = await load();
+      const gone = g[field].filter(x => x.author === author);
+      if (!gone.length) return gone;
+      g[field] = g[field].filter(x => x.author !== author);
+      await save(g);
+      return gone;
+    }
+    // an account's new display name on its entries
+    async function renamed(author, by) {
+      const g = await load();
+      let changed = false;
+      for (const x of g[field]) if (x.author === author && x.by !== by) { x.by = by; changed = true; }
+      if (changed) await save(g);
+    }
+    const flush = () => timer && cur ? cur.then(g => save(g)).catch(() => {}) : Promise.resolve();
+    const stop = () => { clearTimeout(timer); timer = null; };
+    return { load, save, played, forget, renamed, flush, stop };
   }
-  function saveGallery(g) {
-    clearTimeout(playsTimer); playsTimer = null;
-    const gz = zlib.gzipSync(Buffer.from(JSON.stringify({ maps: g.maps })));
-    galleryWrite = galleryWrite.catch(() => {}).then(async () => {
-      if (galleryS3) {
-        const r = await s3Request(galleryS3, "PUT", GALLERY_KEY, gz);
-        if (r.status < 200 || r.status >= 300) throw new Error("storage " + r.status);
-      } else if (galleryDir) { const f = path.join(galleryDir, GALLERY_KEY); fs.writeFileSync(f + ".tmp", gz); fs.renameSync(f + ".tmp", f); }
-      else galleryMem = gz;
-    });
-    return galleryWrite;
-  }
-  function galleryPlayed(id) {
-    if (!galleryIds.has(id)) return;
-    loadGallery().then(g => {
-      const x = g.maps.find(e => e.id === id);
-      if (!x) return;
-      x.plays = (x.plays || 0) + 1;
-      if (!playsTimer) playsTimer = setTimeout(() => { saveGallery(g).catch(e => say("gallery not stored:", e.message)); }, GALLERY_PLAYS_SAVE_MS);
-    }).catch(() => {});
-  }
+  const mapIndex = galleryIndex(GALLERY_KEY, "maps", x => !!NetProto.mapId(x.id),
+    x => { galleryIds.add(x.id); if (Array.isArray(x.mods)) for (const m of x.mods) galleryModIds.add(m); });
+  const loadGallery = mapIndex.load, saveGallery = mapIndex.save;
+  // pending plays (galleryPlayed, modGalleryPlayed) written now - a server stopping
+  const flushGallery = () => Promise.all([mapIndex.flush(), modIndex.flush()]);
+  function galleryPlayed(id) { if (galleryIds.has(id)) mapIndex.played(id); }
   async function galleryForget(author) {
-    const g = await loadGallery();
-    const keep = g.maps.filter(x => x.author !== author);
-    if (keep.length === g.maps.length) return;
-    for (const x of g.maps) if (x.author === author) galleryIds.delete(x.id);
-    g.maps = keep;
-    await saveGallery(g);
+    for (const x of await mapIndex.forget(author).catch(() => [])) galleryIds.delete(x.id);
+    for (const x of await modIndex.forget(author).catch(() => [])) modGalleryIds.delete(x.id);   // (and its published mods)
   }
   async function galleryRenamed(a) {
-    const g = await loadGallery(), key = accountKey(a), by = accounts.shown(a);
-    let changed = false;
-    for (const x of g.maps) if (x.author === key && x.by !== by) { x.by = by; changed = true; }
-    if (changed) await saveGallery(g);
+    const key = accountKey(a), by = accounts.shown(a);
+    await mapIndex.renamed(key, by);
+    await modIndex.renamed(key, by);
   }
-  const galleryEntry = (x, me) => ({ id: x.id, name: x.name, size: x.size, bases: x.bases, by: x.by, date: x.date, plays: x.plays || 0, mine: !!me && x.author === me });
+  // (1.5: mods - the ids of the mods the map needs, docs/MODS.md 6a: the map picker names them before the map is taken)
+  const galleryEntry = (x, me) => ({ id: x.id, name: x.name, size: x.size, bases: x.bases, by: x.by, date: x.date, plays: x.plays || 0, mine: !!me && x.author === me,
+    ...(Array.isArray(x.mods) && x.mods.length ? { mods: x.mods.slice() } : {}) });
   async function galleryApi(req, res, p) {
     const u = new URL(req.url, "http://x");
     // who asks: an account's session (accounts on; optional to read), else the client id + name
@@ -1449,7 +1642,7 @@ function createServer(opts = {}) {
       if (!m) return json(res, 400, { error: "not a map", code: "map" });
       const buf = Buffer.from(canon), id = mapIdOf(buf);
       if (m.bases.length < MapData.MIN_BASES) return json(res, 400, { error: "too few bases", code: "bases" });
-      if (!mapLinked(id, m)) return json(res, 400, { error: "a tank can't reach every base", code: "path" });
+      if (!mapLinked(id, m) && !(mapLinked(id, m, true) && await mapModsOpen(m))) return json(res, 400, { error: "a tank can't reach every base", code: "path" });
       if (!(await load())) return;
       const old = g.maps.find(x => x.id === id);
       if (old) return old.author === w.key ? json(res, 200, { id, map: galleryEntry(old, w.key) }) : json(res, 409, { error: "already in the gallery", code: "published" });
@@ -1459,8 +1652,8 @@ function createServer(opts = {}) {
       const again = g.maps.find(e => e.id === id);
       if (again) return again.author === w.key ? json(res, 200, { id, map: galleryEntry(again, w.key) }) : json(res, 409, { error: "already in the gallery", code: "published" });
       if (g.maps.filter(e => e.author === w.key).length >= MAX_GALLERY_PER_AUTHOR || g.maps.length >= MAX_GALLERY) return json(res, 429, { error: "the gallery is full", code: "full" });
-      const x = { id, name: m.name, size: m.size, bases: m.bases.length, author: w.key, by: w.by, date: now(), plays: 0 };
-      g.maps.push(x); galleryIds.add(id);
+      const x = { id, name: m.name, size: m.size, bases: m.bases.length, author: w.key, by: w.by, date: now(), plays: 0, ...(m.mods && m.mods.length ? { mods: m.mods.slice() } : {}) };
+      g.maps.push(x); galleryIds.add(id); for (const mid of x.mods || []) galleryModIds.add(mid);
       try { await saveGallery(g); } catch (e) { g.maps = g.maps.filter(e2 => e2 !== x); galleryIds.delete(id); return json(res, 503, { error: "could not store it, try later", code: "storage" }); }
       say("gallery: published", id, JSON.stringify(m.name), "by", JSON.stringify(w.by));
       return json(res, 200, { id, map: galleryEntry(x, w.key) });
@@ -1478,6 +1671,217 @@ function createServer(opts = {}) {
       g.maps = g.maps.filter(e => e !== x); galleryIds.delete(x.id);
       try { await saveGallery(g); } catch (e) { return json(res, 503, { error: "could not store it, try later", code: "storage" }); }
       say("gallery: removed", x.id, admin ? "by the operator" : "by its author");
+      return json(res, 200, { ok: true });
+    }
+    json(res, 404, { error: "not found" });
+  }
+  // ------------------------------------------------------------ the mod gallery (1.5, docs/MODS.md 6b)
+  // Script mods their authors published (POST /api/modgallery {id}: a mod already shared - POST /api/mods - whose header
+  // is fine and whose @game includes this server's major.minor or a later one), like the map gallery: by an account's
+  // session, else a client id + name; listed newest or most played first (a play: an online match started with it -
+  // skirmishes never reach the server), only those for a game (game=1.5: their @game includes it), only those whose
+  // texts have q in them. One index {mods: [{id, name, hby (its @by), about, game, version, mode, tanks, bases, settings
+  // (how many), author, by (the publisher's name shown), at, plays}]} - the header read without running anything,
+  // cleaned like names - in the mods' bucket / folder (MOD_GALLERY_KEY); a published mod is never swept. Its author
+  // removes it (POST /api/modgallery/<id>/remove), and so does the operator (X-Admin-Key: GALLERY_ADMIN_KEY); a deleted
+  // account's mods leave it (galleryForget), a renamed one's show the new name (galleryRenamed).
+  const modGalleryIds = new Set();
+  const modIndex = galleryIndex(MOD_GALLERY_KEY, "mods", x => /^[a-z2-9]{10}$/.test(x.id), x => modGalleryIds.add(x.id));
+  const loadModGallery = modIndex.load;
+  const { perMin: allowModPublish, perDay: allowModPublishDay } = publishLimits();
+  function modGalleryPlayed(id) { if (id && modGalleryIds.has(id)) modIndex.played(id); }
+
+  // ------------------------------------------------------------ the official mods (1.5, docs/MODS.md 6c)
+  // The Mode choices every game offers first (owner, 2026-11-02: "all mods should be just mods other than the standard
+  // one so they can be updated without updating the whole server"): src/mods/official.json's keys - "standard" (no mod)
+  // and src/mods/<key>.tmod.js, put into the mods' store as this server starts (shared like any: GET /api/mods/<id>,
+  // rooms load them) and never swept. The admin can point a key at a newer file already shared (POST /api/mods/official
+  // {key, id} with ADMIN_TOKEN; id "": back to the bundled one) - kept in OFFICIAL_KEY: a fixed mode without a release.
+  //   GET /api/mods/official -> {mods: [{key, id ("" = standard), name, by, about, game, version, mode, tanks, bases,
+  //   settings, hide}]} in the manifest's order
+  const officialIndex = galleryIndex(OFFICIAL_KEY, "mods", x => /^[a-z0-9-]{1,24}$/.test(x.key) && /^[a-z2-9]{10}$/.test(x.id), x => officialIds.add(x.id));
+  const officialHeaders = new Map();                    // (id -> header, read once)
+  let bundledOfficial = null;
+  function loadBundledOfficial() {
+    if (bundledOfficial) return bundledOfficial;
+    bundledOfficial = (async () => {
+      const dir = path.join(__dirname, "src", "mods"), out = [];
+      let keys = [];
+      try { keys = JSON.parse(fs.readFileSync(path.join(dir, "official.json"), "utf8")).mods || []; } catch (e) { keys = ["standard"]; }
+      for (const key of keys) {
+        if (key === "standard") { out.push({ key, id: "" }); continue; }
+        let bytes;
+        try { bytes = fs.readFileSync(path.join(dir, key + ".tmod.js")); } catch (e) { continue; }
+        const c = checkMod(bytes);
+        if (!c.ok) { console.error("official mod " + key + ": " + c.problem); continue; }
+        officialIds.add(c.id); officialHeaders.set(c.id, c.header);
+        if (!mods.has(c.id)) try { await mods.keep(c.id, Buffer.from(bytes)); } catch (e) { /* storage down: served from the file */ }
+        out.push({ key, id: c.id, bytes });
+      }
+      return out;
+    })();
+    bundledOfficial.catch(() => { bundledOfficial = null; });
+    return bundledOfficial;
+  }
+  if (opts.officialMods !== false) loadBundledOfficial().catch(() => {});
+  // the game's other example mods in the mod gallery (owner, 2026-11-02: "race, conquest and closing wall should not be
+  // official but in gallery"): official.json's "gallery" keys - put in as this server (started as the program) starts,
+  // by Norko (author GALLERY_SEED: nobody's client); a newer file replaces the older one of the same key, never twice
+  const GALLERY_SEED = "tunneler-examples";
+  async function seedGallery() {
+    const dir = path.join(__dirname, "src", "mods");
+    let keys = [];
+    try { keys = JSON.parse(fs.readFileSync(path.join(dir, "official.json"), "utf8")).gallery || []; } catch (e) { return; }
+    let g;
+    try { g = await modIndex.load(); } catch (e) { return; }
+    let changed = false;
+    for (const key of keys) {
+      let bytes;
+      try { bytes = fs.readFileSync(path.join(dir, key + ".tmod.js")); } catch (e) { continue; }
+      const c = checkMod(bytes);
+      if (!c.ok) continue;
+      if (!mods.has(c.id)) try { await mods.keep(c.id, Buffer.from(bytes)); } catch (e) { continue; }
+      if (g.mods.some(x => x.id === c.id)) continue;
+      const h = c.header;
+      g.mods = g.mods.filter(x => { const old = x.author === GALLERY_SEED && x.key === key; if (old) modGalleryIds.delete(x.id); return !old; });
+      g.mods.push({ id: c.id, key, name: NetProto.cleanRoomName(h.name, 40), hby: NetProto.cleanRoomName(h.by, 40), about: NetProto.cleanRoomName(h.about, 300),
+        game: h.game, version: NetProto.cleanRoomName(h.version, 20), mode: h.mode, tanks: { min: h.tanks.min, max: h.tanks.max },
+        bases: h.bases ? { min: h.bases.min, max: h.bases.max } : null, settings: (h.settings || []).length,
+        author: GALLERY_SEED, by: NetProto.cleanRoomName(h.by || "Norko", 40), at: now(), plays: 0 });
+      modGalleryIds.add(c.id);
+      changed = true;
+      say("mod gallery: the example", key, c.id);
+    }
+    if (changed) try { await modIndex.save(g); } catch (e) { /* next start */ }
+  }
+  if (opts.seedGallery !== undefined ? opts.seedGallery : !!opts.handoff) seedGallery().catch(() => {});
+  async function officialHeader(id, bytes) {
+    if (officialHeaders.has(id)) return officialHeaders.get(id);
+    const b = bytes || await mods.get(id);
+    const c = b ? checkMod(b) : null;
+    const h = c && c.ok && c.id === id ? c.header : null;
+    if (h) officialHeaders.set(id, h);
+    return h;
+  }
+  async function officialList() {
+    const bundled = await loadBundledOfficial();
+    let set = [];
+    try { set = (await officialIndex.load()).mods; } catch (e) { set = []; }
+    const out = [];
+    for (const b of bundled) {
+      if (!b.id) { out.push({ key: b.key, id: "" }); continue; }
+      const o = set.find(x => x.key === b.key);
+      let id = b.id, h = await officialHeader(b.id, b.bytes);
+      if (o) { const oh = await officialHeader(o.id).catch(() => null); if (oh) { id = o.id; h = oh; } }
+      if (h) out.push(Object.assign({ key: b.key }, modInfoOf(id, h)));
+    }
+    return out;
+  }
+  // the gallery's answer for one mod (by: its @by, else who published it; publisher: who published it)
+  const modGalleryEntry = (x, me) => ({ id: x.id, name: x.name, by: x.hby || x.by, publisher: x.by, about: x.about, game: x.game, version: x.version,
+    mode: x.mode, tanks: x.tanks, bases: x.bases || null, settings: x.settings || 0, plays: x.plays || 0, at: x.at, mine: !!me && x.author === me });
+  // a stored mod's file -> {ok, header} or {ok: false, problem, game?}: Mods.check against this server's game, else - its
+  // @game names only later games ("1.6", "1.6+") - against the first of them; and that it parses (never run)
+  function checkGalleryMod(bytes) {
+    const Mods = modsLib(), cur = minorNo(modGame());
+    let c = Mods.check(new Uint8Array(bytes), modGame());
+    if (!c.ok && c.problem === "version" && c.header && Array.isArray(c.header.ranges)) {
+      const r = c.header.ranges.find(([, hi]) => hi >= cur);
+      if (r) { const v = Math.max(r[0], cur); c = Mods.check(new Uint8Array(bytes), Math.floor(v / 1000) + "." + v % 1000); }
+    }
+    if (!c.ok) return { ok: false, problem: c.problem, game: c.header && c.header.game || "" };
+    try { new vm.Script(c.text, { filename: c.id + ".tmod.js" }); } catch (e) { return { ok: false, problem: "syntax" }; }
+    return c;
+  }
+  async function modGalleryApi(req, res, p) {
+    const u = new URL(req.url, "http://x");
+    // who asks: an account's session (accounts on; optional to read), else the client id + name (the body's, else the query's)
+    const who = async (need, body) => {
+      if (accounts) {
+        if (need) { const a = await needSession(req, res); return a ? { key: accountKey(a), by: accounts.shown(a) } : null; }
+        let a = null;
+        try { a = await accounts.sessionOf(req); } catch (e) { a = null; }
+        return { key: a ? accountKey(a) : null, by: a ? accounts.shown(a) : null };
+      }
+      const from = k => body && typeof body[k] === "string" ? body[k] : u.searchParams.get(k);
+      return { key: clientId(from("cid")), by: cleanPlayerName(from("name")) };
+    };
+    // a POST's JSON body ({} when there is none) - or null after answering
+    const bodyOf = async () => {
+      let t;
+      try { t = await readBody(req, 2048); } catch (e) { json(res, 413, { error: "too large" }); return null; }
+      if (!t.trim()) return {};
+      try { const b = JSON.parse(t); if (b && typeof b === "object" && !Array.isArray(b)) return b; } catch (e) { /* below */ }
+      json(res, 400, { error: "bad request", code: "bad" });
+      return null;
+    };
+    let g;
+    const load = async () => { try { g = await loadModGallery(); return true; } catch (e) { json(res, 503, { error: "storage unavailable, try later", code: "storage" }); return false; } };
+    if (p === "/api/modgallery" && req.method === "GET") {
+      if (!(await load())) return;
+      const me = (await who(false)).key;
+      const sort = u.searchParams.get("sort") === "plays" ? "plays" : "new";
+      const from = Math.max(0, Math.floor(+u.searchParams.get("from") || 0)), n = Math.max(1, Math.min(200, Math.floor(+u.searchParams.get("n") || 100)));
+      const game = /^\d{1,3}\.\d{1,3}$/.test(u.searchParams.get("game") || "") ? u.searchParams.get("game") : null;
+      const q = String(u.searchParams.get("q") || "").normalize("NFC").replace(/\s+/g, " ").trim().slice(0, 40).toLowerCase();
+      const Mods = game ? modsLib() : null;
+      let list = g.mods.filter(x => (u.searchParams.get("mine") !== "1" || (me && x.author === me)) &&
+        (!game || Mods.fits({ ranges: Mods.parseGame(x.game) }, game)) &&
+        (!q || [x.name, x.hby, x.by, x.about].some(t => String(t || "").toLowerCase().includes(q))));
+      list.sort(sort === "plays" ? (a, b) => (b.plays || 0) - (a.plays || 0) || b.at - a.at : (a, b) => b.at - a.at);
+      return json(res, 200, { sort, total: list.length, from, mods: list.slice(from, from + n).map(x => modGalleryEntry(x, me)) });
+    }
+    if (p === "/api/modgallery" && req.method === "POST") {
+      const body = await bodyOf();
+      if (!body) return;
+      const w = await who(true, body);
+      if (!w) return;
+      if (!w.key) return json(res, 400, { error: "bad client id", code: "bad" });
+      if (!w.by) return json(res, 400, { error: "a name is needed", code: "name" });
+      const id = typeof body.id === "string" && /^[a-z2-9]{10}$/.test(body.id) ? body.id : null;
+      if (!id) return json(res, 400, { error: "no mod id", code: "bad" });
+      if (!allowModPublish(addressOf(req))) return json(res, 429, { error: "too many mods published, try again in a minute", code: "busy" });
+      if (!allowModPublishDay(addressOf(req))) return json(res, 429, { error: "too many mods published today", code: "busy" });
+      if (!(await load())) return;
+      const mine = x => x.author === w.key ? json(res, 200, { ok: true, id, mod: modGalleryEntry(x, w.key) }) : json(res, 409, { error: "already in the gallery", code: "published" });
+      const full = () => g.mods.filter(x => x.author === w.key).length >= MAX_MOD_GALLERY_PER_AUTHOR || g.mods.length >= MAX_MOD_GALLERY;
+      const old = g.mods.find(x => x.id === id);
+      if (old) return mine(old);
+      if (full()) return json(res, 429, { error: "the gallery is full", code: "full" });
+      let bytes;
+      try { bytes = await mods.get(id); } catch (e) { return json(res, 503, { error: "storage unavailable, try later", code: "storage" }); }
+      if (!bytes) return json(res, 400, { error: "no such mod - share it first", code: "nomod" });
+      const c = checkGalleryMod(bytes);
+      if (!c.ok) return json(res, 400, Object.assign({ error: c.problem === "version" ? "not made for this version" : "not a mod", code: c.problem }, c.game ? { game: c.game } : {}));
+      const h = c.header, name = NetProto.cleanRoomName(h.name, 40);
+      if (!name) return json(res, 400, { error: "not a mod", code: "header" });
+      // (checked again after the wait: another request may have published it - or filled the gallery - meanwhile)
+      const again = g.mods.find(x => x.id === id);
+      if (again) return mine(again);
+      if (full()) return json(res, 429, { error: "the gallery is full", code: "full" });
+      const x = { id, name, hby: NetProto.cleanRoomName(h.by, 40), about: NetProto.cleanRoomName(h.about, 300), game: h.game, version: NetProto.cleanRoomName(h.version, 20), mode: h.mode,
+        tanks: { min: h.tanks.min, max: h.tanks.max }, bases: h.bases ? { min: h.bases.min, max: h.bases.max } : null, settings: (h.settings || []).length,
+        author: w.key, by: w.by, at: now(), plays: 0 };
+      g.mods.push(x); modGalleryIds.add(id);
+      try { await modIndex.save(g); } catch (e) { g.mods = g.mods.filter(e2 => e2 !== x); modGalleryIds.delete(id); return json(res, 503, { error: "could not store it, try later", code: "storage" }); }
+      say("mod gallery: published", id, JSON.stringify(name), "by", JSON.stringify(w.by));
+      return json(res, 200, { ok: true, id, mod: modGalleryEntry(x, w.key) });
+    }
+    const rm = /^\/api\/modgallery\/([a-z2-9]{10})\/remove$/.exec(p);
+    if (rm && req.method === "POST") {
+      const admin = !!galleryAdmin && sameKey(req.headers["x-admin-key"] || "", galleryAdmin);
+      const body = admin ? {} : await bodyOf();
+      if (!body) return;
+      const w = admin ? null : await who(true, body);
+      if (!admin && !w) return;
+      if (!admin && !w.key) return json(res, 400, { error: "bad client id", code: "bad" });
+      if (!(await load())) return;
+      const x = g.mods.find(e => e.id === rm[1]);
+      if (!x) return json(res, 404, { error: "not in the gallery", code: "none" });
+      if (!admin && x.author !== w.key) return json(res, 403, { error: "only its author removes it", code: "author" });
+      g.mods = g.mods.filter(e => e !== x); modGalleryIds.delete(x.id);
+      try { await modIndex.save(g); } catch (e) { g.mods.push(x); modGalleryIds.add(x.id); return json(res, 503, { error: "could not store it, try later", code: "storage" }); }
+      say("mod gallery: removed", x.id, admin ? "by the operator" : "by its author");
       return json(res, 200, { ok: true });
     }
     json(res, 404, { error: "not found" });
@@ -1683,6 +2087,7 @@ function createServer(opts = {}) {
     }
     if (/^\/api\/challenge(\/[^/]*)?$/.test(p)) return challengeApi(req, res, p);
     if (/^\/api\/gallery(\/|$)/.test(p)) return galleryApi(req, res, p);
+    if (/^\/api\/modgallery(\/|$)/.test(p)) return modGalleryApi(req, res, p);
     const rm = /^\/api\/replays\/([a-z2-9]{8})$/.exec(p);
     if (rm && req.method === "GET") {
       let gz;
@@ -1701,6 +2106,48 @@ function createServer(opts = {}) {
       // (the id is the content's hash: the same map shared again is already there)
       if (!maps.has(id)) try { await maps.keep(id, buf); } catch (e) { return json(res, 503, { error: "could not store it, try later" }); }
       return json(res, 200, { id });
+    }
+    if (p === "/api/mods/official" && req.method === "GET") {
+      try { return json(res, 200, { mods: await officialList() }); } catch (e) { return json(res, 503, { error: "storage unavailable, try later", code: "storage" }); }
+    }
+    if (p === "/api/mods/official" && req.method === "POST") {
+      if (!adminToken) return json(res, 404, { error: "not found" });
+      if (!tokenOk(req)) return json(res, 401, { error: "admin token needed" });
+      let b;
+      try { b = JSON.parse(await readBody(req, 1024)); } catch (e) { return json(res, 400, { error: "bad request" }); }
+      const key = b && typeof b.key === "string" ? b.key : "", id = b && typeof b.id === "string" ? b.id : null;
+      const bundled = await loadBundledOfficial();
+      if (!bundled.some(x => x.key === key && x.id) || id == null || (id && !/^[a-z2-9]{10}$/.test(id))) return json(res, 400, { error: "bad key or id", code: "bad" });
+      if (id) {
+        const h = await officialHeader(id).catch(() => null);
+        if (!h) return json(res, 400, { error: "no such mod here (POST /api/mods first), or not made for this version", code: "mod" });
+      }
+      let g;
+      try { g = await officialIndex.load(); } catch (e) { return json(res, 503, { error: "storage unavailable, try later", code: "storage" }); }
+      g.mods = g.mods.filter(x => x.key !== key);
+      if (id) { g.mods.push({ key, id, author: "admin", name: key }); officialIds.add(id); }
+      try { await officialIndex.save(g); } catch (e) { return json(res, 503, { error: "could not store it, try later", code: "storage" }); }
+      return json(res, 200, { mods: await officialList() });
+    }
+    if (p === "/api/mods" && req.method === "POST") {
+      let bytes;
+      try { bytes = await readRaw(req, MAX_MOD_BYTES); } catch (e) { return json(res, 413, { error: "too large", code: "size" }); }
+      if (!allowModShare(addressOf(req))) return json(res, 429, { error: "too many shared mods, try again in a minute" });
+      const c = checkMod(bytes);
+      if (!c.ok) return json(res, 400, Object.assign({ error: c.problem === "version" ? "not made for this version" : "not a mod", code: c.problem },
+        c.header && c.header.game ? { game: c.header.game } : {}, c.detail ? { detail: c.detail } : {}));
+      // (the id is the file's hash: the same mod shared again is already there)
+      if (!mods.has(c.id)) try { await mods.keep(c.id, Buffer.from(bytes)); } catch (e) { return json(res, 503, { error: "could not store it, try later" }); }
+      return json(res, 200, { id: c.id, name: c.header.name });
+    }
+    const dm = /^\/api\/mods\/([a-z2-9]{10})$/.exec(p);
+    if (dm && req.method === "GET") {
+      let b;
+      try { b = await mods.get(dm[1]); } catch (e) { return json(res, 503, { error: "storage unavailable, try later" }); }
+      if (!b) return json(res, 404, { error: "no such mod" });
+      res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8", "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "public, max-age=31536000, immutable", ...CORS });
+      return res.end(b);
     }
     const mp = /^\/api\/maps\/([a-z2-9]{10})$/.exec(p);
     if (mp && req.method === "GET") {
@@ -2078,8 +2525,18 @@ function createServer(opts = {}) {
           if (!ws.host || !lobby || room.qp) break;        // (quick play: fixed settings)
           let changed = false;
           if (msg.map !== undefined) setMap(room, msg.map).catch(() => {});   // (async: its own status when loaded)
+          if (msg.mod !== undefined && SETTINGS.mod(msg.mod) !== undefined) setMod(room, msg.mod).catch(() => {});   // (as the map)
+          // (the mod's own settings: the keys given merged into the room's - checked against its header, modSettingsNow)
+          if (msg.modSettings !== undefined && !room.qp) {
+            const v = SETTINGS.modSettings(msg.modSettings), before = JSON.stringify(modSettingsNow(room));
+            if (v) {
+              room.modSettings = NetProto.modSettingsOf(Object.assign({}, v, room.modSettings, v));
+              if (room.mod && room.modInfo) room.modSettings = modSettingsNow(room);
+              if (JSON.stringify(modSettingsNow(room)) !== before) changed = true;
+            }
+          }
           for (const k of Object.keys(SETTINGS)) {
-            if (msg[k] === undefined || (k === "size" && room.map && !NetProto.genMap(room.map))) continue;   // (a map has its own size; a generated one the room's)
+            if (k === "mod" || k === "modSettings" || msg[k] === undefined || (k === "size" && room.map && !NetProto.genMap(room.map))) continue;   // (a map has its own size; a generated one the room's)
             const v = SETTINGS[k](msg[k]);
             if (v !== undefined && v !== room[k]) { room[k] = v; changed = true; }
           }
@@ -2373,7 +2830,7 @@ function createServer(opts = {}) {
     if (genWorker) { const w = genWorker; genWorker = null; w.terminate().catch(() => {}); }
     clearInterval(errorTimer); clearInterval(statsTimer);
     await Promise.race([Promise.all([flushErrors(), flushStats()]), new Promise(res => setTimeout(res, saveMs).unref())]);   // (the kept error reports, the match counts)
-    await flushGallery();                         // (the gallery's plays counted since its last write)
+    await flushGallery();                         // (the galleries' plays counted since their last write)
     let saved = false;
     if (stateStore && rooms.size) {
       let timer;
@@ -2408,13 +2865,13 @@ function createServer(opts = {}) {
     get closing() { return closing; },
     stateStore: stateStore ? stateStore.name : null,
     replayStore: replays.describe(), mapStore: maps.describe(), boardStore: placeOf(boardS3, boardDir),
-    galleryPlayed,                                     // (tests: a play counted as a match on the map would)
+    galleryPlayed, modGalleryPlayed,                   // (tests: a play counted as a match on the map / with the mod would)
     // (accounts: null = off; else where they are kept)
     accounts, accountStore: accounts ? accounts.storeName : null,
     // (a handoff snapshot the previous server left is read right away)
-    listen(port, cb) { server.listen(port, () => { refreshHandoff(true); loadGallery().catch(() => {}); if (cb) cb(server.address().port); }); return this; },
+    listen(port, cb) { server.listen(port, () => { refreshHandoff(true); loadGallery().catch(() => {}); loadModGallery().catch(() => {}); if (cb) cb(server.address().port); }); return this; },
     close(cb) {
-      clearInterval(heartbeat); clearInterval(idleSweep); clearTimeout(playsTimer);
+      clearInterval(heartbeat); clearInterval(idleSweep); mapIndex.stop(); modIndex.stop();
       for (const w of checkWorkers) w.terminate();
       for (const r of rooms.values()) { if (r.match) { stopClock(r.match); clearTimeout(r.match.aloneTimer); } clearTimeout(r.cleanupTimer); clearTimeout(r.stTimer); clearTimeout(r.qpTimer); }
       for (const ws of wss.clients) ws.terminate();

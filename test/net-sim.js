@@ -10,7 +10,7 @@
 process.env.STATIC_DIR = process.env.STATIC_DIR || "src";   // serve the sources: no build needed
 const assert = require("assert");
 const WebSocket = require("ws");
-const { TunnelerEngine, NetProto, TunnelerAI, MapData } = require("./src.js");
+const { TunnelerEngine, NetProto, TunnelerAI, MapData, loadMods, modFile } = require("./src.js");
 const { createServer, PackedLog } = require("../server.js");
 const { MapGen } = require("../src/js/game/mapgen.js");
 const { FrameQueue, frameToInput, frameToInputExt, stateHash, HASH_EVERY, UP, RIGHT, FIRE, engineOptions } = NetProto;
@@ -28,8 +28,11 @@ catch (e) {
     } };
 }
 const makeBots = cfg => cfg.ext ? cfg.slots.map((s, i) => s.bot ? new AI(s.level || "easy", i + 1) : null) : null;
+// (a match with a mod: its file from MOD_FILES - id -> text, as a page fetches it by the id; 1.5)
+const MOD_FILES = {};
 function makeEngine(seed, cfg) {
-  const e = new TunnelerEngine(seed, engineOptions(cfg));
+  const id = cfg.mod && (typeof cfg.mod === "string" ? cfg.mod : cfg.mod.id);
+  const e = new TunnelerEngine(seed, JSON.parse(JSON.stringify(engineOptions(cfg, id ? MOD_FILES[id] : undefined))));
   if (cfg.names) e.setNames(cfg.names);
   return e;
 }
@@ -531,22 +534,29 @@ async function main() {
   check("no player connected for a while: the match ends", () => assert.strictEqual(room.match, null));
   check("the host left: the spectator hosts now (with the key)", () => assert(spec1.hostKey === hostKey));
 
-  // ---------------------------------------------------------------- a game mode online (docs/DESIGN-8P.md 27)
+  // ---------------------------------------------------------------- a game mode online (docs/DESIGN-8P.md 27; 1.5: the
+  // game's modes are official mods - src/mods/, the server has their files from its start: a room takes one by its id)
   console.log("game mode online");
   {
-    const gr = (await http(port, "POST", "/api/rooms", { name: "Gold room", mode: "gold",
+    const Mods = loadMods();
+    await Mods.load();
+    const gold = modFile("gold"), goldId = Mods.idOf(gold);
+    MOD_FILES[goldId] = gold;
+    const gr = (await http(port, "POST", "/api/rooms", { name: "Gold room", mode: "gold", mod: goldId,
       seats: [{ kind: "open", team: 1 }, { kind: "open", team: 2 }, { kind: "normal", team: 1 }, { kind: "hard", team: 2 }], size: "small" })).json;
     const g1 = await new FakeClient(port, gr.id, { name: "G1", host: gr.hostKey }).connect();
     const g2 = await new FakeClient(port, gr.id, { name: "G2" }).connect();
     const gs = await new FakeClient(port, gr.id, { name: "GS", role: "watch" }).connect();
-    await until(() => g1.status && g1.status.seats.filter(x => x.k).length === 2, "seated");
-    check("the room's mode", () => assert(g1.status.settings.mode === "gold" && g1.status.settings.noRepair === undefined));
+    await until(() => g1.status && g1.status.seats.filter(x => x.k).length === 2 && g1.status.mod, "seated, the mod loaded");
+    check("the room's mode: the official Gold rush (no upload), mode standard (an old page's mode: gold - ignored)", () =>
+      assert(g1.status.settings.mode === "standard" && g1.status.settings.mod === goldId && g1.status.mod.id === goldId &&
+        g1.status.mod.name === "Gold rush" && g1.status.settings.noRepair === undefined, JSON.stringify(g1.status.settings)));
     g2.send({ t: "ready", v: 1 });
     await updated(g1, st => st.cant === null, "can start");
     g1.send({ t: "start" });
     await until(() => g1.match && g2.match && gs.match, "gold match");
-    check("a gold match: extended engine in the gold mode, for every client", () =>
-      [g1, g2, gs].every(c => c.engine.extended && c.engine.gameMode === "gold"));
+    check("a gold match: extended engine with the mod, for every client", () =>
+      [g1, g2, gs].every(c => c.engine.extended && c.engine.modInfo && c.engine.modInfo.id === goldId && c.engine.gameMode === "mod:" + goldId));
     g1.bits(UP); g2.bits(RIGHT | FIRE);
     await until(() => g1.frames > 900, "gold frames", 60000);
     g1.bits(0); g2.bits(0);
@@ -554,9 +564,10 @@ async function main() {
     await until(() => [g1, g2, gs].every(c => c.frames >= gn), "caught up");
     for (const c of [g1, g2, gs]) check(c.name + " matches the reference (gold)", () =>
       assert.deepStrictEqual(fingerprint(reference(gm, c.frames)), fingerprint(c.engine)));
-    check("gold: the mode's state the same everywhere", () => assert.strictEqual(JSON.stringify(g1.engine.GS), JSON.stringify(gs.engine.GS)));
+    check("gold: the mod's score the same everywhere, nobody stopped it", () => assert(JSON.stringify(Array.from(g1.engine.modeScore || [])) === JSON.stringify(Array.from(gs.engine.modeScore || [])) &&
+      ![g1, g2, gs].some(c => c.engine.modStopped)));
     check("no desync (gold)", () => assert(![g1, g2, gs].some(c => c.desync) && gm.desyncs === 0));
-    for (const c of [g1, g2, gs]) await c.close();
+    for (const c of [g1, g2, gs]) { await c.close(); c.engine.dispose(); }
   }
 
   // ---------------------------------------------------------------- out of step: the players' hashes judged

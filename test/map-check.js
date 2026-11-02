@@ -600,15 +600,16 @@ const ticks = async (n = 8) => { for (let i = 0; i < n; i++) await tick(); };
     const rec = await w.MapStore.save(m);
     api.edit(rec, MapData.decode(rec.code));
     const width = segs => segs.reduce((n, s) => n + U.cols(s.text), 0) + 2 * Math.max(0, segs.length - 1);
-    for (const code of w.Lang.codes) {
+    for (const code of w.Lang.codes) for (const [tool, look] of [["rock"], ["ground", "map"], ["ground", "classic"]]) {
       w.Lang.set(code);
+      api.setTool(tool); if (look) w.tunnelerMapEditor().look = look;
       for (const msg of [null, "map.err.max", "map.err.edge", "map.err.near", "map.err.water"]) {
         api.say(msg ? w.Lang.t(msg) : null);
         for (const [phone, cols] of [[true, 40], [false, 80]]) {
           const rows = api.barRows(phone);
           rows.forEach((r, i) => {
             const keep = r.filter(s => (s.prio || 0) === 0 || (s.prio === 1 && !msg));
-            assert(width(keep) <= cols, code + (phone ? " phone" : " desktop") + " row " + (i + 1) + " (" + msg + "): " + width(keep) + " > " + cols + ": " +
+            assert(width(keep) <= cols, code + " " + tool + (phone ? " phone" : " desktop") + " row " + (i + 1) + " (" + msg + "): " + width(keep) + " > " + cols + ": " +
               keep.map(s => w.Lang.decode(s.text)).join("|"));
             // (a desktop: the keys fit beside the tools - nothing of that row is dropped)
             if (!phone && i === 0) assert(width(r) <= cols, code + " desktop: the keys beside the tools: " + width(r) + " > " + cols);
@@ -628,10 +629,10 @@ const ticks = async (n = 8) => { for (let i = 0; i < n; i++) await tick(); };
     let rec = await w.MapStore.save(m);
     api.edit(rec, MapData.decode(rec.code));
     const ed = w.tunnelerMapEditor(), at = (x, y) => ed.map.cells[y * ed.map.w + x];
-    // the tools: 1-5 (tunnel, dirt, rock, water, base), Tab / Shift+Tab through all five
+    // the tools: 1-5 (tunnel, dirt, rock, water, base; 6 ground - 1.5), Tab / Shift+Tab through all (ground: each look)
     env.key("Digit4"); assert.strictEqual(ed.tool, "water", "4: water");
     env.key("Digit5"); assert.strictEqual(ed.tool, "base", "5: base");
-    env.key("Tab"); assert.strictEqual(ed.tool, "tunnel", "Tab after base: tunnel");
+    env.key("Tab"); assert.strictEqual(ed.tool, "ground", "Tab after base: ground");
     env.key("Tab", "Tab", { shiftKey: true }); env.key("Tab", "Tab", { shiftKey: true }); assert.strictEqual(ed.tool, "water", "Shift+Tab twice: water");
     assert(api.barRows(false)[0].some(g => g.attr === 0x5F && w.Lang.decode(g.text).trim() === "4 " + w.Lang.decode(T("map.t.water"))), "the status line: 4 Water chosen");
     api.barRows(true)[0].find(g => w.Lang.decode(g.text).trim() === w.Lang.decode(T("map.t.rock"))).onClick();
@@ -704,6 +705,99 @@ const ticks = async (n = 8) => { for (let i = 0; i < n; i++) await tick(); };
     await ticks();
     rec = (await w.MapStore.list()).find(r => r.id === rec.id);
     assert(MapData.decode(rec.code).ground === "classic" && MapData.fromCode(rec.code)[2] === 1, "classic: format 1");
+  });
+
+  await okAsync("painted ground in the editor (1.5): the Ground tool (key 6, again: the next look; Tab through its looks; the status line's < >), painting a look over the map's ground and back to it (Default), undo, the terrain and the way unchanged, saved in format 4, the picture", async () => {
+    const env = makeEnv("/maps");
+    env.page("maps.html");
+    await ticks();
+    const w = env.win, ui = w.tunnelerMapsUI(), api = w.tunnelerMapsApi, T = w.Lang.t, D = w.Lang.decode;
+    const m = MapData.blank("small"); m.name = "Meadow"; m.ground = "sand"; m.bases.push({ x: 30, y: 32 }, { x: 98, y: 32 });
+    for (let y = 20; y < 24; y++) for (let x = 10; x < 119; x++) m.cells[y * m.w + x] = MapData.TUNNEL;
+    let rec = await w.MapStore.save(m);
+    api.edit(rec, MapData.decode(rec.code));
+    const ed = w.tunnelerMapEditor(), gc = (x, y) => ed.map.groundCells ? ed.map.groundCells[y * ed.map.w + x] : 0;
+    // the tool and its looks: 6, 6 again, Tab, Shift+Tab
+    env.key("Digit6"); assert(ed.tool === "ground" && ed.look === "sand", "6: ground, sand at first");
+    env.key("Digit6"); assert.strictEqual(ed.look, "grass", "6 again: grass");
+    env.key("Digit6"); env.key("Digit6"); assert.strictEqual(ed.look, "map", "classic, then Default");
+    env.key("Tab"); assert.strictEqual(ed.tool, "tunnel", "Tab after the last look: tunnel");
+    env.key("Tab", "Tab", { shiftKey: true }); assert(ed.tool === "ground" && ed.look === "map", "Shift+Tab: back on Default");
+    env.key("Tab", "Tab", { shiftKey: true }); assert.strictEqual(ed.look, "classic", "Shift+Tab: classic");
+    env.key("Digit5"); env.key("Tab"); assert(ed.tool === "ground" && ed.look === "sand", "Tab after base: ground, sand");
+    // the status line: a desktop's second row "6 Ground < Sand >", a phone's first row has Ground with the tools
+    const row2 = api.barRows(false)[1], tool = row2.find(s => D(s.text).trim() === "6 " + D(T("map.t.ground")));
+    assert(tool && tool.attr === 0x5F, "a desktop: 6 Ground, chosen");
+    assert(!api.barRows(false)[0].some(s => D(s.text).includes(D(T("map.t.ground")))), "not on a desktop's first row");
+    assert(api.barRows(true)[0].some(s => D(s.text).trim() === D(T("map.t.ground"))), "a phone: with the tools");
+    assert(row2.some(s => D(s.text) === D(T("map.look.sand"))), "the look shown");
+    row2.find(s => D(s.text) === ">").onClick();
+    assert.strictEqual(ed.look, "grass", "> : the next look");
+    api.setTool("rock");
+    api.barRows(false)[1].find(s => D(s.text) === "<").onClick();
+    assert(ed.tool === "ground" && ed.look === "sand", "< : the look before, the tool chosen");
+    // painting grass over the strip (and its dirt), never the frame; the terrain stays
+    const cells0 = ed.map.cells.slice(), reach = api.reachOf();
+    ed.look = "grass"; api.setBrush(-9); api.setBrush(1);              // (radius 1)
+    api.stamp(50, 21);
+    assert(gc(50, 21) === 3 && gc(51, 22) === 3 && gc(50, 19) === 0, "grass painted around 50, 21");
+    assert.strictEqual(MapData.groundOf(ed.map, 50, 21), "grass");
+    assert(Buffer.compare(Buffer.from(cells0), Buffer.from(ed.map.cells)) === 0, "the terrain unchanged");
+    assert.strictEqual(api.reachOf(), reach, "the way between the bases not worked out again (a look only)");
+    api.stamp(1, 1);
+    assert(gc(1, 1) === 0 && gc(2, 2) === 0, "the frame never painted");
+    // the picture: the painted cells' tunnel in grass, the rest in the map's sand
+    const L = w.PlayScreen ? w.PlayScreen.FLOOR_LOOK : { SAND: 3, GRASS: 4 };
+    api.render();
+    const snap = api.shown(), lookAtCell = (cx, cy) => {
+      const z = [0.25, 0.5, 1, 2, 4][ed.zoom], x = Math.floor(2 + (cx - ed.ox + 0.5) * z), y = Math.floor(1 + (cy - ed.oy + 0.5) * z), b = snap.floor[y * 80 + (x >> 1)];
+      return x & 1 ? b >> 4 : b & 15;
+    };
+    assert.strictEqual(lookAtCell(50, 21), L.GRASS, "painted: grass");
+    assert.strictEqual(lookAtCell(80, 21), L.SAND, "the map's ground: sand");
+    // "classic" (nothing) over the map's sand, Default back to it; undo
+    ed.look = "classic"; api.stamp(80, 21);
+    assert(gc(80, 21) === 1 && MapData.groundOf(ed.map, 80, 21) === "classic", "classic painted");
+    api.undo();
+    assert.strictEqual(gc(80, 21), 0, "undone");
+    ed.look = "map"; api.stamp(50, 21);
+    assert(gc(50, 21) === 0 && gc(51, 21) === 0 && gc(49, 21) === 0, "Default: back to the map's ground");
+    api.undo(); assert.strictEqual(gc(50, 21), 3, "undo: grass again");
+    // Space held, the cursor moving: a stroke of grass
+    ed.look = "grass"; api.setBrush(-9); ed.cx = 60; ed.cy = 22;
+    env.key("Space", " ");
+    for (let i = 0; i < 5; i++) env.key("ArrowRight", "ArrowRight");
+    env.keyup("Space");
+    for (let x = 60; x <= 65; x++) assert.strictEqual(gc(x, 22), 3, "the stroke at " + x);
+    // saved: format 4, the painted cells and the map's ground kept; a file too
+    env.key("Escape", "Escape");
+    await ticks();
+    const item = k => ui.spec.items.find(it => it.key === k);
+    assert(ui.spec.lines.some(l => l.text === T("map.changed")), "a draft");
+    item("back").go();
+    await item("keep").go();
+    await ticks();
+    rec = (await w.MapStore.list()).find(r => r.id === rec.id);
+    const saved = MapData.decode(rec.code);
+    assert(MapData.fromCode(rec.code)[2] === 4 && saved.ground === "sand" && saved.groundCells[22 * saved.w + 62] === 3 && saved.groundCells[21 * saved.w + 80] === 0,
+      "saved: format 4, grass over sand");
+    // the map's Ground changed: the painted cells keep theirs (the setting stays, painting overrides it)
+    api.detail(rec);
+    item("ground").change(1);
+    item("edit").go();
+    const d = w.tunnelerMapEditor().map;
+    assert(d.ground === "grass" && d.groundCells[22 * d.w + 62] === 3 && MapData.groundOf(d, 80, 21) === "grass", "the draft: grass, the painted cells kept");
+    env.key("Escape", "Escape");
+    await ticks();
+    // everything painted back to Default: the map's old bytes (format 2 - nothing painted)
+    api.edit(rec, saved);
+    const ed2 = w.tunnelerMapEditor();
+    ed2.look = "map"; api.setTool("ground"); api.setBrush(9);
+    for (let y = 5; y < 64; y += 8) for (let x = 5; x < 128; x += 8) api.stamp(x, y);
+    assert(!MapData.painted(ed2.map), "nothing painted any more");
+    const plain = MapData.copy(ed2.map); plain.groundCells = null;
+    assert.strictEqual(MapData.code(ed2.map), MapData.code(plain), "the bytes of the map unpainted");
+    assert.strictEqual(MapData.fromCode(MapData.code(ed2.map))[2], 2, "format 2 (sand)");
   });
 
   await okAsync("a shared map's address (/map/<id>): fetched, kept, its screen; an unknown one: an error", async () => {

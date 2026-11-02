@@ -10,6 +10,7 @@ import { STRINGS_EN } from "../../lang/en/engine.js";
 import { SeenMap } from "./seenmap.js";
 import { TextBuf } from "./textbuf.js";
 import { UniText } from "../text/unitext.js";
+import { Lang } from "../text/lang.js";
 
 const i16 = v => (v << 16) >> 16;
 // display columns of font text (markup "{n}" excluded; wide Unicode characters count 2)
@@ -91,16 +92,31 @@ export class MatchText extends TextBuf {
     if (!o) return [];
     const S = Object.assign({}, STRINGS_EN.settings, this.strings.settings);
     const sizes = this.e.constructor.SIZES || ["small", "medium", "large"];
-    const goalText = this.e.goal && (S.goals || STRINGS_EN.settings.goals)[this.e.gameMode];
-    const parts = [S.size[Math.max(0, sizes.indexOf(this.e.size))], goalText ? goalText.replace("{n}", String(this.e.goal)) : S.win.replace("{n}", String(this.e.winScore))];
-    if (this.e.gameMode !== "standard") parts.unshift((S.modes || {})[this.e.gameMode] || this.e.gameMode);
-    if (this.e.teams) parts.push(S.ff[this.e.friendlyFire ? 1 : 0]);
-    if (this.e.sight !== "full" && time < 3) parts.push(S.sight[this.e.constructor.SIGHTS.indexOf(this.e.sight) - 1]);   // (short: it packs well here)
+    // (a script mod - 1.5, game/mods.js: its @mode's goal, its own name)
+    const mi = this.e.modInfo, mode = mi ? mi.base : this.e.gameMode;
+    // (a mod's @hide - docs/MODS.md 3a: the settings it hides aren't listed - they mean nothing in its game)
+    const hid = n => !!(mi && mi.header.hide && mi.header.hide.includes(n));
+    const goalText = this.e.goal && (S.goals || STRINGS_EN.settings.goals)[mode];
+    const parts = [];
+    if (!hid("size")) parts.push(S.size[Math.max(0, sizes.indexOf(this.e.size))]);
+    if (goalText ? !hid("goal") : !hid("winScore")) parts.push(goalText ? goalText.replace("{n}", String(this.e.goal)) : S.win.replace("{n}", String(this.e.winScore)));
+    if (mi) {
+      // (its own settings after its name - "laps: 3, shots: on", in the page's language: display only; left out first
+      // when the lines don't fit - time 3)
+      const own = time < 3 && mi.settings ? (mi.header.settings || []).map(st => {
+        const label = (st.label && (st.label[Lang.code] || st.label.en)) || st.key, v = mi.settings[st.key];
+        return UniText.fromRaw(label.charAt(0).toLowerCase() + label.slice(1)) + ": " + (st.onOff ? S.onOff[v ? 1 : 0] : String(v));
+      }) : [];
+      parts.unshift(UniText.fromRaw(mi.header.name), ...own);
+    }
+    else if (this.e.gameMode !== "standard") parts.unshift((S.modes || {})[this.e.gameMode] || this.e.gameMode);
+    if (this.e.teams && !hid("friendlyFire")) parts.push(S.ff[this.e.friendlyFire ? 1 : 0]);
+    if (this.e.sight !== "full" && time < 3 && !hid("sight")) parts.push(S.sight[this.e.constructor.SIGHTS.indexOf(this.e.sight) - 1]);   // (short: it packs well here)
     const vi = ["self", "team", "everyone"].indexOf(o.view);
-    if (vi >= 0) parts.push((o.visible ? S.visible : S.view).replace("{v}", S.views[vi]));
+    if (vi >= 0 && !hid("visible")) parts.push((o.visible ? S.visible : S.view).replace("{v}", S.views[vi]));
     // the round time limit only when there is one (here, before the longest part, it fits best)
-    if (this.e.roundTime && time < 2) parts.push((time ? S.timeShort || S.time : S.time).replace("{n}", String(this.e.roundTime)));
-    if (o.watchOut != null) parts.push(S.watch[this.e.constructor.AFTER_DEATH.indexOf(this.e.constructor.afterDeath(o.watchOut))] || S.watch[1]);
+    if (this.e.roundTime && time < 2 && !hid("roundTime")) parts.push((time ? S.timeShort || S.time : S.time).replace("{n}", String(this.e.roundTime)));
+    if (o.watchOut != null && !hid("watchOut")) parts.push(S.watch[this.e.constructor.AFTER_DEATH.indexOf(this.e.constructor.afterDeath(o.watchOut))] || S.watch[1]);
     return parts;
   }
 
@@ -109,7 +125,7 @@ export class MatchText extends TextBuf {
   settingsLines(width, maxLines = 4) {
     let lines;
     for (let time = 0; time < 4; time++) {
-      if (time === 3 ? this.e.sight === "full" : time && !this.e.roundTime) continue;
+      if (time === 3 ? this.e.sight === "full" && !(this.e.modInfo && (this.e.modInfo.header.settings || []).length) : time && !this.e.roundTime) continue;
       lines = [];
       let cur = "";
       for (const p of this.settingsParts(time)) {
@@ -250,9 +266,10 @@ export class MatchText extends TextBuf {
     const st = this.strings.stats, N = this.e.nPlayers;
     // a game mode's own total per tank (gold brought home, captures, kills...: GM.stat) instead of the
     // meters moved - why the winner won (docs/DESIGN-8P.md 27)
-    const modeStat = this.e.GM && this.e.GM.stat ? p => this.e.GM.stat(this.e, p) : null;
+    // (a script mod: hasStat - it or its @mode has one; statName - its heading)
+    const GM = this.e.GM, modeStat = GM && GM.stat && (!GM.hasStat || GM.hasStat(this.e)) ? p => GM.stat(this.e, p) : null;
     const head = (st.head || STRINGS_EN.stats.head).slice(), widths = [5, 5, 5, 6, 6];
-    if (modeStat) head[4] = UniText.slice(this.e.mt("stat"), 5);
+    if (modeStat) head[4] = UniText.slice(GM.statName ? GM.statName(this.e) : this.e.mt("stat"), 5);
     this.window(this.statsLeft, 5, this.statsLeft + 36, 25);     // 37 columns
     this.textColor(11);
     this.gotoXY(19 - (visLen(st.title) >> 1), 1);

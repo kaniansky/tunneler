@@ -1,6 +1,8 @@
 // Homepage, in the look of TUNNELER's own main menu (see dosui.js). Texts from lang.js.
-// Screens: the main menu, the split-screen settings (/#split) and the vs computer slot editor (/#cpu,
+// Screens: the main menu, the vs computer slot editor (/#cpu,
 // docs/DESIGN-8P.md 20). Their settings are remembered in localStorage and passed to play.html.
+// The Mods screen (1.5, docs/MODS.md 6: ui/modsui.js) - from the main menu, /#mods, and a mod's share link /mod/<id>
+// (the mod fetched from the server and kept, its screen shown).
 import { Medals } from "../game/medals.js";
 import { Account } from "../net/account.js";
 import { Controls } from "../io/controls.js";
@@ -15,9 +17,15 @@ import { Login } from "../ui/login.js";
 import { MapData } from "../game/mapdata.js";
 import { MapPic } from "../draw/mappic.js";
 import { MapPick } from "../ui/mappick.js";
+import { MapMods } from "../game/mapmods.js";
 import { Replay } from "../game/replay.js";
 import { MapGen } from "../game/mapgen.js";
 import { MapStore } from "../net/mapstore.js";
+import { ModStore } from "../net/modstore.js";
+import { ModsUI } from "../ui/modsui.js";
+import { Official } from "../net/official.js";
+import { ModSettings } from "../ui/modsettings.js";
+import { Mods } from "../game/mods.js";
 import { Pads } from "../io/pads.js";
 import { GameScreen } from "../io/screen.js";
 import { Speaker } from "../io/speaker.js";
@@ -97,6 +105,55 @@ export function mount() {
   }, () => { mapsLoaded = true; });
   loadMaps();
   window.tunnelerHomeMaps = loadMaps;                    // (tests: read the maps again)
+  // a script mod (1.5, docs/MODS.md 6): one of the mods kept in this browser (net/modstore.js; its id = its file's hash,
+  // "" = none) - only those made for this version (@game) are offered (tunneler.cpu.mod), passed to play.js as &mod=<id>
+  let cpuMod = load("tunneler.cpu.mod", ""), modRecs = [], modsLoaded = false;
+  const MOD_COLS = 24;                                    // (a mod's name in the Settings box: at most this wide)
+  const playableMods = () => modRecs.filter(ModsUI.fitsRec);
+  // (1.5, docs/MODS.md 6c: the official mods first - net/official.js -, then this browser's)
+  const officialMods = () => Official.now().filter(x => x.id && ModsUI.fitsRec(x));
+  const allMods = () => { const o = officialMods(); return o.concat(playableMods().filter(r => !o.some(x => x.id === r.id))); };
+  const modById = id => id ? allMods().find(r => r.id === id) || null : null;
+  const loadMods = () => Promise.all([ModStore.list(), Official.list()]).then(([l]) => {
+    modRecs = l; modsLoaded = true;
+    // (a mode remembered from before 1.5 - the game's own modes are official mods now: that mod)
+    const was = load("tunneler.cpu.mode", "standard");
+    if (was !== "standard") { const id = Official.idOf(was); if (id && !cpuMod) cpuMod = id; gmode = "standard"; saveCpu(); }
+    if (cpuMod && !modById(cpuMod)) cpuMod = "";          // (deleted meanwhile, or made for another version: none)
+    const keys = ui.spec && ui.spec.items ? ui.spec.items.map(it => it.key) : [];
+    if (keys.includes("slot0")) cpu(true);
+  }, () => { modsLoaded = true; });
+  loadMods();
+  window.tunnelerHomeMods = loadMods;                    // (tests: read the mods again)
+  // the Mod row's value and why it is what it is: the mod's name (cut), or None
+  const modName = r => r ? UniText.slice(UniText.fromRaw(Mods.nameIn(r, Lang.code) || "?"), MOD_COLS) : T("lc.mod.none");
+  // (a mod's @about on one info line: cut at a word, "..." - owner's info lines are at most 78 columns)
+  const aboutLine = t => { let f = UniText.fromRaw(t); if (UniText.cols(f) <= 76) return f; f = UniText.slice(f, 73); const k = f.lastIndexOf(" "); return (k > 40 ? f.slice(0, k) : f) + "..."; };
+  const rawT = (k, p) => UniText.fromRaw(String(Lang.raw(k) || k).replace(/\{(\w+)\}/g, (m, n) => p && p[n] !== undefined ? String(p[n]) : m));
+  // the Mode row (1.5 - owner, 2026-11-02: "Mode and Mod should be a single Setting"): Standard or a mod - official or
+  // this browser's; ids = what Left / Right go through (Standard first unless a map needs a mod), Enter: the picker
+  // (Official / Your mods / The gallery - ui/modsui.js pick); locked: the map needs this one (the row says so)
+  function modeItem(cur, ids, set, mapRec, pick) {
+    const r = modById(cur), locked = !!mapRec && ids.length <= 1;
+    const info = mapRec ? [rawT(ids.length > 1 ? "lc.mod.maps" : "lc.mod.map", { map: mapRec.name || "?" }), ...(r && r.about ? [aboutLine(r.about)] : [])]
+      : r ? [...(r.about ? [aboutLine(Mods.aboutIn(r, Lang.code))] : r.by ? [rawT("mods.by", { name: r.by })] : []), T("lc.mode.pick")]
+      : [T("gm.standard.i"), T("lc.mode.pick")];
+    return { key: "mode", label: T("lc.mode") + (r ? modName(r) : T("gm.standard")), info,
+      ...(locked ? { valueAttr: 8, go: () => {} } : { go: pick, change: d => set(step(ids, cur, d)) }) };
+  }
+  // a mod's header for the rows (its settings, the rows it hides, its bases): from its file, else (an official mod the
+  // server listed) from the list
+  const headerOfMod = M => !M ? ModSettings.NONE : M.source ? ModSettings.headerOf(M.source)
+    : { settings: M.settings || [], hide: M.hide || [], bases: M.bases || null, tanks: M.tanks, mode: M.mode };
+  // the skirmish's mod now: the map's (one of the mods it needs - docs/MODS.md 6a, game/mapmods.js -, as long as one is
+  // here) or the chosen one; blocked: why the map's mods can't be played here (MapMods.status: "missing" / "version")
+  function cpuModState(rec) {
+    const needs = rec ? MapMods.allowedMods(rec) : null, mods = allMods();
+    const offered = needs ? mods.filter(r => needs.includes(r.id)) : mods;
+    if (needs && modsLoaded && !offered.some(r => r.id === cpuMod)) cpuMod = offered.length ? offered[0].id : "";
+    const st = needs && modsLoaded && !offered.length ? MapMods.status(rec, modRecs.concat(officialMods())) : null;
+    return { needs, ids: (needs ? [] : [""]).concat(offered.map(r => r.id)), mod: modById(cpuMod), blocked: st && st.blocked ? st : null };
+  }
   const slots = COLORS.map((c, i) => ({ kind: i ? "none" : "you", team: i + 1 }));
   {
     const oldLevel = today(load("tunneler.level"));
@@ -122,13 +179,9 @@ export function mount() {
     save("tunneler.cpu.sight", sight); save("tunneler.cpu.showmap", showMap);
     save("tunneler.cpu.mode", gmode); save("tunneler.cpu.goals", JSON.stringify(cpuGoals));
     if (mapsLoaded) save("tunneler.cpu.map", cpuMap);
+    if (modsLoaded) save("tunneler.cpu.mod", cpuMod);
   };
 
-  // ---- split-screen settings
-  let splitSize = SIZES.includes(load("tunneler.split.size")) ? load("tunneler.split.size") : "medium";
-  let splitWin = clampInt(load("tunneler.split.win"), 1, 9, 3);
-  let splitTime = loadTime("tunneler.split.time");
-  const saveSplit = () => { save("tunneler.split.size", splitSize); save("tunneler.split.win", String(splitWin)); save("tunneler.split.time", String(splitTime)); };
 
   // the main menu: "TUNNELER" and the author (the version at the bottom left); the other screens: their
   // own title (like VS COMPUTER)
@@ -211,12 +264,19 @@ export function mount() {
     ui.show({ lines: [{ row: 2, text: T("medal.title"), color: 12 }, { row: 4, text: T("medal.count", { n: Object.keys(have).length, all }), color: 15 }],
       box: { y: 6, rows: 11 }, fixed: 2, items, back: () => main("medals"), infoRow: 21 });
   }
+  // ------------------------------------------------------------------ mods (1.5, docs/MODS.md 6 - ui/modsui.js): Play in a
+  // skirmish opens the skirmish lobby with the mod on its Mod row
+  const modsOpts = {
+    back: () => main("mods"),
+    play: id => loadMods().then(() => { if (modById(id)) cpuMod = id; saveCpu(); cpu(false, "mod"); }),
+    removed: id => { if (cpuMod === id) cpuMod = ""; saveCpu(); loadMods(); },
+  };
+  function mods() { loadMods(); ModsUI.show(ui, modsOpts); }
   // a new player (1.4): the training ground not done and no skirmish played in this browser
   const newPlayer = () => { try { return !localStorage.getItem("tunneler.trained") && !localStorage.getItem("tunneler.cpu.slots"); } catch (e) { return false; } };
   // sel: an item's index or key (the screen came back from it)
   function main(sel, keep) {
     const items = [
-      ...(MOBILE ? [] : [{ key: "split", label: T("home.split"), info: [T("home.split.i1"), splitKeys()], go: () => split() }]),
       { key: "cpu", label: T("home.cpu"), info: [T(MOBILE ? "home.cpu.i1m" : "home.cpu.i1n"), T("home.cpu.i2")], go: () => cpu() },
       // (1.4: the training ground - recommended, and the menu's first choice, until it is done or a skirmish was played)
       { key: "training", label: T("home.training"), info: [T("home.training.i"), ...(newPlayer() ? [T("home.training.new")] : [])], go: () => { Nav.go(Links.training()); } },
@@ -225,6 +285,7 @@ export function mount() {
       { key: "challenge", label: T("home.challenge"), info: [T("home.challenge.i")], go: () => { Nav.go(Links.challenge()); } },   // (docs/v6/CHALLENGE.md)
       { key: "replays", label: T("home.replays"), info: [T("home.replays.i")], go: () => { Nav.go(Links.replays()); } },
       { key: "maps", label: T("home.maps"), info: [T("home.maps.i")], go: () => { Nav.go(Links.maps()); } },
+      { key: "mods", label: T("home.mods"), info: [T("home.mods.i")], go: () => mods() },   // (1.5: script mods)
       { key: "medals", label: T("home.medals"), info: [T("home.medals.i", { n: Object.keys(Medals.earned()).length, all: Medals.LIST.length })], go: () => medals() },   // (1.4)
       { key: "gap", label: "", disabled: true },
       { key: "instr", label: T("menu.instr"), info: [T("menu.instr.i")], go: () => ui.showPage("instructions", "hotseat", () => main("instr")) },
@@ -619,39 +680,22 @@ export function mount() {
   const timeItem = (time, set) => ({ key: "time", label: T("lc.time") + (time ? T("time.n", { n: time }) : T("time.off")),
     info: [T("time.i1"), T("time.i2")], go: () => set(step(TIMES, time, 1)), change: d => set(step(TIMES, time, d)) });
 
-  // ------------------------------------------------------------------ split screen (DESIGN-8P 11, 17)
-  function split(keep, sel) {
-    const start = () => { Nav.go(Links.split("size=" + splitSize + "&win=" + splitWin + timeArg(splitTime))); };
-    const set = f => v => { f(v); saveSplit(); split(true); };
-    ui.show({
-      lines: screenTitle("lc.split.title"), box: { y: 9 }, sel: sel || 0, infoRow: 20,
-      back: () => main("split"),
-      items: [
-        { key: "play", label: T("cpu.start"), info: [T("home.split.i1"), splitKeys()], go: start },
-        { key: "gap1", label: "", disabled: true },
-        sizeItem(splitSize, set(v => { splitSize = v; })),
-        winItem(splitWin, set(v => { splitWin = v; })),
-        timeItem(splitTime, set(v => { splitTime = v; })),
-        { key: "gap2", label: "", disabled: true },
-        { key: "back", label: T("back.main"), info: [T("back.main.i")], go: () => main("split") },
-      ],
-    }, keep);
-  }
-
   // ------------------------------------------------------------------ vs computer (DESIGN-8P 20)
-  // the used slots and what they make: engine slots, classic or not, teams, validity
-  function cpuSetup() {
+  // the used slots and what they make: engine slots, classic or not, teams, validity (gm: the game mode in effect - a
+  // mod's own @mode)
+  // (noTeams: a mod's @hide teams - every tank its own team, Mods.ownTeams: the slots' teams mean nothing)
+  function cpuSetup(gm = gmode, noTeams = false) {
     const used = [];
-    slots.forEach((s, i) => { if (s.kind !== "none") used.push({ color: i, team: s.team, kind: s.kind }); });
+    slots.forEach((s, i) => { if (s.kind !== "none") used.push({ color: i, team: noTeams ? i + 1 : s.team, kind: s.kind }); });
     const perTeam = new Map();
     for (const u of used) perTeam.set(u.team, (perTeam.get(u.team) || 0) + 1);
     const me = slots.findIndex(s => s.kind === "you"), p2 = slots.findIndex(s => s.kind === "p2");
     const nCpu = used.length - (me >= 0 ? 1 : 0) - (p2 >= 0 ? 1 : 0);
-    const ownTeams = (TunnelerEngine.OWN_TEAMS || []).includes(gmode);   // (infection, survival: the mode makes the teams)
+    const ownTeams = (TunnelerEngine.OWN_TEAMS || []).includes(gm);      // (infection, survival: the mode makes the teams)
     return {
       used, nCpu, me, p2,
       // (a skirmish always runs the extended engine - owner, 2026-10-24; the classic one is split screen's)
-      one: used.length === 2 && nCpu === 1 && p2 < 0 && gmode === "standard",
+      one: used.length === 2 && nCpu === 1 && p2 < 0 && gm === "standard",
       nTeams: perTeam.size,
       teamGame: [...perTeam.values()].some(n => n > 1) || ownTeams,
       mates: me >= 0 ? perTeam.get(slots[me].team) - 1 : 0,   // computer tanks on your team
@@ -661,24 +705,56 @@ export function mount() {
   }
 
   const pickState = {};                                  // (the map picker's gallery order, kept)
+  // the skirmish's Settings box: as wide as its widest possible value (it doesn't jump when one changes) - a mod's
+  // settings are cut to it (ui/modsettings.js); at most SET_ROWS rows shown (a game without a mod has that many)
+  const SET_ROWS = 10;
+  function cpuSetW() {
+    const noop = () => {}, labels = [
+      T("lc.mode") + T("gm.standard"), T("lc.mode") + "W".repeat(MOD_COLS),
+      ...SIZES.flatMap(z => [T("lc.map") + "W".repeat(MAP_COLS) + " (" + T("lc.size." + z) + ", 8)",
+        ...[T("lc.map.random"), ...MapGen.KINDS.map(k => genLabel({ kind: k }))].map(n => T("lc.map") + sizedLabel(n, z))]),
+      ...Object.keys(GOALS).flatMap(m => GOALS[m].choices.map(n => T("goal." + m) + (m === "infection" ? T("time.n", { n }) : n))),
+      ...[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => winItem(n, noop).label),
+      ...TIMES.map(v => timeItem(v, noop).label),
+      T("lc.ff") + T("lc.on"), T("lc.ff") + T("lc.off"),
+      ...SIGHTS.map(v => T("lc.sight") + T("sight." + v)),
+      ...SHOW_MAPS.map(v => T("smap.label") + T("smap." + v)),
+      ...VIEWS.map(v => T("cpu.view") + T("view." + v)), T("cpu.view") + T("view.split"),
+      ...TunnelerEngine.AFTER_DEATH.map(w => T("lc.watch") + T("watch." + w))];
+    return DosUI.boxWidth(labels.map(label => ({ label, align: "left" })));
+  }
   // (the Show map value in effect: the team ones without a team of 2+ tanks are the player's own)
   const smapOf = S => S.teamGame ? showMap : showMap === "team" ? "own" : showMap === "allteam" ? "all" : showMap;
   function cpu(keep, sel) {
-    const S = cpuSetup();
-    // (a map whose bases a tank can't all drive between, or with fewer bases than the skirmish has tanks, can't be played)
-    const rec = mapRec();
-    if (!S.error && rec && rec.linked === false) S.error = "lc.err.path";
-    if (!S.error && rec && rec.bases < Math.max(2, S.used.length)) S.error = "lc.err.bases";
+    // (a mod: its @mode is the game mode - the Mode row shows it, gray; a map made for mods sets the Mod row)
+    const rec = mapRec(), MS = cpuModState(rec), M = MS.mod, gm = M ? M.mode : "standard";
+    // (1.5, docs/MODS.md 3a: the mod's own settings - remembered per mod, ui/modsettings.js - and the built-in ones it
+    // hides: their rows gone, the game's defaults played - Mods.HIDE_DEFAULTS)
+    const H = headerOfMod(M), hid = n => ModSettings.hides(H, n), HD = Mods.HIDE_DEFAULTS;
+    const msVals = M ? ModSettings.values(H, ModSettings.load("tunneler.cpu.modset", M.id)) : {};
+    const size = hid("size") && !rec ? HD.size : cpuSize, win = hid("winScore") ? HD.winScore : cpuWin, time = hid("roundTime") ? HD.roundTime : cpuTime;
+    const viewNow = hid("visible") ? HD.visible : view, watchNow = hid("watchOut") ? HD.watchOut : watchOut, sightNow = hid("sight") ? HD.sight : sight;
+    const S = cpuSetup(gm, hid("teams"));
+    const ffNow = hid("friendlyFire") ? HD.friendlyFire : ff, goalNow = m => hid("goal") ? GOALS[m].def : goalOf(m);
+    // (a map whose bases a tank can't all drive between, or with fewer bases than the skirmish has tanks, can't be played;
+    // a mod with @bases: tanks share bases - the map needs the mod's least)
+    // (MapStore.playable: a map for mods whose bases have no walls - @walls none - reached without them counts)
+    if (!S.error && rec && MapStore.playable(rec) === "path") S.error = "lc.err.path";
+    if (!S.error && rec && H.bases && rec.bases < H.bases.min) S.error = "ms.err.bases";
+    if (!S.error && rec && !H.bases && rec.bases < Math.max(2, S.used.length)) S.error = "lc.err.bases";
+    if (!S.error && MS.blocked) S.error = "mm.why." + MS.blocked.blocked;
+    if (!S.error && M && (S.used.length < M.tanks.min || S.used.length > M.tanks.max)) S.error = "lc.err.modtanks";
     const redraw = () => { saveCpu(); cpu(true); };
     const start = () => {
       if (S.error) return;
       // the whole setup as a short code (cpucode.js: /skirmish?g=<13 characters>)
       const all = COLORS.map((c, i) => ({ kind: "none", team: slots[i].team }));
       for (const u of S.used) all[u.color] = { kind: u.kind, team: u.team };
-      Nav.go(Links.cpu("g=" + CpuCode.encode({ slots: all, size: cpuSize, win: cpuWin, time: cpuTime, ff: ff && S.teamGame,
-        view, watch: watchOut, sight, mode: gmode, goal: GOALS[gmode] ? goalOf(gmode) : undefined }) +
+      Nav.go(Links.cpu("g=" + CpuCode.encode({ slots: all, size, win, time, ff: ffNow && S.teamGame,
+        view: viewNow, watch: watchNow, sight: sightNow, mode: gm, goal: GOALS[gm] ? goalNow(gm) : undefined }) +
         (rec ? "&lmap=" + rec.id + (MapStore.sharedHere(rec) ? "&map=" + rec.shared : "") : MapGen.parse(cpuMap) ? "&gen=" + cpuMap
-          : "") + (smapOf(S) !== "off" ? "&smap=" + smapOf(S) : "")));   // (the map: this browser's copy, else the shared one)
+          : "") + (smapNow !== "off" ? "&smap=" + smapNow : "") + (M ? "&mod=" + M.id : "") +
+        (M && ModSettings.query(msVals) ? "&ms=" + ModSettings.query(msVals) : "")));   // (the map: this browser's copy, else the shared one)
     };
     // slot rows: "you                team 1", the who column padded to the longest text in this language,
     // each row in its tank's color (which is all that tells the colors apart - no color name)
@@ -694,8 +770,10 @@ export function mount() {
         s.kind = step(KINDS.filter(k => (k !== "you" && k !== "p2") || free(k)), s.kind, d);
         redraw();
       };
-      // (infection / survival make their own teams: the team column gray, nothing to set - the mode's description instead)
-      const own = (TunnelerEngine.OWN_TEAMS || []).includes(gmode);
+      // (infection / survival make their own teams: the team column gray, nothing to set - the mode's description instead;
+      // a mod's @hide teams the same: its "no teams" line)
+      const own = (TunnelerEngine.OWN_TEAMS || []).includes(gm) || hid("teams");
+      const ownInfo = hid("teams") ? ModSettings.noTeamsText(M.name) : T("gm." + gm + ".i");
       const teamText = T("lc.team", { n: s.team });   // (shown gray when it doesn't apply: the row stays put)
       return {
         key: "slot" + i, align: "left", attr: TEXT_COLORS[i] & 0x0F,
@@ -705,7 +783,7 @@ export function mount() {
         dim: own ? [2 + whoW, 2 + whoW + teamText.length] : null,
         zones: own ? [{ from: 2, to: 2 + whoW - 1, click: setKind }]
           : [{ from: 2, to: 2 + whoW - 1, click: setKind }, { from: 2 + whoW, to: 2 + whoW + teamText.length, click: setTeam }],
-        info: own ? [s.kind === "you" ? youInfo() : s.kind === "p2" ? T("lc.p2.i1") : T(MOBILE ? "lc.slot.i1m" : "lc.slot.i1", { levels: levelsText() }), T("gm." + gmode + ".i")]
+        info: own ? [s.kind === "you" ? youInfo() : s.kind === "p2" ? T("lc.p2.i1") : T(MOBILE ? "lc.slot.i1m" : "lc.slot.i1", { levels: levelsText() }), ownInfo]
           : s.kind === "you" ? [youInfo(), T("lc.you.i2")] : s.kind === "p2" ? [T("lc.p2.i1"), T("lc.you.i2")]
           : [T(MOBILE ? "lc.slot.i1m" : "lc.slot.i1", { levels: levelsText() }), T("lc.slot.i2")],
         go: own ? () => setKind(1) : () => setTeam(1),
@@ -713,21 +791,22 @@ export function mount() {
         change: setKind,
       };
     });
-    const startInfo = S.error ? [{ text: T(S.error, { n: rec ? rec.bases : 0 }), color: 12 }]
+    const startInfo = S.error ? [{ text: MS.blocked && S.error.startsWith("mm.") ? rawT(S.error, MS.blocked)
+      : T(S.error, { n: rec ? rec.bases : 0, min: S.error === "ms.err.bases" ? H.bases.min : M ? M.tanks.min : 2, max: M ? M.tanks.max : 8 }), color: 12 }]
       // (infection / survival make their own sides: the mode's description, not the slots' teams)
-      : (TunnelerEngine.OWN_TEAMS || []).includes(gmode) ? [T("gm." + gmode + ".i"), T(view === "everyone" ? "cpu.all" : view === "team" ? "cpu.team" : "cpu.own")]
+      : (TunnelerEngine.OWN_TEAMS || []).includes(gm) ? [T("gm." + gm + ".i"), T(viewNow === "everyone" ? "cpu.all" : viewNow === "team" ? "cpu.team" : "cpu.own")]
       : [S.p2 >= 0 ? (S.nCpu ? T(S.teamGame ? "lc.go.2t" : "lc.go.2n", { n: S.nCpu, t: S.nTeams }) : T("lc.go.2"))
         : S.one ? T("lc.go.1", { level: Lang.lower(Lang.raw("level." + S.used.find(u => u.kind !== "you").kind)) })
         : S.teamGame ? T("lc.go.t", { t: S.nTeams, n: S.nCpu, m: S.mates }) : T("lc.go.n", { n: S.nCpu }),
-      T(view === "everyone" ? "cpu.all" : view === "team" && S.mates > 0 ? "cpu.team" : "cpu.own")];
+      T(viewNow === "everyone" ? "cpu.all" : viewNow === "team" && S.mates > 0 ? "cpu.team" : "cpu.own")];
     const setView = d => { view = step(VIEWS, view, d); redraw(); };
-    const setMode = d => { gmode = step(MODE_LIST, gmode, d); redraw(); };
-    // Left / Right: the next map that can be played; Enter: the map picker (your maps with their pictures, the
-    // gallery - owner, 2026-10-28)
+    // Left / Right: the next map that can be played (1.5: and whose mods can - MapMods.status, docs/MODS.md 6a); Enter:
+    // the map picker (your maps with their pictures, the gallery - owner, 2026-10-28)
     const GEN = MapGen.KINDS.map(k => MapGen.id(k));
-    const setMap = d => { cpuMap = step([""].concat(GEN, cpuMaps.filter(r => !MapStore.playable(r) || r.id === cpuMap).map(r => r.id)), cpuMap, d); redraw(); };
+    const canPlay = r => !MapStore.playable(r) && !MapMods.status(r, modRecs).blocked;
+    const setMap = d => { cpuMap = step([""].concat(GEN, cpuMaps.filter(r => canPlay(r) || r.id === cpuMap).map(r => r.id)), cpuMap, d); redraw(); };
     const pickMap = () => MapPick.show(ui, { random: true, current: cpuMap, state: pickState, name: () => DosUI.playerName(),
-      gen: { size: cpuSize, bases: Math.max(2, S.used.length) },
+      gen: { size: cpuSize, bases: H.bases ? Mods.basesFor(H, { size: cpuSize }) : Math.max(2, S.used.length) },
       choose: async c => {
         cpuMap = c.random ? "" : c.gen ? c.gen : c.rec.id;
         if (SIZES.includes(c.size) && !c.rec) cpuSize = c.size;   // (1.3: the size is chosen in the picker)
@@ -739,34 +818,44 @@ export function mount() {
     // friendly fire)
     const setSight = d => { sight = step(SIGHTS, sight, d); redraw(); };
     // (1.3: the map with the score - the team ones only with a team of 2+ tanks)
-    const smapList = SHOW_MAPS.filter(v => (v !== "team" && v !== "allteam") || S.teamGame), smap = smapOf(S);
+    const smapList = SHOW_MAPS.filter(v => (v !== "team" && v !== "allteam") || S.teamGame), smap = smapOf(S), smapNow = hid("showMap") ? HD.showMap : smap;
     const setSmap = d => { showMap = step(smapList, smap, d); redraw(); };
     const setWatch = d => { watchOut = step(TunnelerEngine.AFTER_DEATH, watchOut, d); redraw(); };
     const toggleFF = () => { ff = !ff; redraw(); };
     const options = [
-      { key: "mode", label: T("lc.mode") + T("gm." + gmode), info: [T("gm." + gmode + ".i"), T("lc.mode.i")], go: () => setMode(1), change: setMode },
-      GOALS[gmode]                                   // (a mode's goal instead of rounds to win)
-        ? { key: "goal", label: T("goal." + gmode) + (gmode === "infection" ? T("time.n", { n: goalOf(gmode) }) : goalOf(gmode)), info: [T("goal." + gmode + ".i")],
-          go: () => { cpuGoals[gmode] = step(GOALS[gmode].choices, goalOf(gmode), 1); redraw(); },
-          change: d => { cpuGoals[gmode] = step(GOALS[gmode].choices, goalOf(gmode), d); redraw(); } }
-        : winItem(cpuWin, v => { cpuWin = v; redraw(); }),
-      gmode === "infection"                          // (infection: its goal is a time)
+      // (1.5: Standard or a mod - official, this browser's, the gallery's; a map made for mods: one of those)
+      modeItem(cpuMod, MS.ids, v => { cpuMod = v; redraw(); }, MS.needs ? rec : null,
+        () => ModsUI.pick(ui, { current: cpuMod, title: T("lc.mode.title"), backLabel: T("set.back"), backInfo: T("lc.mode.back.i"),
+          pick: id => { cpuMod = id; saveCpu(); cpu(false, "mode"); }, back: () => cpu(false, "mode") })),
+      GOALS[gm]                                      // (a mode's goal instead of rounds to win)
+        ? hid("goal") ? null : { key: "goal", label: T("goal." + gm) + (gm === "infection" ? T("time.n", { n: goalOf(gm) }) : goalOf(gm)), info: [T("goal." + gm + ".i")],
+          go: () => { cpuGoals[gm] = step(GOALS[gm].choices, goalOf(gm), 1); redraw(); },
+          change: d => { cpuGoals[gm] = step(GOALS[gm].choices, goalOf(gm), d); redraw(); } }
+        : hid("winScore") ? null : winItem(cpuWin, v => { cpuWin = v; redraw(); }),
+      hid("roundTime") ? null
+        : gm === "infection"                         // (infection: its goal is a time)
         ? Object.assign(timeItem(cpuTime, () => {}), { info: [T("lc.time.inf")], valueAttr: 8, change: undefined, go: () => {} })
         : timeItem(cpuTime, v => { cpuTime = v; redraw(); }),
       { key: "map", label: T("lc.map") + (rec ? mapLabel(rec) : sizedLabel(MapGen.parse(cpuMap) ? genLabel(MapGen.parse(cpuMap))
-          : T("lc.map.random"), cpuSize)),
-        info: rec && rec.linked === false ? [{ text: T("lc.err.path"), color: 12 }, T("lc.map.i2")]
+          : T("lc.map.random"), size)),
+        info: rec && MapStore.playable(rec) === "path" ? [{ text: T("lc.err.path"), color: 12 }, T("lc.map.i2")]
           : MapGen.parse(cpuMap) ? [T("gen." + MapGen.parse(cpuMap).kind + ".i"), T("gen.i2")]
           : [T("lc.map.i1"), T("lc.map.i2")],
         go: pickMap, change: setMap },
-      { key: "smap", label: T("smap.label") + T("smap." + smap), info: [T("smap.i1"), T("smap." + smap + ".i")], go: () => setSmap(1), change: setSmap },
-      { key: "sight", label: T("lc.sight") + T("sight." + sight), info: [T("sight.i1"), T("sight.i2")], go: () => setSight(1), change: setSight },
-      { key: "view", label: T("cpu.view") + T("view." + view), info: [T("view.i1"), T("view.i2")], go: () => setView(1), change: setView },
-      { key: "watch", label: T("lc.watch") + T("watch." + watchOut), info: [T("watch.i1"), T("watch.i2")], go: () => setWatch(1), change: setWatch },
+      hid("showMap") ? null : { key: "smap", label: T("smap.label") + T("smap." + smap), info: [T("smap.i1"), T("smap." + smap + ".i")], go: () => setSmap(1), change: setSmap },
+      hid("sight") ? null : { key: "sight", label: T("lc.sight") + T("sight." + sight), info: [T("sight.i1"), T("sight.i2")], go: () => setSight(1), change: setSight },
+      // (Player 2 set: "Self" is the split screen - each player's own view side by side; owner, 2026-11-02)
+      hid("visible") ? null : { key: "view", label: T("cpu.view") + T(S.p2 >= 0 && view === "self" ? "view.split" : "view." + view),
+        info: S.p2 >= 0 && view === "self" ? [T("view.split.i"), splitKeys()] : [T("view.i1"), T(S.p2 >= 0 ? "view.i2.p2" : "view.i2")], go: () => setView(1), change: setView },
+      hid("watchOut") ? null : { key: "watch", label: T("lc.watch") + T("watch." + watchOut), info: [T("watch.i1"), T("watch.i2")], go: () => setWatch(1), change: setWatch },
       // friendly fire only matters with teammates: its value gray while no team has 2+ tanks
-      S.teamGame ? { key: "ff", label: T("lc.ff") + T(ff ? "lc.on" : "lc.off"), info: [T("lc.ff.i1"), T("lc.ff.i2")], go: toggleFF, change: toggleFF }
+      hid("friendlyFire") ? null
+        : S.teamGame ? { key: "ff", label: T("lc.ff") + T(ff ? "lc.on" : "lc.off"), info: [T("lc.ff.i1"), T("lc.ff.i2")], go: toggleFF, change: toggleFF }
         : { key: "ff", label: T("lc.ff") + T(ff ? "lc.on" : "lc.off"), info: [T("lc.ff.none")], valueAttr: 8, go: () => {} },
-    ];
+    ].filter(Boolean);
+    // (1.5: the mod's own settings after the built-in ones - docs/MODS.md 3a; the box scrolls when they don't all fit)
+    if (M) options.push(...ModSettings.rows(H, msVals, { name: M.name, on: T("lc.on"), off: T("lc.off"), width: ui.isNarrow() ? DosUI.NARROW_W : cpuSetW(),
+      set: v => { ModSettings.save("tunneler.cpu.modset", M.id, v); redraw(); } }));
     // like the online game lobby (online.js), without the chat: the 8 slot rows (the screen's title in the
     // box's border) and the settings on top, Start / Back below them, the selected item's info under it
     const sets = options.map(o => Object.assign(o, { align: "left" }));
@@ -796,32 +885,22 @@ export function mount() {
     // (the slots and the settings side by side, 3 columns apart, centred together; the Game box centred
     // below them, the info under it)
     // (the settings box as wide as its widest possible value, so it doesn't jump when one changes)
-    const noop = () => {}, labels = [
-      ...MODE_LIST.map(m => T("lc.mode") + T("gm." + m)),
-      ...SIZES.flatMap(z => [T("lc.map") + "W".repeat(MAP_COLS) + " (" + T("lc.size." + z) + ", 8)",
-        ...[T("lc.map.random"), ...MapGen.KINDS.map(k => genLabel({ kind: k }))].map(n => T("lc.map") + sizedLabel(n, z))]),
-      ...Object.keys(GOALS).flatMap(m => GOALS[m].choices.map(n => T("goal." + m) + (m === "infection" ? T("time.n", { n }) : n))),
-      ...[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => winItem(n, noop).label),
-      ...TIMES.map(v => timeItem(v, noop).label),
-      T("lc.ff") + T("lc.on"), T("lc.ff") + T("lc.off"),
-      ...SIGHTS.map(v => T("lc.sight") + T("sight." + v)),
-      ...SHOW_MAPS.map(v => T("smap.label") + T("smap." + v)),
-      ...VIEWS.map(v => T("cpu.view") + T("view." + v)),
-      ...TunnelerEngine.AFTER_DEATH.map(w => T("lc.watch") + T("watch." + w))];
-    const seatW = DosUI.boxWidth(slotItems), actW = DosUI.boxWidth(acts),
-      setW = Math.max(DosUI.boxWidth(sets), DosUI.boxWidth(labels.map(label => ({ label, align: "left" }))));
+    const seatW = DosUI.boxWidth(slotItems), setW = Math.max(cpuSetW(), DosUI.boxWidth(sets.filter(it => !/^ms:/.test(it.key))));
+    // (the settings box at most SET_ROWS item rows - as many as a game without a mod has: a mod's settings scroll in it,
+    // the Game box and the picture stay where they are - docs/MODS.md 3a)
+    const setRows = Math.min(sets.length, SET_ROWS);
     const x0 = Math.max(1, 1 + ((80 - (seatW + 2 + 3 + setW + 2)) >> 1));
     // (owner, 2026-10-28: the Game box under the Settings, as wide as them; the chosen map's picture under the slots, in
     // a frame as wide as their box - always: an example of a random world / a generated kind too, MapPick.preview)
-    const setX = x0 + seatW + 5, gameY = sets.length + 4, frameY = slotItems.length + 3, PIC_ROWS = 6;
-    const pv = MapPick.preview(rec || cpuMap || "", cpuSize, Math.max(2, S.used.length));
+    const setX = x0 + seatW + 5, gameY = setRows + 4, frameY = slotItems.length + 3, PIC_ROWS = 6;
+    const pv = MapPick.preview(rec || cpuMap || "", size, H.bases ? Mods.basesFor(H, { size }) : Math.max(2, S.used.length));
     // (bleed: up and down into the frame's rows; across it stays inside the box - a wide box: the width decides)
     const pic = pv ? Object.assign({ row: frameY + 1, col: x0 + 1.3, cols: seatW - 0.6, rows: PIC_ROWS, bleed: 0.3 }, pv) : null;
     const frame = { x: x0, y: frameY, x2: x0 + seatW + 1, y2: frameY + PIC_ROWS + 1 };
     const infoRow = Math.max(frame.y2 + 1, gameY + acts.length + 2) + 1;
     ui.show({
       boxes: [{ x: x0, y: 1, w: seatW, title: T("cpu.title"), items: slotItems },
-        { x: setX, y: 1, w: setW, title: T("box.settings"), items: sets },
+        { x: setX, y: 1, w: setW, title: T("box.settings"), items: sets, rows: SET_ROWS },
         { x: setX, y: gameY, w: setW, title: T("box.game"), items: acts }],
       pic, panels: [frame], block: [1, infoRow + 1],
       hint: T("create.hint"),
@@ -830,7 +909,13 @@ export function mount() {
     }, keep);
   }
 
+  // (a mod's share link /mod/<id>: the main menu's address, the mod's screen - fetched and kept; /#mods: the Mods screen)
+  const modLink = /^\/mod\/([a-z2-9]{10})\/?$/.exec(location.pathname);
   if (location.hash === "#cpu") { history.replaceState(null, "", location.pathname); cpu(); }
-  else if (location.hash === "#split") { history.replaceState(null, "", location.pathname); split(); }
+  // (1.5: split screen is the skirmish with Player 2 - View: Split screen; owner, 2026-11-02: "split screen should be
+  // dropped and moved under a new View type (split screen) when you set both players")
+  else if (location.hash === "#split") { history.replaceState(null, "", location.pathname); cpu(); }
+  else if (location.hash === "#mods") { history.replaceState(null, "", location.pathname); mods(); }
+  else if (modLink) { history.replaceState(null, "", "/"); main("mods"); ModsUI.fromLink(ui, modsOpts, modLink[1]); }
   else main(0);
 }

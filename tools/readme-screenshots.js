@@ -53,7 +53,7 @@ const fill = a => { while (a.length < 8) a.push(S('closed', a.length + 1)); retu
     p = await page({ 'tunneler.cpu.slots': JSON.stringify(fill([S('you', 1), S('hard', 2), S('normal', 1), S('hard', 2)])),
       'tunneler.cpu.view': 'team', 'tunneler.cpu.time': '3', 'tunneler.cpu.watch': 'others',
       'tunneler.cpu.map': 'gen:rivers:natural', 'tunneler.cpu.size': 'large', 'tunneler.cpu.showmap': 'team' }, '/');
-    await sleep(800); await p.keyboard.press('ArrowDown'); await p.keyboard.press('Enter'); await sleep(500); await shot(p, 'vs-computer.png'); await p.close();
+    await sleep(800); await p.keyboard.press('Enter'); await sleep(500); await shot(p, 'vs-computer.png'); await p.close();
     // split screen, both tanks digging
     p = await page({}, '/play.html?mode=hotseat&size=medium&win=3');
     await until(p, () => tunnelerEngine().screen === 'play');
@@ -106,7 +106,7 @@ const fill = a => { while (a.length < 8) a.push(S('closed', a.length + 1)); retu
     // graphics "modern" (docs/GRAPHICS.md): the main menu, its settings, a skirmish of 4 (clean), the split screen (retro)
     // the map picker (the skirmish's Map row; generated islands, large): map-picker.png / modern-map-picker.png
     p = await page({ 'tunneler.cpu.map': 'gen:islands:natural', 'tunneler.cpu.size': 'large' }, '/');
-    await sleep(800); await p.keyboard.press('ArrowDown'); await p.keyboard.press('Enter'); await sleep(500);
+    await sleep(800); await p.keyboard.press('Enter'); await sleep(500);
     await p.evaluate(() => tunnelerHomeUI().spec.items.find(i => i.key === 'map').go()); await sleep(600);
     await shot(p, 'map-picker.png'); await p.close();
     if (MODERN) {

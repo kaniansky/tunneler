@@ -12,6 +12,8 @@ import { STRINGS_EN } from "../../lang/en/engine.js";
 import { TunnelerEngine } from "../game/engine.js";
 import { Lang } from "../text/lang.js";
 import { UniText } from "../text/unitext.js";
+// (the official mods with an Instructions paragraph - src/mods/official.json's game modes)
+const OFFICIAL_MODES = ["gold", "infection", "survival", "hill", "shrink", "ctf", "siege", "deathmatch"];
 
 const PAGE_ROWS = 23, PAGE_W = 78;
 const visLen = t => UniText.cols(t.replace(/\{\d+\}/g, ""));
@@ -72,12 +74,13 @@ function instructionRows(ctx) {
   add("");
   para(I.gameHead, I.game);
   for (const [head, text] of I.sections || E.sections) { add(""); para(head, text); }
-  // the game modes (docs/DESIGN-8P.md 27): each one's name and its own explanation (GM.strings.<lang>.instr)
-  for (const m of TunnelerEngine.MODE_LIST) {
-    const M = TunnelerEngine.MODES[m], S = M && M.strings;
-    if (!S || !S.en || !S.en.instr) continue;
-    const name = ((ctx.strings.settings || {}).modes || STRINGS_EN.settings.modes)[m] || m;
-    add(""); para(name.charAt(0).toUpperCase() + name.slice(1) + ":  ", Lang.enc((S[ctx.lang] && S[ctx.lang].instr) || S.en.instr));
+  // the game's modes - official mods since 1.5 (docs/MODS.md 6c, src/mods/): each one's name and its explanation
+  // (src/lang/<code>/omodes.js "om.<key>", the name gm.<key>)
+  for (const m of OFFICIAL_MODES) {
+    const text = Lang.raw("om." + m);
+    if (!text) continue;
+    const name = Lang.raw("gm." + m) || m;
+    add(""); para(Lang.enc(name.charAt(0).toUpperCase() + name.slice(1)) + ":  ", Lang.enc(text));
   }
   return rows;
 }

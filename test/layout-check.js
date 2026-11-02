@@ -2,7 +2,8 @@
 // The menus' layout on every screen size (owner, 2026-10-25: most bugs of a week were phone layouts the tests
 // didn't see): the main menu, split screen, the skirmish and its Game settings, every Settings category, the
 // games list, creating a game, join by link, the name prompt, the replays, the maps (docs/v6/MAPS.md: the list, a
-// new map, a map's screen, open a link, the editor's menu, a skirmish with a map) - on a desktop, a phone held upright
+// new map, a map's screen, open a link, the editor's menu, a skirmish with a map), the Mods screen and the mod gallery
+// (docs/MODS.md 6b: the list, the gallery - all versions too -, a published mod's screen, a mod's screen) - on a desktop, a phone held upright
 // (the narrow layout) and sideways (a touch screen with the 80-column layout), in every language. Each screen:
 //   - every box has its place (a box without one drew nothing: the skirmish held sideways was blank),
 //   - boxes stay on the screen, don't overlap each other, end above the info (the online lobby's Game box ran
@@ -11,8 +12,8 @@
 //   - the online game's lobby too: host, player, spectator, its Game settings, the kick page;
 //   - every item's info fits (a narrow screen: 7 rows - the window gets shorter for more than 4; a wide one: the
 //     rows down to the rule, 80 columns).
-const path = require("path"), vm = require("vm");
-const { runPage } = require("./page-env.js");
+const fs = require("fs"), path = require("path"), vm = require("vm");
+const { runPage, shippedMod, textResponse } = require("./page-env.js");
 const { SRC } = require("./src.js");
 
 let failures = 0, checked = 0;
@@ -35,7 +36,7 @@ function makeEnv(pathname, size, touch, realTimers) {
   const rooms = [{ id: "friday", name: "Friday night tunnels", public: true, spectators: true, locked: false, version: "dev", state: "lobby", round: 0, wins: [], teamWins: [],
     ext: true, mode: "standard", players: 2, places: 4, bots: 1, open: 2, spec: 1, seats: [] },
   { id: "cup", name: "Championship of the long names", public: true, spectators: true, locked: true, version: "dev", state: "play", round: 2, wins: [1, 0], teamWins: [],
-    ext: false, mode: "gold", players: 2, places: 2, bots: 0, open: 0, spec: 3, seats: [] },
+    ext: true, mode: "standard", mod: "fcnguuvgug", modName: "Capture the flag", players: 2, places: 2, bots: 0, open: 0, spec: 3, seats: [] },   // (1.5: a mode is a mod)
   // (a running 4-tank free-for-all: its score in the state column fits the row)
   { id: "quick-play", name: "Quick play", qp: true, public: true, spectators: true, locked: false, version: "dev", state: "playing", round: 3, wins: [2, 1, 0, 2],
     teamWins: [], ext: true, teams: false, mode: "standard", players: 3, places: 4, bots: 1, open: 1, spec: 0, seats: [] }];
@@ -94,7 +95,7 @@ function check(win, ui, where) {
   } else if (s.boxes) {
     for (const b of ui.boxesGeom()) {
       if (!Number.isFinite(b.x) || !Number.isFinite(b.y)) { bad("box " + (b.title || b.start) + " has no place (x " + b.x + ", y " + b.y + ")"); continue; }
-      boxes.push({ x: b.x, y: b.y, w: b.w, start: b.start, end: b.end, top: b.y, bottom: b.y + 1 + (b.end - b.start), title: b.title });
+      boxes.push({ x: b.x, y: b.y, w: b.w, start: b.start, end: b.end, top: b.y, bottom: b.y + 1 + (b.scrolls ? b.rows : b.end - b.start), title: b.title });   // (rows: a box that scrolls)
     }
   } else {
     const g = ui.geom(), side = ui.sideGeom(), shown = ui.rowItems().length;
@@ -412,6 +413,45 @@ const tick = () => new Promise(r => setTimeout(r, 0));
         check(hw, hui, W + ", the map picker (one can't be played)");
         go("tab"); await later();
         check(hw, hui, W + ", the map picker's gallery");
+      }
+      // ---------------------------------------------------------------- the Mods screen and the mod gallery (docs/MODS.md 6 / 6b)
+      {
+        const env = makeEnv("/", size, touch);
+        env.storage.set("tunneler.lang", code);
+        env.page("index.html");
+        const win = env.win, ui = win.tunnelerHomeUI(), Mods = win.Mods;
+        const later = async () => { for (let k = 0; k < 12; k++) await new Promise(r => setTimeout(r, 0)); };
+        const race = fs.readFileSync(path.join(SRC, "mods", "race.tmod.js"), "utf8");
+        for (const f of ["race", "hot-potato", "conquest"]) await win.ModStore.save(fs.readFileSync(path.join(SRC, "mods", f + ".tmod.js"), "utf8"));
+        // (a server's gallery: long names, authors, versions; the first yours - Race, with its settings)
+        const pub = [];
+        for (let k = 0; k < 12; k++) pub.push({ id: k ? "abcdefgh" + "23456789"[k % 8] + "abcdefghjkmn"[k] : Mods.idOf(race), name: k ? "Championship of tunnels " + k : "Race",
+          by: "Wolfgang Amadeus", about: "Every tank starts in the first base; the other bases are checkpoints, driven in their order, and the last one is the finish.",
+          game: k % 4 === 3 ? "1.3 - 1.4" : "1.5 - 1.7, 1.9+", version: "2.1-beta", mode: "standard", tanks: { min: 2, max: 8 }, bases: { min: 2, max: 8 }, settings: 2,
+          plays: k * 1234, at: 1000 - k, mine: k === 0 });
+        win.fetch = async url => {
+          url = String(url);
+          if (/\/api\/modgallery/.test(url)) return { ok: true, status: 200, json: async () => ({ mods: /game=/.test(url) ? pub.filter(e => e.game !== "1.3 - 1.4") : pub }) };
+          if (shippedMod(url) !== null) return textResponse(shippedMod(url));   // (the official mods: src/mods/)
+          return { ok: false, status: 404, json: async () => ({}) };
+        };
+        ui.spec.items.find(x => x.key === "mods").go(); await later();
+        check(win, ui, W + ", mods");
+        // (1.5: the Show row - Official, Your mods, The gallery)
+        ui.spec.items.find(x => x.key === "tab").change(-1); await later();
+        if (!ui.spec.items.some(x => /^o:./.test(x.key))) throw new Error(W + ": the Official tab without the official mods");
+        check(win, ui, W + ", the official mods");
+        ui.spec.items.find(x => x.key === "tab").change(1); await later();
+        ui.spec.items.find(x => x.key === "tab").go(); await later();
+        check(win, ui, W + ", the mod gallery");
+        ui.spec.items.find(x => x.key === "ver").go(); await later();
+        ui.sel = ui.spec.items.findIndex(x => x.key === "g:" + pub[3].id); check(win, ui, W + ", the mod gallery, all versions");
+        ui.spec.items.find(x => x.key === "g:" + pub[0].id).go(); await later();
+        check(win, ui, W + ", a published mod (yours)");
+        ui.spec.items.find(x => x.key === "back").go(); await later();
+        ui.spec.items.find(x => x.key === "tab").change(-1); await later();   // (the gallery -> your mods)
+        ui.spec.items.find(x => x.key === "m:" + Mods.idOf(race)).go(); await later();
+        ui.sel = ui.spec.items.findIndex(x => x.key === "pub"); check(win, ui, W + ", a mod (Publish)");
       }
       // ---------------------------------------------------------------- the replays
       {

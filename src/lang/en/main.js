@@ -225,7 +225,7 @@ Lang.register("en", {
   "level.normal": "Medium",
   "level.hard": "Hard",
   // vs computers with 1-7 opponents / teams, spectator view modes (views.js)
-  "home.cpu.i1n": "Your own game against 1 to 7 computer tanks - alone or two players.",
+  "home.cpu.i1n": "Your own game against computer tanks - alone, or two players split screen.",
   "home.cpu.i1m": "Your own game against 1 to 7 computer tanks.",
   "cpu.all": "You see every tank's view screen.",
   "map.anykey": "PRESS ANY KEY",
@@ -430,6 +430,9 @@ Lang.register("en", {
   "view.everyone": "Everyone",
   "view.i1": "What you see during play: only your own view screen,",
   "view.i2": "your team's or every tank's (yours first).",
+  "view.split": "Split screen",
+  "view.split.i": "Split screen: each player's own view side by side, like the original.",
+  "view.i2.p2": "your team's or every tank's (the two players' first).",
   "cpu.team": "You see your team's view screens.",
   "os.visible": "View limit: ",
   "os.visible.i1": "The most a player may see during play: their own",

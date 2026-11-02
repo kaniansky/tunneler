@@ -7,6 +7,9 @@
 // view, the live map or one tank - Tab, 1 2 3, Left / Right) with Space / Enter (a tap) = pause, + / - =
 // speed (1/2x .. 8x; sound only at 1x), PgUp / PgDn = 30 s back / on, Home = from the start, Esc = back.
 // At its end: the world map, then "End of replay" (statistics, watch again, back).
+// A match with a script mod (1.5, docs/MODS.md 4): its file - the replay's own (one saved as a file / shared carries it),
+// this browser's (ModStore) or the game's server's (ModFetch) - and QuickJS are loaded before it plays; saved as a file
+// or shared, the replay takes the file with it (ModFetch.forReplay). The list shows the mod's name for its mode.
 import "../draw/gfx-modern.js";
 import "../draw/gfx-hud.js";
 import { Display } from "../draw/display.js";
@@ -19,6 +22,9 @@ import { Lang } from "../text/lang.js";
 import { Nav } from "../nav.js";
 import { Pads } from "../io/pads.js";
 import { Replay } from "../game/replay.js";
+import { Mods } from "../game/mods.js";
+import { ModFetch } from "../net/modfetch.js";
+import { Scope } from "../scope.js";
 import { Runner } from "../io/runner.js";
 import { GameScreen } from "../io/screen.js";
 import { Speaker } from "../io/speaker.js";
@@ -45,6 +51,8 @@ export function mount() {
 
   // what plays (null on the list / a replay's screen)
   let rep = null, engine = null, player = null, runner = null, views = null;
+  let modSrc = null;                                       // the playing replay's mod's file (null: no mod)
+  Scope.onEnd(() => { if (engine) engine.dispose(); });   // (the page goes: a mod's sandbox with it)
   let watching = false, paused = false, speed = 1, ended = false, differs = false, seekTo = null, vt = 0, last = 0;
   const ui = new DosUI(canvas, { display, active: () => !watching,
     present: snap => { if (runner) runner.setOverlay(snap); else display.setSnapshot(snap); } });
@@ -76,11 +84,13 @@ export function mount() {
   // flag" - owner, 2026-10-28: "Skirmish" said nothing); a replay's screen: the kind, then its mode
   const modeOf = r => { const m = r.opts && r.opts.mode; return typeof m === "string" && Lang.raw("gm." + m) ? m : "standard"; };
   const cap = t => t.charAt(0).toUpperCase() + t.slice(1);
-  const modeText = r => UniText.fromRaw(cap(Lang.raw("gm." + modeOf(r))));
+  // (a script mod: its name instead of the mode)
+  const modName = r => r.mod && typeof r.mod.name === "string" && r.mod.name ? r.mod.name : null;
+  const modeText = r => UniText.fromRaw(modName(r) || cap(Lang.raw("gm." + modeOf(r))));
   const kindText = r => r.kind === "online" ? UniText.fromRaw(r.room || "") || T("rp.kind.online") : r.kind === "split" ? T("rp.kind.split")
     : r.challenge ? T("home.challenge") : modeText(r);
   const kindLine = r => (r.kind === "online" ? kindText(r) : T(r.kind === "split" ? "rp.kind.split" : r.challenge ? "home.challenge" : "rp.kind.skirmish"))
-    + (r.kind === "split" ? "" : UniText.fromRaw(", " + Lang.lower(Lang.raw("gm." + modeOf(r)))));
+    + (r.kind === "split" && !modName(r) ? "" : UniText.fromRaw(", " + (modName(r) || Lang.lower(Lang.raw("gm." + modeOf(r))))));
   const playersText = r => {
     const P = r.meta ? r.meta.players : [];
     return P.length === 2 ? UniText.fromRaw(Lang.raw("rp.vs").replace("{a}", nameOf(P[0])).replace("{b}", nameOf(P[1]))) : T("rp.tanks", { n: P.length });
@@ -189,8 +199,9 @@ export function mount() {
     shareNote = { id: r.id, text: T("rp.sharing"), color: 7 };
     detail(r, true);
     try {
+      const full = await ModFetch.forReplay(r).catch(e => { throw new Error(modWhy(e)); });   // (a mod's file goes with it)
       const res = await fetch(Endpoint.api("/api/replays"), { method: "POST", headers: { "Content-Type": "application/octet-stream" },
-        body: new Uint8Array(await (await Replay.toBlob(r)).arrayBuffer()) });
+        body: new Uint8Array(await (await Replay.toBlob(full)).arrayBuffer()) });
       const j = await res.json().catch(() => ({}));
       if (!res.ok || !j.id) throw new Error(j.error || "HTTP " + res.status);
       const link = Endpoint.web(Links.replayLink(j.id));
@@ -245,7 +256,10 @@ export function mount() {
   }
 
   async function saveFile(r) {
-    const blob = await Replay.toBlob(r), A = window.TunnelerAndroid;
+    let full;
+    try { full = await ModFetch.forReplay(r); }               // (a mod's file goes with it)
+    catch (e) { saveNote = { id: r.id, text: T("mo.rp.nosave", { why: modWhy(e) }), color: 12 }; if (!watching) detail(r, true); return; }
+    const blob = await Replay.toBlob(full), A = window.TunnelerAndroid;
     if (A && A.saveFile) {
       const b = new Uint8Array(await blob.arrayBuffer());
       let bin = "";
@@ -287,7 +301,8 @@ export function mount() {
   // a new engine at the replay's start (views stay: the mode / tank watched)
   function build() {
     if (runner) runner.stop();
-    engine = Replay.engine(rep, TunnelerEngine);
+    if (engine) engine.dispose();                          // (a mod's sandbox: freed)
+    engine = Replay.engine(rep, TunnelerEngine, modSrc);
     Lang.apply(engine);                                    // (texts: this page's language)
     engine.uiMode = rep.kind === "split" ? "hotseat" : rep.kind === "online" ? "online" : "cpu";
     engine.smoothScroll = store.get("tunneler.smooth") !== "0" || Gfx.mode() === "modern";
@@ -301,9 +316,37 @@ export function mount() {
   }
   function watch(r) {
     if (!Replay.playable(r)) return oldScreen(r);
+    if (Replay.modOf(r)) return watchModded(r, Replay.modOf(r));
+    modSrc = null;
     rep = r; watching = true; paused = false;
     build();
     renderBar();
+  }
+  // why a replay's mod can't be had (ModFetch's {why, header, msg}) - raw text
+  const modWhy = e => (Lang.raw("mo.why." + (e && e.why)) || Lang.raw("mo.why.other")).replace("{game}", e && e.header ? Mods.gameText(e.header.ranges) : "?")
+    .replace("{version}", Mods.GAME).replace("{msg}", String(e && e.msg || "").slice(0, 40));
+  // a match with a script mod: its file (the replay's own, else this browser's / the server's) and QuickJS, then played
+  function watchModded(r, id) {
+    watching = false;
+    const scope = Scope.current;
+    ui.show({ lines: [{ row: 2, text: T("rp.one.title"), color: 12 }, { row: 10, text: T("mo.rp.loading"), color: 7 }],
+      box: { y: 13 }, infoRow: 18, back, items: [backItem()] });
+    const own = r.mod && typeof r.mod.source === "string" ? r.mod.source : null;
+    const file = own !== null ? (() => {
+      const c = Mods.check(own);
+      return Mods.idOf(own) !== id ? Promise.reject({ why: "hash" }) : c.ok ? Promise.resolve(own) : Promise.reject({ why: c.problem, header: c.header });
+    })() : ModFetch.get(id);
+    file.then(src => Mods.load().then(() => src, e => { throw { why: "load", msg: String(e && e.message || e) }; })).then(src => {
+      if (Scope.current !== scope) return;
+      modSrc = src; rep = r; watching = true; paused = false;
+      build();
+      renderBar();
+    }, e => {
+      if (Scope.current !== scope) return;
+      ui.show({ lines: [{ row: 2, text: T("rp.one.title"), color: 12 }, { row: 4, text: dateText(r.date) + "  " + kindLine(r), color: 15 },
+        { row: 6, text: T("mo.rp.fail"), color: 12 }, { row: 7, text: Lang.enc(modWhy(e).slice(0, 76)), color: 12 }],
+        box: { y: 10 }, infoRow: 15, back, items: [backItem()] });
+    });
   }
   // one step of the replay (quiet: fast-forward, nothing shown or played); false at its end
   function stepOnce(at, quiet) {

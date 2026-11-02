@@ -5,8 +5,10 @@
 //   const t = Medals.track(engine)           a match's kills and losses per player (from outside the engine)
 //   Medals.afterMatch(engine, t, info)       -> the medals earned now (ids, in LIST order; saved)
 //     info = {kind: "skirmish" | "challenge" | "training" | "split" | "online", me (1-based: your tank), levels (per
-//     player: a computer tank's level, null = a human), weekly (the challenge on the map of the week)}
-//   Medals.earn(id)                          -> true when new (saved) - things that aren't a match: a map published
+//     player: a computer tank's level, null = a human), weekly (the challenge on the map of the week), p2 (player 2 played:
+//     the split screen), official (an official mod's key - its mode's medal: "hill"...)}
+//   Medals.earn(id)                          -> true when new (saved) - things that aren't a match: a map published ("maker"), a mod
+//                                            published ("modmaker", 1.5)
 //   Medals.earned()                          {id: day}    Medals.merge(a, b) -> the union of two stored values (JSON)
 //   Medals.LIST                              [{id}] - their names / how to earn them: src/lang/<code>/medals.js
 //   Medals.name(id, Lang) / how(id, Lang)    raw text
@@ -16,7 +18,7 @@ const LIST = [
   { id: "training" }, { id: "first" }, { id: "split" }, { id: "five" }, { id: "flawless" }, { id: "sniper" }, { id: "digger" },
   { id: "hard" }, { id: "seven" },
   { id: "challenge" }, { id: "challenge.win" }, { id: "streak" }, { id: "weekly" },
-  { id: "online" }, { id: "online.win" }, { id: "maker" },
+  { id: "online" }, { id: "online.win" }, { id: "maker" }, { id: "modmaker" },
   ...MODES.map(m => ({ id: "mode." + m })), { id: "allmodes" },
 ];
 const DIG = 300, SNIPER = 0.6, SNIPER_SHOTS = 20, KILLS = 5, STREAK_DAYS = 7;
@@ -76,7 +78,8 @@ function afterMatch(e, t, info) {
   const foes = [];
   for (let p = 1; p <= e.nPlayers; p++) if (p !== me && (!e.isEnemy || e.isEnemy(me, p))) foes.push(p);
   if (kind === "training" && won) add("training");
-  if (kind === "split") add("split");
+  // (a match with player 2 - the split screen, 1.5 the skirmish's View: Split screen - computer tanks or not)
+  if (kind === "split" || (kind === "skirmish" && info.p2)) add("split");
   if (won && kind !== "split" && kind !== "training") add("first");   // (owner, 2026-11-01: not the training ground)
   if (kind !== "training") {
     if (t && t.kills[me] >= KILLS) add("five");
@@ -101,7 +104,8 @@ function afterMatch(e, t, info) {
     if (last.length === STREAK_DAYS && at(last[STREAK_DAYS - 1]) - at(last[0]) === (STREAK_DAYS - 1) * DAY) add("streak");
   }
   if (kind === "online") { add("online"); if (won) add("online.win"); }
-  const mode = e.gameMode;
+  // (1.5: the game's modes are official mods - info.official: the official mod's key, net/official.js)
+  const mode = info.official || e.gameMode;
   if (won && kind !== "split" && MODES.includes(mode)) add("mode." + mode);
   if (MODES.every(m => have["mode." + m] || got.includes("mode." + m))) add("allmodes");
   const out = LIST.map(m => m.id).filter(id => got.includes(id));

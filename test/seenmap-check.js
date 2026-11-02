@@ -13,6 +13,7 @@
 //   - NetProto: the setting checked, carried by roomSettings / readCfg / engineOptions (never with "off")
 //   node test/seenmap-check.js
 const H = require("./modes-harness.js");
+const { PlayScreen } = require("../src/js/draw/playscreen.js");
 const { NetProto, MatchText, TunnelerEngine, MapData } = require("./src.js");
 const { SeenMap } = require("../src/js/draw/seenmap.js");
 const check = H.check;
@@ -61,7 +62,9 @@ console.log("what each shows");
   const po = SeenMap.picture(own.engine, 1), seen = own.engine.seenCells[1].filter(Boolean).length;
   check(seen > 0 && seen < po.w * po.h * 0.9, "own: only what was seen (" + seen + " of " + po.w * po.h + " cells)");
   check(lit(po) > early, "own: more of the world as the match goes on (" + early + " -> " + lit(po) + ")");
-  const all2 = run("all", {}, 1500), e2 = all2.engine, p2 = SeenMap.picture(e2, 1);
+  // (the colour check: a picture while tank 1 lives - a destroyed tank sees nothing, its map all gray)
+  let pLive = null;
+  const all2 = run("all", {}, 1500, e => { if (e.screen === "play" && e.alive[1]) pLive = SeenMap.picture(e, 1); }), e2 = all2.engine, p2 = SeenMap.picture(e2, 1);
   check(lit(po) < lit(p2), "own shows less than all (" + lit(po) + " < " + lit(p2) + ")");
   // (all: where nobody of the team looked, the world as it started - the enemies' tunnels not on it)
   const mates = e2.teamMembers(e2.team(1)), cw = e2.worldW >> 2;
@@ -74,12 +77,36 @@ console.log("what each shows");
   check(unseen > 0 && stale > 0, "all: what the team didn't see stays as it started (" + stale + " of " + unseen + " unseen cells changed since)");
   // (gray: known, not seen now; colour: seen now)
   let gray = 0, colour = 0;
-  for (let i = 0; i < p2.w * p2.h; i++) {
-    const r = p2.rgba[i * 4], g = p2.rgba[i * 4 + 1], b = p2.rgba[i * 4 + 2];
-    if (blank(p2.rgba, i * 4)) continue;
+  for (let i = 0; i < pLive.w * pLive.h; i++) {
+    const r = pLive.rgba[i * 4], g = pLive.rgba[i * 4 + 1], b = pLive.rgba[i * 4 + 2];
+    if (blank(pLive.rgba, i * 4)) continue;
     if (r === g && g === b && r) gray++; else if (r !== g || g !== b) colour++;
   }
   check(gray > colour && colour > 0, "all: what isn't seen now gray (" + gray + "), what is in colour (" + colour + ")");
+  // (seen now after death: the views the after death setting watches - owner, 2026-11-02: "black screen - noone, my
+  // wreck - only my square, watch team - all my living team members, watch killer - my team members and his view, watch
+  // all - see everyones view"; alive: the Show map setting)
+  {
+    const colour = pd => { let c = 0; for (let i = 0; i < pd.w * pd.h; i++) { const o = i * 4; if (!blank(pd.rgba, o) && (pd.rgba[o] !== pd.rgba[o + 1] || pd.rgba[o + 1] !== pd.rgba[o + 2])) c++; } return c; };
+    const after = (map, watchOut, dead = [1]) => {
+      const d = run(map, {}, 400).engine;
+      d.showSettings = { view: "self", visible: false, watchOut };
+      d.killedBy = [0, 2, 0, 0, 0];                       // (GREEN destroyed you)
+      for (const p of dead) d.alive[p] = false;
+      for (let i = 0; i < 4; i++) d.step({ bits: [0, 0, 0, 0], keys: [] });
+      return { c: colour(SeenMap.picture(d, 1)), viewers: PlayScreen.mapViewers(d).join() };
+    };
+    const live = after("own", "others", []), liveTeam = after("team", "others", []);
+    check(live.viewers === "1" && liveTeam.viewers === "1,3", "alive: the Show map setting - seen by me: yours (" + live.viewers + "), seen by team: the team's (" + liveTeam.viewers + ")");
+    const black = after("own", "black"), wreck = after("own", "wreck"), team = after("own", "team"), killer = after("own", "killer"), all = after("own", "others");
+    check(black.viewers === "" && black.c === 0, "destroyed, black screen: nobody's view (" + black.c + " cells in colour)");
+    check(wreck.viewers === "1" && wreck.c > 0, "destroyed, my wreck: only its own view (" + wreck.c + ")");
+    check(team.viewers === "3" && team.c > 0, "destroyed, watch team: the living teammates' (" + team.viewers + ")");
+    check(killer.viewers === "3,2" && killer.c > team.c, "destroyed, watch killer: the teammates' and the killer's (" + killer.viewers + ")");
+    check(all.viewers === "2,3,4" && all.c > killer.c * 0.9, "destroyed, watch all: every living tank's (" + all.viewers + ", " + all.c + " cells)");
+    const mateGone = after("team", "wreck", [3]);
+    check(mateGone.viewers === "1", "alive, seen by team: a destroyed teammate's view no more (" + mateGone.viewers + ")");
+  }
   // (allteam: the teammates' sight changes it too - where only a mate looked, the world as it is now)
   const et = run("allteam", {}, 1500).engine, mate2 = et.teamMembers(et.team(1)).find(p => p !== 1);
   const pAll = SeenMap.picture(e2, 1), pTeam = SeenMap.picture(et, 1);

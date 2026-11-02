@@ -1,0 +1,30 @@
+// Maps that need a mod (1.5, docs/MODS.md 6a): Slovak (src/lang/en/mapmods.js).
+import { Lang } from "../../js/text/lang.js";
+
+Lang.extend("sk", {
+  "mm.row": "Potrebuje mód: ",
+  "mm.row.none": "Žiadny",
+  "mm.row.more": "{name} +{n}",
+  "mm.row.i1": "Módy, pre ktoré je mapa urobená: zápas na nej hrá jeden z nich.",
+  "mm.row.i2": "Enter: vyber ich z módov v tomto prehliadači.",
+  "mm.title": "POTREBUJE MÓD",
+  "mm.top": "Mapa sa dá hrať len s jedným z tu označených módov.",
+  "mm.mod.i": "Enter ho označí alebo odznačí.",
+  "mm.max": "Mapa môže potrebovať najviac 4 módy.",
+  "mm.version": "Je pre {game}; toto je {version}.",
+  "mm.gone": "Mód, ktorý tu nie je ({id})",
+  "mm.gone.i": "Tento mód v tomto prehliadači nie je - Enter ho z mapy odoberie.",
+  "mm.empty": "V tomto prehliadači nie sú žiadne módy.",
+  "mm.empty.i": "Mód príde ako súbor alebo odkaz - najprv si ho ulož v tomto prehliadači.",
+  "mm.clear": "Netreba žiadny mód",
+  "mm.clear.i": "Mapa sa dá hrať s akýmkoľvek módom alebo bez neho.",
+  "mm.back": "Späť na mapu",
+  "mm.back.i": "Obrazovka mapy - tam zmeny ulož alebo vráť.",
+  "mm.needs": "(potrebuje {need})",
+  "mm.why.version": "Potrebuje {name}, ten je pre {game}; toto je {version}.",
+  "mm.why.missing": "Potrebuje {need} - v tomto prehliadači nie je.",
+  "mm.play.other": "{map} potrebuje {need}, nie {mod}.",
+  "mm.play.choose": "{map} potrebuje jeden z týchto módov: {need}.",
+  "mm.err.upload": "Jej módy sa nepodarilo poslať na server ({msg}).",
+  "mm.err.missing": "Jej mód {msg} v tomto prehliadači nie je - nedá sa poslať.",
+});

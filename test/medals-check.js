@@ -45,6 +45,10 @@ console.log("after a match");
   const sp = Medals.afterMatch(m.e, m.t, { kind: "split", me: 1, levels: [null, null] });
   check(sp.includes("split") && !sp.includes("first") && !sp.includes("flawless"), "split screen: its own medal, no victory medals (" + sp + ")");
   reset();
+  // (1.5: a skirmish with player 2 and computer tanks - View: Split screen - earns it too)
+  const sk = Medals.afterMatch(m.e, m.t, { kind: "skirmish", p2: true, me: 1, levels: [null, null] });
+  check(sk.includes("split"), "a skirmish with player 2: the split screen's medal (" + sk + ")");
+  reset();
   const tr = Medals.afterMatch(m.e, m.t, { kind: "training", me: 1, levels: [null, "easy"] });
   check(tr.includes("training") && !tr.includes("first") && !tr.includes("digger"), "the training ground won: recruit - not first victory");
   reset();

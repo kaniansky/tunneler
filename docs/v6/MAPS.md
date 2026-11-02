@@ -38,17 +38,21 @@ A map is a grid of **cells of 4 x 4 world pixels** (the computer players' grid i
 travels: in engine options, links, the online match cfg, replays.
 
 ```
-0  "T" "M" 1 | 2      magic + format (1: classic ground; 2: a ground byte follows the size - section 5c)
+0  "T" "M" 1 - 4      magic + format (1: classic ground; 2: a ground byte follows the size - section 5c; 3: the
+                      ground and the mods - docs/MODS.md 6a; 4: as 3 and the painted ground - section 5d)
 3  size               0 small, 1 medium, 2 large
-(4 ground)            format 2 only: 1 sand, 2 grass
+(4 ground)            formats 2 - 4: 0 classic (not in format 2), 1 sand, 2 grass
+(.. mods)             formats 3 - 4: a count (3: 1..4, 4: 0..4), then 10 ASCII bytes each
 4  n                  bases (0..8), then n x (u16 cx, u16 cy) little endian
 .. name               u8 byte length (<= 96) + UTF-8
 .. terrain kind       0: packed - 2 bits per cell, 4 cells a byte, row by row
                       1: runs - (length - 1) << 2 | value as a varint, row by row
-.. terrain            whichever of the two is shorter
+.. terrain            whichever of the two is shorter (runs: until every cell is filled)
+(.. painted ground)   format 4 only: a kind byte and a body as the terrain's, the values 0..3 (section 5d) - to the end
 ```
 
-Worst case (large, packed) about 32.8 KB; a typical map is a few hundred bytes. `decode` checks everything
+Worst case (large, packed) about 32.8 KB, painted (format 4: two packed layers) about 65.6 KB; a typical map is a few
+hundred bytes. `decode` checks everything
 (magic, size, base count and places, name, the terrain filling exactly every cell, no trailing bytes) and
 returns null for anything else; `canonical(bytes)` = decode + encode (the server keeps only that form).
 
@@ -141,7 +145,7 @@ also the phone's way to choose). A desktop (two rows under the 4:3 screen):
 
 ```
  1 Tunnel  2 Dirt  [ 3 Rock ]  4 Water  5 Base  Undo  Done  SPACE: paint  ESC: done   (the chosen tool white on magenta)
- Brush - 3 +  Zoom - 1:1 +  X 120  Y 64  Bases: 2 of 8  (a message in red)
+ Brush - 3 +  6 Ground < Sand >  Zoom - 1:1 +  X 120  Y 64  Bases: 2 of 8  (a message in red; Ground: 1.5 - 5d)
 ```
 
 Five tools since water (1.3, owner 2026-10-31): each tool is padded with a space on both sides while its row has room,
@@ -154,7 +158,8 @@ message always stay, and on a desktop the key hint fits beside the tools (map-ch
 language).
 
 - Keyboard: arrows / W A S D move the cursor (Shift: 8 cells), Space / Enter paint (held: draw while
-  moving), 1-5 the tools (tunnel, dirt, rock, water, base), Tab / Shift+Tab the next / previous tool, [ ] (or , .) the brush, + - the zoom, U or Ctrl+Z undo, Esc
+  moving), 1-6 the tools (tunnel, dirt, rock, water, base, ground - 5d; 6 again: its next look), Tab / Shift+Tab the next /
+  previous tool (the Ground tool once per look), [ ] (or , .) the brush, + - the zoom, U or Ctrl+Z undo, Esc
   the editor's menu.
 - Mouse: the cursor follows it, left button paints / places, right button drags the view, the wheel zooms.
 - Touch: one finger paints (or places a base); two fingers drag and pinch the view.
@@ -350,6 +355,47 @@ sometimes water, and six kinds were added (5b, "1.3"); the old four made dry wit
 - Tests: `test/water-check.js` (formats, bases on water, the floor and its shore, half speed, shots over water,
   explosions, a bot match on a wet Open field, the option water ignored), map-check (format bytes, cell value 3).
 
+## 5d. Painted ground (1.5, owner 2026-11-02)
+
+Owner: "the ground should be paintable so the user can choose to place sand or grass or nothing" + "setting should
+stay and painting overrides it". The map's Ground (5c) stays its default; a painted cell overrides it. Only the look,
+like the map's Ground: the simulation, `stateHash`, the world, the AI and netproto never see it (ground-paint-check:
+a bot match on a painted map = the same map unpainted). 1.5 is a minor anyway (pages before it can't decode format 4).
+
+- **Data**: `map.groundCells` - `null` (nothing painted) or a byte per cell (`Uint8Array(w * h)`), `MapData.PAINT`:
+  0 the map's ground, 1 classic ("nothing" - the original's dark floor), 2 sand, 3 grass. The frame is never painted
+  (`frame()` clears it there, `decode` too). `MapData.groundOf(map, cx, cy)` -> the cell's ground; `MapData.painted(map)`
+  -> any cell inside the frame not 0. `MapData.copy` copies the layer.
+- **Format 4**: written only for a painted map - every other map keeps the format and the very bytes (code, id) it had:
+  an all-0 layer is no layer. After the size the ground byte (any) and the mods (a count 0..4), then as format 1; after
+  the terrain the painted layer, packed or runs (`layer()` / `readLayer()` - the terrain's own encoding, whichever is
+  shorter). `decode` refuses a layer that doesn't cover exactly every cell or bytes after it; a layer painted only in
+  the frame decodes as none, so `canonical` gives the lower format. An explicit look equal to the map's ground stays
+  explicit (it keeps its look when the map's Ground changes). Limits raised for the worst case: `MAX_CODE` 90000
+  characters, the server's `MAX_MAP_BYTES` 72 KB, an account's map record (`MAX_MAP_JSON`) 96 KB, a .tmap file 96 KB.
+- **Engine**: `engine.groundPaint` = the map's layer when painted, else `null`; with it the floor plane is allocated
+  (as for water or a non-classic ground - a painted classic dry map gets one; unpainted classic dry maps still none).
+  Display code asks `PlayScreen.groundAt(e, x, y)` (the cell's painted ground, else `groundType`) wherever it used
+  `groundType`: playscreen.js (the views, line of sight, the world map), views.js (the world map), seenmap.js,
+  mappic.js (`MapData.groundOf`), the editor; the modern look gets it in the floor texture - each pixel's nibble keeps
+  the floor in bits 0-1 and the painted ground in bits 2-3 (0: `uGround`), `lookAt` in the shader. Unpainted maps:
+  every picture as before (screen-check).
+- **Looks** per cell as 5c per map: open from the start in the cell's ground, dug floor sand where the cell's ground is
+  sand / grass (dark where it is classic), the shore sand everywhere, a base's inside dug.
+- **Editor**: the Ground tool (6) paints the chosen look with the brush - Sand, Grass, Classic, Default (0: back to the
+  map's ground) - over any cell inside the frame (dirt too: what is dug there later looks like it); the terrain and the
+  way between the bases don't change. 6 again (a click on the tool or on its look) = the next look; Tab / Shift+Tab
+  (a gamepad's Y) go through the other tools and then the Ground tool once per look; the status line's `<` `>` choose
+  the look. A desktop: the Ground tool sits on the second row (`6 Ground < Sand >` after the brush - no room beside the
+  five tools, Undo, Done and the keys in every language); a phone: with the tools on the first row, its `< Sand >` on
+  the third while it is chosen (not beside a message). While the tool is chosen painted dirt shows a dot of its look
+  in every 4 pixels. Undo keeps the layer. The map's screen's Ground row: a third info line ("The Ground tool paints over
+  it." - a phone held upright has room for one row more in English). Texts `map.t.ground`, `map.look.*`, `map.ground.i3` in water.js.
+- Tests: `test/ground-paint-check.js` (format 4, old formats' bytes, canonical, odd bytes, the engine display only,
+  the original look's views / world map, map pictures), map-check ("painted ground in the editor": keys, Tab, the
+  status line, painting, Default, undo, saved as format 4, the map's Ground changed under it; the status line's widths
+  with the Ground tool in every language).
+
 ## 6. Playing a map
 
 **Skirmish** (home.js, `/#cpu`): a Settings row **Map: random / <name>** (Enter / a click: the map picker -
@@ -389,7 +435,7 @@ map under the score while Tab (SCORE) is held - docs/NOTES.md "Show map".
 ## 7. Limits and abuse
 
 - Every decoded field is range-checked; anything odd -> null (400 on the API, ignored in options / cfg).
-- Request bodies over 40 KB -> 413; 20 shares a minute per address; 5000 maps on disk (oldest go); the
+- Request bodies over 72 KB (a painted large map packed: ~66 KB - 1.5) -> 413; 20 shares a minute per address; 5000 maps on disk (oldest go); the
   bucket keeps everything (its own rules may delete).
 - A room's `set {map}` with an unknown / bad id is ignored (the host's page sends a map to the room's server
   before choosing it, so its id is known there); only the host, only in the lobby, at most

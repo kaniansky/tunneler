@@ -2,7 +2,8 @@
 // no IndexedDB: the page's memory. A record: {id (local, random), name, size, bases (their number), code
 // (mapdata.js), date, shared (the server's id once shared, else ""), sharedAt (that server's address - a map shared on
 // one server is sent again to another one: the desktop app's Server setting, a link from another site), linked (a tank
-// can drive between all of its bases - TunnelerEngine.mapReach; a map isn't played without)}.
+// can drive between all of its bases - TunnelerEngine.mapReach; a map isn't played without), mods (1.5: the ids of the
+// mods it needs - MapMods.of(rec) reads them, also from an older record's code)}.
 //   MapStore.playable(rec) -> "" (it can be played) / "bases" (fewer than 2) / "path" (not every base reaches the others)
 //   MapStore.fill(list) -> the records, each with linked (older ones: worked out and kept)
 //   MapStore.list() -> records, newest first (filled)       MapStore.get(id)       MapStore.remove(id)
@@ -16,14 +17,29 @@
 // {ok: false, code} (code "none": this server has no gallery - an older one; "net": no answer; "session": log in):
 //   MapStore.gallery({sort: "new" | "plays", from, n, mine}, name) -> {ok, total, maps: [{id, name, size, bases, by, date,
 //                              plays, mine}]}
-//   MapStore.publish(rec, name) -> {ok, map} (a playable map only - the server checks it too; rec.galleryAt = the server)
+//   MapStore.publish(rec, name) -> {ok, map} (a playable map only - the server checks it too; rec.galleryAt = the server;
+//                              1.5: the mods it needs published in the mod gallery too - ModStore.publish)
 //   MapStore.unpublish(id, name) -> {ok}             MapStore.published(rec) -> it is in this server's gallery (as far as
 //                              this browser knows)
 // name: the player's name on a server without accounts (with them the session's display name counts)
+// Maps that need a mod (1.5, docs/MODS.md 6a - game/mapmods.js): the mods go with the map. Share and Publish upload them
+// first (POST /api/mods, the body the mod's file as text - once per server and page); fetchShared fetches them with the
+// map (GET /api/mods/<id> -> the file; its hash must be its id) and keeps them in ModStore - a mod the server doesn't
+// have is left out: the map is kept, MapMods.status says "missing".
+//   MapStore.fetchMods(ids, origin?) -> {got: [ids this browser has now], missing: [ids]} (those it already has: kept)
+//   MapStore.uploadMods(ids) -> resolves once the server has them all; throws an Error with code "missing" (not in
+//                              this browser) | "net" | "error" and msg
+//   MapStore.peekMod(id) -> this browser's record, else the server's file's header {id, name, by, game, ranges} (fetched
+//                              once a page, not kept) or null - a gallery map's mods named before it is taken
+//   MapStore.peekedMod(id) -> that header once fetched, else null (synchronous: a screen draws with what it has)
 import { Account } from "./account.js";
 import { Endpoint } from "./endpoint.js";
 import { TunnelerEngine } from "../game/engine.js";
 import { MapData } from "../game/mapdata.js";
+import { MapMods } from "../game/mapmods.js";
+import { Mods } from "../game/mods.js";
+import { ModStore } from "./modstore.js";
+import { Official } from "./official.js";
 const root = globalThis;
 
 const DB = "tunneler-maps", STORE = "maps";
@@ -88,28 +104,45 @@ async function putRecord(rec) {
 }
 // can a tank drive between all of the map's bases (the engine's check on the world a match starts on)
 const linkedOf = map => { const r = TunnelerEngine.mapReach(map); return !!(r && r.ok); };
+// (... without base walls - for mods with @walls none, Race: linkedOpen)
+const linkedOpenOf = map => { const r = TunnelerEngine.mapReach(map, { walls: false }); return !!(r && r.ok); };
+// every one of these mods has bases without walls (their headers as this page knows them: official, this browser's)
+const wallsNone = ids => Array.isArray(ids) && ids.length > 0 && ids.every(id => {
+  const r = Official.now().find(x => x.id === id) || ModStore.peek(id);
+  return !!r && r.walls === "none";
+});
 async function save(map, rec) {
   const code = MapData.code(map);
   const same = rec && rec.code === code;
-  return put({ id: rec && rec.id || newId(), name: MapData.cleanName(map.name), size: map.size, bases: map.bases.length, code,
+  return put({ id: rec && rec.id || newId(), name: MapData.cleanName(map.name), size: map.size, bases: map.bases.length, code, mods: MapData.cleanMods(map.mods),
     linked: same && typeof rec.linked === "boolean" ? rec.linked : linkedOf(map),
+    linkedOpen: same && typeof rec.linkedOpen === "boolean" ? rec.linkedOpen : linkedOpenOf(map),
     date: same && rec.date ? rec.date : Date.now(), shared: same ? rec.shared || "" : "", sharedAt: same ? rec.sharedAt || "" : "",
     galleryAt: same ? rec.galleryAt || "" : "" });                 // (a changed map is another map: not the published one)
 }
 // records from before the check (no linked): worked out once and kept
 async function fill(recs) {
   for (const r of recs) {
-    if (typeof r.linked === "boolean") continue;
+    if (typeof r.linked === "boolean" && typeof r.linkedOpen === "boolean") continue;
     const m = MapData.decode(r.code);
-    r.linked = !!m && linkedOf(m);
+    if (typeof r.linked !== "boolean") r.linked = !!m && linkedOf(m);
+    r.linkedOpen = !!m && linkedOpenOf(m);
     try { await put(r); } catch (e) { /* kept in memory only */ }
   }
   return recs;
 }
-const playable = r => !r || r.bases < MapData.MIN_BASES ? "bases" : r.linked === false ? "path" : "";
+// (a map whose mods all have bases without walls - @walls none: reached without them counts)
+// (a record from before linkedOpen: worked out here once - when it matters, kept on the record object)
+const openOf = r => {
+  if (typeof r.linkedOpen !== "boolean") { const m = MapData.decode(r.code); r.linkedOpen = !!m && linkedOpenOf(m); put(r).catch(() => {}); }
+  return r.linkedOpen;
+};
+const playable = r => !r || r.bases < MapData.MIN_BASES ? "bases"
+  : r.linked === false && !(wallsNone(r.mods) && openOf(r)) ? "path" : "";
 // the map sent to the game's server: its id there (the content's hash - sharing it again gives the same)
 async function share(rec) {
   if (sharedHere(rec)) return rec.shared;
+  await uploadMods(MapMods.of(rec));                     // (its mods first: a link to a map whose mod nobody can fetch is no link)
   const res = await fetch(Endpoint.api("/api/maps"), { method: "POST", headers: { "Content-Type": "application/octet-stream" },
     body: MapData.fromCode(rec.code) });
   const j = await res.json().catch(() => ({}));
@@ -149,9 +182,16 @@ function gallery({ sort, from, n, mine } = {}, name) {
 }
 async function publish(rec, name) {
   if (playable(rec)) return { ok: false, code: playable(rec) };
+  try { await uploadMods(MapMods.of(rec)); } catch (e) { return { ok: false, code: "mods", msg: e.msg || "" }; }
   const r = await galleryCall("POST", "/api/gallery", {}, MapData.fromCode(rec.code), name);
   if (r.ok || r.code === "published") {
     if (r.ok) { rec.galleryAt = here(); rec.shared = r.id; rec.sharedAt = here(); await put(rec); }
+  }
+  // (1.5, docs/MODS.md 6b: its mods go into the mod gallery too - one published already, or a server without a mod
+  // gallery, changes nothing: the map is published)
+  if (r.ok) for (const id of MapMods.of(rec)) {
+    const m = await ModStore.get(id).catch(() => null);
+    if (m && !ModStore.published(m)) await ModStore.publish(id, name).catch(() => null);
   }
   return r;
 }
@@ -172,11 +212,57 @@ async function fetchShared(id, origin) {
   if (!map) throw new Error("not a map");
   const rec = await save(map);
   rec.shared = id; rec.sharedAt = origin || here();
+  if (rec.mods.length) await fetchMods(rec.mods, origin);
   return put(rec);
 }
 
+// ---------------------------------------------------------------- the mods a map needs (1.5)
+const sent = ModStore.sent;                              // "<server> <mod id>": uploaded from this page (ModStore's: its publish too)
+async function fetchMods(ids, origin) {
+  const got = [], missing = [];
+  for (const id of MapData.cleanMods(ids)) {
+    let have = null;
+    try { have = await ModStore.get(id); } catch (e) { have = null; }
+    if (!have) try {
+      const res = await fetch((origin || Endpoint.base()) + "/api/mods/" + id);
+      const text = res.ok ? await res.text() : null;
+      if (text !== null && Mods.idOf(text) === id) { const r = await ModStore.save(text); have = r.ok ? r.rec : null; }
+    } catch (e) { have = null; }
+    (have ? got : missing).push(id);
+  }
+  return { got, missing };
+}
+const fail = (code, msg) => Object.assign(new Error(msg), { code, msg });
+async function uploadMods(ids) {
+  for (const id of MapData.cleanMods(ids)) {
+    if (sent.has(here() + " " + id)) continue;
+    const rec = await ModStore.get(id).catch(() => null);
+    if (!rec) throw fail("missing", id);
+    let res;
+    try {
+      res = await fetch(Endpoint.api("/api/mods"), { method: "POST", headers: { "Content-Type": "text/plain; charset=utf-8" }, body: rec.source });
+    } catch (e) { throw fail("net", String(e && e.message || e)); }
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok || (j.id && j.id !== id)) throw fail("error", j.error || "HTTP " + res.status);
+    sent.add(here() + " " + id);
+  }
+}
+const peeked = new Map(), known = new Map();             // id -> a Promise of the server's mod header (or null) / the header
+async function peekMod(id) {
+  const have = await ModStore.get(id).catch(() => null);
+  if (have) return have;
+  if (!peeked.has(id)) peeked.set(id, fetch(Endpoint.api("/api/mods/" + id)).then(r => r.ok ? r.text() : null).then(text => {
+    const h = text !== null && Mods.idOf(text) === id ? Mods.parseHeader(text) : null;
+    const rec = h && h.ok ? { id, name: h.name, by: h.by, game: h.game, ranges: h.ranges } : null;
+    if (rec) known.set(id, rec);
+    return rec;
+  }, () => { peeked.delete(id); return null; }));
+  return peeked.get(id);
+}
+
 export const MapStore = {
-  list, get, save, remove, share, sharedHere, byShared, fetchShared, put, putRecord, fill, playable, gallery, publish, unpublish, published,
+  list, get, save, remove, share, sharedHere, byShared, fetchShared, put, putRecord, fill, playable, wallsNone, gallery, publish, unpublish, published,
+  fetchMods, uploadMods, peekMod, peekedMod: id => known.get(id) || null,
   onChange: fn => { listeners.push(fn); },
   // (tests: forget the storage; mem = true: this page's memory only)
   reset(mem) { dbp = mem ? Promise.resolve(null) : null; memory = mem ? new Map() : null; },

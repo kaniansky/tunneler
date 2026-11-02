@@ -20,6 +20,11 @@
 // Accounts (docs/v6/ACCOUNTS.md): on a server that needs them every connection carries a one-time ticket (POST
 // /api/ticket with the session) instead of the name - LOG IN (login.js) first when there is no session, or when the
 // server refuses with "login"; the name prompt only on a server without accounts.
+// Script mods (1.5, docs/MODS.md 5): the host's Mod row (none, or one of this browser's mods made for this version -
+// chosen: sent to the server first, ModFetch.share; a map that needs mods offers only those, one locks it); every page
+// of the room fetches the room's mod (ModFetch: /api/mods/<id>, the hash checked) and QuickJS as soon as the lobby names
+// it, and a match with it waits for both (modWait - its frames gather meanwhile) before its engine is made; what the mod
+// says and why it stopped: across the game for a few seconds.
 import { Medals } from "../game/medals.js";
 import "../draw/gfx-modern.js";
 import "../draw/gfx-hud.js";
@@ -41,6 +46,13 @@ import { MapGen } from "../game/mapgen.js";
 import { MapPic } from "../draw/mappic.js";
 import { MapPick } from "../ui/mappick.js";
 import { MapStore } from "../net/mapstore.js";
+import { MapMods } from "../game/mapmods.js";
+import { Mods } from "../game/mods.js";
+import { ModFetch } from "../net/modfetch.js";
+import { Official } from "../net/official.js";
+import { ModsUI } from "../ui/modsui.js";
+import { ModStore } from "../net/modstore.js";
+import { ModSettings } from "../ui/modsettings.js";
 import { NetProto } from "../game/netproto.js";
 import { Pads } from "../io/pads.js";
 import { Replay } from "../game/replay.js";
@@ -132,6 +144,9 @@ export function mount() {
   let fatal = null, fatal2 = null, desyncAt = -1, lastReport = "";
   let lastRep = null, lastRepSaved = false;   // the last match's replay: saved here from the room's "Save the replay"
   let lastMatch = null;              // {engine, cfg, player} of the last match played to its end (statistics)
+  // a match whose script mod isn't here yet ({no, id, ended}): its frames gather in the queue until the mod's file and
+  // QuickJS are loaded (takeMatch), then its engine is made and runs them (catching up)
+  let modWait = null;
   let statsShown = 0;
   const isPlayer = () => !!engine && player >= 0 && !ended;
   // the views: a player follows their own tank, a spectator chooses (remembered: tunneler.spec.mode / .follow)
@@ -173,15 +188,20 @@ export function mount() {
   window.tunnelerViews = () => views;
   window.tunnelerFrames = () => ({ frames, queued: queue.length, catching, desync: desyncAt, rebuilds });   // (tests: caught up? in step?)
 
-  // a new match ({no, seed, cfg, you} from "match" / "hello")
-  function newMatch(m) {
+  // a new match ({no, seed, cfg, you} from "match" / "hello"); modSource: its mod's file (cfg.mod - fetched and
+  // checked, QuickJS loaded); keep: the frames queued while it waited for it stay
+  function newMatch(m, modSource, keep) {
     if (runner) runner.stop();
     const c = readCfg(m.cfg);
     if (!c) { fatal = "Bad game settings."; updateOverlay(); return false; }
     if (m.no !== rebuildsOf) { rebuildsOf = m.no; rebuilds = 0; }   // (a new match: its own rebuilds)
     cfg = c; matchNo = m.no; player = Number.isInteger(m.you) ? m.you : -1; ended = false;
-    const opts = engineOptions(cfg);
-    engine = new TunnelerEngine(m.seed >>> 0, JSON.parse(JSON.stringify(opts)));
+    const opts = engineOptions(cfg, c.mod ? modSource : undefined);
+    if (engine) engine.dispose();                          // (a mod's sandbox: freed)
+    try { engine = new TunnelerEngine(m.seed >>> 0, JSON.parse(JSON.stringify(opts))); }
+    catch (e) {                                            // (a mod that can't be played here - the server checked it)
+      engine = null; fatal = T("mo.fail", { why: Lang.raw("mo.why." + (e && e.problem ? "version" : "other")) || "?" }); updateOverlay(); return false;
+    }
     medalTrack = Medals.track(engine);                     // (1.4: kills / losses for the medals - only reads)
     Lang.apply(engine);                                    // texts only: the simulation is the same
     engine.uiMode = "online";
@@ -207,7 +227,8 @@ export function mount() {
     views.setWatchOut(player >= 0 ? cfg.watchOut : "wreck");   // (spectators see everything anyway)
     if (showPing) views.setPing(rtt == null ? null : Math.round(rtt));
     markEngine(engine, player);
-    frames = 0; queue.clear(); lastReport = ""; desyncAt = -1; mapPending = false; mapSnap = null; catchSince = 0;
+    frames = 0; if (!keep) queue.clear(); lastReport = ""; desyncAt = -1; mapPending = false; mapSnap = null; catchSince = 0;
+    modNoteSeen = null;
     if (lobby) closeLobby();
     presentOverlay();
     renderBar();
@@ -215,6 +236,7 @@ export function mount() {
   }
   // the server ended the match: once this page has run what it got, back to the lobby (see the loop below)
   function dropMatch() {
+    if (modWait) { modWait = null; matchNo = 0; queue.clear(); }
     if (!engine) return;
     if (engine.menuShift !== 0 && (!lastMatch || lastMatch.no !== matchNo)) lastMatch = { engine, cfg, player, no: matchNo };
     if (runner) runner.stop();
@@ -280,7 +302,8 @@ export function mount() {
     if (engine.screen === "map" && (!lastMatch || lastMatch.no !== matchNo)) {   // the match is over: its statistics are final
       lastMatch = { engine, cfg, player, no: matchNo };
       // (1.4: a player's medals - the computer tanks' levels from the match's seats)
-      if (player >= 0) Medals.afterMatch(engine, medalTrack, { kind: "online", me: player + 1, levels: cfg.slots.map(sl => sl.bot ? sl.level || "easy" : null) });
+      if (player >= 0) Medals.afterMatch(engine, medalTrack, { kind: "online", me: player + 1, levels: cfg.slots.map(sl => sl.bot ? sl.level || "easy" : null),
+        official: engine.modInfo ? Official.keyOf(engine.modInfo.id) || "" : "" });
     }
     if (engine.screen === "map" && engine.snapshots.length) {
       mapSnap = engine.snapshots[engine.snapshots.length - 1];
@@ -461,7 +484,7 @@ export function mount() {
   let chat = [], chatSeq = 0;
   // what this player sees during play: self / team / everyone, at most the room's "visible" (section 23)
   let myView = VISIBLE.includes(store.get("tunneler.view")) ? store.get("tunneler.view") : "self";
-  const visibleNow = () => (cfg && engine ? cfg.visible : st && st.settings.visible) || "self";
+  const visibleNow = () => (cfg && engine ? cfg.visible : st && (modHides("visible") ? "self" : st.settings.visible)) || "self";
   const viewChoices = () => VISIBLE.slice(0, VISIBLE.indexOf(visibleNow()) + 1);
   const viewChoice = () => viewChoices().includes(myView) ? myView : viewChoices()[viewChoices().length - 1];
   let kickArm = null, kickArmTimer = null;
@@ -516,8 +539,9 @@ export function mount() {
   const sizedLabel = (name, size) => name + " (" + sizeName(size) + ")";
   function mapName() {
     const id = st.settings.map || "";
-    if (!id) return sizedLabel(T("os.map.random"), st.settings.size);
-    if (MapGen.parse(id)) return sizedLabel(genLabel(MapGen.parse(id)), st.settings.size);
+    const size = modHides("size") ? Mods.HIDE_DEFAULTS.size : st.settings.size;
+    if (!id) return sizedLabel(T("os.map.random"), size);
+    if (MapGen.parse(id)) return sizedLabel(genLabel(MapGen.parse(id)), size);
     const m = st.map && st.map.id === id ? st.map : myMaps.find(r => r.shared === id) || {};
     return m.name ? mapLabel(m.name, m.bases, m.size) : "...";
   }
@@ -526,8 +550,8 @@ export function mount() {
     const list = mapChoices(), id = st.settings.map || "";
     let at = list.findIndex(o => o.id === id);
     if (mapNote && mapNote.rec) at = list.findIndex(o => o.rec === mapNote.rec);   // (one being sent: on from it)
-    // (Left / Right: only the maps that can be played - and the room's own)
-    const ok = list.filter((o, i) => !o.rec || !MapStore.playable(o.rec) || i === at);
+    // (Left / Right: only the maps that can be played - their mods too, MapMods.status - and the room's own)
+    const ok = list.filter((o, i) => !o.rec || (!MapStore.playable(o.rec) && !MapMods.status(o.rec, myMods).blocked) || i === at);
     useMap(ok[((Math.max(0, ok.indexOf(list[at]))) + d + ok.length) % ok.length]);
   }
   function useMap(next) {
@@ -621,6 +645,133 @@ export function mount() {
     show();
   }
 
+  // ------------------------------------------------------------ the room's script mod (1.5, docs/MODS.md 5)
+  // The host steps through None, this browser's mods made for this version (ModStore; Mods.fits) and the room's mod when
+  // it isn't one of them; a map that needs mods (st.map.mods - MapMods): only those, never None - one: the row locked.
+  // Choosing one sends its file to the server first (ModFetch.share - once a page), then {t:"set", mod: id}; the server
+  // loads and checks it and shows st.mod ({id, name, by, about, game, version, mode, tanks}).
+  let myMods = [], modNote = null;
+  const loadMyMods = () => Promise.all([ModStore.list(), Official.list()]).then(([l]) => { myMods = l; if (lobby && st && lobby.page === "lobby") drawLobby(true); }, () => {});
+  loadMyMods();
+  Scope.onEnd(() => { if (engine) engine.dispose(); });   // (the page goes: a mod's sandbox with it)
+  const MOD_COLS = 16;
+  const fitsHere = r => Mods.fits({ ranges: Mods.parseGame(r.game) });
+  // the room's map's mods (null: it needs none)
+  const roomMapMods = () => st && st.settings.map && st.map && st.map.id === st.settings.map && Array.isArray(st.map.mods) && st.map.mods.length ? st.map.mods : null;
+  function modChoices() {
+    const id = st.settings.mod || "", need = roomMapMods();
+    // (1.5, docs/MODS.md 6c: Standard, the official mods - the server has their files -, then this browser's)
+    const off = Official.now().filter(x => x.id && fitsHere(x));
+    let out = [{ id: "" }].concat(off.map(x => ({ id: x.id, official: x })),
+      myMods.filter(r => fitsHere(r) && !off.some(x => x.id === r.id)).map(r => ({ id: r.id, rec: r })));
+    if (need) out = out.filter(o => need.includes(o.id));
+    if (id && !out.some(o => o.id === id)) out.push({ id, room: true });
+    return out;
+  }
+  // the room's mod as the lobby shows it: {id, name, by, about, version, mode} (its name "..." while the server loads it)
+  function roomMod() {
+    const id = st.settings.mod || "";
+    if (!id) return null;
+    if (st.mod && st.mod.id === id) return Object.assign({}, st.mod, { name: Mods.nameIn(st.mod, Lang.code), about: Mods.aboutIn(st.mod, Lang.code) });
+    const r = myMods.find(x => x.id === id) || Official.now().find(x => x.id === id);
+    return r ? { id, name: Mods.nameIn(r, Lang.code), by: r.by, about: Mods.aboutIn(r, Lang.code), version: r.version, mode: r.mode } : { id, name: "...", by: "", about: "", version: "", mode: "standard" };
+  }
+  // the room's mod's header as the server sent it (st.mod: its @setting / @hide - docs/MODS.md 3a); none while it loads
+  const modHeader = () => st && st.mod && st.settings.mod && st.mod.id === st.settings.mod ? st.mod : null;
+  // the room's mod hides that built-in setting (its row gone; the server plays its default - Mods.HIDE_DEFAULTS)
+  const modHides = n => ModSettings.hides(modHeader(), n);
+  const modLabel = name => UniText.slice(UniText.fromRaw(name), MOD_COLS);
+  const modName = () => modNote ? modLabel(modNote.rec.name) : roomMod() ? modLabel(roomMod().name) : T("gm.standard");
+  // the game mode a match plays: the mod's @mode, else the room's
+  const modeNow = () => { const m = roomMod(); return m && st.mod && st.mod.id === m.id ? m.mode : st.settings.mode; };
+  function stepMod(d) {
+    if (!st || !isHost() || st.match) return;
+    const list = modChoices(), id = st.settings.mod || "";
+    let at = list.findIndex(o => o.id === id);
+    if (modNote) at = list.findIndex(o => o.rec === modNote.rec);   // (one being sent: on from it)
+    if (list.length < 2) return;
+    useMod(list[(Math.max(0, at) + d + list.length) % list.length]);
+  }
+  function useMod(next) {
+    modNote = null;
+    if (!next.rec) return setSetting("mod", next.id);
+    modNote = { rec: next.rec, text: T("mo.sending"), color: 7 };
+    drawLobby(true);
+    ModFetch.share(next.rec.source).then(id => {
+      if (!modNote || modNote.rec !== next.rec) return;
+      modNote = null;
+      setSetting("mod", id);
+    }, e => {
+      if (!modNote || modNote.rec !== next.rec) return;
+      modNote = { rec: next.rec, text: T("mo.err", { msg: String(e && (e.msg || e.why) || e).slice(0, 40) }), color: 12 };
+      if (lobby && st && lobby.page === "lobby") drawLobby(true);
+    });
+  }
+  function modRow(host, row) {
+    const m = roomMod(), need = roomMapMods(), locked = !!need && need.length === 1 && !!m && m.id === need[0];
+    const mapNameRaw = st.map && st.map.name ? st.map.name : "";
+    // (the mod's @about on the info's two rows - wrapped, the rest cut -, else its @about and its author)
+    const aboutRows = t => {
+      // (a phone: one entry - DosUI wraps it to the screen's width)
+      if (lobbyUI.isNarrow()) return [{ text: UniText.fromRaw(UniText.truncRaw(String(t), 150)), color: 11 }];
+      const rows = [];
+      let line = "";
+      for (const w of String(t).split(" ").filter(Boolean)) {
+        if (line && UniText.rawCols(line + " " + w) > 76) { rows.push(line); line = w; } else line = line ? line + " " + w : w;
+      }
+      if (line) rows.push(line);
+      if (rows.length > 2) rows.splice(1, rows.length - 1, UniText.truncRaw(rows.slice(1).join(" "), 73) + "...");
+      return rows.map(r => ({ text: UniText.fromRaw(UniText.truncRaw(r, 76)), color: 11 }));
+    };
+    const about = !m ? [T("gm.standard.i"), T("lc.mode.pick")] : (r => r.length > 1 ? r : r.concat(T(m.version ? "mo.by.v" : "mo.by", { name: m.by || "?", v: m.version || "" })))(aboutRows(m.about || m.name));
+    const label = T("lc.mode") + modName();
+    if (modNote) return row("mod", label, [{ text: modNote.text, color: modNote.color }], d => stepMod(d));
+    if (!host) return Object.assign(row("mod", label, about, d => stepMod(d)), { static: false, attr: 5, info: about, go: () => {} });
+    if (locked) return row("mod", label, about, d => stepMod(d), "mo.locked");
+    return Object.assign(row("mod", label, need ? [T("mo.need", { map: mapNameRaw }), about[0]] : about, d => stepMod(d)), { go: pickMode });
+  }
+  // the host's Enter on the Mode row (1.5 - owner, 2026-11-02: "Mode and Mod should be a single Setting"): the picker -
+  // Official / Your mods / The gallery (ui/modsui.js pick); a map that needs mods: Left / Right through those only
+  function pickMode() {
+    if (!st || !isHost() || st.match || !lobby) return;
+    if (roomMapMods()) return stepMod(1);
+    lobby.page = "mode";
+    const back = () => { if (lobby && lobby.page === "mode") { lobby.page = "lobby"; drawLobby(false, "mod"); } };
+    ModsUI.pick(lobbyUI, { current: st.settings.mod || "", title: T("lc.mode.title"), backLabel: T("set.back"), backInfo: T("lc.mode.back.i"), back,
+      pick: async id => {
+        if (!lobby || lobby.page !== "mode") return;
+        if (id && !myMods.some(r => r.id === id) && !Official.now().some(x => x.id === id)) { try { myMods = await ModStore.list(); } catch (e) { /* as it was */ } }
+        lobby.page = "lobby";
+        const rec = myMods.find(r => r.id === id);
+        if (isHost() && !st.match) useMod(id && rec && !Official.now().some(x => x.id === id) ? { id, rec } : { id });
+        drawLobby(false, "mod");
+      } });
+  }
+  // every page of the room: the room's mod (its file, QuickJS) fetched as soon as the lobby names it - a match with it
+  // then starts at once
+  const prefetched = new Set();
+  function prefetchMod() {
+    const id = st && st.settings && st.settings.mod;
+    if (!id || prefetched.has(id)) return;
+    prefetched.add(id);
+    ModFetch.prepare(id).catch(() => prefetched.delete(id));
+  }
+  // what the mod says (g.say) and why it stopped: across the game for 4 seconds (not while catching up)
+  let modNoteSeen = null, modNoteTimer = null;
+  function modNotice() {
+    const n = engine && engine.modInfo ? engine.modNote : null;
+    if (!n || n === modNoteSeen) return;
+    modNoteSeen = n;
+    if (n.kind === "stop") console.warn("mod " + engine.modInfo.header.name + " stopped:", n.why, n.detail || "");
+    if (catching || rebuilding) return;
+    const text = n.kind === "say" ? Lang.enc(String(n.text || "")) : T("modrun.stopped", { name: engine.modInfo.header.name,
+      why: (Lang.raw("modrun.why." + n.why) || n.why).replace("{detail}", n.detail || "") });
+    const v = views;
+    v.setNotice(text);
+    clearTimeout(modNoteTimer);
+    modNoteTimer = setTimeout(() => { if (v.noticeText === text) v.setNotice(null); }, 4000);
+  }
+
   function seatSet(i, change) {
     if (!st || !isHost() || st.match) return;
     Object.assign(st.seats[i], change);
@@ -653,8 +804,11 @@ export function mount() {
     const nw = narrow ? Math.max(fixed, Math.min(NetProto.MAX_PLAYER_NAME, DosUI.NARROW_W - 5 - tw - pw)) : Math.max(NetProto.MAX_PLAYER_NAME, fixed);
     return { nw, tw, pw };
   }
-  // (infection / survival make their own teams: the seats' teams mean nothing - the team column gray)
-  const ownTeams = () => !!(st && st.settings && TunnelerEngine.OWN_TEAMS.includes(st.settings.mode));
+  // (infection / survival make their own teams, a mod's @hide teams none - every tank its own, Mods.ownTeams: the seats'
+  // teams mean nothing - the team column gray)
+  const noTeams = () => modHides("teams");
+  const ownTeams = () => !!(st && st.settings && (TunnelerEngine.OWN_TEAMS.includes(modeNow()) || noTeams()));
+  const ownTeamsText = () => noTeams() ? ModSettings.noTeamsText(modHeader().name) : T("gm." + st.settings.mode + ".i");
   function seatText(s, i, c) {
     let name, team = T("pg.teamn", { n: s.team }), ping = "";
     if (s.k) {
@@ -703,7 +857,7 @@ export function mount() {
           digit: own ? undefined : i === mine ? n => setTeam(0, n) : n => seatSet(i, { team: n }) });
         if (!s.k && s.kind === "open")
           return Object.assign(it, { info: [T("seat.sit.host.i", { name: NAME(ROLES[i]) }), T("seat.kind.i")], go: () => sitOn(i) });
-        return Object.assign(it, { info: [T("seat.kind.i"), own ? T("gm." + st.settings.mode + ".i") : T("seat.team.i")],
+        return Object.assign(it, { info: [T("seat.kind.i"), own ? ownTeamsText() : T("seat.team.i")],
           go: hasTeam ? () => team(1) : () => hostCycle(i, 1) });
       }
       if (i === mine) {
@@ -733,59 +887,67 @@ export function mount() {
     else drawLobby(true);
   }
 
+  // (the Settings box: at most as many rows as a room without a mod has - a mod's settings scroll in it, nothing moves)
+  const SET_ROWS = 11;
   function settingItems() {
     const s = st.settings, host = isHost() && !st.match && !isQuick();   // (quick play: fixed settings)
     const viewOne = viewChoices().length < 2;
     // friendly fire only matters with teammates: grayed out while no team has 2+ seats that aren't closed
     const teamOf = {};
     for (const x of st.seats) if (x.kind !== "closed") teamOf[x.team] = (teamOf[x.team] || 0) + 1;
-    const teams = Object.values(teamOf).some(n => n > 1) || TunnelerEngine.OWN_TEAMS.includes(s.mode);
+    const teams = !noTeams() && (Object.values(teamOf).some(n => n > 1) || TunnelerEngine.OWN_TEAMS.includes(modeNow()));
     // off (a setting that doesn't apply now): its value gray, the row still selectable - its info says why (owner,
     // 2026-10-28); read-only (not the host): magenta label, gray value
     const row = (key, label, info, step, off) => off
       ? host ? { key, label, align: "left", info: [T(off)], valueAttr: 8, go: () => {} } : { key, label, align: "left", static: true, attr: 5, valueAttr: 8 }
       : host ? { key, label, align: "left", info, go: () => step(1), change: step }
       : { key, label, align: "left", static: true, attr: 5, valueAttr: 7 };
-    const ML = TunnelerEngine.MODE_LIST, mode = ML.includes(s.mode) ? s.mode : "standard";
+    // (a script mod: its @mode - the Mode row gray, the goal the mod's mode's)
+    const ML = TunnelerEngine.MODE_LIST, modded = !!roomMod(), mode = ML.includes(modeNow()) ? modeNow() : "standard";
     const goalText = (m, n) => m === "infection" ? T("time.n", { n }) : String(n);
     const onOff = v => T(v ? "os.on" : "os.off");
     // (1.3: the map with the score - the team ones only with a team of 2+ seats; without one the player's own)
     const sm = SHOW_MAPS.includes(s.showMap) ? s.showMap : "off";
     const smap = teams ? sm : sm === "team" ? "own" : sm === "allteam" ? "all" : sm;
     const smapList = SHOW_MAPS.filter(v => (v !== "team" && v !== "allteam") || teams);
+    const hid = modHides, mh = modHeader();
     return [
       // (the order - owner, 2026-10-31: mode, rounds to win, round time, map, show map, line of sight, view (the room's
-      // limit, then this player's), after death, friendly fire)
-      row("mode", T("lc.mode") + T("gm." + mode), [T("gm." + mode + ".i"), T("lc.mode.i")], d => setSetting("mode", cycle(ML, mode, d))),
+      // limit, then this player's), after death, friendly fire; 1.5: the rows a mod hides gone, its own settings last)
+      // (1.5: the Mode row first - Standard or a mod, one row; owner, 2026-11-02)
+      modRow(host, row),
       // (a mode with a goal - gold, waves, kills...: the goal instead of rounds to win, one round decides it)
       NetProto.GOALS[mode]
-        ? row("goal", T("goal." + mode) + goalText(mode, NetProto.goalOf(mode, s.goals)), [T("goal." + mode + ".i")],
+        ? hid("goal") ? null : row("goal", T("goal." + mode) + goalText(mode, NetProto.goalOf(mode, s.goals)), [T("goal." + mode + ".i")],
           d => setSetting("goals", Object.assign({}, s.goals, { [mode]: cycle(NetProto.GOALS[mode].choices, NetProto.goalOf(mode, s.goals), d) })))
-        : row("win", T("os.win") + s.winScore, [T("os.win.i1"), T("os.win.i2")], d => setSetting("winScore", (s.winScore - 1 + d + 9) % 9 + 1)),
+        : hid("winScore") ? null : row("win", T("os.win") + s.winScore, [T("os.win.i1"), T("os.win.i2")], d => setSetting("winScore", (s.winScore - 1 + d + 9) % 9 + 1)),
       // (infection: its goal is a time to survive - no round time; grayed)
-      row("time", T("os.time") + (s.roundTime ? T("time.n", { n: s.roundTime }) : T("time.off")), [T("time.i1"), T("time.i2")],
+      hid("roundTime") ? null : row("time", T("os.time") + (s.roundTime ? T("time.n", { n: s.roundTime }) : T("time.off")), [T("time.i1"), T("time.i2")],
         d => setSetting("roundTime", cycle(ROUND_TIMES, s.roundTime, d)), mode === "infection" && "lc.time.inf"),
       // the map (docs/v6/MAPS.md): random or a shared one - its own size then (grayed)
       Object.assign(row("map", T("os.map") + (mapNote ? mapLabel(mapNote.rec.name, mapNote.rec.bases, mapNote.rec.size) : mapName()),
         mapNote ? [{ text: mapNote.text, color: mapNote.color }]
-          : st.map && st.map.id === s.map && st.map.linked === false ? [{ text: T("os.map.cut"), color: 12 }, T("os.map.i1")]   // (the server's check)
+          : st.map && st.map.id === s.map && st.map.linked === false && !(st.map.linkedOpen && modHeader() && modHeader().walls === "none") ? [{ text: T("os.map.cut"), color: 12 }, T("os.map.i1")]   // (the server's check)
           : MapGen.parse(s.map) ? [T("gen." + MapGen.parse(s.map).kind + ".i"), T("gen.i2")]   // (as the skirmish's Map row)
           : [T("os.map.i1"), T("os.map.i2")], d => stepMap(d)),
         // (not the host: a row to pick - Enter shows the map, owner 2026-10-28)
         host ? { go: pickMap } : { static: false, attr: 5, info: [T("os.map.view.i")], go: viewMap }),
       // (1.3: the map with the score - "Seen by team" only with a team of 2+ seats; without one it is "Seen by me")
-      row("smap", T("smap.label") + T("smap." + smap), [T("smap.i1"), T("smap." + smap + ".i")], d => setSetting("showMap", cycle(smapList, smap, d))),
-      row("sight", T("os.sight") + T("sight." + (SIGHTS.includes(s.sight) ? s.sight : "full")), [T("sight.i1"), T("sight.i2")],
+      hid("showMap") ? null : row("smap", T("smap.label") + T("smap." + smap), [T("smap.i1"), T("smap." + smap + ".i")], d => setSetting("showMap", cycle(smapList, smap, d))),
+      hid("sight") ? null : row("sight", T("os.sight") + T("sight." + (SIGHTS.includes(s.sight) ? s.sight : "full")), [T("sight.i1"), T("sight.i2")],
         d => setSetting("sight", cycle(SIGHTS, SIGHTS.includes(s.sight) ? s.sight : "full", d))),
-      row("visible", T("os.visible") + T("view." + s.visible), [T("os.visible.i1"), T("os.visible.i2")], d => setSetting("visible", cycle(VISIBLE, s.visible, d))),
+      hid("visible") ? null : row("visible", T("os.visible") + T("view." + s.visible), [T("os.visible.i1"), T("os.visible.i2")], d => setSetting("visible", cycle(VISIBLE, s.visible, d))),
       // what this player sees during play, up to the room's View limit (display only, everybody's own): below the limit
       // (owner, 2026-10-28: always shown - grayed "View: self" when the room allows only that)
       viewOne ? { key: "view", label: T("pg.view") + T("view." + viewChoice()), align: "left", info: [T("pg.view.one")], valueAttr: 8, go: () => {} }
         : { key: "view", label: T("pg.view") + T("view." + viewChoice()), align: "left", info: [T("pg.view.i1"), T("pg.view.i2", { max: Lang.raw("view." + visibleNow()) })],
           go: () => setView(1), change: setView },
-      row("watch", T("os.watch") + T("watch." + s.watchOut), [T("watch.i1"), T("watch.i2")], d => setSetting("watchOut", cycle(AFTER_DEATH, s.watchOut, d))),
-      row("ff", T("os.ff") + T(s.friendlyFire ? "os.on" : "os.off"), [T("os.ff.i1"), T("os.ff.i2")], () => setSetting("friendlyFire", !s.friendlyFire), !teams && "lc.ff.none"),
-    ];
+      hid("watchOut") ? null : row("watch", T("os.watch") + T("watch." + s.watchOut), [T("watch.i1"), T("watch.i2")], d => setSetting("watchOut", cycle(AFTER_DEATH, s.watchOut, d))),
+      hid("friendlyFire") ? null : row("ff", T("os.ff") + T(s.friendlyFire ? "os.on" : "os.off"), [T("os.ff.i1"), T("os.ff.i2")], () => setSetting("friendlyFire", !s.friendlyFire), !teams && "lc.ff.none"),
+      // (the mod's own settings - the host's switches, read-only for the others; the server checks them: st.settings.modSettings)
+      ...(mh ? ModSettings.rows(mh, s.modSettings, { name: mh.name, on: T("os.on"), off: T("os.off"), width: lobbyUI.isNarrow() ? DosUI.NARROW_W : settingsWidth(),
+        set: host ? v => setSetting("modSettings", v) : null, readOnly: it => Object.assign(it, { static: true, attr: 5, valueAttr: 7 }) }) : []),
+    ].filter(Boolean);
   }
 
   // the Settings box as wide as its widest possible row (a setting changed moves no box - the seats, the chat)
@@ -796,7 +958,7 @@ export function mount() {
         ...[T("os.map.random"), ...MapGen.KINDS.map(k => genLabel({ kind: k }))].map(n => T("os.map") + sizedLabel(n, z))]),
       ...Object.keys(G).flatMap(m => G[m].choices.map(n => T("goal." + m) + (m === "infection" ? T("time.n", { n }) : n))),
       T("os.win") + "9", ...ROUND_TIMES.map(v => T("os.time") + (v ? T("time.n", { n: v }) : T("time.off"))),
-      T("os.ff") + T("os.on"), T("os.ff") + T("os.off"),
+      T("os.ff") + T("os.on"), T("os.ff") + T("os.off"), T("mo.row") + T("mo.none"), T("mo.row") + "W".repeat(MOD_COLS),
       ...SIGHTS.map(v => T("os.sight") + T("sight." + v)), ...SHOW_MAPS.map(v => T("smap.label") + T("smap." + v)),
       ...VISIBLE.map(v => T("os.visible") + T("view." + v)), ...VISIBLE.map(v => T("pg.view") + T("view." + v)),
       ...AFTER_DEATH.map(w => T("os.watch") + T("watch." + w))];
@@ -850,13 +1012,14 @@ export function mount() {
     // (the Game box ends where the chat beside it does, above the info: as many rows as the settings above it leave -
     // 8 with 9 settings; View and, after a match, Statistics made 9 and it ran into the info; After death and Save the
     // replay again - owner, 2026-10-30; empty rows go first, from the top - the one above Back to the lobby last)
-    const maxActs = 20 - (sets.length + 3);
+    const setRows = Math.min(sets.length, SET_ROWS);   // (1.5: a mod's settings scroll in the box - docs/MODS.md 3a)
+    const maxActs = 20 - (setRows + 3);
     while (acts.length > maxActs && acts.some(it => it.disabled && !it.label)) acts.splice(acts.findIndex(it => it.disabled && !it.label), 1);
     const lines = [], text = [], panels = [];
     // the seats (the game's name in the top border) and the chat below them on the left - its last row the "Say:"
     // input (a box joined to the panel above it) -, the settings and the Game box below them on the right (owner,
     // 2026-10-28: the Game box under the settings), the spectators between the seats and the chat
-    const seatW = DosUI.boxWidth(seats), setW = Math.max(DosUI.boxWidth(sets), settingsWidth());
+    const seatW = DosUI.boxWidth(seats), setW = Math.max(DosUI.boxWidth(sets.filter(it => !/^ms:/.test(it.key))), settingsWidth());
     const fullTitle = Lang.enc(roomName || roomId) + (st.public ? "" : " " + T("room.private")), title = UniText.slice(fullTitle, seatW - 4);
     const rightW = Math.min(Math.max(setW, DosUI.boxWidth(acts)), 79 - (seatW + 4));
     // (the seats box as wide as the room the right column leaves - owner, 2026-10-28: to the chat's right edge)
@@ -884,13 +1047,13 @@ export function mount() {
         { key: "specs", label: who + names, align: "left", static: true, spans: [[0, W(who), 0x08], [W(who), 200, 0x07]] }];
     };
     seats.push(...watchers(lobbyUI.isNarrow() ? DosUI.NARROW_W : seatBoxW));
-    const setX = 79 - rightW, gameY = sets.length + 3, chatX1 = setX - 2, chatTop = seats.length + 3;
+    const setX = 79 - rightW, gameY = setRows + 3, chatX1 = setX - 2, chatTop = seats.length + 3;
     if (!chatHidden()) chatPanel(lines, text, panels, 1, chatTop, chatX1, 21, 1);   // (its last row: the input below)
     chatForm.width = Math.max(8, chatX1 - 2 - W(T("pg.say")) - 2);
     chatForm.placeholder = T("ph.say");
     const say = chatHidden() ? [] : [{ key: "say", label: T("pg.say"), input: chatForm, align: "left", info: [T("pg.say.i")], go: sendChat }];
     const boxes = [{ x: 1, y: 1, w: seatBoxW, title: UniText.slice(fullTitle, seatBoxW - 4), items: seats },
-      { x: setX, y: 1, w: rightW, title: T("box.settings"), items: sets },
+      { x: setX, y: 1, w: rightW, title: T("box.settings"), items: sets, rows: SET_ROWS },
       { x: setX, y: gameY, w: rightW, title: T("box.game"), items: acts },   // (as wide as the settings above it)
       ...(say.length ? [{ x: 1, y: 19, w: chatX1 - 2, items: say, joinTop: true }] : [])];   // (row 20, the panel's border below)
     // the phone layout (DosUI narrow): the boxes one below the other - the chat a box of its own, its last
@@ -1134,7 +1297,8 @@ export function mount() {
   // the lobby shows between matches - and once the match is over for this page (its engine is back at
   // the menu, or the server ended it and this page has run every frame it got)
   // (the engine's menu after the match - menuShift set -, or the world map this viewer already closed)
-  const matchOver = () => !engine || (ended && !queue.length) ||
+  // (a match waiting for its mod isn't over: its loading screen, not the lobby)
+  const matchOver = () => !engine ? !modWait : (ended && !queue.length) ||
     (!engine.kbdInstalled && ((engine.screen === "text" && engine.menuShift !== 0) || (engine.screen === "map" && !mapPending)));
   setInterval(() => {
     if (ended && !queue.length && engine) dropMatch();
@@ -1149,6 +1313,7 @@ export function mount() {
     if (lobby && lobby.page === "lobby" && lastMatch && statsShown !== lastMatch.no) { statsShown = lastMatch.no; showStats(); }
     if (engine && engine.screen !== lastScreen) { lastScreen = engine.screen; presentOverlay(); }   // e.g. left the map
     if (isPlayer() && runner && matchOver()) report();
+    modNotice();
   }, 100);
   let lastScreen = "";
 
@@ -1219,7 +1384,8 @@ export function mount() {
     rebuilding = true;
     desyncAt = -1;
     if (runner) runner.stop();
-    runner = null; engine = null; bots = null; ended = false;
+    if (engine) engine.dispose();
+    runner = null; engine = null; bots = null; ended = false; modWait = null;
     queue.clear(); catching = false; mapPending = false; mapSnap = null;
     renderBar();
     if (ws) { dropSocket(); clearTimeout(retryTimer); retry = 0; connect(); }
@@ -1294,12 +1460,43 @@ export function mount() {
   function takeMatch(m) {
     if (!m || !Number.isInteger(m.no)) return;
     if (!(engine && m.no === matchNo && m.from === frames + queue.length && m.from > 0)) {
-      if (engine && m.no !== matchNo) dropMatch();
-      if (m.from !== 0 || !newMatch(m)) { if (ws) ws.close(); return; }
+      if ((engine || modWait) && m.no !== matchNo) dropMatch();
+      if (m.from !== 0) { if (ws) ws.close(); return; }
+      // (a script mod: its file and QuickJS first - the frames wait in the queue)
+      const c = readCfg(m.cfg), mod = c && c.mod;
+      if (mod && !(ModFetch.have(mod) && Mods.ready())) return waitForMod(m, mod);
+      if (!newMatch(m, mod ? ModFetch.have(mod) : null)) { if (ws) ws.close(); return; }
     } else if (Number.isInteger(m.you) && m.you !== player) setPlayer(m.you);
     queue.pushEntries(m.f || []);
     if (queue.length > 3) catching = true;
     else nextAt = performance.now();
+  }
+  // a match whose mod this page hasn't loaded yet: "Loading the game's mod..." while its frames gather (from 0 - a
+  // reconnect meanwhile brings them all again), then the match as any other; a mod that can't be had: said, and the page
+  // stops (it can't play this match)
+  function waitForMod(m, id) {
+    if (engine) { if (runner) runner.stop(); engine.dispose(); runner = null; engine = null; }
+    modWait = { no: m.no, id, ended: false };
+    matchNo = m.no; frames = 0; ended = false; queue.clear(); queue.pushEntries(m.f || []);
+    updateOverlay();
+    ModFetch.prepare(id).then(source => {
+      if (!modWait || modWait.no !== m.no) return;
+      const end = modWait.ended;
+      modWait = null;
+      if (!newMatch(m, source, true)) { if (ws) ws.close(); return; }
+      if (end) ended = true;
+      if (queue.length > 3) catching = true;
+      else nextAt = performance.now();
+      updateOverlay();
+    }, e => {
+      if (!modWait || modWait.no !== m.no) return;
+      modWait = null; queue.clear();
+      const why = e && e.why || "other";
+      fatal = T("mo.fail", { why: (Lang.raw("mo.why." + why) || Lang.raw("mo.why.other")).replace("{game}", e && e.header ? Mods.gameText(e.header.ranges) : "?")
+        .replace("{version}", Mods.GAME).replace("{msg}", String(e && e.msg || "").slice(0, 40)) });
+      if (ws) ws.close();
+      updateOverlay();
+    });
   }
 
   function handle(m) {
@@ -1322,6 +1519,7 @@ export function mount() {
         break;
       case "end":
         if (engine && m.no === matchNo) ended = true;
+        if (modWait && m.no === modWait.no) modWait.ended = true;
         break;
       case "you":                                          // quick play: this page drives a tank now (or watches)
         if (engine && m.m === matchNo && Number.isInteger(m.p) && m.p >= -1 && m.p < cfg.slots.length) setPlayer(m.p);
@@ -1339,7 +1537,7 @@ export function mount() {
         chatSeq++;
         break;
       case "f":
-        if (!engine || m.m !== matchNo) break;
+        if ((!engine && !modWait) || m.m !== matchNo) break;
         if (m.n !== frames + queue.length) { if (ws) ws.close(); return; }   // gap: reconnect resumes
         if (!queue.pushEntries(m.f) && ws) ws.close();     // (a malformed entry - e.g. a bad drive marker: reconnect resumes)
         arrived = { end: frames + queue.length, at: performance.now() };
@@ -1350,6 +1548,7 @@ export function mount() {
         const people = x => x ? (x.seats || []).filter(q => q.k).length + (x.specs || []).length : 0;
         if (st && !m.match && people(m) > people(st)) chatBeep("join");
         st = m;
+        prefetchMod();
         qpAt = m.qp && m.qp.left != null ? performance.now() + Math.max(0, Number(m.qp.left) || 0) : 0;
         roomName = m.name || roomName;
         if (isHost() && !m.match) rememberSettings();
@@ -1469,6 +1668,7 @@ export function mount() {
     if (fatal) msg = [{ text: fatal, color: 12 }, ...(fatal2 ? [{ text: fatal2, color: 3 }] : [])];
     else if (restarting) msg = [T("rel.restart"), { text: T("rel.restart2"), color: 3 }];
     else if (!ws || ws.readyState !== 1 || !st) msg = [window.navigator && navigator.onLine === false ? T("rel.offline") : T("on.connecting")];
+    else if (modWait) msg = [T("mo.loading")];
     else if (catching || rebuilding) msg = [rebuilding ? T("rel.rebuild") : T("on.catching"), frames + " / " + (frames + queue.length)];
     else if (engine && !ended && st.match && !st.match.running && !matchOver()) {   // (a classic match: one player is away)
       const missing = cfg.slots.map((s, i) => st.match.conn[i] ? null : cfg.names[i] || NAME(ROLES[s.color])).filter(Boolean);

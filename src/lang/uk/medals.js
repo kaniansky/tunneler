@@ -43,8 +43,10 @@ Lang.extend("uk", {
   "medal.online.win.i": "Виграй матч онлайн.",
   "medal.maker": "Творець мап",
   "medal.maker.i": "Опублікуй мапу в галереї.",
-  "medal.mode": "Режим: {mode}",
-  "medal.mode.i": "Виграй матч у цьому ігровому режимі.",
+  "medal.modmaker": "Творець модів",
+  "medal.modmaker.i": "Опублікуй мод у галереї (головне меню, Моди).",
+  "medal.mode": "Мод: {mode}",
+  "medal.mode.i": "Виграй матч із цим офіційним модом.",
   "medal.allmodes": "Універсал",
   "medal.allmodes.i": "Виграй матч у кожному ігровому режимі.",
 });

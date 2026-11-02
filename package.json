@@ -1,6 +1,6 @@
 {
   "name": "tunneler",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "TUNNELER 2.0 (1991, Geoffrey Silverton) rewritten in JavaScript from the decompiled original: split screen, vs computer and online multiplayer in the browser",
   "license": "Unlicense",
   "author": "Norko Kaniansky",
@@ -37,6 +37,8 @@
     "check:phone": "node build.js && node tools/phone-check.js"
   },
   "dependencies": {
+    "@jitl/quickjs-wasmfile-release-sync": "0.32.0",
+    "quickjs-emscripten": "0.32.0",
     "ws": "^8.18.0"
   },
   "devDependencies": {

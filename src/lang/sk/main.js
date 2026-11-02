@@ -224,7 +224,7 @@ Lang.register("sk", {
   "level.normal": "Stredná",
   "level.hard": "Ťažká",
   // vs computers with 1-7 opponents / teams, spectator view modes (views.js)
-  "home.cpu.i1n": "Vlastná hra proti 1 až 7 počítačovým tankom - sám alebo vo dvojici.",
+  "home.cpu.i1n": "Vlastná hra proti počítačovým tankom - sám, alebo dvaja na delenej obrazovke.",
   "home.cpu.i1m": "Vlastná hra proti 1 až 7 počítačovým tankom.",
   "cpu.all": "Vidíš obrazovky všetkých tankov.",
   "map.anykey": "STLAČ KLÁVES",
@@ -348,6 +348,7 @@ Lang.register("sk", {
       views: ["len ja", "tím", "všetci"],
       watch: ["po smrti: čierna obrazovka", "po smrti: môj vrak", "po smrti: sledovať tím", "po smrti: sledovať vraha", "po smrti: sledovať všetkých"],
       sight: ["dohľad: kruh", "dohľad: skutočný"],
+      onOff: ["vyp.", "zap."],
       modes: {
         "standard": "štandard",
         "gold": "zlatá horúčka",
@@ -430,22 +431,22 @@ Lang.register("sk", {
         ["Veľkosť mapy:  ", "malá (512 x 256 bodov, štvrtina originálu), stredná (1024 x 512, " +
           "pôvodný svet) alebo veľká (2048 x 1024, štyrikrát väčšia).  Každý tank začína vo svojej " +
           "vlastnej základni.  Vyberáš ju vo výbere máp (<ENTER> na riadku Mapa); riadok Mapa ju ukazuje - Rieky (Veľká), tvoja mapa aj so základňami: Križovatka (Veľká, 6)."],
-        ["Voda a povrch:  ", "niektoré svety majú vodu - jazerá, rieky, more: tank ňou prejde polovičnou rýchlosťou, nedá sa vykopať, strely nad ňou preletia a výbuchy ju nezmenia; základňa nikdy nestojí vo vode.  Počítačové tanky vedia, že voda je pomalá.  Vodu majú generované mapy (Rieky a Ostrovy vždy, ostatné druhy asi v jednom zápase z troch) a mapy, do ktorých ju niekto nakreslil.  Povrch - klasický (tmavé tunely originálu), piesok alebo tráva - je len vzhľad: ukazuje sa na zemi voľnej od začiatku; na piesku a tráve je zem vykopaná počas hry piesočná a breh vody je piesočný na každom povrchu.  Každá generovaná mapa má piesok alebo trávu."],
+        ["Voda a povrch:  ", "niektoré svety majú vodu - jazerá, rieky, more: tank ňou prejde polovičnou rýchlosťou, nedá sa vykopať, strely nad ňou preletia a výbuchy ju nezmenia; základňa nikdy nestojí vo vode.  Počítačové tanky vedia, že voda je pomalá.  Vodu majú generované mapy (Rieky a Ostrovy vždy, ostatné druhy asi v jednom zápase z troch) a mapy, do ktorých ju niekto nakreslil.  Povrch - klasický (tmavé tunely originálu), piesok alebo tráva - je len vzhľad: ukazuje sa na zemi voľnej od začiatku; na piesku a tráve je zem vykopaná počas hry piesočná a breh vody je piesočný na každom povrchu.  Každá generovaná mapa má piesok alebo trávu.  V editore máp nástroj Zem nakreslí na časti mapy iný povrch (klasický, piesok alebo tráva; Predvolený: zasa ten mapy)."],
         ["Pohľad:  ", "čo vidíš počas hry: len ja - iba svoju obrazovku; tím - aj obrazovky " +
           "spoluhráčov; všetci - obrazovky všetkých tankov, tvoju ako prvú.  V hre online nastaví jej " +
           "tvorca limit pohľadu: najviac, čo si v nej hráč môže zvoliť."],
         ["Po smrti:  ", "čo vidíš od zničenia svojho tanku do konca kola: čiernu obrazovku, svoj " +
           "vrak, svojich spoluhráčov, svojho vraha (tank, ktorý ťa zničil, potom ten, ktorý zničil " +
-          "jeho...) alebo všetky tanky, ktoré ešte žijú.  S pohľadom „len ja“ sa ukazujú po jednom: tvoje klávesy doľava / doprava (Nastavenia, Ovládanie; ťuknutie pri okraji obrazovky) prepnú na ďalšieho."],
+          "jeho...) alebo všetky tanky, ktoré ešte žijú.  S pohľadom „len ja“ sa ukazujú po jednom: tvoje klávesy doľava / doprava (Nastavenia, Ovládanie; ťuknutie pri okraji obrazovky) prepnú na ďalšieho.  Najprv sa asi 2 sekundy ešte ukazuje tvoj pohľad."],
         ["Dohľad:  ", "vypnutý - ako v origináli: vidíš celú svoju obrazovku.  Kruh - naživo vidíš len kruh " +
           "okolo svojho tanku; zvyšok obrazovky ukazuje svet tak, ako si ho naposledy videl, v sivej " +
           "(nepriateľský tank ostane tam, kde si ho videl naposledy).  Skutočný - to isté, ale hlina, " +
           "skala a steny základní zakryjú, čo je za nimi (voda nie): v tuneli vidíš len tunel.  Počítačové tanky " +
           "vidia rovnako; stredné a ťažké navyše zhruba počujú, kde je najbližší nepriateľ."],
-        ["Ukázať mapu:  ", "kým počas zápasu držíš <TAB> (na telefóne SKÓRE), pod skóre je mapa sveta: nie (ako originál), čo som videl (čo videl tvoj tank - s dohľadom čo ukázal), čo videl tím (čo videl tvoj tím), odhalená (celý svet, aký bol na začiatku zápasu, mení ho to, čo vidíš) alebo odhalená (tím) (mení ju to, čo vidí tvoj tím).  Mapu mení len to, čo vidíš ty alebo tvoj tím; časti, ktoré práve nikto nevidí, sú sivé a nepriateľské tanky sa ukážu, len keď sú vidieť."],
+        ["Ukázať mapu:  ", "kým počas zápasu držíš <TAB> (na telefóne SKÓRE), pod skóre je mapa sveta: nie (ako originál), čo som videl (čo videl tvoj tank - s dohľadom čo ukázal), čo videl tím (čo videl tvoj tím), odhalená (celý svet, aký bol na začiatku zápasu, mení ho to, čo vidíš) alebo odhalená (tím) (mení ju to, čo vidí tvoj tím).  Mapu mení len to, čo vidíš ty alebo tvoj tím; časti, ktoré práve nikto nevidí, sú sivé a nepriateľské tanky sa ukážu, len keď sú vidieť.  Keď je tvoj tank zničený, ukazuje to, čo sleduješ (po smrti): čierna obrazovka - nič, môj vrak - pohľad tvojho vraku, sledovať tím - pohľady živých spoluhráčov, sledovať vraha - ich a vrahov, sledovať všetkých - všetkých tankov."],
         ["Delená obrazovka:  ", "dvaja hráči na jednej klávesnici, {9}MODRÝ{3} proti {10}ZELENÉMU{3}, " +
-          "každý so svojím pohľadom vedľa seba - potýčka vás dvoch.  Najprv si zvoľ veľkosť mapy, počet kôl " +
-          "na výhru a čas kola."],
+          "každý so svojím pohľadom vedľa seba.  V potýčke nastav jednu farbu na hráča 2 (riadok Pohľad potom ukazuje " +
+          "Delená obrazovka) - len vy dvaja, alebo s počítačovými tankmi a tímami ako v každej potýčke."],
         ["Potýčka:  ", "vlastná hra proti tankom počítača, sám alebo s druhým hráčom na tej istej klávesnici.  Každá z 8 farieb je hráč 1, hráč 2, nikto alebo tank počítača (ľahký, stredný, ťažký) so svojím tímom (1-8) - hráči môžu mať ľubovoľnú farbu; potom režim, víťazné kolá, čas kola, mapa (aj jej veľkosť), ukázať mapu, dohľad, pohľad, čo po smrti a paľba do vlastných.  Hráč 1 riadi W A S D + SHIFT, hráč 2 šípkami + ENTER (iné klávesy: Nastavenia, Ovládanie).  Podržaním <TAB> počas zápasu (aj online) uvidíš skóre a nastavenia hry - alebo mapu (Ukázať mapu).  <ESC> počas hry ukončí zápas; Odveta alebo <ESC> v menu hry sa vráti k nastaveniam."],
         ["Hra online:  ", "2 až 8 tankov na rôznych počítačoch, niektoré z nich môžu byť počítačové.  Hra online " +
           "potrebuje účet na serveri hry (vytvoríš si ho alebo sa prihlásiš prvý raz; server bez účtov chce len meno).  Vytvor hru - jej " +
@@ -618,6 +619,9 @@ Lang.register("sk", {
   "view.everyone": "Všetci",
   "view.i1": "Čo počas hry vidíš: len svoju obrazovku,",
   "view.i2": "obrazovky svojho tímu alebo všetkých tankov (tvoja prvá).",
+  "view.split": "Delená obrazovka",
+  "view.split.i": "Delená obrazovka: pohľad každého hráča vedľa seba, ako v origináli.",
+  "view.i2.p2": "obrazovky svojho tímu alebo všetkých tankov (oboch hráčov prvé).",
   "cpu.team": "Vidíš obrazovky svojho tímu.",
   "os.visible": "Limit pohľadu: ",
   "os.visible.i1": "Najviac, čo hráč počas hry smie vidieť: svoju",

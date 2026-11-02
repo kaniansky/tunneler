@@ -62,6 +62,13 @@ function floorLook(f, x, y, g, still) {
   if (g !== "sand" && g !== "grass") return FLOOR_LOOK.NONE;
   return f === 2 && g === "grass" ? FLOOR_LOOK.GRASS : FLOOR_LOOK.SAND;
 }
+// the ground at world pixel (x, y) of engine e: its map's painted ground there (1.5, engine.groundPaint - a byte per
+// 4 x 4 px cell, MapData.PAINT), else the map's (engine.groundType)
+const PAINT = ["", "classic", "sand", "grass"];
+function groundAt(e, x, y) {
+  const P = e.groundPaint, v = P ? P[(y >> 2) * (e.worldW >> 2) + (x >> 2)] : 0;
+  return v ? PAINT[v] : e.groundType;
+}
 
 class PlayScreen {
   constructor(e) {
@@ -104,6 +111,7 @@ class PlayScreen {
     // ... and the game mode's objects (zone marks, flags, gold...) of the last play frame [x, y, colour, ...]: in the
     // world only while the views are blitted (objPut / objRestore), and that look draws the world after the step
     this.objsShown = [];
+    this.paintShown = [];                         // (1.5: a mod's paint on the ground [x, y, colour, ...] - flat)
     this.biosModeSet();
   }
 
@@ -153,10 +161,11 @@ class PlayScreen {
   // a tank's gauges start empty (a new round, a respawn): drawn in full by the next frames
   resetGauges(p) { this.shownEnergy[p] = 0; this.shownShield[p] = 0; }
   // the mode objects' world pixels [x, y, old colour, ...] about to be restored (engine.objRestore)
-  modeObjects(o) {
-    const s = [];
-    for (let i = 0; i < o.length; i += 3) s.push(o[i], o[i + 1], this.e.getPixel(o[i], o[i + 1]));
-    this.objsShown = s;
+  // (paint: the indexes into o of a mod's paint on the ground - paintShown, the rest objsShown)
+  modeObjects(o, paint) {
+    const s = [], p = [], P = paint && paint.length ? new Set(paint) : null;
+    for (let i = 0; i < o.length; i += 3) (P && P.has(i) ? p : s).push(o[i], o[i + 1], this.e.getPixel(o[i], o[i + 1]));
+    this.objsShown = s; this.paintShown = p;
   }
   resetHud() { this.hudShown = new Array(this.e.nPlayers + 1).fill(null); }
   // the round clock's seconds (the last 30): drawn when they change
@@ -325,7 +334,7 @@ class PlayScreen {
   // the floor plane of a view window just blitted at ScrOfs (world pixel (x0, y0) at its top left): the look of each
   // open pixel; the static: none
   floorView(scrOfs, x0, y0, noise) {
-    const flo = this.flo, F = this.e.floor, W = this.e.worldW, H = this.e.worldH, g = this.e.groundType;
+    const e = this.e, flo = this.flo, F = e.floor, W = e.worldW, H = e.worldH;
     let dst = scrOfs;
     for (let r = 0; r < 71; r++, dst += 84) {
       if (noise) { flo.fill(0, dst >> 1, (dst >> 1) + 38); dst += 76; continue; }
@@ -336,7 +345,7 @@ class PlayScreen {
         for (let k = 0; k < 2; k++) {
           const wx = x0 + 2 * c + k;
           if ((byte >> (k << 2)) & 15 || wx < 0 || wx >= W || wy < 0 || wy >= H) continue;
-          f |= floorLook(F[wy * W + wx], wx, wy, g) << (k << 2);
+          f |= floorLook(F[wy * W + wx], wx, wy, groundAt(e, wx, wy)) << (k << 2);
         }
         flo[dst >> 1] = f;
       }
@@ -360,7 +369,7 @@ class PlayScreen {
     if (!mem || mem.length !== this.e.world.length) mem = this.sightMem[p] = new Uint8Array(this.e.world.length);
     const W = this.e.worldW, H = this.e.worldH, ws = this.e.ws, world = this.e.world;
     // (with a floor: the look of the open pixels seen now or before - never seen stays black)
-    const flo = this.flo, F = this.e.floor, g = this.e.groundType;
+    const flo = this.flo, F = this.e.floor;
     let seen = null;
     if (flo) {
       seen = this.sightSeen[p];
@@ -382,7 +391,7 @@ class PlayScreen {
           if (flo) {
             const pi = wy * W + wx;
             if (!(d & (1 << k))) seen[pi >> 3] |= 1 << (pi & 7);
-            if (!v && seen[pi >> 3] & (1 << (pi & 7))) f |= floorLook(F[pi], wx, wy, g) << (k << 2);
+            if (!v && seen[pi >> 3] & (1 << (pi & 7))) f |= floorLook(F[pi], wx, wy, groundAt(this.e, wx, wy)) << (k << 2);
           }
         }
         this.vram[dst] = byte; dim[dst >> 1] = d;
@@ -427,8 +436,10 @@ class PlayScreen {
   seenTrack(p, x0, y0, vis) {
     const e = this.e;
     if (!e.extended || !e.showMap || e.showMap === "off" || !e.youPlayer) return;
-    // (only what the map can show: the viewer's own - its team's with the team modes)
-    if (p !== e.youPlayer && !((e.showMap === "team" || e.showMap === "allteam") && e.team(p) === e.team(e.youPlayer))) return;
+    // (only what the map can show: the views the player watches - PlayScreen.mapViewers: its own, its team's with the
+    // team modes; after death what its after death setting watches - a destroyed teammate's view no more; owner,
+    // 2026-11-02: "4 player team with 3 players dead still show 4 colored squares in a map")
+    if (!PlayScreen.mapViewers(e).includes(p)) return;
     const cw = e.worldW >> 2, ch = e.worldH >> 2;
     let S = this.seenCells[p], A = this.seenAt[p];
     if (!S || S.length !== cw * ch) { S = this.seenCells[p] = new Uint8Array(cw * ch); A = this.seenAt[p] = new Uint32Array(cw * ch); }
@@ -585,14 +596,15 @@ class PlayScreen {
         let c = this.e.getPixel(wx, wy);
         if (this.e.extended ? this.e.constructor.PixelClassExt[c] === 3 : (c === 10 || c === 9)) c = 0;   // tanks and bases hidden
         this.plotLores(x + 7, y + 5, c);
-        if (flo && !c) flo[(y + 5) * 80 + ((x + 7) >> 1)] |= floorLook(F[wy * W + wx], wx, wy, this.e.groundType, true) << (((x + 7) & 1) << 2);
+        if (flo && !c) flo[(y + 5) * 80 + ((x + 7) >> 1)] |= floorLook(F[wy * W + wx], wx, wy, groundAt(this.e, wx, wy), true) << (((x + 7) & 1) << 2);
       }
     // base markers: the original's 5x5 outline with a 1-pixel doorway gap top and bottom; on other map
     // sizes scaled to cover the whole base (a base is 35 pixels wide whatever the world size)
     const k = this.e.scD / this.e.scN;                             // medium 1, small 2, large 0.5
     const r = Math.max(1, Math.trunc(2.5 * k)), door = Math.trunc(0.5 * k);
-    for (let p = 1; p <= this.e.nPlayers; p++) {
-      const color = this.e.playerColor(p);
+    // (every base in its walls' colour: its player's - a mod's @bases: its owner's, engine.baseColor)
+    for (let p = 1; p <= (this.e.nBases || this.e.nPlayers); p++) {
+      const color = this.e.baseColor ? this.e.baseColor(p) : this.e.playerColor(p);
       const x = Math.trunc((this.e.unsc(this.e.baseX[p]) + 3) / 7) + 7;
       const yc = Math.trunc((this.e.unsc(this.e.baseY[p]) + 3) / 7) + 5;
       if (this.e.size === "small")                               // the black cleared base area too
@@ -700,7 +712,35 @@ class PlayScreen {
 }
 
 PlayScreen.FLOOR_LOOK = FLOOR_LOOK;
+// whose views the map with the score shows as seen now (SeenMap; display only - the views the player watches; owner,
+// 2026-11-02). Alive: its own - its living team's with Show map team / allteam. Its tank destroyed, by its after death
+// setting: black screen - nobody; my wreck - its own (the wreck's view); watch team - its living teammates; watch killer
+// - them and the tank that destroyed it (following the chain while those are destroyed too; none alive: the first
+// alive); watch all - every living tank
+PlayScreen.mapViewers = e => {
+  const you = e.youPlayer, N = e.nPlayers, out = [];
+  if (!you || !e.alive) return out;
+  const mate = p => !!(e.team && e.team(p) === e.team(you));
+  if (e.alive[you]) {
+    const team = e.showMap === "team" || e.showMap === "allteam";
+    for (let p = 1; p <= N; p++) if (p === you || (team && e.alive[p] && mate(p))) out.push(p);
+    return out;
+  }
+  const raw = e.showSettings && e.showSettings.watchOut;
+  const w = e.constructor.afterDeath ? e.constructor.afterDeath(raw) : raw || "wreck";
+  if (w === "black") return out;
+  if (w === "wreck") return [you];
+  for (let p = 1; p <= N; p++) if (e.alive[p] && (w === "others" || mate(p))) out.push(p);
+  if (w === "killer") {
+    let t = you;
+    for (let k = 0; k < N && !e.alive[t]; k++) { const by = e.killedBy ? e.killedBy[t] | 0 : 0; if (!by || by === t) break; t = by; }
+    if (!e.alive[t]) for (let p = 1; p <= N && !e.alive[t]; p++) if (e.alive[p]) t = p;
+    if (e.alive[t] && !out.includes(t)) out.push(t);
+  }
+  return out;
+};
 PlayScreen.floorLook = floorLook;     // (floor, x, y, ground, still) -> FLOOR_LOOK of an open world pixel
+PlayScreen.groundAt = groundAt;       // (engine, x, y) -> the ground at that world pixel (painted, else the map's)
 PlayScreen.rippleAt = rippleAt;
 // do play snapshots carry the views' floor planes? Only the original look's painting reads them (views.js: the original
 // look, or a modern one that failed); node, tests: always
