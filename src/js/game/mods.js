@@ -664,6 +664,9 @@ class Sandbox {
   dispose() {
     if (this.disposed) return;
     this.disposed = true;
+    // (out of memory: its runtime may hold objects QuickJS can't free any more - freeing it would abort the whole
+    // module (JS_FreeRuntime's gc_obj_list assertion, seen in CI): left to go with the module, at most MEMORY)
+    if (this.dead && this.dead.why === "memory") return;
     try { if (this.entry) this.entry.dispose(); this.ctx.dispose(); this.rt.dispose(); }
     catch (x) { QM = null; loading = null; }       // (the WebAssembly aborted: a new module next time)
   }

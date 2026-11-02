@@ -411,6 +411,7 @@ mod({ onHit(g, s, t, fired) { T.hits++; if (!Number.isInteger(fired) || fired < 
       { name: "at its start: g.rules out of range", why: "error", body: "mod({ rules: { shotSpeed: 99 } });", at: 0, detail: /shotSpeed: 1..8/ },
     ];
     for (const F of FAILS) {
+      await Mods.load();                               // (as a page does before each modded game: a module that aborted is made anew)
       const src = modText({ name: "Fails" }, F.body);
       const events = [];
       Mods.onEvent(ev => { if (ev.id === Mods.idOf(src)) events.push(ev); });
@@ -431,6 +432,7 @@ mod({ onHit(g, s, t, fired) { T.hits++; if (!Number.isInteger(fired) || fired < 
     const fresh = await Mods.newModule();
     let worst = 0;
     const seeds = quick ? [1, 2] : [1, 2, 3, 4];
+    await Mods.load();                                 // (after the failures: QuickJS as a page has it)
     for (const name of ["hot-potato", "deathmatch", "closing-wall"]) {
       const src = modFile(name), h = Mods.check(src);
       check(h.ok, name + ": a mod for this game (" + h.header.name + ", @game " + h.header.game + ")");
