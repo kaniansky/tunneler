@@ -91,7 +91,9 @@ import { VERSION } from "../version.js";
 
 const API = 1;
 const MAX_BYTES = 65536;
-const MEMORY = 32 << 20, STACK = 384 << 10;
+// (STACK: QuickJS's own limit, well below what the host's stack allows - a deep recursion must stop on QuickJS's limit
+// on every page alike; 384 KB was more than Node's stack in CI could take: "Maximum call stack size exceeded" first)
+const MEMORY = 32 << 20, STACK = 128 << 10;
 // interrupt-handler calls a call into the sandbox may take (test/mods-check.js measures the example mods' worst call and
 // keeps 10x room above it)
 const BUDGET = 20;
@@ -643,7 +645,11 @@ class Sandbox {
     catch (x) { r = { error: null, hostError: x }; }                      // (the WebAssembly itself failed)
     this.e = null;
     for (const h of hs) if (h !== ctx.null) h.dispose();
-    if (r.hostError) { this.dead = { why: "error", detail: String(r.hostError && r.hostError.message || r.hostError).slice(0, 200) }; return null; }
+    if (r.hostError) {
+      const msg = String(r.hostError && r.hostError.message || r.hostError).slice(0, 200);
+      this.dead = { why: /call stack/i.test(msg) ? "stack" : "error", detail: msg };
+      return null;
+    }
     if (r.error) {
       const over = this.ticks > BUDGET, text = over ? "" : this.errText(r.error);
       r.error.dispose();
