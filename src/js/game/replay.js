@@ -13,6 +13,13 @@
 //   for (let inp; (inp = p.next()); ) { e.step(inp); if (p.check(e) === false) ...plays differently }
 //   Replay.playable(rep) -> recorded by this version (major.minor), minorOf("1.1.5") = "1.1"
 //   Replay.list() / get(id) / remove(id) / save(rep)   (promises), toBlob(rep) / fromBytes(bytes), onChange(fn): fn() after a change
+// A match with a script mod (1.5, docs/MODS.md 4): its options keep the mod's id only (opts.mod = {id}) and rep.mod = {id,
+// name} - the file itself (rep.mod.source) only in a replay saved as a file or shared (net/modfetch.js ModFetch.forReplay
+// puts it in) and in one read from such; Replay.modOf(rep) -> the id (null: no mod); Replay.engine(rep, Engine, source)
+// plays it with the file (rep.mod.source when not given) - QuickJS loaded first (Mods.load). The mod's settings (docs/MODS.md
+// 3a): opts.modSettings = the values the match played with (engine.modInfo.settings - every @setting, defaults filled in),
+// so it plays back the same whatever the page asked for; a replay without them (older, or a mod without settings): the
+// defaults, as the match had.
 import { NetProto } from "./netproto.js";
 import { VERSION } from "../version.js";
 
@@ -76,8 +83,9 @@ class Recorder {
     const date = Date.now();
     const rep = {
       format: FORMAT, id: date.toString(36) + Math.random().toString(36).slice(2, 6), version: VERSION || "dev", date,
-      kind: this.info.kind, room: this.info.room || null, seed: this.info.seed >>> 0, opts: kept(this.info.opts),
+      kind: this.info.kind, room: this.info.room || null, seed: this.info.seed >>> 0, opts: kept(this.info.opts, e),
       names: e.names ? e.names.slice() : null, you: e.youPlayer || null, showSettings: e.showSettings || null,
+      ...(e.modInfo ? { mod: { id: e.modInfo.id, name: e.modInfo.header.name } } : {}),
       aiDriven: e.aiDriven ? Array.from(e.aiDriven, v => !!v) : null,
       steps: this.n, frames: this.frames, checks: this.checks, end: [this.n, NetProto.stateHash(e)], meta: summary(e),
     };
@@ -109,15 +117,24 @@ class Player {
 // (the options as a replay keeps them: without match - an engine's way of running, not the game - so a replay's options
 // are what they always were: the daily challenge checks them; an auto start is played as the match only, step for step
 // the same - test/match-check.js)
-function kept(opts) {
-  if (!opts || typeof opts !== "object" || !("match" in opts)) return opts;
+// (a mod: its id only - the file goes with a replay saved as a file / shared, rep.mod.source - and the settings its engine
+// played with: e.modInfo.settings)
+function kept(opts, e) {
+  if (!opts || typeof opts !== "object" || (!("match" in opts) && !opts.mod)) return opts;
   const o = Object.assign({}, opts);
   delete o.match;
+  if (o.mod) {
+    o.mod = { id: String(o.mod.id || "") };
+    if (e && e.modInfo && e.modInfo.settings) o.modSettings = Object.assign({}, e.modInfo.settings);
+    else if (o.modSettings) o.modSettings = Object.assign({}, o.modSettings);
+  }
   return o;
 }
-function makeEngine(rep, Engine) {
+const modOf = rep => rep && rep.opts && rep.opts.mod && typeof rep.opts.mod.id === "string" ? rep.opts.mod.id : null;
+function makeEngine(rep, Engine, modSource) {
   const opts = JSON.parse(JSON.stringify(rep.opts || {}));
   if (opts.autoStart) opts.match = true;
+  if (opts.mod) opts.mod = { id: opts.mod.id, source: modSource != null ? modSource : rep.mod && rep.mod.source };
   const e = new Engine(rep.seed >>> 0, opts);
   if (rep.names && e.setNames) e.setNames(rep.names);
   if (rep.aiDriven && e.extended) e.aiDriven = rep.aiDriven.slice();   // (set by the computer players before step 1)
@@ -135,7 +152,11 @@ const minorOf = v => (/^(\d+\.\d+)\./.exec(v || "") || [null, v || "?"])[1];
 function valid(rep) {
   return !!rep && typeof rep === "object" && rep.format === FORMAT && typeof rep.id === "string" && Number.isInteger(rep.steps) &&
     Array.isArray(rep.frames) && rep.frames.every(f => Array.isArray(f) && Number.isInteger(f[0]) && f[0] > 0 && typeof f[1] === "string") &&
-    rep.opts && typeof rep.opts === "object" && Number.isFinite(rep.seed);
+    rep.opts && typeof rep.opts === "object" && Number.isFinite(rep.seed) &&
+    // (a mod: its id in the options and beside them the same, the file - when there - a string)
+    (!rep.opts.mod || (!!rep.mod && typeof rep.mod === "object" && /^[a-z2-9]{10}$/.test(rep.opts.mod.id || "") && rep.mod.id === rep.opts.mod.id &&
+      (rep.mod.source === undefined || typeof rep.mod.source === "string"))) &&
+    (rep.opts.modSettings === undefined || (!!rep.opts.modSettings && typeof rep.opts.modSettings === "object" && !Array.isArray(rep.opts.modSettings)));
 }
 
 // ------------------------------------------------------------------ storage: IndexedDB (none: this page's memory)
@@ -233,7 +254,7 @@ function fileName(rep) {
 }
 
 export const Replay = {
-  FORMAT, MAX, CHECK_EVERY, encode, decode, valid, summary, fileName, playable, minorOf,
+  FORMAT, MAX, CHECK_EVERY, encode, decode, valid, summary, fileName, playable, minorOf, modOf,
   recorder: (engine, info, onDone) => new Recorder(engine, info, onDone),
   player: rep => new Player(rep),
   engine: makeEngine,

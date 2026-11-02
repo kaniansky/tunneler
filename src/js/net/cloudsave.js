@@ -1,21 +1,23 @@
-// A logged-in player's maps, replays and settings kept with their account on the game's server (docs/v6/CLOUDSAVE.md;
+// A logged-in player's maps, replays, mods and settings kept with their account on the game's server (docs/v6/CLOUDSAVE.md;
 // owner, 2026-10-28), so every device they log in on has them. No DOM; app.js starts it once (app-wide).
 // A sync compares three states per kind: this device's (MapStore, Replay, localStorage), the server's index
-// (GET /api/save) and the last sync's (localStorage "tunneler.save.<origin>.<account id>" = {settings, maps, replays}):
+// (GET /api/save) and the last sync's (localStorage "tunneler.save.<origin>.<account id>" = {settings, maps, replays, mods}):
 //   - an item on one side only: new there (copied over) - or, when the last sync had it, deleted there (deleted here);
 //   - an item on both sides, different: the side that changed since the last sync wins (both: this device's).
-// Maps and replays are compared by fingerprints (a map: its name, size and code; a replay never changes: its id).
+// Maps and replays are compared by fingerprints (a map: its name, size and code; a replay never changes: its id; a script
+// mod - 1.5, net/modstore.js - neither: its id is its file's hash. A server before 1.5 has no mods in its index: none sent).
 // Settings are the keys of SETTINGS; a sync "pulls" them (the server's changes written here) only at the start and
 // right after logging in - the screens read them when they open, so then the page shows them again (home: reloaded) -,
 // any other sync only sends this device's changes.
 //   CloudSave.start()          app.js: a sync now (a session) and on every login, map / replay change, screen change and
 //                              when the page is hidden
-//   CloudSave.sync({pull})     -> {ok, code?, settings: changed here, maps, replays: items copied / deleted here}
+//   CloudSave.sync({pull})     -> {ok, code?, settings: changed here, maps, replays, mods: items copied / deleted here}
 //   CloudSave.changed()        a sync soon (debounced)
 import { Medals } from "../game/medals.js";
 import { Account } from "./account.js";
 import { Endpoint } from "./endpoint.js";
 import { MapStore } from "./mapstore.js";
+import { ModStore } from "./modstore.js";
 import { Replay } from "../game/replay.js";
 import { Scope } from "../scope.js";
 const root = globalThis;
@@ -25,7 +27,7 @@ const root = globalThis;
 const SETTINGS = ["name", "sound", "volume", "stereo", "fade", "chatsound", "ping", "lang", "gfx", "gfx.modern", "smooth", "tankcolors", "teammarks",
   "keys", "touch.size", "touch.left", "touch.look", "chat.hide", "view", "spec", "replay", "replays.auto", "online", "online.color", "levels",
   "cpu.slots", "cpu.size", "cpu.win", "cpu.time", "cpu.ff", "cpu.view", "cpu.watch", "cpu.sight", "cpu.mode", "cpu.map", "cpu.goals",
-  "split.size", "split.win", "split.time", "medals"].map(k => "tunneler." + k);
+  "split.size", "split.win", "split.time", "medals", "cpu.mod", "split.mod", "cpu.modset", "split.modset"].map(k => "tunneler." + k);
 // (the medals - 1.4: never one side over the other - both devices' together, Medals.merge)
 const UNION = { "tunneler.medals": Medals.merge };
 const DEBOUNCE = 3000;
@@ -122,6 +124,30 @@ async function syncReplays(index, base, out) {
   base.replays = p.agreed;
   return { ok: true };
 }
+// the script mods (1.5): a mod's record (net/modstore.js - its file and what its header says) - the same id, the same file
+async function syncMods(index, base, out) {
+  if (!index.mods || typeof index.mods !== "object") return { ok: true };   // (a server that keeps no mods)
+  const recs = await ModStore.list(), here = {};
+  for (const r of recs) here[r.id] = r.id;
+  const p = plan(here, index.mods, base.mods || {});
+  for (const id of p.up) {
+    const rec = recs.find(r => r.id === id);
+    const r = await call("POST", "/api/save/mod/" + encodeURIComponent(id), { fp: id, mod: rec });
+    if (!r.ok) { delete p.agreed[id]; if (r.code === "full" || r.code === "bad") continue; return r; }
+  }
+  for (const id of p.down) {
+    const r = await call("GET", "/api/save/mod/" + encodeURIComponent(id));
+    if (!r.ok || !r.mod || r.mod.id !== id) { delete p.agreed[id]; if (r.ok || r.code === "none") continue; return r; }
+    let kept = null;
+    quiet++; try { kept = await ModStore.putRecord(r.mod); } finally { quiet--; }   // (checked: its file hashes to its id)
+    if (!kept) { delete p.agreed[id]; continue; }
+    out.mods++;
+  }
+  for (const id of p.delThere) { const r = await call("POST", "/api/save/mod/" + encodeURIComponent(id) + "/delete", {}); if (!r.ok) return r; }
+  for (const id of p.delHere) { quiet++; try { await ModStore.remove(id); } finally { quiet--; } out.mods++; }
+  base.mods = p.agreed;
+  return { ok: true };
+}
 // settings: pull = the server's changes written here too (else only this device's are sent)
 async function syncSettings(index, base, out, pull) {
   const there = index.settings || {}, b = base.settings, result = {}, keep = {};
@@ -153,7 +179,7 @@ let running = null, again = false, again2 = false, timer = null;
 async function run(pull) {
   const s = Account.session();
   if (!s) return { ok: false, code: "session" };
-  const out = { ok: true, settings: false, maps: 0, replays: 0 };
+  const out = { ok: true, settings: false, maps: 0, replays: 0, mods: 0 };
   const index = await call("GET", "/api/save");
   if (!index.ok) {
     if (index.code === "session") Account.logout();
@@ -161,7 +187,7 @@ async function run(pull) {
   }
   let base = {};
   try { base = JSON.parse(ls.get(baseKey(s)) || "{}") || {}; } catch (e) { base = {}; }
-  for (const step of [() => syncSettings(index, base, out, pull), () => syncMaps(index, base, out), () => syncReplays(index, base, out)]) {
+  for (const step of [() => syncSettings(index, base, out, pull), () => syncMaps(index, base, out), () => syncReplays(index, base, out), () => syncMods(index, base, out)]) {
     let r;
     try { r = await step(); } catch (e) { r = { ok: false, code: "error" }; }
     if (!r.ok) { out.ok = false; out.code = r.code; break; }
@@ -193,6 +219,7 @@ function start(onPulled) {
   sync.onPulled = onPulled || null;
   MapStore.onChange(changed);
   Replay.onChange(changed);
+  ModStore.onChange(changed);
   Account.onLogin(() => sync({ pull: true }));
   if (root.document && root.addEventListener) Scope.free(() => root.addEventListener("visibilitychange", () => { if (root.document.visibilityState === "hidden" && Account.session()) sync(); }));
   if (Account.session()) Account.check().then(s => { if (s) sync({ pull: true }); });

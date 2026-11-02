@@ -43,8 +43,10 @@ Lang.extend("sk", {
   "medal.online.win.i": "Vyhraj zápas online.",
   "medal.maker": "Tvorca máp",
   "medal.maker.i": "Zverejni mapu v galérii.",
-  "medal.mode": "Režim: {mode}",
-  "medal.mode.i": "Vyhraj zápas v tomto hernom režime.",
+  "medal.modmaker": "Tvorca módov",
+  "medal.modmaker.i": "Zverejni mód v galérii (hlavné menu, Módy).",
+  "medal.mode": "Mód: {mode}",
+  "medal.mode.i": "Vyhraj zápas s týmto oficiálnym módom.",
   "medal.allmodes": "Všestranný",
   "medal.allmodes.i": "Vyhraj zápas v každom hernom režime.",
 });

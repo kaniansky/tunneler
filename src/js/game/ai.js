@@ -90,6 +90,12 @@ const playersOf = e => e.nPlayers || 2;
 const enemyOf = (e, a, b) => (e.isEnemy ? e.isEnemy(a, b) : a !== b);
 // team index of p (part of the per-round key: setTeams between matches regroups the tanks)
 const teamOf = (e, p) => (e.team ? e.team(p) : p);
+// the bases (1.5: a script mod's @bases puts them apart from the players - e.nBases of them, e.home[p] the one tank p was
+// put in last, e.baseOwner whose they are; every other game: base p is player p's)
+const basesOf = e => e.nBases || playersOf(e);
+const homeOf = (e, p) => (e.home ? e.home[p] : p);
+// where tank p's home is: its base (bases apart without one yet: where it is)
+const homeXY = (e, p) => { const b = homeOf(e, p); return b ? [e.baseX[b], e.baseY[b]] : [e.tankX[p], e.tankY[p]]; };
 
 // ------------------------------------------------------------------ difficulty levels
 //   delay       reaction delay in frames (what the AI perceives of the enemies and their shots is this old)
@@ -486,7 +492,8 @@ class TunnelerAI {
   // ---------------------------------------------------------------- per-round state
   resetRound(e) {
     const me = this.me, N = playersOf(e);
-    const bx = e.baseX[me], by = e.baseY[me];
+    const [bx, by] = homeXY(e, me);
+    this.gridBase = homeOf(e, me);   // (the base the grid is aligned with: its doorways need no steering - doorway)
     this.grid = new Grid(e, ((bx % 4) + 4) % 4, ((by % 4) + 4) % 4);
     // extended engine: the PRNG restarts every round from engine state (identical on every client) +
     // player + level + seed (classic: one stream for the match, see the constructor)
@@ -543,6 +550,7 @@ class TunnelerAI {
     const N = playersOf(e);
     let key = "" + e.round;
     for (let p = 1; p <= N; p++) key += ":" + e.baseX[p] + ":" + e.baseY[p] + ":" + teamOf(e, p);
+    for (let b = N + 1; b <= basesOf(e); b++) key += ":" + e.baseX[b] + ":" + e.baseY[b];
     if (key !== this.roundKey || e !== this.eng) { this.roundKey = key; this.eng = e; this.resetRound(e); }
     // (a game mode with objectives - GM.aiAlways - keeps playing while no enemy is alive)
     const over = e.endTimer >= 0 || (!this.enemies.some(q => e.alive[q]) && !(e.GM && e.GM.aiAlways));
@@ -605,6 +613,18 @@ class TunnelerAI {
   refuelBase(e, mx, my, repair) {
     const me = this.me, N = playersOf(e);
     let best = null, bestS = Infinity;
+    // bases apart (a mod's @bases): the nearest base its team owns; for energy alone also another team's (if it refuels
+    // there at all - rules foeEnergy); a base of nobody's never. None: null - it doesn't retreat
+    if (e.baseOwner) {
+      const t = teamOf(e, me), foe = !repair && e.R && e.R.foeEnergy > 0;
+      for (let b = 1; b <= basesOf(e); b++) {
+        const o = e.baseOwnerOf(b);
+        if (o < 0 || (o !== t && !foe) || (e.GM && e.GM.baseUsable && !e.GM.baseUsable(e, b, me))) continue;
+        const s = cheb(mx, my, e.baseX[b], e.baseY[b]) + (o === t ? 0 : 80);
+        if (s < bestS) { bestS = s; best = { x: e.baseX[b], y: e.baseY[b], repair: o === t }; }
+      }
+      return best;
+    }
     for (let q = 1; q <= N; q++) {
       if (e.GM && e.GM.baseUsable && !e.GM.baseUsable(e, q, me)) continue;
       const mate = q !== me && !enemyOf(e, me, q);
@@ -644,6 +664,13 @@ class TunnelerAI {
     // keep the map cache fresh where it changes
     g.invalidate(mx - 6, my - 6, mx + 6, my + 6);
     if ((this.t & 3) === 0) g.look(mx, my);
+    // (1.5: what a script mod dug / filled since the last frame - game/mods.js; none without a mod)
+    // (missed some - it waited destroyed longer than the edits are kept, 4 steps: its whole map read again as it goes)
+    if (e.modDirty) {
+      if (this.modSeen && e.tick - this.modSeen > 4) g.invalidate(0, 0, e.worldW, e.worldH);
+      else for (const d of e.modDirty) if (d[0] >= (this.modSeen | 0)) g.invalidate(d[1], d[2], d[3], d[4]);
+      this.modSeen = e.tick;
+    }
     for (let p = 1; p <= N; p++)
       for (let s = 1; s <= 6; s++) {
         const sx = e.shotX[p][s];
@@ -768,7 +795,7 @@ class TunnelerAI {
   decide(e) {
     const me = this.me, cfg = this.cfg;
     const mx = e.tankX[me], my = e.tankY[me];
-    const bx = e.baseX[me], by = e.baseY[me];
+    const [bx, by] = homeXY(e, me);
     const T = this.target();
 
     // --- retreat to own base when low on energy or shield
@@ -783,10 +810,13 @@ class TunnelerAI {
     // low shield one that repairs; kept for the retreat (rbase). Classic: its own, as always
     const ext = e.extended && rp == null;
     let rb = ext ? (this.retreating && this.rbase ? this.rbase : this.refuelBase(e, mx, my, e.shield[me] < cfg.retreatS)) : { x: bx, y: by, repair: true };
-    if (ext && this.retreating && !rb.repair && e.shield[me] < cfg.retreatS) rb = this.rbase = this.refuelBase(e, mx, my, true);
+    if (ext && rb && this.retreating && !rb.repair && e.shield[me] < cfg.retreatS) rb = this.rbase = this.refuelBase(e, mx, my, true) || rb;
+    // (bases apart: no base of its team's - nowhere to retreat to)
+    const noBase = !rb;
+    if (noBase) rb = { x: bx, y: by, repair: false };
     const rDist = ext ? cheb(mx, my, rb.x, rb.y) : homeDist;
     const atBase = ext ? e.distance(Math.abs(mx - rb.x), Math.abs(my - rb.y)) < 15 : atHome;
-    if (rp === false) {
+    if (rp === false || noBase) {
       if (this.retreating) { this.retreating = false; this.path = null; this.waypoint = null; }
     } else if (rp === "energy") {
       if (!this.retreating) {
@@ -953,10 +983,11 @@ class TunnelerAI {
       let bestD = Infinity;
       for (const q of this.enemies) {
         if (!e.alive[q]) continue;
-        const d = cheb(mx, my, e.baseX[q], e.baseY[q]);
+        const [qx, qy] = homeXY(e, q);
+        const d = cheb(mx, my, qx, qy);
         if (d < bestD) { bestD = d; this.exploreQ = q; }
       }
-      const ebx = e.baseX[this.exploreQ], eby = e.baseY[this.exploreQ];
+      const [ebx, eby] = this.exploreQ ? homeXY(e, this.exploreQ) : [e.baseX[0], e.baseY[0]];
       if (!this.waypoint) {
         const top = Math.abs(my - (eby - 27)) <= Math.abs(my - (eby + 27));
         this.waypoint = { x: ebx, y: top ? eby - 27 : eby + 27 };
@@ -992,7 +1023,8 @@ class TunnelerAI {
     if (!this.reach) {
       const R = rockCells(e, this.roundKey), cw = R.cw, ch = R.ch, open = R.open, n = cw * ch;
       let a = new Uint8Array(n);
-      const s0 = Math.min(ch - 1, e.baseY[this.me] >> 3) * cw + Math.min(cw - 1, e.baseX[this.me] >> 3);
+      const [hx, hy] = homeXY(e, this.me);
+      const s0 = Math.min(ch - 1, hy >> 3) * cw + Math.min(cw - 1, hx >> 3);
       const q = new Int32Array(n);
       let qh = 0, qt = 0;
       a[s0] = 1; q[qt++] = s0;
@@ -1092,8 +1124,8 @@ class TunnelerAI {
   // Leaving one (a tank that drove in after an enemy) or entering one (an enemy hiding there) is steered
   // here instead: line up with the gap, then straight through. -> {dir}, {x, y} (go there first) or null
   doorway(e, mx, my, gx, gy) {
-    for (let q = 1, N = playersOf(e); q <= N; q++) {
-      if (q === this.me) continue;
+    for (let q = 1, N = basesOf(e); q <= N; q++) {
+      if (q === (this.gridBase === undefined ? this.me : this.gridBase)) continue;
       // a game mode may say base q has no walls any more (siege: a fallen base, its walls rubble) - nothing
       // to line up with there: steering through its "doorway" would keep turning a tank back and forth in
       // it while the planner leads it straight over the rubble. GM.aiOpenBase(e, q) -> true: skip it

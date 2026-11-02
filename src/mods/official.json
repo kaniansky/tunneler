@@ -1,0 +1,20 @@
+{
+  "about": "The official mods (1.5, docs/MODS.md 6c): the Mode choices every game offers first, in this order. \"standard\" is the game without a mod; every other key is src/mods/<key>.tmod.js. The server serves this list with the ids of these files, or the newer ones its admin set (POST /api/mods/official) - a fixed mode needs no new release. \"gallery\": the game's other example mods - not official: the server puts them into its mod gallery (by Norko) when it starts, a newer file in place of the older.",
+  "mods": [
+    "standard",
+    "gold",
+    "infection",
+    "survival",
+    "hill",
+    "shrink",
+    "ctf",
+    "siege",
+    "deathmatch",
+    "hot-potato"
+  ],
+  "gallery": [
+    "race",
+    "conquest",
+    "closing-wall"
+  ]
+}

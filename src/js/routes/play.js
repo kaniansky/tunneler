@@ -13,6 +13,14 @@
 // &practice=1 (a past day, from its leaderboard): the result is never remembered (nor sent); back to that day's board.
 // A custom map (docs/v6/MAPS.md): &lmap=<local id> (a map kept in this browser, mapstore.js) and / or &map=<shared id>
 // (fetched from the game's server and kept) - the engine gets its code (opts.map).
+// A script mod (1.5, docs/MODS.md): &mod=<id> - a mod kept in this browser (net/modstore.js) - skirmish and split screen
+// (never the training ground or the daily challenge): checked (its @game, its @tanks), QuickJS loaded (game/mods.js -
+// only now), then the engine gets it (opts.mod, its computer tanks ai: true); what it says and why it stopped: a status
+// line over the game (modNotes). Its replay keeps the mod's id (replay.js: the file goes with one saved as a file or shared). A mod that
+// isn't in this browser is fetched from the game's server (GET /api/mods/<id>, MapStore.fetchMods) and kept.
+// A map that needs a mod (docs/MODS.md 6a, game/mapmods.js MapMods.pick): the link's mod must be one of the map's (else
+// noMapMod says which it needs); no &mod - the map's only mod is played (several: noMapMod). The daily challenge never
+// runs a mod: its map plays without one.
 import "../draw/gfx-modern.js";
 import "../draw/gfx-hud.js";
 import { TunnelerAI } from "../game/ai.js";
@@ -42,6 +50,12 @@ import { MapGen } from "../game/mapgen.js";
 import { Scope } from "../scope.js";
 import { StatusLine } from "../draw/statusline.js";
 import { Medals } from "../game/medals.js";
+import { Mods } from "../game/mods.js";
+import { ModStore } from "../net/modstore.js";
+import { Official } from "../net/official.js";
+import { MapMods } from "../game/mapmods.js";
+import { ModSettings } from "../ui/modsettings.js";
+import { UniText } from "../text/unitext.js";
 // the training ground's hints (1.4): the step's hint in a status line over the top of the game ("Training 2/5: ...";
 // overlay - owner, 2026-11-01: it moved the game up and down under it), wrapped to its width (40 columns, a phone held
 // sideways 32); the keys named as this browser has them (either set drives your tank; a phone: the joystick and FIRE);
@@ -90,22 +104,128 @@ function trainingHints(engine, canvas, views, afterShown) {
 }
 export function mount() {
   const q = new URLSearchParams(location.search), lmap = q.get("lmap"), smap = q.get("map");
-  if (!lmap && !smap) return run(null);
-  // the map first (this browser's copy, else the shared one from the server), then the game
+  // (a mod: skirmish and split screen only)
+  const modOk = !q.get("challenge") && q.get("mode") !== "training" && !/^\/training\/?$/.test(location.pathname);
+  const modId = modOk && /^[a-z2-9]{10}$/.test(q.get("mod") || "") ? q.get("mod") : null;
+  // (a link from before 1.5 with a game mode - gm=hill: the game's modes are official mods now - that mod, then as any)
+  // (a short link - g=<code> - from then: its long query, the same way)
+  const gq = q.get("g") ? new URLSearchParams(CpuCode.decode(q.get("g")) || "") : null;
+  const gm = modOk && !modId ? (gq || q).get("gm") : null;
+  if (gm && gm !== "standard" && /^[a-z-]{2,24}$/.test(gm)) {
+    const scope = Scope.current;
+    Official.list().then(() => {
+      if (Scope.current !== scope) return;
+      const id = Official.idOf(gm), n = gq || q;
+      if (gq) { q.delete("g"); for (const [k, v] of q) if (!n.has(k)) n.set(k, v); }
+      n.delete("gm"); n.delete("goal");
+      if (id) n.set("mod", id);
+      history.replaceState(null, "", location.pathname + "?" + n.toString());
+      mount();
+    });
+    return;
+  }
+  if (!lmap && !smap && !modId) return run(null, null);
+  // the map first (this browser's copy, else the shared one from the server), then the mod, then the game
   const scope = Scope.current;
   (async () => {
     let rec = lmap ? await MapStore.get(lmap) : null;
     if (!rec && smap && /^[a-z2-9]{10}$/.test(smap)) rec = await MapStore.fetchShared(smap);
+    // (its mods' headers known first - MapStore.wallsNone: the official list, this browser's mods)
+    if (rec && Array.isArray(rec.mods) && rec.mods.length) await Promise.all([Official.list(), ModStore.list().catch(() => [])]);
     return rec;
   })().then(rec => {
     if (Scope.current !== scope) return;
-    if (!rec) return noMap("404");
+    if ((lmap || smap) && !rec) return noMap("404");
     // (a map whose bases a tank can't all drive between isn't played - docs/v6/MAPS.md 6: checked here too, a link
     // may bring any map)
-    const reach = TunnelerEngine.mapReach(rec.code);
-    if (!reach || !reach.ok) return noMap("path");
-    run(rec);
+    // (1.5: a map for mods with bases without walls - @walls none: reached without them)
+    const reach = rec && TunnelerEngine.mapReach(rec.code, MapStore.wallsNone(rec.mods) ? { walls: false } : null);
+    if (rec && (!reach || !reach.ok)) return noMap("path");
+    // (the map's mods: the link's must be one of them; none given - its only one)
+    let want = modId;
+    if (rec && modOk) {
+      const p = MapMods.pick(rec, modId);
+      if (p.problem) return noMapMod(rec, p.problem, modId, scope);
+      want = p.mod;
+    }
+    if (!want) return run(rec, null);
+    loadMod(want).then(mod => { if (Scope.current === scope) run(rec, mod); },
+      e => { if (Scope.current === scope) noMod(e && e.why ? e : { why: "load", msg: String(e && e.message || e).slice(0, 50) }); });
   }, e => { if (Scope.current === scope) noMap(e && e.status === 404 ? "404" : String(e && e.message || e)); });
+}
+// the link's mod: an official one (net/official.js - the shipped file or the server's), else this browser's copy, made for
+// this game -> {id, source, header}; QuickJS loaded
+async function loadMod(id) {
+  let rec = await ModStore.get(id);
+  if (!rec && (await Official.list()).some(x => x.id === id)) rec = await Official.source(id).then(source => ({ source }), () => null);
+  if (!rec) { await MapStore.fetchMods([id]); rec = await ModStore.get(id); }   // (the game's server may have it)
+  if (!rec) throw { why: "missing" };
+  const c = Mods.check(rec.source);
+  if (!c.ok) throw { why: c.problem, header: c.header };
+  await Mods.load();
+  return { id: c.id, source: rec.source, header: c.header };
+}
+// the link's mod can't be played here: why, back to the skirmish
+function noMod(err, back) {
+  const ui = new DosUI(document.getElementById("screen")), T = Lang.t, R = (k, p) => (Lang.raw(k) || k).replace(/\{(\w+)\}/g, (m, n) => p && p[n] !== undefined ? p[n] : m);
+  back = back || (() => Nav.go("/#cpu"));
+  Pads.start({ menu: () => true });
+  const why = err.why === "missing" ? R("modrun.missing") : err.why === "load" ? R("modrun.load", { msg: err.msg })
+    : err.why === "count" || err.why === "mapbases" ? R("modrun.p." + err.why, err) : R("modrun.p." + err.why, { game: err.header ? Mods.gameText(err.header.ranges) : "?", version: Mods.GAME });
+  window.tunnelerNoMod = () => ({ ui, why: err.why });          // (tests)
+  ui.show({ lines: [{ row: 2, text: T("modrun.title"), color: 12 }, { row: 9, text: T("modrun.cant"), color: 12 }, { row: 11, text: Lang.enc(why.slice(0, 76)), color: 12 }],
+    box: { y: 13 }, infoRow: 18, back, items: [{ key: "back", label: T("back.main"), info: [T("back.main.i")], go: back }] });
+}
+// a mod's words in the match (g.say) and why it stopped (engine.modNote): a status line over the top of the game for 4
+// seconds (as the training ground's hints)
+function modNotes(engine, canvas, views, afterShown) {
+  const columns = () => { const L = views.layout(); return GameScreen.mobile() ? (innerWidth > innerHeight ? 32 : 40) : L.kind === "grid" && L.cols === 1 ? 40 : views.statusColumns(); };
+  const el = document.getElementById("status");
+  const status = new StatusLine(el, canvas, columns, { overlay: true });
+  const R = (k, p) => (Lang.raw(k) || k).replace(/\{(\w+)\}/g, (m, n) => p && p[n] !== undefined ? p[n] : m);
+  let note = null, until = 0, shown = "";
+  const tick = () => {
+    const n = engine.modNote;
+    if (n && n !== note) {
+      note = n; until = Date.now() + 4000;
+      if (n.kind === "stop") console.warn("mod " + engine.modInfo.header.name + " stopped:", n.why, n.detail || "");
+    }
+    const text = !note || Date.now() > until || afterShown() ? "" : note.kind === "say" ? note.text
+      : R("modrun.stopped", { name: engine.modInfo.header.name, why: R("modrun.why." + note.why, { detail: note.detail || "" }) });
+    const cols = Math.max(20, columns() - 2), k = text + "|" + cols;
+    if (k === shown) return;
+    shown = k;
+    el.style.display = text ? "" : "none";
+    const rows = [];
+    let line = "";
+    for (const w of text.split(" ").filter(Boolean)) {
+      if (line && (line + " " + w).length > cols) { rows.push(line); line = w; } else line = line ? line + " " + w : w;
+    }
+    if (line) rows.push(line);
+    status.set(rows.map(r => [{ text: r, attr: note && note.kind === "stop" ? 0x0C : 0x0B, prio: 0, raw: true }]));
+  };
+  Scope.onEnd((iv => () => clearInterval(iv))(setInterval(tick, 150)));
+  window.tunnelerModNote = () => shown.split("|")[0];        // (tests)
+  tick();
+}
+// the link's map and mod don't go together (problem "other": the mod isn't one of the map's; "choose": the map needs one
+// of several and the link names none): which mods the map needs, back to the skirmish
+function noMapMod(rec, problem, modId, scope) {
+  ModStore.list().catch(() => []).then(mods => {
+    if (Scope.current !== scope) return;
+    const ui = new DosUI(document.getElementById("screen")), T = Lang.t, back = () => Nav.go(/^\/split\/?$/.test(location.pathname) ? "/#split" : "/#cpu");
+    Pads.start({ menu: () => true });
+    const st = MapMods.status(rec, mods);
+    const text = T(problem === "other" ? "mm.play.other" : "mm.play.choose", { map: rec.name, need: st.need, mod: MapMods.nameOf(modId, mods) || modId });
+    // (wrapped: a map's name and four mods' names may not fit one row)
+    const rows = [];
+    for (const w of text.split(" ")) {
+      if (rows.length && UniText.cols(rows[rows.length - 1] + " " + w) <= 76) rows[rows.length - 1] += " " + w; else rows.push(w);
+    }
+    window.tunnelerNoMap = () => ({ ui, why: "mod:" + problem, text });   // (tests)
+    ui.show({ lines: [{ row: 2, text: T("map.title"), color: 12 }].concat(rows.slice(0, 3).map((t, i) => ({ row: 9 + i, text: t, color: 12 }))),
+      box: { y: 13 }, infoRow: 18, back, items: [{ key: "back", label: T("back.main"), info: [T("back.main.i")], go: back }] });
+  });
 }
 // the map of the link isn't here and the server doesn't have it (or can't be reached) / its bases aren't all connected
 function noMap(why) {
@@ -116,7 +236,7 @@ function noMap(why) {
   ui.show({ lines: [{ row: 2, text: T("map.title"), color: 12 }, { row: 10, text, color: 12 }],
     box: { y: 13 }, infoRow: 18, back, items: [{ key: "back", label: T("back.main"), info: [T("back.main.i")], go: back }] });
 }
-function run(mapRec) {
+function run(mapRec, modRec) {
   // a short link (?g=<code>, cpucode.js) stands for the long query it encodes
   const query = new URLSearchParams(location.search), code = query.get("g") ? CpuCode.decode(query.get("g")) : null;
   // the daily challenge (?challenge=2026-10-25, docs/v6/CHALLENGE.md): that day's skirmish, read from the query it stands for
@@ -124,6 +244,16 @@ function run(mapRec) {
   // (a Sunday's map of the week - 1.4: &map=<the gallery map's id> on the challenge's link; the challenge fitted to it)
   const chMapOf = rec => { const m = rec && query.get("map") ? MapData.decode(rec.code) : null; return m ? { id: query.get("map"), name: m.name, size: m.size, bases: m.bases.length } : null; };
   const ch = chDay ? Challenge.config(chDay, Challenge.weekly(chDay) ? chMapOf(mapRec) : null) : null;
+  // (1.5: a mode day plays that mode's official mod - the file this game ships, as the server's check plays it)
+  if (ch && ch.mode !== "standard" && !(modRec && modRec.official)) {
+    const scope = Scope.current;
+    Official.shipped(ch.mode).then(f => f ? Mods.load().then(() => f) : null).then(f => {
+      if (Scope.current !== scope) return;
+      if (!f) return noMod({ why: "missing" });
+      run(mapRec, { id: f.id, source: f.text, header: f.header, official: true });
+    }, e => { if (Scope.current === scope) noMod({ why: "load", msg: String(e && e.message || e).slice(0, 50) }); });
+    return;
+  }
   const practice = !!ch && query.get("practice") === "1";   // (a past day played again: practice - docs/v6/CHALLENGE.md 2)
   const params = ch ? new URLSearchParams(Challenge.query(ch) + "&mode=cpu")
     : code ? new URLSearchParams(code + (query.get("mode") ? "&mode=" + query.get("mode") : "")) : query;
@@ -203,14 +333,26 @@ function run(mapRec) {
   // a generated map (?gen=gen:<kind>:natural, mapgen.js - an old :fair link plays natural): a new one every match, from its
   // seed, for its tanks
   const genId = !ch && !mapRec ? query.get("gen") : null, gen = MapGen.parse(genId);
-  const genMap = gen ? MapGen.make({ kind: gen.kind, size, bases: slots.length, seed }) : null;
+  // (a mod with @bases - docs/MODS.md 3a: the world gets the mod's number of bases, whatever the tanks)
+  const modBases = modRec && !ch && !training && modRec.header.bases ? Mods.basesFor(modRec.header, { size }) : 0;
+  const genMap = gen ? MapGen.make({ kind: gen.kind, size, bases: modBases || slots.length, seed }) : null;
   const mapCode = mapRec ? mapRec.code : genMap ? MapData.code(genMap) : null;
   // (escEnds: player 1's Esc ends the match as in the original - the extended engine ignores Esc online)
   // (a skirmish always runs the extended engine - owner, 2026-10-24; match: the engine plays the match only - no menu)
-  const opts = { slots: slots.map(s => ({ color: s.color, team: s.team })), size, winScore, roundTime, friendlyFire: ff, escEnds: true, escPlayer: me,
+  // (a mod: its tanks' number first - @tanks)
+  const mod = modRec && !training && (!ch || modRec.official) ? modRec : null;
+  if (mod && (slots.length < mod.header.tanks.min || slots.length > mod.header.tanks.max))
+    return noMod({ why: "count", min: mod.header.tanks.min, max: mod.header.tanks.max, n: slots.length }, () => Nav.go(mode === "cpu" ? "/#cpu" : "/#split"));
+  if (mod && mod.header.bases && mapRec && !Mods.mapFits(mod.header, MapData.decode(mapRec.code)))
+    return noMod({ why: "mapbases", min: mod.header.bases.min }, () => Nav.go(mode === "cpu" ? "/#cpu" : "/#split"));
+  // (the mod's own settings: &ms=laps.3,shots.0 - ui/modsettings.js; the engine keeps only its choices)
+  const modSettings = mod && mod.header.settings.length ? Mods.settingsOf(mod.header, ModSettings.parse(query.get("ms"))) : null;
+  const opts = { slots: slots.map(s => ({ color: s.color, team: s.team, ...(mod && s.level ? { ai: true, level: s.level } : {}) })), size, winScore, roundTime, friendlyFire: ff, escEnds: true, escPlayer: me,
     autoStart: true, noInstructions: true, match: true, sight, ...(showMap !== "off" ? { showMap } : {}), extended: true, mode: gmode, goal,
-    ...(mapCode ? { map: mapCode } : {}) };
+    ...(mapCode ? { map: mapCode } : {}), ...(mod ? { mod: { id: mod.id, source: mod.source } } : {}),
+    ...(modSettings ? { modSettings } : {}), ...(mod && modBases && !mapCode ? { modBases } : {}) };
   const engine = new TunnelerEngine(seed, JSON.parse(JSON.stringify(opts)));
+  Scope.onEnd(() => engine.dispose());                   // (a mod's sandbox: freed with the page)
   const kills = ch ? Challenge.track(engine) : null;      // (the challenge's result: the enemies you destroyed)
   const medalTrack = Medals.track(engine);               // (1.4: kills / losses for the medals - only reads)
   // display only: views scroll sideways 1 pixel at a time (the homepage's Settings, "tunneler.smooth"; on unless "0";
@@ -278,7 +420,8 @@ function run(mapRec) {
     clock.stop(); runner.stop();                       // (the engine is done: this screen from here)
     const S = engine.strings;
     // (1.4: medals earned in this match - shown under its first choice; a past day's challenge counts as a skirmish)
-    const medals = Medals.afterMatch(engine, medalTrack, { kind: training ? "training" : ch && !practice ? "challenge" : split ? "split" : "skirmish",
+    const medals = Medals.afterMatch(engine, medalTrack, { kind: training ? "training" : ch && !practice ? "challenge" : split || (me2 >= 0 && slots.every(s => !s.level)) ? "split" : "skirmish", p2: me2 >= 0,
+      official: modRec ? Official.keyOf(modRec.id) || "" : "",
       me: me + 1, levels: slots.map(s => s.level), weekly: !!(ch && ch.map), day: chDay });
     const medalInfo = medals.length ? [{ text: Lang.t(medals.length > 1 ? "medal.got.n" : "medal.got", { name: medals.map(id => Medals.name(id, Lang)).join(", ") }), color: 14 }] : [];
     // "Save the replay" while it isn't saved (Replays, "Save every match" off), then "Replay saved"
@@ -370,6 +513,7 @@ function run(mapRec) {
   // the match is over: the screen after it
   runner.onStep = e => { if (e.over) afterMatch(); };
   if (training) trainingHints(engine, canvas, views, () => !!after);
+  if (mod) modNotes(engine, canvas, views, () => !!after);
 
   // the match is recorded (replay.js): kept with the newest replays once it reaches its world map
   // (the challenge: its day on the replay, and the result remembered as this day's last - the challenge screen sends it)

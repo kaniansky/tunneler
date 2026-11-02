@@ -30,6 +30,33 @@ screens drawn anew - see below).
 
 ## What's new
 
+New in 1.5:
+
+- **Script mods**: a mod is one small JavaScript file that changes the game - its rules, the world, the teams, the
+  score, what the computer tanks go for, or a whole new game mode. It runs in a sandbox that sees only the game, the
+  same on every page, so modded games play online too. How to write one: [docs/MODDING.md](docs/MODDING.md).
+- **The game modes are mods**: gold rush, infection, survival, king of the hill, shrinking world, capture the flag,
+  base siege and deathmatch are **official mods** now, with Hot potato. The game's server can update an official mod
+  without a new release. Race, Conquest and Closing wall are in the mod gallery.
+- **One Mode row** in the skirmish and the online lobby: Standard or any mod - Enter opens the list with three tabs,
+  Official, Your mods and The gallery.
+- **Mods** (main menu): open a mod file or a share link, play it in a skirmish, save it, share it, publish it in the
+  **mod gallery**; a console shows what the mod said and why it stopped. With an account your mods follow you to
+  every device. The medal **Mod maker** for a published mod.
+- **Mods set up the game**: their own number of bases, the tanks' starting bases, bases owned by a team or by nobody,
+  bases without walls, one-round matches, teams switched off, and their own settings - shown after the usual ones,
+  where long lists scroll. **Maps that need a mod**: the map editor's "Needs a mod" row.
+- **Split screen** is the skirmish with Player 2: set a color to Player 2 and the View row says Split screen - just
+  the two of you, or with computer tanks and teams.
+- **Paintable ground**: the map editor's Ground tool paints sand, grass or bare floor over the map's own ground.
+- After your tank is destroyed your own view stays about 2 seconds; the map with the score shows what you watch.
+
+Online play needs 1.5 on every side. Replays of matches in the old built-in modes (1.0 - 1.4) no longer play.
+
+| **The Mode row's list (modern look)** | **The same in the original look** |
+|---|---|
+| ![Mode list](screenshots/modern-mods.png) | ![Original mode list](screenshots/mods.png) |
+
 New in 1.4:
 
 - **Training ground** (main menu): a short first match that teaches the rules step by step - drive out of your base,
@@ -164,9 +191,9 @@ play stay exactly the same, and every player chooses their own look. **Modern** 
 
 ## Modes
 
-- **Split screen** - two players on one keyboard, like the original.
 - **Skirmish** - you (in any color) against 1 to 7 computer tanks (easy, medium or hard),
-  every tank for itself or in teams. See your own screen, your team's screens or everybody's.
+  every tank for itself or in teams. See your own screen, your team's screens or everybody's. With a second player
+  on the same keyboard (Player 2) it is the **split screen**, like the original - with or without computer tanks.
 - **Quick play** - straight into an online game with computer tanks in the free seats (see above).
 - **Online game** - create a game (public or private, with or without spectators, with an optional
   password), send the invite
@@ -178,7 +205,7 @@ play stay exactly the same, and every player chooses their own look. **Modern** 
   spectator (every view, the live map or one tank; pause, 1/2x to 8x, 30 s back / on), see its statistics,
   share it as a link (`/replay/<id>`: whoever opens it watches at once) or save it as a `.replay` file.
 
-Game modes (skirmish and online; every mode's AI plays it too):
+Game modes - official mods since 1.5, on the Mode row (skirmish and online; the computer tanks play them too):
 
 - **Standard** - the last tank (or team) still standing wins the round, as in the original.
 - **Gold rush** - gold nuggets lie in the dirt: dig them up and bring them to your base; a hit makes you
@@ -194,9 +221,10 @@ Game modes (skirmish and online; every mode's AI plays it too):
 
 Every mode but standard and shrinking world is a single round with its own goal instead of "rounds to
 win": gold to win, minutes to survive, waves to win, seconds in the zone, captures, base strength (hits),
-kills to win.
+kills to win. Also official: **Hot potato** - one tank carries a bomb, a hit passes it on. In the mod gallery:
+**Race** (checkpoints and laps), **Conquest** (bases to capture and hold), **Closing wall** (rock closes in).
 
-Settings (split screen: map size, rounds to win and round time only):
+Settings:
 
 - **Slots and teams** - 8 slots (BLUE, GREEN, RED, GOLD, PINK, LIME, SKY, WHITE), each nobody,
   human or a computer tank (online: open, closed or AI), each with a team number 1-8: all different =
@@ -394,7 +422,7 @@ the server's log (`client error ...`) and keep them grouped (`ADMIN_TOKEN`, belo
 | kind | what | bucket variable | folder |
 |---|---|---|---|
 | replays | shared replays (Share a link; the daily leaderboards' matches) | `S3_BUCKET_REPLAYS` | `DATA_DIR/replays` |
-| maps | shared maps (Share a link, maps chosen for online games) and the map gallery's index | `S3_BUCKET_MAPS` | `DATA_DIR/maps` |
+| maps | shared maps (Share a link, maps chosen for online games), shared mods (1.5) and the map and mod galleries' indexes | `S3_BUCKET_MAPS` | `DATA_DIR/maps` |
 | accounts | player accounts (and the maps, replays and settings kept with them) | `S3_BUCKET_ACCOUNTS` | `DATA_DIR/accounts` |
 | challenges | the daily challenge's leaderboards (`<day>.json.gz`) | `S3_BUCKET_CHALLENGES` | `DATA_DIR/challenges` |
 | state | the games handed over on a restart | `S3_BUCKET_STATE` | `DATA_DIR/state` |
@@ -415,7 +443,9 @@ the server's log (`client error ...`) and keep them grouped (`ADMIN_TOKEN`, belo
 
 The map gallery: a published map can be removed by its author, or by anyone sending the header `X-Admin-Key: <key>`
 when the server has `GALLERY_ADMIN_KEY=<key>` (`curl -X POST -H "X-Admin-Key: <key>" <server>/api/gallery/<id>/remove`;
-make the key long and random, e.g. `openssl rand -hex 32`). An address may publish 50 maps a day.
+make the key long and random, e.g. `openssl rand -hex 32`). An address may publish 50 maps a day. The mod gallery
+(1.5) works the same way with the same key (`<server>/api/modgallery/<id>/remove`), 50 mods a day per address; its index
+`modgallery.json.gz` and the mods' files (`<id>.tmod.js`) are kept beside the maps, the published ones always.
 
 The server's log says where each kind is kept at start (`shared replays: ...`, `shared maps: ...`, `daily challenge
 leaderboards: ...`, `rooms on a restart: ...`, `accounts: ...`). The live server uses R2 buckets: Render's free disk is

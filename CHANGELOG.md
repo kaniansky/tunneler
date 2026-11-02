@@ -4,6 +4,62 @@ All notable changes to Tunneler. Versions follow [semantic versioning](https://s
 by pushing a version tag (see CONTRIBUTING.md). Up to its version 6.0.1 the game was called Tunneler Online:
 those releases are tagged `online-vX.Y.Z`, their changes are in [docs/CHANGELOG-online.md](docs/CHANGELOG-online.md).
 
+## 1.5.0
+
+1.5 - a new minor version: plays only with 1.5 pages and servers.
+
+- Script mods: a mod is one small JavaScript file (`.tmod.js`) that changes the game - its rules (energy, damage, shot
+  speed, refuelling...), the world (dig or fill it during a match), the teams, the score, what the computer tanks go
+  for, or a whole new game mode. It runs in a sandbox (QuickJS in WebAssembly, loaded only when a modded match starts)
+  that sees only the game; a mod that throws or runs too long stops on the same frame on every page and the match goes
+  on without it. Every mod says which game versions it runs on (`@game`).
+- Main menu **Mods**: the mods kept in this browser - open a file (or drop one on the screen), play one in a skirmish,
+  save it as a file, copy a share link (`/mod/<id>`), delete it; a console shows what the last local game's mod said
+  and why it stopped. Mods are kept with your account on every device.
+- A **Mod** row in the skirmish, split screen and online game lobbies; the games list names a game's mod. Replays of
+  modded matches keep the mod (its file goes with a replay saved as a file or shared). Never in quick play or the daily
+  challenge.
+- Maps that need a mod: the map editor's "Needs a mod" row names up to 4; choosing such a map sets the Mod row (one mod:
+  locked), a map whose mods can't run here is grayed with why, and sharing or publishing a map sends its mods along.
+- Mods can set up the game: a mod may want its own number of bases whatever the number of tanks (`@bases`), put the
+  tanks in any base at the start of a round (several in one base get free spots), give bases to teams or to nobody
+  (the walls take the owner's colour, gray for nobody's; only the owner's tanks refuel there), and bring its own
+  settings (`@setting`: Laps, Points to win...) and hide the usual ones that mean nothing in its game (`@hide`). The
+  mod's settings come after the usual ones in the skirmish, split screen and the online lobby (the host sets them, the
+  others see them); a settings list taller than its box scrolls (keys, the wheel, a finger), on the phone too. The
+  round title and statistics list the mod's values. Online matches and replays keep them.
+- The **mod gallery** on the server, like the map gallery: Mods, Show: The gallery lists the mods players published -
+  the newest or the most played online first, only those this version runs or all versions (the others gray with
+  why). A published mod's screen shows its header (author, versions, mode, tanks, bases, its settings) and how often it
+  was played online: add it to your mods, play it in a skirmish, copy a link; its author removes it. A mod of yours:
+  Publish to the gallery (logged in, or a name first) - and the new medal **Mod maker**. Publishing a map that needs
+  mods publishes them too. The operator removes a mod with `GALLERY_ADMIN_KEY`, as maps.
+- Five example mods in `src/mods/` (Hot potato, Deathmatch written as a mod, Closing wall, and two that set up the
+  game: **Race** - every tank starts in one base, the others are checkpoints and the last one the finish - and
+  **Conquest** - teams start in their home bases and capture and hold the others) and an authors' guide,
+  [docs/MODDING.md](docs/MODDING.md).
+- A mod can switch teams off (`@hide teams`: every tank for itself - Race does), tell its computer tanks to hold their
+  fire or to flee a tank (out of their base and away, then hidden behind its walls), and see when a shot that hit was
+  fired. Hot potato: the bomb passes only to an enemy and only with a shot fired after its tank got the bomb; tanks
+  without it don't shoot and run from it; the round clock is gone (only the bomb's countdown).
+- More of the game for mods - everything the game's own modes use: texts in the player's language (`texts`, `{t: key}`),
+  a statistics column (`stat`), team names, a note per round, shots hitting the world (`shotHit`), bases computer tanks
+  drive through (`baseOpen`), computer tanks told to shoot now or what a retreat is for, explosions, sounds, broken base
+  walls, world-size scaling, and matches decided by each tank's wins.
+- The game modes are mods now: gold rush, infection, survival, king of the hill, shrinking world, capture the flag, base
+  siege and deathmatch are official mods, beside Hot potato; Race, Conquest and Closing wall are in the mod gallery. One **Mode** row in the
+  skirmish and the online lobby picks Standard or any mod - Enter opens the list: Official, Your mods, The gallery. The
+  game's server can update an official mod without a new release. The daily challenge plays them as the game ships
+  them; their medals count as before. Replays of matches in the old built-in modes (1.0 - 1.4) no longer play.
+- The map editor's Ground tool paints sand, grass or the original's dark floor over parts of a map (Default: back to the
+  map's own Ground) - only the look; maps without painting keep their codes.
+- Split screen is no longer a menu item of its own: in the skirmish set a color to Player 2 and the View row says Split
+  screen - just the two of you, or with computer tanks and teams. Old split-screen links still play.
+- After your tank is destroyed your own view stays about 2 seconds before the view switches to another tank (or goes
+  black). The map with the score shows as seen now only the views you watch: alive, by Show map; after death, by the
+  after death setting - black screen nothing, my wreck your wreck's view, watch team your living teammates', watch
+  killer theirs and the killer's, watch all every tank's (a destroyed tank's view no more).
+
 ## 1.4.0
 
 1.4 - a new minor version: plays only with 1.4 pages and servers.

@@ -14,12 +14,22 @@
 //     current: the chosen map's local id ("" = a random world); name(): the player's name (a server without accounts);
 //     open(): false once the page put something else on the screen (nothing drawn any more);
 //     state: an object kept by the caller - the gallery's order and the map chosen last (selected again)
+// Maps that need a mod (1.5, docs/MODS.md 6a - game/mapmods.js): "(needs <mod name>)" under the map; one whose mods this
+// game can't run (@game) or this browser doesn't have (nor the server) listed gray with why, never chosen. A gallery
+// map's mods come with it when it is chosen (MapStore.fetchShared); their names before that from the server
+// (MapStore.peekMod).
+//   MapPick.modsFor(ids, local, redraw) -> mod records for MapMods.status: this browser's (local - ModStore.list()), the
+//                     others' headers as the server has them (asked once; redraw() when one comes)
+//   MapPick.needsText(status) -> "(needs Hot potato)" ("": no mod needed)
+//   MapPick.blockedText(status) -> why the map can't be played here ("": it can)
 import { Endpoint } from "../net/endpoint.js";
 import { Lang } from "../text/lang.js";
 import { MapData } from "../game/mapdata.js";
 import { MapGen } from "../game/mapgen.js";
 import { MapPic } from "../draw/mappic.js";
 import { MapStore } from "../net/mapstore.js";
+import { MapMods } from "../game/mapmods.js";
+import { ModStore } from "../net/modstore.js";
 import { TunnelerEngine } from "../game/engine.js";
 import { UniText } from "../text/unitext.js";
 
@@ -34,6 +44,20 @@ function randomPic(size) {
   return MapPic.of(MapData.fromWorld(size, g.world, g.ws));
 }
 const ROWS = 8;                                          // (a desktop: the list's rows - the info fits below them)
+
+// ------------------------------------------------------------ the mods a map needs (1.5)
+function modsFor(ids, local, redraw) {
+  const out = (local || []).slice();
+  for (const id of ids || []) {
+    if (out.some(m => m.id === id)) continue;
+    const h = MapStore.peekedMod(id);
+    if (h) out.push(h); else MapStore.peekMod(id).then(r => { if (r && redraw) redraw(); }, () => {});
+  }
+  return out;
+}
+const needsText = st => st.ids.length ? Lang.t("mm.needs", { need: st.need }) : "";
+const blockedText = st => st.blocked === "version" ? Lang.t("mm.why.version", { name: st.name, game: st.game, version: st.version })
+  : st.blocked === "missing" ? Lang.t("mm.why.missing", { need: st.need }) : "";
 
 // an example of a random world (kind null) or a generated kind (always the same seed), kept - without bases (owner,
 // 2026-10-31: a new map every match, its bases elsewhere)
@@ -65,6 +89,8 @@ function show(ui, opts) {
   const SIZES = MapData.SIZES;
   let size = opts.gen && SIZES.includes(opts.gen.size) ? opts.gen.size : "medium";   // (the generated tab's Map size row)
   let mine = null, gal = null, galCode = "", busy = false, closed = false, lastPic = null;
+  let localMods = [], modNote = null;                    // (this browser's mods; {id, text}: why a gallery map wasn't taken)
+  const statusOf = (map, ids) => MapMods.status(map, modsFor(ids || MapMods.of(map), localMods, () => draw(true)));
   const S = { open: true };
   const sizeText = s => Lang.raw("lc.size." + s) || s;
   const narrow = () => ui.isNarrow();
@@ -77,7 +103,11 @@ function show(ui, opts) {
   // (the columns in their colours, like the maps list: the name white, then cyan, then green)
   const spans = () => { const w = W(); return [[0, w[0], 0x0F], [w[0], w[0] + w[1], 0x0B], [w[0] + w[1], 200, 0x0A]]; };
   const why = rec => ({ bases: T("map.need"), path: T("map.cut.play") })[MapStore.playable(rec)];
-  async function loadMine() { try { mine = await MapStore.list(); } catch (e) { mine = []; } if (!closed) draw(true); }
+  async function loadMine() {
+    try { localMods = await ModStore.list(); } catch (e) { localMods = []; }
+    try { mine = await MapStore.list(); } catch (e) { mine = []; }
+    if (!closed) draw(true);
+  }
   async function loadGallery() {
     gal = null; galCode = ""; draw(true);
     const r = await MapStore.gallery({ sort, n: 50 }, opts.name ? opts.name() : "");
@@ -105,7 +135,7 @@ function show(ui, opts) {
   }
   async function choose(it) {
     if (busy) return;
-    if (it.map.rec) { if (!MapStore.playable(it.map.rec)) { close(); opts.choose({ rec: it.map.rec }); } return; }
+    if (it.map.rec) { if (!MapStore.playable(it.map.rec) && !statusOf(it.map.rec).blocked) { close(); opts.choose({ rec: it.map.rec }); } return; }
     const e = it.map.entry;
     state.at = e.id;
     if (tabs.length === 1) { close(); opts.choose({ entry: e }); return; }
@@ -115,6 +145,10 @@ function show(ui, opts) {
     busy = false;
     if (closed) return;
     if (!rec) { galCode = "fetch"; draw(true); return; }
+    // (its mods came with it - the ones the server has: one this game can't run, or none at all, and it isn't taken)
+    try { localMods = await ModStore.list(); } catch (err) { /* as they were */ }
+    const st = statusOf(rec);
+    if (st.blocked) { modNote = { id: e.id, text: blockedText(st) }; draw(true); return; }
     close(); opts.choose({ rec });
   }
   const close = () => { closed = true; S.open = false; };
@@ -137,21 +171,30 @@ function show(ui, opts) {
       if (!ok) items.push({ key: "wait", label: T("pk.loading"), disabled: true });
       else if (!ok.length) items.push({ key: "none", label: T("pk.none.mine"), disabled: true });
       else for (const r of ok) {
-        const bad = MapStore.playable(r);
+        // (a map whose mods can't be played here: gray, why - docs/MODS.md 6a)
+        const st = statusOf(r), bad = MapStore.playable(r) || st.blocked;
         items.push({ key: "m:" + r.id, label: row(r.name, sizeText(r.size), String(r.bases)), align: "left", map: { rec: r },
           attr: bad ? 0x08 : 0, spans: bad ? null : spans(),
-          info: [T(r.bases === 1 ? "map.info.one" : "map.info", { size: Lang.lower(sizeText(r.size)), n: r.bases }), bad ? { text: why(r), color: 12 } : T("pk.mine.i")],
+          info: [T(r.bases === 1 ? "map.info.one" : "map.info", { size: Lang.lower(sizeText(r.size)), n: r.bases }),
+            st.blocked ? { text: blockedText(st), color: 12 } : bad ? { text: why(r), color: 12 } : st.ids.length ? { text: needsText(st), color: 14 } : T("pk.mine.i")],
           go: () => choose(items.find(x => x.key === "m:" + r.id)) });
       }
     } else {
       if (busy || !gal) items.push({ key: "wait", label: T("pk.loading"), disabled: true });
       else if (galCode && !gal.length) items.push({ key: "none", label: T(galCode === "none" ? "pk.err.none" : "pk.err.net"), disabled: true });
       else if (!gal.length) items.push({ key: "none", label: T("pk.none.gal"), disabled: true });
-      else for (const e of gal) items.push({ key: "g:" + e.id, label: row(e.name, U.fromRaw(e.by || ""), String(e.plays || 0)), align: "left", map: { entry: e },
-        spans: e.mine ? [[0, W()[0], 0x0E]].concat(spans().slice(1)) : spans(),
-        info: [T(e.bases === 1 ? "map.info.one" : "map.info", { size: Lang.lower(sizeText(e.size)), n: e.bases }),
-          T("pk.gal.by", { name: e.by || "?", n: e.plays || 0 })].concat(galCode === "fetch" ? [{ text: T("pk.err.net"), color: 12 }] : []),
-        go: () => choose(items.find(x => x.key === "g:" + e.id)) });
+      else for (const e of gal) {
+        // (its mods: the gallery's entry may list them, else the map once its picture came; one not known yet comes with
+        // the map - choose says when it doesn't)
+        const ids = Array.isArray(e.mods) ? MapData.cleanMods(e.mods) : maps.get(e.id) ? maps.get(e.id).mods : [];
+        const st = ids.length ? statusOf({ mods: ids }) : null, note = modNote && modNote.id === e.id ? modNote.text : "";
+        items.push({ key: "g:" + e.id, label: row(e.name, U.fromRaw(e.by || ""), String(e.plays || 0)), align: "left", map: { entry: e },
+          spans: e.mine ? [[0, W()[0], 0x0E]].concat(spans().slice(1)) : spans(),
+          info: [T(e.bases === 1 ? "map.info.one" : "map.info", { size: Lang.lower(sizeText(e.size)), n: e.bases }),
+            T("pk.gal.by", { name: e.by || "?", n: e.plays || 0 })].concat(galCode === "fetch" ? [{ text: T("pk.err.net"), color: 12 }]
+            : note ? [{ text: note, color: 12 }] : st ? [st.blocked === "version" ? { text: blockedText(st), color: 12 } : { text: needsText(st), color: 14 }] : []),
+          go: () => choose(items.find(x => x.key === "g:" + e.id)) });
+      }
     }
     const fixed = [{ key: "sep", separator: true }];
     if (tabs.length > 1) {
@@ -208,4 +251,4 @@ function show(ui, opts) {
   return S;
 }
 
-export const MapPick = { show, preview };
+export const MapPick = { show, preview, modsFor, needsText, blockedText };

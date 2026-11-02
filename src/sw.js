@@ -2,8 +2,8 @@
 // keep (PRECACHE: the page, its code, styles, icons, the modern font); app.js registers it only when built.
 // Pages (navigation) come from the network first - the cached page when offline, so split screen and
 // skirmish work without a connection; the kept files from the cache (their names carry a hash, so an
-// old one never meets a new page); the Unifont glyph blocks and the recorded sounds are kept the first time
-// they are used. The lobby API and the game's websocket are never cached. A new version replaces the old
+// old one never meets a new page); the Unifont glyph blocks, the recorded sounds and the script mods' QuickJS
+// (/js/vendor/quickjs.wasm) are kept the first time they are used. The lobby API and the game's websocket are never cached. A new version replaces the old
 // caches when it activates.
 const VERSION = "__VERSION__";
 const PRECACHE = __PRECACHE__;
@@ -30,7 +30,14 @@ self.addEventListener("fetch", e => {
     e.respondWith(cached(req).then(r => r || fetch(req)));
     return;
   }
-  if (url.pathname.startsWith("/fonts/unifont/") || url.pathname.startsWith("/sounds/")) {
+  // (the official mods' files - 1.5, net/official.js: the network first, the kept copy offline - a changed file is
+  // never served stale)
+  if (url.pathname.startsWith("/mods/")) {
+    e.respondWith(caches.open(RUNTIME).then(c => fetch(req).then(res => { if (res.ok) c.put(req, res.clone()); return res; },
+      () => c.match(req).then(r => r || Response.error()))));
+    return;
+  }
+  if (url.pathname.startsWith("/fonts/unifont/") || url.pathname.startsWith("/sounds/") || url.pathname === "/js/vendor/quickjs.wasm") {
     e.respondWith(caches.open(RUNTIME).then(c => c.match(req).then(r => r || fetch(req).then(res => {
       if (res.ok) c.put(req, res.clone());
       return res;

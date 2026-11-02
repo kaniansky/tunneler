@@ -40,6 +40,8 @@ const STRINGS_EN = {
     watch: ["after death: black screen", "after death: my wreck", "after death: watch team", "after death: watch killer", "after death: watch all"],
     // line of sight when it isn't full (option sight): circle, walls
     sight: ["sight: circle", "sight: true"],
+    // a script mod's on / off setting (its label: the value - 1.5, docs/MODS.md 3a)
+    onOff: ["off", "on"],
     // game modes (the round title / statistics settings: the mode's name first) and modifiers
     modes: {
       "standard": "standard",
@@ -130,22 +132,22 @@ const STRINGS_EN = {
       ["Computer tanks:  ", "the computer drives a tank at one of three levels: easy, medium or hard."],
       ["Map size:  ", "small (512 x 256 pixels, a quarter of the original), medium (1024 x 512, the " +
         "original world) or large (2048 x 1024, four times as big).  Every tank starts in its own base.  Choose it in the map picker (<ENTER> on the Map row); the Map row shows it - Rivers (Large), a map of yours with its bases: Crossroads (Large, 6)."],
-      ["Water and ground:  ", "some worlds have water - lakes, rivers, a sea: a tank drives through it at half speed, it can't be dug, shots fly over it and explosions don't change it; a base never stands in water.  Computer tanks know water is slow.  Water comes with the generated maps (Rivers and Islands always, the other kinds in about one match in three) and maps painted with it.  The ground - classic (the original's dark tunnels), sand or grass - is only a look: it shows on the floor open from the start; on sand or grass, floor dug during play is sand, and the shore along water is sand on every ground.  Every generated map has sand or grass."],
+      ["Water and ground:  ", "some worlds have water - lakes, rivers, a sea: a tank drives through it at half speed, it can't be dug, shots fly over it and explosions don't change it; a base never stands in water.  Computer tanks know water is slow.  Water comes with the generated maps (Rivers and Islands always, the other kinds in about one match in three) and maps painted with it.  The ground - classic (the original's dark tunnels), sand or grass - is only a look: it shows on the floor open from the start; on sand or grass, floor dug during play is sand, and the shore along water is sand on every ground.  Every generated map has sand or grass.  In the map editor the Ground tool paints a ground of its own on parts of a map (classic, sand or grass; Default: the map's again)."],
       ["View:  ", "what you see during play: self - only your own view screen; team - your " +
         "teammates' view screens too; everyone - every tank's view screen, yours first.  In an online " +
         "game its creator sets a view limit, the most any player in it may choose."],
       ["After death:  ", "what you see once your tank is destroyed, until the round ends: a black " +
         "screen, your wreck, your teammates, your killer (the tank that destroyed you, then the one " +
-        "that destroyed it...) or all the tanks still alive.  With the view \"self\" they are shown one at a time: your left / right keys (Settings, Controls; a tap near the side of the screen) watch the next."],
+        "that destroyed it...) or all the tanks still alive.  With the view \"self\" they are shown one at a time: your left / right keys (Settings, Controls; a tap near the side of the screen) watch the next.  Your own view stays about 2 seconds first."],
       ["Line of sight:  ", "off - the original: you see your whole view screen.  Circle - you see only a circle " +
         "around your tank as it is now; the rest of the view screen shows the world as you last saw " +
         "it, in gray (an enemy tank stays where you last saw it).  True - the same, but dirt, rock and " +
         "base walls hide what is behind them (water doesn't): in a tunnel you see only the tunnel.  Computer tanks " +
         "see the same way; medium and hard ones also hear roughly where the nearest enemy is."],
-      ["Show map:  ", "while you hold <TAB> (SCORE on a phone) during a match, a map of the world under the score: no (the original), seen by me (what your tank has seen - with line of sight what it showed), seen by team (what your team has seen), revealed (the whole world as the match started, changed by what you see) or revealed (team) (changed by what your team sees).  Only what you or your team see changes the map; the parts not seen right now are gray, and enemy tanks show only while seen."],
+      ["Show map:  ", "while you hold <TAB> (SCORE on a phone) during a match, a map of the world under the score: no (the original), seen by me (what your tank has seen - with line of sight what it showed), seen by team (what your team has seen), revealed (the whole world as the match started, changed by what you see) or revealed (team) (changed by what your team sees).  Only what you or your team see changes the map; the parts not seen right now are gray, and enemy tanks show only while seen.  Once your tank is destroyed it shows what you watch (after death): black screen - nothing, my wreck - your wreck's view, watch team - your living teammates', watch killer - theirs and the killer's, watch all - every tank's."],
       ["Split screen:  ", "two players on one keyboard, {9}BLUE{3} against {10}GREEN{3}, each with " +
-        "their own view side by side - a skirmish of the two of you.  First choose the map size, the rounds to " +
-        "win and the round time."],
+        "their own view side by side.  In the skirmish set one color to player 2 (the View row then says Split screen) - " +
+        "just the two of you, or with computer tanks and teams like any skirmish."],
       ["Skirmish:  ", "your own game against computer tanks, alone or with a second player on the same keyboard.  Each of the 8 colors is player 1, player 2, nobody or a computer tank (easy, medium, hard), with its team (1-8) - the players can take any color; then the mode, rounds to win, round time, the map (and its size), show map, line of sight, view, after death and friendly fire.  Player 1 drives with W A S D + SHIFT, player 2 with the arrows + ENTER (other keys: Settings, Controls).  Hold <TAB> during a match (online too) for the score and the game's settings - or the map (Show map).  <ESC> during play ends the match; Rematch or <ESC> on the game's menu goes back to the settings."],
       ["Online game:  ", "2 to 8 tanks on different computers, some of them may be computer tanks.  Online play " +
         "needs an account on the game's server (you create one or log in the first time; a server without accounts asks only for a name).  Create a game - its name, an " +

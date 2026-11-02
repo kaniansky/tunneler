@@ -6,7 +6,10 @@
 // stray Space now and then (online's "any key").
 //   node test/match-check.js [quick]
 const assert = require("assert");
-const { TunnelerEngine: E, TunnelerAI, NetProto, MapData, MatchText } = require("./src.js");
+const { TunnelerEngine: E, TunnelerAI, NetProto, MapData, MatchText, loadMods, modFile } = require("./src.js");
+// (1.5: the game's modes are official mods - src/mods/; a mod's engines are freed after their match)
+const Mods = loadMods();
+const official = key => ({ id: Mods.idOf(modFile(key)), source: modFile(key) });
 const K = E.KEYS;
 const quick = process.argv.includes("quick");
 let n = 0;
@@ -68,6 +71,7 @@ function compare(name, seed, opts, levels, after = 400, maxSteps = 40000) {
   assert.ok(played > 100, name + ": played");
   assert.ok(a.worldStage === -1 && b.worldStage === -1, name + ": the next world made by both");
   assert.ok(!b.halted, name + ": match() idles");
+  if (a.dispose) { a.dispose(); b.dispose(); }
   ok(name + " - " + overAt + " steps to the end, the same state every step (and " + after + " after it)");
 }
 
@@ -77,8 +81,6 @@ compare("extended, 4 tanks free-for-all", 5, { players: 4, extended: true, winSc
 if (!quick) {
   compare("extended, 2 v 2, friendly fire, line of sight", 9, { players: 4, teams: true, friendlyFire: true, winScore: 1, size: "small", sight: "walls" },
     ["easy", "hard", "normal", "normal"]);
-  compare("gold rush", 11, { players: 3, mode: "gold", size: "small" }, ["normal", "normal", "normal"]);
-  compare("capture the flag", 12, { players: 4, teams: true, mode: "ctf", size: "small" }, ["normal", "normal", "normal", "normal"]);
   compare("a custom map", 13, { players: 3, map: testMap(), winScore: 1 }, ["normal", "normal", "normal"]);
   compare("large, escEnds, idle player 1", 14, { players: 2, extended: true, size: "large", winScore: 1, escEnds: true }, [null, "hard"]);
 }
@@ -102,4 +104,12 @@ if (!quick) {
   ok("the summary after a match (matchtext.js): the statistics and the rounds, the menu's rows left free");
 }
 
-console.log("match-check: all " + n + " passed");
+// the official mods (1.5: the old game modes gold rush, capture the flag): QuickJS loaded first
+(async () => {
+  if (!quick) {
+    await Mods.load();
+    compare("gold rush (the official mod)", 11, { players: 3, extended: true, mod: official("gold"), size: "small" }, ["normal", "normal", "normal"]);
+    compare("capture the flag (the official mod)", 12, { players: 4, teams: true, extended: true, mod: official("ctf"), size: "small" }, ["normal", "normal", "normal", "normal"]);
+  }
+  console.log("match-check: all " + n + " passed");
+})().catch(err => { console.error(err); process.exit(1); });

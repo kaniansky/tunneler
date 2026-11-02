@@ -19,6 +19,8 @@ const WATCH = ["black", "wreck", "team", "killer", "others"];
 const SIGHTS = ["full", "circle", "walls"];
 const E = () => TunnelerEngine;
 const modes = () => E().MODE_LIST || ["standard"];
+// (the modes a code made up to 1.4 may name - official mods since 1.5: decoded as gm=<key>, play.js plays that mod)
+const OLD_MODES = ["standard", "gold", "infection", "survival", "hill", "shrink", "ctf", "siege", "deathmatch"];
 const goals = m => ((E().GOALS || {})[m] || {}).choices || [];
 const idx = (list, v, d = 0) => Math.max(0, list.indexOf(v) < 0 ? d : list.indexOf(v));
 
@@ -53,7 +55,7 @@ function decode(code) {
   const size = SIZES[Math.floor(a / 9)], win = a % 9 + 1;
   const time = TIMES[Math.floor(b / 6)], ff = Math.floor(b / 3) % 2, view = VIEWS[b % 3];
   const watch = WATCH[Math.floor(w / 6)], sight = SIGHTS[Math.floor(w / 2) % 3];   // (w % 2: the old Base repairs bit, ignored)
-  const mode = modes()[Math.floor(g / 7)], goal = mode ? goals(mode)[g % 7] : undefined;
+  const mode = OLD_MODES[Math.floor(g / 7)], goal = mode && modes().includes(mode) ? goals(mode)[g % 7] : undefined;
   if (!size || time === undefined || !watch || !mode) return null;
   const q = ["slots=" + encodeURIComponent(slots.join(",")), "size=" + size, "win=" + win, "ff=" + ff, "view=" + view,
     "watch=" + watch];

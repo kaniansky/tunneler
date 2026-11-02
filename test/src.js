@@ -39,6 +39,10 @@ const jsIn = d => fs.existsSync(d) ? fs.readdirSync(d).filter(f => f.endsWith(".
 // it (matchtext.js - the engine draws nothing) -> {vram, uni}; statsOf: the statistics page of a finished match
 const screenOf = e => e.out.mode === "text" ? MatchText.snapshot({ t: 0, text: e.out.textOps }, e) : { vram: e.vram, uni: e.uni };
 const statsOf = (e, prompt) => new MatchText(e).statsPage(prompt || "");
+// script mods (1.5, game/mods.js - only what loads it has them, as on a page): Mods with QuickJS's .wasm read from disk
+// (await Mods.load() before an engine with a mod); modFile(name) = src/mods/<name>.tmod.js as text
+const loadMods = () => { const { Mods } = mod("game/mods.js"); Mods.wasmLoader = () => fs.readFileSync(path.join(SRC, "js", "vendor", "quickjs.wasm")); return Mods; };
+const modFile = name => fs.readFileSync(path.join(SRC, "mods", name + ".tmod.js"), "utf8");
 
 module.exports = { SRC, MatchText, screenOf, statsOf, TunnelerEngine, TunnelerAI, NetProto, Lang, UniText, UniFont, CpuCode, MapData, Speaker, VGA_FONT, CP437_CHARS,
-  EXTRA_GLYPHS, unicodeGlyph, UNI_DATA, STRINGS_EN, readBlock, langFolders, jsIn };
+  EXTRA_GLYPHS, unicodeGlyph, UNI_DATA, STRINGS_EN, readBlock, langFolders, jsIn, loadMods, modFile };

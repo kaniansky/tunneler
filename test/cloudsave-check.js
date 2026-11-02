@@ -49,7 +49,7 @@ function device(port) {
 
   // ------------------------------------------------------------ the server
   same((await api(port, "GET", "/api/save")).status, 401, "no session: 401");
-  same((await api(port, "GET", "/api/save", null, T)).j, { settings: {}, maps: {}, replays: {} }, "a new account: nothing kept");
+  same((await api(port, "GET", "/api/save", null, T)).j, { settings: {}, maps: {}, replays: {}, mods: {} }, "a new account: nothing kept");
   same((await api(port, "POST", "/api/save/settings", { settings: { "tunneler.gfx": "original" } }, T)).status, 200);
   same((await api(port, "POST", "/api/save/settings", { settings: { "other.key": "x" } }, T)).status, 400, "a key not the game's: refused");
   same((await api(port, "POST", "/api/save/settings", { settings: { "tunneler.gfx": 5 } }, T)).status, 400, "a value not a string: refused");
@@ -64,7 +64,7 @@ function device(port) {
   same((await api(port, "POST", "/api/save/replay/r2", Buffer.from("not a replay"), T, true)).status, 400, "not a replay: refused");
   const back = (await api(port, "GET", "/api/save/replay/r1", null, T)).j;
   same(JSON.parse(zlib.gunzipSync(Buffer.from(back.gz, "base64"))).id, "r1", "a replay back (gzip'd, base64)");
-  same((await api(port, "GET", "/api/save", null, T)).j, { settings: { "tunneler.gfx": "original" }, maps: { abc: "f1" }, replays: { r1: "r1" } }, "the index");
+  same((await api(port, "GET", "/api/save", null, T)).j, { settings: { "tunneler.gfx": "original" }, maps: { abc: "f1" }, replays: { r1: "r1" }, mods: {} }, "the index");
   same((await api(port, "POST", "/api/save/map/abc/delete", {}, T)).status, 200);
   same((await api(port, "GET", "/api/save/map/abc", null, T)).status, 404, "deleted");
   for (let i = 0; i < CloudSave.MAX_MAPS; i++) await api(port, "POST", "/api/save/map/m" + i, { fp: "x", map: mapOf("m" + i, "M") }, bob.token);

@@ -93,6 +93,12 @@ const EXT_PAL_RGB = [
 // colour -> 0 free, 1 dirt (6, 8), 2 shot (12), 3 tank / base (player colours, treads 13, gun 14), 4 rock (7, 4)
 const PixelClassExt = [0, 3, 3, 3, 4, 3, 1, 4, 1, 3, 3, 3, 2, 3, 3, 3];
 const EXT_TREADS = 13, EXT_GUN = 14;
+// bases apart (a mod's @bases): a base of nobody's has gray walls (the treads' colour: a base wall's class); the spots
+// on a base's floor tanks are put on (its middle first, 9 px apart: a tank blocks another within 6; the two in line
+// with the doorways last but for the doorways themselves - a tank standing there, a player who doesn't move yet, shuts
+// that doorway: a race's computer tanks all put in one base waited behind it for ever)
+const NOBODY_WALL = 13;
+const BASE_SPOTS = [[0, 0], [-9, 0], [9, 0], [-9, -9], [9, -9], [-9, 9], [9, 9], [0, -9], [0, 9], [0, -17], [0, 17]];
 const EXT_MAX_PLAYERS = 8;
 // net bits (netproto.js): 1 up, 2 down, 4 left, 8 right, 16 fire (32 esc is ignored in extended mode)
 const B_UP = 1, B_DOWN = 2, B_LEFT = 4, B_RIGHT = 8, B_FIRE = 16;
@@ -151,6 +157,23 @@ const PAGE_KEYS = { 0x48: "up", 0x50: "down", 0x49: "pgup", 0x51: "pgdn", 0x47: 
 // (STRINGS_EN: src/lang/en/engine.js)
 
 const MaxShots = 6, MaxExplosions = 30, MaxParticles = 40, MaxPower = 11400;
+// The rules as numbers (1.5, docs/MODS.md 4 - script mods, game/mods.js): the extended engine's play reads them from
+// this.R, a copy of these per match (a mod's g.rules in its init may change them, each within RULE_RANGES); the defaults
+// are the original's constants, so a match without a mod plays exactly as before. The classic engine never changes
+// them (its own paths keep the original's literals; fireShot, shared, reads the default shotCost / maxShots).
+//   maxEnergy / maxShield  full energy / shield (MaxPower; at most it - the gauges' full)
+//   idleCost / moveCost / digCost  energy a frame alive / a pixel moved / a pixel dug    shotCost  energy a shot
+//   hitDamage  shield a hit takes (0x700)   shotSpeed  pixels a shot flies a frame   maxShots  shots in the air a tank
+//   digSlow    frames a tank waits after digging a pixel
+//   baseEnergy / baseShield  own base's refuel / repair a frame; mateEnergy / mateShield  a teammate's base's;
+//   foeEnergy  an enemy base's refuel
+//   respawn    frames until a destroyed tank comes back at its base (0: never - the round ends by elimination as ever)
+const RULES = Object.freeze({ maxEnergy: MaxPower, maxShield: MaxPower, idleCost: 2, moveCost: 2, digCost: 2, shotCost: 60,
+  hitDamage: 0x700, shotSpeed: 4, maxShots: MaxShots, digSlow: 1, baseEnergy: 80, baseShield: 40, mateEnergy: 30,
+  mateShield: 20, foeEnergy: 30, respawn: 0 });
+const RULE_RANGES = Object.freeze({ maxEnergy: [100, MaxPower], maxShield: [100, MaxPower], idleCost: [0, 100], moveCost: [0, 100],
+  digCost: [0, 100], shotCost: [0, 2000], hitDamage: [0, MaxPower], shotSpeed: [1, 8], maxShots: [0, MaxShots], digSlow: [0, 8],
+  baseEnergy: [0, 2000], baseShield: [0, 2000], mateEnergy: [0, 2000], mateShield: [0, 2000], foeEnergy: [0, 2000], respawn: [0, 1800] });
 
 class Explosion {
   constructor() {
@@ -188,18 +211,43 @@ class TunnelerEngine {
   //   mode: "standard" | a game mode         extended only (docs/DESIGN-8P.md 27): TunnelerEngine.MODES[mode]
   //                                           (src/js/game/modes/<mode>.js) hooks into the extended play loop;
   //                                           "standard" (default) = last team standing, as before
+  //   mod: {id, source}                       a script mod (1.5, docs/MODS.md; game/mods.js - imported by the page,
+  //                                           Mods.load() done): source = the .tmod.js file (text or bytes), id = its
+  //                                           hash (Mods.idOf - checked). Runs as game mode "mod:<id>" over its @mode
+  //                                           (instead of mode); forces the extended engine. A file that isn't a mod,
+  //                                           or one made for other versions (@game): the constructor throws.
+  //                                           Slots may say ai: true (a computer tank - the mod's g.tank(p).human).
+  //                                           engine.dispose() frees its sandbox (else the next match / the GC does).
+  //   modSettings: {key: value}               the mod's own settings (its @setting lines; Mods.settingsOf: a value
+  //                                           that isn't one of a setting's choices - or none - is its default);
+  //                                           the mod reads them as g.settings. A mod's @hide: those options are the
+  //                                           game's defaults whatever was given (Mods.HIDE_DEFAULTS)
+  //   modBases: n                             a mod with @bases on a generated world: how many bases (within its
+  //                                           @bases; default Mods.basesFor's - by the world's size). A custom map:
+  //                                           its bases in its order, as many as @bases allows (fewer than @bases'
+  //                                           least: the constructor throws, problem "mapbases")
   // The classic engine (the original, byte for byte with size medium and winScore 3) runs for exactly
   // BLUE + GREEN in different teams and the standard mode; anything else is the extended
   // engine (N tanks, own palette, input bits).
   constructor(seed, opts) {
-    const o = opts || {};
-    const gameMode = TunnelerEngine.MODES[o.mode] ? o.mode : "standard";
+    let o = opts || {};
+    // a script mod (game/mods.js): its game mode "mod:<id>" (registered there) - null: none
+    if (o.mod && !TunnelerEngine.modHost) throw new Error("a mod needs game/mods.js");
+    this.modInfo = o.mod ? TunnelerEngine.modHost.open(o.mod, o) : null;  // {mode, base, id, header, settings, ...}
+    // (its @hide: those options the game's defaults)
+    if (this.modInfo) o = TunnelerEngine.modHost.options(this.modInfo, o);
+    this.modBox = null;                            // its sandbox in this match (mods.js, made by the mode's init)
+    const gameMode = this.modInfo ? this.modInfo.mode : TunnelerEngine.MODES[o.mode] ? o.mode : "standard";
     // a custom map (null: a generated world, as always)
     this.customMap = o.map ? MapData.decode(o.map) : null;
+    // (a script mod's @walls none - game/mods.js modHost.options: the bases without walls)
+    this.noBaseWalls = !!o.noBaseWalls;
     let slots, forceExt = !!o.extended || gameMode !== "standard" || !!this.customMap;
     if (Array.isArray(o.slots) && o.slots.length)
       slots = o.slots.slice(0, EXT_MAX_PLAYERS).map((s, i) =>
-        ({ color: clampInt(s && s.color, 0, 7, i), team: clampInt(s && s.team, 1, 8, i + 1) }));
+        ({ color: clampInt(s && s.color, 0, 7, i), team: clampInt(s && s.team, 1, 8, i + 1),
+          // (a script mod's game: which tanks are computer tanks and their level - g.tank(p).human / level)
+          ...(s && s.ai ? { ai: true, ...(["easy", "normal", "hard"].includes(s.level) ? { level: s.level } : {}) } : {}) }));
     else {
       const nP = Math.max(2, Math.min(EXT_MAX_PLAYERS, (o.players | 0) || 2));
       slots = [];
@@ -224,7 +272,7 @@ class TunnelerEngine {
     this.winScore = clampInt(o.winScore, 1, 9, 3);
     // a mode's goal instead of rounds to win (TunnelerEngine.GOALS: gold, minutes to survive, waves, seconds
     // in the zone, captures, base strength, kills): one round decides the match
-    const G = TunnelerEngine.GOALS[this.gameMode];
+    const G = TunnelerEngine.GOALS[this.modInfo ? this.modInfo.base : this.gameMode];   // (a mod: its @mode's goal)
     this.goal = G ? (G.choices.includes(o.goal) ? o.goal : G.def) : 0;
     if (G) this.winScore = 1;
     this.friendlyFire = !!o.friendlyFire;
@@ -242,8 +290,19 @@ class TunnelerEngine {
     // it can't be dug, explosions leave it water.
     this.groundType = this.customMap && MapData.GROUNDS.includes(this.customMap.ground) ? this.customMap.ground : "classic";
     this.hasWater = !!this.customMap && this.customMap.cells.includes(MapData.WATER);
+    // groundPaint (1.5, owner 2026-11-02 - the map's painted ground, display only like groundType): per map cell (4 x 4
+    // px, worldW / 4 a row) 0 = groundType, else MapData.PAINT[v]; null when nothing is painted (playscreen.js groundAt)
+    this.groundPaint = this.customMap && MapData.painted(this.customMap) ? this.customMap.groundCells : null;
     // (o.noFloor: mapReach's throwaway engine - it reads only the world)
-    this.floor = !o.noFloor && (this.hasWater || this.groundType !== "classic") ? new Uint8Array(this.worldW * this.worldH) : null;
+    this.floor = !o.noFloor && (this.hasWater || this.groundType !== "classic" || this.groundPaint) ? new Uint8Array(this.worldW * this.worldH) : null;
+    // Bases apart from players (1.5, docs/MODS.md 3a: a script mod's @bases): the world has nBases bases whatever the
+    // number of tanks; baseOwner[b] = the team (its number 1..8, 0: nobody's) base b belongs to - its walls in that
+    // team's colour (baseColor), it refuels and repairs that team's tanks as a tank's own base does, the others' as an
+    // enemy base (rules), nobody's none; home[p] = the base tank p was put in last (the computer tanks' bearings).
+    // Every other game: one base per player, base p is player p's (nBases = nPlayers; baseOwner, home null - no code
+    // path changes)
+    const hb = this.modInfo && this.extended ? this.modInfo.header.bases : null;
+    this.nBases = hb ? TunnelerEngine.modHost.basesFor(this.modInfo, this.size, this.customMap, o.modBases) : this.nPlayers;
     // extended mode, local games only: player 1's Esc (bit 32) ends the match as in the original (online
     // the extended engine ignores Esc - one player must not end everybody's match)
     this.escEnds = this.extended && !!o.escEnds;
@@ -314,7 +373,12 @@ class TunnelerEngine {
       this.shotX.push(new Int16Array(MaxShots + 1).fill(-1));
       this.shotY.push(new Int16Array(MaxShots + 1));
     }
-    this.baseX = arr(0); this.baseY = arr(0); this.digDelay = arr(0); this.moving = arr(false);
+    const nb1 = Math.max(n1, this.nBases + 1);
+    this.baseX = new Array(nb1).fill(0); this.baseY = new Array(nb1).fill(0); this.digDelay = arr(0); this.moving = arr(false);
+    this.baseOwner = hb ? new Array(this.nBases + 1).fill(0) : null;
+    this.home = hb ? arr(0) : null;
+    this.placing = null;                          // (a mod's setup: the tanks placed so far - spotFree)
+    this.tanksDrawn = false;                      // (the tanks are in the world now: between their drawing and erasing)
     this.tankX = arr(0); this.tankY = arr(0); this.tankDir = arr(0);
     this.explosions = [];
     for (let i = 0; i <= MaxExplosions + 1; i++) this.explosions.push(new Explosion());
@@ -322,6 +386,7 @@ class TunnelerEngine {
     this.speakerHz = 0;
 
     // extended mode
+    this.R = RULES;                               // the rules (RULES; a copy per extended match - newMatchExt)
     this.pixelClass = this.extended ? PixelClassExt : PixelClass;
     this.bits = new Uint8Array(n1);               // held net bits per player 1..N (input.bits)
     // (teamWins: per team index 0..nTeams-1, set by computeTeams)
@@ -466,7 +531,7 @@ class TunnelerEngine {
     if (c === 6 || c === 7 || c === 8) return true;
     if (c === 0) return false;
     if (this.tankPixel(x, y)) return false;      // (a tank in a doorway lies on the wall ring: it hid what was behind it)
-    for (let b = 1; b <= this.nPlayers; b++) {
+    for (let b = 1; b <= this.nBases; b++) {
       const ax = Math.abs(x - this.baseX[b]), ay = Math.abs(y - this.baseY[b]);
       if (ax <= 17 && ay <= 17 && (ax === 17 || ay === 17)) return true;
     }
@@ -678,17 +743,23 @@ class TunnelerEngine {
   }
 
   fireShot(player) {
+    // (a mod's rules maxShots 0 - 1.5: nobody shoots - no shot, no sound, nothing counted; the original never has it)
+    if (this.R.maxShots === 0) return;
     if (this.fireDelay[player] > 0) this.fireDelay[player]--;
     else {
       this.shotsFired[player] = i16(this.shotsFired[player] + 1);
+      // (R: the original's MaxShots and 60 - a mod's rules may lower the one, change the other; extended only)
+      const max = this.R.maxShots;
       let s = 1;
-      while (s <= MaxShots && this.shotX[player][s] !== -1) s++;
-      if (s <= MaxShots) {
+      while (s <= max && this.shotX[player][s] !== -1) s++;
+      if (s <= max) {
         this.queueSound(4, this.tankX[player], this.tankY[player]);
         this.shotX[player][s] = this.tankX[player];
         this.shotY[player][s] = this.tankY[player];
         this.shotDir[player][s] = this.tankDir[player];
-        this.energy[this.P] -= 60;                       // PlayGame's P
+        this.energy[this.P] -= this.R.shotCost;          // PlayGame's P
+        // (a game mode: player fired shot s - extended only, the classic game has none)
+        if (this.GM && this.GM.onFire) this.GM.onFire(this, player, s);
       }
       this.fireDelay[player] = 1;
     }
@@ -838,14 +909,21 @@ class TunnelerEngine {
   }
 
   drawBases() {
-    for (let p = 1; p <= this.nPlayers; p++) {
-      const bx = this.baseX[p], by = this.baseY[p];
-      const c = this.playerColor(p);                          // extended: walls in the player's color
-      for (let x = bx - 16; x <= bx + 16; x++) for (let y = by - 16; y <= by + 16; y++) this.setPixel(x, y, 0);
-      for (let x = bx - 17; x <= bx - 4; x++) { this.setPixel(x, by - 17, c); this.setPixel(x, by + 17, c); }
-      for (let x = bx + 17; x >= bx + 4; x--) { this.setPixel(x, by - 17, c); this.setPixel(x, by + 17, c); }
-      for (let y = by - 16; y <= by + 16; y++) { this.setPixel(bx - 17, y, c); this.setPixel(bx + 17, y, c); }
+    for (let b = 1; b <= this.nBases; b++) {
+      const bx = this.baseX[b], by = this.baseY[b];
+      // (a mod's @walls none - extended only: no walls, the ground where they would be open too)
+      const r = this.noBaseWalls ? 17 : 16;
+      for (let x = bx - r; x <= bx + r; x++) for (let y = by - r; y <= by + r; y++) this.setPixel(x, y, 0);
+      this.drawBaseWalls(b);
     }
+  }
+  // base b's walls (extended: in its player's colour - bases apart: its owner's, baseColor)
+  drawBaseWalls(b) {
+    if (this.noBaseWalls) return;
+    const bx = this.baseX[b], by = this.baseY[b], c = this.baseColor(b);
+    for (let x = bx - 17; x <= bx - 4; x++) { this.setPixel(x, by - 17, c); this.setPixel(x, by + 17, c); }
+    for (let x = bx + 17; x >= bx + 4; x--) { this.setPixel(x, by - 17, c); this.setPixel(x, by + 17, c); }
+    for (let y = by - 16; y <= by + 16; y++) { this.setPixel(bx - 17, y, c); this.setPixel(bx + 17, y, c); }
   }
 
 
@@ -1100,11 +1178,12 @@ class TunnelerEngine {
   // (re)place a destroyed - or not yet active - tank at x, y (default: its own base) with full energy
   // and shield, facing the middle of the world; it is drawn from this frame on
   respawn(p, x, y) {
-    x = x == null ? this.baseX[p] : x; y = y == null ? this.baseY[p] : y;
+    const h = this.homeOf(p);                       // (its own base - bases apart: its home)
+    x = x == null ? this.baseX[h] : x; y = y == null ? this.baseY[h] : y;
     this.tankX[p] = x; this.tankY[p] = y;
     this.tankDir[p] = x < (this.worldW >> 1) ? 2 : 6;
     this.alive[p] = true; this.killedBy[p] = 0;
-    this.energy[p] = MaxPower; this.shield[p] = MaxPower; this.out.resetGauges(p);
+    this.energy[p] = this.R.maxEnergy; this.shield[p] = this.R.maxShield; this.out.resetGauges(p);
     this.digDelay[p] = -1; this.staticTimer[p] = 0; this.fireDelay[p] = 0; this.moving[p] = false;
     for (let j = 1; j <= MaxShots; j++) this.shotX[p][j] = -1;
   }
@@ -1116,22 +1195,99 @@ class TunnelerEngine {
     this.teamWins = null;
     this.computeTeams();
     this.teamIds.forEach((id, k) => { const o = oldIds.indexOf(id); this.teamWins[k] = o >= 0 ? old[o] : 0; });
-    if (this.endTimer < 0 && !(this.GM && this.GM.eliminationEnds === false) && this.sidesLeft() <= 1) this.endTimer = 25;
+    if (this.endTimer < 0 && !this.noElimination() && this.sidesLeft() <= 1) this.endTimer = 25;
   }
   // a world pixel of a mode object for this frame's view screens (restored after the blits)
-  objPut(x, y, color) {
+  // (paint - 1.5, a mod's g.mark / g.ring {paint}: paint on the ground, flat - the modern look draws it as the floor's)
+  objPut(x, y, color, paint) {
     if (x < 0 || y < 0 || x >= this.worldW || y >= this.worldH) return;
+    if (paint) (this.objPaint || (this.objPaint = [])).push(this.objs.length);
     this.objs.push(x, y, this.getPixel(x, y));
     this.setPixel(x, y, color);
   }
   objRestore() {
     const o = this.objs;
-    this.out.modeObjects(o);                        // (display only: the modern look draws them)
+    this.out.modeObjects(o, this.objPaint);         // (display only: the modern look draws them)
     for (let i = o.length - 3; i >= 0; i -= 3) this.setPixel(o[i], o[i + 1], o[i + 2]);
-    this.objs = [];
+    this.objs = []; this.objPaint = null;
   }
   // the mode's score of player p for the map's table, the round title, the statistics ("" = none)
   modeScoreText(p) { return this.GM && this.GM.scoreText ? this.GM.scoreText(this, p) || "" : ""; }
+
+  // ---- bases (1.5: apart from players with a script mod's @bases - see the constructor; else base b is player b's)
+  // the base tank p calls home: its own - bases apart: the one it was put in last (0: none yet)
+  homeOf(p) { return this.home ? this.home[p] : p; }
+  // the team index base b belongs to (-1: nobody's)
+  baseOwnerOf(b) {
+    if (!this.baseOwner) return b >= 1 && b <= this.nPlayers ? this.team(b) : -1;
+    const n = this.baseOwner[b];
+    return n ? this.teamIds.indexOf(n) : -1;
+  }
+  // the LORES colour of base b's walls: its player's - bases apart: its owner team's (its first tank's colour), nobody's
+  // gray (13, the treads' - a base wall's class like every tank colour)
+  baseColor(b) {
+    if (!this.baseOwner) return this.playerColor(b);
+    const n = this.baseOwner[b];
+    for (let p = 1; n && p <= this.nPlayers; p++) if (this.slots[p - 1].team === n) return this.playerColor(p);
+    return NOBODY_WALL;
+  }
+  // bases apart: base b belongs to team index t from now on (-1: nobody) - its walls redrawn in its colour
+  setBaseOwner(b, t) {
+    if (!this.baseOwner || !(b >= 1 && b <= this.nBases)) return;
+    const n = t >= 0 && t < this.nTeams ? this.teamIds[t] : 0;
+    if (this.baseOwner[b] === n) return;
+    this.baseOwner[b] = n;
+    this.drawBaseWalls(b);
+  }
+  // can tank p be put at x, y: inside the world (8 px from its edge), no other tank (alive - in a mod's setup: placed
+  // already) nearer than 8 px; open: its 7 x 7 box all open ground, no water
+  spotFree(p, x, y, open) {
+    if (x < 8 || y < 8 || x >= this.worldW - 8 || y >= this.worldH - 8) return false;
+    for (let q = 1; q <= this.nPlayers; q++)
+      if (q !== p && this.alive[q] && (!this.placing || this.placing[q]) &&
+          this.distance(Math.abs(x - this.tankX[q]), Math.abs(y - this.tankY[q])) < 8) return false;
+    if (open) {
+      for (let dy = -3; dy <= 3; dy++) for (let dx = -3; dx <= 3; dx++) if (this.getPixel(x + dx, y + dy) !== 0) return false;
+      if (this.hasWater && this.inWater(x, y)) return false;
+    }
+    return true;
+  }
+  // where tank p goes in base b (docs/MODS.md 3a): its floor (the middle, then 8 spots around it), then its doorways,
+  // then the nearest dug-out spot around it (rings growing every 2 px) - never on top of another tank -> [x, y]
+  freeSpot(p, b) {
+    const bx = this.baseX[b], by = this.baseY[b];
+    for (const [dx, dy] of BASE_SPOTS) if (this.spotFree(p, bx + dx, by + dy, false)) return [bx + dx, by + dy];
+    return this.spotNear(p, bx, by, 22);
+  }
+  // the nearest free spot to x, y from d0 px on: dug out, else (none within sc(200)) any spot without rock, water or
+  // walls; nothing at all (a world full of tanks): x, y itself
+  spotNear(p, x, y, d0) {
+    const max = this.sc(200), pc = this.pixelClass;
+    if (d0 <= 0 && this.spotFree(p, x, y, true)) return [x, y];
+    for (let pass = 0; pass < 2; pass++)
+      for (let d = Math.max(2, d0); d <= max; d += 2)
+        for (let k = -d; k < d; k += 2)
+          for (const [i, j] of [[x + k, y - d], [x + d, y + k], [x - k, y + d], [x - d, y - k]]) {
+            if (pass === 0 ? this.getPixel(i, j) !== 0 || !this.spotFree(p, i, j, true) : !this.spotFree(p, i, j, false)) continue;
+            if (pass === 1) {
+              let ok = !(this.hasWater && this.inWater(i, j));
+              for (let dy = -3; dy <= 3 && ok; dy++) for (let dx = -3; dx <= 3 && ok; dx++) if (pc[this.getPixel(i + dx, j + dy)] > 1) ok = false;
+              if (!ok) continue;
+            }
+            return [i, j];
+          }
+    return [x, y];
+  }
+  // put tank p at x, y (b: in base b - bases apart, its home from now on), back alive with full energy and shield
+  // (respawn); while the tanks are drawn in the world it is taken out of it and drawn again there
+  putTank(p, x, y, b) {
+    const drawn = this.tanksDrawn;
+    if (drawn && this.alive[p]) this.eraseTankExt(p);
+    this.respawn(p, x, y);
+    if (b && this.home) this.home[p] = b;
+    if (drawn) this.drawTankExt(p);
+    if (this.placing) this.placing[p] = 1;
+  }
 
   // coloured tank sprites: the original's shapes, treads 13, body = player colour, gun 14
   initTablesExt() {
@@ -1162,12 +1318,13 @@ class TunnelerEngine {
     this.roundWinner = 0; this.roundWinnerTeam = -1;
     const dist = d => Math.max(this.sc(d), 40 + (d - 60) / 5);       // small world: 50 / 44 / 40
     let minDist = dist(100);
+    const NB = this.nBases;                          // (= N, but with a mod's @bases)
     if (this.customMap) minDist = this.mapBases();
     else for (let attempt = 1; ; attempt++) {
       if (attempt > 100) minDist = dist(80);
       if (attempt > 300) minDist = dist(60);
       let ok = true;
-      for (let i = 1; i <= N && ok; i++) {
+      for (let i = 1; i <= NB && ok; i++) {
         let tries = 0, good;
         do {
           this.baseX[i] = this.random(this.sc(704)) + this.sc(160);
@@ -1181,19 +1338,22 @@ class TunnelerEngine {
       if (ok) break;
     }
     // (a base's inside always looks dug - sand on sand / grass, as map pictures and the editor show it: the floor's
-    // "open at the start" goes inside the walls; display only, the floor stays static for the match)
-    if (this.floor) for (let i = 1; i <= N; i++)
+    // "open at the start" goes inside the walls; display only, the floor stays static for the match - but a cell painted
+    // there keeps its painted look, 1.5: owner, 2026-11-02 "it should be possible to paint inside the base")
+    const GP = this.groundPaint, cw = this.worldW >> 2;
+    if (this.floor) for (let i = 1; i <= NB; i++)
       for (let y = this.baseY[i] - 17; y <= this.baseY[i] + 17; y++)
         for (let x = this.baseX[i] - 17; x <= this.baseX[i] + 17; x++) {
           const k = y * this.worldW + x;
-          if (this.floor[k] === 2) this.floor[k] = 0;
+          if (this.floor[k] === 2 && !(GP && GP[(y >> 2) * cw + (x >> 2)])) this.floor[k] = 0;
         }
-    this.groupTeams();
+    if (!this.baseOwner) this.groupTeams();
     this.baseMinDist = minDist;
     this.baseCarved = 0;
-    for (let i = 1; i <= N; i++) this.baseCarved += this.openBase(this.baseX[i], this.baseY[i]);
+    for (let i = 1; i <= NB; i++) this.baseCarved += this.openBase(this.baseX[i], this.baseY[i]);
     this.modeScore = new Array(N + 1).fill(0);      // the game mode's score per player (gold, points, kills...)
     this.GS = {};
+    this.R = Object.assign({}, RULES);               // (every match starts with the original's rules - a mod's init may change them)
     if (this.GM && this.GM.init) this.GM.init(this);
   }
 
@@ -1230,6 +1390,11 @@ class TunnelerEngine {
   // from the others. -> the closest distance the bases keep
   mapBases() {
     const N = this.nPlayers, B = this.customMap.bases.map(MapData.basePx), order = B.map((b, i) => i);
+    // (bases apart - a mod's @bases: the map's own bases in the map's order, as many as the engine has; no RNG)
+    if (this.baseOwner) {
+      for (let b = 1; b <= this.nBases; b++) { this.baseX[b] = B[b - 1].x; this.baseY[b] = B[b - 1].y; }
+      return MapData.BASE_GAP;
+    }
     for (let i = 0; i < Math.min(N, order.length); i++) {
       const j = i + this.random(order.length - i);
       const t = order[i]; order[i] = order[j]; order[j] = t;
@@ -1368,7 +1533,7 @@ class TunnelerEngine {
       this.digDelay[i] = -1; this.staticTimer[i] = 0; this.alive[i] = true; this.killedBy[i] = 0; this.fireDelay[i] = 0;
       for (let j = 1; j <= MaxShots; j++) this.shotX[i][j] = -1;
       this.moving[i] = false;
-      this.energy[i] = MaxPower; this.shield[i] = MaxPower;
+      this.energy[i] = this.R.maxEnergy; this.shield[i] = this.R.maxShield;
       this.out.resetGauges(i);
       this.roundDamage[i] = 0;
     }
@@ -1377,7 +1542,26 @@ class TunnelerEngine {
     this.objs = [];                                 // world pixels covered by mode objects this frame (objPut)
     this.out.modeObjects(this.objs);
     this.out.resetHud();
+    // (a script mod: its setup - where the tanks start, who owns which base; bases apart: every tank put in a base)
+    if (this.GM && this.GM.setup) this.GM.setup(this);
     if (this.GM && this.GM.round) this.GM.round(this);
+  }
+
+  // bases apart (a mod's @bases): tank P in a base its team owns refuels and repairs as in its own; in another team's it
+  // refuels as in an enemy's (foeEnergy); a base of nobody's does nothing (a game mode may switch a base off)
+  refuelApart(P) {
+    const R = this.R, n = this.slots[P - 1].team;
+    for (let b = 1; b <= this.nBases; b++) {
+      const o = this.baseOwner[b];
+      if (!o || this.distance(Math.abs(this.tankX[P] - this.baseX[b]), Math.abs(this.tankY[P] - this.baseY[b])) >= 15) continue;
+      if (this.GM && this.GM.baseUsable && !this.GM.baseUsable(this, b, P)) continue;
+      this.energy[P] += o === n ? R.baseEnergy : R.foeEnergy;
+      if (this.energy[P] > R.maxEnergy) this.energy[P] = R.maxEnergy;
+      if (o === n) {
+        this.shield[P] += R.baseShield;
+        if (this.shield[P] > R.maxShield) this.shield[P] = R.maxShield;
+      }
+    }
   }
 
   // every tank that runs out of energy / shield dies; the round ends 25 frames after at most one
@@ -1394,7 +1578,7 @@ class TunnelerEngine {
     // a game mode may handle what a destroyed tank means (respawn, switching teams...) - true: it did, the
     // round doesn't end by elimination
     if (this.GM && this.GM.onKill && this.GM.onKill(this, p, this.killedBy[p] || 0, x, y)) return;
-    if (this.GM && this.GM.eliminationEnds === false) return;
+    if (this.noElimination()) return;
     if (this.endTimer < 0 && this.sidesLeft() <= 1) this.endTimer = 25;
   }
 
@@ -1408,7 +1592,7 @@ class TunnelerEngine {
   // MoveShots for N players: a shot hits the first other tank alive (lowest number) within distance
   // < 4; without friendly fire only enemies count - a shot reaching a teammate explodes like on a wall
   moveShotsExt() {
-    const N = this.nPlayers, ff = this.friendlyFire;
+    const N = this.nPlayers, ff = this.friendlyFire, speed = this.R.shotSpeed;
     for (let p = 1; p <= N; p++)
       for (let s = 1; s <= MaxShots; s++)
         if (this.shotX[p][s] !== -1) {
@@ -1425,9 +1609,12 @@ class TunnelerEngine {
                     && this.distance(Math.abs(x - this.tankX[t]), Math.abs(y - this.tankY[t])) < 4) q = t;
                 if (q) {
                   this.shotsHit[p] = i16(this.shotsHit[p] + 1);
-                  this.shield[q] -= 0x700;
-                  if (this.isEnemy(p, q)) this.roundDamage[p] += 0x700;   // (round time limit: enemies only)
+                  this.shield[q] -= this.R.hitDamage;
+                  if (this.isEnemy(p, q)) this.roundDamage[p] += this.R.hitDamage;   // (round time limit: enemies only)
                   this.gaugeTurn = 2;
+                  // (a game mode: shooter p's shot s hit tank q - its shield already down by the hit; the mode may
+                  // change it)
+                  if (this.GM && this.GM.onHit) this.GM.onHit(this, p, q, s);
                   if (this.shield[q] > 0) {
                     this.addExplosion(x - DX, y - DY, 7, 20);
                     this.queueSound(2, x - DX, y - DY);
@@ -1444,7 +1631,7 @@ class TunnelerEngine {
                 x = -1;
               }
             k++;
-          } while (x !== -1 && k <= 4);
+          } while (x !== -1 && k <= speed);
           this.shotX[p][s] = x;
           this.shotY[p][s] = y;
         }
@@ -1458,7 +1645,11 @@ class TunnelerEngine {
   // own round wins: the screens then list the tanks' wins (free-for-all layout) and mark as match winners
   // the tanks with winScore wins, not the team that won the last round. (Display only: the mode keeps
   // teamWins such that the match still ends through matchWinnerTeam.)
-  perTankWins() { return !!(this.GM && this.GM.perTankWins); }
+  // (a script mod's: a function of the engine - its file says so)
+  // the game mode says the last side left doesn't end the round (GM.eliminationEnds false - a script mod's: a function
+  // of the engine, only while the mod runs)
+  noElimination() { const f = this.GM && this.GM.eliminationEnds; return (typeof f === "function" ? f(this) : f) === false; }
+  perTankWins() { const f = this.GM && this.GM.perTankWins; return typeof f === "function" ? !!f(this) : !!f; }
   // did player p win the match (its team reached winScore; perTankWins: p itself)
   matchWinner(p) {
     if (this.perTankWins()) return this.wins[p] >= this.winScore;
@@ -1502,13 +1693,14 @@ class TunnelerEngine {
       this.roundStart = this.tick; this.out.clockShown = -1; this.timedOut = false;
       this.out.sightNewRound();
       let byEsc = false;
+      const R = this.R;                           // (the match's rules - RULES unless a mod's init changed them)
       do {
         if (this.escHeld) { this.roundOver = true; this.matchOver = true; byEsc = true; }   // (escEnds only)
         if (this.roundTicks) this.roundClock();
         for (let P = 1; P <= N; P++) {
           this.P = P;
           if (this.alive[P]) {
-            this.energy[P] -= 2;
+            this.energy[P] -= R.idleCost;
             if (this.shield[P] > 0 && this.energy[P] > 0) {
               const b = B[P], fire = (b & B_FIRE) !== 0;
               this.newX = this.tankX[P];
@@ -1541,9 +1733,9 @@ class TunnelerEngine {
                     if (this.obstacle === 1) {
                       this.queueSound(1, this.newX, this.newY);
                       this.digTunnel(kb);
-                      this.energy[P] -= 2;
+                      this.energy[P] -= R.digCost;
                       this.metersDug[P] = i16(this.metersDug[P] + 1);
-                      this.digDelay[P] = 1;
+                      this.digDelay[P] = R.digSlow;
                     } else if (this.digDelay[P] > 0) this.digDelay[P]--;
                     else {
                       if (fire) {
@@ -1553,7 +1745,7 @@ class TunnelerEngine {
                       this.tankX[P] = this.newX;
                       this.tankY[P] = this.newY;
                       this.tankDir[P] = this.newDir;
-                      this.energy[P] -= 2;
+                      this.energy[P] -= R.moveCost;
                       this.metersMoved[P] = i16(this.metersMoved[P] + 1);
                       // water (1.3): a pixel moved with water under the tank - it waits a frame, as after
                       // digging (half speed)
@@ -1568,20 +1760,22 @@ class TunnelerEngine {
               } else this.moving[P] = false;
               // own base: refuel and repair; a teammate's base: refuel slower, repair at half speed;
               // an enemy base: refuel only, slower (a game mode may switch a base off - GM.baseUsable)
-              for (let q = 1; q <= N; q++)
+              if (this.baseOwner) this.refuelApart(P);
+              else for (let q = 1; q <= N; q++)
                 if (this.distance(Math.abs(this.tankX[P] - this.baseX[q]), Math.abs(this.tankY[P] - this.baseY[q])) < 15 &&
                     !(this.GM && this.GM.baseUsable && !this.GM.baseUsable(this, q, P))) {
                   if (q === P) {
-                    this.energy[P] += 80;
-                    if (this.energy[P] > MaxPower) this.energy[P] = MaxPower;
-                    this.shield[P] += 40;
-                    if (this.shield[P] > MaxPower) this.shield[P] = MaxPower;
+                    this.energy[P] += R.baseEnergy;
+                    if (this.energy[P] > R.maxEnergy) this.energy[P] = R.maxEnergy;
+                    this.shield[P] += R.baseShield;
+                    if (this.shield[P] > R.maxShield) this.shield[P] = R.maxShield;
                   } else {
-                    this.energy[P] += 30;
-                    if (this.energy[P] > MaxPower) this.energy[P] = MaxPower;
-                    if (this.team(q) === this.team(P)) {
-                      this.shield[P] += 20;
-                      if (this.shield[P] > MaxPower) this.shield[P] = MaxPower;
+                    const mate = this.team(q) === this.team(P);
+                    this.energy[P] += mate ? R.mateEnergy : R.foeEnergy;
+                    if (this.energy[P] > R.maxEnergy) this.energy[P] = R.maxEnergy;
+                    if (mate) {
+                      this.shield[P] += R.mateShield;
+                      if (this.shield[P] > R.maxShield) this.shield[P] = R.maxShield;
                     }
                   }
                 }
@@ -1600,6 +1794,7 @@ class TunnelerEngine {
           if (this.shield[I] <= 0) this.shield[I] = 1;
           if (this.alive[I]) this.drawTankExt(I);
         }
+        this.tanksDrawn = true;
         this.moveShotsExt();
         this.drawShots();
         // a game mode's objects (gold, flags, zone marks...): drawn into the world for the view screens only
@@ -1622,6 +1817,7 @@ class TunnelerEngine {
         }
         this.objRestore();
         for (let I = 1; I <= N; I++) if (this.alive[I]) this.eraseTankExt(I);
+        this.tanksDrawn = false;
         this.eraseShots();
         if (this.endTimer > 0) this.endTimer--;
         if (this.endTimer === 0) this.roundOver = true;
@@ -2009,6 +2205,10 @@ class TunnelerEngine {
   }
 
 
+  // a script mod's sandbox (game/mods.js) freed now - the page is done with this engine (else the next match's init or
+  // the garbage collector frees it)
+  dispose() { if (this.modBox) { this.modBox.dispose(); this.modBox = null; } }
+
   // ============================================================ read-only state for UI / AI
   // wins / alive / tanks / players: 0-based, one entry per player (classic: [BLUE, GREEN])
   state() {
@@ -2019,7 +2219,7 @@ class TunnelerEngine {
       wins: ids.map(p => this.wins[p]),
       alive: ids.map(p => this.alive[p]),
       tanks: ids.map(p => ({ x: this.tankX[p], y: this.tankY[p], dir: this.tankDir[p],
-        energy: this.energy[p], shield: this.shield[p], baseX: this.baseX[p], baseY: this.baseY[p] })),
+        energy: this.energy[p], shield: this.shield[p], baseX: this.baseX[this.homeOf(p)] || 0, baseY: this.baseY[this.homeOf(p)] || 0 })),
       endTimer: this.endTimer,
       extended: this.extended, nPlayers: this.nPlayers, teams: this.teams,
       teamWins: this.teamWins.slice(), roundWinner: this.roundWinner, roundWinnerTeam: this.roundWinnerTeam,
@@ -2029,7 +2229,9 @@ class TunnelerEngine {
       players: ids.map(p => ({ x: this.tankX[p], y: this.tankY[p], dir: this.tankDir[p], energy: this.energy[p],
         shield: this.shield[p], alive: this.alive[p], wins: this.wins[p], team: this.team(p),
         teamNo: this.teamNumber(p), color: this.colorIndex(p),
-        baseX: this.baseX[p], baseY: this.baseY[p] })),
+        baseX: this.baseX[this.homeOf(p)] || 0, baseY: this.baseY[this.homeOf(p)] || 0 })),
+      // the world's bases (1.5; bases apart - a mod's @bases - as many as it has): owner a team index, -1 nobody's
+      bases: Array.from({ length: this.nBases }, (_, i) => ({ x: this.baseX[i + 1], y: this.baseY[i + 1], owner: this.baseOwnerOf(i + 1) })),
     };
   }
 }
@@ -2037,7 +2239,7 @@ class TunnelerEngine {
 // The game's picture (playscreen.js) through the engine, as before it was its own: pages and tests read engine.vram,
 // views, snapshots, screen, cams... - all of it the screen's (engine.out)
 const SCREEN_STATE = ["vram", "uni", "uniUsed", "mode", "screen", "loresActive", "dirty", "snapshots", "dim", "views", "viewDims",
-  "sightMem", "seenCells", "seenAt", "cams", "objsShown", "shownEnergy", "shownShield", "hudShown", "clockShown", "tickMarker"];
+  "sightMem", "seenCells", "seenAt", "cams", "objsShown", "paintShown", "shownEnergy", "shownShield", "hudShown", "clockShown", "tickMarker"];
 for (const k of SCREEN_STATE)
   Object.defineProperty(TunnelerEngine.prototype, k, { get() { return this.out[k]; }, set(v) { this.out[k] = v; }, configurable: true });
 for (const k of Object.getOwnPropertyNames(PlayScreen.prototype)) {
@@ -2049,6 +2251,10 @@ for (const k of Object.getOwnPropertyNames(PlayScreen.prototype)) {
 TunnelerEngine.TICK_MS = TICK * 1000 / PIT_HZ;
 TunnelerEngine.FX_KINDS = FX_KINDS;
 TunnelerEngine.MAX_POWER = MaxPower;           // (energy / shield gauges: gfx-hud.js)
+TunnelerEngine.RULES = RULES;                  // the rules' defaults (the original's) and what a mod may set them to (mods.js)
+TunnelerEngine.RULE_RANGES = RULE_RANGES;
+// script mods (game/mods.js sets it when it is imported): {open(opt) -> the engine's modInfo, or throws}
+TunnelerEngine.modHost = null;
 TunnelerEngine.KEYS = { KeyFire, KeyUp, KeyDown: PlayerKeys, KeyRight, KeyLeft };
 TunnelerEngine.DirDX = DirDX;
 TunnelerEngine.DirDY = DirDY;
@@ -2121,7 +2327,10 @@ TunnelerEngine.mapReach = (src, opts) => {
       blocked[y * W + x] = pc[v & 15] >= 3 ? 1 : 0;
       blocked[y * W + x + 1] = pc[v >> 4] >= 3 ? 1 : 0;
     }
-  for (const { x: bx, y: by } of B) {                    // (drawBases)
+  // (opts.walls false: the bases without walls - a map for mods with @walls none: drawBases clears 17 px round each)
+  if (opts && opts.walls === false) for (const { x: bx, y: by } of B) {
+    for (let y = by - 17; y <= by + 17; y++) blocked.fill(0, y * W + bx - 17, y * W + bx + 18);
+  } else for (const { x: bx, y: by } of B) {                    // (drawBases)
     for (let y = by - 16; y <= by + 16; y++) blocked.fill(0, y * W + bx - 16, y * W + bx + 17);
     for (let x = bx - 17; x <= bx + 17; x++) if (Math.abs(x - bx) >= 4) { blocked[(by - 17) * W + x] = 1; blocked[(by + 17) * W + x] = 1; }
     for (let y = by - 16; y <= by + 16; y++) { blocked[y * W + bx - 17] = 1; blocked[y * W + bx + 17] = 1; }
@@ -2230,21 +2439,20 @@ TunnelerEngine.mapReach = (src, opts) => {
 // Game modes (docs/DESIGN-8P.md 27): src/js/game/modes/<name>.js registers each one's hooks; src/js/game/modes/index.js
 // imports them all (the game pages' entries and node tests import it).
 TunnelerEngine.MODES = {};
-// every mode in the order the menus offer them (the same as NetProto.MODES); modifiers
-TunnelerEngine.MODE_LIST = ["standard", "gold", "infection", "survival", "hill", "shrink", "ctf", "siege", "deathmatch"];
-TunnelerEngine.OWN_TEAMS = ["infection", "survival"];      // modes that make their own teams
+// the modes the menus offer (the same as NetProto.MODES) - 1.5: the game's modes are official mods (src/mods/, docs/MODS.md
+// 6c; owner, 2026-11-02: "port them, you can drop the built-in", "you can break 1.0-1.4, remove them"): standard only
+TunnelerEngine.MODE_LIST = ["standard"];
+TunnelerEngine.OWN_TEAMS = [];                             // modes that make their own teams (a mod: @hide teams)
 // modes only this page's own games run (1.4): never in a lobby, online or in the daily challenge (not in MODE_LIST)
 TunnelerEngine.LOCAL_MODES = ["training"];
-// a mode's goal instead of rounds to win (the same as NetProto.GOALS)
-TunnelerEngine.GOALS = { gold: { choices: [5, 10, 15, 20, 30, 50], def: 10 }, infection: { choices: [1, 2, 3, 5, 10], def: 3 },
-  survival: { choices: [3, 5, 7, 10, 15, 20], def: 5 }, hill: { choices: [30, 45, 60, 90, 120, 180], def: 60 },
-  ctf: { choices: [1, 2, 3, 5, 7, 10], def: 3 }, siege: { choices: [10, 20, 30, 50, 80], def: 30 },
-  deathmatch: { choices: [5, 10, 15, 20, 30, 50], def: 10 } };
-// (a mode's texts per language - strings[code] - come from src/lang/<code>/modes/<name>.js: Lang.modeTexts)
+// a mode's goal instead of rounds to win (the same as NetProto.GOALS) - none since 1.5 (a mod: its @setting and @rounds)
+TunnelerEngine.GOALS = {};
+// (a mode's texts per language - strings[code] - come from src/lang/<code>/modes/<name>.js: Lang.modeTexts; hooks.textsOf:
+// another mode's - a script mod's, its @mode's)
 TunnelerEngine.registerMode = (name, hooks) => {
   const m = Object.assign({ name }, hooks);
   Object.defineProperty(m, "strings", { enumerable: true,
-    get: () => Lang.modeData[name] || { en: {} } });
+    get: () => Lang.modeData[m.textsOf || name] || { en: {} } });
   TunnelerEngine.MODES[name] = m;
 };
 

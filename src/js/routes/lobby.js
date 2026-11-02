@@ -78,9 +78,10 @@ export function mount() {
     (r.spec ? " +" + r.spec : "");
   // a game Enter joins as a player: a free seat in its lobby - a quick-play game also a computer tank during a match
   const joinable = r => !!r.open && (r.state === "lobby" || !!r.qp);
+  // (the mode column: a game with a script mod - 1.5 - shows the mod's name)
   function rowText(r, state) {
     const C = cols(), cell = (t, k) => C[k] ? UniText.padEnd(UniText.slice(t, C[k] - 1), C[k]) : "";
-    return cell(E((r.locked ? LOCK : "") + r.name), 0) + cell(r.qp ? T("qp.mode") : T("gm." + (r.mode || "standard")), 1) + cell(playersText(r), 2) + state;
+    return cell(E((r.locked ? LOCK : "") + r.name), 0) + cell(r.qp ? T("qp.mode") : r.modName ? E(r.modName) : T("gm." + (r.mode || "standard")), 1) + cell(playersText(r), 2) + state;
   }
   // its columns' colors (DosUI spans): the name white, the mode light cyan, the players light green, the state
   // yellow in the lobby (joinable), light magenta during a match

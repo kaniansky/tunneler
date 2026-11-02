@@ -1,0 +1,30 @@
+// Maps that need a mod (1.5, docs/MODS.md 6a): Czech (src/lang/en/mapmods.js).
+import { Lang } from "../../js/text/lang.js";
+
+Lang.extend("cs", {
+  "mm.row": "Potřebuje mód: ",
+  "mm.row.none": "Žádný",
+  "mm.row.more": "{name} +{n}",
+  "mm.row.i1": "Módy, pro které je mapa udělaná: zápas na ní hraje jeden z nich.",
+  "mm.row.i2": "Enter: vyber je z módů v tomto prohlížeči.",
+  "mm.title": "POTŘEBUJE MÓD",
+  "mm.top": "Mapa se dá hrát jen s jedním ze zde označených módů.",
+  "mm.mod.i": "Enter ho označí nebo odznačí.",
+  "mm.max": "Mapa může potřebovat nejvýš 4 módy.",
+  "mm.version": "Je pro {game}; tohle je {version}.",
+  "mm.gone": "Mód, který tu není ({id})",
+  "mm.gone.i": "Tento mód v tomto prohlížeči není - Enter ho z mapy odebere.",
+  "mm.empty": "V tomto prohlížeči nejsou žádné módy.",
+  "mm.empty.i": "Mód přijde jako soubor nebo odkaz - nejdřív si ho ulož v tomto prohlížeči.",
+  "mm.clear": "Není potřeba žádný mód",
+  "mm.clear.i": "Mapa se dá hrát s jakýmkoli módem nebo bez něj.",
+  "mm.back": "Zpět na mapu",
+  "mm.back.i": "Obrazovka mapy - tam změny ulož nebo vrať.",
+  "mm.needs": "(potřebuje {need})",
+  "mm.why.version": "Potřebuje {name}, ten je pro {game}; tohle je {version}.",
+  "mm.why.missing": "Potřebuje {need} - v tomto prohlížeči není.",
+  "mm.play.other": "{map} potřebuje {need}, ne {mod}.",
+  "mm.play.choose": "{map} potřebuje jeden z těchto módů: {need}.",
+  "mm.err.upload": "Její módy se nepodařilo poslat na server ({msg}).",
+  "mm.err.missing": "Její mód {msg} v tomto prohlížeči není - nedá se poslat.",
+});

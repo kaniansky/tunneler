@@ -53,6 +53,10 @@ function build() {
   // the version shown on the main menu ("TUNNELER v5"), sent to the server (another version is refused)
   const version = JSON.parse(fs.readFileSync(path.join(__dirname, "package.json"), "utf8")).version;
   const { metafile } = esbuild.buildSync(bundleOptions(version));
+  // (script mods' sandbox, 1.5: QuickJS's WebAssembly next to its code - game/mods.js fetches /js/vendor/quickjs.wasm when a
+  // modded match starts; its JavaScript is a chunk of the bundle)
+  fs.mkdirSync(path.join(OUT, "js", "vendor"), { recursive: true });
+  fs.copyFileSync(path.join(SRC, "js", "vendor", "quickjs.wasm"), path.join(OUT, "js", "vendor", "quickjs.wasm"));
   const url = f => "/" + path.relative(OUT, path.resolve(__dirname, f)).split(path.sep).join("/");
   const app = Object.keys(metafile.outputs).find(f => metafile.outputs[f].entryPoint && /js\/app\.js$/.test(metafile.outputs[f].entryPoint));
   const index = path.join(OUT, "index.html");

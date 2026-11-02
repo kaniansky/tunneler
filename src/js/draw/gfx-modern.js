@@ -63,10 +63,13 @@ uniform sampler2D uH;         // 3D, smooth edges: the terrain's heights around 
 uniform vec4 uHRect;          // ... its world rectangle: x, y, w, h
 uniform sampler2D uHA;        // 3D: the heights per world pixel (HAFS) - voxel blocks
 uniform vec4 uARect;          // ... its world rectangle
-uniform usampler2D uFloor;    // water and ground (1.3): engine.floor, 2 pixels a byte as uWorld (the whole world)
+uniform usampler2D uFloor;    // water and ground (1.3): engine.floor, 2 pixels a byte as uWorld (the whole world); a
+                              // nibble's bits 2-3 (1.5): the painted ground there (0 the map's, 1 classic, 2 sand, 3 grass)
 uniform int uFloorOn;         // ... 0: no floor (no water, classic ground - every world before 1.3: drawn as before)
 uniform int uGround;          // ... the map's ground: 0 classic, 1 sand, 2 grass
 uniform int uMemSeen;         // ... a memory band: its green channel says which pixels the player has ever seen
+uniform usampler2D uPaint;    // a mod's paint on the ground (1.5, g.mark / g.ring {paint}): a byte a pixel, colour + 1
+uniform int uPaintOn;         // ... 0: none this frame (never read)
 out vec4 outColor;
 
 // 3D: the heights of the materials (world pixels): dirt, rock, base walls; tanks below (tankH)
@@ -84,6 +87,11 @@ int colAt(ivec2 g) {
   return int((g.x & 1) == 1 ? (b >> 4) & 15u : b & 15u);
 }
 int shapeOf(int cls) { return cls >= 4 ? 0 : cls; }
+// a mod's paint at g: its colour + 1, 0 none (flat on the floor - no height, under tanks and shots)
+int paintAt(ivec2 g) {
+  if (uPaintOn == 0 || g.x < 0 || g.y < 0 || g.x >= uWorldPx.x || g.y >= uWorldPx.y) return 0;
+  return int(texelFetch(uPaint, g, 0).r);
+}
 // water and ground (1.3; owner, 2026-10-31): how an open pixel at g looks - 0 dark (the classic tunnel), 1 sand, 2
 // grass, 3 water: water; the shore (within 3 px of water) sand on every ground; open from the start the map's ground;
 // dug since - dark on classic ground, sand on sand / grass. A memory: what the player never saw stays dark (the fog
@@ -95,8 +103,8 @@ int lookAt(ivec2 g) {
     if (r < 0 || r >= uRows || ((texelFetch(uWorld, ivec2(g.x >> 1, r), 0).g >> uint(g.x & 1)) & 1u) == 0u) return 0;
   }
   uint b = texelFetch(uFloor, ivec2(g.x >> 1, g.y), 0).r;
-  int f = int((g.x & 1) == 1 ? (b >> 4) & 15u : b & 15u);
-  return f == 1 ? 3 : f == 3 ? 1 : f == 2 ? uGround : uGround == 0 ? 0 : 1;
+  int n = int((g.x & 1) == 1 ? (b >> 4) & 15u : b & 15u), f = n & 3, gr = (n >> 2) == 0 ? uGround : (n >> 2) - 1;
+  return f == 1 ? 3 : f == 3 ? 1 : f == 2 ? gr : gr == 0 ? 0 : 1;
 }
 // (set by terrainAt for shade: the open floor's looks around - dark, sand, grass weights -, how much water is around)
 vec3 gLook = vec3(1.0, 0.0, 0.0);
@@ -460,6 +468,9 @@ void main() {
   bool vis = va > 0.5;
   int bs;
   vec3 col = terrainAt(wp, pw, vis, bs);
+  // (a mod's paint: the floor's colour there, lit as the floor - owner, 2026-11-02: "the paint should be only on the
+  // ground and not have any height")
+  if (uPaintOn == 1 && (bs == 0 || bs == 4)) { int pc = paintAt(ivec2(floor(wp))); if (pc > 0) col = mix(col, uPal[pc - 1], 0.85); }
   vec3 ground = col;
   col = tanksAt(col, wp, pw);
   if (d3) {
@@ -801,12 +812,17 @@ function create(gl) {
   for (const n of ["uWorld", "uVis", "uWorldPx", "uRowOff", "uRows", "uOutside", "uSize", "uOut", "uWin", "uCam", "uScale", "uPal",
     "uCls", "uTerrain", "uEdges", "uGlow", "uLight", "uFog", "uVisOn", "uStatic", "uMap", "uVisOrg", "uTime", "uNT", "uTank",
     "uTankCol", "uTread", "uTS", "uTankStyle", "uNL", "uLt", "uLc", "uNS", "uShot", "uDepth", "uEye", "uH", "uHRect", "uHA", "uARect",
-    "uNTL", "uLMOn", "uLM", "uLMC", "uTSlot", "uFloor", "uFloorOn", "uGround", "uMemSeen"]) u[n] = gl.getUniformLocation(prog, n);
+    "uNTL", "uLMOn", "uLM", "uLMC", "uTSlot", "uFloor", "uFloorOn", "uGround", "uMemSeen", "uPaint", "uPaintOn"]) u[n] = gl.getUniformLocation(prog, n);
   if (pprog) for (const n of ["uCam", "uScale", "uSize", "uOut", "uWin"]) pu[n] = gl.getUniformLocation(pprog, n);
   const worldTex = texture(gl), visTex = texture(gl);
   gl.bindTexture(gl.TEXTURE_2D, visTex);
   for (const q of [gl.TEXTURE_MIN_FILTER, gl.TEXTURE_MAG_FILTER]) gl.texParameteri(gl.TEXTURE_2D, q, gl.LINEAR);
   const memTex = new Map();                          // player -> {tex, y0, rows, tick, vis, vx, vy}
+  // a mod's paint (1.5) on unit 6, a byte a pixel (uploadPaint); none - never read
+  const paintTex = texture(gl);
+  gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8UI, 1, 1, 0, gl.RED_INTEGER, gl.UNSIGNED_BYTE, new Uint8Array(1));
+  gl.pixelStorei(gl.UNPACK_ALIGNMENT, 4);
   // water and ground (1.3): engine.floor on unit 5, 2 pixels a byte (uploadFloor); no floor - a 1 x 1 zero, never read
   const floorTex = texture(gl);
   gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
@@ -886,6 +902,26 @@ function create(gl) {
   // water and ground (1.3): engine.floor into floorTex - static for a match once its world is made, so only when it
   // could have changed: another array or a new match (newMatchExt gives it a new roundLog); not while a map is being
   // painted (nothing shows the floor before the world is ready)
+  // a mod's paint this frame (engine.paintShown [x, y, colour, ...]) into paintTex - its rows that changed only
+  function uploadPaint(e) {
+    const P = e.paintShown || [], W = e.worldW, H = e.worldH;
+    S.paintOn = P.length > 0;
+    const key = P.join(",");
+    if (key === S.paintKey && S.paintW === W) return;
+    if (!S.pbuf || S.paintW !== W || S.pbuf.length !== W * H) { S.pbuf = new Uint8Array(W * H); S.paintW = W; S.paintFull = true; S.paintOld = []; }
+    const buf = S.pbuf;
+    let r0 = H, r1 = -1;
+    const row = y => { if (y < r0) r0 = y; if (y > r1) r1 = y; };
+    for (let k = 0; k < S.paintOld.length; k += 3) { buf[S.paintOld[k + 1] * W + S.paintOld[k]] = 0; row(S.paintOld[k + 1]); }
+    for (let k = 0; k < P.length; k += 3) if (P[k] >= 0 && P[k + 1] >= 0 && P[k] < W && P[k + 1] < H) { buf[P[k + 1] * W + P[k]] = (P[k + 2] & 15) + 1; row(P[k + 1]); }
+    S.paintOld = P.slice(); S.paintKey = key;
+    gl.bindTexture(gl.TEXTURE_2D, paintTex);
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+    if (S.paintFull) { gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8UI, W, H, 0, gl.RED_INTEGER, gl.UNSIGNED_BYTE, buf); S.paintFull = false; }
+    else if (r1 >= r0) gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, r0, W, r1 - r0 + 1, gl.RED_INTEGER, gl.UNSIGNED_BYTE, buf, r0 * W);
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 4);
+    gl.bindTexture(gl.TEXTURE_2D, worldTex);
+  }
   function uploadFloor(e) {
     const F = e.floor;
     S.floorOn = !!F;
@@ -894,10 +930,13 @@ function create(gl) {
     const key = e.roundLog || 1;
     if (S.floorArr === F && S.floorKey === key) return;
     S.floorArr = F; S.floorKey = key;
-    const W = e.worldW, H = e.worldH, ws = e.ws;
+    const W = e.worldW, H = e.worldH, ws = e.ws, P = e.groundPaint, cw = W >> 2;
     const buf = S.fbuf && S.fbuf.length === ws * H ? S.fbuf : (S.fbuf = new Uint8Array(ws * H));
     for (let y = 0; y < H; y++)
       for (let i = 0, r = y * W, o = y * ws; i < ws; i++) buf[o + i] = F[r + 2 * i] | F[r + 2 * i + 1] << 4;
+    // (a painted map, 1.5: each pixel's painted ground in its nibble's upper bits - a cell is 4 px, 2 bytes of a row)
+    if (P) for (let y = 0; y < H; y++)
+      for (let i = 0, p = (y >> 2) * cw, o = y * ws; i < ws; i++) { const v = P[p + (i >> 1)]; if (v) buf[o + i] |= (v << 2) | (v << 6); }
     gl.bindTexture(gl.TEXTURE_2D, floorTex);
     gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8UI, ws, H, 0, gl.RED_INTEGER, gl.UNSIGNED_BYTE, buf);
@@ -958,6 +997,7 @@ function create(gl) {
       S.tick = e.tick; S.t0 = now;
       uploadWorld(e);
       uploadFloor(e);
+      uploadPaint(e);
       for (let p = 1; p <= e.nPlayers; p++) {
         const t = S.tanks[p] || (S.tanks[p] = { px: e.tankX[p], py: e.tankY[p], cx: e.tankX[p], cy: e.tankY[p], ang: (e.tankDir[p] & 7) * Math.PI / 4 });
         t.px = t.cx; t.py = t.cy; t.cx = e.tankX[p]; t.cy = e.tankY[p];
@@ -1043,6 +1083,8 @@ function create(gl) {
     const cls = new Int32Array(16).fill(CLASS.other);
     cls[0] = CLASS.tunnel; cls[6] = cls[8] = CLASS.dirt; cls[7] = CLASS.rock; cls[12] = CLASS.ember; cls[4] = CLASS.trail;
     for (let p = 1; p <= e.nPlayers; p++) cls[e.playerColor ? e.playerColor(p) : [0, 9, 10][p]] = CLASS.wall;
+    // (a mod's @bases: a base of nobody's has gray walls - the treads' colour 13, never in the world otherwise)
+    if (e.baseOwner) cls[13] = CLASS.wall;
     return cls;
   }
   function setCommon(e, sw, sh, W, H, now, set) {
@@ -1067,6 +1109,8 @@ function create(gl) {
     gl.uniform1i(u.uFloor, 5); gl.uniform1i(u.uFloorOn, S.floorOn ? 1 : 0); gl.uniform1i(u.uMemSeen, 0);
     gl.uniform1i(u.uGround, Math.max(0, MapData.GROUNDS.indexOf(e.groundType)));   // (0 classic, 1 sand, 2 grass)
     gl.activeTexture(gl.TEXTURE5); gl.bindTexture(gl.TEXTURE_2D, floorTex); gl.activeTexture(gl.TEXTURE0);
+    gl.uniform1i(u.uPaint, 6); gl.uniform1i(u.uPaintOn, S.paintOn ? 1 : 0);
+    gl.activeTexture(gl.TEXTURE6); gl.bindTexture(gl.TEXTURE_2D, paintTex); gl.activeTexture(gl.TEXTURE0);
     return pal;
   }
   // tanks (and their lamps) for a view: own view (p), or everyone (p 0); with line of sight only those seen

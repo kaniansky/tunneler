@@ -43,8 +43,10 @@ Lang.extend("en", {
   "medal.online.win.i": "Win an online match.",
   "medal.maker": "Map maker",
   "medal.maker.i": "Publish a map in the gallery.",
-  "medal.mode": "Mode: {mode}",
-  "medal.mode.i": "Win a match in this game mode.",
+  "medal.modmaker": "Mod maker",
+  "medal.modmaker.i": "Publish a mod in the gallery (main menu, Mods).",
+  "medal.mode": "Mod: {mode}",
+  "medal.mode.i": "Win a match with this official mod.",
   "medal.allmodes": "All-rounder",
   "medal.allmodes.i": "Win a match in every game mode.",
 });

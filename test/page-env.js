@@ -73,4 +73,15 @@ function runPage(ctx, page, opts = {}) {
   run(ctx, APP, Object.assign({}, opts, { mount: ROUTES[page] }));
 }
 
-module.exports = { SRC, ROUTES, APP, bundle, run, runPage, entryOf, modulesOf };
+// the files the game ships in src/mods/ (1.5: the official mods - net/official.js fetches /mods/official.json and
+// /mods/<key>.tmod.js when the server doesn't list them): a fetch stub's answer for such a URL (its text), else null
+function shippedMod(url) {
+  const m = /(?:^|\/\/[^/]*)\/mods\/(official\.json|[a-z0-9-]{1,24}\.tmod\.js)(?:[?#].*)?$/.exec(String(url));
+  if (!m) return null;
+  try { return fs.readFileSync(path.join(SRC, "mods", m[1]), "utf8"); } catch (e) { return null; }
+}
+// a fetch Response-like for a text (status 200), for the stubs
+const textResponse = body => { const b = new TextEncoder().encode(body);
+  return { ok: true, status: 200, text: async () => body, json: async () => JSON.parse(body), arrayBuffer: async () => b.buffer.slice(b.byteOffset, b.byteOffset + b.length) }; };
+
+module.exports = { SRC, ROUTES, APP, bundle, run, runPage, entryOf, modulesOf, shippedMod, textResponse };

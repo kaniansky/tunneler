@@ -111,7 +111,11 @@ for (const c of Lang.codes) {
   // single lines on the 80-column screen
   // (the training ground's hints - tr.*, 1.4: wrapped in the status line under the game, at most 4 rows of a phone's 32
   // columns with "Training n/5: " before them)
-  for (const k in D) if (typeof D[k] === "string" && k !== "name") fits(c, k, t(k, { name: "GREEN", names: "BLUE and GREEN", level: "hard", levels: "easy, normal, hard, expert", msg: "x", n: 99, s: 9 }), /^tr\.(?!d\.)/.test(k) ? 112 : 79);
+  // (the official mods' Instructions paragraphs - om.*, 1.5: long texts the scrolling page wraps like the game's own paragraphs)
+  for (const k in D) if (typeof D[k] === "string" && k !== "name" && !/^om\./.test(k)) fits(c, k, t(k, { name: "GREEN", names: "BLUE and GREEN", level: "hard", levels: "easy, normal, hard, expert", msg: "x", n: 99, s: 9 }), /^tr\.(?!d\.)/.test(k) ? 112 : 79);
+  for (const m of ["gold", "infection", "survival", "hill", "shrink", "ctf", "siege", "deathmatch"]) {
+    if (typeof D["om." + m] !== "string" || vis(D["om." + m]) < 40) fail(c, "om." + m + " (the " + m + " mod's Instructions paragraph) is missing or too short");
+  }
   fits(c, "ui hint", t("ui.hint") + "  " + t("ui.back"), 78);
   fits(c, "create hint", t("create.hint"), 78);
   // the engine's own pages
@@ -174,7 +178,7 @@ for (const c of Lang.codes) {
   }
   // every paragraph of the English Instructions / Information is there, translated
   const EN = E.STRINGS_EN;
-  for (const [k, n] of [["instr", 18], ["info", 9]]) {      // (instr: + water and ground, show map; info: + quick play - src/lang/<code>/quickplay.js -, the daily challenge, custom maps, generated maps, accounts)
+  for (const [k, n] of [["instr", 19], ["info", 10]]) {      // (instr: + water and ground, show map, mods - src/lang/<code>/mods.js; info: + mods, + quick play - src/lang/<code>/quickplay.js -, the daily challenge, custom maps, generated maps, accounts)
     const sec = S[k].sections, en = EN[k].sections;
     if (en.length !== n) fail(c, k + ".sections: English has " + en.length + ", the test expects " + n);
     if (!Array.isArray(sec) || sec.length !== en.length) { fail(c, k + ".sections: " + (sec ? sec.length : 0) + " paragraphs, English has " + en.length); continue; }

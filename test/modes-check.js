@@ -1,6 +1,7 @@
 "use strict";
 // Game modes (docs/DESIGN-8P.md 27): the framework and every registered mode.
-//   - every mode in TunnelerEngine.MODE_LIST but "standard" is registered (src/js/game/modes/<mode>.js)
+//   - every mode in TunnelerEngine.MODE_LIST but "standard" is registered (src/js/game/modes/<mode>.js; 1.5: only the
+//     local training ground is left there - the other modes are official mods, test/official-<mode>-check.js)
 //   - every mode: AI-only matches (free-for-all and teams, small map, 1 round to win) finish, and the same
 //     match twice is identical (bits every frame, the final state hash) - online every client must agree
 //   - then each mode's own test, test/modes/<mode>.js, if there is one
@@ -52,9 +53,11 @@ for (const m of Object.keys(E.MODES).filter(modeOn).filter(m => !E.LOCAL_MODES.i
 }
 
 if (core) {
-  // the classic engine never runs a mode
-  const e = new E(1, { slots: slots([1, 2]), mode: "gold" });
-  check(e.extended || !E.MODES.gold, "a game mode always runs the extended engine");
+  // (1.5: the built-in modes are gone - official mods, src/mods/; an old mode name plays standard)
+  check(JSON.stringify(E.MODE_LIST) === JSON.stringify(["standard"]) && Object.keys(E.MODES).every(m => E.LOCAL_MODES.includes(m) || /^mod:/.test(m)),
+    "the engine's modes: standard, the local ones (" + E.LOCAL_MODES.join(", ") + ") and mods");
+  const e = new E(1, { slots: slots([1, 2, 3]), mode: "gold" });
+  check(e.gameMode === "standard" && !e.GM, "an old mode name (gold): the standard game");
   const c = new E(1, { slots: slots([1, 2]) });
   check(!c.extended && c.gameMode === "standard" && !c.GM, "BLUE + GREEN, standard: the classic engine");
 }

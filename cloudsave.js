@@ -1,10 +1,13 @@
 "use strict";
-// A player's own data kept with their account (docs/v6/CLOUDSAVE.md; owner, 2026-10-28): their maps, their replays
-// and their settings, so every device they log in on has them. In the accounts' store (the accounts' bucket / folder),
+// A player's own data kept with their account (docs/v6/CLOUDSAVE.md; owner, 2026-10-28): their maps, their replays,
+// their script mods (1.5, docs/MODS.md 6) and their settings, so every device they log in on has them. In the accounts' store (the accounts' bucket / folder),
 // next to the account:
-//   save-<account id>              the index: {format: 1, settings: {key: value}, maps: {id: fp}, replays: {id: fp}}
+//   save-<account id>              the index: {format: 1, settings: {key: value}, maps: {id: fp}, replays: {id: fp},
+//                                  mods: {id: fp} (1.5; an index from before: none)}
 //   save-<account id>-m-<map id>   a map record (mapstore.js's): {fp, map}
 //   save-<account id>-r-<id>       a replay, gzip'd JSON as base64: {fp, gz}
+//   save-<account id>-d-<mod id>   a mod record (modstore.js's): {fp, mod} - its file (mod.source) hashes to its id (the
+//                                  page's Mods.idOf: SHA-256, 10 characters of the map ids' alphabet), never run here
 // fp = the page's fingerprint of the item (it tells whether it changed since the page's last sync); the server keeps
 // it as given. Every call needs the session (Bearer token); one account's calls run one after another (the index is
 // read, changed and written). Nothing here is ever logged but the account's id on a failure.
@@ -13,14 +16,20 @@
 //   POST /api/save/settings {settings}   -> {ok}
 //   GET  /api/save/map/<id>              -> {fp, map}      POST {fp, map} -> {ok}      POST .../<id>/delete -> {ok}
 //   GET  /api/save/replay/<id>           -> {fp, gz}       POST the gzip'd bytes (?fp=) -> {ok}   POST .../<id>/delete
+//   GET  /api/save/mod/<id>              -> {fp, mod}      POST {fp, mod} -> {ok}      POST .../<id>/delete -> {ok}
 const crypto = require("crypto"), zlib = require("zlib");
 
-const MAX_MAPS = 200, MAX_REPLAYS = 40;              // per account (a page keeps its newest 20 replays)
-const MAX_MAP_JSON = 48 * 1024;                      // one map record as sent (its code: at most ~33 KB)
+const MAX_MAPS = 200, MAX_REPLAYS = 40, MAX_MODS = 100;   // per account (a page keeps its newest 20 replays)
+const MAX_MAP_JSON = 96 * 1024;                      // one map record as sent (its code: at most ~33 KB, painted ~66 KB)
 const MAX_REPLAY_BYTES = 512 * 1024;                 // one replay, gzip'd (a long match: ~50 KB)
+const MAX_MOD_BYTES = 65536, MAX_MOD_JSON = 160 * 1024;  // a mod's file (mods.js MAX_BYTES); its record as sent (JSON escapes)
+const MOD_ID_CHARS = "abcdefghijkmnpqrstuvwxyz23456789";
 const MAX_SETTINGS_JSON = 32 * 1024, MAX_SETTINGS = 100, MAX_VALUE = 8 * 1024;
 const MAX_CALLS = 600, CALL_WINDOW = 10 * 60 * 1000; // per account
 const ID_RE = /^[A-Za-z0-9_-]{1,40}$/, FP_RE = /^[A-Za-z0-9_.:-]{1,80}$/, KEY_RE = /^tunneler\.[a-z0-9.]{1,40}$/;
+
+// a mod's id: its file's hash (game/mods.js idOf)
+const modId = text => { const h = crypto.createHash("sha256").update(Buffer.from(text, "utf8")).digest(); let id = ""; for (let i = 0; i < 10; i++) id += MOD_ID_CHARS[h[i] & 31]; return id; };
 
 class SaveError extends Error { constructor(status, code) { super(code); this.status = status; this.code = code; } }
 const fail = (status, code) => { throw new SaveError(status, code); };
@@ -31,6 +40,7 @@ function createCloudSave(opts) {
   const { store, json, readBody, readRaw } = opts;
   const now = opts.now || Date.now, say = opts.say || (() => {});
   const indexKey = a => "save-" + a.id, mapKey = (a, id) => "save-" + a.id + "-m-" + id, repKey = (a, id) => "save-" + a.id + "-r-" + id;
+  const modKey = (a, id) => "save-" + a.id + "-d-" + id;
   // one account at a time (a chain of promises per account)
   const chains = new Map();
   function serial(key, fn) {
@@ -42,7 +52,9 @@ function createCloudSave(opts) {
   }
   async function index(a) {
     const i = await store.get(indexKey(a));
-    return i && i.format === 1 ? i : { format: 1, settings: {}, maps: {}, replays: {} };
+    const out = i && i.format === 1 ? i : { format: 1, settings: {}, maps: {}, replays: {} };
+    if (!out.mods || typeof out.mods !== "object") out.mods = {};
+    return out;
   }
   const calls = new Map();
   function allow(a) {
@@ -84,14 +96,14 @@ function createCloudSave(opts) {
       const a = await opts.sessionOf(req).catch(() => fail(503, "storage"));
       if (!a) fail(401, "session");
       if (!allow(a)) fail(429, "busy");
-      const m = /^\/api\/save(?:\/(settings|map|replay)(?:\/([^/]+)(\/delete)?)?)?$/.exec(p);
+      const m = /^\/api\/save(?:\/(settings|map|replay|mod)(?:\/([^/]+)(\/delete)?)?)?$/.exec(p);
       if (!m) fail(404, "none");
       const [, kind, rawId, del] = m, id = rawId === undefined ? null : rawId;
       if (id !== null && !ID_RE.test(id)) fail(400, "bad");
       const method = del ? (req.method === "POST" ? "DELETE" : "-") : req.method === "POST" ? "PUT" : req.method;
       if (!kind && method === "GET") {
         const i = await index(a);
-        return json(res, 200, { settings: i.settings, maps: i.maps, replays: i.replays });
+        return json(res, 200, { settings: i.settings, maps: i.maps, replays: i.replays, mods: i.mods });
       }
       if (kind === "settings" && method === "PUT" && id === null) {
         const settings = cleanSettings((await jsonBody(req, MAX_SETTINGS_JSON)).settings);
@@ -155,6 +167,34 @@ function createCloudSave(opts) {
           return json(res, 200, { ok: true });
         }
       }
+      if (kind === "mod" && id !== null) {
+        if (method === "GET") {
+          const r = await store.get(modKey(a, id));
+          return r ? json(res, 200, r) : json(res, 404, { error: "none", code: "none" });
+        }
+        if (method === "PUT") {
+          const b = await jsonBody(req, MAX_MOD_JSON);
+          const d = b.mod;
+          if (typeof b.fp !== "string" || !FP_RE.test(b.fp) || !d || typeof d !== "object" || Array.isArray(d) || d.id !== id ||
+            typeof d.source !== "string" || Buffer.byteLength(d.source, "utf8") > MAX_MOD_BYTES || modId(d.source) !== id) fail(400, "bad");
+          await serial(a.id, async () => {
+            const i = await index(a);
+            if (!(id in i.mods) && Object.keys(i.mods).length >= MAX_MODS) fail(413, "full");
+            await store.put(modKey(a, id), { fp: b.fp, mod: d });
+            i.mods[id] = b.fp;
+            await store.put(indexKey(a), i);
+          });
+          return json(res, 200, { ok: true });
+        }
+        if (method === "DELETE") {
+          await serial(a.id, async () => {
+            const i = await index(a);
+            await store.del(modKey(a, id));
+            if (id in i.mods) { delete i.mods[id]; await store.put(indexKey(a), i); }
+          });
+          return json(res, 200, { ok: true });
+        }
+      }
       fail(404, "none");
     } catch (e) {
       if (e instanceof SaveError) return json(res, e.status, { error: e.code, code: e.code });
@@ -169,6 +209,7 @@ function createCloudSave(opts) {
       const i = await index(a);
       for (const id of Object.keys(i.maps)) await store.del(mapKey(a, id));
       for (const id of Object.keys(i.replays)) await store.del(repKey(a, id));
+      for (const id of Object.keys(i.mods)) await store.del(modKey(a, id));
       await store.del(indexKey(a));
     });
   }
@@ -176,4 +217,4 @@ function createCloudSave(opts) {
   return { api, wipe };
 }
 
-module.exports = { createCloudSave, MAX_MAPS, MAX_REPLAYS, MAX_REPLAY_BYTES };
+module.exports = { createCloudSave, MAX_MAPS, MAX_REPLAYS, MAX_REPLAY_BYTES, MAX_MODS, modId };

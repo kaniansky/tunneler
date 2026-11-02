@@ -11,6 +11,13 @@ Lang.extend("ru", {
   "map.ground.grass": "Трава",
   "map.ground.i1": "Как выглядит свободная земля: тёмные туннели оригинала, песок или трава.",
   "map.ground.i2": "Только вид - танки ездят так же. Берег воды всегда песчаный.",
+  "map.ground.i3": "Инструмент Земля в редакторе рисует на её частях другой вид.",
+  // the Ground tool (1.5): the look it paints (Default: back to the map's ground)
+  "map.t.ground": "Земля",
+  "map.look.sand": "Песок",
+  "map.look.grass": "Трава",
+  "map.look.classic": "Классический",
+  "map.look.map": "По умолчанию",
   // ---- generated kinds (mapgen.js)
   "gen.labyrinth": "Лабиринт",
   "gen.rivers": "Реки",

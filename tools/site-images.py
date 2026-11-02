@@ -21,7 +21,9 @@ SHOTS = ["home", "split-screen", "vs-computer", "online-team", "spectator-grid",
          # 1.3: water on generated rivers, held Tab with Show map (readme-screenshots.js, both looks)
          "water", "modern-water", "score-map", "modern-score-map",
          # 1.4: the training ground (readme-screenshots.js, both looks)
-         "training", "modern-training"]
+         "training", "modern-training",
+         # 1.5: the Mode row's list (the official mods, both looks)
+         "mods", "modern-mods"]
 
 def crop(src, dst, pad=6):
     im = Image.open(src).convert("RGB")
@@ -39,7 +41,7 @@ def crop(src, dst, pad=6):
         im.save(dst, optimize=True)
     return im.size
 
-JPEG = ["modern-game", "modern-split-screen", "modern-spectator-grid", "modern-spectator-map", "modern-map-editor", "modern-3d", "modern-water", "modern-training"]  # lit, textured: much smaller as JPEG
+JPEG = ["modern-game", "modern-split-screen", "modern-spectator-grid", "modern-spectator-map", "modern-map-editor", "modern-3d", "modern-water", "modern-training", "modern-mods"]  # lit, textured: much smaller as JPEG
 
 for name in SHOTS:
     ext = ".jpg" if name in JPEG else ".png"

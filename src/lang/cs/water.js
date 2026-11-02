@@ -11,6 +11,13 @@ Lang.extend("cs", {
   "map.ground.grass": "Tráva",
   "map.ground.i1": "Jak vypadá volná zem: tmavé tunely originálu, písek nebo tráva.",
   "map.ground.i2": "Jen vzhled - tanky jezdí stejně. Břeh vody je vždy písečný.",
+  "map.ground.i3": "Nástroj Zem v editoru nakreslí na jeho části jiný vzhled.",
+  // the Ground tool (1.5): the look it paints (Default: back to the map's ground)
+  "map.t.ground": "Zem",
+  "map.look.sand": "Písek",
+  "map.look.grass": "Tráva",
+  "map.look.classic": "Klasický",
+  "map.look.map": "Výchozí",
   // ---- generated kinds (mapgen.js)
   "gen.labyrinth": "Labyrint",
   "gen.rivers": "Řeky",

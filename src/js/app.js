@@ -3,7 +3,7 @@
 // chunk). Going to another screen (nav.js) changes the address without loading a page: the current route
 // ends (scope.js takes away whatever it set up: listeners, timers, the websocket, its sound) and the new
 // one is mounted on the same canvases, so fullscreen, the audio permission and loaded fonts stay.
-// Paths: / (#split / #cpu: the local games' setup), /games, /game/<id>[/<colour|watch>], /split, /skirmish
+// Paths: / (#split / #cpu: the local games' setup; #mods: the Mods screen), /mod/<id> (a shared script mod), /games, /game/<id>[/<colour|watch>], /split, /skirmish
 // (old /vs-computer), /replays[/<id>], /challenge (the daily challenge), /maps[/<id>], /map/<id> (custom maps), and the
 // desktop app's forms /lobby.html, /online.html?room=, /play.html?mode=, /replays.html[?id=], /challenge.html, /maps.html (endpoint.js
 // Links builds them). Unknown paths show the main menu.
@@ -26,12 +26,21 @@ Gfx.onFail3d = why => Report.error("gfx 3d", "3D failed: " + why);
 const ROUTES = [
   { name: "games", re: /^\/(games\/?|lobby\.html)$/, title: "Tunneler - online", load: () => import("./routes/lobby.js") },
   { name: "online", re: /^\/(game\/.+|online\.html)$/, title: "Tunneler - online", load: () => import("./routes/online.js") },
-  { name: "play", re: /^\/(split|skirmish|vs-computer|training)\/?$|^\/play\.html$/, title: "Tunneler", load: () => import("./routes/play.js") },
+  { name: "play", re: /^\/(split|skirmish|vs-computer|training)\/?$|^\/play\.html$/, title: "Tunneler", load: () => import("./routes/play.js").then(modLog) },
   { name: "replays", re: /^\/(replays(\/[^/]+)?\/?|replay\/[a-z2-9]{8}\/?|replays\.html)$/, title: "Tunneler - replays", load: () => import("./routes/replays.js") },
   { name: "challenge", re: /^\/(challenge\/?|challenge\.html)$/, title: "Tunneler - daily challenge", load: () => import("./routes/daily.js") },
   { name: "maps", re: /^\/(maps(\/[^/]+)?\/?|map\/[a-z2-9]{10}\/?|maps\.html)$/, title: "Tunneler - maps", load: () => import("./routes/maps.js") },
+  // (1.5: a mod's share link - the main menu's screen shows it, ui/modsui.js)
+  { name: "mods", re: /^\/mod\/[a-z2-9]{10}\/?$/, title: "Tunneler - mods", load: () => import("./routes/home.js") },
   { name: "home", re: /^/, title: "Tunneler", load: () => import("./routes/home.js") },
 ];
+// a local game with a script mod (&mod=<id> - not the training ground or the daily challenge, as play.js): the Mods
+// screen's console starts anew and gets what the mod says and why it stops (net/modlog.js, loaded with the game)
+function modLog(m) {
+  const q = new URLSearchParams(location.search), id = q.get("mod");
+  if (!id || q.get("challenge") || q.get("mode") === "training" || /^\/training\/?$/.test(location.pathname)) return m;
+  return import("./net/modlog.js").then(l => { l.ModLog.begin(id); return m; }, () => m);
+}
 const LOADING_DELAY = 150;                 // ms before "Loading..." shows while a route's module arrives
 
 const $ = id => document.getElementById(id);

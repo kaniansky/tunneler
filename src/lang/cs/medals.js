@@ -43,8 +43,10 @@ Lang.extend("cs", {
   "medal.online.win.i": "Vyhraj zápas online.",
   "medal.maker": "Tvůrce map",
   "medal.maker.i": "Zveřejni mapu v galerii.",
-  "medal.mode": "Režim: {mode}",
-  "medal.mode.i": "Vyhraj zápas v tomto herním režimu.",
+  "medal.modmaker": "Tvůrce módů",
+  "medal.modmaker.i": "Zveřejni mód v galerii (hlavní menu, Módy).",
+  "medal.mode": "Mód: {mode}",
+  "medal.mode.i": "Vyhraj zápas s tímto oficiálním módem.",
   "medal.allmodes": "Všestranný",
   "medal.allmodes.i": "Vyhraj zápas v každém herním režimu.",
 });

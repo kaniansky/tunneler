@@ -47,7 +47,16 @@ const stop = s => new Promise(r => s.close(r));
   ok((await req(port, "POST", "/api/maps", Buffer.from("TM junk"))).status === 400, "not a map: 400");
   const near = MapData.blank("small"); near.bases.push({ x: 40, y: 30 }, { x: 42, y: 30 });
   ok((await req(port, "POST", "/api/maps", Buffer.from(MapData.encode(near)))).status === 400, "bases on top of each other: 400");
-  ok((await req(port, "POST", "/api/maps", Buffer.alloc(60 * 1024, 1))).status === 413, "too large: 413");
+  ok((await req(port, "POST", "/api/maps", Buffer.alloc(80 * 1024, 1))).status === 413, "too large: 413 (over 72 KB - a painted large map packed is ~66 KB, 1.5)");
+  // a painted map (1.5, format 4) at its largest: noise in the terrain and the painted ground (both packed)
+  const big = MapData.blank("large");
+  for (let i = 0; i < big.cells.length; i++) big.cells[i] = (Math.imul(i, 2654435761) >>> 30) % 3;
+  big.groundCells = new Uint8Array(big.cells.length).map((_, i) => (Math.imul(i + 7, 2246822519) >>> 30) & 3);
+  MapData.frame(big);
+  const bigBytes = Buffer.from(MapData.encode(big)), bigUp = await req(port, "POST", "/api/maps", bigBytes);
+  const bigBack = bigUp.status === 200 ? await req(port, "GET", "/api/maps/" + idOf(bigUp)) : null;
+  ok(bigBytes[2] === 4 && bigBytes.length > 60000 && bigBack && Buffer.compare(bigBack.bytes, bigBytes) === 0 && MapData.painted(MapData.decode(bigBack.bytes)),
+    "a painted large map at its largest (" + bigBytes.length + " bytes, format 4): shared, back as its bytes (" + bigUp.status + ")");
   ok((await req(port, "GET", "/api/maps/zzzzzzzz22")).status === 404, "an unknown id: 404");
   ok((await req(port, "GET", "/api/maps/../x")).status === 404 && (await req(port, "GET", "/api/maps/ABCDEFGHIJ")).status === 404, "anything else than an id: 404");
   ok(fs.existsSync(path.join(dir, "maps", id + ".map")), "kept in the folder (DATA_DIR/maps)");

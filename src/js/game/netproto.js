@@ -64,15 +64,14 @@ const ROUND_TIMES = [0, 2, 3, 5, 10];                    // round time limit, mi
 // game modes (docs/DESIGN-8P.md 27; src/js/game/modes/<mode>.js - the server never loads them): standard = last
 // team standing. Infection and survival make their own teams (the seats' teams don't matter); survival
 // needs AI tanks (the waves) and players.
-const MODES = ["standard", "gold", "infection", "survival", "hill", "shrink", "ctf", "siege", "deathmatch"];
-const OWN_TEAMS = ["infection", "survival"];
+// (1.5: the game's modes are official mods - src/mods/, docs/MODS.md 6c: a room's mode is standard, its mod the rest)
+const MODES = ["standard"];
+const OWN_TEAMS = [];
 // a mode's goal instead of "rounds to win" (one round decides the match): gold to win, minutes to survive
 // (infection), waves to win, seconds in the zone to win (hill), captures to win, base strength in hits
 // (siege), kills to win - choices and default; the room keeps one per mode (settings.goals {mode: n})
-const GOALS = { gold: { choices: [5, 10, 15, 20, 30, 50], def: 10 }, infection: { choices: [1, 2, 3, 5, 10], def: 3 },
-  survival: { choices: [3, 5, 7, 10, 15, 20], def: 5 }, hill: { choices: [30, 45, 60, 90, 120, 180], def: 60 },
-  ctf: { choices: [1, 2, 3, 5, 7, 10], def: 3 }, siege: { choices: [10, 20, 30, 50, 80], def: 30 },
-  deathmatch: { choices: [5, 10, 15, 20, 30, 50], def: 10 } };
+// (none since 1.5: a mod's goal is its @setting, one round its @rounds 1)
+const GOALS = {};
 const goalsOf = v => {                                   // a goals object, checked (null: not an object)
   if (!v || typeof v !== "object" || Array.isArray(v)) return null;
   const out = {};
@@ -154,6 +153,30 @@ const afterDeath = v => v === true || v === "1" ? "others" : AFTER_DEATH.include
 const MAP_ID = /^[a-z2-9]{10}$/, GEN_ID = /^gen:(fortress|arena|highlands|caves|labyrinth|rivers|islands|strata|quarters|field):(fair|natural)$/;
 const mapId = v => typeof v !== "string" ? "" : MAP_ID.test(v) ? v : GEN_ID.test(v) ? v.replace(/:fair$/, ":natural") : "";
 const genMap = v => typeof v === "string" && GEN_ID.test(v);
+// a script mod's id (1.5, docs/MODS.md 5: the hash of its file - game/mods.js Mods.idOf; POST /api/mods keeps it under
+// it), "" = no mod. A room's setting mod, a match's cfg.mod: every page fetches /api/mods/<id>, checks the hash and plays
+// it (engineOptions(cfg, source)); never in quick play or the daily challenge
+const MOD_ID = /^[a-z2-9]{10}$/;
+const modId = v => typeof v === "string" && MOD_ID.test(v) ? v : "";
+// a script mod's settings (1.5, docs/MODS.md 3a: its // @setting lines): {key: integer} - a room's modSettings, a match's
+// cfg.modSettings, the engine's option modSettings. Read here without the mod's header (netproto never loads mods.js):
+// only their shape - at most MAX_MOD_SETTINGS keys of an @setting's form (no Object.prototype names), whole numbers of at
+// most 6 digits (an integer's text too: "3"); the server checks them against the header (Mods.settingsOf: one of the
+// choices, else the default; unknown keys dropped) and every page's engine does the same - so every engine plays the same
+const MAX_MOD_SETTINGS = 8, MOD_SETTING_KEY = /^[A-Za-z_][A-Za-z0-9_]{0,19}$/;
+function modSettingsOf(v) {
+  const out = {};
+  if (!v || typeof v !== "object" || Array.isArray(v)) return out;
+  for (const k of Object.keys(v)) {
+    if (!MOD_SETTING_KEY.test(k) || k in Object.prototype) continue;
+    let x = v[k];
+    if (typeof x === "string" && /^\s*-?\d{1,6}\s*$/.test(x)) x = +x;
+    if (!Number.isInteger(x) || Math.abs(x) > 999999) continue;
+    out[k] = x;
+    if (Object.keys(out).length >= MAX_MOD_SETTINGS) break;
+  }
+  return out;
+}
 
 // a round time limit setting: one of ROUND_TIMES, else 0 (no limit)
 const roundTime = v => ROUND_TIMES.includes(Number(v)) ? Number(v) : 0;
@@ -187,6 +210,10 @@ const SETTINGS = {
   showMap: v => SHOW_MAPS.includes(v) ? v : undefined,
   mode: v => MODES.includes(v) ? v : undefined,
   goals: v => goalsOf(v) || undefined,
+  // (the server loads the mod first - like a map: server.js setMod - then it is the room's)
+  mod: v => v === "" || modId(v) ? v : undefined,
+  // (the mod's own settings - a change: the keys given, merged into the room's; checked by the server against the header)
+  modSettings: v => v && typeof v === "object" && !Array.isArray(v) ? modSettingsOf(v) : undefined,
 };
 // A new room's settings from POST /api/rooms -> {seats: [8 x {kind, team}], size, winScore, friendlyFire,
 // roundTime, visible, watchOut, sight}; anything missing or wrong gets its default. o.seats (or the older
@@ -199,7 +226,7 @@ function roomSettings(o) {
     friendlyFire: o.friendlyFire === true, roundTime: roundTime(o.roundTime),
     visible: VISIBLE.includes(o.visible) ? o.visible : "self", watchOut: afterDeath(o.watchOut), sight: SIGHTS.includes(o.sight) ? o.sight : "full",
     mode: MODES.includes(o.mode) ? o.mode : "standard", goals: goalsOf(o.goals) || {}, map: mapId(o.map),
-    showMap: SHOW_MAPS.includes(o.showMap) ? o.showMap : "off" };
+    showMap: SHOW_MAPS.includes(o.showMap) ? o.showMap : "off", mod: modId(o.mod), modSettings: modSettingsOf(o.modSettings) };
 }
 
 // The tanks of a match: the seats with a player (human) or a computer tank, in colour order ->
@@ -216,18 +243,25 @@ function matchSlots(seats, occupied) {
 // Why a match can't start, or null: "tanks" (fewer than 2), "human" (no player), "teams" (fewer than 2 -
 // not for the modes that make their own teams), "ai" (survival without AI tanks), "map" (the room's map has
 // fewer bases than the match would have tanks - mapBases: its number of bases, null = no map), "path" (a tank can't
-// drive between all of the map's bases - mapLinked false: TunnelerEngine.mapReach, worked out by the server)
-function startProblem(slots, mode, mapBases, mapLinked) {
+// drive between all of the map's bases - mapLinked false: TunnelerEngine.mapReach, worked out by the server), "modtanks"
+// (the room's script mod - its header's tanks: {min, max} - isn't made for that many tanks; 1.5, docs/MODS.md), "mapbases"
+// (the mod has bases apart from the tanks - its header's bases: {min, max}, docs/MODS.md 3a - and the map has fewer than
+// its least; such a mod's tanks share bases: a map's bases need not be as many as the tanks)
+function startProblem(slots, mode, mapBases, mapLinked, modTanks, modBases, modSides) {
   if (slots.length < 2) return "tanks";
+  // (1.5: a mod with @sides ai - the players against the computer tanks: both)
+  if (modSides === "ai" && !slots.some(s => s.bot)) return "ai";
+  if (modTanks && (slots.length < modTanks.min || slots.length > modTanks.max)) return "modtanks";
   if (mapBases != null && mapLinked === false) return "path";
-  if (mapBases != null && mapBases < slots.length) return "map";
+  if (mapBases != null && modBases && mapBases < modBases.min) return "mapbases";
+  if (mapBases != null && !modBases && mapBases < slots.length) return "map";
   if (!slots.some(s => !s.bot)) return "human";
   if (mode === "survival" && !slots.some(s => s.bot)) return "ai";
   if (!OWN_TEAMS.includes(mode) && new Set(slots.map(s => s.team)).size < 2) return "teams";
   return null;
 }
-// a game mode or a custom map: always the extended engine
-const special = st => !!st && ((!!st.mode && st.mode !== "standard") || !!st.map);
+// a game mode, a custom map or a script mod: always the extended engine
+const special = st => !!st && ((!!st.mode && st.mode !== "standard") || !!st.map || !!st.mod);
 // the classic game: exactly BLUE + GREEN, both players, in different teams, the standard mode -
 // the original protocol and engine (st: the settings; none = standard)
 const isClassic = (slots, st) => slots.length === 2 && slots[0].color === 0 && slots[1].color === 1 && !slots[0].bot && !slots[1].bot &&
@@ -236,8 +270,13 @@ const isClassic = (slots, st) => slots.length === 2 && slots[0].color === 0 && s
 // TunnelerEngine options for a match's cfg ({ext, slots: [{color, team}], size, winScore, friendlyFire,
 // roundTime, sight}): every client the same. autoStart: no menu before the first round (the lobby was it); match: the
 // engine plays the match only (docs/RENDERING.md - step for step as an older page's auto start)
-function engineOptions(cfg) {
-  const o = { slots: cfg.slots.map(s => ({ color: s.color, team: s.team })), size: cfg.size || "medium",
+// A script mod (cfg.mod, 1.5): modSource = its file (fetched by its id and checked - the engine checks the hash again);
+// the options then carry mod {id, source}, modSettings (cfg.modSettings: the values the server checked - the engine
+// checks them again against the header) and the computer tanks' slots ai: true (the mod's g.tank(p).human). Without
+// the file: the options of everything else (the engine can't be made with them - a page waits for the file).
+function engineOptions(cfg, modSource) {
+  const mod = modId(cfg.mod);
+  const o = { slots: cfg.slots.map(s => ({ color: s.color, team: s.team, ...(mod && s.bot ? { ai: true, level: s.level } : {}) })), size: cfg.size || "medium",
     winScore: cfg.winScore || 3, friendlyFire: !!cfg.friendlyFire, autoStart: true, match: true };
   if (roundTime(cfg.roundTime)) o.roundTime = roundTime(cfg.roundTime);
   if (SIGHTS.includes(cfg.sight) && cfg.sight !== "full") o.sight = cfg.sight;
@@ -246,6 +285,7 @@ function engineOptions(cfg) {
   if (MODES.includes(cfg.mode) && cfg.mode !== "standard") o.mode = cfg.mode;
   if (GOALS[cfg.mode]) o.goal = goalOf(cfg.mode, cfg.goals);
   if (cfg.map) { o.map = cfg.map; o.extended = true; }
+  if (mod) { o.extended = true; if (modSource != null) o.mod = { id: mod, source: modSource }; o.modSettings = modSettingsOf(cfg.modSettings); }
   return o;
 }
 // a received match cfg, checked (null = unusable)
@@ -261,7 +301,8 @@ function readCfg(c) {
     visible: VISIBLE.includes(c.visible) ? c.visible : "self", watchOut: afterDeath(c.watchOut), sight: SIGHTS.includes(c.sight) ? c.sight : "full",
     mode: MODES.includes(c.mode) ? c.mode : "standard", goals: goalsOf(c.goals) || {}, qp: !!c.qp,
     map: typeof c.map === "string" && c.map && MapData.decode(c.map) ? c.map : "",
-    showMap: SHOW_MAPS.includes(c.showMap) ? c.showMap : "off" };
+    showMap: SHOW_MAPS.includes(c.showMap) ? c.showMap : "off", mod: c.qp ? "" : modId(c.mod),
+    ...(!c.qp && modId(c.mod) ? { modSettings: modSettingsOf(c.modSettings) } : {}) };
 }
 
 // ------------------------------------------------------------ quick play (docs/v6/QUICKPLAY.md)
@@ -432,6 +473,10 @@ function stateHash(e) {
   if (e.extended) {
     for (let t = 0; t < e.teamWins.length; t++) mix(e.teamWins[t]);
     for (let p = 1; p <= N; p++) { mix(e.alive[p] ? 1 : 0); if (e.team) mix(e.team(p)); }
+    // (a script mod's bases apart from the tanks - 1.5, docs/MODS.md 3a: whose each base is, each tank's home base; null
+    // in every other game, so its hash is as before)
+    if (e.baseOwner) for (let b = 1; b <= e.nBases; b++) mix(e.baseOwner[b]);
+    if (e.home) for (let p = 1; p <= N; p++) mix(e.home[p]);
   }
   let s = 0;
   for (let i = 0; i < e.world.length; i += 61) s = (s + e.world[i] * (i & 0xFF | 1)) >>> 0;
@@ -443,7 +488,7 @@ const NetProto = { TICK_MS, UP, DOWN, LEFT, RIGHT, FIRE, ESC, ALL_BITS, EXT_BITS
   AFTER_DEATH, afterDeath, ROLES, roleIndex, sameGame, MAX_SLOTS, LEVELS, oldLevel, SEAT_KINDS, SIZES, MAX_PLAYER_NAME, MAX_CHAT, VISIBLE, SIGHTS, SHOW_MAPS, ROUND_TIMES, roundTime,
   cleanPlayerName, cleanChat, cleanRoomName, MAX_PASSWORD, cleanPassword,
   RESERVED_NAMES, usernameKey, cleanUsername, MAX_USERNAME, MIN_ACCOUNT_PASSWORD, MAX_ACCOUNT_PASSWORD, passwordProblem, RECOVERY_ALPHABET, cleanRecovery, SETTINGS, defaultSeats, roomSettings, matchSlots, startProblem, isClassic, engineOptions, readCfg,
-  MODES, OWN_TEAMS, GOALS, goalOf, QUICK_TANKS, QUICK_LEVEL, quickSettings, aiSlot, readDrives, botInputs, MAP_ID, mapId, genMap,
-  frameToInput, frameToInputExt, FrameLog, FrameQueue, HASH_EVERY, stateHash };
+  MODES, OWN_TEAMS, GOALS, goalOf, QUICK_TANKS, QUICK_LEVEL, quickSettings, aiSlot, readDrives, botInputs, MAP_ID, mapId, genMap, MOD_ID, modId,
+  MAX_MOD_SETTINGS, modSettingsOf, frameToInput, frameToInputExt, FrameLog, FrameQueue, HASH_EVERY, stateHash };
 
 export { NetProto };

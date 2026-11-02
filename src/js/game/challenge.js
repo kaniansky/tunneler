@@ -9,7 +9,9 @@
 //   Challenge.weekly(day)                           a Sunday: the map of the week's day (1.4) - map = {id, name, by, size, bases},
 //                                                   a published gallery map the server picked for it (its board says which)
 //   Challenge.query(cfg)                            the skirmish link's query (play.js builds the engine from it)
-//   Challenge.engineOptions(cfg[, code])            the engine options play.js builds from that query (code: the map's)
+//   Challenge.engineOptions(cfg[, code, mod])       the engine options play.js builds from that query (code: the map's;
+//                                                   mod: the day's mode as an official mod - {id, settings} of the file the
+//                                                   game ships, src/mods/<mode>.tmod.js: 1.5, the game's modes are mods)
 //   const kills = Challenge.track(engine)           kills per player, counted from outside the engine
 //   Challenge.result(engine, kills, steps)          {rounds, won, kills, secs} - BLUE's (you are always BLUE)
 //   Challenge.compare(a, b)                         the leaderboard's order (< 0: a is better)
@@ -59,6 +61,8 @@ function mulberry32(a) {
 // start infected); a mode's round time
 const MODE_WEIGHTS = [["standard", 5], ["gold", 1], ["hill", 1], ["ctf", 1], ["deathmatch", 1], ["siege", 1], ["shrink", 1], ["survival", 1]];
 const MODE_TIME = { gold: 5, hill: 5, ctf: 5, deathmatch: 5, shrink: 5, siege: 10, survival: 10 };
+// (the modes one round decides - their official mods have @rounds 1; the same draws as before)
+const ONE_ROUND = ["gold", "infection", "survival", "hill", "ctf", "siege", "deathmatch"];
 
 // a Sunday (UTC): the map of the week (1.4, owner 2026-11-01) - one published gallery map, its author named on the board
 const weekly = day => validDay(day) && new Date(dayStart(day)).getUTCDay() === 0;
@@ -77,7 +81,7 @@ function config(day, map) {
   let size = pick([["small", 3], ["medium", 5], ["large", 2]]);
   const M = map && typeof map === "object" && NetProto.mapId(map.id) && (map.bases | 0) >= 2 ? map : null;
   if (M) { size = ["small", "medium", "large"].includes(M.size) ? M.size : size; if (mode === "survival" && M.bases < 4) mode = "standard"; }
-  const goalMode = !!NetProto.GOALS[mode];
+  const goalMode = ONE_ROUND.includes(mode);
   const level = () => pick([["easy", 1], ["normal", 2], ["hard", 2]]);
   const slots = [{ color: 0, team: 1, level: null }];      // (you: BLUE)
   let foes, teamGame = false;
@@ -96,7 +100,7 @@ function config(day, map) {
   const sight = pick([["full", 7], ["circle", 2], ["walls", 1]]);
   const friendlyFire = teamGame && r() % 3 === 0;
   const seed = r() >>> 0;
-  return { day, seed, mode, goal: NetProto.GOALS[mode] ? NetProto.GOALS[mode].def : 0, size, winScore, roundTime, friendlyFire, sight, slots,
+  return { day, seed, mode, goal: 0, size, winScore, roundTime, friendlyFire, sight, slots,
     ...(M ? { map: { id: M.id, name: String(M.name || "").slice(0, 40), by: String(M.by || "").slice(0, 40), size: M.size, bases: M.bases | 0 } } : {}) };
 }
 
@@ -105,13 +109,17 @@ function query(cfg) {
   const who = s => s.level === null ? "you" : s.level;
   return "slots=" + cfg.slots.map(s => s.color + ":" + who(s) + ":" + s.team).join(",") + "&lv=2&size=" + cfg.size + "&win=" + cfg.winScore +
     "&time=" + cfg.roundTime + "&ff=" + (cfg.friendlyFire ? 1 : 0) + "&view=self&watch=wreck" + (cfg.sight !== "full" ? "&sight=" + cfg.sight : "") +
-    (cfg.mode !== "standard" ? "&gm=" + cfg.mode : "") + (cfg.goal ? "&goal=" + cfg.goal : "") + (cfg.map ? "&map=" + cfg.map.id : "") + "&challenge=" + cfg.day;
+    (cfg.map ? "&map=" + cfg.map.id : "") + "&challenge=" + cfg.day;
 }
 // the engine options play.js builds from that query (a skirmish: always the extended engine; you = player 1)
-function engineOptions(cfg, code) {
-  return { slots: cfg.slots.map(s => ({ color: s.color, team: s.team })), size: cfg.size, winScore: cfg.winScore, roundTime: cfg.roundTime,
+// (the day's mode - not standard - is its official mod: mod {id, settings (its defaults)}; the options as a replay keeps
+// them - replay.js kept: the id, the settings the engine played with; its computer tanks marked with their level)
+function engineOptions(cfg, code, mod) {
+  return { slots: cfg.slots.map(s => ({ color: s.color, team: s.team, ...(mod && s.level ? { ai: true, level: s.level } : {}) })), size: cfg.size,
+    winScore: cfg.winScore, roundTime: cfg.roundTime,
     friendlyFire: !!cfg.friendlyFire, escEnds: true, escPlayer: 0, autoStart: true, noInstructions: true,
-    sight: cfg.sight, extended: true, mode: cfg.mode, goal: cfg.goal, ...(cfg.map && code ? { map: code } : {}) };
+    sight: cfg.sight, extended: true, mode: "standard", goal: 0, ...(cfg.map && code ? { map: code } : {}),
+    ...(mod ? { mod: { id: mod.id }, modSettings: Object.assign({}, mod.settings) } : {}) };
 }
 // the same options (key order doesn't matter)
 const canon = v => Array.isArray(v) ? "[" + v.map(canon).join(",") + "]" : v && typeof v === "object"
@@ -151,39 +159,47 @@ const clock = secs => Math.floor(secs / 60) + ":" + z2(secs % 60);
 // Plays it on a new engine with its own computer players (as play.js creates them): every computer tank's bits must
 // be the recorded ones and the recorded state hashes must match; only BLUE's bits and the keystrokes come from the
 // replay. The result is the engine's own. deps: {Engine, AI, day, name? (BLUE's on the kept replay), maxSteps?, map? (the
-// day's map of the week with its code: {id, name, by, size, bases, code})}
+// day's map of the week with its code: {id, name, by, size, bases, code}), mod? (the day's mode's official mod: mod(key)
+// -> {id, source, settings} - QuickJS loaded; none: a mode day can't be checked)}
 function verify(rep, deps) {
   const { Engine, AI, day } = deps, maxSteps = deps.maxSteps || MAX_STEPS;
   if (!Replay.valid(rep)) return { code: "bad" };
   if (rep.challenge !== day || !validDay(day)) return { code: "config" };
   const map = deps.map && deps.map.code ? deps.map : null;
-  const cfg = config(day, map), opts = engineOptions(cfg, map && map.code);
+  const cfg = config(day, map), mod = cfg.mode !== "standard" ? (deps.mod ? deps.mod(cfg.mode) : null) : null;
+  if (cfg.mode !== "standard" && !mod) return { code: "config" };
+  const opts = engineOptions(cfg, map && map.code, mod);
   if ((rep.seed >>> 0) !== cfg.seed || !sameOptions(rep.opts, opts)) return { code: "config" };
   if (rep.steps < 1 || rep.steps > maxSteps) return { code: "long" };
-  const e = new Engine(cfg.seed, Object.assign(JSON.parse(JSON.stringify(opts)), { match: true }));
-  const kills = track(e), N = e.nPlayers;
-  const ais = [];
-  for (let p = 2; p <= N; p++) ais.push(new AI(cfg.slots[p - 1].level, p));
-  const player = Replay.player(rep), checks = [];
-  for (;;) {
-    const rec = player.next();
-    if (!rec) return { code: "unfinished" };
-    if (!rec.bits || rec.bits.length !== N) return { code: "differs", step: player.n };
-    const bits = new Array(N).fill(0);
-    bits[0] = (rec.bits[0] | 0) & 63;
-    for (const ai of ais) {
-      const b = AI.bitsFor(ai, e);
-      if ((rec.bits[ai.me - 1] | 0) !== b) return { code: "differs", step: player.n };
-      bits[ai.me - 1] = b;
+  const e = new Engine(cfg.seed, Object.assign(JSON.parse(JSON.stringify(opts)), { match: true }, mod ? { mod: { id: mod.id, source: mod.source } } : {}));
+  // (the engine freed at the end - a mod's sandbox with it)
+  const out = (() => {
+    const kills = track(e), N = e.nPlayers;
+    const ais = [];
+    for (let p = 2; p <= N; p++) ais.push(new AI(cfg.slots[p - 1].level, p));
+    const player = Replay.player(rep), checks = [];
+    for (;;) {
+      const rec = player.next();
+      if (!rec) return { code: "unfinished" };
+      if (!rec.bits || rec.bits.length !== N) return { code: "differs", step: player.n };
+      const bits = new Array(N).fill(0);
+      bits[0] = (rec.bits[0] | 0) & 63;
+      for (const ai of ais) {
+        const b = AI.bitsFor(ai, e);
+        if ((rec.bits[ai.me - 1] | 0) !== b) return { code: "differs", step: player.n };
+        bits[ai.me - 1] = b;
+      }
+      if (rec.keys.length > 16 || !rec.keys.every(k => k.length === 2 && k.every(v => Number.isInteger(v) && v >= 0 && v <= 0xFFFF))) return { code: "bad" };
+      e.step({ bits, keys: rec.keys });
+      if (player.check(e) === false) return { code: "differs", step: player.n };
+      if (player.n % Replay.CHECK_EVERY === 0) checks.push([player.n, NetProto.stateHash(e)]);
+      if (e.screen === "map") return player.n === rep.steps ? { code: null, result: result(e, kills, player.n), replay: clean(rep, e, player, checks, deps.name) }
+        : { code: "differs", step: player.n };
+      if (player.n >= rep.steps) return { code: "unfinished" };
     }
-    if (rec.keys.length > 16 || !rec.keys.every(k => k.length === 2 && k.every(v => Number.isInteger(v) && v >= 0 && v <= 0xFFFF))) return { code: "bad" };
-    e.step({ bits, keys: rec.keys });
-    if (player.check(e) === false) return { code: "differs", step: player.n };
-    if (player.n % Replay.CHECK_EVERY === 0) checks.push([player.n, NetProto.stateHash(e)]);
-    if (e.screen === "map") return player.n === rep.steps ? { code: null, result: result(e, kills, player.n), replay: clean(rep, e, player, checks, deps.name) }
-      : { code: "differs", step: player.n };
-    if (player.n >= rep.steps) return { code: "unfinished" };
-  }
+  })();
+  if (e.dispose) e.dispose();
+  return out;
 }
 
 // the checked replay as the server keeps it for the board: only the fields a replay has, its frames up to the last

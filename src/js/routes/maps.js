@@ -9,6 +9,11 @@
 // Space / Enter paint (held: while moving), 1-5 the tool (tunnel, dirt, rock, water, base), Tab the next one, [ ] or , . the brush, + - the zoom, U or
 // Ctrl+Z undo, Esc the editor's menu. Mouse: the cursor follows it, the left button paints, the right one drags the
 // view, the wheel zooms. Touch: one finger paints, two drag and pinch. Leaving the editor saves the map.
+// Maps that need a mod (1.5, docs/MODS.md 6a - game/mapmods.js): the map's screen's Needs a mod row opens a list of this
+// browser's mods (ModStore) to check - several allowed, at most 4, only ones made for this game (@game); a draft like the
+// ground. "(needs <mod name>)" on the map's screen, in the list and on a gallery map's screen; a map none of whose mods
+// can be played here: Play gray, why. Share / Publish send its mods first, a map file or link brings their ids (the mods
+// fetched from the server with it - MapStore.fetchMods).
 import { Medals } from "../game/medals.js";
 import { Account } from "../net/account.js";
 import { Display } from "../draw/display.js";
@@ -22,6 +27,10 @@ import { MapGen } from "../game/mapgen.js";
 import { MapPic } from "../draw/mappic.js";
 import { MapPick } from "../ui/mappick.js";
 import { MapStore } from "../net/mapstore.js";
+import { MapMods } from "../game/mapmods.js";
+import { Mods } from "../game/mods.js";
+import { ModStore } from "../net/modstore.js";
+import { Official } from "../net/official.js";
 import { Nav } from "../nav.js";
 import { PlayScreen } from "../draw/playscreen.js";
 import { Pads } from "../io/pads.js";
@@ -30,8 +39,14 @@ import { GameScreen } from "../io/screen.js";
 import { StatusLine } from "../draw/statusline.js";
 import { UniText } from "../text/unitext.js";
 
-// (water: 1.3, owner 2026-10-31 - docs/v6/MAPS.md 5c; a map's ground is set on its own screen)
-const TOOLS = ["tunnel", "dirt", "rock", "water", "base"];
+// (water: 1.3, owner 2026-10-31 - docs/v6/MAPS.md 5c; a map's ground is set on its own screen; the Ground tool - 1.5,
+// owner 2026-11-02: "the ground should be paintable ... setting should stay and painting overrides it" - paints a look
+// over it per cell: LOOKS, "map" = back to the map's ground)
+const TOOLS = ["tunnel", "dirt", "rock", "water", "base", "ground"];
+const LOOKS = ["sand", "grass", "classic", "map"];
+const LOOK_VALUE = { map: 0, classic: 1, sand: 2, grass: 3 };            // (MapData.PAINT)
+// Tab / Shift+Tab (a gamepad's Y): every tool, the Ground tool once per look
+const CYCLE = TOOLS.filter(t => t !== "ground").map(t => [t, null]).concat(LOOKS.map(l => ["ground", l]));
 const VALUE = { tunnel: MapData.TUNNEL, dirt: MapData.DIRT, rock: MapData.ROCK, water: MapData.WATER };
 const BRUSHES = [0, 1, 2, 3, 5, 8];                        // radius in cells (shown as the diameter)
 const ZOOMS = [0.25, 0.5, 1, 2, 4];                       // LORES pixels per cell
@@ -82,15 +97,20 @@ export function mount() {
     const C = cols();
     return UniText.padEnd(UniText.slice(UniText.fromRaw(r.name || "?"), C[0] - 1), C[0]) + UniText.padEnd(Lang.enc(sizeText(r.size)), C[1]) + r.bases;
   };
-  // (the bases green, red while the map can't be played - too few, or not every base reaches the others)
-  const rowSpans = r => { const C = cols(); return [[0, C[0], 0x0F], [C[0], C[0] + C[1], 0x0B], [C[0] + C[1], 200, MapStore.playable(r) ? 0x0C : 0x0A]]; };
+  // (the bases green, red while the map can't be played - too few, or not every base reaches the others, or none of
+  // the mods it needs can be played here)
+  const rowSpans = r => { const C = cols(); return [[0, C[0], 0x0F], [C[0], C[0] + C[1], 0x0B], [C[0] + C[1], 200, MapStore.playable(r) || modStatus(r).blocked ? 0x0C : 0x0A]]; };
   const whyNot = r => ({ bases: T("map.need"), path: T("map.cut.play") })[MapStore.playable(r)];
+  // (1.5: "(needs Hot potato)" after the map's size, why it can't be played here in red - docs/MODS.md 6a)
+  const withNeeds = (text, st) => st.ids.length ? UniText.slice(text + " " + MapPick.needsText(st), 78) : text;
   async function showList(keep) {
+    await refreshMods();
     try { list = await MapStore.list(); } catch (e) { list = []; }
     if (ed) return;
-    const items = list.map(r => ({ key: "m:" + r.id, label: rowText(r), align: "left", spans: rowSpans(r),
-      info: [infoText(r.size, r.bases), MapStore.playable(r) ? { text: whyNot(r), color: 12 } : T(mobile ? "map.row.i.touch" : "map.row.i")],
-      go: () => detail(r) }));
+    const items = list.map(r => { const st = modStatus(r); return { key: "m:" + r.id, label: rowText(r), align: "left", spans: rowSpans(r),
+      info: [withNeeds(infoText(r.size, r.bases), st), MapStore.playable(r) ? { text: whyNot(r), color: 12 }
+        : st.blocked ? { text: MapPick.blockedText(st), color: 12 } : T(mobile ? "map.row.i.touch" : "map.row.i")],
+      go: () => detail(r) }; });
     if (!list.length) items.push({ key: "none", label: T("map.none"), disabled: true });
     items.push({ key: "sep", separator: true });
     items.push({ key: "gallery", label: T("gal.open"), info: [T("gal.open.i1"), T("gal.open.i2")], go: () => galleryList() });
@@ -114,11 +134,13 @@ export function mount() {
   // its name from the file), its screen opened - also a map that can't be played yet (it can be edited)
   let fileError = false;
   async function readFile(f) {
-    const map = f && f.size <= 64 * 1024 ? MapData.decode(new Uint8Array(await f.arrayBuffer())) : null;
+    const map = f && f.size <= 96 * 1024 ? MapData.decode(new Uint8Array(await f.arrayBuffer())) : null;
     if (!map) { fileError = true; return showList(true); }
     fileError = false;
     const rec = await MapStore.save(map);
     if (!ed) detail(rec);
+    // (the mods it needs: fetched from the game's server - those it has)
+    if (rec.mods.length) MapStore.fetchMods(rec.mods).then(refreshMods).then(() => { if (detOn(rec.id)) detail(rec, true); }, () => {});
   }
   function openFile() {
     const inp = document.createElement("input");
@@ -249,32 +271,39 @@ export function mount() {
     detShown = r.id;
     const d = draft && draft.id === r.id ? draft : null, map = shownMap(r);
     if (!map) return showList();
-    if (!keep) nameForm.value = map.name;
+    if (!keep) { nameForm.value = map.name; refreshMods().then(() => { if (detOn(r.id)) detail(r, true); }); }
     const sure = armed && performance.now() < armed;
     // can a tank drive between all its bases (TunnelerEngine.mapReach, once per map): the Edit row says which base it
     // can't get to, and to dig; ready: which bases the game digs out
-    const key = d ? d.map : r.code;
+    // (a map for mods whose bases have no walls - @walls none, Race: reached without them)
+    const open = MapStore.wallsNone(map.mods), key = (d ? d.map : r.code) + (open ? " open" : "");
     let rr = reachCache.get(key);
-    if (!rr) { if (reachCache.size > 32) reachCache.clear(); rr = TunnelerEngine.mapReach(map) || { ok: true, groups: [], walled: [] }; reachCache.set(key, rr); }
-    if (!d && r.linked !== !!rr.ok) { r.linked = !!rr.ok; MapStore.put(r).catch(() => {}); }   // (a record from before the check)
+    if (!rr) { if (reachCache.size > 32) reachCache.clear(); rr = TunnelerEngine.mapReach(map, open ? { walls: false } : null) || { ok: true, groups: [], walled: [] }; reachCache.set(key, rr); }
+    if (!d && !open && r.linked !== !!rr.ok) { r.linked = !!rr.ok; MapStore.put(r).catch(() => {}); }   // (a record from before the check)
+    if (!d && open && r.linkedOpen !== !!rr.ok) { r.linkedOpen = !!rr.ok; MapStore.put(r).catch(() => {}); }
     const why = map.bases.length < MapData.MIN_BASES ? "bases" : !rr.ok ? "path" : "", walled = rr.walled.map(i => i + 1);
     const editInfo = why === "bases" ? [{ text: T("map.need"), color: 12 }]
       : why ? [{ text: T("map.cut", { list: cutOff(rr) }), color: 12 }, { text: T("map.cut.dig"), color: 14 }]
       : [T("map.edit.i")].concat(walled.length ? [{ text: T("map.walled", { list: walled.join(", ") }), color: 14 }] : []);
     const done = () => { armed = 0; showList(); };
     nameForm.placeholder = T("map.ph.name");
+    // (the mods it needs: a line of its own; none of them playable here - Play gray, why)
+    const st = modStatus(map), needs = st.ids.length ? [{ row: 5, text: st.blocked ? MapPick.blockedText(st) : MapPick.needsText(st), color: st.blocked ? 12 : 14 }] : [];
+    const modWhy = st.blocked ? MapPick.blockedText(st) : "";
     ui.show({
       lines: [{ row: 2, text: T("map.one.title"), color: 12 }, { row: 4, text: infoText(map.size, map.bases.length), color: 11 }]
-        .concat(d ? [{ row: 5, text: T("map.changed"), color: 14 }] : []),
-      box: { y: 7 }, infoRow: 20, back: () => settle(r, done),
+        .concat(needs, d ? [{ row: needs.length ? 6 : 5, text: T("map.changed"), color: 14 }] : []),
+      box: { y: 7 }, infoRow: 21, back: () => settle(r, done),
       items: [
         { key: "name", label: T("map.name"), input: nameForm, align: "left", info: [T("map.name.i")], go: () => { noteName(r); detail(r, true); } },
-        { key: "ground", label: T("map.ground") + T("map.ground." + map.ground), info: [T("map.ground.i1"), T("map.ground.i2")],
+        { key: "ground", label: T("map.ground") + T("map.ground." + map.ground), info: [T("map.ground.i1"), T("map.ground.i2"), T("map.ground.i3")],
           go: () => setGround(r, 1), change: d => setGround(r, d) },
+        { key: "mods", label: T("mm.row") + modsLabel(st), info: [T("mm.row.i1"), T("mm.row.i2")], go: () => { noteName(r); needsScreen(r); } },
         { key: "gap0", label: "", disabled: true },
         { key: "edit", label: T("map.edit"), info: editInfo, go: () => { noteName(r); edit(r, shownMap(r)); } },
-        { key: "play", label: T("map.play"), attr: why ? 0x08 : 0, info: why ? [{ text: T(why === "bases" ? "map.need" : "map.cut.play"), color: 12 }] : [T("map.play.i")],
-          go: () => { if (why) return; settle(r, r2 => { if (MapStore.playable(r2)) return detail(r2); store("tunneler.cpu.map", r2.id); Nav.go("/#cpu"); }); } },
+        { key: "play", label: T("map.play"), attr: why || modWhy ? 0x08 : 0,
+          info: why ? [{ text: T(why === "bases" ? "map.need" : "map.cut.play"), color: 12 }] : modWhy ? [{ text: modWhy, color: 12 }] : [T("map.play.i")],
+          go: () => { if (why || modWhy) return; settle(r, r2 => { if (MapStore.playable(r2)) return detail(r2); store("tunneler.cpu.map", r2.id); Nav.go("/#cpu"); }); } },
         { key: "share", label: T("map.share"), go: () => settle(r, r2 => shareMap(r2)),
           info: shareNote && shareNote.id === r.id ? [{ text: shareNote.text, color: shareNote.color }] : [T("map.share.i1"), T("map.share.i2")] },
         published(r) ? { key: "unpub", label: T("gal.remove"), info: [galNote && galNote.id === r.id ? galNote : T("gal.remove.i")], go: () => settle(r, r2 => unpublish(r2)) }
@@ -293,6 +322,68 @@ export function mount() {
       ],
     }, keep);
   }
+  // ------------------------------------------------------------ the mods the map needs (1.5, docs/MODS.md 6a)
+  // this browser's mods (ModStore records, newest first) - read again whenever a map's screen or the list opens
+  let mods = [], modsNote = null;                          // modsNote: {id, text} - why a mod wasn't checked
+  // (with the official list: MapStore.wallsNone - a map for mods whose bases have no walls)
+  const refreshMods = () => Promise.all([ModStore.list(), Official.list()]).then(([l]) => { mods = l; }, () => { mods = []; });
+  const modStatus = map => MapMods.status(map, mods);
+  const runsHere = rec => Mods.fits({ ranges: Mods.parseGame(rec.game) });
+  const nameCut = (s, n) => UniText.fromRaw(Array.from(String(s || "")).slice(0, n).join(""));
+  // a mod's @about in at most two info rows of 78 columns
+  const aboutRows = text => {
+    const rows = [""];
+    for (const w of UniText.fromRaw(text).split(" ")) {
+      const last = rows[rows.length - 1], next = last ? last + " " + w : w;
+      if (UniText.cols(next) <= 78) rows[rows.length - 1] = next;
+      else if (rows.length < 2) rows.push(UniText.slice(w, 78));
+      else { rows[1] = UniText.slice(rows[1], 75) + "..."; break; }
+    }
+    return rows;
+  };
+  // the row's value: "None", the mod's name, or the first one's and how many more
+  const modsLabel = st => !st.ids.length ? T("mm.row.none") : st.ids.length === 1 ? nameCut(st.names[0], 24)
+    : T("mm.row.more", { name: Array.from(st.names[0]).slice(0, 20).join(""), n: st.ids.length - 1 });
+  // the list: each mod of this browser's (checked: needed), the map's mods this browser doesn't have (only to uncheck),
+  // No mod needed, Back - every change a draft of the map's screen, like the ground
+  function needsScreen(r, keep) {
+    const ids = MapMods.of(shownMap(r));
+    const set = list => {
+      const m = MapData.copy(shownMap(r));
+      m.mods = list;
+      draft = MapData.code(m) === r.code ? null : { id: r.id, rec: r, map: m };
+    };
+    const toggle = rec => {
+      const cur = MapMods.of(shownMap(r));
+      modsNote = null;
+      if (cur.includes(rec.id)) set(cur.filter(x => x !== rec.id));
+      else if (!runsHere(rec)) modsNote = { id: rec.id, text: T("mm.version", { game: Mods.gameText(Mods.parseGame(rec.game)), version: Mods.GAME }) };
+      else if (cur.length >= MapMods.MAX) modsNote = { id: rec.id, text: T("mm.max") };
+      else set(cur.concat([rec.id]));
+      needsScreen(r, true);
+    };
+    const items = mods.map(rec => {
+      const on = ids.includes(rec.id), ok = runsHere(rec), note = modsNote && modsNote.id === rec.id ? modsNote.text : "";
+      return { key: "mod:" + rec.id, label: (on ? "\xFB " : "  ") + nameCut(rec.name, 36), align: "left", attr: on ? 0x0E : ok ? 0 : 0x08,
+        info: aboutRows(rec.about || rec.name).concat([note ? { text: note, color: 12 } : ok ? T("mm.mod.i") : { text: T("mm.version", { game: Mods.gameText(Mods.parseGame(rec.game)), version: Mods.GAME }), color: 12 }]),
+        go: () => toggle(rec) };
+    });
+    for (const id of ids) if (!mods.some(m => m.id === id))
+      items.push({ key: "mod:" + id, label: "\xFB " + T("mm.gone", { id }), align: "left", attr: 0x08, info: [T("mm.gone.i")], go: () => toggle({ id }) });
+    if (!items.length) items.push({ key: "none", label: T("mm.empty"), disabled: true });
+    const n = items.length;
+    items.push({ key: "sep", separator: true },
+      { key: "clear", label: T("mm.clear"), info: [T("mm.clear.i")], go: () => { modsNote = null; set([]); needsScreen(r, true); } },
+      { key: "gap", label: "", disabled: true },
+      { key: "back", label: T("mm.back"), info: [T("mm.back.i")], go: () => { modsNote = null; detail(r, true); } });
+    const shown = Math.min(8, n);
+    ui.show({
+      lines: [{ row: 2, text: T("mm.title"), color: 12 }, { row: 4, text: T("mm.top"), color: 11 }]
+        .concat(mods.length ? [] : [{ row: 5, text: T("mm.empty.i"), color: 3 }]),
+      box: { y: 7, rows: shown }, fixed: 4, items, infoRow: 7 + shown + 4 + 3, back: () => { modsNote = null; detail(r, true); },
+    }, keep);
+  }
+
   // ------------------------------------------------------------ the map gallery (docs/v6/MAPS.md; owner, 2026-10-28)
   // Publishing needs who you are: a server with accounts - logged in (LOG IN first), else the player's name (asked once)
   let galNote = null;                                      // {id, text, color}: what Publish / Remove did
@@ -306,14 +397,15 @@ export function mount() {
       then();
     });
   }
-  const galErr = c => T({ none: "gal.err.none", net: "pk.err.net", session: "gal.err.session", bases: "map.need", path: "map.cut.play",
-    published: "gal.err.taken", full: "gal.err.full", busy: "gal.err.busy", author: "gal.err.author" }[c] || "gal.err.other");
+  const galErr = (c, msg) => c === "mods" ? T("mm.err.upload", { msg: String(msg || "").slice(0, 40) })
+    : T({ none: "gal.err.none", net: "pk.err.net", session: "gal.err.session", bases: "map.need", path: "map.cut.play",
+      published: "gal.err.taken", full: "gal.err.full", busy: "gal.err.busy", author: "gal.err.author" }[c] || "gal.err.other");
   function publish(r) {
     whoFirst(async () => {
       galNote = { id: r.id, text: T("gal.publishing"), color: 7 };
       detail(r, true);
       const res = await MapStore.publish(r, galName());
-      galNote = { id: r.id, text: res.ok ? T("gal.published") : galErr(res.code), color: res.ok ? 10 : 12 };
+      galNote = { id: r.id, text: res.ok ? T("gal.published") : galErr(res.code, res.msg), color: res.ok ? 10 : 12 };
       if (res.ok) Medals.earn("maker");                    // (1.4: a medal)
       if (detOn(r.id)) detail(r, true);
     }, () => detail(r, true));
@@ -350,9 +442,12 @@ export function mount() {
     const sure = galArmed && performance.now() < galArmed;
     const note = galNote && galNote.id === e.id ? galNote : null;
     const pic = map ? MapPic.of(map) : null;
+    // (1.5: the mods it needs - their names this browser's or the server's; one this game can't run: red)
+    const st = map && map.mods.length ? MapMods.status(map, MapPick.modsFor(map.mods, mods, () => { if (galOn(e.id)) galleryMap(e, true); })) : null;
     ui.show({
       lines: [{ row: 2, text: T("gal.one.title"), color: 12 }, { row: 3, text: UniText.fromRaw(e.name || "?"), color: 15 },
-        { row: 4, text: infoText(e.size, e.bases), color: 11 }, { row: 5, text: T("pk.gal.by", { name: e.by || "?", n: e.plays || 0 }), color: 3 }],
+        { row: 4, text: infoText(e.size, e.bases), color: 11 }, { row: 5, text: T("pk.gal.by", { name: e.by || "?", n: e.plays || 0 }), color: 3 }]
+        .concat(st ? [{ row: 6, text: st.blocked === "version" ? MapPick.blockedText(st) : MapPick.needsText(st), color: st.blocked === "version" ? 12 : 14 }] : []),
       pic: pic ? Object.assign({ row: 7, col: 27, cols: 28, rows: 6 }, pic) : null,
       box: { y: 14 }, infoRow: 22, back,
       items: [
@@ -399,7 +494,9 @@ export function mount() {
       try { if (navigator.clipboard) { await navigator.clipboard.writeText(link); copied = true; } } catch (e) { copied = false; }
       shareNote = { id: r.id, text: T(copied ? "map.shared" : "map.shared.nocopy", { link }), color: 10 };
     } catch (e) {
-      shareNote = { id: r.id, text: T("map.share.err", { msg: String(e.message || e).slice(0, 50) }), color: 12 };
+      // (its mods go first: one not in this browser can't be sent, nor one the server refused)
+      shareNote = { id: r.id, text: e.code === "missing" ? T("mm.err.missing", { msg: e.msg }) : e.code ? T("mm.err.upload", { msg: String(e.msg || "").slice(0, 40) })
+        : T("map.share.err", { msg: String(e.message || e).slice(0, 50) }), color: 12 };
     }
     if (detOn(r.id)) detail(r, true);
   }
@@ -449,7 +546,7 @@ export function mount() {
   // (turning the phone, a resized window: the editor's screen takes the new height)
   window.addEventListener("resize", () => { if (ed && screenRows() !== LR) { setRows(); clampView(true); render(); } });
   function edit(rec, map) {
-    ed = { rec, map: MapData.copy(map), tool: "rock", brush: 1, zoom: 2, cx: map.w >> 1, cy: map.h >> 1, ox: 0, oy: 0,
+    ed = { rec, map: MapData.copy(map), tool: "rock", look: "sand", brush: 1, zoom: 2, cx: map.w >> 1, cy: map.h >> 1, ox: 0, oy: 0,
       undo: [], msg: null, menu: false, stroke: false, last: null, changed: false, reach: null, reachShown: null };
     setRows();
     // a medium / large map starts zoomed out so all of it shows; a phone held upright: as far in as its height fits the
@@ -494,8 +591,10 @@ export function mount() {
     const px = new Uint8Array(160 * LR).fill(255);                              // 255 = the frame shows
     // water and ground (1.3, owner 2026-10-31): open pixels in their floor's look as in the game (playscreen.js
     // FLOOR_LOOK; display.js draws the floor plane) - water (its ripple from 2:1 on, by the world pixel), the shore
-    // (world pixels within 3 of water) sand, tunnels in the map's ground
-    const fl = new Uint8Array(160 * LR), L = PlayScreen.FLOOR_LOOK, look = PlayScreen.floorLook, g = m.ground, W4 = MapData.CELL;
+    // (world pixels within 3 of water) sand, tunnels in their ground (1.5: the cell's painted one, else the map's); with
+    // the Ground tool painted dirt shows its ground in a dot of every 4 pixels (what is dug there later looks like it)
+    const fl = new Uint8Array(160 * LR), L = PlayScreen.FLOOR_LOOK, look = PlayScreen.floorLook, W4 = MapData.CELL;
+    const g = (cx, cy) => MapData.groundOf(m, cx, cy), dots = ed.tool === "ground" && !!m.groundCells;
     const wet = (x, y) => inMap(x, y) && m.cells[y * m.w + x] === MapData.WATER;
     const shore = (wx, wy) => {
       for (let cy = Math.floor((wy - 3) / W4); cy <= Math.floor((wy + 3) / W4); cy++)
@@ -516,18 +615,26 @@ export function mount() {
         }
         const frame = MapData.inFrame(m.size, cx, cy), wx = Math.floor(fx * W4), wy = Math.floor(fy * W4);
         px[y * 160 + x] = v === MapData.ROCK ? (frame ? 13 : 7) : v === MapData.TUNNEL || v === MapData.WATER ? 0 : MapData.dirtAt(x, y);
-        if (v === MapData.WATER) fl[y * 160 + x] = look(MapData.FLOOR.WATER, wx, wy, g, z < 2);
-        else if (v === MapData.TUNNEL) fl[y * 160 + x] = shore(wx, wy) ? L.SAND : look(MapData.FLOOR.OPEN, wx, wy, g, true);
+        if (v === MapData.WATER) fl[y * 160 + x] = look(MapData.FLOOR.WATER, wx, wy, g(cx, cy), z < 2);
+        else if (v === MapData.TUNNEL) fl[y * 160 + x] = shore(wx, wy) ? L.SAND : look(MapData.FLOOR.OPEN, wx, wy, g(cx, cy), true);
+        else if (dots && v === MapData.DIRT && !(x & 1) && !(y & 1) && m.groundCells[cy * m.w + cx]) {
+          px[y * 160 + x] = 0; fl[y * 160 + x] = look(MapData.FLOOR.OPEN, wx, wy, g(cx, cy), true);
+        }
       }
     // (f: the floor look of a 0 pixel - a base's inside: dug out by the engine, sand on sand / grass)
     const plot = (x, y, c, f = 0) => { x = Math.round(x); y = Math.round(y); if (x >= VX0 && y >= VY0 && x < VX0 + VW && y < VY0 + VH) { px[y * 160 + x] = c; fl[y * 160 + x] = f; } };
-    const inside = g === "sand" || g === "grass" ? L.SAND : L.NONE;
+    const inside = (x, y) => {                                                   // (the ground of the cell at pixel x, y)
+      const [fx, fy] = cellAtPx(x, y), cx = Math.floor(fx), cy = Math.floor(fy), gr = inMap(cx, cy) ? g(cx, cy) : m.ground;
+      // (a painted cell: its look - the game's floor there is open from the start, MapData.paint)
+      if (inMap(cx, cy) && m.groundCells && m.groundCells[cy * m.w + cx]) return look(MapData.FLOOR.OPEN, Math.floor(fx * W4), Math.floor(fy * W4), gr, true);
+      return gr === "sand" || gr === "grass" ? L.SAND : L.NONE;
+    };
     // a base: its walls (35 x 35 world pixels, doorways 7 wide in the top and bottom walls), black inside, its number
     const baseAt = (b, color, outlineOnly) => {
       const c = MapData.basePx(b), s = z / MapData.CELL;                         // (LORES pixels per world pixel)
       const [x0, y0] = pxOfCell((c.x - 17) / 4, (c.y - 17) / 4), [x1, y1] = pxOfCell((c.x + 17) / 4, (c.y + 17) / 4);
       const [mx] = pxOfCell(c.x / 4, c.y / 4), door = 4 * s;
-      if (!outlineOnly) for (let y = Math.ceil(y0) + 1; y < y1; y++) for (let x = Math.ceil(x0) + 1; x < x1; x++) plot(x, y, 0, inside);
+      if (!outlineOnly) for (let y = Math.ceil(y0) + 1; y < y1; y++) for (let x = Math.ceil(x0) + 1; x < x1; x++) plot(x, y, 0, inside(x, y));
       for (let x = Math.round(x0); x <= Math.round(x1); x++) if (Math.abs(x - mx) >= door) { plot(x, y0, color); plot(x, y1, color); }
       for (let y = Math.round(y0); y <= Math.round(y1); y++) { plot(x0, y, color); plot(x1, y, color); }
       return [mx, (y0 + y1) / 2];
@@ -585,16 +692,28 @@ export function mount() {
     const m = ed.map, pm = t => phone ? " " + t + " " : t;   // (a phone: - and + three cells wide - a finger's target)
     // (five tools since water - owner, 2026-10-31: each padded with a space while the row has room, else only the
     // chosen one, else none; a desktop's row also holds Undo, Done and the keys)
-    const toolsOf = pad => TOOLS.map((t, i) => {
+    // (the Ground tool, 1.5: chosen again - a click, its key - the next look; a phone's first row has it with the others,
+    // a desktop's has no room for it beside the keys: the second row, with its look)
+    const toolsOf = pad => TOOLS.filter(t => phone || t !== "ground").map((t, i) => {
       const sp = pad === 2 || (pad === 1 && t === ed.tool) ? " " : "";
-      return { text: sp + (phone ? "" : (i + 1) + " ") + T("map.t." + t) + sp, attr: t === ed.tool ? 0x5F : 0x07, prio: 0, onClick: () => setTool(t) };
+      return { text: sp + (phone ? "" : (i + 1) + " ") + T("map.t." + t) + sp, attr: t === ed.tool ? 0x5F : 0x07, prio: 0, onClick: () => pickTool(t) };
     });
     const width = segs => segs.reduce((n, s) => n + UniText.cols(s.text), 0) + 2 * Math.max(0, segs.length - 1);
-    const rest = phone ? 0 : UniText.cols(T("map.undo")) + UniText.cols(T("map.done")) + UniText.cols(T("map.keys")) + 6;
+    const keys = T("map.keys");
+    const rest = phone ? 0 : UniText.cols(T("map.undo")) + UniText.cols(T("map.done")) + UniText.cols(keys) + 6;
     let tools = toolsOf(2);
     for (let pad = 1; pad >= 0 && width(tools) + rest > (phone ? 40 : 80); pad--) tools = toolsOf(pad);
     const brush = [{ text: T("map.brush"), attr: 0x07, prio: 2 }, { text: pm("-"), attr: 0x0F, prio: 2, onClick: () => setBrush(-1) },
       { text: String(BRUSHES[ed.brush] * 2 + 1), attr: 0x0E, prio: 2 }, { text: pm("+"), attr: 0x0F, prio: 2, onClick: () => setBrush(1) }];
+    // (the Ground tool: the look it paints - < > the others, and the tool chosen; a desktop: the tool itself first, a phone:
+    // only while it is chosen - not beside a message)
+    const lookTo = d => () => { ed.look = step(LOOKS, ed.look, d); setTool("ground"); };
+    const lookSegs = [{ text: pm("<"), attr: 0x0F, prio: 0, onClick: lookTo(-1) },
+      { text: T("map.look." + ed.look), attr: 0x0E, prio: 0, onClick: () => pickTool("ground") },
+      { text: pm(">"), attr: 0x0F, prio: 0, onClick: lookTo(1) }];
+    const gsp = ed.tool === "ground" ? " " : "";                             // (chosen: padded as the tools are)
+    const looks = !phone ? [{ text: gsp + TOOLS.length + " " + T("map.t.ground") + gsp, attr: ed.tool === "ground" ? 0x5F : 0x07, prio: 0, onClick: () => pickTool("ground") }].concat(lookSegs)
+      : ed.tool === "ground" && !ed.msg ? lookSegs : [];
     const zoom = [{ text: T("map.zoom"), attr: 0x07, prio: 3 }, { text: pm("-"), attr: 0x0F, prio: 3, onClick: () => setZoom(-1) },
       { text: ZOOM_TEXT[ed.zoom], attr: 0x0E, prio: 3 }, { text: pm("+"), attr: 0x0F, prio: 3, onClick: () => setZoom(1) }];
     const acts = [{ text: T("map.undo"), attr: ed.undo.length ? 0x0B : 0x08, prio: 0, onClick: () => undo() },
@@ -605,13 +724,23 @@ export function mount() {
     const msg = ed.msg ? [{ text: ed.msg, attr: 0x0C, prio: 0 }] : [];
     // (a gamepad connected: its buttons instead of the keys / fingers - owner, 2026-10-27)
     const pad = padOn() ? T("map.keys.pad") : "";
-    if (phone) return [tools, brush.concat(acts), zoom.concat([bases], msg.length ? msg : [{ text: pad || T("map.keys.touch"), attr: 0x08, prio: 5 }])];
+    // (a phone with the Ground tool's look on its third row: no zoom there - two fingers pinch it)
+    if (phone) return [tools, brush.concat(acts), looks.concat(looks.length ? [] : zoom, [bases], msg.length ? msg : [{ text: pad || T("map.keys.touch"), attr: 0x08, prio: 5 }])];
     // (a desktop: the keys beside the tools - the row with room for them -, a message on the second row)
-    return [tools.concat(acts, [{ text: pad || T("map.keys"), attr: 0x08, prio: 5 }]),
-      brush.concat(zoom, [{ text: T("map.pos", { x: ed.cx * MapData.CELL, y: ed.cy * MapData.CELL }), attr: 0x07, prio: 4 }, bases], msg)];
+    return [tools.concat(acts, [{ text: pad || keys, attr: 0x08, prio: 5 }]),
+      brush.concat(looks, zoom, [{ text: T("map.pos", { x: ed.cx * MapData.CELL, y: ed.cy * MapData.CELL }), attr: 0x07, prio: 4 }, bases], msg)];
   }
   const say = msg => { ed.msg = msg; clearTimeout(ed.msgTimer); ed.msgTimer = setTimeout(() => { if (ed) { ed.msg = null; renderBar(); } }, 3000); };
   function setTool(t) { ed.tool = t; ed.drag = null; render(); }
+  // a tool's key / click: the Ground tool chosen again - its next look
+  function pickTool(t) { if (t === "ground" && ed.tool === "ground") setLook(1); else setTool(t); }
+  function setLook(d) { ed.look = step(LOOKS, ed.look, d); render(); }
+  // Tab / Shift+Tab: the next / previous tool, the Ground tool's looks one by one (CYCLE)
+  function cycleTool(d) {
+    const i = CYCLE.findIndex(([t, l]) => t === ed.tool && (!l || l === ed.look)), [t, l] = CYCLE[(Math.max(0, i) + d + CYCLE.length) % CYCLE.length];
+    if (l) ed.look = l;
+    setTool(t);
+  }
   function setBrush(d) { ed.brush = Math.max(0, Math.min(BRUSHES.length - 1, ed.brush + d)); render(); }
   // zoom: around the cursor (keys) or around pixel (x, y) of the screen (the wheel, a pinch)
   function setZoom(d, at) {
@@ -624,21 +753,35 @@ export function mount() {
     render();
   }
   function snapshotUndo() {
-    ed.undo.push({ cells: ed.map.cells.slice(), bases: ed.map.bases.map(b => ({ x: b.x, y: b.y })) });
+    const P = ed.map.groundCells;
+    ed.undo.push({ cells: ed.map.cells.slice(), bases: ed.map.bases.map(b => ({ x: b.x, y: b.y })), ground: P ? P.slice() : null });
     if (ed.undo.length > UNDO_MAX) ed.undo.shift();
-    ed.changed = true; ed.reach = null;
+    ed.changed = true;
+    if (ed.tool !== "ground") ed.reach = null;                            // (painted ground: only a look - the way stays)
   }
   function undo() {
     const u = ed.undo.pop();
     if (!u) return;
-    ed.map.cells.set(u.cells); ed.map.bases = u.bases; ed.reach = null;
+    ed.map.cells.set(u.cells); ed.map.bases = u.bases; ed.map.groundCells = u.ground; ed.reach = null;
     render();
   }
   // painting: the brush stamped on every cell from the last one to (x, y)
   // (water never inside a base's walls - the cells x - 4 .. x + 4 around it, MapData.baseProblem: those stay as they
   // are and the status line says why)
+  // (the Ground tool, 1.5: the look into the map's painted ground - MapData.PAINT, made the first time; the terrain
+  // stays as it is)
   function stamp(x, y) {
-    const m = ed.map, v = VALUE[ed.tool], bases = v === MapData.WATER ? m.bases : [];
+    const m = ed.map;
+    if (ed.tool === "ground") {
+      const v = LOOK_VALUE[ed.look];
+      if (!m.groundCells) { if (!v) return; m.groundCells = new Uint8Array(m.w * m.h); }
+      for (const [dx, dy] of brushCells(BRUSHES[ed.brush])) {
+        const cx = x + dx, cy = y + dy;
+        if (inMap(cx, cy) && !MapData.inFrame(m.size, cx, cy)) m.groundCells[cy * m.w + cx] = v;
+      }
+      return;
+    }
+    const v = VALUE[ed.tool], bases = v === MapData.WATER ? m.bases : [];
     let dry = false;
     for (const [dx, dy] of brushCells(BRUSHES[ed.brush])) {
       const cx = x + dx, cy = y + dy;
@@ -690,8 +833,8 @@ export function mount() {
     const c = e.code, k = e.key;
     if (MOVES[c]) { const n = e.shiftKey ? 8 : 1; moveCursor(MOVES[c][0] * n, MOVES[c][1] * n); }
     else if (c === "Space" || c === "Enter" || c === "NumpadEnter") { if (!e.repeat && !ed.stroke) beginStroke(); }
-    else if (/^Digit[1-5]$/.test(c)) setTool(TOOLS[+c.slice(5) - 1]);
-    else if (c === "Tab") setTool(step(TOOLS, ed.tool, e.shiftKey ? -1 : 1));
+    else if (/^Digit[1-6]$/.test(c)) pickTool(TOOLS[+c.slice(5) - 1]);
+    else if (c === "Tab") cycleTool(e.shiftKey ? -1 : 1);
     else if (c === "BracketLeft" || c === "Comma") setBrush(-1);
     else if (c === "BracketRight" || c === "Period") setBrush(1);
     else if (k === "+" || c === "NumpadAdd" || c === "Equal") setZoom(1);
@@ -806,7 +949,7 @@ export function mount() {
   // engine's own check on the world a match starts on (TunnelerEngine.mapReach; ~5 / 15 / 60 ms on a small / medium /
   // large map) - the status line asks a moment after the last change (reachSoon), saving at once
   function reachOf() {
-    if (!ed.reach) { ed.reach = TunnelerEngine.mapReach(ed.map) || { ok: true, groups: [], walled: [] }; ed.reachShown = ed.reach; }
+    if (!ed.reach) { ed.reach = TunnelerEngine.mapReach(ed.map, MapStore.wallsNone(ed.map.mods) ? { walls: false } : null) || { ok: true, groups: [], walled: [] }; ed.reachShown = ed.reach; }
     return ed.reach;
   }
   function reachSoon() {
@@ -850,8 +993,8 @@ export function mount() {
   const sharedId = mShared ? mShared[1] : q.get("share"), oneId = mOne ? mOne[1] : q.get("id");
   window.tunnelerMapsList = () => showList(true);
   window.tunnelerMapsOpen = (rec, map) => edit(rec, map || MapData.decode(rec.code));   // (tests)
-  window.tunnelerMapsApi = { showList, newMap, detail, openLink, edit, stamp: (x, y) => { ed.cx = x; ed.cy = y; beginStroke(); endStroke(); },
-    setTool, setBrush, setZoom, undo, leaveEditor, render, barRows, say: msg => say(msg), readFile, saveFile, reachOf: () => reachOf() };
+  window.tunnelerMapsApi = { showList, newMap, detail, needsScreen, refreshMods, openLink, edit, stamp: (x, y) => { ed.cx = x; ed.cy = y; beginStroke(); endStroke(); },
+    setTool, setLook, cycleTool, setBrush, setZoom, undo, leaveEditor, render, barRows, say: msg => say(msg), readFile, saveFile, reachOf: () => reachOf(), shown: () => display.snap };
   if (sharedId && /^[a-z2-9]{10}$/.test(sharedId)) loadShared("", sharedId);
   else if (oneId) MapStore.get(oneId).then(r => { if (r) detail(r); else showList(); }, () => showList());
   else showList();

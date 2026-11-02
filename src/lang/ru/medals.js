@@ -43,8 +43,10 @@ Lang.extend("ru", {
   "medal.online.win.i": "Выиграй матч онлайн.",
   "medal.maker": "Создатель карт",
   "medal.maker.i": "Опубликуй карту в галерее.",
-  "medal.mode": "Режим: {mode}",
-  "medal.mode.i": "Выиграй матч в этом игровом режиме.",
+  "medal.modmaker": "Создатель модов",
+  "medal.modmaker.i": "Опубликуй мод в галерее (главное меню, Моды).",
+  "medal.mode": "Мод: {mode}",
+  "medal.mode.i": "Выиграй матч с этим официальным модом.",
   "medal.allmodes": "Универсал",
   "medal.allmodes.i": "Выиграй матч в каждом игровом режиме.",
 });

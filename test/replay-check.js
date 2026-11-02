@@ -1,11 +1,11 @@
 "use strict";
 // Replays (src/js/game/replay.js, docs/DESIGN-8P.md 33): the input encoding, recordings of bot matches (classic -
-// keys held -, extended - net bits -, game modes, survival's computer-driven tanks) played again on a new
+// keys held -, extended - net bits -, the official mods (1.5: the old game modes), survival's computer-driven tanks) played again on a new
 // engine without the computer players: the same state at every check and at the end; a changed input is
 // noticed; the storage (newest MAX kept) and the replay files (gzip'd JSON, plain JSON too).
 const path = require("path");
 const assert = require("assert");
-const { TunnelerEngine: E, TunnelerAI, NetProto } = require("./src.js");
+const { TunnelerEngine: E, TunnelerAI, NetProto, loadMods, modFile } = require("./src.js");
 const { Replay } = require(path.join(__dirname, "..", "src", "js", "game", "replay.js"));
 
 let failures = 0;
@@ -41,15 +41,18 @@ function record(seed, opts, levels, maxSteps = 60000) {
   return { rep, engine: e };
 }
 // plays a replay on a new engine: [every check matched, checks made, the final hash matched]
-function play(rep) {
-  const e = Replay.engine(rep, E), p = Replay.player(rep);
+// (a mod's replay: its file given - a replay keeps the mod's id only)
+function play(rep, modSource) {
+  const e = Replay.engine(rep, E, modSource), p = Replay.player(rep);
   let checks = 0, bad = 0;
   for (let inp; (inp = p.next()); ) {
     e.step(inp);
     const c = p.check(e);
     if (c !== null) { checks++; if (!c) bad++; }
   }
-  return { good: bad === 0, checks, done: p.done, screen: e.screen, hash: NetProto.stateHash(e) };
+  const out = { good: bad === 0, checks, done: p.done, screen: e.screen, hash: NetProto.stateHash(e) };
+  if (e.dispose) e.dispose();
+  return out;
 }
 
 // ------------------------------------------------------------------ encoding
@@ -69,10 +72,7 @@ const CASES = [
   ["extended free-for-all, 4 tanks", 5, { slots: [0, 1, 2, 3].map(c => ({ color: c, team: c + 1 })), size: "small", winScore: 1, autoStart: true, extended: true }, ["easy", "normal", "hard", "normal"]],
   ["extended 2 v 2, friendly fire, line of sight", 9, { slots: [0, 1, 2, 3].map(c => ({ color: c, team: c % 2 + 1 })), size: "small", winScore: 1, autoStart: true, extended: true, friendlyFire: true, sight: "walls" }, ["hard", "normal", "normal", "hard"]],
 ];
-for (const m of E.MODE_LIST || []) if (m !== "standard")
-  CASES.push(["mode " + m + (m === "survival" ? " (computer-driven tanks: aiDriven)" : ""), 11,
-    { slots: [0, 1, 2, 3].map(c => ({ color: c, team: c % 2 + 1 })), size: "small", winScore: 1, autoStart: true, extended: true, mode: m },
-    m === "survival" ? [null, "normal", "normal", "normal"] : ["normal", "easy", "normal", "hard"]]);
+// (1.5: the game's modes are official mods - their matches below, with QuickJS loaded)
 for (const [name, seed, opts, levels] of CASES) {
   const { rep: r, engine } = record(seed, opts, levels);
   if (!r) { ok(false, name + ": the match reached its world map"); continue; }
@@ -113,6 +113,25 @@ for (const [name, seed, opts, levels] of CASES) {
   try { await Replay.fromBytes(new TextEncoder().encode("{\"x\":1}")); } catch (e) { refused = true; }
   ok(refused, "a file that isn't a replay is refused");
   ok(/^tunneler-\d{4}-\d\d-\d\d-\d{4}\.replay$/.test(Replay.fileName(base)), "file name " + Replay.fileName(base));
+
+  // ---------------------------------------------------------------- the official mods (1.5: the game's old modes):
+  // recorded and played again with the mod's file (survival: its computer-driven tanks)
+  {
+    const Mods = loadMods();
+    await Mods.load();
+    for (const m of ["gold", "infection", "survival", "hill", "shrink", "ctf", "siege", "deathmatch"]) {
+      const source = modFile(m), id = Mods.idOf(source);
+      const opts = { slots: [0, 1, 2, 3].map(c => ({ color: c, team: c % 2 + 1, ...(m === "survival" && c ? { ai: true, level: "normal" } : {}) })), size: "small", winScore: 1,
+        autoStart: true, extended: true, mod: { id, source } };
+      const { rep: r, engine } = record(11, opts, m === "survival" ? [null, "normal", "normal", "normal"] : ["normal", "easy", "normal", "hard"]);
+      if (!r) { ok(false, "mod " + m + ": the match reached its world map"); engine.dispose(); continue; }
+      const json = JSON.parse(JSON.stringify(r));
+      const back = play(json, source);
+      ok(json.opts.mod.id === id && !("source" in json.opts.mod) && back.good && back.done && back.screen === "map" && back.hash === NetProto.stateHash(engine) && back.checks === r.checks.length + 1,
+        "the official mod " + m + ": " + r.steps + " steps, its id kept, played again with its file the same (" + back.checks + " checks)");
+      engine.dispose();
+    }
+  }
 
   // ---------------------------------------------------------------- the Replays screen (replays.js in a vm, real timers)
   await viewer(base, record(5, CASES[1][2], CASES[1][3]).rep);
