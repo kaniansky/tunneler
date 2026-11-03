@@ -8,7 +8,7 @@ Limits: app name 30 characters, short description 80, full description 4000 (pla
 breaks). The counts below are Unicode characters, line breaks included, of the text inside each block -
 checked with Python's `len()` (see the end of this file).
 
-The text describes version 1.4 as it is on a phone: no split screen and no second player on one device
+The text describes version 1.5 as it is on a phone: no split screen and no second player on one device
 (phones and tablets hide them), so neither is mentioned. Up to its version 6.0.1 the game was called "Tunneler Online"
 (app id `com.kaniansky.TunnelerOnline`, never uploaded to Play). Game mode names, "Skirmish", "Replays", difficulty levels etc. use the game's own translations
 (`src/lang/<code>/main.js`).
@@ -29,7 +29,7 @@ Tunneler
 The 1991 DOS tank duel, rebuilt: dig tunnels and hunt tanks, online or vs AI.
 ```
 
-**Full description** (3965 / 4000)
+**Full description** (3973 / 4000)
 
 ```text
 Tunneler brings back TUNNELER, the 1991 DOS game by Geoffrey Silverton - rebuilt from its decompiled source code so that it plays exactly like the original, and extended with computer opponents, teams, game modes, online games, a daily challenge and your own maps.
@@ -51,8 +51,8 @@ SKIRMISH
 • Ten kinds of generated worlds - caves, rivers, islands, a labyrinth... - with water, sand or grass
 • Hold SCORE for the map: what you or your team have seen, or the whole world
 
-8 GAME MODES
-Besides the classic last tank standing: gold rush, infection, survival, king of the hill, shrinking world, capture the flag, base siege and deathmatch. The computer tanks play every mode too.
+GAME MODES AND MODS
+Besides last tank standing: gold rush, infection, survival, king of the hill, shrinking world, capture the flag, base siege, deathmatch, hot potato. More in the mod gallery, or write your own.
 
 ONLINE GAMES
 • Quick play: straight into a game - computer tanks fill the empty seats, and you take one over the moment you join
@@ -102,7 +102,7 @@ Tunneler
 Tanková klasika z DOSu (1991): kop tunely a lov tanky online aj proti počítaču.
 ```
 
-**Full description** (3904 / 4000)
+**Full description** (3926 / 4000)
 
 ```text
 Tunneler vracia hru TUNNELER pre DOS od Geoffreyho Silvertona z roku 1991 – prestavanú z dekompilovaného zdrojového kódu tak, aby sa hrala presne ako originál, a rozšírenú o počítačových súperov, tímy, herné režimy, hru online, dennú výzvu a vlastné mapy.
@@ -124,8 +124,8 @@ POTÝČKA
 • Desať druhov generovaných svetov – jaskyne, rieky, ostrovy, labyrint... – s vodou, pieskom či trávou
 • Podržte SKÓRE a uvidíte mapu: čo ste videli vy alebo váš tím, či celý svet
 
-8 HERNÝCH REŽIMOV
-Okrem klasiky, kde vyhráva posledný tank: zlatá horúčka, nákaza, prežitie, kráľ kopca, zmenšujúci sa svet, ukradni vlajku, obliehanie základní a zápas na smrť. Počítačové tanky hrajú každý režim.
+REŽIMY A MÓDY
+Okrem klasiky, kde vyhráva posledný tank: zlatá horúčka, nákaza, prežitie, kráľ kopca, zmenšujúci sa svet, ukradni vlajku, obliehanie základní, zápas na smrť, horúci zemiak. Ďalšie v galérii módov, alebo si napíš vlastný.
 
 HRA ONLINE
 • Rýchla hra: hneď do hry – prázdne miesta zaplnia počítačové tanky a keď sa pripojíš, jeden hneď prevezmeš
@@ -175,7 +175,7 @@ Tunneler
 Tanková klasika z DOSu (1991): kopej tunely a lov tanky online i proti počítači.
 ```
 
-**Full description** (3862 / 4000)
+**Full description** (3882 / 4000)
 
 ```text
 Tunneler vrací hru TUNNELER pro DOS od Geoffreyho Silvertona z roku 1991 – přestavěnou z dekompilovaného zdrojového kódu tak, aby se hrála přesně jako originál, a rozšířenou o počítačové soupeře, týmy, herní režimy, hru online, denní výzvu a vlastní mapy.
@@ -197,8 +197,8 @@ POTYČKA
 • Deset druhů generovaných světů – jeskyně, řeky, ostrovy, labyrint... – s vodou, pískem či trávou
 • Podržte SKÓRE a uvidíte mapu: co jste viděli vy nebo váš tým, či celý svět
 
-8 HERNÍCH REŽIMŮ
-Kromě klasiky, kde vyhrává poslední tank: zlatá horečka, nákaza, přežití, král kopce, zmenšující se svět, ukradni vlajku, obléhání základen a zápas na smrt. Počítačové tanky hrají každý režim.
+REŽIMY A MÓDY
+Kromě klasiky, kde vyhrává poslední tank: zlatá horečka, nákaza, přežití, král kopce, zmenšující se svět, ukradni vlajku, obléhání základen, zápas na smrt, horký brambor. Další v galerii módů, nebo si napiš vlastní.
 
 HRA ONLINE
 • Rychlá hra: rovnou do hry – prázdná místa zaplní počítačové tanky, a když se připojíš, jeden hned převezmeš
@@ -248,7 +248,7 @@ Tunneler
 Танкова класика з DOS (1991): копай тунелі й полюй на танки онлайн і проти ШІ.
 ```
 
-**Full description** (3916 / 4000)
+**Full description** (3931 / 4000)
 
 ```text
 Tunneler повертає гру TUNNELER для DOS, яку Geoffrey Silverton створив 1991 року, – відтворену з декомпільованого вихідного коду так, щоб грати точнісінько як оригінал, і доповнену комп'ютерними суперниками, командами, режимами гри, грою онлайн, викликом дня та власними мапами.
@@ -269,8 +269,8 @@ Tunneler повертає гру TUNNELER для DOS, яку Geoffrey Silverton 
 • Щораунду випадковий світ або твоя власна мапа
 • Десять видів згенерованих світів – печери, річки, острови, лабіринт... – з водою, піском чи травою
 
-8 РЕЖИМІВ ГРИ
-Окрім класики, де перемагає останній танк: золота лихоманка, інфекція, виживання, цар гори, світ стискається, захоплення прапора, облога баз і бій на смерть. Комп'ютерні танки грають у кожному режимі.
+РЕЖИМИ Й МОДИ
+Окрім класики, де перемагає останній танк: золота лихоманка, інфекція, виживання, цар гори, світ стискається, захоплення прапора, облога баз, бій на смерть, гаряча картопля. Ще - у галереї модів, або напиши власний.
 
 ГРА ОНЛАЙН
 • Швидка гра: одразу в гру – вільні місця заповнюють комп'ютерні танки, а щойно ти приєднаєшся, один із них переходить до тебе
@@ -320,7 +320,7 @@ Tunneler
 Танковая классика DOS (1991): копай туннели и охоться на танки онлайн и с ИИ.
 ```
 
-**Full description** (3982 / 4000)
+**Full description** (3995 / 4000)
 
 ```text
 Tunneler возвращает игру TUNNELER для DOS, которую Geoffrey Silverton создал в 1991 году, – воссозданную по декомпилированному исходному коду так, чтобы играть в точности как оригинал, и дополненную компьютерными соперниками, командами, режимами игры, игрой онлайн, испытанием дня и своими картами.
@@ -341,8 +341,8 @@ Tunneler возвращает игру TUNNELER для DOS, которую Geoff
 • Каждый раунд случайный мир или твоя собственная карта
 • Десять видов сгенерированных миров – пещеры, реки, острова, лабиринт... – с водой, песком или травой
 
-8 РЕЖИМОВ ИГРЫ
-Помимо классики, где побеждает последний танк: золотая лихорадка, заражение, выживание, царь горы, мир сжимается, захват флага, осада баз и бой насмерть. Компьютерные танки играют в каждом режиме.
+РЕЖИМЫ И МОДЫ
+Помимо классики, где побеждает последний танк: золотая лихорадка, заражение, выживание, царь горы, мир сжимается, захват флага, осада баз, бой насмерть, горячая картошка. Ещё - в галерее модов, или напиши свой.
 
 ИГРА ОНЛАЙН
 • Быстрая игра: сразу в игру – свободные места занимают компьютерные танки, а как только ты присоединишься, один из них переходит к тебе
