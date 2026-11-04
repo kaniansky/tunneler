@@ -130,7 +130,7 @@ const L = {
     "cr4": "Source code: <a href=\"https://github.com/kaniansky/tunneler\">github.com/kaniansky/tunneler</a> (public domain, Unlicense).",
     "privacy.h": "Privacy",
     "privacy.p": "The game has no ads, no tracking and no analytics services; the game server only counts the online matches played each day, as totals with nothing about any player. Online games and the daily challenge's leaderboard need an account on the game server: a username and a password, nothing else (no e-mail). While you are logged in, a copy of your maps, replays and settings is kept with your account, so your other devices have them; deleting the account deletes it. Game rooms (names, chat, moves) live only while a game exists; when the server restarts it hands them to the next one, which deletes that copy as soon as it has read it. The apps ask GitHub whether a new version is out, and connect to a game server only when you play online. The whole <a href=\"privacy.html\">privacy policy</a>.",
-    "foot.play": "play", "foot.source": "source code", "foot.changelog": "changes", "foot.privacy": "privacy",
+    "foot.play": "play", "foot.source": "source code", "foot.changelog": "changes", "foot.privacy": "privacy", "foot.terms": "terms of service",
   },
   sk: {
     name: "Slovenčina",
@@ -258,7 +258,7 @@ const L = {
     "cr4": "Zdrojový kód: <a href=\"https://github.com/kaniansky/tunneler\">github.com/kaniansky/tunneler</a> (voľné dielo, Unlicense).",
     "privacy.h": "Súkromie",
     "privacy.p": "Hra nemá reklamy, sledovanie ani analytické služby; herný server iba počíta online zápasy odohrané za deň, ako súčty bez čohokoľvek o hráčoch. Hry online a rebríček dennej výzvy potrebujú účet na hernom serveri: meno a heslo, nič iné (žiadny e-mail). Kým ste prihlásení, kópia vašich máp, záznamov a nastavení sa uchováva s vaším účtom, aby ich mali aj vaše ďalšie zariadenia; zrušenie účtu ju zmaže. Herné miestnosti (mená, chat, ťahy) existujú, len kým existuje hra; pri reštarte ich server odovzdá ďalšiemu, ktorý túto kópiu zmaže, hneď ako ju prečíta. Aplikácie sa pýtajú GitHubu, či vyšla nová verzia, a k hernému serveru sa pripoja, až keď hráte online. Celé <a href=\"privacy.html\">zásady ochrany súkromia</a> (po anglicky).",
-    "foot.play": "hrať", "foot.source": "zdrojový kód", "foot.changelog": "zmeny", "foot.privacy": "súkromie",
+    "foot.play": "hrať", "foot.source": "zdrojový kód", "foot.changelog": "zmeny", "foot.privacy": "súkromie", "foot.terms": "podmienky používania",
   },
   cs: {
     name: "Čeština",
@@ -386,7 +386,7 @@ const L = {
     "cr4": "Zdrojový kód: <a href=\"https://github.com/kaniansky/tunneler\">github.com/kaniansky/tunneler</a> (volné dílo, Unlicense).",
     "privacy.h": "Soukromí",
     "privacy.p": "Hra nemá reklamy, sledování ani analytické služby; herní server jen počítá online zápasy odehrané za den, jako součty bez čehokoli o hráčích. Hry online a žebříček denní výzvy potřebují účet na herním serveru: jméno a heslo, nic jiného (žádný e-mail). Dokud jste přihlášeni, kopie vašich map, záznamů a nastavení se uchovává s vaším účtem, aby je měla i vaše další zařízení; zrušení účtu ji smaže. Herní místnosti (jména, chat, tahy) existují, jen dokud existuje hra; při restartu je server předá dalšímu, který tuto kopii smaže, hned jak ji přečte. Aplikace se ptají GitHubu, zda vyšla nová verze, a k hernímu serveru se připojí, až když hrajete online. Celé <a href=\"privacy.html\">zásady ochrany soukromí</a> (anglicky).",
-    "foot.play": "hrát", "foot.source": "zdrojový kód", "foot.changelog": "změny", "foot.privacy": "soukromí",
+    "foot.play": "hrát", "foot.source": "zdrojový kód", "foot.changelog": "změny", "foot.privacy": "soukromí", "foot.terms": "podmínky použití",
   },
   uk: {
     name: "Українська",
@@ -514,7 +514,7 @@ const L = {
     "cr4": "Вихідний код: <a href=\"https://github.com/kaniansky/tunneler\">github.com/kaniansky/tunneler</a> (суспільне надбання, Unlicense).",
     "privacy.h": "Приватність",
     "privacy.p": "Гра не має реклами, стеження чи аналітичних сервісів; ігровий сервер лише рахує онлайн-матчі, зіграні за день, як загальні числа без жодних даних про гравців. Онлайн-ігри й таблиця лідерів виклику дня потребують облікового запису на ігровому сервері: ім'я та пароль, нічого більше (без e-mail). Поки ви увійшли, копія ваших мап, записів і налаштувань зберігається з вашим обліковим записом, щоб вони були й на інших ваших пристроях; видалення запису видаляє її. Ігрові кімнати (імена, чат, ходи) існують, лише поки існує гра; під час перезапуску сервер передає їх наступному, а той видаляє цю копію, щойно прочитає її. Застосунки питають GitHub, чи вийшла нова версія, і з'єднуються з ігровим сервером, лише коли ви граєте онлайн. Повна <a href=\"privacy.html\">політика конфіденційності</a> (англійською).",
-    "foot.play": "грати", "foot.source": "вихідний код", "foot.changelog": "зміни", "foot.privacy": "приватність",
+    "foot.play": "грати", "foot.source": "вихідний код", "foot.changelog": "зміни", "foot.privacy": "приватність", "foot.terms": "умови використання",
   },
   ru: {
     name: "Русский",
@@ -642,7 +642,7 @@ const L = {
     "cr4": "Исходный код: <a href=\"https://github.com/kaniansky/tunneler\">github.com/kaniansky/tunneler</a> (общественное достояние, Unlicense).",
     "privacy.h": "Конфиденциальность",
     "privacy.p": "В игре нет рекламы, слежки и сервисов аналитики; игровой сервер только считает онлайн-матчи, сыгранные за день, как общие числа без каких-либо данных об игроках. Онлайн-игры и таблица лидеров испытания дня требуют учётной записи на игровом сервере: имя и пароль, больше ничего (без e-mail). Пока вы вошли, копия ваших карт, записей и настроек хранится с вашей учётной записью, чтобы они были и на других ваших устройствах; удаление записи удаляет её. Игровые комнаты (имена, чат, ходы) существуют, только пока существует игра; при перезапуске сервер передаёт их следующему, а тот удаляет эту копию, как только прочитает её. Приложения спрашивают GitHub, вышла ли новая версия, и подключаются к игровому серверу, только когда вы играете онлайн. Полная <a href=\"privacy.html\">политика конфиденциальности</a> (на английском).",
-    "foot.play": "играть", "foot.source": "исходный код", "foot.changelog": "изменения", "foot.privacy": "конфиденциальность",
+    "foot.play": "играть", "foot.source": "исходный код", "foot.changelog": "изменения", "foot.privacy": "конфиденциальность", "foot.terms": "условия использования",
   },
 };
 const ORDER = ["en", "sk", "cs", "uk", "ru"];
