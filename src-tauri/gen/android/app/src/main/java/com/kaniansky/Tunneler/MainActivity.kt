@@ -14,11 +14,20 @@ import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.ActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.google.android.gms.games.PlayGames
 import com.google.android.gms.games.PlayGamesSdk
+import com.google.android.play.core.appupdate.AppUpdateInfo
+import com.google.android.play.core.appupdate.AppUpdateManagerFactory
+import com.google.android.play.core.appupdate.AppUpdateOptions
+import com.google.android.play.core.install.InstallStateUpdatedListener
+import com.google.android.play.core.install.model.AppUpdateType
+import com.google.android.play.core.install.model.InstallStatus
+import com.google.android.play.core.install.model.UpdateAvailability
 import org.json.JSONObject
 
 // TUNNELER on Android (docs/ANDROID.md):
@@ -33,7 +42,11 @@ import org.json.JSONObject
 //   from the Settings screen). On the main menu Back closes the app: the page tells it with
 //   window.tunnelerBackExits() (true = on the main menu); without that function Back is always Esc;
 // - window.TunnelerAndroid.saveFile(name, base64): a file (a replay) into the phone's Downloads folder - a page's
-//   download (a blob link) does nothing in this web view (src/js/replays.js).
+//   download (a blob link) does nothing in this web view (src/js/replays.js);
+// - Google Play's in-app updates (only when Google Play installed the app): a newer major.minor (versionCode / 1000:
+//   it can't play online with the old one) = Play's full-screen update, the app closes when it is cancelled; a newer
+//   patch = Play's update dialog, once per version, downloaded while the game goes on and installed when the app
+//   goes to the background from the main menu (or at the next start).
 class MainActivity : TauriActivity() {
   override val handleBackNavigation: Boolean = false     // (WryActivity's own Back = history back: off)
   private var webView: WebView? = null
@@ -42,12 +55,84 @@ class MainActivity : TauriActivity() {
   // (the build's Play Games project: empty strings = no Google Play sign-in in this build)
   private val playGamesOn by lazy { getString(R.string.game_services_project_id).isNotEmpty() && getString(R.string.play_games_web_client).isNotEmpty() }
 
+  // (Google Play installed the app: the in-app updates work only then - not for the APK channel nor a debug build)
+  private val fromPlay by lazy {
+    try {
+      val installer = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) packageManager.getInstallSourceInfo(packageName).installingPackageName
+        else @Suppress("DEPRECATION") packageManager.getInstallerPackageName(packageName)
+      installer == "com.android.vending"
+    } catch (e: Exception) { false }
+  }
+  private val updates by lazy { AppUpdateManagerFactory.create(this) }
+  private var flexibleDownloaded = false
+  private val updateFlow = registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { r: ActivityResult ->
+    // the full-screen update cancelled (Back on Play's screen): the old version can't play online - closed
+    if (r.resultCode == RESULT_CANCELED && immediateAsked) finish()
+    immediateAsked = false
+  }
+  private var immediateAsked = false
+  private val installListener = InstallStateUpdatedListener { state ->
+    if (state.installStatus() == InstallStatus.DOWNLOADED) flexibleDownloaded = true
+  }
+
   override fun onCreate(savedInstanceState: Bundle?) {
     enableEdgeToEdge()
     super.onCreate(savedInstanceState)
     if (playGamesOn) PlayGamesSdk.initialize(this)
     window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     immersive()
+    if (fromPlay) checkUpdate(true)
+  }
+
+  private var resumed = false
+  override fun onResume() {
+    super.onResume()
+    if (resumed && fromPlay) checkUpdate(false)
+    resumed = true
+  }
+
+  // the patch downloaded while the game ran: installed when the app leaves from the main menu (Play installs it
+  // silently in the background and the app restarts), never during a match - else at the next start
+  override fun onStop() {
+    super.onStop()
+    if (flexibleDownloaded) onMainMenu { if (it && flexibleDownloaded) { flexibleDownloaded = false; updates.completeUpdate() } }
+  }
+
+  override fun onDestroy() {
+    if (fromPlay) updates.unregisterListener(installListener)
+    super.onDestroy()
+  }
+
+  // start: a newer version asks (above); back in front: a full-screen update left unfinished goes on (Play's rule)
+  private fun checkUpdate(start: Boolean) {
+    updates.appUpdateInfo.addOnSuccessListener { info ->
+      val immediate = info.updateAvailability() == UpdateAvailability.DEVELOPER_TRIGGERED_UPDATE_IN_PROGRESS
+      if (immediate) return@addOnSuccessListener startUpdate(info, AppUpdateType.IMMEDIATE)
+      if (!start) return@addOnSuccessListener
+      // a patch downloaded on an earlier run and not installed yet: installed now, at the start (nothing to lose)
+      if (info.installStatus() == InstallStatus.DOWNLOADED) { updates.completeUpdate(); return@addOnSuccessListener }
+      if (info.updateAvailability() != UpdateAvailability.UPDATE_AVAILABLE) return@addOnSuccessListener
+      val newer = info.availableVersionCode()
+      if (newer / 1000 > BuildConfig.VERSION_CODE / 1000 && info.isUpdateTypeAllowed(AppUpdateType.IMMEDIATE))
+        startUpdate(info, AppUpdateType.IMMEDIATE)
+      else if (info.isUpdateTypeAllowed(AppUpdateType.FLEXIBLE)) {
+        val prefs = getSharedPreferences("updates", MODE_PRIVATE)
+        if (prefs.getInt("asked", 0) == newer) return@addOnSuccessListener
+        prefs.edit().putInt("asked", newer).apply()
+        updates.registerListener(installListener)
+        startUpdate(info, AppUpdateType.FLEXIBLE)
+      }
+    }.addOnFailureListener { e -> Log.w("TunnelerUpdate", "no update info", e) }
+  }
+
+  private fun startUpdate(info: AppUpdateInfo, type: Int) {
+    try {
+      immediateAsked = type == AppUpdateType.IMMEDIATE
+      updates.startUpdateFlowForResult(info, updateFlow, AppUpdateOptions.newBuilder(type).build())
+    } catch (e: Exception) {
+      immediateAsked = false
+      Log.w("TunnelerUpdate", "update flow", e)
+    }
   }
 
   override fun onWebViewCreate(webView: WebView) {
@@ -140,12 +225,20 @@ class MainActivity : TauriActivity() {
   private fun back() {
     val wv = webView
     if (wv == null) { moveTaskToBack(true); return }
-    wv.evaluateJavascript("(function(){try{return !!(window.tunnelerBackExits&&window.tunnelerBackExits())}catch(e){return false}})()") { r ->
-      if (r == "true") moveTaskToBack(true)
+    onMainMenu { menu ->
+      if (menu) moveTaskToBack(true)
       else {
         wv.dispatchKeyEvent(esc(KeyEvent.ACTION_DOWN))
         wv.dispatchKeyEvent(esc(KeyEvent.ACTION_UP))
       }
+    }
+  }
+
+  // the page shows the main menu (window.tunnelerBackExits(): true there)
+  private fun onMainMenu(answer: (Boolean) -> Unit) {
+    val wv = webView ?: return answer(false)
+    wv.evaluateJavascript("(function(){try{return !!(window.tunnelerBackExits&&window.tunnelerBackExits())}catch(e){return false}})()") { r ->
+      answer(r == "true")
     }
   }
 

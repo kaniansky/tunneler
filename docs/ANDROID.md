@@ -25,6 +25,17 @@ What differs from the desktop app:
 
 - **No updater.** Google Play / the APK channel updates the app. `update_check` answers "no update";
   `update_install` / `update_page` answer an error (home.js shows no update item either way).
+- **Google Play's in-app updates** (`MainActivity.kt`, `com.google.android.play:app-update`; owner, 2026-11-04):
+  only when Google Play installed the app (installer `com.android.vending`; the APK channel and debug builds never
+  ask). At the start Play is asked for a newer version:
+  - a newer **major.minor** (`availableVersionCode / 1000` above the app's - it can't play online with the
+    servers any more): Play's full-screen *immediate* update; cancelling it (Back) closes the app, a failed
+    update lets the game go on. Coming back to the app while it runs resumes it (Play's rule);
+  - a newer **patch**: Play's *flexible* dialog, once per version (SharedPreferences `updates` / `asked`); it
+    downloads while the game goes on and installs when the app goes to the background from the main menu
+    (`window.tunnelerBackExits()` true: never in a match - Play restarts the app), else at the next start.
+  Play only offers what is live on the user's track. Testing needs a Play install: Play Console's internal app
+  sharing (or a test track) - install the older build from it, upload a newer one, open the app.
 - **Always fullscreen** (`MainActivity.kt`): immersive mode - status and navigation bars hidden, a swipe
   from the edge shows them for a moment. `set_fullscreen` / `is_fullscreen` answer an error; screen.js
   then changes nothing.
@@ -150,11 +161,12 @@ NDK build, no prebuilt binaries) - not set up.
 
 It rewrites `src-tauri/gen/android/` from the template. Then put back:
 
-- `app/src/main/java/com/kaniansky/Tunneler/MainActivity.kt` (immersive, keep screen on, Back = Esc)
+- `app/src/main/java/com/kaniansky/Tunneler/MainActivity.kt` (immersive, keep screen on, Back = Esc, Play Games
+  sign-in, saveFile, Play's in-app updates)
 - `buildSrc/src/main/java/com/kaniansky/Tunneler/kotlin/BuildTask.kt`: executable `npx`, arguments
   `--yes @tauri-apps/cli@2 android android-studio-script` (the template runs `npm run -- tauri`)
-- `app/build.gradle.kts`: the `keystoreProperties` signing block, release `signingConfig`, and
-  `usesCleartextTraffic` "true" in `defaultConfig`
+- `app/build.gradle.kts`: the `keystoreProperties` signing block, release `signingConfig`,
+  `usesCleartextTraffic` "true" in `defaultConfig`, the Play Games / app-update dependencies
 - `res/values/themes.xml`, `res/values-night/themes.xml`: `android:windowBackground` black
 - the icons: `node tools/make-icons.js` writes the `mipmap-*` icons and `res/values/ic_launcher_background.xml`
   (delete the template's `drawable/ic_launcher_background.xml` and `drawable-v24/ic_launcher_foreground.xml`)

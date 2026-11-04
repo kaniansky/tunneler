@@ -4,6 +4,16 @@ All notable changes to Tunneler. Versions follow [semantic versioning](https://s
 by pushing a version tag (see CONTRIBUTING.md). Up to its version 6.0.1 the game was called Tunneler Online:
 those releases are tagged `online-vX.Y.Z`, their changes are in [docs/CHANGELOG-online.md](docs/CHANGELOG-online.md).
 
+## 1.5.1
+
+Plays with 1.5.0 (nothing in the game changed).
+
+- The Android app from Google Play updates itself: at the start it asks Google Play for a newer version. A new
+  major.minor (one that the old app can't play online with) is Google Play's full-screen update - the game starts
+  once it's installed; a new patch is Google Play's update dialog, once per version, downloaded while you play and
+  installed when you leave the app from the main menu (never in a match) or at the next start. The .apk from GitHub
+  is updated by hand as before.
+
 ## 1.5.0
 
 1.5 - a new minor version: plays only with 1.5 pages and servers.

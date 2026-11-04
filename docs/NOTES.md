@@ -1303,7 +1303,10 @@ page from before 2.0 - is refused (POST 409 `{code:
   `window.tunnelerBackExits()` (home.js: true on the main menu) - then the app goes to the background;
   `window.TunnelerAndroid.saveFile(name, base64)` (a JavascriptInterface: a page's download does nothing in the
   web view) writes into Downloads via MediaStore (Android 10+; the same name it saved before is written over;
-  older: the app's own Downloads folder) and returns where - replays.js's Save as a file uses it. CI: app-build.yml job `android` (universal
+  older: the app's own Downloads folder) and returns where - replays.js's Save as a file uses it. Google Play's
+  in-app updates (owner, 2026-11-04; ANDROID.md): Play installs only; a newer major.minor = the immediate
+  (blocking) update, cancelled = the app closes; a newer patch = the flexible dialog once per version, installed
+  when the app leaves from the main menu or at the next start. CI: app-build.yml job `android` (universal
   APK + AAB, signed with the ANDROID_KEYSTORE* secrets when present, else `-android-unsigned`), attached to releases.
 - **Phone layout** (DESIGN-8P 32, owner 2026-10-24): `GameScreen.mobile()` (screen.js) = the Android app or a
   touch-only device. Mobile: no split screen (home.js `MOBILE` hides it), no player 2 (`KINDS` without "p2";
