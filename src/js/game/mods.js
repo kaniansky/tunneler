@@ -9,8 +9,9 @@
 // Mods.load() - a page awaits it before it makes an engine with a mod (never in the normal page load: its own chunk and
 // /js/vendor/quickjs.wasm, ~500 KB).
 //
-//   Mods.load() -> Promise of the QuickJS module (loaded once, then cached; tests: Mods.wasmLoader = () => the .wasm
-//                 bytes - node has no fetch for files)      Mods.ready() -> loaded      Mods.newModule() -> another one
+//   Mods.load() -> Promise of the QuickJS module (cached until a sandbox runs in it, then a fresh one - 1.5.2; tests:
+//                 Mods.wasmLoader = () => the .wasm bytes - node has no fetch for files)      Mods.ready() -> loaded
+//                 Mods.newModule({maxMemory}?) -> another one (maxMemory: its WebAssembly memory's cap, tests)
 //   Mods.idOf(src) -> the mod's id: 10 characters (map ids' alphabet) of the SHA-256 of the file's bytes - a changed
 //                 mod is a new mod. src: the file as text (UTF-8) or bytes
 //   Mods.parseHeader(src) -> {ok: true, name, by, about, game, ranges, version, mode, tanks: {min, max}, bases: {min, max}
@@ -336,16 +337,24 @@ function check(src, game) {
 }
 
 // ---------------------------------------------------------------- QuickJS (loaded on demand)
-let QM = null, loading = null;
-async function newModule() {
+// (1.5.2: a fresh module once the current one has run a sandbox - Mods.load() before each modded game makes it: a mod
+// that died keeps its runtime (Sandbox.dispose), and QuickJS's memory limit doesn't hold in WebAssembly (its allocator
+// can't tell a block's size - each counts a few bytes), so only dropping the whole module gives the memory back: the
+// old module goes with its last engine. QuickJS plays the same in any module - mods-check: "the same in a fresh QuickJS")
+let QM = null, loading = null, wasmBin = null;
+const used = new WeakSet();                          // modules a sandbox was made in
+// o.maxMemory (bytes, tests): the module's WebAssembly memory can't grow past it - an allocation over it fails there
+async function newModule(o) {
   const Q = await import("../vendor/quickjs.js");
   const bin = Mods.wasmLoader ? await Mods.wasmLoader()
-    : await fetch(WASM_URL).then(r => { if (!r.ok) throw new Error("quickjs.wasm: HTTP " + r.status); return r.arrayBuffer(); });
-  return Q.newQuickJSWASMModuleFromVariant(Q.newVariant(Q.variant, { wasmBinary: bin }));
+    : await (wasmBin || (wasmBin = fetch(WASM_URL).then(r => { if (!r.ok) throw new Error("quickjs.wasm: HTTP " + r.status); return r.arrayBuffer(); })
+      .catch(e => { wasmBin = null; throw e; })));
+  const mem = o && o.maxMemory ? { wasmMemory: new WebAssembly.Memory({ initial: 256, maximum: Math.max(256, o.maxMemory >> 16) }) } : {};
+  return Q.newQuickJSWASMModuleFromVariant(Q.newVariant(Q.variant, Object.assign({ wasmBinary: bin }, mem)));
 }
 function load() {
-  if (QM) return Promise.resolve(QM);
-  return loading || (loading = newModule().then(m => (QM = m), e => { loading = null; throw e; }));
+  if (QM && !used.has(QM)) return Promise.resolve(QM);
+  return loading || (loading = newModule().then(m => { loading = null; return (QM = m); }, e => { loading = null; throw e; }));
 }
 
 // ---------------------------------------------------------------- the sandbox's own code (QuickJS, before the mod)
@@ -583,6 +592,7 @@ const reg = typeof FinalizationRegistry === "function" ? new FinalizationRegistr
 class Sandbox {
   constructor(QMod, info, seed) {
     this.info = info; this.dead = null; this.ticks = 0; this.has = {}; this.e = null; this.depth = 0;
+    used.add(QMod);
     this.rt = QMod.newRuntime();
     this.rt.setMemoryLimit(MEMORY);
     this.rt.setMaxStackSize(STACK);
@@ -672,7 +682,7 @@ class Sandbox {
     this.disposed = true;
     // (a mod that died - out of memory, its stack, its budget, a throw: its runtime may hold objects QuickJS can't free
     // any more - freeing it aborted the whole module in CI, JS_FreeRuntime's gc_obj_list assertion: left to go with the
-    // module, at most MEMORY each - a mod's failure is rare)
+    // module - a fresh one per modded game, load() above)
     if (this.dead) return;
     try { if (this.entry) this.entry.dispose(); this.ctx.dispose(); this.rt.dispose(); }
     catch (x) { QM = null; loading = null; }       // (the WebAssembly aborted: a new module next time)

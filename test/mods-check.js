@@ -401,7 +401,9 @@ mod({ onHit(g, s, t, fired) { T.hits++; if (!Number.isInteger(fired) || fired < 
     const FAILS = [
       { name: "over its budget", why: "budget", body: "mod({ frame(g) { if (g.frame === 40) for (;;) {} } });" },
       { name: "a throw", why: "error", body: "mod({\n  frame(g) {\n    if (g.frame === 40) null.x = 1;\n  },\n});", detail: /TypeError.*\.tmod\.js:5/ },
-      { name: "out of memory", why: "memory", body: "mod({ frame(g) { if (g.frame === 40) { const a = []; for (;;) a.push(new Array(100000).fill(g.frame)); } } });" },
+      // (cap: each run in its own QuickJS, its WebAssembly memory capped at 64 MB - QuickJS's own limit doesn't hold in
+      // WebAssembly, uncapped this grows to the 2 GB the module allows)
+      { name: "out of memory", why: "memory", cap: true, body: "mod({ frame(g) { if (g.frame === 40) { const a = []; for (;;) a.push(new Array(100000).fill(g.frame)); } } });" },
       { name: "its stack", why: "stack", body: "function f(n) { return f(n + 1) + 1; }\nmod({ frame(g) { if (g.frame === 40) f(0); } });" },
       { name: "calls inside calls", why: "error", body: "mod({ frame(g) { if (g.frame === 40) g.destroy(1); }, onKill(g, p) { g.respawn(p); g.destroy(p); } });", detail: /inside calls/ },
       { name: "a wrong call", why: "error", body: "mod({ frame(g) { if (g.frame === 40) g.rules({ hitDamage: 1 }); } });", detail: /only in init/ },
@@ -415,7 +417,8 @@ mod({ onHit(g, s, t, fired) { T.hits++; if (!Number.isInteger(fired) || fired < 
       const src = modText({ name: "Fails" }, F.body);
       const events = [];
       Mods.onEvent(ev => { if (ev.id === Mods.idOf(src)) events.push(ev); });
-      const a = modMatch(src, { seed: 6 }), b = modMatch(src, { seed: 6 });
+      const capped = async () => F.cap ? { quickjs: await Mods.newModule({ maxMemory: 64 << 20 }) } : {};
+      const a = modMatch(src, Object.assign({ seed: 6 }, await capped())), b = modMatch(src, Object.assign({ seed: 6 }, await capped()));
       const at = F.at === undefined ? 40 : F.at;
       check(a.finished && a.why === F.why && a.stopAt === at && (!F.detail || F.detail.test(a.detail)),
         "the mod stops - " + F.name + ": " + a.why + " at frame " + a.stopAt + (a.detail ? " (" + a.detail + ")" : "") + ", the match finishes");

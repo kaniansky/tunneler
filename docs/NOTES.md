@@ -341,8 +341,13 @@ joystick drives the tank, the end map / menu without them, a tap beside the map 
   Engine: option `mod: {id, source}` -> `engine.modInfo` (throws for a file that isn't a playable mod / QuickJS not
   loaded), game mode `mod:<id>` registered with `TunnelerEngine.registerMode` (a composite over its @mode's hooks;
   `textsOf` = the @mode's texts), always extended; slots may carry `ai: true` (`g.tank(p).human`). A fresh runtime +
-  context per match (made in the mode's init; `engine.dispose()` / the next match / a FinalizationRegistry frees it):
-  32 MB, a stack limit, `Mods.BUDGET` = 20 interrupt-handler calls per call into the sandbox (QuickJS calls it every
+  context per match (made in the mode's init; `engine.dispose()` / the next match / a FinalizationRegistry frees it; a
+  mod that died is never freed - JS_FreeRuntime may abort - so since 1.5.2 `Mods.load()` makes a fresh QuickJS module
+  once the current one ran a sandbox: the old one goes with its last engine; mods-check's out of memory runs in modules
+  capped at 64 MB, `Mods.newModule({maxMemory})` - uncapped it took 2 GB):
+  32 MB set (it doesn't hold: QuickJS in WebAssembly counts each block a few bytes - malloc_usable_size is 0 there, the
+  quickjs-ng variant too; out of memory only at the module's 2 GB; a cap via the module's `wasmMemory` maximum changes
+  when a mod stops: 1.6), a stack limit, `Mods.BUDGET` = 20 interrupt-handler calls per call into the sandbox (QuickJS calls it every
   ~10000 interpreter polls: ~5000 loop rounds; the example mods' worst call is 1 - mods-check keeps 10x); no Math.random /
   Date / WeakRef / FinalizationRegistry, `g.random` = its own PRNG from the engine's RandSeed at the match's start (read,
   never drawn). Bridge: a JSON snapshot of plain numbers in, a queue of actions out (integers only, every value checked

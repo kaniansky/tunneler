@@ -4,6 +4,14 @@ All notable changes to Tunneler. Versions follow [semantic versioning](https://s
 by pushing a version tag (see CONTRIBUTING.md). Up to its version 6.0.1 the game was called Tunneler Online:
 those releases are tagged `online-vX.Y.Z`, their changes are in [docs/CHANGELOG-online.md](docs/CHANGELOG-online.md).
 
+## 1.5.2
+
+Plays with 1.5.0 and 1.5.1 (nothing in the game changed).
+
+- A mod that stopped (an error, its budget, out of memory) no longer keeps its memory until the page is reloaded: each
+  game with a mod runs in its own QuickJS, which goes away with the game.
+- Tests: the mods test no longer takes 2 GB of memory (its out-of-memory mod runs in a QuickJS with capped memory).
+
 ## 1.5.1
 
 Plays with 1.5.0 (nothing in the game changed).

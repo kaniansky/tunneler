@@ -261,7 +261,8 @@ A broken `@bases`, `@setting` or `@hide` line makes the file not a mod (the Mods
 - **Work**: every call into the mod (a hook, the file's top level) has a budget, counted inside the sandbox - the same
   on every computer, never wall time. It is about 100,000 loop rounds: far more than a mod needs each frame (the
   example mods use a twentieth of it). Don't loop over every pixel of the world in a frame.
-- **Memory**: 32 MB; a stack limit (deep recursion); hooks calling the game calling hooks: at most 8 deep.
+- **Memory**: keep a mod's data small - a few MB is plenty (the 32 MB limit isn't enforced yet; a mod that takes
+  hundreds of MB can make a phone close the game); a stack limit (deep recursion); hooks calling the game calling hooks: at most 8 deep.
 - A mod that throws, goes over its budget, runs out of memory or stack **stops** - on every computer at the same frame.
   The match goes on as its `@mode` (or the standard game), and the players see "The mod Hot potato stopped: ...". It
   doesn't run again in that match.

@@ -56,7 +56,9 @@ The mod runs in **QuickJS** (a small JavaScript engine) compiled to WebAssembly 
   them, so results are bit-identical in every browser. `Math.random` and `Date` are removed (the mod gets `g.random(n)`:
   a PRNG seeded from the match, its own stream - the engine's `Random()` order never changes); `Object` iteration order
   is the spec's (deterministic).
-- **Limits**: 32 MB memory, a stack limit, and an **instruction budget per frame** (QuickJS's interrupt counter -
+- **Limits**: memory (32 MB is set, but QuickJS in WebAssembly can't tell a block's size, so it doesn't hold: a mod
+  can take memory until the WebAssembly's 2 GB - a cap is for 1.6; since 1.5.2 a QuickJS module per modded game, so a
+  stopped mod's memory goes with its game), a stack limit, and an **instruction budget per frame** (QuickJS's interrupt counter -
   counted in the WebAssembly, the same on every page). A mod over its budget, out of memory, or throwing: **the mod
   stops** - on every page at the same frame - and the match goes on as its built-in mode (or standard), with a message
   ("the mod Hot potato stopped: ..."). No page can fall out of sync because of a mod.
