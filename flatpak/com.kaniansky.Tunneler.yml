@@ -17,8 +17,8 @@ modules:
     buildsystem: simple
     sources:
       - type: file
-        url: https://github.com/kaniansky/tunneler/releases/download/v1.5.3/tunneler-1.5.3_amd64.deb
-        sha256: b0eeb6627ce9ea4cb6f8a507d6ba3d9f1a9c3facb18dcd20450f4d5b3f9838c5
+        url: https://github.com/kaniansky/tunneler/releases/download/v1.5.4/tunneler-1.5.4_amd64.deb
+        sha256: 589b708ad853c82061faf869e90dc65d09fbf4b40ef3b01c71e4310c7b27dea4
         dest-filename: tunneler.deb
         only-arches: [x86_64]
         x-checker-data:
@@ -28,8 +28,8 @@ modules:
           url-query: '"https://github.com/kaniansky/tunneler/releases/download/v" + $version + "/tunneler-" + $version + "_amd64.deb"'
           is-main-source: true
       - type: file
-        url: https://github.com/kaniansky/tunneler/releases/download/v1.5.3/tunneler-1.5.3_arm64.deb
-        sha256: ef17a93cd016dfcf1b341e9fced9e3f3e95bfd28d39ee18ffd796dda53fc7658
+        url: https://github.com/kaniansky/tunneler/releases/download/v1.5.4/tunneler-1.5.4_arm64.deb
+        sha256: b9197f71be150407a7bd3b45be6272f138fe422df849d24c59f6997e9fd61e33
         dest-filename: tunneler.deb
         only-arches: [aarch64]
         x-checker-data:
@@ -39,8 +39,8 @@ modules:
           url-query: '"https://github.com/kaniansky/tunneler/releases/download/v" + $version + "/tunneler-" + $version + "_arm64.deb"'
       - type: git
         url: https://github.com/kaniansky/tunneler.git
-        tag: v1.5.3
-        commit: c6a49e1e8d5bbe632107b90fb62c71ef9d33979f
+        tag: v1.5.4
+        commit: e2269ea1ec6e00dfa327d08bd680607b076f3df7
         dest: upstream
         x-checker-data:
           type: git
