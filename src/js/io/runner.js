@@ -4,7 +4,7 @@ import { TunnelerEngine } from "../game/engine.js";
 import { Debug } from "../ui/debug.js";
 import { Scope } from "../scope.js";
 
-const TICK_MS = TunnelerEngine.TICK_MS;
+const TICK_MS = TunnelerEngine.TICK_MS, WATCH_MS = 250;
 
 class Runner {
   constructor(engine, display, speaker) {
@@ -75,9 +75,23 @@ class LocalClock {
     this.inputFn = inputFn;
     this.start = performance.now();
     this.steps = 0;
-    this.timer = setInterval(() => this.pump(), 5);
+    this.exact = 0;
+    // (an interval starts the steps' timeouts and then watches them, WATCH_MS - pages in tests have no intervals:
+    // no clock there, as before)
+    this.timer = setInterval(() => this.watch(), 5);
   }
+  watch() {
+    if (!this.watching) { clearInterval(this.timer); this.watching = true; this.timer = setInterval(() => this.watch(), WATCH_MS); }
+    if (!this.exact && !this.stopped) this.pump();
+  }
+  // (a timeout for when the next step is due - not an interval every 5 ms: 200 wake-ups a second for 18 steps kept a
+  // phone's processor from resting; owner, 2026-11-11: 4.5 % of the battery in 10 minutes)
   pump() {
+    this.exact = 0;
+    this.pumpSteps();
+    if (!this.stopped) this.exact = setTimeout(() => this.pump(), Math.max(0, Math.ceil(this.start + (this.steps + 1) * TICK_MS - performance.now()) + 1));   // (+1: never woken just before)
+  }
+  pumpSteps() {
     const now = performance.now();
     let due = Math.floor((now - this.start) / TICK_MS);
     // (the tab was asleep - or every frame takes longer than 10 ticks on a slow device: one step, not none, so the
@@ -89,7 +103,7 @@ class LocalClock {
       this.steps++;
     }
   }
-  stop() { clearInterval(this.timer); this.stopped = true; }
+  stop() { clearInterval(this.timer); clearTimeout(this.exact); this.stopped = true; }
 }
 
 export { Runner, LocalClock };

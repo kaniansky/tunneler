@@ -51,7 +51,8 @@ may be redesigned, but always in the original's DOS look.
   lazy chunk. `nav.js` `Nav.go(url[, replace])` = history.pushState + the new route (another origin: a page
   load) - pages never set `location.href` themselves. `scope.js`: the route scope - `Scope.install()` (app.js)
   makes every event listener, timeout, interval, animation frame and WebSocket made while a route runs go
-  with it (removed / cleared / closed, the socket's handlers taken off first); registries call
+  with it (removed / cleared / closed, the socket's handlers taken off first; a timeout / animation frame is forgotten
+  once it ran or was cleared - `s.once`, 1.5.4: loops that set the next one kept them all, test/scope-check.js); registries call
   `Scope.onEnd` (UniFont.onLoad, Controls.onChange, GameScreen.onChange, Speaker (its AudioContext closed),
   Gfx displays, Pads' touch controls / toast); app-wide things use `Scope.free(fn)` (Gfx's frame loop, the
   overlay) or are made at import time. The canvases persist across routes (`resetScreen`: cursor, status line
@@ -774,6 +775,17 @@ tick after the frame arrived (its phase: anything from 0 to 55 ms, measured 1.5 
 least time a frame waited over half a second; above `SLACK_MS` (4) the clock moves that much earlier (never later -
 a late frame runs when it comes). Measured on localhost: buffer 2 - 7 ms. Test: net-page-smoke.js (frames 30 ms
 early: ~32 ms waits before, under 15 after a second).
+
+Battery (1.5.4; owner, 2026-11-11: 4.5 % in 10 minutes on a 120 Hz phone): the clocks wake only when there is
+something to do. runner.js `LocalClock`: a timeout for the next step's time (+1 ms: a timer can fire just before
+performance.now() reaches it), not a 5 ms interval (200 wake-ups a second); online.js `pumpTick`: a timeout for
+`nextAt` (+1 ms - woken just before it, the half second's early frame took the due frame's place and the jitter buffer
+stayed full), a frame's arrival (`pumpSoon(0)` - a wake already set for sooner is never moved later: frames
+arriving in bursts on a slow device kept moving it, and the game stood still), at most `PUMP_IDLE_MS` (50), not a 4 ms
+interval. Both are started by
+an interval that then watches them every 250 ms (pages in tests have no intervals - no clock there, as before).
+surface.js: at most ~60 pictures a second (`FRAME_MS`), and a phone's modern picture at most 2 device pixels per CSS
+pixel (`PHONE_DPR`, `outScale`; Debug info's quality shows the result).
 
 ## Languages (`lang.js`, `src/lang/<code>/`, `glyphs.js`)
 

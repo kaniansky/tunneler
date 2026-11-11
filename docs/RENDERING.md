@@ -33,7 +33,7 @@ changes the engine, the AI, the protocol or replays (a patch).
   `Surface.source(#screen)`, StatusLine into `Surface.source(#status)` (their `canvas` stays the element: its box, its
   events; `this.src` is the picture). Every paint (`putImageData` on a source) composes the surface in a microtask; an
   animation frame loop catches elements that moved and the modern pictures that move - at most ~60 a second (`FRAME_MS`:
-  a 90 / 120 / 144 Hz screen skips the frames in between; owner, 2026-11-11: a 120 Hz phone was choppy drawing every one). gfx.js `Presenter` = one layer's
+  a 90 / 120 / 144 Hz screen skips the frames in between; owner, 2026-11-11: a 120 Hz phone was choppy drawing every one); a phone's modern picture is at most 2 device pixels per CSS pixel - `PHONE_DPR`, 1.5.4). gfx.js `Presenter` = one layer's
   modern picture in a framebuffer of the surface's WebGL2 context. The touch controls' pictures (pads.js: the tank knob,
   the shell) are `<img>`s painted from offscreen canvases. `el.surfaceSource` = the element's source (screen.js's
   integer scaling).

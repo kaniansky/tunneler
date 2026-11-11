@@ -65,6 +65,7 @@ const TESTS = [
   "idle-sim.js",
   "update-check.js",
   "endpoint-check.js",
+  "scope-check.js",
   "gfx-check.js",
   "gfx-text-check.js",
   "modes-check.js quick only=core",

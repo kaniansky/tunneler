@@ -15,6 +15,7 @@
 import { Gfx, Presenter } from "./gfx.js";
 import { Scope } from "../scope.js";
 import { Debug } from "../ui/debug.js";
+import { GameScreen } from "../io/screen.js";
 const root = globalThis;
 
 const layers = [];          // {el, src, painted, dirty (the source changed), gfxDirty (modern), pres, srcTex, rect}
@@ -136,6 +137,9 @@ function schedule() {
 // uneven (owner, 2026-11-11: choppy on a 120 Hz phone). A frame up to EARLY_MS before the next picture is due draws
 // (a 60 Hz screen's frames all draw), the phase kept while on time; a frame whose clock didn't move on draws too.
 const FRAME_MS = 1000 / 60, EARLY_MS = 3;
+const PHONE_DPR = 2;
+// the modern picture's size in device pixels per layer pixel: the quality, a phone's cap (compose)
+const outScale = (dpr = root.devicePixelRatio || 1) => Gfx.qualityScale() * (dpr > PHONE_DPR && GameScreen.mobile() ? PHONE_DPR / dpr : 1);
 let nextAt = 0;                                            // (when the next picture is due)
 function tick(now) {
   raf = 0;
@@ -160,7 +164,7 @@ Debug.provide("screen", () => {
   const m = gl ? Gfx.modern() : null, modern = !!gl && Gfx.mode() === "modern";
   return { look: Gfx.mode(), canvas: gl ? "webgl2" + (lost ? " (lost)" : "") : c2d ? "2d" : "none",
     size: canvas ? canvas.width + "x" + canvas.height : "", dpr: root.devicePixelRatio || 1,
-    quality: modern ? (m.quality === "auto" ? "auto:" + Gfx.autoQuality() : m.quality) + " x" + Gfx.qualityScale() : "",
+    quality: modern ? (m.quality === "auto" ? "auto:" + Gfx.autoQuality() : m.quality) + " x" + +outScale().toFixed(3) : "",
     depth: modern ? Gfx.depth(m) + (Gfx.no3d() ? " (no 3d: " + Gfx.no3d() + ")" : "") : "",
     heap: root.performance && root.performance.memory ? Math.round(root.performance.memory.usedJSHeapSize / 1048576) + " MB" : "" };
 });
@@ -179,7 +183,10 @@ function compose(now, frame) {
   if (frame) lastNow = now; else now = lastNow;           // (one clock for both: a moving picture never goes back in time)
   if (modern && frame && Gfx.modern().quality === "auto")
     Gfx.autoFrame(now, layers.some(L => L.painted && L.painted.scene && L.painted.scene.windows && L.painted.scene.windows.length));
-  const q = modern ? Gfx.qualityScale() : 1;
+  // (a phone: the modern picture at most 2 device pixels per CSS pixel - PHONE_DPR; the 8T's 2.625 drew 1.7 times the
+  // pixels through the world shader for a difference too small to see on its screen, and ate the battery; owner,
+  // 2026-11-11. The canvas keeps the screen's pixels: the picture is scaled up smoothly onto it)
+  const q = modern ? outScale(dpr) : 1;
   const shown = [];
   for (const L of layers) {
     const r = L.el.getBoundingClientRect ? L.el.getBoundingClientRect() : null;

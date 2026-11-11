@@ -12,7 +12,7 @@ const live = () => current && !freeDepth ? current : null;
 export const Scope = {
   // a new route starts (the previous one must have ended)
   begin() {
-    current = { ends: [], alive: true };
+    current = { ends: [], once: new Map(), alive: true };
     return current;
   },
   // the route ends: its registrations undone, last first
@@ -20,6 +20,8 @@ export const Scope = {
     if (!s || !s.alive) return;
     s.alive = false;
     if (current === s) current = null;
+    for (const [cancel, ids] of s.once) for (const id of ids) try { cancel.call(root, id); } catch (e) { /* gone */ }
+    s.once.clear();
     for (const f of s.ends.splice(0).reverse()) try { f(); } catch (e) { if (root.console) console.warn("scope:", e); }
   },
   // fn runs when the current route ends (no route running: never - an app-wide registration)
@@ -52,9 +54,33 @@ function install() {
       return id;
     };
   };
-  wrap("setTimeout", "clearTimeout");
+  // (one-shot timers - timeouts, animation frames - are forgotten once they ran or were cleared: a loop that sets the
+  // next one every frame or tick kept them all, 60 - 250 a second for as long as the route ran - and a 0 ms loop
+  // millions; owner, 2026-11-11: "the tests eat up all my memory")
+  const once = (set, clear) => {
+    const orig = root[set], cancel = root[clear];
+    if (typeof orig !== "function" || typeof cancel !== "function") return;
+    root[set] = function (fn, ...rest) {
+      const s = live();
+      if (!s || typeof fn !== "function") {
+        const id = orig.call(root, fn, ...rest);
+        if (s) s.ends.push(() => cancel.call(root, id));
+        return id;
+      }
+      let ids = s.once.get(cancel);
+      if (!ids) s.once.set(cancel, ids = new Set());
+      const id = orig.call(root, function (...a) { ids.delete(id); return fn.apply(this, a); }, ...rest);
+      ids.add(id);
+      return id;
+    };
+    root[clear] = function (id) {
+      if (current) { const ids = current.once.get(cancel); if (ids) ids.delete(id); }
+      return cancel.call(root, id);
+    };
+  };
+  once("setTimeout", "clearTimeout");
   wrap("setInterval", "clearInterval");
-  wrap("requestAnimationFrame", "cancelAnimationFrame");
+  once("requestAnimationFrame", "cancelAnimationFrame");
   const WS = root.WebSocket;
   if (typeof WS === "function") {
     const Tracked = function (...a) {

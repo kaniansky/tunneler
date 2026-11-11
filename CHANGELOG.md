@@ -4,6 +4,15 @@ All notable changes to Tunneler. Versions follow [semantic versioning](https://s
 by pushing a version tag (see CONTRIBUTING.md). Up to its version 6.0.1 the game was called Tunneler Online:
 those releases are tagged `online-vX.Y.Z`, their changes are in [docs/CHANGELOG-online.md](docs/CHANGELOG-online.md).
 
+## 1.5.4
+
+Plays with 1.5.0 - 1.5.3 (nothing in the game changed).
+
+- Less battery on phones: the game's clock wakes only when a step is due (about 18 times a second, online when a frame
+  is due or arrives) instead of 200 - 250 times a second, and on a phone the modern look draws at most 2 pixels per
+  screen point (a 2.6x screen drew 70 % more pixels for a difference too small to see).
+- A page forgets each timer once it ran: games that set the next one every frame kept them all for as long as they ran.
+
 ## 1.5.3
 
 Plays with 1.5.0, 1.5.1 and 1.5.2 (nothing in the game changed).

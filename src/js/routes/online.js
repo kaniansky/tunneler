@@ -367,7 +367,31 @@ export function mount() {
     }
     if (isPlayer()) sendKeys();
   }
-  setInterval(pump, 4);
+  // (the loop wakes when there is something to do - the next frame's time, a frame arriving (pumpSoon in "f"), at
+  // least every PUMP_IDLE_MS - not every 4 ms: 250 wake-ups a second kept a phone's processor from resting; owner,
+  // 2026-11-11: 4.5 % of the battery in 10 minutes)
+  const PUMP_IDLE_MS = 50, PUMP_WATCH_MS = 250;
+  let pumpTimer = 0, pumpAt = 0;
+  // (a wake already set for sooner is kept - never pushed later: on a slow device frames arrive in bursts between long
+  // pictures, and each one moving the 0 ms wake again kept it from ever coming - the game stood still)
+  function pumpSoon(ms) {
+    const at = performance.now() + Math.max(0, ms);
+    if (pumpTimer && pumpAt <= at) return;
+    if (pumpTimer) clearTimeout(pumpTimer);
+    pumpAt = at; pumpTimer = setTimeout(pumpTick, Math.max(0, ms));
+  }
+  function pumpTick() {
+    pumpTimer = 0;
+    pump();
+    // (+1: a timer can fire a little before performance.now() reaches its time - woken just before nextAt, the half
+    // second's early frame took the due frame's place instead of running besides it, and the buffer stayed full)
+    pumpSoon(catching && runner ? 0 : queue.length ? Math.min(PUMP_IDLE_MS, Math.ceil(nextAt - performance.now()) + 1) : PUMP_IDLE_MS);
+  }
+  // (started by an interval, which then watches it - pages in tests have no intervals)
+  let pumpWatch = setInterval(() => {
+    if (pumpWatch !== true) { clearInterval(pumpWatch); pumpWatch = true; setInterval(() => { if (!pumpTimer) pumpTick(); }, PUMP_WATCH_MS); }
+    if (!pumpTimer) pumpTick();
+  }, 4);
 
   // ------------------------------------------------------------ input
   // either tank's keys drive your tank (controls.js: remappable; defaults W A S D / arrows / keypad 8 2 4 6,
@@ -1542,6 +1566,7 @@ export function mount() {
         if (!queue.pushEntries(m.f) && ws) ws.close();     // (a malformed entry - e.g. a bad drive marker: reconnect resumes)
         arrived = { end: frames + queue.length, at: performance.now() };
         if (!catching && queue.length) slack = Math.min(slack, nextAt + (queue.length - 1) * TICK_MS - arrived.at);
+        if (pumpWatch === true) pumpSoon(0);               // (it may be due already)
         break;
       case "st": {
         // somebody new in the room (a seat taken or a spectator): the join sound
