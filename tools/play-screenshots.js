@@ -1,6 +1,6 @@
 // The Google Play screenshots (docs/play-store/screenshots/): the same 8 screens on a phone held upright
 // (360 x 720 at 3x = 1080 x 2160) and on 7" / 10" tablets held sideways (960 x 600 / 1280 x 800 at 2x =
-// 1920 x 1200 / 2560 x 1600), graphics modern, touch:
+// 1920 x 1200 / 2560 x 1600), graphics modern, touch, as the Android app (window.TunnelerAndroid):
 //   1 the main menu (a new player's: the training ground chosen), 2 the training ground (a step's hint over the game),
 //   3 a battle (your own view, the touch controls), 4 four tanks (everyone's views), 5 an online game's lobby (quick
 //   play, chat), 6 the daily challenge's leaderboard, 7 the map editor, 8 the medals (1.4: 2 and 8 were the skirmish's
@@ -117,6 +117,8 @@ function drawMap() {
         const ctx = await b.newContext(touch ? { viewport: { width: w, height: h }, deviceScaleFactor: dpr, isMobile: true, hasTouch: true }
           : { viewport: { width: 1000, height: 820 } });
         await ctx.addInitScript(o => { for (const k in o) localStorage.setItem(k, o[k]); }, Object.assign({}, LS, ls));
+        // (the phone / tablet as the Android app the store sells: no QUIT button - the phone's Back is Esc - pads.js)
+        if (touch) await ctx.addInitScript(() => { window.TunnelerAndroid = window.TunnelerAndroid || {}; });
         const p = await ctx.newPage(); p.on("pageerror", e => errs.push(dev + " " + url + ": " + e.message));
         await p.goto(B + url); return p;
       };

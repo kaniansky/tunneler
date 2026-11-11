@@ -117,7 +117,7 @@ const STRINGS_EN = {
         "arrows, <ENTER> and <ESC>, Y as <TAB>, LB / RB and LT / RT as [ ] and - + (the map editor's tool, " +
         "brush and zoom; a replay's speed).  On phones and tablets an on-screen joystick and the FIRE, " +
         "ESC and SCORE buttons appear with the first touch (ESC says QUIT in a skirmish, LEAVE online; while your " +
-        "tank is destroyed only it stays); names and chat still need a keyboard."],
+        "tank is destroyed only it stays; the Android app has no ESC button: the phone's Back does it); names and chat still need a keyboard."],
       ["Winning:  ", "The first tank (or team) to win the chosen number of rounds - 1 to 9, the " +
         "original is 3 - wins the match.  A round can also have a time limit of 2, 3, 5 or 10 minutes " +
         "(the last 30 seconds count down beside the instrument panel).  When the time is up, the side " +

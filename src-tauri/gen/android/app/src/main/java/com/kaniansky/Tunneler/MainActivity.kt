@@ -186,8 +186,10 @@ class MainActivity : TauriActivity() {
     }
   }
 
-  // Back: added once the app is up, after Tauri's own app plugin added its handler (history back) - the
-  // handler added last is asked first
+  // Back: added once the app is up. Tauri's own app plugin adds a handler too (history back while the web view has
+  // history, else the next handler) - the handler added last is asked first, and which one that is is a race (the
+  // plugin can come after onPostResume). The pages keep no history in this app (app.js noHistory), so Tauri's handler
+  // always passes Back on to this one
   // signed in already (Play Games signs in by itself at start), else the sign-in dialog; then the server auth code
   // (a failure logged as TunnelerPlayGames; Google's own reason: tag PlayGamesServices[SignInAuthenticator] - ACCOUNTS.md 6)
   private fun playGamesSignIn() {

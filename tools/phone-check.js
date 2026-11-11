@@ -52,7 +52,7 @@ const layout = p => p.evaluate(() => {
   const root = document.querySelector(".tpad-stick") && document.querySelector(".tpad-stick").parentElement;
   return {
     canvas: r(document.getElementById("screen")), stick: r(document.querySelector(".tpad-stick")),
-    fire: r(document.querySelector(".tpad-fire")), esc: r(document.querySelector(".tpad-esc")),
+    fire: r(document.querySelector(".tpad-fire")), esc: r(document.querySelector(".tpad-esc")), stats: r(document.querySelector(".tpad-stats")),
     shown: !!root && !root.hidden && getComputedStyle(root).display !== "none",
     vw: innerWidth, vh: innerHeight,
     sw: document.scrollingElement.scrollWidth, sh: document.scrollingElement.scrollHeight
@@ -70,7 +70,13 @@ async function playChecks(ctx, p, file, tank) {
   await p.screenshot({ path: file("play") });
   ok(L.shown && L.stick && L.fire, "touch controls shown (joystick " + fmt(L.stick) + ", FIRE " + fmt(L.fire) + ")");
   ok(inside(L.canvas, L), "the canvas on the screen (" + fmt(L.canvas) + " in " + L.vw + "x" + L.vh + ")");
-  ok(!overlap(L.canvas, L.stick) && !overlap(L.canvas, L.fire) && !overlap(L.canvas, L.esc), "the canvas off the joystick, FIRE and ESC");
+  // (ESC in the top left corner - upright the game below it; SCORE above FIRE - owner, 2026-11-11)
+  const upright = L.vh > L.vw;
+  ok(!overlap(L.canvas, L.stick) && !overlap(L.canvas, L.fire) && !overlap(L.canvas, L.esc) && !overlap(L.canvas, L.stats),
+    "the canvas off the joystick, FIRE, ESC and SCORE");
+  ok(L.esc && L.esc.x < 20 && L.esc.y < 60 && L.stats && L.stats.y + L.stats.h <= L.fire.y + 1 &&
+    Math.abs(L.stats.x + L.stats.w / 2 - (L.fire.x + L.fire.w / 2)) < 2 && !overlap(L.stats, L.stick) && !overlap(L.esc, L.stick),
+    "ESC in the top left corner" + (upright ? ", the game below it" : "") + ", SCORE above FIRE (ESC " + fmt(L.esc) + ", SCORE " + fmt(L.stats) + ")");
   ok(L.sw <= L.vw && L.sh <= L.vh, "no page scroll (" + L.sw + "x" + L.sh + ")");
   if (!L.stick) return;
   // a held drag up (touch events through the DevTools protocol)

@@ -329,7 +329,8 @@ second GREEN (the keyboard still works); against the computer and online any gam
 In menus the d-pad moves, A selects, B goes back.
 
 **Phones and tablets**: touch the screen and an on-screen joystick (left) and a FIRE button (right)
-appear, plus ESC and SCORE (held: the score) buttons; they drive your tank (BLUE in split screen). Tap menu items to choose them.
+appear, plus SCORE (above FIRE, held: the score) and ESC (top left; the Android app has none - the phone's Back is
+Esc); they drive your tank (BLUE in split screen). Tap menu items to choose them.
 The game fits the screen in portrait and landscape.
 
 The rules are in the game's own *Instructions* page: win the set number of rounds (three in the

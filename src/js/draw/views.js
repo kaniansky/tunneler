@@ -69,9 +69,10 @@ const root = typeof window !== "undefined" ? window : globalThis;
 function controlsRoom(canvas) {
   const d = root.document;
   if (!d || !d.querySelector || !GameScreen.mobile()) return null;
-  const rects = [".tpad-stick", ".tpad-fire"].map(q => d.querySelector(q)).filter(Boolean).map(e => e.getBoundingClientRect()).filter(r => r.height > 0);
-  if (!rects.length) return null;
   const W = root.innerWidth || 0, H = root.innerHeight || 0, top = canvas ? Math.max(8, canvas.getBoundingClientRect().top) : 8;
+  // (upright: SCORE too - it sits above the joystick, style.css)
+  const rects = [".tpad-stick", ".tpad-fire", ...(H > W ? [".tpad-stats"] : [])].map(q => d.querySelector(q)).filter(Boolean).map(e => e.getBoundingClientRect()).filter(r => r.height > 0);
+  if (!rects.length) return null;
   if (H > W) return { w: W - 16, h: Math.round(Math.min(...rects.map(r => r.top)) - 8 - top) };
   const left = Math.max(0, ...rects.filter(r => r.left < W / 2).map(r => r.right)), right = Math.min(W, ...rects.filter(r => r.left >= W / 2).map(r => r.left));
   return { w: Math.round(2 * Math.min(W / 2 - left, right - W / 2) - 16), h: H - 16 };

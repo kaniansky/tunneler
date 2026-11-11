@@ -282,6 +282,14 @@ const SC = { W: 0x11, A: 0x1E, X: 0x2D, D: 0x20, BLUEFIRE: 0x1D, GREENFIRE: 0x1C
       for (const k of ["touch.fire", "touch.esc", "touch.quit", "touch.leave", "touch.stats"]) assert(env.win.Lang.data[code][k], code + " " + k);
     }
     assert(!tc.statsBtn && !env.body.children.some(c => c !== tc.root && /tpad-stats/.test(c.className || "")), "no SCORE button unless asked for");
+    // the Android app: no ESC button - the phone's Back is Esc there (owner, 2026-11-11)
+    {
+      const envA = makeEnv("");
+      envA.win.TunnelerAndroid = {};
+      envA.load("lang/index.js", "js/io/input.js", "js/io/pads.js");
+      const tcA = envA.win.Pads.start({ raf: false, menu: () => false, touchSet: "blue", statsLabel: "touch.stats" }).touch;
+      assert(tcA && !tcA.escBtn && tcA.statsBtn && tcA.fireBtn && !tcA.root.children.some(c => /tpad-esc/.test(c.className || "")), "the Android app: no ESC button");
+    }
     ok("touch: joystick (8 directions, dead zone, clamped) + FIRE + ESC -> BLUE's keys; menus: arrows / Enter; shown on the first touch; labels in every language");
   }
 
@@ -456,13 +464,13 @@ const SC = { W: 0x11, A: 0x1E, X: 0x2D, D: 0x20, BLUEFIRE: 0x1D, GREENFIRE: 0x1C
     const env = makeEnv("");
     env.load("js/io/controls.js", "js/io/input.js", "js/io/pads.js");
     const P = env.win.Pads, cl = env.body.classList;
-    same(P.TOUCH, { size: ["small", "medium", "large"], left: ["off", "on"], look: ["plain", "tank"] });
-    assert.strictEqual(P.getTouch("look"), "plain");
+    same(P.TOUCH, { size: ["small", "medium", "large"], left: ["off", "on"], look: ["tank", "plain"] });
+    assert.strictEqual(P.getTouch("look"), "tank", "the tank look by default");
     assert.strictEqual(P.getTouch("size"), "medium"); assert.strictEqual(P.getTouch("left"), "off");
     assert.strictEqual(P.getTouch("nope"), null);
     assert.strictEqual(P.setTouch("size", "huge"), false); assert.strictEqual(P.setTouch("left", "maybe"), false);
     const ctl = P.start({ raf: false, menu: () => false, touchSet: "blue" });
-    assert(ctl.touch && !cl.contains("tpad-small") && !cl.contains("tpad-large") && !cl.contains("tpad-left"), "medium, right-handed: no class");
+    assert(ctl.touch && !cl.contains("tpad-small") && !cl.contains("tpad-large") && !cl.contains("tpad-left") && cl.contains("tpad-tank"), "medium, right-handed, the tank look: tpad-tank only");
     assert.strictEqual(P.setTouch("size", "large"), true);
     assert(cl.contains("tpad-large") && !cl.contains("tpad-small"), "large applied live");
     assert.strictEqual(env.win.localStorage.getItem("tunneler.touch.size"), "large");

@@ -104,6 +104,18 @@ function makeEnv(href) {
     ok("the screen of the address: /, /games, /game/<id>, /split, /replays, /challenge (and /lobby.html, /online.html, /play.html, /replays.html, /challenge.html); unknown: the main menu");
   }
   {
+    // the Android app: no history - Tauri's Back handler goes back in it while it has any (owner, 2026-11-11: Back on the
+    // main menu after a skirmish started a new game)
+    const env = makeEnv("http://x.test/");
+    env.win.TunnelerAndroid = {};
+    vm.runInContext(app, env.ctx, { filename: "app.js" });
+    await wait(40);
+    for (const u of ["/skirmish?slots=0:you:1,1:easy:2", "/", "/replays", "/"]) { env.win.Nav.go(u); await wait(60); }
+    assert.strictEqual(env.history.entries.length, 1, "one history entry: " + env.history.entries.join(" "));
+    assert.strictEqual(env.location.pathname, "/");
+    ok("the Android app: going to another screen replaces the history entry (nothing for Back to go back to)");
+  }
+  {
     const env = makeEnv("http://x.test/");
     vm.runInContext(app, env.ctx, { filename: "app.js" });
     await wait(40);

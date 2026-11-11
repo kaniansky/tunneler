@@ -127,10 +127,14 @@ async function show() {
 }
 
 Scope.install();
+// (the Android app: no history at all - Back is the game's Esc there (MainActivity.kt), but Tauri's own Back handler goes
+// back in the web view's history while it has any, and which handler is asked first is a race: from the main menu after
+// a skirmish Back went back to the game's address - a new game; owner, 2026-11-11)
+const noHistory = !!globalThis.TunnelerAndroid;
 Nav.handler = (url, replace) => {
   const u = new URL(url, location.href);
   if (u.origin !== location.origin) { location.href = u.href; return; }
-  history[replace ? "replaceState" : "pushState"](null, "", u.pathname + u.search + u.hash);
+  history[replace || noHistory ? "replaceState" : "pushState"](null, "", u.pathname + u.search + u.hash);
   show();
 };
 addEventListener("popstate", show);

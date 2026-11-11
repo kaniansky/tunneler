@@ -43,7 +43,10 @@ What differs from the desktop app:
 - **Back** (button or gesture) is the game's Esc key - "Esc goes back everywhere" - sent with its scan
   code so `KeyboardEvent.code` is "Escape". On the main menu Back closes the app (moves it to the
   background) when the page defines `window.tunnelerBackExits()` returning true there; without that
-  function Back is always Esc (it never closes the app; Home does).
+  function Back is always Esc (it never closes the app; Home does). The pages keep no history in the app (app.js
+  `noHistory`: every screen replaces the history entry): Tauri's own Back handler goes back in the web view's history
+  while there is any, and whether it or MainActivity's is asked first is a race - from the main menu after a skirmish
+  Back went back to the game's address and started a new one (owner, 2026-11-11).
 - **Plain http allowed** (`usesCleartextTraffic` true in release too): the Settings screen's Server may be
   a server on the local network (`192.168.1.5:8050` -> `http://...`). The public server is https / wss.
 - `INTERNET` is the only permission. Portrait and landscape both work (the touch controls lay out for

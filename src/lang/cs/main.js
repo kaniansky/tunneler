@@ -415,7 +415,7 @@ Lang.register("cs", {
           "směrový ovladač a A / B jako šipky, <ENTER> a <ESC>, Y jako <TAB>, LB / RB a LT / RT jako [ ] " +
           "a - + (nástroj, štětec a zoom v editoru map; rychlost záznamu).  Na telefonech a tabletech se " +
           "při prvním dotyku objeví joystick na obrazovce a tlačítka PAL, ESC a SKÓRE (ESC je v šarvátce KONEC, " +
-          "online ODEJÍT; dokud je tvůj tank zničený, zůstane jen ono); jména a chat zatím potřebují " +
+          "online ODEJÍT; dokud je tvůj tank zničený, zůstane jen ono; aplikace pro Android ho nemá: dělá to tlačítko Zpět telefonu); jména a chat zatím potřebují " +
           "klávesnici."],
         ["Vítězství:  ", "Zápas vyhraje tank (nebo tým), který jako první vyhraje zvolený počet kol " +
           "- 1 až 9, v originálu 3.  Kolo může mít i časový limit 2, 3, 5 nebo 10 minut (posledních 30 " +

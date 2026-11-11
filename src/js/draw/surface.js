@@ -131,8 +131,16 @@ function soon() {
 function schedule() {
   if (!raf && root.requestAnimationFrame) raf = Scope.free(() => root.requestAnimationFrame(tick));
 }
+// At most ~60 pictures a second: a 90 / 120 / 144 Hz screen (phones) asks for more animation frames than that, and
+// drawing every one doubled the work for nothing - the game moves 18.2 times a second - and made a phone's frames
+// uneven (owner, 2026-11-11: choppy on a 120 Hz phone). A frame up to EARLY_MS before the next picture is due draws
+// (a 60 Hz screen's frames all draw), the phase kept while on time; a frame whose clock didn't move on draws too.
+const FRAME_MS = 1000 / 60, EARLY_MS = 3;
+let nextAt = 0;                                            // (when the next picture is due)
 function tick(now) {
   raf = 0;
+  if (now > nextAt - FRAME_MS && now < nextAt - EARLY_MS) { if (layers.length) schedule(); return; }
+  nextAt = now >= nextAt - EARLY_MS && now - nextAt < FRAME_MS ? nextAt + FRAME_MS : now + FRAME_MS;
   const t0 = root.performance ? root.performance.now() : 0;
   compose(now, true);
   if (Debug.on()) { Debug.count("frames"); if (t0) Debug.time("draw", root.performance.now() - t0); }

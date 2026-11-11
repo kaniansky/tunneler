@@ -712,7 +712,7 @@ joystick drives the tank, the end map / menu without them, a tap beside the map 
   the start / a login, then the main menu reloads. Test: cloudsave-check.
 - **The score during a match** (owner, 2026-10-28, 1.1.7; `src/js/ui/livestats.js`, `LiveStats.attach`): a player
   holding Tab - a gamepad's Back / Select (`readGamepad` `stats`, play only), the touch controls' SCORE button
-  (`Pads.start({statsLabel: "touch.stats"})`, `.tpad-stats` under ESC / QUIT) - sees `MatchText.liveStats()` over the
+  (`Pads.start({statsLabel: "touch.stats"})`, `.tpad-stats` above FIRE) - sees `MatchText.liveStats()` over the
   game (`runner.setOverlay`; online `statsSnap` in `presentOverlay`), rebuilt every 250 ms: a box with the round, every
   player's (or team's, its members below) rounds won - not in a one-round match - and the mode's score
   (`modeScoreText`), destroyed tanks gray, and the settings (`settingsLines(40, 3)`). Owner: "only what is important,
@@ -720,8 +720,8 @@ joystick drives the tank, the end map / menu without them, a tap beside the map 
   still switches the views; replays: none. Display only (local-check checks stateHash). Tests: input-check (SCORE /
   Back = Tab, Tab never fires), local-check, net-page-smoke (player / spectator). Touch: `Pads.TOUCH`
   size small / medium / large ("tunneler.touch.size", CSS `--tpad-k`) and left-handed ("tunneler.touch.left":
-  joystick right, FIRE left; body classes tpad-small / tpad-large / tpad-left) and look ("tunneler.touch.look" plain /
-  tank, body class tpad-tank; owner, 2026-10-27): plain = a ring with 8 ticks whose sector the tank goes lights up
+  joystick right, FIRE left; body classes tpad-small / tpad-large / tpad-left) and look ("tunneler.touch.look" tank -
+  the default, owner 2026-11-11 - / plain, body class tpad-tank; owner, 2026-10-27): plain = a ring with 8 ticks whose sector the tank goes lights up
   (`--a`, class "go"), a knob, a FIRE disc with an inner ring; tank = your own tank as the knob, as the game draws it
   now (src/js/draw/tankview.js `TankView.provider(engine, p)` -> `Pads.start({touchTank})` from play.js / online.js: graphics
   original the 7 x 7 sprite, modern gfx-modern.js's simple / realistic tank - its shader ported to the CPU,
@@ -730,7 +730,11 @@ joystick drives the tank, the end map / menu without them, a tap beside the map 
   lit from the top left; it doesn't move when pressed). Colours: CSS variables on .tpad - the DOS palette, `html.modern` the
   modern menus', the tank look dirt / tunnel. Your tank destroyed (`touchDead`): no joystick / FIRE (class "dead"),
   nothing held - ESC stays. The ESC button says QUIT in a skirmish (`escLabel: "touch.quit"`: Esc ends the match),
-  LEAVE online (`touch.leave`: Esc twice leaves; the game can be joined again). test/input-check.js, gfx-check.
+  LEAVE online (`touch.leave`: Esc twice leaves; the game can be joined again); none in the Android app
+  (`window.TunnelerAndroid`: the phone's Back is Esc - owner, 2026-11-11). ESC in the top left corner (upright the game
+  below it: body.tpad-quit), SCORE above FIRE, a key cap's height clear of it (upright views.js `controlsRoom` keeps the
+  game above it) - both ways the phone is held (owner, 2026-11-11 - upright SCORE / ESC sat between the joystick and
+  FIRE, sideways top right). test/input-check.js, gfx-check.
 - Gamepads + touch (`pads.js`; home.js / lobby.js call `Pads.start({ menu: () => true })` = menus only,
   play.js / online.js with the tank's keys): every controller becomes **synthesized KeyboardEvents on window** (so
   Keyboard, DosUI, online.js's held bits / Esc twice take them like real keys - nothing else knows about

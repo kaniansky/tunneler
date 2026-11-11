@@ -4,6 +4,17 @@ All notable changes to Tunneler. Versions follow [semantic versioning](https://s
 by pushing a version tag (see CONTRIBUTING.md). Up to its version 6.0.1 the game was called Tunneler Online:
 those releases are tagged `online-vX.Y.Z`, their changes are in [docs/CHANGELOG-online.md](docs/CHANGELOG-online.md).
 
+## 1.5.3
+
+Plays with 1.5.0, 1.5.1 and 1.5.2 (nothing in the game changed).
+
+- Smoother on phones with a 90 / 120 / 144 Hz screen: the picture is drawn at most 60 times a second (the game moves
+  18 times a second) - drawing every one of the screen's frames doubled the work and made a 120 Hz phone choppy.
+- Touch controls: SCORE sits above FIRE and ESC / QUIT in the top left corner, both ways a phone is held (upright the
+  game moves below it) - upright they were between the joystick and FIRE. Touch look Tank is the default.
+- The Android app: no QUIT button (the phone's Back is Esc), and Back on the main menu after a game no longer starts
+  that game again (the app's own Back handler went back in the page's history).
+
 ## 1.5.2
 
 Plays with 1.5.0 and 1.5.1 (nothing in the game changed).

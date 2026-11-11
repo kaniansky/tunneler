@@ -210,7 +210,7 @@ class TouchControls {
     showPic(el("tpad-shell", this.fireBtn, null, "img"), shell);
     el("tpad-shellm", this.fireBtn, null, "span").innerHTML = SHELL_SVG;
     if (this.fireBtn.setAttribute) this.fireBtn.setAttribute("aria-label", labels.fire);
-    this.escBtn = el("tpad-esc", this.root, labels.esc);
+    this.escBtn = labels.esc ? el("tpad-esc", this.root, labels.esc) : null;
     this.statsBtn = labels.stats ? el("tpad-stats", this.root, labels.stats) : null;   // (held: the statistics)
     const capture = (t, e) => { try { t.setPointerCapture(e.pointerId); } catch (_) { /* (synthesized) */ } };
     const stop = e => { if (e.cancelable && e.preventDefault) e.preventDefault(); };
@@ -225,7 +225,7 @@ class TouchControls {
       b.addEventListener("contextmenu", stop);
     };
     button(this.fireBtn, this.fire);
-    button(this.escBtn, this.esc);
+    if (this.escBtn) button(this.escBtn, this.esc);
     if (this.statsBtn) button(this.statsBtn, this.stats);
     this.root.addEventListener("contextmenu", stop);
   }
@@ -337,7 +337,8 @@ function start(opts) {
   // top, the controls below it - everything else is centred; owner, 2026-10-27)
   function shown() {
     const cl = doc && doc.body && doc.body.classList;
-    if (cl) cl.toggle("tpad-shown", !!touch && !touch.root.hidden && !touch.menuHidden);
+    const on = !!touch && !touch.root.hidden && !touch.menuHidden;
+    if (cl) { cl.toggle("tpad-shown", on); cl.toggle("tpad-quit", on && !!touch.escBtn); }   // (tpad-quit: upright, the game below ESC)
   }
 
   // touch: the controls appear on the first touch (or right away on a touch-only device)
@@ -348,7 +349,8 @@ function start(opts) {
     shown();
   }
   if (opts.touchSet && doc && doc.body && typeof doc.body.appendChild === "function" && typeof doc.createElement === "function") {
-    touch = new TouchControls(doc, { fire: T("touch.fire") || "FIRE", esc: T(opts.escLabel || "touch.esc") || "ESC",
+    // (no ESC button in the Android app: the phone's Back is Esc there - MainActivity.kt; owner, 2026-11-11)
+    touch = new TouchControls(doc, { fire: T("touch.fire") || "FIRE", esc: root.TunnelerAndroid ? null : T(opts.escLabel || "touch.esc") || "ESC",
       stats: opts.statsLabel ? T(opts.statsLabel) || "SCORE" : null }, opts.touchTank);
     touch.root.hidden = true;
     doc.body.appendChild(touch.root);
@@ -372,7 +374,7 @@ function start(opts) {
     for (const p of pads.values()) p.releaseAll();
     if (touchPad) touchPad.releaseAll();
     if (touch && touch.root.remove) touch.root.remove();
-    if (doc && doc.body && doc.body.classList) doc.body.classList.remove("tpad-shown");
+    if (doc && doc.body && doc.body.classList) { doc.body.classList.remove("tpad-shown"); doc.body.classList.remove("tpad-quit"); }
     if (toastEl && toastEl.remove) toastEl.remove();
   });
   return { poll, pads, touch, showTouch };
@@ -380,16 +382,16 @@ function start(opts) {
 
 // touch controls' options: their size ("tunneler.touch.size": small / medium = the original / large - the
 // joystick and the buttons scaled, style.css --tpad-k), sides ("tunneler.touch.left" "1": the joystick
-// on the right, FIRE on the left) and look ("tunneler.touch.look": plain / tank - TouchControls); body classes
-// tpad-small / tpad-large / tpad-left / tpad-tank
-const TOUCH = { size: ["small", "medium", "large"], left: ["off", "on"], look: ["plain", "tank"] };
+// on the right, FIRE on the left) and look ("tunneler.touch.look": tank - the default, owner 2026-11-11 - / plain -
+// TouchControls); body classes tpad-small / tpad-large / tpad-left / tpad-tank
+const TOUCH = { size: ["small", "medium", "large"], left: ["off", "on"], look: ["tank", "plain"] };
 const TOUCH_KEYS = { size: "tunneler.touch.size", left: "tunneler.touch.left", look: "tunneler.touch.look" };
 function getTouch(name) {
   if (!TOUCH[name]) return null;
   let v = null;
   try { v = root.localStorage ? root.localStorage.getItem(TOUCH_KEYS[name]) : null; } catch (e) { v = null; }
   if (name === "left") return v === "1" ? "on" : "off";
-  if (name === "look") return TOUCH.look.includes(v) ? v : "plain";
+  if (name === "look") return TOUCH.look.includes(v) ? v : "tank";
   return TOUCH.size.includes(v) ? v : "medium";
 }
 function setTouch(name, value) {
