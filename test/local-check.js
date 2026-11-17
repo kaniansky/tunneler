@@ -761,6 +761,23 @@ function play(search) {
   ok("play.js: held Tab = the score, the teams and the settings over the game (display only, no fire)");
 }
 
+// ---------------------------------------------------------------- play.js: Esc down and up between two steps
+{
+  // (the Android app's Back: an Esc keydown and keyup at once - the step after it still sees Esc, once)
+  const env = makeEnv("?mode=cpu&slots=" + encodeURIComponent("0:you:1,1:easy:2") + "&size=small&lv=2&win=5", new Map());
+  env.page("play.html");
+  const e = env.win.tunnelerEngine();
+  for (let i = 0; i < 3000 && e.screen !== "play"; i++) e.step({ bits: [0, 0], keys: [] });
+  env.key("Escape"); env.key("Escape", "keyup");
+  assert(env.win.tunnelerInput().bits[0] & 32, "a tap of Esc: held for the next step");
+  assert(!(env.win.tunnelerInput().bits[0] & 32), "and only that one");
+  env.key("Escape"); env.key("Escape", "keyup");
+  e.step(env.win.tunnelerInput());
+  for (let i = 0; i < 200 && !e.matchOver; i++) e.step({ bits: [0, 0], keys: [] });
+  assert(e.matchOver, "the tap ends the match");
+  ok("play.js: Esc pressed and let go between two steps ends the match (the Android app's Back)");
+}
+
 // ---------------------------------------------------------------- teammates marked in the views (Settings, Gameplay)
 {
   const store = new Map();
@@ -994,10 +1011,19 @@ function play(search) {
   const screenText = () => { const v = ui.display.snap.vram; let t = ""; for (let k = 0; k < v.length; k += 2) t += String.fromCharCode(v[k]); return t; };
   const desc = ui.spec.items[ui.sel].info[0];
   assert(bars() === 0, "no highlight bar on a phone: " + bars());
-  // (held upright: the description wrapped - its first words; nothing below the menu without it: no empty strip)
+  // (held upright: the description wrapped - its first words; the room for the items' longest info kept below the menu
+  // whether one shows or not - a finger's info covers nothing, the page never jumps; owner, 2026-11-17)
   const start = d => d.slice(0, 12);
   assert(typeof desc === "string" && !screenText().includes(start(desc)), "no description without the bar: " + desc);
-  assert.strictEqual(ui.display.snap.view.rows, ui.display.snap.rows, "no strip for the info below the menu");
+  const strip = () => ui.display.snap.rows - ui.display.snap.view.rows;
+  const longest = Math.max(...ui.spec.items.map(i => (i.info || []).length));
+  assert(longest > 0 && strip() >= longest + 1, "the room for the info below the menu: " + strip());
+  const strip0 = strip(), top0 = ui.display.snap.view.top;
+  // (a finger on an item: its info in that room - the menu doesn't move)
+  ui.tpick = { still: false }; ui.draw(); ui.tpick = null;
+  assert(screenText().includes(start(ui.spec.items[ui.sel].info[0])) && strip() === strip0 && ui.display.snap.view.top === top0,
+    "a finger's info: in the room kept, nothing moves");
+  ui.draw();
   env.key("ArrowDown");
   assert(bars() > 0, "arrow keys show the highlight bar");
   assert(screenText().includes(start(ui.spec.items[ui.sel].info[0])), "and the description");
@@ -1032,7 +1058,7 @@ function play(search) {
   const env = phone();
   env.page("index.html");
   const ui = env.win.tunnelerHomeUI(), snap = () => ui.display.snap;
-  assert(snap().view && snap().view.rows === snap().rows, "the content in a window (no info strip without info): " + JSON.stringify(snap().view));
+  assert(snap().view && snap().view.rows < snap().rows, "the content in a window, the info's room below it: " + JSON.stringify(snap().view));
   {                                                   // (it fits: the title through the last box in the window's middle)
     const v = snap().view, h = snap().rowH, used = r => { for (let c = 0; c < 36; c++) { const ch = snap().vram[r * 160 + c * 2]; if (ch !== 0x20 && ch !== 0) return true; } return false; };
     let first = 0;

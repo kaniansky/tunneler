@@ -248,7 +248,7 @@ class Presenter {
         gl.useProgram(k.up);
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, this.srcTex);
-        if (this.srcStale) { gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src); this.srcStale = false; }
+        if (this.srcStale) { const t = Debug.timer("src up"); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src); this.srcStale = false; t(); }
         gl.uniform1i(k.upU.uSrc, 0);
         gl.uniform2f(k.upU.uSize, src.width, src.height);
         gl.uniform2f(k.upU.uOut, W, H);
@@ -259,16 +259,23 @@ class Presenter {
       if (!this.modern) return true;
       const set = Gfx.modern();
       set.depth = Gfx.depth(set);
+      const tScene = Debug.timer("scene");
       this.modern.draw(sc, src.width, src.height, W, H, now || 0, set);
+      tScene();
       // (every view - also one black with DESTROYED, when no world window is left to draw)
       if ((sc.cells && sc.cells.length || sc.windows && sc.windows.length || sc.map && sc.map.kind === "end") && Gfx.Hud) {
         // (drawn again only when what it shows changed - Hud.key: the engine's step, the scene, a blink)
         const hset = Gfx.modern(), style = Gfx.menuStyle(), key = Gfx.Hud.key(sc, W, H, hset, now || 0, style);
         if (key !== this.hudKey) {
           const c = this.canvasOf("hud", W, H), ctx = c.getContext("2d");
+          const tHud = Debug.timer("hud");
           ctx.clearRect(0, 0, W, H);
           Gfx.Hud.draw(ctx, W, H, sc, src.width, src.height, hset, now || 0, style);
+          tHud();
+          // (a 2D canvas into a WebGL texture: on some phones the browser waits for the GPU here)
+          const tUp = Debug.timer("hud up");
           this.blit(c, W, H, true, this.hudTex || (this.hudTex = k.tex()));
+          tUp();
           this.hudKey = key;
           Debug.count("hud draws");
         } else this.blit(null, W, H, true, this.hudTex);

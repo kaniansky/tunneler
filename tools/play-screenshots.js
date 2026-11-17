@@ -117,7 +117,7 @@ function drawMap() {
         const ctx = await b.newContext(touch ? { viewport: { width: w, height: h }, deviceScaleFactor: dpr, isMobile: true, hasTouch: true }
           : { viewport: { width: 1000, height: 820 } });
         await ctx.addInitScript(o => { for (const k in o) localStorage.setItem(k, o[k]); }, Object.assign({}, LS, ls));
-        // (the phone / tablet as the Android app the store sells: no QUIT button - the phone's Back is Esc - pads.js)
+        // (the phone / tablet as the Android app the store sells)
         if (touch) await ctx.addInitScript(() => { window.TunnelerAndroid = window.TunnelerAndroid || {}; });
         const p = await ctx.newPage(); p.on("pageerror", e => errs.push(dev + " " + url + ": " + e.message));
         await p.goto(B + url); return p;

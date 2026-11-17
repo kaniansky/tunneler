@@ -4,6 +4,18 @@ All notable changes to Tunneler. Versions follow [semantic versioning](https://s
 by pushing a version tag (see CONTRIBUTING.md). Up to its version 6.0.1 the game was called Tunneler Online:
 those releases are tagged `online-vX.Y.Z`, their changes are in [docs/CHANGELOG-online.md](docs/CHANGELOG-online.md).
 
+## 1.5.5
+
+Plays with 1.5.0 - 1.5.4 (nothing in the game changed).
+
+- The Android app: Back ends a match again (its Esc came and went between two of the game's steps, so the game never
+  saw it), and the QUIT button in the top left corner is back.
+- Phones held upright: a menu keeps the room for its info text below it, so holding an item no longer covers the
+  menu's bottom (the skirmish's Game box), and dragging while the text shows no longer makes the page jump when the
+  finger lets go - a screen too tall for it scrolls instead, opening at its top.
+- Debug info shows where a frame's time goes - the GPU's time per frame, the longest wait for a frame, the HUD's
+  drawing and upload, the main thread's long tasks - and the page sits below its box instead of under it.
+
 ## 1.5.4
 
 Plays with 1.5.0 - 1.5.3 (nothing in the game changed).

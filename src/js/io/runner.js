@@ -61,7 +61,9 @@ class Runner {
     let snap = null;
     while (this.queue.length && this.queue[0].at <= now) snap = this.queue.shift().snap;
     if (snap) { this.latest = snap; if (!this.overlay) this.display.setSnapshot(snap); }
+    const t = Debug.timer("show");
     this.display.draw(now);
+    t();
     this.raf = requestAnimationFrame(t => this.frame(t));
   }
 

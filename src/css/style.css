@@ -7,13 +7,16 @@ html { background: var(--bg); }
 #surface { position: fixed; inset: 0; width: 100%; height: 100%; z-index: -1; pointer-events: none; display: block; }
 a { color: var(--hi); }
 .screen { display: flex; flex-direction: column; align-items: center; justify-content: center;
-  min-height: 100%; padding: 8px; gap: 8px; }
+  min-height: calc(100% - var(--dbg, 0px)); padding: 8px; gap: 8px; margin-top: var(--dbg, 0px); }
+/* (--dbg: the Debug info box's height while it shows - ui/debug.js; the page below it, never under it) - html.dbg: the
+   screen's margin kept inside body, not past its bottom) */
+html.dbg body { display: flow-root; }
 /* (the status line under it, when shown: its rows' height grows with the width - --status-k, statusline.js - so a wide,
    short window leaves room for them by that, not only the 90 px) */
 .game { display: block;
-  width: min(100vw - 16px, (100vh - 90px) * 4 / 3, (100vh - 16px - var(--status-gap, 0px)) / (0.75 + var(--status-k, 0)));
+  width: min(100vw - 16px, ((100vh - var(--dbg, 0px)) - 90px) * 4 / 3, ((100vh - var(--dbg, 0px)) - 16px - var(--status-gap, 0px)) / (0.75 + var(--status-k, 0)));
   aspect-ratio: 4 / 3; }
-.game.half { width: min(100vw - 16px, (100vh - 90px) * 2 / 3, (100vh - 16px - var(--status-gap, 0px)) / (1.5 + var(--status-k, 0)));
+.game.half { width: min(100vw - 16px, ((100vh - var(--dbg, 0px)) - 90px) * 2 / 3, ((100vh - var(--dbg, 0px)) - 16px - var(--status-gap, 0px)) / (1.5 + var(--status-k, 0)));
   aspect-ratio: 2 / 3; }
 .bar { display: flex; gap: 16px; align-items: center; font-size: 14px; color: var(--dim); flex-wrap: wrap;
   justify-content: center; }
@@ -64,7 +67,7 @@ body.touch { overflow: hidden; overscroll-behavior: none; touch-action: none; -w
 /* (the page's padding around the canvas, both ways together: --screen-px / --screen-py - display.js and dosui.js size
    the phone layout's canvas by them) */
 body.touch { --screen-px: 16px; --screen-py: calc(max(8px, env(safe-area-inset-top)) + 8px); }
-body.touch .screen { height: 100dvh; min-height: 0; padding: max(8px, env(safe-area-inset-top)) 8px 8px; }
+body.touch .screen { height: calc(100dvh - var(--dbg, 0px)); min-height: 0; padding: max(8px, env(safe-area-inset-top)) 8px 8px; }
 .tpad { display: none;
   --line: #aa00aa; --tick: #aa00aa; --hi: rgba(255, 85, 255, .5); --fill: rgba(0, 0, 0, .5);
   --knob: #aa00aa; --knob-edge: #ff55ff; --knob-on: #fff;
@@ -114,7 +117,7 @@ html.modern body.tpad-tank .tpad-shellm { display: block; }
    FIRE; ESC on the left - both ways a phone is held) */
 .tpad-esc, .tpad-stats { padding: calc(5px * var(--tpad-k, 1)) calc(10px * var(--tpad-k, 1)); border-radius: 3px;
   background: var(--fill); color: var(--esc); border: 1px solid var(--esc-edge); border-bottom-width: 3px; font-size: calc(13px * var(--tpad-k, 1)); }
-.tpad-esc { left: max(8px, env(safe-area-inset-left)); top: max(8px, env(safe-area-inset-top)); }
+.tpad-esc { left: max(8px, env(safe-area-inset-left)); top: calc(max(8px, env(safe-area-inset-top)) + var(--dbg, 0px)); }
 .tpad-stats { --f: calc(min(26vmin, 116px) * var(--tpad-k, 1)); right: calc(max(14px, env(safe-area-inset-right)) + var(--f) / 2);
   transform: translateX(50%); bottom: calc(max(28px, env(safe-area-inset-bottom)) + var(--f) + 8px + 36px * var(--tpad-k, 1)); }
 .tpad-esc.on, .tpad-stats.on { color: #fff; border-color: var(--esc); border-bottom-width: 1px; translate: 0 2px; }
@@ -136,7 +139,7 @@ body.tpad-left .tpad-stats { right: auto; left: calc(max(14px, env(safe-area-ins
   body.touch.tpad-shown.tpad-quit { --screen-py: calc(env(safe-area-inset-top) + env(safe-area-inset-bottom) + 36px * var(--tpad-k, 1) + 16px); }
   body.touch.tpad-shown.tpad-quit .screen { padding-top: calc(max(8px, env(safe-area-inset-top)) + 36px * var(--tpad-k, 1) + 8px); }
   body.touch .game:not([style*="width"]) { width: calc(100vw - var(--screen-px)); }
-  body.touch .game.half:not([style*="width"]) { width: min(calc(100vw - 16px), calc((100dvh - 46vmin * var(--tpad-k, 1) - 40px) * 2 / 3)); }
+  body.touch .game.half:not([style*="width"]) { width: min(calc(100vw - 16px), calc(((100dvh - var(--dbg, 0px)) - 46vmin * var(--tpad-k, 1) - 40px) * 2 / 3)); }
 }
 /* landscape: the game as tall as the screen, between the controls */
 @media (orientation: landscape) {
@@ -144,8 +147,8 @@ body.tpad-left .tpad-stats { right: auto; left: calc(max(14px, env(safe-area-ins
      no room kept for the joystick and FIRE: they show only on the play screen, which views.js sizes for them - owner,
      2026-10-27: the first touch shrank the menus) */
   body.touch .game:not([style*="width"]) { width: min(calc(100vw - var(--screen-px)),
-    calc((100dvh - 16px - var(--status-gap, 0px)) / (0.75 + var(--status-k, 0)))); }
-  body.touch .game.half:not([style*="width"]) { width: min(calc(100vw - 2 * min(38vmin, 170px) * var(--tpad-k, 1) - 40px), calc((100dvh - 16px) * 2 / 3)); }
+    calc(((100dvh - var(--dbg, 0px)) - 16px - var(--status-gap, 0px)) / (0.75 + var(--status-k, 0)))); }
+  body.touch .game.half:not([style*="width"]) { width: min(calc(100vw - 2 * min(38vmin, 170px) * var(--tpad-k, 1) - 40px), calc(((100dvh - var(--dbg, 0px)) - 16px) * 2 / 3)); }
 }
 /* the loading screen (index.html; app.js hides it once a screen runs, shows it while one's code arrives):
    the game's own words over the black game canvas - VGA gray on black, the modern look's colors with it */

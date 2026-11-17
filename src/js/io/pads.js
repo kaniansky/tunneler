@@ -23,6 +23,7 @@
 import { Controls } from "./controls.js";
 import { Lang } from "../text/lang.js";
 import { Scope } from "../scope.js";
+import { Debug } from "../ui/debug.js";
 const root = globalThis;
 
 const SETS = {
@@ -349,8 +350,8 @@ function start(opts) {
     shown();
   }
   if (opts.touchSet && doc && doc.body && typeof doc.body.appendChild === "function" && typeof doc.createElement === "function") {
-    // (no ESC button in the Android app: the phone's Back is Esc there - MainActivity.kt; owner, 2026-11-11)
-    touch = new TouchControls(doc, { fire: T("touch.fire") || "FIRE", esc: root.TunnelerAndroid ? null : T(opts.escLabel || "touch.esc") || "ESC",
+    // (the Android app too - its Back is Esc as well; owner, 2026-11-17: without the button there was no way out seen)
+    touch = new TouchControls(doc, { fire: T("touch.fire") || "FIRE", esc: T(opts.escLabel || "touch.esc") || "ESC",
       stats: opts.statsLabel ? T(opts.statsLabel) || "SCORE" : null }, opts.touchTank);
     touch.root.hidden = true;
     doc.body.appendChild(touch.root);
@@ -366,7 +367,7 @@ function start(opts) {
   if (root.matchMedia && root.matchMedia("(pointer: coarse)").matches && !root.matchMedia("(any-pointer: fine)").matches) showTouch();
 
   if (opts.raf !== false && typeof root.requestAnimationFrame === "function") {
-    const loop = t => { poll(t); root.requestAnimationFrame(loop); };
+    const loop = t => { const d = Debug.timer("pads"); poll(t); d(); root.requestAnimationFrame(loop); };
     root.requestAnimationFrame(loop);
   }
   // (a route's controls go with the route: scope.js)

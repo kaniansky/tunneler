@@ -44,6 +44,7 @@ import { VGA_FONT } from "../text/vgafont.js";
 import { Scope } from "../scope.js";
 import { Surface } from "./surface.js";
 import { GameScreen } from "../io/screen.js";
+import { Debug } from "../ui/debug.js";
 
 // (the views' floor planes only when they are painted: the original look, or a modern one that failed - 1.3.1)
 PlayScreen.wantFloors = () => Gfx.mode() !== "modern" || !!Gfx.modernFailed;
@@ -74,8 +75,10 @@ function controlsRoom(canvas) {
   const rects = [".tpad-stick", ".tpad-fire", ...(H > W ? [".tpad-stats"] : [])].map(q => d.querySelector(q)).filter(Boolean).map(e => e.getBoundingClientRect()).filter(r => r.height > 0);
   if (!rects.length) return null;
   if (H > W) return { w: W - 16, h: Math.round(Math.min(...rects.map(r => r.top)) - 8 - top) };
+  // (sideways: below the Debug info box while it shows - style.css --dbg)
+  const dbg = Debug.room();
   const left = Math.max(0, ...rects.filter(r => r.left < W / 2).map(r => r.right)), right = Math.min(W, ...rects.filter(r => r.left >= W / 2).map(r => r.left));
-  return { w: Math.round(2 * Math.min(W / 2 - left, right - W / 2) - 16), h: H - 16 };
+  return { w: Math.round(2 * Math.min(W / 2 - left, right - W / 2) - 16), h: H - 16 - dbg };
 }
 const VIEW_W = 360, VIEW_H = 400;               // (one view and its panel on the play screen, in canvas pixels)
 function gridCols(c, room) {
@@ -521,7 +524,7 @@ class ViewModes {
     c.style.width = room ? "min(" + Math.max(80, room.w) + "px, " + Math.max(80, Math.floor(room.h * a)) + "px)"
       // (and the status line under it - a spectator's, a replay's: its height grows with the width, --status-k, as
       // style.css's canvas.game; a wide window's grid ran past the bottom)
-      : "min(calc(100vw - 16px), calc((100vh - 90px) * " + a.toFixed(4) + "), calc((100vh - 16px - var(--status-gap, 0px)) / ("
+      : "min(calc(100vw - 16px), calc(((100vh - var(--dbg, 0px)) - 90px) * " + a.toFixed(4) + "), calc(((100vh - var(--dbg, 0px)) - 16px - var(--status-gap, 0px)) / ("
         + (1 / a).toFixed(4) + " + var(--status-k, 0))))";
   }
 

@@ -499,14 +499,18 @@ function run(mapRec, modRec) {
   function extInput() {
     const kd = keyboard.keyDown();
     const on = a => kd[a[1]] || kd[a[2]];
+    const keys = keyboard.takeKeys();
+    // (Esc held - or pressed and let go since the last step: the Android app's Back is an Esc down and up at once,
+    // gone before the step looked)
+    const esc = kd[1] || keys.some(k => k[1] === 1 && !k[2]) ? 32 : 0;
     const bits = [];
     for (const ai of ais) bits[ai.me - 1] = botBits(ai);
     if (me2 >= 0) {                                    // two players: player 1 BLUE's keys, player 2 GREEN's
       const set = k => ({ up: kd[K.KeyUp[k]], down: kd[K.KeyDown[k]], left: kd[K.KeyLeft[k]], right: kd[K.KeyRight[k]], fire: kd[K.KeyFire[k]] });
-      bits[me] = keysToBits(set(1)) | (kd[1] ? 32 : 0);
+      bits[me] = keysToBits(set(1)) | esc;
       bits[me2] = keysToBits(set(2));
-    } else bits[me] = keysToBits({ up: on(K.KeyUp), down: on(K.KeyDown), left: on(K.KeyLeft), right: on(K.KeyRight), fire: on(K.KeyFire) }) | (kd[1] ? 32 : 0);
-    return { bits, keys: keyboard.takeKeys().concat(clicks.splice(0)) };
+    } else bits[me] = keysToBits({ up: on(K.KeyUp), down: on(K.KeyDown), left: on(K.KeyLeft), right: on(K.KeyRight), fire: on(K.KeyFire) }) | esc;
+    return { bits, keys: keys.concat(clicks.splice(0)) };
   }
 
   function leave(url) { clock.stop(); runner.stop(); Nav.go(url); }

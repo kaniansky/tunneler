@@ -122,7 +122,8 @@ Earlier:
 - 1.2 also: a small triangle in their color marks your teammates' tanks (Settings, Gameplay); "Save the replay" after
   a match (or Settings, Gameplay, Save every match), a replay plays in the version that recorded it; after death with
   one view, your left / right keys switch the teammate you watch; lamps stop at walls; online, your tank answers your
-  keys sooner; **Debug info** (Settings, Gameplay) shows the frame rate, drawing, the engine and the connection.
+  keys sooner; **Debug info** (Settings, Gameplay) shows the frame rate, drawing, the engine and the connection
+  (since 1.5.5 also where a frame's time goes: the GPU, the HUD, long tasks), and the page sits below it.
 - **Quick play** (Online game, in the list of games): straight into an online game. The server finds a game with a
   place for you or makes one - eight tanks free-for-all, computer tanks in every seat nobody sits on, matches that
   start by themselves after a short countdown. Join a running match and you take over a computer tank at once;
@@ -329,8 +330,8 @@ second GREEN (the keyboard still works); against the computer and online any gam
 In menus the d-pad moves, A selects, B goes back.
 
 **Phones and tablets**: touch the screen and an on-screen joystick (left) and a FIRE button (right)
-appear, plus SCORE (above FIRE, held: the score) and ESC (top left; the Android app has none - the phone's Back is
-Esc); they drive your tank (BLUE in split screen). Tap menu items to choose them.
+appear, plus SCORE (above FIRE, held: the score) and ESC (top left, QUIT in a skirmish; in the Android app the phone's
+Back is Esc too); they drive your tank (BLUE in split screen). Tap menu items to choose them.
 The game fits the screen in portrait and landscape.
 
 The rules are in the game's own *Instructions* page: win the set number of rounds (three in the

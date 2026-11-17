@@ -672,7 +672,12 @@ joystick drives the tank, the end map / menu without them, a tap beside the map 
   info's place kept for its items' longest info with a keyboard / mouse - moved to the middle of rows 1-23, a phone /
   tablet all 25; `vshift`, and `cellAt(ev)` maps clicks back - DosUI code uses it, never `display.cellAt`; tests read
   rows / click at `+ ui.vshift`; worked out before the info is drawn - an info that comes and goes on a touch screen
-  moves nothing; `spec.block` = [first, last] rows a screen can span - Settings' tallest category, the games list's
+  moves nothing; the phone layout (`drawNarrow`) keeps the room for its items' longest info at the bottom on a touch
+  screen too, shown or not (`RES`: its wrapped lines + 1, at most 8; none when no item has info) - an info a finger
+  brought up covered the menu's bottom (the skirmish's Game box), and a drag while it showed scrolled the page, which
+  jumped back when the finger let go (owner, 2026-11-17); the content scrolls above it instead, `spec.fit` rows as tall
+  as without that room ("settings could scroll"), and a new screen on a touch screen opens at its top (the selection
+  isn't shown there - following it hid the skirmish's title); `spec.block` = [first, last] rows a screen can span - Settings' tallest category, the games list's
   full box - so a box that grows doesn't move it). Centred items line up as a block (`centreStart`: the widest centred item of a box is
   centred, a narrower one starts half the difference later, rounded down - one column narrower = the same
   start). Shared DOS menu screen (`showPage("instructions"|"information", uiMode, back)` shows the
@@ -731,8 +736,9 @@ joystick drives the tank, the end map / menu without them, a tap beside the map 
   lit from the top left; it doesn't move when pressed). Colours: CSS variables on .tpad - the DOS palette, `html.modern` the
   modern menus', the tank look dirt / tunnel. Your tank destroyed (`touchDead`): no joystick / FIRE (class "dead"),
   nothing held - ESC stays. The ESC button says QUIT in a skirmish (`escLabel: "touch.quit"`: Esc ends the match),
-  LEAVE online (`touch.leave`: Esc twice leaves; the game can be joined again); none in the Android app
-  (`window.TunnelerAndroid`: the phone's Back is Esc - owner, 2026-11-11). ESC in the top left corner (upright the game
+  LEAVE online (`touch.leave`: Esc twice leaves; the game can be joined again); the Android app has it too (1.5.3 had
+  none there - Back is Esc - and the owner missed it, 2026-11-17). Back (MainActivity.kt) is an Esc down and up at once:
+  play.js `extInput` takes an Esc pressed since the last step as held for that step (else the step never saw it). ESC in the top left corner (upright the game
   below it: body.tpad-quit), SCORE above FIRE, a key cap's height clear of it (upright views.js `controlsRoom` keeps the
   game above it) - both ways the phone is held (owner, 2026-11-11 - upright SCORE / ESC sat between the joystick and
   FIRE, sideways top right). test/input-check.js, gfx-check.
@@ -768,6 +774,21 @@ frame with it run on this page; releases aren't timed - the server keeps a relea
 Steady text (owner: "not jumpy"): fixed decimals, every figure as wide as at its widest, a figure once shown keeps its
 place ("-" without a value). Labels are technical names, not translated; the Settings row and its info are (5
 languages). Tests: local-check.js (the row).
+
+Where a frame's time goes (owner, 2026-11-17: an Adreno 650 phone drew 12 frames a second at draw 6.8 ms - most of
+the frame unaccounted for): `Debug.timer(name)` -> stop() (a no-op while off), `Debug.peak(name, v)` (the "max" line:
+the half second's largest). Figures: `rafs/s` (every animation frame the browser gives, before surface.js's ~60 a
+second limit), `max raf gap` / `frame gap` (the longest wait for an animation frame / between pictures), `gpu` ms (a
+picture's GPU time - EXT_disjoint_timer_query_webgl2 around compose, read a few frames later; the gpu line's `timer
+yes / no`), `show` (runner.js display.draw), `pads` (the gamepad / touch poll), `scene` (gfx-modern.js draw), `hud` /
+`hud up` (the HUD's 2D canvas drawn / put into its texture - a canvas -> WebGL upload can wait for the GPU on some
+phones), `src up` (the layer's source canvas -> texture), `long tasks/s` / `long ms/s` (PerformanceObserver
+"longtask": the main thread busy 50 ms or more at a time). Reading them: frames low with `raf gap` ~ `gpu` = the GPU;
+long tasks = the main thread; neither = the browser / compositor. The page sits below the box, never under it
+(owner, 2026-11-17): its height + 4 px in the CSS variable `--dbg` on html (ResizeObserver; `html.dbg` while it shows -
+body a flow-root, the .screen's margin-top kept inside it), `Debug.room()` the same in px - style.css (.screen
+margin-top / height, the canvases' vh sizes, ESC / QUIT), display.js / views.js (sizes, `controlsRoom` sideways),
+dosui.js (`narrowRows`) take it off; a change sends a resize event.
 
 Online input lag (1.2.4; owner, 2026-10-30): a key waits for the server's next step (0 - 55 ms, the game's tick - as in
 a local game), the way there and back, then the page's frame clock. That clock ran every frame the same part of a

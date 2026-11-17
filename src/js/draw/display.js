@@ -279,14 +279,14 @@ class Display {
     if (text && (s.cols || z)) {
       // (as wide as the page, but never taller than the room under the safe area: style.css's .screen padding)
       const ratio = (c1 - c0) * 9 / (scan * 1.35);
-      this.canvas.style.width = "min(calc(100vw - var(--screen-px, 16px)), calc((100dvh - var(--screen-py, 16px)) * " + ratio.toFixed(4) + "))";
+      this.canvas.style.width = "min(calc(100vw - var(--screen-px, 16px)), calc((100dvh - var(--screen-py, 16px) - var(--dbg, 0px)) * " + ratio.toFixed(4) + "))";
       this.canvas.style.aspectRatio = (c1 - c0) * 9 + " / " + (scan * 1.35).toFixed(1);
       this.shaped = true;
     } else if (!text && s.rows && s.rows !== 100) {
       // (a LORES screen taller than 100 rows - the map editor on a phone held upright: 4 scan lines a row, shown as tall as
       // the game's)
       const ratio = (c1 - c0) * 9 / (rows * 4 * 1.35);
-      this.canvas.style.width = "min(calc(100vw - var(--screen-px, 16px)), calc((100dvh - var(--screen-py, 16px)) * " + ratio.toFixed(4) + "))";
+      this.canvas.style.width = "min(calc(100vw - var(--screen-px, 16px)), calc((100dvh - var(--screen-py, 16px) - var(--dbg, 0px)) * " + ratio.toFixed(4) + "))";
       this.canvas.style.aspectRatio = (c1 - c0) * 9 + " / " + (rows * 4 * 1.35).toFixed(1);
       this.shaped = true;
     } else if (this.shaped || this.canvas.style.aspectRatio) {   // (also a shape the previous screen left: app.js)

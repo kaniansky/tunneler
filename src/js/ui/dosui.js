@@ -88,6 +88,7 @@ import { Pages } from "./pages.js";
 import { UniText } from "../text/unitext.js";
 import { GameScreen } from "../io/screen.js";
 import { TextBuf } from "../draw/textbuf.js";
+import { Debug } from "./debug.js";
 const root = globalThis;
 
 const ATTR = 0x05, SEL = 0x5F, DISABLED = 0x08;
@@ -881,7 +882,7 @@ class DosUI {
         padX = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0);
       }
     } catch (e) { /* no layout (tests): the default */ }
-    const w = Math.max(160, (root.innerWidth || 390) - padX), h = Math.max(200, (root.innerHeight || 844) - pad);
+    const w = Math.max(160, (root.innerWidth || 390) - padX), h = Math.max(200, (root.innerHeight || 844) - pad - Debug.room());   // (below the Debug info box)
     // (rows of the DOS screen's height: display.js; a fraction too - the window is that many rows high, so the canvas
     // fills the screen to its bottom edge: whole rows left a strip below it a drag couldn't start on; owner, 2026-10-27)
     return Math.max(25, Math.min(100, h / (w / NC * 16 * 1.35 / 9)));
@@ -930,8 +931,16 @@ class DosUI {
     const selInfo = this.infoOfSel();
     const infoLines = Math.min(7, selInfo.reduce((n, l) => n + wrapCols(typeof l === "string" ? l : l.text, NC - 2).length, 0));
     // (an empty row and the info's 4: kept with a keyboard - the selection moves through items with and without info;
-    // on a touch screen only while there is info to show - owner, 2026-10-27: the room is the menu's)
-    const BOTTOM = this.keyNav || !GameScreen.mobile() ? (infoLines > 4 ? infoLines : 5) : infoLines ? infoLines + 1 : 0;
+    // on a touch screen the room for its items' longest info, kept whether one shows or not - the info a finger brings
+    // up covered the menu's bottom, and a drag while it showed scrolled the page, which jumped back when the finger
+    // let go; the content scrolls above it instead - owner, 2026-11-17; none on a screen whose items have no info)
+    let RES = 0;
+    if (!this.keyNav && GameScreen.mobile())
+      for (const it of items) {
+        const n = (it.info || []).reduce((k, l) => k + (l ? wrapCols(typeof l === "string" ? l : l.text, NC - 2).length : 0), 0);
+        RES = Math.max(RES, n ? Math.min(7, n) + 1 : 0);
+      }
+    const BOTTOM = this.keyNav || !GameScreen.mobile() ? (infoLines > 4 ? infoLines : 5) : Math.max(RES, infoLines ? infoLines + 1 : 0);
     // A list with items fixed below it (a box with rows and fixed - the replays, the maps, the games): the screen fits
     // the phone and only the list scrolls (owner, 2026-10-28) - as many of its rows as the room leaves, the view on the
     // selection, a drag or the arrows move it; else every item (the window scrolls when the screen is taller)
@@ -941,7 +950,7 @@ class DosUI {
     this.scrollRows = this.scrollN = items.length;
     if (fixedN) {
       const listN = items.length - fixedN - leadN, unitsOf = it => it.separator || it.static || (it.disabled && !it.label) ? 1 : LINE_H;
-      const room = (this.keyNav || !GameScreen.mobile() ? R - BOTTOM : R) - (row - 1) - 2 - (this.spec.header ? 2 : 0)
+      const room = R - BOTTOM - (row - 1) - 2 - (this.spec.header ? 2 : 0)
         - items.slice(0, leadN).concat(items.slice(items.length - fixedN)).reduce((u, it) => u + unitsOf(it), 0) - 0.5;
       const fit = Math.max(3, Math.floor(room / LINE_H)), at = this.sel - leadN;
       if (listN > fit) {
@@ -1003,6 +1012,8 @@ class DosUI {
     if (s.fit) {
       let n = 0;
       for (let r = 1; r <= height; r++) if (pickable(r)) n++;
+      // (a touch screen: the rows as tall as without the info's room - the screen scrolls by it instead; owner,
+      // 2026-11-17: "settings could scroll")
       const room = (this.keyNav || !GameScreen.mobile() ? R - BOTTOM : R) - (height - n) - 0.5;
       if (n) lineH = Math.max(1, Math.min(LINE_H, room / n));
     }
@@ -1018,18 +1029,18 @@ class DosUI {
     const used = r => { const o = (r - 1) * 160; for (let c = 0; c < NC; c++) { const ch = t.vram[o + c * 2]; if ((ch !== 0x20 && ch !== 0) || (t.vram[o + c * 2 + 1] & 0x70)) return true; } return false; };
     let first = 1;
     while (first < height && !used(first)) first++;
-    // (a touch screen lays the content out as if no info showed - LAY: an info that comes and goes covers the screen's
-    // bottom instead of moving the content; owner, 2026-10-27 - the window shorter by it can still scroll that far)
-    const LAY = this.keyNav || !GameScreen.mobile() ? VIEW : R;
     const total = start[height], block = total - start[first - 1];
-    const minTop = block < LAY ? Math.max(start[first - 1] - (R - block) / 2, total - LAY) : 0;
+    const minTop = block < VIEW ? Math.max(start[first - 1] - (R - block) / 2, total - VIEW) : 0;
     const maxTop = Math.max(minTop, total - VIEW);
     const selRow = +Object.keys(rowItem).find(r => rowItem[r] === this.sel) || 0;
     const fresh = this.nspec !== this.spec && !this.nkeep;
     // (the view follows the selection when it moved or on a new screen - not on a refresh: the online lobby's
     // pings and chat redraw it, and a drag away from the selection stays where it is)
     // (a finger pressing an item: it is on the screen already - the view stays put under it)
-    if (this.nsel !== this.sel || fresh) { this.nfollow = !(this.tpick && !this.keyNav) || fresh; this.nsel = this.sel; }
+    // (a new screen on a touch screen - no keyboard used: at its top - the selection isn't shown there, and following it
+    // hid the skirmish's title once the info's room was kept; owner, 2026-11-17)
+    const touchOnly = !this.keyNav && GameScreen.mobile();
+    if (this.nsel !== this.sel || fresh) { this.nfollow = fresh ? !touchOnly : !(this.tpick && !this.keyNav); this.nsel = this.sel; }
     if (fresh) { this.ntopU = minTop; this.nanim = null; }
     this.nspec = this.spec;
     let target = Math.max(minTop, Math.min(this.ntopU || 0, maxTop));

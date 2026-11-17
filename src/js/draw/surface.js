@@ -51,7 +51,7 @@ function make1() {
   if (canvas.addEventListener) {
     canvas.addEventListener("webglcontextlost", e => { e.preventDefault(); lost = true; });
     canvas.addEventListener("webglcontextrestored", () => {
-      lost = false; kit = null;
+      lost = false; kit = null; gpuExt = undefined; gpuQs = [];   // (the timer queries too)
       Presenter.forget(gl);                                  // (gfx.js's programs belonged to the lost context)
       for (const L of layers) { L.pres = null; L.srcTex = null; L.dirty = L.gfxDirty = true; }
       again = true; schedule();
@@ -141,14 +141,48 @@ const PHONE_DPR = 2;
 // the modern picture's size in device pixels per layer pixel: the quality, a phone's cap (compose)
 const outScale = (dpr = root.devicePixelRatio || 1) => Gfx.qualityScale() * (dpr > PHONE_DPR && GameScreen.mobile() ? PHONE_DPR / dpr : 1);
 let nextAt = 0;                                            // (when the next picture is due)
+let rafAt = 0, drawnAt = 0;                                // (Debug info: the last animation frame, the last picture)
 function tick(now) {
   raf = 0;
+  const dbg = Debug.on();
+  // (Debug info: every animation frame the browser gives - "rafs/s" - and the longest wait for one: low with long gaps
+  // = the browser holds the frames back - the GPU still busy, the main thread elsewhere -, not this limit)
+  if (dbg) { Debug.count("rafs"); if (rafAt) Debug.peak("raf gap", now - rafAt); }
+  rafAt = now;
   if (now > nextAt - FRAME_MS && now < nextAt - EARLY_MS) { if (layers.length) schedule(); return; }
   nextAt = now >= nextAt - EARLY_MS && now - nextAt < FRAME_MS ? nextAt + FRAME_MS : now + FRAME_MS;
   const t0 = root.performance ? root.performance.now() : 0;
+  const q = dbg ? gpuBegin() : null;
   compose(now, true);
-  if (Debug.on()) { Debug.count("frames"); if (t0) Debug.time("draw", root.performance.now() - t0); }
+  if (q) gpuEnd(q);
+  if (dbg) {
+    Debug.count("frames");
+    if (t0) Debug.time("draw", root.performance.now() - t0);
+    if (drawnAt) Debug.peak("frame gap", now - drawnAt);
+    drawnAt = now;
+  } else drawnAt = rafAt = 0;
   if (layers.length) schedule();
+}
+
+// Debug info: the GPU's time for a frame's picture (EXT_disjoint_timer_query_webgl2, where the browser has it - "gpu"
+// on the ms line, read a few frames later when the GPU has it; "gpu timer: no" on the gpu line without it)
+let gpuExt, gpuQs = [];
+function gpuBegin() {
+  if (!gl || lost) return null;
+  if (gpuExt === undefined) { try { gpuExt = gl.getExtension("EXT_disjoint_timer_query_webgl2") || null; } catch (e) { gpuExt = null; } }
+  gpuRead();
+  if (!gpuExt || gpuQs.length > 8) return null;
+  const q = gl.createQuery();
+  gl.beginQuery(gpuExt.TIME_ELAPSED_EXT, q);
+  return q;
+}
+function gpuEnd(q) { gl.endQuery(gpuExt.TIME_ELAPSED_EXT); gpuQs.push(q); }
+function gpuRead() {
+  while (gpuQs.length && gl.getQueryParameter(gpuQs[0], gl.QUERY_RESULT_AVAILABLE)) {
+    const q = gpuQs.shift();
+    if (!gl.getParameter(gpuExt.GPU_DISJOINT_EXT)) Debug.time("gpu", gl.getQueryParameter(q, gl.QUERY_RESULT) / 1e6);
+    gl.deleteQuery(q);
+  }
 }
 
 // Debug info (ui/debug.js): how the page is drawn
@@ -168,7 +202,7 @@ Debug.provide("screen", () => {
     depth: modern ? Gfx.depth(m) + (Gfx.no3d() ? " (no 3d: " + Gfx.no3d() + ")" : "") : "",
     heap: root.performance && root.performance.memory ? Math.round(root.performance.memory.usedJSHeapSize / 1048576) + " MB" : "" };
 });
-Debug.provide("gpu", () => ({ renderer: gpu() }));
+Debug.provide("gpu", () => ({ renderer: gpu(), timer: gl && gpuExt !== undefined ? (gpuExt ? "yes" : "no") : "" }));
 
 function compose(now, frame) {
   if (!ensure() || lost || (!gl && !c2d)) return;

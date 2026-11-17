@@ -46,7 +46,10 @@ What differs from the desktop app:
   function Back is always Esc (it never closes the app; Home does). The pages keep no history in the app (app.js
   `noHistory`: every screen replaces the history entry): Tauri's own Back handler goes back in the web view's history
   while there is any, and whether it or MainActivity's is asked first is a race - from the main menu after a skirmish
-  Back went back to the game's address and started a new one (owner, 2026-11-11).
+  Back went back to the game's address and started a new one (owner, 2026-11-11). Its Esc is a keydown and keyup
+  at once: a local match takes an Esc pressed since its last step as held for that step (play.js `extInput`; 1.5.4
+  and before missed it - Back didn't end a match). The touch controls' QUIT / LEAVE button shows in the app too
+  (1.5.5; 1.5.3 - 1.5.4 had none there).
 - **Plain http allowed** (`usesCleartextTraffic` true in release too): the Settings screen's Server may be
   a server on the local network (`192.168.1.5:8050` -> `http://...`). The public server is https / wss.
 - `INTERNET` is the only permission. Portrait and landscape both work (the touch controls lay out for

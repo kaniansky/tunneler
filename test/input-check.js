@@ -282,13 +282,13 @@ const SC = { W: 0x11, A: 0x1E, X: 0x2D, D: 0x20, BLUEFIRE: 0x1D, GREENFIRE: 0x1C
       for (const k of ["touch.fire", "touch.esc", "touch.quit", "touch.leave", "touch.stats"]) assert(env.win.Lang.data[code][k], code + " " + k);
     }
     assert(!tc.statsBtn && !env.body.children.some(c => c !== tc.root && /tpad-stats/.test(c.className || "")), "no SCORE button unless asked for");
-    // the Android app: no ESC button - the phone's Back is Esc there (owner, 2026-11-11)
+    // the Android app: the ESC button too (owner, 2026-11-17 - 1.5.3 had none there)
     {
       const envA = makeEnv("");
       envA.win.TunnelerAndroid = {};
       envA.load("lang/index.js", "js/io/input.js", "js/io/pads.js");
       const tcA = envA.win.Pads.start({ raf: false, menu: () => false, touchSet: "blue", statsLabel: "touch.stats" }).touch;
-      assert(tcA && !tcA.escBtn && tcA.statsBtn && tcA.fireBtn && !tcA.root.children.some(c => /tpad-esc/.test(c.className || "")), "the Android app: no ESC button");
+      assert(tcA && tcA.escBtn && tcA.statsBtn && tcA.fireBtn, "the Android app: an ESC button");
     }
     ok("touch: joystick (8 directions, dead zone, clamped) + FIRE + ESC -> BLUE's keys; menus: arrows / Enter; shown on the first touch; labels in every language");
   }
